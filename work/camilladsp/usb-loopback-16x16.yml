@@ -1,0 +1,79 @@
+title: "USB 16x16 identity loopback"
+description: "Prototype-only proof that all 16 gadget channels can traverse CamillaDSP unchanged."
+
+devices:
+  samplerate: 48000
+  chunksize: 1024
+  enable_rate_adjust: false
+  capture:
+    type: Alsa
+    channels: 16
+    device: "hw:CARD=UAC2Gadget,DEV=0"
+    format: S24_3_LE
+    labels:
+      - "USB In 01"
+      - "USB In 02"
+      - "USB In 03"
+      - "USB In 04"
+      - "USB In 05"
+      - "USB In 06"
+      - "USB In 07"
+      - "USB In 08"
+      - "USB In 09"
+      - "USB In 10"
+      - "USB In 11"
+      - "USB In 12"
+      - "USB In 13"
+      - "USB In 14"
+      - "USB In 15"
+      - "USB In 16"
+  playback:
+    type: Alsa
+    channels: 16
+    device: "hw:CARD=UAC2Gadget,DEV=0"
+    format: S24_3_LE
+
+mixers:
+  identity_16:
+    channels:
+      in: 16
+      out: 16
+    mapping:
+      - dest: 0
+        sources: [{channel: 0, gain: 0.0, inverted: false}]
+      - dest: 1
+        sources: [{channel: 1, gain: 0.0, inverted: false}]
+      - dest: 2
+        sources: [{channel: 2, gain: 0.0, inverted: false}]
+      - dest: 3
+        sources: [{channel: 3, gain: 0.0, inverted: false}]
+      - dest: 4
+        sources: [{channel: 4, gain: 0.0, inverted: false}]
+      - dest: 5
+        sources: [{channel: 5, gain: 0.0, inverted: false}]
+      - dest: 6
+        sources: [{channel: 6, gain: 0.0, inverted: false}]
+      - dest: 7
+        sources: [{channel: 7, gain: 0.0, inverted: false}]
+      - dest: 8
+        sources: [{channel: 8, gain: 0.0, inverted: false}]
+      - dest: 9
+        sources: [{channel: 9, gain: 0.0, inverted: false}]
+      - dest: 10
+        sources: [{channel: 10, gain: 0.0, inverted: false}]
+      - dest: 11
+        sources: [{channel: 11, gain: 0.0, inverted: false}]
+      - dest: 12
+        sources: [{channel: 12, gain: 0.0, inverted: false}]
+      - dest: 13
+        sources: [{channel: 13, gain: 0.0, inverted: false}]
+      - dest: 14
+        sources: [{channel: 14, gain: 0.0, inverted: false}]
+      - dest: 15
+        sources: [{channel: 15, gain: 0.0, inverted: false}]
+
+filters: {}
+
+pipeline:
+  - type: Mixer
+    name: identity_16

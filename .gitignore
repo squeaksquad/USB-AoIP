@@ -1,0 +1,30 @@
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Local Pro Tools test sessions and recorded audio (large/private)
+Pi Testing/
+*.ptx
+**/Audio Files/
+**/Session File Backups/
+**/WaveCache.wfm
+
+# Generated test media and captures
+outputs/*.wav
+*.log
+*.pcap
+
+# Build products
+*.ko
+*.o
+*.a
+build/
+build-*/
+node_modules/
+
+# Reproducible upstream checkout; pinned revisions are documented in the handoff
+work/aes67-linux-daemon/
+
+# Editor and temporary files
+*~
+*.swp
