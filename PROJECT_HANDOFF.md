@@ -1100,11 +1100,56 @@ prime identically).
   safety for a property that varies run to run. Repetition is required, and
   `tx_qfloor` should be an acceptance metric alongside latency.
 
+#### Mitigation measured: TX prime 288 makes TX's floor invariant
+
+Four runs, buffer 288 requested, `--tx-playback-prime 288 --rx-playback-prime
+96`, 600 s each with the 800-impulse sustained load. `NEGOTIATED` returned
+`usb=96/384 ravenna=128/288` -- **identical to the buffer-192 runs**, because
+192 already rounds up to 288 on RAVENNA, so TX prime is the only variable.
+(The wrapper validates the prime against the *requested* buffer, which is why
+288 must be requested rather than 192.)
+
+| run | median | TX overshoot | `tx_qfloor` | TX under period | RX overshoot | `rx_qfloor` |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 29.979 ms | 93 | **144** | 0.000% | 45 | 45 |
+| 2 | 29.979 ms | 93 | **144** | 0.000% | 93 | 93 |
+| 3 | 30.979 ms | 93 | **144** | 0.000% | 93 | 93 |
+| 4 | 30.979 ms | 93 | **144** | 0.000% | 93 | **45** |
+
+Zero restarts and zero drops in all four.
+
+**`tx_qfloor` is invariant at 144** against 89/104/124/126 at TX prime 192, and
+TX never dips under one RAVENNA period. That is the result worth having: the
+metric that predicted the failure has stopped varying. Four clean runs on their
+own would prove little -- 0 of 4 bounds the failure rate very weakly -- but an
+invariant floor sitting 48 frames clear of a period is mechanism-level
+evidence rather than a pass count.
+
+**There are two paths to the same 48-frame deficit.** Runs 1 and 2 suggested
+`rx_qfloor` simply equals the prime overshoot (45 -> 45, 93 -> 93). **Run 4
+refutes that**: overshoot 93 but floor 45. So a run can lose its 48 frames
+either as a short draw at prime (run 1) or shortly after priming (run 4, and
+the original failure `224517Z`). Do not treat the `PRIMED` line as a complete
+predictor.
+
+**RX remains exposed.** `rx_qfloor` still swings 45/93 and 45 is below USB's
+96-frame period. It has not failed, but the lottery has been moved off TX, not
+removed. Raising RX's prime is the same trade again and is untested.
+
+**Latency is an independent degree of freedom.** Runs 1 and 4 share
+`rx_qfloor` 45 yet measure 29.979 and 30.979 ms; runs 2 and 3 share overshoot
+93 and floor 93 and also differ by one 48-sample step. Latency scatter and
+safety scatter are separate phenomena and must not be reasoned about together.
+
+**Cost.** 29.979-30.979 ms against 27.979-28.729 ms at TX 192, so roughly
++2 ms, and 1.75-2.75 ms faster than the stopgap's re-baselined 32.729 ms.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
 | `96/192/768/192` prime 96 | **211118Z, 600 s soak PASSED, ACCEPTED** | **26.979 ms** | **0.988** | **0 samples** |
+| `96/288/768/192` TX 288 / RX 96 | **4 runs, 800 impulses, 0 failures, tx_qfloor 144 invariant** | **29.979-30.979 ms** | ~0.92 | 8-10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **221301Z, 600 s soak PASSED, ACCEPTED** | **28.729 ms** | 0.924 | 8 samples |
 | `96/192/768/192` TX 192 / RX 96 | 214847Z, 480 s, unsoaked | 27.729 ms | 0.898 | 8 samples |
 | `96/192/768/192` prime 96 | 202405Z, 480 s | 26.729 ms | 0.884 | 9 samples |
