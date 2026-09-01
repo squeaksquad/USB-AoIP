@@ -80,6 +80,7 @@ std::size_t FarrowResampler::render(AudioRing& source,
         const std::size_t consumed = static_cast<std::size_t>(position_) - 1;
         source.pop(consumed);
         position_ -= static_cast<double>(consumed);
+        consumed_frames_ += consumed;
     }
     return produced;
 }

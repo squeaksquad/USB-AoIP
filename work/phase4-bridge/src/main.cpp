@@ -249,6 +249,8 @@ struct Telemetry {
     std::atomic<std::uint64_t> rx_restarts{0};
     std::atomic<std::uint64_t> tx_input_frames{0};
     std::atomic<std::uint64_t> rx_input_frames{0};
+    std::atomic<std::uint64_t> tx_consumed_frames{0};
+    std::atomic<std::uint64_t> rx_consumed_frames{0};
     std::atomic<std::uint64_t> tx_frames{0};
     std::atomic<std::uint64_t> rx_frames{0};
 };
@@ -382,17 +384,40 @@ IoResult render_to_playback(Direction& direction,
             : IoResult::idle;
     }
 
-    // Keep the target occupancy in the process-local elastic ring. ALSA may
-    // expose an entire playback buffer at once; draining the ring into that
-    // hidden queue would recreate the large, movable latency this bridge is
-    // intended to remove.
-    if (direction.ring.size() <= target_frames + 3) {
+    // Regulate the ALSA playback queue, not the process-local ring alone.
+    //
+    // The previous law held ring.size() at the target and left the playback
+    // queue unregulated. The queue is the half that underruns, and nothing
+    // restored it: the shared estimator is differential, and because one ppm is
+    // applied reciprocally to the two directions it can only move frames
+    // between them, never change how many are in flight overall. A queue that
+    // drifted down therefore kept drifting until it hit XRUN. That is the
+    // failure this bridge reproduced in every instrumented run -- ravenna-to-usb
+    // at 960-frame buffers, usb-to-ravenna at 384-frame ones -- always with the
+    // ring sitting healthy at its target while the queue drained to nothing.
+    //
+    // Holding the queue at the target gives it a restoring force and makes the
+    // control law agree with what the servo already measures, which is ring
+    // plus playback delay. The ring becomes the elastic reservoir and its drift
+    // is what the estimator corrects. Total latency is unchanged in kind: it
+    // was always ring plus queue, and this only decides which half holds the
+    // frames rather than adding any.
+    const auto buffer_frames = static_cast<std::size_t>(direction.playback.buffer());
+    const auto free_frames = static_cast<std::size_t>(available);
+    const std::size_t queued_frames = buffer_frames > free_frames ? buffer_frames - free_frames : 0;
+    const std::size_t queue_target = target_frames + 3;
+    if (queued_frames >= queue_target || direction.ring.size() <= usb16x16::FarrowResampler::kLookaheadFrames) {
         return IoResult::idle;
     }
-    const double excess_source_frames = static_cast<double>(direction.ring.size() - target_frames - 3);
-    const std::size_t safe_output_frames = static_cast<std::size_t>(excess_source_frames / source_step);
+    // Output frames needed to restore the queue, and the most the ring can
+    // supply without starving the interpolator's lookahead window.
+    const std::size_t queue_deficit_frames = queue_target - queued_frames;
+    const double ring_supply_frames =
+        static_cast<double>(direction.ring.size() - usb16x16::FarrowResampler::kLookaheadFrames);
+    const auto ring_output_limit = static_cast<std::size_t>(ring_supply_frames / source_step);
     const std::size_t wanted = std::min<std::size_t>(
-        std::min<std::size_t>(available, kScratchFrames), safe_output_frames);
+        std::min<std::size_t>(queue_deficit_frames, ring_output_limit),
+        std::min<std::size_t>(free_frames, kScratchFrames));
     if (wanted == 0) {
         return IoResult::idle;
     }
@@ -503,6 +528,8 @@ void publish_telemetry(const Direction& tx,
     telemetry.rx_restarts.store(rx.restarts, std::memory_order_relaxed);
     telemetry.tx_input_frames.store(tx.input_frames, std::memory_order_relaxed);
     telemetry.rx_input_frames.store(rx.input_frames, std::memory_order_relaxed);
+    telemetry.tx_consumed_frames.store(tx.resampler.consumed_frames(), std::memory_order_relaxed);
+    telemetry.rx_consumed_frames.store(rx.resampler.consumed_frames(), std::memory_order_relaxed);
     telemetry.tx_frames.store(tx.output_frames, std::memory_order_relaxed);
     telemetry.rx_frames.store(rx.output_frames, std::memory_order_relaxed);
 }
@@ -524,6 +551,8 @@ void telemetry_loop(const Telemetry& telemetry) {
                   << " rx_restarts=" << telemetry.rx_restarts.load()
                   << " tx_input=" << telemetry.tx_input_frames.load()
                   << " rx_input=" << telemetry.rx_input_frames.load()
+                  << " tx_consumed=" << telemetry.tx_consumed_frames.load()
+                  << " rx_consumed=" << telemetry.rx_consumed_frames.load()
                   << " tx_frames=" << telemetry.tx_frames.load()
                   << " rx_frames=" << telemetry.rx_frames.load() << '\n';
     }
@@ -672,6 +701,8 @@ int run(const Options& options) {
               << ",\"rx_restarts\":" << rx.restarts
               << ",\"tx_input_frames\":" << tx.input_frames
               << ",\"rx_input_frames\":" << rx.input_frames
+              << ",\"tx_consumed_frames\":" << tx.resampler.consumed_frames()
+              << ",\"rx_consumed_frames\":" << rx.resampler.consumed_frames()
               << ",\"tx_frames\":" << tx.output_frames
               << ",\"rx_frames\":" << rx.output_frames << "}\n";
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;

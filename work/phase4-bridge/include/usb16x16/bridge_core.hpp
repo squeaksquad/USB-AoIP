@@ -36,6 +36,10 @@ private:
 
 class FarrowResampler {
 public:
+    // The interpolator reads source frames center-1 through center+2 with
+    // center at least 1, so the ring must never be drawn below this.
+    static constexpr std::size_t kLookaheadFrames = 8;
+
     void reset() noexcept { position_ = 1.0; }
 
     // source_step is input frames consumed per output frame. The four-point
@@ -48,8 +52,14 @@ public:
 
     [[nodiscard]] double fractional_position() const noexcept { return position_; }
 
+    // Cumulative source frames actually popped. Divided by the frames produced
+    // it gives the rate the converter really achieved, which is the only direct
+    // way to confirm a direction is applying the ratio it was handed.
+    [[nodiscard]] std::uint64_t consumed_frames() const noexcept { return consumed_frames_; }
+
 private:
     double position_{1.0};
+    std::uint64_t consumed_frames_{0};
 };
 
 class SharedDriftEstimator {
