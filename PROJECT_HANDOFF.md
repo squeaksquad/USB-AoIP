@@ -425,20 +425,55 @@ Ring occupancy stayed healthy at ~196 against a target of 192 throughout, so the
 converter had input available and simply stopped feeding playback fast enough.
 Chase the converter's output scheduling, not the ring sizing.
 
+#### The XRUN is one defect, and it follows the uncorrected direction
+
+Run `160859Z` re-tested `96/384/768/192` on the instrumented binary. The XRUN
+reproduced at 331 s, but in the **other direction**: `usb-to-ravenna`, where
+every large-buffer run failed `ravenna-to-usb`. The signature is identical --
+the ALSA playback queue drains monotonically to nothing while the elastic ring
+sits healthy at target:
+
+| | drains | ring occupancy |
+|---|---|---|
+| `96/960/1536/192`, RX | `rx_queue` 876 -> 108 | `rx_occ` ~196 vs target 192 |
+| `96/384/768/192`, TX | `tx_queue` 384 -> 288 -> 240 -> 192 -> 144 -> 96 | `tx_occ` 195 vs target 192 |
+
+So this is **one defect, not two**. The direction that fails is whichever
+playback queue runs out of headroom first, which is why larger buffers moved it
+from TX to RX rather than fixing it.
+
+It connects directly to the rate asymmetry, which reproduced here too: TX
+residual pinned at 93 for the whole run, RX residual growing ~1.4 frames/s
+(~29 ppm). Because TX transfers frames 1:1 with no correction applied, nothing
+holds its playback queue stable and it drains at the raw USB-versus-PTP clock
+difference until it underruns. The observed drain of roughly 0.9 frames/s is the
+right order of magnitude for an uncorrected ~29 ppm offset; it is not an exact
+match, and the commanded ppm wandered between -21 and -33 during the run, so
+treat the arithmetic as consistent rather than proven.
+
+**Prediction to test next: fix the TX rate correction and the XRUN should
+disappear in both directions.**
+
 #### Phase 4 latency is not yet competitive
 
-| Operating point | runs | median round trip |
-|---|---|---:|
-| `96/384/768/192` | 113600Z, 120034Z, 121252Z | 40.2-42.6 ms |
-| `96/960/1536/192` | 124130Z, 132355Z, 134118Z, 143219Z | 76.9-82.5 ms |
-| dual `alsaloop` tlatency 3000 (accepted stopgap) | soaked | **32.792 ms** |
+| Operating point | run | median | score | spread |
+|---|---|---:|---:|---:|
+| `96/384/768/192` | **160859Z, instrumented binary** | **41.625 ms** | **1.000** | **0 samples** |
+| `96/384/768/192` | 113600Z, 120034Z, 121252Z (older binaries) | 40.2-42.6 ms | | |
+| `96/960/1536/192` | 151450Z | 84.291 ms | 0.987 | 8 |
+| `96/960/1536/192` | 143219Z | 76.917 ms | 0.320 | 16 |
+| dual `alsaloop` tlatency 3000 (accepted stopgap) | soaked | **32.792 ms** | | |
 
-Run `143219Z` measured **76.917 ms** over 40 impulses, and exited 33 (an RX
-direction restart), so it is reconnaissance only. The larger buffers were
-adopted for stability and cost roughly 36 ms. Neither Phase 4 point currently
-beats the stopgap. Given that the TX frame loss was illusory, the smaller
-`96/384/768/192` point deserves a fresh look before more work goes into the
-large-buffer one.
+Run `160859Z` is the cleanest measurement in the dataset: correlation score
+1.000 with all forty impulses at exactly 1998 samples, zero spread. The small
+buffers halve the latency *and* measure far more cleanly than the large ones.
+The gap to the stopgap is 8.8 ms rather than the 51 ms the large-buffer point
+suggested.
+
+Every run above exited 33, so all are reconnaissance until a clean run
+reproduces one. The larger buffers were adopted for stability, but they did not
+buy stability -- they only moved the XRUN from TX to RX -- and they cost roughly
+43 ms. **`96/384/768/192` is the operating point to carry forward.**
 
 The dual-`alsaloop` `tlatency=3000`, sink-delay-576 point remains the accepted
 stopgap until a Phase 4 point completes its own ten-minute loaded soak.
