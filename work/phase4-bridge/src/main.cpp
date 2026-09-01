@@ -277,6 +277,15 @@ struct Telemetry {
     std::atomic<std::uint64_t> rx_dropped_frames{0};
     std::atomic<std::uint64_t> tx_short_begin_frames{0};
     std::atomic<std::uint64_t> rx_short_begin_frames{0};
+    // -1 means not yet observed.
+    std::atomic<std::int64_t> tx_queue_floor{-1};
+    std::atomic<std::int64_t> rx_queue_floor{-1};
+    std::atomic<std::int64_t> tx_depth_floor{-1};
+    std::atomic<std::int64_t> rx_depth_floor{-1};
+    std::atomic<std::uint64_t> tx_queue_below_period{0};
+    std::atomic<std::uint64_t> rx_queue_below_period{0};
+    std::atomic<std::uint64_t> tx_queue_samples{0};
+    std::atomic<std::uint64_t> rx_queue_samples{0};
     std::atomic<std::uint64_t> tx_frames{0};
     std::atomic<std::uint64_t> rx_frames{0};
 };
@@ -295,6 +304,15 @@ struct Direction {
     // playback buffer.
     std::size_t playback_prime_frames{0};
     bool prime_trim{false};
+    // Worst case playback-queue and total-pipeline depth seen, sampled on every
+    // loop iteration rather than at telemetry time. The 1 Hz telemetry prints
+    // one sample in roughly a hundred, so its apparent minimum is not the
+    // floor; these are. Needed to relate the queue floor to the depth the
+    // prime sets, which is the open question about how much slack is real.
+    std::size_t queue_floor{std::numeric_limits<std::size_t>::max()};
+    std::size_t depth_floor{std::numeric_limits<std::size_t>::max()};
+    std::uint64_t queue_below_period{0};
+    std::uint64_t queue_samples{0};
     std::uint64_t input_frames{};
     std::uint64_t output_frames{};
     // Frames the resampler produced, and consumed ring input for, that
@@ -446,6 +464,24 @@ IoResult render_to_playback(Direction& direction,
         return available < 0 && available != -EAGAIN
             ? request_recovery(direction, "playback-avail", available)
             : IoResult::idle;
+    }
+
+    // Sample the queue and total depth here, before any early return, because
+    // this runs on every loop iteration. Only once playback is started: during
+    // priming the queue is deliberately empty and would floor the statistic at
+    // zero for reasons that say nothing about steady-state headroom.
+    if (direction.playback_started) {
+        const auto buffer_frames = static_cast<std::size_t>(direction.playback.buffer());
+        const auto free_frames = static_cast<std::size_t>(available);
+        const std::size_t queue_depth =
+            buffer_frames > free_frames ? buffer_frames - free_frames : 0;
+        direction.queue_floor = std::min(direction.queue_floor, queue_depth);
+        direction.depth_floor =
+            std::min(direction.depth_floor, direction.ring.size() + queue_depth);
+        if (queue_depth < static_cast<std::size_t>(direction.playback.period())) {
+            ++direction.queue_below_period;
+        }
+        ++direction.queue_samples;
     }
 
     // Keep the target occupancy in the process-local elastic ring. ALSA may
@@ -605,6 +641,19 @@ void publish_telemetry(const Direction& tx,
     telemetry.rx_dropped_frames.store(rx.dropped_frames, std::memory_order_relaxed);
     telemetry.tx_short_begin_frames.store(tx.short_begin_frames, std::memory_order_relaxed);
     telemetry.rx_short_begin_frames.store(rx.short_begin_frames, std::memory_order_relaxed);
+    const auto publish_floor = [](const std::size_t value) {
+        return value == std::numeric_limits<std::size_t>::max()
+            ? std::int64_t{-1}
+            : static_cast<std::int64_t>(value);
+    };
+    telemetry.tx_queue_floor.store(publish_floor(tx.queue_floor), std::memory_order_relaxed);
+    telemetry.rx_queue_floor.store(publish_floor(rx.queue_floor), std::memory_order_relaxed);
+    telemetry.tx_depth_floor.store(publish_floor(tx.depth_floor), std::memory_order_relaxed);
+    telemetry.rx_depth_floor.store(publish_floor(rx.depth_floor), std::memory_order_relaxed);
+    telemetry.tx_queue_below_period.store(tx.queue_below_period, std::memory_order_relaxed);
+    telemetry.rx_queue_below_period.store(rx.queue_below_period, std::memory_order_relaxed);
+    telemetry.tx_queue_samples.store(tx.queue_samples, std::memory_order_relaxed);
+    telemetry.rx_queue_samples.store(rx.queue_samples, std::memory_order_relaxed);
     telemetry.tx_frames.store(tx.output_frames, std::memory_order_relaxed);
     telemetry.rx_frames.store(rx.output_frames, std::memory_order_relaxed);
 }
@@ -632,6 +681,14 @@ void telemetry_loop(const Telemetry& telemetry) {
                   << " rx_dropped=" << telemetry.rx_dropped_frames.load()
                   << " tx_short=" << telemetry.tx_short_begin_frames.load()
                   << " rx_short=" << telemetry.rx_short_begin_frames.load()
+                  << " tx_qfloor=" << telemetry.tx_queue_floor.load()
+                  << " rx_qfloor=" << telemetry.rx_queue_floor.load()
+                  << " tx_dfloor=" << telemetry.tx_depth_floor.load()
+                  << " rx_dfloor=" << telemetry.rx_depth_floor.load()
+                  << " tx_qlow=" << telemetry.tx_queue_below_period.load()
+                  << " rx_qlow=" << telemetry.rx_queue_below_period.load()
+                  << " tx_qn=" << telemetry.tx_queue_samples.load()
+                  << " rx_qn=" << telemetry.rx_queue_samples.load()
                   << " tx_frames=" << telemetry.tx_frames.load()
                   << " rx_frames=" << telemetry.rx_frames.load() << '\n';
     }
@@ -787,6 +844,11 @@ int run(const Options& options) {
 
     telemetry_thread.join();
     publish_telemetry(tx, rx, estimator, telemetry);
+    const auto summary_floor = [](const std::size_t value) {
+        return value == std::numeric_limits<std::size_t>::max()
+            ? std::int64_t{-1}
+            : static_cast<std::int64_t>(value);
+    };
     std::cout << "SUMMARY {\"ppm\":" << std::fixed << std::setprecision(3) << estimator.ppm()
               << ",\"tx_restarts\":" << tx.restarts
               << ",\"rx_restarts\":" << rx.restarts
@@ -797,7 +859,15 @@ int run(const Options& options) {
               << ",\"tx_dropped_frames\":" << tx.dropped_frames
               << ",\"rx_dropped_frames\":" << rx.dropped_frames
               << ",\"tx_frames\":" << tx.output_frames
-              << ",\"rx_frames\":" << rx.output_frames << "}\n";
+              << ",\"rx_frames\":" << rx.output_frames
+              << ",\"tx_queue_floor\":" << summary_floor(tx.queue_floor)
+              << ",\"rx_queue_floor\":" << summary_floor(rx.queue_floor)
+              << ",\"tx_depth_floor\":" << summary_floor(tx.depth_floor)
+              << ",\"rx_depth_floor\":" << summary_floor(rx.depth_floor)
+              << ",\"tx_queue_below_period\":" << tx.queue_below_period
+              << ",\"rx_queue_below_period\":" << rx.queue_below_period
+              << ",\"tx_queue_samples\":" << tx.queue_samples
+              << ",\"rx_queue_samples\":" << rx.queue_samples << "}\n";
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
 }
 
