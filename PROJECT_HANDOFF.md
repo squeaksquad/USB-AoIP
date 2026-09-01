@@ -701,7 +701,15 @@ misalignment 4 samples. Artifacts in
 ### Headline
 
 The complete Mac to USB to Pi to AES67 to Ferrofish and back round trip is
-measured and tuned from **74.146 ms to 32.792 ms**.
+measured, tuned from 74.146 ms to **20.688 ms**, and soak-tested.
+
+**Accepted stopgap operating point:** `alsaloop --tlatency 3000`, AES67 sink
+delay 576, driver-default ALSA buffering, 48 kHz, 16 channels, 64-frame
+CoreAudio buffer. Measured median 20.688 ms.
+
+This is a stopgap pending Phase 4, not a final design. Its known defect is
+documented under "Accepted stopgap" below and must be understood before anyone
+relies on a fixed reported latency.
 
 | Configuration | Round trip |
 |---|---:|
@@ -713,6 +721,112 @@ This lands inside the 20-35 ms band this document predicted for a tuned dual
 `alsaloop` design. It is still above the 10-20 ms fallback and far above the
 sub-10 ms research goal. Full tables and provenance are in
 `outputs/latency/2026-08-31-latency-results.md`.
+
+### Accepted stopgap: tlatency 3000, sink delay 576
+
+Ten-minute acceptance soak, 31 measurements of 24 impulses over 605 seconds.
+
+**Transport integrity was flawless.** Zero XRUN, underrun, overrun, and broken
+pipe on both directions. Zero daemon RTP sequence, SSRC, and payload errors.
+Zero CoreAudio discontinuities. PTP locked at 9 ns. USB `configured/high-speed`
+throughout. 47.7 C, `get_throttled` `0x0`. No measurement rejected.
+
+**Known defect: a bimodal 12 ms latency step.**
+
+| Cluster | Samples | Range |
+|---|---:|---|
+| Low | 28 of 31 | 20.062 to 21.250 ms |
+| High | 3 of 31 | 32.833 to 32.958 ms |
+
+The step is 590 samples, 12.29 ms, which is one 576-frame ALSA buffer of
+12.00 ms. It occurred roughly every 70 to 150 seconds and recovered each time.
+Nothing underruns; the queue simply settles one buffer deeper for a while, so
+no error is logged anywhere.
+
+Consequences for anyone using this stopgap:
+
+- Do not publish a single fixed latency figure to Pro Tools or to downstream
+  delay compensation. The true value is 20.7 ms about 90 percent of the time
+  and 32.9 ms otherwise.
+- It is acceptable for development, verification, and non-critical monitoring.
+  It is not suitable for critical tracking where a sudden 12 ms shift matters.
+- Audio is never lost. Across ten minutes there were no dropouts.
+
+### Rejected operating points
+
+| Point | Round trip | Why rejected |
+|---|---:|---|
+| `tlatency` 5000, delay 48 | 33.625 ms | Only 29 percent of measurements usable. Writing delay 48 to an established stream caused a two-minute outage, then unstable per-impulse timing, and both sinks ended `all_muted`. |
+| `tlatency` 2000 and 1000 | none | Continuous `underrun for playback plughw:CARD=RAVENNA`. 384-frame and 192-frame buffers are below what the RAVENNA playback path sustains. |
+
+`tlatency` 5000 with delay 576, 44.292 ms, is the untested conservative
+fallback. It has never been soaked. Adopt it only after its own soak.
+
+**Sink delay 48 is not usable on this path in any order.** An earlier note
+calling the muting a startup-ordering constraint was wrong; writing 48 to a
+fully established stream also breaks it, after a delay long enough that a short
+sweep does not see it.
+
+Note that none of these failures produce an ALSA or daemon error. Only impulse
+correlation reveals them.
+
+### Scheduler latency measured: no real-time kernel needed
+
+`cyclictest` v2.60, priority 99, all cores, 250 us interval, 300 seconds per
+pass, 1.2 million samples per thread. Stock kernel, governor `ondemand`.
+
+| Pass | Avg | Worst of four threads |
+|---|---:|---:|
+| Idle | 2 us | 62 us |
+| Bridge live at `tlatency` 3000 | 2-3 us | **184 us** |
+
+Zero histogram overflows in both passes. Against the 128-frame period of
+2667 us that is **14.5x headroom**, and still 5.4x against a hypothetical
+48-frame period.
+
+**Do not pursue a PREEMPT_RT kernel.** Scheduling determinism is nowhere near
+the binding constraint, and a kernel change would require rebuilding and
+revalidating both the patched `usb_f_uac2` module and the RAVENNA prototype
+LKM. That prototype does kernel-side RTP and timing, exactly the code
+PREEMPT_RT locking changes tend to break. High risk to the protected rollback
+path for no measurable gain.
+
+**The `tlatency` 2000 underruns were not a scheduling failure.** A 384-frame
+buffer is an 8000 us period against a 184 us worst case, 43x headroom, and it
+still failed with continuous `underrun for playback plughw:CARD=RAVENNA`. The
+buffer floor is set by the RAVENNA driver, the `plughw` conversion chain, or
+per-period SRC work. Tightening buffers is not a scheduling problem.
+
+**Most of Phase 6 also drops off the critical path.** IRQ affinity, core
+isolation, and the governor all target a number already at 184 us; the entire
+idle-to-loaded delta is 122 us against a 2667 us period. Setting the governor
+to `performance` remains a trivial reversible change but is not a priority.
+
+Caveat: `cyclictest` measures timer wake-up for an ordinary RT thread. It does
+not measure NIC interrupt servicing, USB gadget completion, or RAVENNA's
+internal scheduling. Necessary rather than sufficient evidence, but the margin
+is wide enough that scheduling cannot explain anything observed.
+
+### AoIP switch QoS
+
+The NETGEAR GS305EP is in `Port-based` QoS mode with port 1, which carries the
+Pi, set to `Low`. Every other port is higher. This is backwards, though it is
+currently harmless: the Ferrofish reported zero late packets over 12:22 at a
+2 ms receive setting with a 1.4 ms peak, no sink reported RTP errors, and PTP
+jitter stayed between 3 and 11 ns on a gigabit link carrying roughly 25 to
+30 Mbps.
+
+The correct fix is not the port priority but the QoS mode. AES67 and Dante
+already mark media as DSCP 34 and PTP as DSCP 46, and `Port-based` mode ignores
+those marks, so PTP and media are treated identically. Switching to the
+802.1p/DSCP mode makes the switch honour the existing marks and prioritise the
+clock above audio. Expect no measurable latency change today; this is headroom
+for when the network carries more.
+
+Do not enable Broadcast Filtering casually, since some implementations also
+affect multicast and SAP discovery runs on `239.255.255.255`. Treat the
+MULTICAST menu with more caution still: IGMP snooping without a working querier
+can black-hole multicast and take the streams down.
 
 ### Operational fact that dominates all testing
 
@@ -881,10 +995,13 @@ env-tunable, default-omitted behavior before using it for measurement.
    RAVENNA module unloaded.
 4. Remember that `eth0` at `169.254.92.97` is the AES67 network and `wlan0` at
    `192.168.1.201` is management. SSH working says nothing about AoIP health.
-5. Read the `alsaloop` target-latency sweep outcome in the results file before
-   choosing the next lever.
-6. If target latency is not the gate, begin Phase 4: the single purpose-built
-   real-time bridge. That is the credible route from 32.8 ms to 10-20 ms.
+5. **Begin Phase 4.** Every other lever has been measured and eliminated.
+   Parameter tuning of the dual `alsaloop` stack has reached its floor, and
+   scheduling latency has 14.5x headroom, so the single purpose-built bridge
+   with one shared clock-drift estimator is the only remaining route to a
+   stable 10-20 ms.
+6. Validate Phase 4 against the same harness that produced these numbers so the
+   before-and-after comparison is meaningful.
 7. Budget about 4 minutes of dead time per daemon restart, and prefer live
    `PUT /api/sink/{0,1}` changes for anything that supports them.
 8. Never gate a measurement on sink flags. Gate on a detected return signal.

@@ -492,3 +492,267 @@ latency, currently 5000 us and untested below that on this path, and then
 Phase 4, replacing the two `alsaloop` processes with one purpose-built
 real-time bridge. Note that `alsaloop` target latency requires a restart and
 therefore costs about 4 minutes per point, unlike sink delay which is live.
+
+## alsaloop target latency is the real buffer control
+
+`--tlatency` determines what ALSA negotiates. This is the lever the explicit
+`--period`/`--buffer` request could never reach.
+
+| `tlatency` | Negotiated `buffer_size` | Result at sink delay 576 |
+|---:|---:|---|
+| 5000 us | 960 frames, 20 ms | 44.292 ms, clean |
+| **3000 us** | **576 frames, 12 ms** | **20.625 ms, zero error markers** |
+| 2000 us | 384 frames, 8 ms | unusable, 20,950 underrun lines |
+| 1000 us | 192 frames, 4 ms | unusable, continuous underruns |
+
+Both failing points died identically with
+`underrun for playback plughw:CARD=RAVENNA`, so the RAVENNA playback path
+cannot sustain a 384-frame buffer. **The usable floor lies between 3000 and
+2000 us** and has not been bisected.
+
+The best clean reading is 20.625 ms with zero error markers on both directions
+and `Latency 144 frames, 3.000ms`, against 44.292 ms at `tlatency` 5000 in the
+same configuration. A 2000 us reduction in target bought 23.7 ms because the
+buffer fell 384 frames across several streams.
+
+## Sink delay stops being additive at tlatency 3000
+
+A repeated, `PUT`-verified sweep at `tlatency` 3000, two measurements per point:
+
+| Sink delay | Rep 1 | Rep 2 | Score |
+|---:|---:|---:|---:|
+| 576 | 22.292 ms | 22.208 ms | 0.77-0.79 |
+| 288 | 27.229 ms | 28.354 ms | 0.74-0.79 |
+| 144 | 25.042 ms | 24.583 ms | 0.95-1.00 |
+| 96 | 24.062 ms | 23.479 ms | 0.79-0.91 |
+| 48 | 23.333 ms | 22.229 ms | 0.79-1.00 |
+
+**The relationship is non-monotonic.** 288 is the worst point and 576 is among
+the best, which is the opposite of the clean 1:1 additivity measured at
+`tlatency` 5000.
+
+The delay changes were confirmed to apply. `GET /api/sinks` reported
+`delay=48` on both sinks after the final write. Note that `GET /api/sink/N`
+returns 404; the collection route `/api/sinks` is the one to read back. An
+earlier verification attempt used the wrong route and reported spurious
+mismatches.
+
+Interpretation: at `tlatency` 5000 the 960-frame buffer is loose enough that
+the sink playout delay is the dominant queue and shows through cleanly. At
+3000 the 576-frame buffer runs near its stability limit, its occupancy
+fluctuates, and that fluctuation masks the playout delay. Supporting evidence:
+correlation scores at 3000 mostly sit at 0.77-0.79 against the consistent 1.0
+seen at 5000, run-to-run spread is roughly 1.6 ms against about 0.7 ms, and the
+next step down, 2000 us, fails outright.
+
+### Two candidate operating points
+
+| Point | Round trip | Stability |
+|---|---:|---|
+| `tlatency` 5000, sink delay 48 | 32.792 ms | score 1.0, tight spread, well characterised |
+| `tlatency` 3000, sink delay 576 | 20.6 to 22.3 ms | best single reading 20.625 ms, but 22-28 ms across the sweep and lower scores |
+
+Neither has had the required ten-minute clean acceptance soak with all sixteen
+channels loaded. Every figure recorded so far is reconnaissance. The 3000 point
+is faster but demonstrably closer to instability, so the soak is what should
+decide between them rather than the headline number.
+
+## Ten-minute acceptance soak at tlatency 3000: FAILED on stability
+
+Configuration: `tlatency` 3000, sink delay 576, driver-default buffering,
+48 kHz, 16 channels, 64-frame CoreAudio buffer, 31 measurements of 24 impulses
+each over 605 seconds.
+
+### Transport integrity: clean on every count
+
+| Check | Result |
+|---|---|
+| XRUN / underrun / overrun / broken pipe, both directions | **0** |
+| Daemon RTP sequence, SSRC, payload errors | **0** |
+| CoreAudio input and output discontinuities | **0** |
+| Sink flags, both sinks | clean, receiving, unmuted |
+| PTP | locked, expected GMID, 9 ns jitter |
+| USB | `active`, `configured/high-speed` |
+| SoC temperature | 47.7 C |
+| `vcgencmd get_throttled` | `0x0` |
+| Measurements rejected | 0 of 31 |
+
+### Latency: bimodal, fails the stability requirement
+
+| Statistic | Value |
+|---|---:|
+| Median | 20.688 ms |
+| Mean | 21.864 ms |
+| p95 | 32.833 ms |
+| p99 | 32.958 ms |
+| Min / max | 20.062 / 32.958 ms |
+| Spread | 12.896 ms |
+
+The distribution is not noisy, it is **bimodal**:
+
+| Cluster | Samples | Range |
+|---|---:|---|
+| Low | 28 of 31 | 20.062 to 21.250 ms |
+| High | 3 of 31 | 32.833 to 32.958 ms |
+
+The two clusters sit about 990 and 1580 samples. **The step is 590 samples,
+12.29 ms, which is one 576-frame ALSA buffer, 12.00 ms.** Outliers occurred at
+samples 10, 22, and 29, roughly every 70 to 150 seconds, and the loop returned
+to the low cluster afterwards each time.
+
+### Verdict
+
+Rejected as an operating point. This is not measurement noise; the bridge
+intermittently re-queues exactly one full buffer deeper and runs there for a
+while. No XRUN is logged because nothing underruns, the queue simply sits at a
+different depth.
+
+The project criterion is explicit that delay must be stable and that low jitter
+and drift matter more than the lowest isolated number. A 12 ms step that
+appears about 10 percent of the time is disqualifying for tracking or
+performer monitoring: it is an audible timing shift, and it makes any fixed
+latency figure reported to Pro Tools wrong whenever it occurs.
+
+### What this points at
+
+Two independent `alsaloop` processes each run their own adaptive sample-rate
+servo with its own elastic buffer. This document already warns against running
+two independent pitch servos that can fight each other, and Phase 4 already
+specifies one bridge with **one clock-drift estimator shared by both
+directions** and small lock-free elastic buffers.
+
+The bimodal step is direct empirical evidence for that design. Parameter tuning
+of the current stack has reached a floor: `tlatency` 2000 fails outright with
+continuous underruns, and 3000 is stable in transport but not in delay.
+
+### Next
+
+1. Soak `tlatency` 5000 with sink delay 48, the 32.792 ms point, for
+   comparison. Its looser 960-frame buffer may not exhibit the step, which
+   would make it the defensible operating point today even though it is
+   12 ms slower.
+2. If the step appears there too, it is inherent to the dual `alsaloop`
+   architecture and Phase 4 is required rather than optional.
+
+### Soak caveat
+
+The 15 non-measurement channels carried digital silence rather than
+representative program material. All 16 channels streamed end to end with
+identical packet sizes and buffer traffic, and resampling cost is
+data-independent, so transport load is equivalent. This is not a literal
+satisfaction of the acceptance criterion and a true program-material soak
+would need a generator the harness does not have.
+
+## Ten-minute soak at tlatency 5000, sink delay 48: FAILED
+
+First attempt was invalid: the audio gate accepted a single passing burst, so
+delay 48 was written before the stream was established. The gate now requires
+three consecutive passing probes. The second attempt confirmed audio after
+exactly three good probes and **reproduced the failure**, so it is real.
+
+| Statistic | Value |
+|---|---|
+| Usable measurements | **9 of 31, 29 percent** |
+| No signal at all | 10 |
+| Rejected for delay instability | 12 |
+| Median of usable | 33.625 ms |
+| Spread of usable | 2.000 ms |
+| XRUN / underrun / overrun / broken pipe | 0 |
+| Daemon RTP errors | 0 |
+| PTP | locked, 3 ns jitter |
+| Sinks at end of soak | **both `all_muted: true`** |
+
+Sequence of events after writing delay 48 to an established, working stream:
+
+1. Samples 1-10, about two minutes: complete outage, no signal.
+2. Samples 11-31: audio returns, captured peak a healthy 0.2005, but 12 of 21
+   show per-impulse delay spread of 7 to 16 samples. The delay itself is
+   unstable, which is different from losing signal.
+3. End state: both sinks muted.
+
+### Correction
+
+An earlier entry recorded that delay 48 muting was "a startup-ordering
+constraint rather than a floor". **That was wrong.** Writing 48 to a
+fully established stream also breaks it, after a delay. The live sweep that
+produced the original conclusion measured within seconds of the write and did
+not run long enough to see the degradation. Sink delay 48 is not usable on this
+path in either order.
+
+Note that no XRUN or RTP error is ever logged in this state. Neither ALSA nor
+the daemon considers anything wrong; the playout buffer is simply too shallow
+to hold alignment, so only the impulse correlation reveals it.
+
+## Operating point status
+
+| Point | Round trip | Soak verdict |
+|---|---:|---|
+| `tlatency` 3000, delay 576 | 20.688 ms median | Integrity perfect, 31/31 valid, zero errors. **12 ms bimodal step** in 3 of 31 samples. |
+| `tlatency` 5000, delay 48 | 33.625 ms median | **Rejected.** 29 percent usable, two-minute outage, ends muted. |
+| `tlatency` 5000, delay 576 | 44.292 ms | **Not yet soaked.** The most conservative candidate. |
+
+Recommended stopgap on current evidence: **`tlatency` 3000 with sink delay
+576**. It is the fastest point measured, it never lost audio across ten
+minutes, and it logged no errors of any kind. Its known defect is the 12 ms
+step, which must be documented for anyone relying on a fixed reported latency.
+
+If maximum conservatism is preferred over latency, soak `tlatency` 5000 with
+delay 576 before adopting it; 44.292 ms is unmeasured for stability.
+
+## Scheduler wake-up latency: a real-time kernel is not justified
+
+`cyclictest` v2.60, `--mlockall --smp --priority=99 --interval=250
+--distance=0`, 300 seconds per pass, 1.2 million samples per thread across four
+threads. Governor `ondemand`, stock kernel `6.18.34+rpt-rpi-2712`.
+
+| Pass | Min | Avg | Max per thread | Worst | Histogram overflows |
+|---|---:|---:|---|---:|---:|
+| Idle | 1 us | 2 us | 30 / 26 / 22 / 62 us | **62 us** | 0 |
+| Bridge live, `tlatency` 3000 | 1 us | 2-3 us | 174 / 148 / 184 / 132 us | **184 us** | 0 |
+
+Worst-case wake-up latency under a live bridge is **184 microseconds**. Read
+against the ALSA period times:
+
+| Period | Period time | Loaded max as fraction | Headroom |
+|---:|---:|---:|---:|
+| 48 frames | 1000 us | 18.4 % | 5.4x |
+| 96 frames | 2000 us | 9.2 % | 10.9x |
+| 128 frames | 2667 us | 6.9 % | 14.5x |
+| 384 frames | 8000 us | 2.3 % | 43.5x |
+| 576 frames | 12000 us | 1.5 % | 65.2x |
+
+### Conclusions
+
+**A PREEMPT_RT kernel is not justified.** At 14.5x headroom against the current
+128-frame period, and still 5.4x at a hypothetical 48-frame period, scheduling
+determinism is nowhere near the binding constraint. That matters because a
+kernel change would require rebuilding and revalidating both the patched
+`usb_f_uac2` module and the RAVENNA prototype module, the latter being a vendor
+LKM doing kernel-side RTP and timing that PREEMPT_RT locking changes could
+easily break. High risk to the protected rollback path, no measurable benefit.
+
+**The tlatency 2000 underruns were not caused by scheduling.** A 384-frame
+buffer is an 8000 us period against a 184 us worst-case wake-up, 43x headroom,
+yet that configuration failed with continuous
+`underrun for playback plughw:CARD=RAVENNA`. The buffer floor is therefore set
+by the RAVENNA driver, the `plughw` conversion chain, or the adaptive SRC
+work per period, not by the scheduler. This is a useful elimination: tightening
+buffers further is not a scheduling problem to solve.
+
+**Most of Phase 6 drops off the critical path too.** IRQ affinity, core
+isolation, and the performance governor exist to reduce exactly the number that
+is already 184 us. The idle-to-loaded delta is only 62 to 184 us, so even
+perfect isolation could recover at most about 120 us against a 2667 us period.
+The governor is currently `ondemand` and could be set to `performance` as a
+trivial, reversible change, but the measurement says it is not worth
+prioritising.
+
+Everything now points at Phase 4 as the single remaining lever.
+
+### Caveat
+
+`cyclictest` measures timer wake-up latency for an ordinary RT thread. It does
+not measure NIC interrupt servicing, USB gadget completion timing, or the
+RAVENNA driver's internal scheduling. It is necessary rather than sufficient
+evidence, but at 14.5x headroom the margin is wide enough that scheduling is
+not a plausible explanation for any behaviour observed in this session.
