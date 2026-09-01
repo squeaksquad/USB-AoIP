@@ -868,22 +868,59 @@ Two mechanisms have already been proposed here and both were wrong; instrument
 it before believing anything.
 
 **26.729 ms is the best figure the project has produced, 6.06 ms below the
-32.792 ms stopgap.** It is not accepted: no soak, and correlation fell to 0.884
-with 9 samples of real spread (min 1275, max 1284).
+32.792 ms stopgap.** Its 600 s soak has since passed -- see below -- so this
+point is now accepted.
 
 **On the "1 ms scatter".** Every buffer-384 run lands all forty impulses on the
-same sample, and runs at identical settings differ by exactly 48 samples -- one
-1.000 ms step, with no within-run variation at all. That reads as quantisation
-in the correlation rather than instability. Buffer 192 is different: it varies
-*within* the run. So the buffer trades real jitter for latency, and quoting
-"+/-1 ms of scatter" at buffer 384 was probably describing resolution, not
-noise. Confirm against the harness, not with more bridge runs.
+same sample, and buffer-384 runs at identical settings differ by exactly 48
+samples -- one 1.000 ms step, with no within-run variation. That looked like
+quantisation in the correlation. **It is not a general rule:** the two
+buffer-192 runs land 12 samples apart (1283 and 1295), so whatever produces the
+48-sample steps does not apply everywhere. Treat the run-to-run spread as
+unexplained rather than as known quantisation, and confirm against the harness
+rather than with more bridge runs.
+
+#### ACCEPTED: buffer 192, prime 96 -- 26.979 ms, soaked
+
+Run `211118Z`, 600 s, binary `ae1cf9ba`, `96/192/768/192` with
+`--playback-prime 96`, sink delay 576.
+
+| | 480 s `202405Z` | **600 s soak `211118Z`** |
+|---|---:|---:|
+| median | 26.729 ms | **26.979 ms** |
+| score / spread | 0.884 / 9 | **0.988 / 0** |
+| restarts / drops | 0 / 0 | **0 / 0** |
+| `tx_queue_floor` | 36 | **25** |
+| `rx_queue_floor` | 93 | 165 |
+| depth floor total | 573 fr | 699 fr |
+| capture mean | 75.0 fr | 75.8 fr |
+
+**5.81 ms below the stopgap, on a full ten-minute loaded soak.** All forty
+impulses landed on exactly 1295 samples.
+
+**The jitter concern did not survive contact with the longer run.** The 480 s
+run's 0.884 score and 9-sample spread looked like the price of the smaller
+buffer; the soak scored 0.988 with zero spread. That spread was not a stable
+property of the configuration, so it is not an argument against this point.
+
+**The standing caution is TX's queue floor: 25 frames, 0.52 ms, with 50% of
+samples under one RAVENNA period.** Thin by any normal standard. Against that,
+the floor has measured 25-36 frames across roughly 2000 s of cumulative running
+at `prime 96` with no underrun. It is the first thing to suspect if this
+configuration ever fails in the field, and the reason `--tx-playback-prime`
+exists: raising TX alone buys floor back at a known latency cost.
+
+**Depth stayed decoupled from latency for the third time.** Depth floor went
+573 -> 699 frames (+2.6 ms) while latency moved +0.25 ms. This point's latency
+is not governed by the buffering this process owns, which is consistent with
+the 5.33 ms buffer effect living outside the bridge.
 
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
-| `96/192/768/192` prime 96 | **buffer 192, capture-instrumented, unsoaked** | **26.729 ms** | 0.884 | 9 samples |
+| `96/192/768/192` prime 96 | **211118Z, 600 s soak PASSED, ACCEPTED** | **26.979 ms** | **0.988** | **0 samples** |
+| `96/192/768/192` prime 96 | 202405Z, 480 s | 26.729 ms | 0.884 | 9 samples |
 | `96/384/768/192` prime 96 | **191326Z, 600 s soak PASSED** | **32.063 ms** | **1.000** | **0 samples** |
 | `96/384/768/192` prime 96 | 190400Z, 480 s | 31.063 ms | 1.000 | 0 samples |
 | `96/384/768/192` prime 192 | **185418Z, `--playback-prime` `02d2153c`** | **35.313 ms** | **1.000** | **0 samples** |
@@ -910,10 +947,12 @@ not buy stability -- they only moved the XRUN from TX to RX -- and they cost
 roughly 43 ms. **`96/384/768/192` is the operating point to carry forward.**
 
 The dual-`alsaloop` `tlatency=3000`, sink-delay-576 point remains the deployed
-configuration. Phase 4 at `96/384/768/192` has now completed its own ten-minute
-loaded soak (`182239Z`), so it is an accepted operating point, but at 43.313 ms
-it is 10.5 ms slower than the stopgap and there is no reason to switch to it
-until the ring/queue split is tuned.
+configuration, but it is no longer the best measured one. **Phase 4 at
+`96/192/768/192` with `--playback-prime 96` is soaked at 26.979 ms, 5.81 ms
+faster than the stopgap's 32.792 ms**, with zero restarts, zero drops and zero
+impulse spread. Switching is now a real decision rather than an aspiration; the
+open question is not latency but whether TX's 25-frame queue floor is
+acceptable for unattended operation.
 
 ### Phase 5: PTP-disciplined USB research
 
