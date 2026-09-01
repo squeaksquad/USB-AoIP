@@ -742,6 +742,53 @@ against a measured 768 -- removing 93 per direction takes depth to 582 frames
 `prime 192` + trim is the interesting one: about the same latency as bare
 `prime 96`, with four times the playback runway. Not yet measured.
 
+#### RETRACTED: the prime overshoot is not waste, it is the startup runway
+
+Run `192813Z`, `prime 96` with `--prime-trim 1`, **failed immediately**: 673
+recoveries, every one `stage=playback-avail code=-32` (broken pipe) with
+`playback_state=XRUN`, in both directions, restarting in a loop from the first
+second. The USB baseline was unaffected -- `configured`, `high-speed`, service
+active -- so the guard did its job.
+
+The trim did exactly what it was written to do. That is what makes the result
+informative:
+
+```
+PRIMED direction=usb-to-ravenna intended=291 ring_at_prime=384 overshoot=93 trimmed=93 queue_prime=96
+PRIMED direction=ravenna-to-usb intended=291 ring_at_prime=336 overshoot=45 trimmed=45 queue_prime=96
+```
+
+**The mechanism, and why the earlier claim was wrong.** The first render after
+priming commits `ring.size() - target - 3` frames. Untrimmed that is
+`384 - 195 = 189` frames; trimmed it is exactly `291 - 195 = 96`. Ninety-six
+frames is 2 ms, and **below one RAVENNA period (128)**, so both devices
+underran before the next capture wakeup could refill them. This is precisely
+the failure the existing comment in `render_to_playback` predicted: "a
+period-sized initial write leaves only a couple of milliseconds of runway and
+both directions can underrun in lockstep before the next capture wakeup."
+
+**So "93 frames per direction of permanent startup waste" is retracted.** The
+overshoot is load-bearing. What remains true, because it was measured rather
+than reasoned: total round-trip depth is conserved after priming, and it did
+read 768 frames against a predicted 2 x 384. The observation stands; the
+explanation built on it does not.
+
+**The deeper reason a trim at prime time cannot work:** in this design the
+initial commit size and the steady-state depth are *the same quantity* --
+`ring_at_prime - target - 3` sets both. Lowering the steady-state depth by
+trimming necessarily shrinks the initial commit by the same amount. Separating
+them would mean trimming *after* playback has started and stabilised, not at
+prime.
+
+**Do not assume that would work either.** `tx_queue` already bottoms at 48
+frames at depth 768. Removing a further 186 frames of depth would very
+plausibly drive it negative, i.e. straight back to this XRUN, just later in the
+run. The remaining slack looks like runway too. Instrument the queue floor
+against depth before spending another install on it.
+
+`--prime-trim` is retained, defaulting to 0. It costs nothing when off, and it
+is the measurement that established the above. **Do not turn it on.**
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
