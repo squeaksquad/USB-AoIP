@@ -123,8 +123,24 @@ like this. A fixed timer does.
 
 **264 s is the IGMP group membership interval.** The standard value is
 `robustness (2) x query interval (125 s) + max response time (10 s) = 260 s`,
-and the Pi joins its groups at T0 + 0.35 s. The segment is link-local
-(169.254/16) with a GS305EP and no router, so **there is no IGMP querier on it**.
+and the Pi joins its groups at T0 + 0.35 s.
+
+**The absence of a querier is measured, not assumed.**
+`work/aes67-candidate/igmp-querier-probe.py` joins an otherwise unused group on
+the Pi and polls `/proc/net/igmp`: an arriving General Query arms a per-group
+report delay timer, so an armed timer means a querier reached the host. Run on
+2026-09-01 for 150 s after a 20 s settle — longer than the 125 s standard query
+interval — it recorded **zero arming events**:
+
+```text
+# watched 150s after a 20s settle
+# timer arming events: 0
+# VERDICT: NO querier reached this host in a full query interval.
+```
+
+The probe needs no root, no packet capture and no switch access, and it joins a
+group nothing else uses so the SAP group's own snooping state is not warmed.
+
 With snooping enabled and no querier, the switch has no membership state to
 maintain and withholds the groups until that interval expires, at which point it
 falls back to flooding and everything works at once.
@@ -134,7 +150,8 @@ Ferrofish's (2 or 3) — went from receiving nothing to receiving normally insid
 the same ~20 s window, roughly 260 s after the Pi joined. Two independent
 device-level backoffs landing there together is far less likely.
 
-This is a hypothesis about the switch, formed without switch access. It is
+The remaining inference is about the switch's behaviour, not about the querier:
+that the GS305EP withholds rather than floods for exactly that interval. It is
 consistent with every committed measurement, and it predicts a specific,
 falsifiable A/B result (below).
 
@@ -192,13 +209,18 @@ the Pi's own 42.4 s announcement, minus whatever the two fixes above recover.
 
 ## Next measurements, in order
 
-1. **IGMP snooping A/B — now has a prediction, not just a baseline.** With
-   snooping disabled on the GS305EP, first-return-signal should collapse from
-   264 s to roughly the Pi's announcement time plus one Ferrofish resolution
-   interval. If it stays near 264 s, the switch hypothesis is wrong and the
-   timer is inside the Ferrofish. Still blocked on identifying ports 2 vs 3, and
-   still changes the network under test — every figure in the repo to date was
-   collected with snooping enabled.
+1. **IGMP snooping A/B — no longer blocked.** With snooping disabled on the
+   GS305EP, first-return-signal should collapse from 264 s to roughly the Pi's
+   announcement time plus one Ferrofish resolution interval, so about 45-75 s.
+   If it stays near 264 s the switch hypothesis is wrong and the timer is inside
+   the Ferrofish.
+
+   The port identity no longer gates this. The outcome measure is the
+   end-to-end first-return-signal time — one number the existing harness already
+   produces, with a seven-run baseline of 263-267 s and a 4 s spread — not a
+   per-port counter that needs interpreting. One switch toggle plus one ~15 min
+   harness run. It does still change the network under test: every figure in the
+   repo to date was collected with snooping enabled.
 2. **Enable the IGMP querier instead.** If the diagnosis is right, this fixes
    the same 240 s without giving up snooping, and is the better production
    answer. Also switch-UI work, so also blocked.
@@ -219,15 +241,20 @@ Established by mDNS and ARP on `en12` ("2.5G AOIP").
 | Raspberry Pi (`eth0`) | 169.254.92.97 | `88:a2:9e:8b:01:e4` | 1 |
 | Dante USB adapter `D2USB-6152f1` (Ultimo X2, 100 Mb) | 169.254.242.82 | `00:1d:c1:61:52:f1` | 4 |
 | Mac (`en12`) | 169.254.227.116 | `4c:ea:41:63:33:8f` | 5 |
-| Ferrofish `FF-PULSE-16-DX` / `P16DX-1d27dc` | 169.254.248.189 | `00:1d:c1:1d:27:dc` | 2 or 3 |
-| Metric Halo ULN-2 3d `MobileIO_49057` | 169.254.162.191 | `00:07:59:00:bf:a1` | 2 or 3 |
+| Ferrofish `FF-PULSE-16-DX` / `P16DX-1d27dc` | 169.254.248.189 | `00:1d:c1:1d:27:dc` | 3 |
+| Metric Halo ULN-2 3d `MobileIO_49057` | 169.254.162.191 | `00:07:59:00:bf:a1` | 2 |
 | GS305EP management | 169.254.0.239 | `54:07:7d:20:48:50` | — |
 
-Ports 2 and 3 are still unresolved between the Ferrofish and the Metric Halo.
-The switch exposes no MAC table; identify by unplugging one cable and watching
-the port status page, or by correlating per-port byte counters with generated
-traffic. Resolve this before the snooping A/B, since interpreting a per-port
-change requires knowing which port is which.
+Ports 2 and 3 were resolved on 2026-09-01: **port 2 is the Metric Halo ULN-2 3d,
+port 3 is the Ferrofish.** The switch exposes no MAC table, so this was settled
+by administratively disabling a port and watching the ULN-2 drop out of
+MIOConsole3d. That is safe to repeat: the ULN-2 has exactly one ARP entry, on
+`en12`, so it has no alternate path, and the Mac sits on port 5 so disabling 2
+or 3 cannot cut the management path to the switch. Note that `MHLinkAudio.driver`
+is a live CoreAudio device, so dropping port 2 interrupts whatever is using it.
+
+The switch management UI at `169.254.0.239` answers over `en12` from the Mac
+(HTTP 200, ~1.7 ms). None of this work requires being at the rack.
 
 SAP announcements on this segment repeat about every 30.5 s. Allow a full
 interval before concluding a source is silent.
