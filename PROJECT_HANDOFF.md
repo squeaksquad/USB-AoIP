@@ -915,11 +915,47 @@ exists: raising TX alone buys floor back at a known latency cost.
 is not governed by the buffering this process owns, which is consistent with
 the 5.33 ms buffer effect living outside the bridge.
 
+#### Pricing the safer point: TX 192 / RX 96 costs 0.75 ms
+
+Run `214847Z`, 480 s, buffer 192, `--tx-playback-prime 192
+--rx-playback-prime 96`. First use of the per-direction knob; `PRIMED`
+confirms it resolved as intended, `usb-to-ravenna queue_prime=192` and
+`ravenna-to-usb queue_prime=96`.
+
+| | accepted soak `211118Z` | **TX 192 / RX 96** | change |
+|---|---:|---:|---:|
+| median | 26.979 ms | **27.729 ms** | **+0.75 ms** |
+| `tx_queue_floor` | 25 fr | **104 fr** | **x4.2** |
+| TX under one period | 50.07% | **10.71%** | **/4.7** |
+| `rx_queue_floor` | 165 fr | 93 fr | prime unchanged |
+| restarts / drops | 0 / 0 | **0 / 0** | |
+| score / spread | 0.988 / 0 | 0.898 / 8 | 480 s only |
+
+**0.75 ms buys 4.2x the TX runway.** That is a far better trade than the depth
+model predicted (~2 ms), and it is the fourth time depth has under-predicted at
+this buffer: depth floor rose 699 -> 760 frames (+1.3 ms) against +0.75 ms of
+latency.
+
+At 27.729 ms it still beats the stopgap by 5.06 ms while moving TX off the
+25-frame floor that is the one standing risk in the accepted point.
+
+**Discount the 0.898 score.** The accepted point's own 480 s run scored
+0.884 with 9 samples of spread and then soaked at 0.988 with zero spread.
+Spread at 480 s has not been predictive at this operating point.
+
+**Recommendation: adopt TX 192 / RX 96 over the 26.979 ms point**, subject to
+its own 600 s soak, which has not been run. Half a millisecond is not worth a
+queue floor that spends half its life under one device period in unattended
+operation, and both points beat the stopgap comfortably. If the faster point is
+kept instead, record the 25-frame floor as a known accepted risk rather than
+leaving it implicit.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
 | `96/192/768/192` prime 96 | **211118Z, 600 s soak PASSED, ACCEPTED** | **26.979 ms** | **0.988** | **0 samples** |
+| `96/192/768/192` TX 192 / RX 96 | 214847Z, 480 s, unsoaked | 27.729 ms | 0.898 | 8 samples |
 | `96/192/768/192` prime 96 | 202405Z, 480 s | 26.729 ms | 0.884 | 9 samples |
 | `96/384/768/192` prime 96 | **191326Z, 600 s soak PASSED** | **32.063 ms** | **1.000** | **0 samples** |
 | `96/384/768/192` prime 96 | 190400Z, 480 s | 31.063 ms | 1.000 | 0 samples |
