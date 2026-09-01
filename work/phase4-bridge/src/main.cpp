@@ -53,6 +53,11 @@ struct Options {
     snd_pcm_uframes_t requested_buffer{384};
     std::size_t ring_frames{768};
     std::size_t target_frames{192};
+    // Frames to prime into the ALSA playback queue. Zero means "the whole
+    // playback buffer", which is the historical behaviour. This is the
+    // ring/queue split knob: the elastic ring holds target_frames as the jitter
+    // reservoir, and this sets how much sits in the device queue behind it.
+    std::size_t playback_prime_frames{0};
     int priority{90};
     unsigned int seconds{0};
 };
@@ -69,6 +74,8 @@ struct Options {
         << "  --buffer FRAMES        requested ALSA buffer (default 384)\n"
         << "  --ring FRAMES          elastic-ring capacity (default 768)\n"
         << "  --target FRAMES        elastic-ring target (default 192)\n"
+        << "  --playback-prime N     frames primed into the ALSA playback queue\n"
+        << "                         (default 0 = the whole playback buffer)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
     std::exit(error.empty() ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -107,6 +114,8 @@ Options parse_options(const int argc, char** argv) {
             options.ring_frames = parse_unsigned(value, "ring");
         } else if (argument == "--target") {
             options.target_frames = parse_unsigned(value, "target");
+        } else if (argument == "--playback-prime") {
+            options.playback_prime_frames = parse_unsigned(value, "playback-prime");
         } else if (argument == "--priority") {
             options.priority = static_cast<int>(parse_unsigned(value, "priority"));
         } else if (argument == "--seconds") {
@@ -269,6 +278,9 @@ struct Direction {
     usb16x16::FarrowResampler resampler;
     bool primed{false};
     bool playback_started{false};
+    // Frames to prime into the ALSA playback queue; zero means the whole
+    // playback buffer.
+    std::size_t playback_prime_frames{0};
     std::uint64_t input_frames{};
     std::uint64_t output_frames{};
     // Frames the resampler produced, and consumed ring input for, that
@@ -378,11 +390,23 @@ IoResult render_to_playback(Direction& direction,
         // runway and both directions can underrun in lockstep before the next
         // capture wakeup. Retain the process-local target plus Farrow lookahead
         // while making one near-full-buffer initial commit.
-        const std::size_t prime_frames =
-            target_frames + static_cast<std::size_t>(direction.playback.buffer()) + 3;
+        const std::size_t queue_prime = direction.playback_prime_frames != 0
+            ? direction.playback_prime_frames
+            : static_cast<std::size_t>(direction.playback.buffer());
+        const std::size_t prime_frames = target_frames + queue_prime + 3;
         if (direction.ring.size() < prime_frames) {
             return IoResult::idle;
         }
+        // The ring is checked on capture wakeups, so it can overshoot the
+        // threshold by a whole capture period before this is reached. Whatever
+        // it overshoots by becomes permanent pipeline depth: total depth is set
+        // here and then conserved, because there is no restoring force on the
+        // common mode. Report it rather than infer it from occupancy later.
+        std::cerr << "PRIMED direction=" << direction.name
+                  << " intended=" << prime_frames
+                  << " ring_at_prime=" << direction.ring.size()
+                  << " overshoot=" << (direction.ring.size() - prime_frames)
+                  << " queue_prime=" << queue_prime << '\n';
         direction.primed = true;
     }
 
@@ -592,8 +616,16 @@ int run(const Options& options) {
     Pcm ravenna_playback("RAVENNA playback", options.ravenna_device, SND_PCM_STREAM_PLAYBACK, SampleFormat::s32_le, options);
 
     const auto largest_playback_buffer = std::max(usb_playback.buffer(), ravenna_playback.buffer());
-    if (options.ring_frames <
-        options.target_frames + static_cast<std::size_t>(largest_playback_buffer) + 4) {
+    // The prime depth is what the ring must be able to hold, and it is the
+    // playback buffer only when --playback-prime is left at zero.
+    const std::size_t queue_prime = options.playback_prime_frames != 0
+        ? options.playback_prime_frames
+        : static_cast<std::size_t>(largest_playback_buffer);
+    if (options.playback_prime_frames != 0 &&
+        options.playback_prime_frames > static_cast<std::size_t>(largest_playback_buffer)) {
+        throw std::runtime_error("--playback-prime exceeds the negotiated ALSA playback buffer");
+    }
+    if (options.ring_frames < options.target_frames + queue_prime + 4) {
         throw std::runtime_error("elastic ring is too small to prime the ALSA playback queues");
     }
 
@@ -605,6 +637,8 @@ int run(const Options& options) {
 
     Direction tx("usb-to-ravenna", usb_capture, ravenna_playback, options.ring_frames);
     Direction rx("ravenna-to-usb", ravenna_capture, usb_playback, options.ring_frames);
+    tx.playback_prime_frames = options.playback_prime_frames;
+    rx.playback_prime_frames = options.playback_prime_frames;
     usb16x16::SharedDriftEstimator estimator;
     Telemetry telemetry;
 

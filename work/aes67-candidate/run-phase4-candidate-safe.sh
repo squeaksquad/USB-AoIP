@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=0c527d8d48fc79675b42a185aac9ef7c8cad7406ed343949760668bbd6bce67c
+expected_bridge_sha256=02d2153c6945bbd8aa76e6e719a7f46941d98cea6325385a2a388713994ed29d
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
@@ -23,6 +23,10 @@ period_frames=${2:-96}
 buffer_frames=${3:-384}
 ring_frames=${4:-768}
 target_frames=${5:-192}
+# Frames primed into the ALSA playback queue. Zero keeps the historical
+# behaviour of priming the whole playback buffer. This is the ring/queue split
+# knob; the elastic ring keeps target_frames as the jitter reservoir.
+playback_prime_frames=${6:-0}
 sink_delay=576
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
@@ -31,7 +35,8 @@ temporary_root=
 daemon_pid=
 bridge_pid=
 
-for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frames" "$target_frames"; do
+for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frames" "$target_frames" \
+             "$playback_prime_frames"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -47,6 +52,13 @@ if { [ "$period_frames" -ne 48 ] && [ "$period_frames" -ne 96 ]; } ||
    [ "$target_frames" -lt "$period_frames" ]; then
   echo "invalid period/buffer/ring/target relationship" >&2
   exit 12
+fi
+if [ "$playback_prime_frames" -ne 0 ] &&
+   { [ "$playback_prime_frames" -lt "$period_frames" ] ||
+     [ "$playback_prime_frames" -gt "$buffer_frames" ] ||
+     [ "$ring_frames" -lt $((target_frames + playback_prime_frames + 4)) ]; }; then
+  echo "invalid playback-prime relationship" >&2
+  exit 13
 fi
 
 for process_name in ptp4l aes67-daemon alsaloop; do
@@ -194,6 +206,7 @@ timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
   --buffer "$buffer_frames" \
   --ring "$ring_frames" \
   --target "$target_frames" \
+  --playback-prime "$playback_prime_frames" \
   --priority 90 \
   --seconds "$candidate_seconds" \
   > "$result_dir/bridge.log" 2>&1 &
@@ -220,6 +233,7 @@ fi
   echo "buffer_frames=$buffer_frames"
   echo "ring_frames=$ring_frames"
   echo "target_frames=$target_frames"
+  echo "playback_prime_frames=$playback_prime_frames"
   echo "sink_delay=$sink_delay"
   echo "candidate_seconds=$candidate_seconds"
   echo "bridge_sha256=$expected_bridge_sha256"

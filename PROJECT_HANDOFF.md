@@ -633,10 +633,78 @@ it, neither direction drops a frame, and neither playback queue drains. The
 `curl` failure to port 8080 early in `182239Z` is the daemon API not yet up;
 the wrapper retried and the sink readback confirms delay 576 was applied.
 
+#### Tuning the ring/queue split — the `--playback-prime` knob
+
+Total pipeline depth is **set at prime time and then conserved**, because there
+is no restoring force on the common mode. `render_to_playback` waited for the
+ring to reach `target + playback_buffer + 3` before priming, so the playback
+buffer size set the permanent depth. The measured soak carried 1349 frames
+round trip, 28.09 ms of the 43.313 ms.
+
+`--playback-prime FRAMES` decouples that from the ALSA buffer: the elastic ring
+still holds `--target` as the jitter reservoir, and this sets how much sits in
+the device queue behind it. Zero, the default, keeps the historical
+whole-buffer behaviour. It is threaded through the safe wrapper as a validated
+sixth positional argument and through the measure script as
+`USB16X16_PHASE4_PLAYBACK_PRIME_FRAMES`.
+
+A `PRIMED` line per direction reports `intended`, `ring_at_prime` and
+`overshoot` once at startup, so the overshoot is measured rather than inferred
+from occupancy later.
+
+| | soak baseline | `184056Z` buffer 192 | `185418Z` **prime 192** |
+|---|---:|---:|---:|
+| median | 43.313 ms | 35.729 ms | **35.3125 ms** |
+| score / spread | 1.000 / 0 | 0.912 / 8 | **1.000 / 0** |
+| round-trip depth | 1349 fr (28.09 ms) | 1238 fr (25.80 ms) | **970 fr (20.21 ms)** |
+| restarts / drops | 0 / 0 | 0 / 0 | **0 / 0** |
+| TX / RX achieved ppm | -14.24 / +14.21 | -13.97 / +13.92 | -14.48 / +14.43 |
+
+**Reducing `--buffer` is the wrong knob.** `184056Z` asked for 192 and the
+devices negotiated `usb=96/384` (the request ignored outright) and
+`ravenna=128/288`. Only TX's prime moved; RX stayed pinned at 726 frames. It
+also dropped the correlation score to 0.912 with 8 samples of spread. Run
+`185418Z` put the buffers back to 384 and changed only the prime: **score
+returned to 1.000 with all forty impulses at exactly 1695 samples.** So the
+score loss was the shallow ALSA buffer, not the shallow queue. Prime depth is
+the safe knob; buffer size is not.
+
+**In the isolated run, depth accounts for the latency.** -379 frames = -7.88 ms
+of depth against -8.00 ms measured, closing to 0.12 ms.
+
+**There is a second lever, still unquantified.** `184056Z` and `185418Z` measure
+within 0.42 ms of each other while differing by 268 frames of depth (5.6 ms), so
+roughly 5 ms of `184056Z`'s gain came from something not counted here. That run
+also moved `ravenna_capture` 384 -> 288, and **capture-side buffering is not
+instrumented at all** -- the depth metric is ring plus playback queue only.
+Recorded as an observation, not a mechanism. Instrument it before acting on it.
+
+**93 frames per direction of prime overshoot, now measured:**
+
+```
+PRIMED direction=usb-to-ravenna intended=387 ring_at_prime=480 overshoot=93 queue_prime=192
+PRIMED direction=ravenna-to-usb intended=387 ring_at_prime=480 overshoot=93 queue_prime=192
+```
+
+The ring is only checked on capture wakeups, so it sails past the threshold by
+most of a capture period before priming runs. That is 186 frames round trip,
+**3.9 ms of permanent startup waste**. Trimming the ring to `intended` at prime
+time would recover it and is harmless at startup, before audio matters. Not yet
+implemented; it needs a code change and an install.
+
+`rx_short` went 0 -> 274,821 at prime 192: the shallower queue makes USB
+playback short-change `snd_pcm_mmap_begin` too, and `rx_dropped` stayed 0. The
+reorder fix is now exercised on both devices rather than only RAVENNA.
+
+**Status: 35.3125 ms, 2.52 ms above the 32.792 ms stopgap**, down from 10.5 ms.
+Reconnaissance only -- one 480 s run, no soak.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
+| `96/384/768/192` prime 192 | **185418Z, `--playback-prime` `02d2153c`** | **35.313 ms** | **1.000** | **0 samples** |
+| `96/192/768/192` | 184056Z, buffer 192, confounded | 35.729 ms | 0.912 | 8 samples |
 | `96/384/768/192` | **182239Z, reorder fix `0c527d8d`, 600 s soak PASSED** | **43.313 ms** | **1.000** | **0 samples** |
 | `96/384/768/192` | **180438Z, reorder fix `0c527d8d`, first clean 480 s** | **44.313 ms** | **1.000** | **0 samples** |
 | `96/384/768/192` | **160859Z, instrumented binary** | **41.625 ms** | **1.000** | **0 samples** |
