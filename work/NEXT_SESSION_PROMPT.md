@@ -69,16 +69,33 @@ TASKS, in order
    throwaway sink early moves it off the critical path.
 3. A new operating point needs its own ten-minute loaded soak before acceptance.
 
-BLOCKED ON PHYSICAL / SWITCH ACCESS - do not attempt remotely
-  - Identifying switch ports 2 vs 3 (Ferrofish vs Metric Halo ULN-2 3d).
-  - The IGMP snooping A/B, and the better alternative of enabling the IGMP
-    querier. The A/B is interpreted per-port, so the port ID gates it.
+NOTHING HERE REQUIRES BEING AT THE RACK
+  The switch management UI at 169.254.0.239 answers over the Mac's en12
+  (HTTP 200, ~1.7 ms). Ports are resolved: port 2 is the ULN-2 3d, port 3 is
+  the Ferrofish, port 5 the Mac, port 1 the Pi.
+
+  The IGMP snooping A/B is ready to run. Its outcome measure is the end-to-end
+  first-return-signal time, NOT a per-port counter, so port identity does not
+  gate it. Baseline is 263-267 s over seven runs with a 4 s spread; with
+  snooping off, predict a collapse to roughly 45-75 s. One switch toggle plus
+  one ~15 min harness run. It does change the network under test, so record it.
+
+  Better still, test the FIX rather than the diagnostic: run an IGMP querier on
+  the segment and see whether the 264 s collapses without disabling snooping.
+  Sending queries needs raw sockets, so it needs one root step - either a Mac
+  sudo or a new root-owned Pi wrapper. Both are remote, neither is physical.
+
+  Caution when disabling port 2: MHLinkAudio.driver is a live CoreAudio device
+  and the ULN-2 has no alternate path, so close any session first. Disabling 2
+  or 3 cannot cut your own management path, which runs via port 5.
 
 GOTCHAS THAT WILL OTHERWISE COST YOU HOURS
 1. Audio takes 263-267 s to start flowing after a daemon restart (n=7, fixed
    timer, NOT device backoff). The Pi itself announces at T0+42.4 s (n=13).
-   The ~220 s gap is almost certainly the switch: IGMP group membership
-   interval 2x125+10 = 260 s on a link-local segment with no querier. It is a
+   The ~220 s gap is the switch: IGMP group membership interval 2x125+10 =
+   260 s on a link-local segment with no querier. The absence of a querier is
+   MEASURED - work/aes67-candidate/igmp-querier-probe.py saw zero report-timer
+   arming events in 150 s, longer than the 125 s query interval. It is a
    network cost; no daemon or bridge work will shorten it.
 2. NEVER gate a measurement on sink flags. receiving_rtp_packet: true occurs
    during pure silence and on a broken path. Gate on a detected return signal
