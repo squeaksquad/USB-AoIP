@@ -368,12 +368,26 @@ near-unity Farrow conversion, and exactly one `SharedDriftEstimator`. The safe
 wrapper and the existing Mac impulse harness provide comparable guarded runs;
 any ALSA recovery rejects the candidate without touching USB enumeration.
 
-No Phase 4 operating point is accepted yet. The best clean reconnaissance run,
+**`96/384/768/192` has now passed its ten-minute loaded soak.** Run
+`phase4-candidate-20260901T182239Z`, 600 s, zero restarts, zero drops, both
+directions applying the commanded rate, measured 43.313 ms at correlation score
+1.000 with zero spread. That clears the acceptance bar this project sets for a
+new operating point, and it is the first Phase 4 point to do so.
+
+It does **not** displace the stopgap. At 43.313 ms it is 10.5 ms slower than
+the soaked dual-`alsaloop` point's 32.792 ms, so the stopgap remains the
+deployed configuration. What Phase 4 now has is a correct, stable base to tune
+from. See "The reorder fix, and what it did".
+
+The earlier best clean reconnaissance run,
 `phase4-candidate-20260901T132356Z`, completed 480 seconds with zero direction
-recoveries and a valid 40-impulse result, but its TX playback queue lost 336
-frames, so it is not safe to extrapolate to the required soak. The following
-pipeline-depth estimator run, `phase4-candidate-20260901T134118Z`, reached an RX
-USB-playback XRUN after 393 seconds. Its latency snapshot is reconnaissance
+recoveries and a valid 40-impulse result. Its `tx_queue` fell by 336 frames,
+which was read at the time as frame loss; the instrumentation build later
+showed it was a shrinking ALSA playback queue and not a loss at all, so that
+run is **not** disqualified. See "Frame accounting from the instrumentation
+build" below. The following pipeline-depth estimator run,
+`phase4-candidate-20260901T134118Z`, reached an RX USB-playback XRUN after 393
+seconds. Its latency snapshot is reconnaissance
 only; its durable value is the first passive SAP discovery timeline captured
 on the same wall clock as readiness.
 
@@ -435,7 +449,8 @@ Three consequences, all of which this explains:
 **The fix is a reorder, not new logic.** Call `snd_pcm_mmap_begin` first to
 learn how many frames ALSA will accept, then render exactly that many. Once
 input has been consumed it cannot be un-consumed, which is why the present order
-can only drop. Not yet implemented.
+can only drop. **Implemented and confirmed in `62125cb`; see the next
+subsection.**
 
 The evidence below is what led here.
 
@@ -544,13 +559,86 @@ right order of magnitude for an uncorrected ~29 ppm offset; it is not an exact
 match, and the commanded ppm wandered between -21 and -33 during the run, so
 treat the arithmetic as consistent rather than proven.
 
-**Prediction to test next: fix the TX rate correction and the XRUN should
-disappear in both directions.**
+**Prediction tested and confirmed** by run `180438Z` below: with the drops
+removed, the XRUN disappeared and TX now applies the ratio it is handed.
+
+#### The reorder fix, and what it did — run 180438Z
+
+Binary `0c527d8d`, commit `62125cb`, `96/384/768/192`, sink delay 576, 480 s.
+`render_to_playback` now calls `snd_pcm_mmap_begin` before `resampler.render`
+and renders exactly the frames ALSA granted; the remainder arrives on the next
+pass instead of being discarded. The estimator and the control law are
+untouched.
+
+| | `172034Z` (before, 252 s) | `180438Z` (after, 480 s) |
+|---|---:|---:|
+| `tx_dropped` | 583 | **0** |
+| `rx_dropped` | 0 | **0** |
+| XRUN | 331 s, `usb-to-ravenna` | **none, ran to completion** |
+| restarts / `RECOVER` | — | 0 / 0 |
+
+**The rate asymmetry is gone**, which is the result that matters, because it is
+what two earlier sessions chased into dead ends. Measured over the 449 s after
+convergence:
+
+| Direction | achieved step | commanded (mean, same window) |
+|---|---:|---:|
+| TX | **-13.69 ppm** | -13.69 ppm |
+| RX | **+13.64 ppm** | +13.64 ppm (mirror) |
+
+TX previously read exactly `1.000000000` while being commanded -31.68 ppm. It
+now tracks the command to 0.00 ppm, and RX mirrors it to 0.05 ppm. The
+cancellation is resolved and the diagnosis holds: the shared estimator was
+correct throughout.
+
+**The playback-queue drain is gone.** `tx_queue` held 336-384 and ended at 384,
+against a previous monotonic 384 -> 288 -> 240 -> 192 -> 144 -> 96 -> XRUN.
+`rx_queue` sat pinned at 300 for the whole run.
+
+**New counter: `tx_short` / `rx_short`**, the frames `snd_pcm_mmap_begin`
+declined to grant. It reads 1,249,363 on TX and **0** on RX. That direction
+asymmetry is the same one the 583-vs-0 drops showed, on the same device, which
+is strong corroboration. **Do not compare 1,249,363 against the old 583** --
+they count different things. `dropped_frames` fired only when `produced >
+granted`; `short_begin_frames` counts every grant smaller than the request,
+most of which the resampler would never have filled. Its job is to distinguish
+"the fix absorbed the short begins" from "the wrap condition did not occur this
+run", which `dropped=0` alone cannot say. `dropped_frames` is retained as a
+structural-zero regression guard on the ordering.
+
+**What the fix did not buy: latency.** `180438Z` measured 44.3125 ms and the
+soak `182239Z` measured 43.3125 ms, both inside the 40.375-44.313 band already
+seen at this operating point. Correctness and stability, not speed. The
+ring/queue split remains the path to beating the 32.792 ms stopgap, and it is
+now safe to attempt on a pipeline that no longer drops frames.
+
+**The ten-minute soak, run `182239Z`.** Same binary, same operating point, 600 s,
+sink delay 576 confirmed on both sinks by readback:
+
+| | `180438Z` (480 s) | `182239Z` (600 s soak) |
+|---|---:|---:|
+| restarts / `RECOVER` | 0 / 0 | **0 / 0** |
+| `tx_dropped` / `rx_dropped` | 0 / 0 | **0 / 0** |
+| TX achieved | -13.69 ppm | **-14.24 ppm** |
+| RX achieved | +13.64 ppm | **+14.21 ppm** |
+| commanded (mean) | -13.69 ppm | **-14.21 ppm** |
+| `tx_queue` | 336-384 | **336-384** |
+| `rx_queue` | 300 flat | **300 flat** |
+| `tx_short` / `rx_short` | 1,249,363 / 0 | 1,860,240 / 0 |
+| median | 44.313 ms | **43.313 ms** |
+| score / spread | 1.000 / 0 | **1.000 / 0** |
+
+Both runs reproduce the same picture: TX tracks the commanded ppm, RX mirrors
+it, neither direction drops a frame, and neither playback queue drains. The
+`curl` failure to port 8080 early in `182239Z` is the daemon API not yet up;
+the wrapper retried and the sink readback confirms delay 576 was applied.
 
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
+| `96/384/768/192` | **182239Z, reorder fix `0c527d8d`, 600 s soak PASSED** | **43.313 ms** | **1.000** | **0 samples** |
+| `96/384/768/192` | **180438Z, reorder fix `0c527d8d`, first clean 480 s** | **44.313 ms** | **1.000** | **0 samples** |
 | `96/384/768/192` | **160859Z, instrumented binary** | **41.625 ms** | **1.000** | **0 samples** |
 | `96/384/768/192` | 113600Z, 120034Z, 121252Z (older binaries) | 40.2-42.6 ms | | |
 | `96/960/1536/192` | 151450Z | 84.291 ms | 0.987 | 8 |
@@ -563,13 +651,18 @@ buffers halve the latency *and* measure far more cleanly than the large ones.
 The gap to the stopgap is 8.8 ms rather than the 51 ms the large-buffer point
 suggested.
 
-Every run above exited 33, so all are reconnaissance until a clean run
-reproduces one. The larger buffers were adopted for stability, but they did not
-buy stability -- they only moved the XRUN from TX to RX -- and they cost roughly
-43 ms. **`96/384/768/192` is the operating point to carry forward.**
+Every run above except `180438Z` exited 33, so all of those are reconnaissance.
+`180438Z` is the first Phase 4 run to complete without a restart, which makes
+its 44.313 ms the first Phase 4 latency figure that is not taken from a run
+that later failed. The larger buffers were adopted for stability, but they did
+not buy stability -- they only moved the XRUN from TX to RX -- and they cost
+roughly 43 ms. **`96/384/768/192` is the operating point to carry forward.**
 
-The dual-`alsaloop` `tlatency=3000`, sink-delay-576 point remains the accepted
-stopgap until a Phase 4 point completes its own ten-minute loaded soak.
+The dual-`alsaloop` `tlatency=3000`, sink-delay-576 point remains the deployed
+configuration. Phase 4 at `96/384/768/192` has now completed its own ten-minute
+loaded soak (`182239Z`), so it is an accepted operating point, but at 43.313 ms
+it is 10.5 ms slower than the stopgap and there is no reason to switch to it
+until the ring/queue split is tuned.
 
 ### Phase 5: PTP-disciplined USB research
 
