@@ -789,6 +789,52 @@ against depth before spending another install on it.
 `--prime-trim` is retained, defaulting to 0. It costs nothing when off, and it
 is the measurement that established the above. **Do not turn it on.**
 
+#### The queue floor against depth, measured — the sweep
+
+Three 480 s runs on the instrumented binary `b91a5d08`, buffer fixed at 384,
+only the prime varied. `prime 384` reproduced 44.3125 ms and `prime 192`
+reproduced 35.3125 ms, matching the pre-instrumentation runs exactly, so the
+counters are behaviour-free.
+
+| prime | median | `tx_qfloor` | `rx_qfloor` | `tx_dfloor` | `rx_dfloor` | TX under a period | RX under a period |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 384 | 44.3125 ms | 240 | 288 | 513 | 684 | **0%** | 0% |
+| 192 | 35.3125 ms | 113 | 285 | 312 | 480 | 6.44% | 0% |
+| 96 | 31.0625 ms | **27** | 93 | 223 | 350 | **49.83%** | 2.64% |
+
+Sampled every loop iteration, ~620k samples per run, against the 480 the 1 Hz
+print gives.
+
+**The accepted `prime 96` point is far thinner than it looked.** The 1 Hz
+telemetry reported `tx_queue` min 48; the true floor is **27 frames, 0.56 ms**,
+and TX sits below one RAVENNA period for **half of all samples**. The 600 s
+soak did pass, and 32.0625 ms is a real measurement, but its safety margin was
+overstated by the statistic used to judge it. Treat `prime 96` as marginal.
+
+**The floor does not plateau; it tracks depth toward zero.** That settles the
+open question: the remaining slack is runway, not waste, and `prime 96` is
+effectively the wall for this design. The `--prime-trim` failure was not bad
+luck, it was this wall being hit from the other side.
+
+**Latency tracks depth floor closely.** Total depth floor 1197 -> 792 -> 573
+frames against 44.31 -> 35.31 -> 31.06 ms; the deltas are 8.44 vs 9.00 ms and
+4.56 vs 4.25 ms.
+
+**The two directions are not alike, but not in the way that helps.** RX's floor
+is flat from prime 384 to 192 (288 -> 285) and then falls with it (93 at prime
+96); TX falls throughout (240 -> 113 -> 27). RX is the roomier direction at
+every point. But mixing does not buy latency: TX 192 with RX 96 predicts a
+depth floor near 662 frames, so roughly **32.9 ms -- worse than 31.06** -- while
+buying TX a 113-frame floor instead of 27. Per-direction prime is therefore a
+**safety-versus-latency knob, not a latency win**. Do not expect it to beat
+`prime 96`; expect it to make a near-`prime 96` point survivable.
+
+`--tx-playback-prime` and `--rx-playback-prime` implement this, each falling
+back to `--playback-prime` and then to that direction's own negotiated buffer.
+Validation is now per direction against the buffer that direction actually
+negotiated, rather than against the larger of the two -- the devices do not
+always agree, and the buffer-192 run had RAVENNA at 288 with USB at 384.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |

@@ -63,6 +63,13 @@ struct Options {
     // capture period, and that excess becomes permanent pipeline depth because
     // depth is conserved after priming. Off by default: historical behaviour.
     bool prime_trim{false};
+    // Per-direction overrides of playback_prime_frames; zero inherits it. The
+    // two directions do not carry the same slack -- measured at prime 192, RX's
+    // queue floor sat at 285 while TX's was 113 -- so one shared prime tunes
+    // the roomy direction and the binding one together. tx is usb-to-ravenna
+    // (RAVENNA playback), rx is ravenna-to-usb (USB playback).
+    std::size_t tx_playback_prime_frames{0};
+    std::size_t rx_playback_prime_frames{0};
     int priority{90};
     unsigned int seconds{0};
 };
@@ -81,6 +88,8 @@ struct Options {
         << "  --target FRAMES        elastic-ring target (default 192)\n"
         << "  --playback-prime N     frames primed into the ALSA playback queue\n"
         << "                         (default 0 = the whole playback buffer)\n"
+        << "  --tx-playback-prime N  usb-to-ravenna override (0 = use --playback-prime)\n"
+        << "  --rx-playback-prime N  ravenna-to-usb override (0 = use --playback-prime)\n"
         << "  --prime-trim 0|1       discard the ring overshoot at prime time\n"
         << "                         (default 0 = keep it, historical behaviour)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
@@ -123,6 +132,10 @@ Options parse_options(const int argc, char** argv) {
             options.target_frames = parse_unsigned(value, "target");
         } else if (argument == "--playback-prime") {
             options.playback_prime_frames = parse_unsigned(value, "playback-prime");
+        } else if (argument == "--tx-playback-prime") {
+            options.tx_playback_prime_frames = parse_unsigned(value, "tx-playback-prime");
+        } else if (argument == "--rx-playback-prime") {
+            options.rx_playback_prime_frames = parse_unsigned(value, "rx-playback-prime");
         } else if (argument == "--prime-trim") {
             const unsigned long parsed = parse_unsigned(value, "prime-trim");
             if (parsed > 1) {
@@ -700,17 +713,28 @@ int run(const Options& options) {
     Pcm ravenna_capture("RAVENNA capture", options.ravenna_device, SND_PCM_STREAM_CAPTURE, SampleFormat::s32_le, options);
     Pcm ravenna_playback("RAVENNA playback", options.ravenna_device, SND_PCM_STREAM_PLAYBACK, SampleFormat::s32_le, options);
 
-    const auto largest_playback_buffer = std::max(usb_playback.buffer(), ravenna_playback.buffer());
-    // The prime depth is what the ring must be able to hold, and it is the
-    // playback buffer only when --playback-prime is left at zero.
-    const std::size_t queue_prime = options.playback_prime_frames != 0
-        ? options.playback_prime_frames
-        : static_cast<std::size_t>(largest_playback_buffer);
-    if (options.playback_prime_frames != 0 &&
-        options.playback_prime_frames > static_cast<std::size_t>(largest_playback_buffer)) {
-        throw std::runtime_error("--playback-prime exceeds the negotiated ALSA playback buffer");
+    // Resolve the prime depth per direction: the direction override if set,
+    // then the shared --playback-prime, then that direction's own negotiated
+    // playback buffer. Validate against the buffer the direction actually got
+    // rather than the larger of the two; the devices need not agree, and in
+    // practice they do not.
+    const auto resolve_prime = [&options](const std::size_t override_frames,
+                                          const snd_pcm_uframes_t buffer) {
+        const std::size_t requested =
+            override_frames != 0 ? override_frames : options.playback_prime_frames;
+        return requested != 0 ? requested : static_cast<std::size_t>(buffer);
+    };
+    const std::size_t tx_prime =
+        resolve_prime(options.tx_playback_prime_frames, ravenna_playback.buffer());
+    const std::size_t rx_prime =
+        resolve_prime(options.rx_playback_prime_frames, usb_playback.buffer());
+    if (tx_prime > static_cast<std::size_t>(ravenna_playback.buffer())) {
+        throw std::runtime_error("usb-to-ravenna prime exceeds the RAVENNA playback buffer");
     }
-    if (options.ring_frames < options.target_frames + queue_prime + 4) {
+    if (rx_prime > static_cast<std::size_t>(usb_playback.buffer())) {
+        throw std::runtime_error("ravenna-to-usb prime exceeds the USB playback buffer");
+    }
+    if (options.ring_frames < options.target_frames + std::max(tx_prime, rx_prime) + 4) {
         throw std::runtime_error("elastic ring is too small to prime the ALSA playback queues");
     }
 
@@ -722,8 +746,8 @@ int run(const Options& options) {
 
     Direction tx("usb-to-ravenna", usb_capture, ravenna_playback, options.ring_frames);
     Direction rx("ravenna-to-usb", ravenna_capture, usb_playback, options.ring_frames);
-    tx.playback_prime_frames = options.playback_prime_frames;
-    rx.playback_prime_frames = options.playback_prime_frames;
+    tx.playback_prime_frames = tx_prime;
+    rx.playback_prime_frames = rx_prime;
     tx.prime_trim = options.prime_trim;
     rx.prime_trim = options.prime_trim;
     usb16x16::SharedDriftEstimator estimator;

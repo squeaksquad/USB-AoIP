@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=b91a5d08cb5cde42dab19cd3f292f0d3cc3ef2528e14fdf69386959932d90016
+expected_bridge_sha256=01858ee74600581e4444a05d9ba8ac0e1c11775cf717ef518a4eeeb7c0b605fa
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
@@ -30,6 +30,10 @@ playback_prime_frames=${6:-0}
 # Discard the ring overshoot at prime time (0 or 1). The overshoot is otherwise
 # permanent pipeline depth, because depth is conserved after priming.
 prime_trim=${7:-0}
+# Per-direction prime overrides; 0 inherits playback_prime_frames. tx is
+# usb-to-ravenna (RAVENNA playback), rx is ravenna-to-usb (USB playback).
+tx_playback_prime_frames=${8:-0}
+rx_playback_prime_frames=${9:-0}
 sink_delay=576
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
@@ -39,7 +43,8 @@ daemon_pid=
 bridge_pid=
 
 for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frames" "$target_frames" \
-             "$playback_prime_frames" "$prime_trim"; do
+             "$playback_prime_frames" "$prime_trim" \
+             "$tx_playback_prime_frames" "$rx_playback_prime_frames"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -67,6 +72,15 @@ if [ "$prime_trim" -ne 0 ] && [ "$prime_trim" -ne 1 ]; then
   echo "prime-trim must be 0 or 1" >&2
   exit 14
 fi
+for value in "$tx_playback_prime_frames" "$rx_playback_prime_frames"; do
+  if [ "$value" -ne 0 ] &&
+     { [ "$value" -lt "$period_frames" ] ||
+       [ "$value" -gt "$buffer_frames" ] ||
+       [ "$ring_frames" -lt $((target_frames + value + 4)) ]; }; then
+    echo "invalid per-direction playback-prime relationship" >&2
+    exit 15
+  fi
+done
 
 for process_name in ptp4l aes67-daemon alsaloop; do
   if pgrep -x "$process_name" >/dev/null; then
@@ -215,6 +229,8 @@ timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
   --target "$target_frames" \
   --playback-prime "$playback_prime_frames" \
   --prime-trim "$prime_trim" \
+  --tx-playback-prime "$tx_playback_prime_frames" \
+  --rx-playback-prime "$rx_playback_prime_frames" \
   --priority 90 \
   --seconds "$candidate_seconds" \
   > "$result_dir/bridge.log" 2>&1 &
@@ -243,6 +259,8 @@ fi
   echo "target_frames=$target_frames"
   echo "playback_prime_frames=$playback_prime_frames"
   echo "prime_trim=$prime_trim"
+  echo "tx_playback_prime_frames=$tx_playback_prime_frames"
+  echo "rx_playback_prime_frames=$rx_playback_prime_frames"
   echo "sink_delay=$sink_delay"
   echo "candidate_seconds=$candidate_seconds"
   echo "bridge_sha256=$expected_bridge_sha256"
