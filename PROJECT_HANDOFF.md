@@ -391,8 +391,16 @@ distinguish a shrinking ALSA playback queue from vanished frames. With
 288 and `tx_occ` at 195 for the whole run. **Run `132356Z` is therefore not
 disqualified by frame loss**, and is the best Phase 4 candidate on record.
 
-**Net rate transfer is asymmetric: TX applies nothing.** Measured over 200 s of
-steady running, directly from the counters:
+**RETRACTED 2026-09-01: there is no TX rate-correction bug.** The claim below
+came from residual algebra that ignored ring drift and the frames the resampler
+retains, and it is wrong. Driving `FarrowResampler` directly with the same call
+pattern `render_to_playback` uses shows it tracks its requested step exactly --
++25.05 ppm achieved for +25.00 requested, +100.05 for +100.01 -- once frames
+still resting in the ring are excluded from the denominator. `main.cpp` also
+passes `ratio` to TX and `1.0 / ratio` to RX correctly. Figures kept for record.
+
+**Net rate transfer measured asymmetric (superseded).** Over 200 s of steady
+running, from the counters:
 
 | Direction | input frames | output frames | out - in | applied |
 |---|---:|---:|---:|---|
@@ -403,20 +411,28 @@ Over that window the estimator commanded -33.6 to -30.1 ppm. TX transfers
 frames 1:1; RX carries the entire correction, and even RX's applied ratio does
 not track the commanded ppm.
 
-This is **not** a missing reciprocal. `main.cpp:594-596` does pass `ratio` to TX
-and `1.0 / ratio` to RX, as designed. The likely mechanism is the occupancy
-guard in `render_to_playback`: `safe_output_frames = excess_source_frames /
-source_step` throttles output to hold the elastic ring at `target_frames`. TX's
-ring is pinned at `tx_occ = 195` against a target of 192 for the entire run, so
-TX output tracks TX input 1:1 by feedback and the commanded ratio has no net
-effect. RX's occupancy is not pinned — it drifts 398 -> 196 across the run — so
-RX is where the correction actually lands.
+**The real defect, visible in the code rather than inferred: the servo and the
+control law regulate different quantities.**
 
-That is the single most important Phase 4 finding so far. The shared estimator
-is computing a sensible number that one direction then cancels, which defeats
-the purpose of having one estimator. Verify the mechanism before rewriting: the
-occupancy-servo explanation is inferred from the counters and the code, not
-proven.
+- The servo regresses `tx.ring + tx_playback_delay - rx.ring - rx_playback_delay`
+  — ring *plus* ALSA queue.
+- `render_to_playback` regulated `direction.ring.size()` alone. The ALSA
+  playback queue depth, `playback.buffer() - available`, was never regulated.
+
+So the playback queue had no restoring force, and the estimator cannot supply
+one: with a single ppm applied reciprocally, raising it drains one direction and
+fills the other by equal amounts, leaving the frames in flight overall
+unchanged. **Common mode is structurally uncontrollable.** A queue that drifted
+down kept drifting until it underran — exactly the monotonic drain measured in
+both directions, with the ring sitting at target throughout.
+
+Fixed 2026-09-01 in binary `d702fbae`: regulate the playback queue toward the
+target and let the ring be the elastic reservoir, so control matches
+measurement. Total latency is unchanged in kind — it was always ring plus queue
+— this only decides which half holds the frames. A `consumed_frames` counter was
+added to `FarrowResampler` at the same time so the achieved step per direction
+can be read from `bridge.log` directly rather than inferred, which is what went
+wrong above. **Untested against hardware at time of writing.**
 
 **The RX XRUN is a fast starve, not a slow drift.** The recovery at 346 s is
 preceded by a 9-second linear drain of the RX ALSA playback queue, 876 -> 780 ->
