@@ -1048,9 +1048,57 @@ mechanism is not known and should not be guessed at.**
 `candidate_exit=0`) while Phase 4 did not. On equal footing that is a material
 disadvantage for Phase 4, and it is why the acceptance above is withdrawn.
 
-**Next step is reproduction, not a fix.** Establish whether `224517Z` repeats
-before theorising. If it does, the 800-impulse window becomes the acceptance
-standard and both Phase 4 points need re-soaking under it.
+**Reproduction: it did not repeat.** Run `225802Z`, same configuration, same
+800 impulses, completed cleanly at 27.979 ms with `tx_qfloor` 126. So sustained
+load is **not** the cause either. What remains is one unexplained failure in
+four runs of this configuration.
+
+#### ROOT CAUSE: the initial settle is a lottery and its outcome is permanent
+
+Comparing the failed and clean 800-impulse runs, which prime identically:
+
+| | at prime | by t=30-40 s | `tx_qfloor` | TX under a period | outcome |
+|---|---:|---:|---:|---:|---|
+| `224517Z` | 480 fr | **432 fr (-48)** | 89 | 7.2% | XRUN at 563 s |
+| `225802Z` | 480 fr | **475 fr (-5)** | 126 | 0.03% | clean |
+
+Both start at TX depth 480 with identical `PRIMED` lines, identical `tx_occ`
+195 / `tx_queue` 285, and hold it for the first 20 s. **Within the first ~30 s
+the failed run shed a discrete 48-frame chunk of TX depth and never recovered
+it.** By t=120 its `tx_qlow` was already 7,681 against the clean run's 0.
+
+The reason it never recovers is the structural property already documented
+here: the servo regresses ring plus queue while the control law regulates the
+ring alone, so **the playback queue has no restoring force** and total depth is
+conserved after priming. This session measured that conservation three separate
+times. Applied to the initial transient it means: **whatever depth a run has
+lost by t=30 is lost for the life of the process.**
+
+So a Phase 4 point's entire safety margin is decided in the first thirty
+seconds by a transient nothing regulates. That is why `tx_qfloor` scatters
+across 89 / 104 / 124 / 126 for one configuration, and why roughly one run in
+four lands low enough to fail.
+
+**Three explanations were falsified along the way**, each by measurement:
+CoreAudio teardown (the clean soaks ran 441 s and 228 s post-teardown),
+sustained load (`225802Z` is clean at 800 impulses), and prime state (both runs
+prime identically).
+
+**Consequences.**
+
+- **No Phase 4 point is deployable as it stands.** The margin is not a property
+  of the configuration; it is a draw.
+- Raising TX's prime buys robustness against a bad draw at a latency cost.
+  `--tx-playback-prime 288` is the maximum at buffer 192 and would leave ~137
+  frames of floor even after a 48-frame loss, for roughly +2 ms. Untested.
+- The real fix is a restoring force on the playback queue. **The naive version
+  of this has already been tried and failed catastrophically** -- it drained the
+  elastic ring to the interpolator's 8-frame reserve and XRUNed at 22 s. A
+  correct version must act slowly and must never draw the ring below its
+  reserve.
+- Acceptance criteria need revisiting: a single clean soak cannot establish
+  safety for a property that varies run to run. Repetition is required, and
+  `tx_qfloor` should be an acceptance metric alongside latency.
 
 #### Phase 4 latency is not yet competitive
 
