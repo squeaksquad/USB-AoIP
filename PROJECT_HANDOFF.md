@@ -391,16 +391,40 @@ distinguish a shrinking ALSA playback queue from vanished frames. With
 288 and `tx_occ` at 195 for the whole run. **Run `132356Z` is therefore not
 disqualified by frame loss**, and is the best Phase 4 candidate on record.
 
-**RETRACTED 2026-09-01: there is no TX rate-correction bug.** The claim below
-came from residual algebra that ignored ring drift and the frames the resampler
-retains, and it is wrong. Driving `FarrowResampler` directly with the same call
-pattern `render_to_playback` uses shows it tracks its requested step exactly --
-+25.05 ppm achieved for +25.00 requested, +100.05 for +100.01 -- once frames
-still resting in the ring are excluded from the denominator. `main.cpp` also
-passes `ratio` to TX and `1.0 / ratio` to RX correctly. Figures kept for record.
+**The TX asymmetry is real, and now measured directly.** It was briefly
+retracted on the strength of a component test showing `FarrowResampler` tracks
+its requested step exactly, which it does. That was the wrong conclusion to draw:
+the component is fine, but the direction still does not apply the ratio it is
+handed. The `consumed_frames` counter added to the resampler settles it from the
+resampler's own accounting rather than from residual algebra. Run `170748Z`,
+over 265 s of steady running:
 
-**Net rate transfer measured asymmetric (superseded).** Over 200 s of steady
-running, from the counters:
+| Direction | consumed | produced | achieved step | commanded |
+|---|---:|---:|---|---|
+| TX | 12,722,400 | 12,722,400 | **1.000000000 (+0.00 ppm)** | -31.68 ppm |
+| RX | 12,722,803 | 12,722,400 | 1.000031676 (+31.68 ppm) | +31.68 ppm |
+
+RX matches `1.0 / ratio` exactly. TX should be -31.68 ppm and is exactly 1:1.
+
+**Prime suspect, code-visible, not yet confirmed.** In `render_to_playback`:
+
+```c
+snd_pcm_uframes_t frames = produced;
+snd_pcm_mmap_begin(handle, &areas, &offset, &frames);   // ALSA may REDUCE frames
+...
+direction.output_frames += frames;                       // counts frames, not produced
+```
+
+`snd_pcm_mmap_begin` may return fewer frames than requested when the playback
+buffer wraps. The resampler has already consumed input for the full `produced`
+count, so the difference is silently discarded. That both drops real samples and
+inflates `consumed / output_frames` above the commanded step, which is exactly
+the TX signature. Confirm by counting `produced - frames` per direction before
+changing anything; it is a two-line counter and it either explains the whole
+asymmetry or eliminates the suspect.
+
+**Earlier figures, from residual algebra (weaker method, same conclusion).**
+Over 200 s of steady running:
 
 | Direction | input frames | output frames | out - in | applied |
 |---|---:|---:|---:|---|
