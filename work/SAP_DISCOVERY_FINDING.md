@@ -261,13 +261,34 @@ the Pi's own 42.4 s announcement, minus whatever the two fixes above recover.
    **Decision, 2026-09-01: snooping stays off.** 48 kHz is the normal operating
    point, where 68 Mbps leaves the AVIO inside its link. 96 kHz is infrequent.
 
-   Note for whoever revisits this: re-enabling snooping is *not* a way to make
-   96 kHz safe for the AVIO. With no querier, hosts report only at join time,
-   entries age out at ~260 s and are never re-learned, and with Block Unknown
-   Multicast off the steady state is flooding either way. Snooping on buys a
-   260 s broken window and then floods anyway. Confirm by measuring the flood
-   rate at the Mac with snooping on and settled - the Mac joins no audio group,
-   so ~68 Mbps there means flooding, and under ~5 Mbps means real filtering.
+   **Measured 2026-09-01, run 155629Z: re-enabling snooping is not a way to make
+   96 kHz safe for the AVIO.** `multicast-rate-watch.sh` sampled the multicast
+   arriving at the Mac, which joins no audio group, throughout a candidate run
+   with snooping on. Offsets are sampler-relative; the candidate started 15 s in.
+
+```text
++5   .. +56    41.1-41.5 Mbps   flooding, nothing had joined since snooping went on
++66  .. +268   21.7      Mbps   FILTERING, steady for 200 s - bridge broken throughout
++278           28.1             first aging step -- audio starts working here
++288 .. +319   41.1-43.4 Mbps
++329 .. +369   60.7-61.1 Mbps   fully flooded, including the Pi's TX
++374                            daemon exits, Pi TX stops
++380 ..        41.2      Mbps   remaining traffic, still flooded
+```
+
+   Snooping does filter, and filters well: 41 -> 21.7 Mbps. But with no querier
+   nothing refreshes the entries, so they age out in stages to **full flooding**,
+   and the first return signal appeared at candidate T0+264 s, inside one 5 s
+   sample of the first aging step. The protection therefore exists only during
+   the window in which the bridge is unusable, and lapses permanently thereafter.
+
+   The decay is monotonic, not oscillating. The drop back to 41.2 Mbps at +380 s
+   is the Pi's daemon exiting after the bridge XRUN at 313 s, not a snooping
+   change: 60.7 - 41.2 = 19.5 Mbps is the Pi's own 2x8ch transmit.
+
+   Raw curve: `outputs/latency/aes67-roundtrip-64f-20260901T155629Z-api/multicast-rate.log`.
+
+   Snooping was returned to off after this run.
 
 2. **Superseded — the original A/B framing.** With snooping disabled on the
    GS305EP, first-return-signal should collapse from 264 s to roughly the Pi's
