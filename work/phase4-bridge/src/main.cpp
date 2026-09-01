@@ -253,6 +253,8 @@ struct Telemetry {
     std::atomic<std::uint64_t> rx_consumed_frames{0};
     std::atomic<std::uint64_t> tx_dropped_frames{0};
     std::atomic<std::uint64_t> rx_dropped_frames{0};
+    std::atomic<std::uint64_t> tx_short_begin_frames{0};
+    std::atomic<std::uint64_t> rx_short_begin_frames{0};
     std::atomic<std::uint64_t> tx_frames{0};
     std::atomic<std::uint64_t> rx_frames{0};
 };
@@ -270,8 +272,13 @@ struct Direction {
     std::uint64_t input_frames{};
     std::uint64_t output_frames{};
     // Frames the resampler produced, and consumed ring input for, that
-    // snd_pcm_mmap_begin then refused to take. They are discarded.
+    // snd_pcm_mmap_begin then refused to take. They are discarded. Rendering
+    // is now sized from mmap_begin rather than the reverse, so this is a
+    // regression guard and must stay at zero.
     std::uint64_t dropped_frames{};
+    // Frames snd_pcm_mmap_begin declined to grant, whether or not any were
+    // lost. Records that the short-begin condition still occurs.
+    std::uint64_t short_begin_frames{};
     std::uint64_t restarts{};
     const char* recovery_stage{"unknown"};
     snd_pcm_sframes_t recovery_code{};
@@ -412,13 +419,14 @@ IoResult render_to_playback(Direction& direction,
     if (wanted == 0) {
         return IoResult::idle;
     }
-    const std::size_t produced = direction.resampler.render(
-        direction.ring, direction.playback_scratch.data(), wanted, source_step);
-    if (produced == 0) {
-        return IoResult::idle;
-    }
-
-    snd_pcm_uframes_t frames = produced;
+    // Ask ALSA how many frames it will actually take BEFORE consuming any ring
+    // input. snd_pcm_mmap_begin hands back fewer frames than requested when the
+    // playback buffer wraps, and the resampler cannot un-consume what it has
+    // already popped, so rendering first could only discard the difference:
+    // 583 frames of real audio on TX in 252 s (run 172034Z), which both lost
+    // samples and inverted the direction's apparent rate. Asking first makes
+    // that structurally impossible.
+    snd_pcm_uframes_t frames = wanted;
     const snd_pcm_channel_area_t* areas = nullptr;
     snd_pcm_uframes_t offset = 0;
     const int begin = snd_pcm_mmap_begin(direction.playback.handle(), &areas, &offset, &frames);
@@ -426,15 +434,26 @@ IoResult render_to_playback(Direction& direction,
         return begin == -EAGAIN ? IoResult::idle
                                 : request_recovery(direction, "playback-mmap-begin", begin);
     }
-    // ALSA may hand back fewer frames than asked for when the playback buffer
-    // wraps. The resampler has already consumed ring input for the full
-    // produced count, so anything not taken here is silently discarded. Count
-    // it: it would both lose samples and make consumed/output_frames read
-    // higher than the commanded step, which is the TX signature under
-    // investigation.
-    if (frames < produced) {
+    // Frames ALSA declined at begin time. Behaviour-free, and it is what
+    // separates "the short-begin condition no longer happens" from "it still
+    // happens and is now absorbed", which a zero drop count alone cannot say.
+    direction.short_begin_frames += wanted - static_cast<std::uint64_t>(frames);
+
+    const std::size_t produced = direction.resampler.render(
+        direction.ring, direction.playback_scratch.data(), frames, source_step);
+    // Frames the resampler consumed ring input for that never reached the
+    // device. The render above is capped at what mmap_begin already granted,
+    // so this is now a structural zero; it stays as the regression guard for
+    // that ordering and should read 0 in both directions.
+    if (produced > frames) {
         direction.dropped_frames += produced - static_cast<std::uint64_t>(frames);
     }
+    if (produced == 0) {
+        // Release the region we reserved but did not fill.
+        snd_pcm_mmap_commit(direction.playback.handle(), offset, 0);
+        return IoResult::idle;
+    }
+    frames = static_cast<snd_pcm_uframes_t>(produced);
     for (snd_pcm_uframes_t frame = 0; frame < frames; ++frame) {
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
             write_area_sample(areas[channel], offset + frame, direction.playback.format(),
@@ -532,6 +551,8 @@ void publish_telemetry(const Direction& tx,
     telemetry.rx_consumed_frames.store(rx.resampler.consumed_frames(), std::memory_order_relaxed);
     telemetry.tx_dropped_frames.store(tx.dropped_frames, std::memory_order_relaxed);
     telemetry.rx_dropped_frames.store(rx.dropped_frames, std::memory_order_relaxed);
+    telemetry.tx_short_begin_frames.store(tx.short_begin_frames, std::memory_order_relaxed);
+    telemetry.rx_short_begin_frames.store(rx.short_begin_frames, std::memory_order_relaxed);
     telemetry.tx_frames.store(tx.output_frames, std::memory_order_relaxed);
     telemetry.rx_frames.store(rx.output_frames, std::memory_order_relaxed);
 }
@@ -557,6 +578,8 @@ void telemetry_loop(const Telemetry& telemetry) {
                   << " rx_consumed=" << telemetry.rx_consumed_frames.load()
                   << " tx_dropped=" << telemetry.tx_dropped_frames.load()
                   << " rx_dropped=" << telemetry.rx_dropped_frames.load()
+                  << " tx_short=" << telemetry.tx_short_begin_frames.load()
+                  << " rx_short=" << telemetry.rx_short_begin_frames.load()
                   << " tx_frames=" << telemetry.tx_frames.load()
                   << " rx_frames=" << telemetry.rx_frames.load() << '\n';
     }
