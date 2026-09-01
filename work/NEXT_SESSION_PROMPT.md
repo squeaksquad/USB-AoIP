@@ -90,13 +90,10 @@ NOTHING HERE REQUIRES BEING AT THE RACK
   or 3 cannot cut your own management path, which runs via port 5.
 
 GOTCHAS THAT WILL OTHERWISE COST YOU HOURS
-1. Audio takes 263-267 s to start flowing after a daemon restart (n=7, fixed
-   timer, NOT device backoff). The Pi itself announces at T0+42.4 s (n=13).
-   The ~220 s gap is the switch: IGMP group membership interval 2x125+10 =
-   260 s on a link-local segment with no querier. The absence of a querier is
-   MEASURED - work/aes67-candidate/igmp-querier-probe.py saw zero report-timer
-   arming events in 150 s, longer than the 125 s query interval. It is a
-   network cost; no daemon or bridge work will shorten it.
+1. FIXED 2026-09-01. Audio USED to take 263-267 s to start after a daemon
+   restart. IGMP snooping is now OFF on the GS305EP and it is at most 52.4 s,
+   bounded by the Pi's own ~42 s startup. If you see the old 260 s behaviour,
+   check whether snooping got re-enabled before you debug anything else.
 2. NEVER gate a measurement on sink flags. receiving_rtp_packet: true occurs
    during pure silence and on a broken path. Gate on a detected return signal
    across several consecutive probes.
@@ -126,6 +123,23 @@ ENVIRONMENT
   Defaults in measure-phase4-roundtrip.sh are buffer 384 / ring 768.
   Budget ~15 min per run: ~264 s network wait + gate lag + the run itself.
 - Mac harness: work/latency-harness (Swift, CoreAudio impulse correlation).
+
+NETWORK STATE - READ BEFORE COMPARING ANY NUMBER
+IGMP snooping is OFF on the GS305EP as of 2026-09-01. Every figure recorded
+before that was measured with it ON. Latency numbers in particular are NOT
+comparable across the change: settle now finishes around +60 s instead of
++363 s, so the 40-impulse measurement fires ~300 s earlier in the shared
+estimator's convergence, and measured latency falls as that converges. The
+84.29 ms of run 151450Z (score 0.987) and the 76.92 ms of run 143219Z
+(score 0.320) differ mostly for that reason, not because anything regressed.
+Re-baseline before drawing conclusions.
+
+With snooping off the switch floods 68 Mbps to every port. Fine for the four
+gigabit devices; 68% of link for the 100 Mb Dante AVIO on port 4, and it would
+exceed that port at 96 kHz. Re-enabling snooping does NOT fix that - with no
+querier the entries age out and it floods anyway, so you would get a 260 s
+broken window and the same flood. Mitigations are a querier, disabling port 4,
+or a VLAN. The user runs 96 kHz infrequently and has accepted this for now.
 
 RULES
 The USB module, usb-16x16.service, and setup script are immutable baselines;

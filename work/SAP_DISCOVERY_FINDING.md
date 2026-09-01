@@ -258,8 +258,16 @@ the Pi's own 42.4 s announcement, minus whatever the two fixes above recover.
    | Snooping on + querier on the Pi or Mac | Restores per-port filtering and protects the AVIO, but adds an always-on dependency: if the querier dies, discovery breaks again 260 s later. |
    | Static router port | Rejected. An mrouter port receives *all* multicast, so it moves the 68 Mbps onto whichever device is designated, and the audio path is ports 1<->3 so a router port on 5 would not fix it. It would also repair the Mac's SAP visibility while leaving the real path broken, blinding `sap-timeline.log`. |
 
-   Simplest mitigation for the only real objection: disable port 4 or unplug the
-   AVIO when it is not in use.
+   **Decision, 2026-09-01: snooping stays off.** 48 kHz is the normal operating
+   point, where 68 Mbps leaves the AVIO inside its link. 96 kHz is infrequent.
+
+   Note for whoever revisits this: re-enabling snooping is *not* a way to make
+   96 kHz safe for the AVIO. With no querier, hosts report only at join time,
+   entries age out at ~260 s and are never re-learned, and with Block Unknown
+   Multicast off the steady state is flooding either way. Snooping on buys a
+   260 s broken window and then floods anyway. Confirm by measuring the flood
+   rate at the Mac with snooping on and settled - the Mac joins no audio group,
+   so ~68 Mbps there means flooding, and under ~5 Mbps means real filtering.
 
 2. **Superseded — the original A/B framing.** With snooping disabled on the
    GS305EP, first-return-signal should collapse from 264 s to roughly the Pi's

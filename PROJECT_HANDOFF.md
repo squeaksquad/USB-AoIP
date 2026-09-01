@@ -914,8 +914,17 @@ can black-hole multicast and take the streams down.
 
 ### Operational fact that dominates all testing
 
-**Audio takes 263-267 seconds to start flowing after the AES67 daemon
-restarts, and it is a fixed timer, not a device backoff.** Measured across
+**This was fixed on 2026-09-01 by disabling IGMP snooping on the GS305EP.**
+Time to first return signal went from 263-267 s to at most 52.4 s, and the
+Mac's first sight of the Pi's SAP announcement from +282.3 s to +1.20 s. The
+current operating point of the network is **IGMP snooping OFF**. Every figure
+in this document recorded before that change was measured with snooping ON.
+
+Historical description, retained because it explains the tooling and the
+gotchas below:
+
+**Audio took 263-267 seconds to start flowing after the AES67 daemon
+restarted, and it was a fixed timer, not a device backoff.** Measured across
 seven runs from `readiness-probe-*.json`: 263, 266, 265, 263, 267, 263, 263 s.
 
 The mechanism is **not** the Ferrofish re-resolving subscriptions. The Pi's
@@ -927,9 +936,25 @@ state, the GS305EP withholds the groups until that interval expires and then
 falls back to flooding. See `work/SAP_DISCOVERY_FINDING.md` for the full split
 and the falsifiable A/B this predicts.
 
-Practical consequence: this is a *network* cost, not a daemon cost, and no
-amount of daemon or bridge work will shorten it. The Pi itself is ready in
-about 42 seconds.
+Practical consequence: this was a *network* cost, not a daemon cost, and no
+amount of daemon or bridge work would have shortened it. The Pi itself is ready
+in about 42 seconds, and with snooping off that is now the binding constraint.
+
+**Current network configuration and its one open risk.** Snooping is off, so
+the switch floods all multicast to every port: a measured 68 Mbps. That is
+under 7% of link for the Pi, Mac, Ferrofish and ULN-2, all of which are gigabit
+or better. It is **68% of link for the 100 Mb Dante AVIO on port 4**, and at
+96 kHz it would roughly double to 110-135 Mbps, exceeding that port's line
+rate. Egress drops there would take out the AVIO's own Dante audio and PTP, not
+just the traffic it never wanted.
+
+Note that re-enabling snooping does **not** mitigate this. With no querier,
+hosts report only at join time, entries age out at ~260 s and are never
+re-learned, and with `Block Unknown Multicast Address` off the steady state is
+flooding regardless. Snooping on would add a 260 s broken window and then flood
+anyway. The only real mitigations are a querier, disabling port 4, or VLAN
+isolation. This inference is consistent with every measurement but has not been
+directly confirmed by measuring the flood rate with snooping on.
 
 Consequences that must be respected by any future harness or service:
 
