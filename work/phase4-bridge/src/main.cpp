@@ -58,6 +58,11 @@ struct Options {
     // ring/queue split knob: the elastic ring holds target_frames as the jitter
     // reservoir, and this sets how much sits in the device queue behind it.
     std::size_t playback_prime_frames{0};
+    // Discard the ring overshoot at prime time. The ring is only checked on
+    // capture wakeups, so it can sail past the prime threshold by most of a
+    // capture period, and that excess becomes permanent pipeline depth because
+    // depth is conserved after priming. Off by default: historical behaviour.
+    bool prime_trim{false};
     int priority{90};
     unsigned int seconds{0};
 };
@@ -76,6 +81,8 @@ struct Options {
         << "  --target FRAMES        elastic-ring target (default 192)\n"
         << "  --playback-prime N     frames primed into the ALSA playback queue\n"
         << "                         (default 0 = the whole playback buffer)\n"
+        << "  --prime-trim 0|1       discard the ring overshoot at prime time\n"
+        << "                         (default 0 = keep it, historical behaviour)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
     std::exit(error.empty() ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -116,6 +123,12 @@ Options parse_options(const int argc, char** argv) {
             options.target_frames = parse_unsigned(value, "target");
         } else if (argument == "--playback-prime") {
             options.playback_prime_frames = parse_unsigned(value, "playback-prime");
+        } else if (argument == "--prime-trim") {
+            const unsigned long parsed = parse_unsigned(value, "prime-trim");
+            if (parsed > 1) {
+                throw std::runtime_error("prime-trim must be 0 or 1");
+            }
+            options.prime_trim = parsed != 0;
         } else if (argument == "--priority") {
             options.priority = static_cast<int>(parse_unsigned(value, "priority"));
         } else if (argument == "--seconds") {
@@ -281,6 +294,7 @@ struct Direction {
     // Frames to prime into the ALSA playback queue; zero means the whole
     // playback buffer.
     std::size_t playback_prime_frames{0};
+    bool prime_trim{false};
     std::uint64_t input_frames{};
     std::uint64_t output_frames{};
     // Frames the resampler produced, and consumed ring input for, that
@@ -402,10 +416,24 @@ IoResult render_to_playback(Direction& direction,
         // it overshoots by becomes permanent pipeline depth: total depth is set
         // here and then conserved, because there is no restoring force on the
         // common mode. Report it rather than infer it from occupancy later.
+        const std::size_t ring_at_prime = direction.ring.size();
+        const std::size_t overshoot = ring_at_prime - prime_frames;
+        std::size_t trimmed = 0;
+        if (direction.prime_trim && overshoot > 0) {
+            // Discard the oldest frames so the pipeline starts at exactly the
+            // intended depth. This runs once, before the playback queue has
+            // been started and before any of this audio could have been heard,
+            // and the resampler has not rendered yet, so its position still
+            // refers to the front of the ring. The alternative is carrying the
+            // overshoot as permanent latency for the life of the process.
+            direction.ring.pop(overshoot);
+            trimmed = overshoot;
+        }
         std::cerr << "PRIMED direction=" << direction.name
                   << " intended=" << prime_frames
-                  << " ring_at_prime=" << direction.ring.size()
-                  << " overshoot=" << (direction.ring.size() - prime_frames)
+                  << " ring_at_prime=" << ring_at_prime
+                  << " overshoot=" << overshoot
+                  << " trimmed=" << trimmed
                   << " queue_prime=" << queue_prime << '\n';
         direction.primed = true;
     }
@@ -639,6 +667,8 @@ int run(const Options& options) {
     Direction rx("ravenna-to-usb", ravenna_capture, usb_playback, options.ring_frames);
     tx.playback_prime_frames = options.playback_prime_frames;
     rx.playback_prime_frames = options.playback_prime_frames;
+    tx.prime_trim = options.prime_trim;
+    rx.prime_trim = options.prime_trim;
     usb16x16::SharedDriftEstimator estimator;
     Telemetry telemetry;
 

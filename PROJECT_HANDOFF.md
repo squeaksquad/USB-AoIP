@@ -696,13 +696,58 @@ implemented; it needs a code change and an install.
 playback short-change `snd_pcm_mmap_begin` too, and `rx_dropped` stayed 0. The
 reorder fix is now exercised on both devices rather than only RAVENNA.
 
-**Status: 35.3125 ms, 2.52 ms above the 32.792 ms stopgap**, down from 10.5 ms.
-Reconnaissance only -- one 480 s run, no soak.
+**`prime 96` reaches the stopgap, and its soak passes.** Two runs at
+`buffer 384, prime 96`, both score 1.000 with zero spread:
+
+| run | duration | median | round-trip depth | `tx_queue` min |
+|---|---:|---:|---:|---:|
+| `190400Z` | 480 s | 31.0625 ms | 768 fr | 48 |
+| `191326Z` **soak** | **600 s** | **32.0625 ms** | 768 fr | 48 |
+
+Both clean: zero restarts, zero drops, rates mirrored, `rx_occ` steady at
+195-196 against target 192.
+
+**Two cautions, and they matter more than the headline.**
+
+1. **The margin is inside the run-to-run scatter.** Those two runs are the same
+   binary, the same settings and the same 768-frame depth, and they measure
+   1.000 ms apart. The soak beats the 32.792 ms stopgap by 0.73 ms, which is
+   less than that scatter. Phase 4 is at **parity-to-slightly-better**, not a
+   decisive win. Do not quote 31.06 ms as the figure; quote the soak, and quote
+   the scatter with it.
+2. **`prime 96` buys latency by spending safety margin.** `tx_queue` bottoms at
+   48 frames and spends 50 of 570 samples below one RAVENNA period (128), 13 of
+   them below 96. It held for 600 s. It is thin, and the elastic ring is doing
+   all the absorbing (`tx_occ` min 195, healthy).
+
+**The overshoot trim is the principled way to get the same latency with the
+margin back.** `--prime-trim 0|1` discards the ring overshoot once at prime
+time, so the pipeline starts at exactly `intended`. It runs before the playback
+queue is started and before the resampler has rendered, so nothing audible is
+lost and the resampler's position still refers to the front of the ring;
+`restart_direction` clears `primed`, so a recovery re-trims rather than
+re-accumulating. It is a flag, defaulting to the historical behaviour, so **one
+install buys both arms of the A/B** at a fixed prime depth.
+
+Predicted from the conservation these runs demonstrate -- total round-trip depth
+is the sum over directions of `intended + overshoot`, which read 2 x 384 = 768
+against a measured 768 -- removing 93 per direction takes depth to 582 frames
+(12.1 ms):
+
+| | predicted median | `tx_queue` floor |
+|---|---:|---:|
+| `prime 96` + trim | ~27.2 ms | 48 (unchanged, still thin) |
+| `prime 192` + trim | ~31.4 ms | **192** |
+
+`prime 192` + trim is the interesting one: about the same latency as bare
+`prime 96`, with four times the playback runway. Not yet measured.
 
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
+| `96/384/768/192` prime 96 | **191326Z, 600 s soak PASSED** | **32.063 ms** | **1.000** | **0 samples** |
+| `96/384/768/192` prime 96 | 190400Z, 480 s | 31.063 ms | 1.000 | 0 samples |
 | `96/384/768/192` prime 192 | **185418Z, `--playback-prime` `02d2153c`** | **35.313 ms** | **1.000** | **0 samples** |
 | `96/192/768/192` | 184056Z, buffer 192, confounded | 35.729 ms | 0.912 | 8 samples |
 | `96/384/768/192` | **182239Z, reorder fix `0c527d8d`, 600 s soak PASSED** | **43.313 ms** | **1.000** | **0 samples** |

@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=02d2153c6945bbd8aa76e6e719a7f46941d98cea6325385a2a388713994ed29d
+expected_bridge_sha256=d183468b29a0f7341cb8b30917c6dcf34d60ef190288812a3255dc4b52de88a0
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
@@ -27,6 +27,9 @@ target_frames=${5:-192}
 # behaviour of priming the whole playback buffer. This is the ring/queue split
 # knob; the elastic ring keeps target_frames as the jitter reservoir.
 playback_prime_frames=${6:-0}
+# Discard the ring overshoot at prime time (0 or 1). The overshoot is otherwise
+# permanent pipeline depth, because depth is conserved after priming.
+prime_trim=${7:-0}
 sink_delay=576
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
@@ -36,7 +39,7 @@ daemon_pid=
 bridge_pid=
 
 for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frames" "$target_frames" \
-             "$playback_prime_frames"; do
+             "$playback_prime_frames" "$prime_trim"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -59,6 +62,10 @@ if [ "$playback_prime_frames" -ne 0 ] &&
      [ "$ring_frames" -lt $((target_frames + playback_prime_frames + 4)) ]; }; then
   echo "invalid playback-prime relationship" >&2
   exit 13
+fi
+if [ "$prime_trim" -ne 0 ] && [ "$prime_trim" -ne 1 ]; then
+  echo "prime-trim must be 0 or 1" >&2
+  exit 14
 fi
 
 for process_name in ptp4l aes67-daemon alsaloop; do
@@ -207,6 +214,7 @@ timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
   --ring "$ring_frames" \
   --target "$target_frames" \
   --playback-prime "$playback_prime_frames" \
+  --prime-trim "$prime_trim" \
   --priority 90 \
   --seconds "$candidate_seconds" \
   > "$result_dir/bridge.log" 2>&1 &
@@ -234,6 +242,7 @@ fi
   echo "ring_frames=$ring_frames"
   echo "target_frames=$target_frames"
   echo "playback_prime_frames=$playback_prime_frames"
+  echo "prime_trim=$prime_trim"
   echo "sink_delay=$sink_delay"
   echo "candidate_seconds=$candidate_seconds"
   echo "bridge_sha256=$expected_bridge_sha256"
