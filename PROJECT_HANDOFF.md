@@ -426,13 +426,33 @@ unchanged. **Common mode is structurally uncontrollable.** A queue that drifted
 down kept drifting until it underran — exactly the monotonic drain measured in
 both directions, with the ring sitting at target throughout.
 
-Fixed 2026-09-01 in binary `d702fbae`: regulate the playback queue toward the
-target and let the ring be the elastic reservoir, so control matches
-measurement. Total latency is unchanged in kind — it was always ring plus queue
-— this only decides which half holds the frames. A `consumed_frames` counter was
-added to `FarrowResampler` at the same time so the achieved step per direction
-can be read from `bridge.log` directly rather than inferred, which is what went
-wrong above. **Untested against hardware at time of writing.**
+**Attempted and reverted, 2026-09-01, binary `d702fbae`.** Regulating the
+playback queue toward the target and letting the ring float made things
+markedly worse: **XRUN at 22 s against 331 s for the original law.** The
+telemetry shows why — `tx_occ` and `rx_occ` sat at exactly 8, the interpolator's
+lookahead reserve, for the whole run. The law drained the elastic ring to
+nothing and left the pipeline with no jitter absorption anywhere, so the first
+scheduling hiccup underran. It inverted the design: the ring is meant to *be*
+the reservoir, and this made it the first thing emptied.
+
+Reverted in `ca2d0c7b`, which restores the original control law and keeps the
+`consumed_frames` counter added to `FarrowResampler`, so the achieved step per
+direction can now be read from `bridge.log` directly rather than inferred.
+
+**The failed attempt did produce a real finding.** Total pipeline depth went
+from roughly 580 frames to about 200, and measured latency fell from 41.625 ms
+to 23.229 ms — below the 32.792 ms stopgap. So the current law is carrying
+roughly 380 frames of slack, and the ring/queue split is worth tuning
+deliberately. The lesson is that the slack cannot simply be removed from the
+ring: some of it is the jitter absorption the bridge depends on. A tuned split
+that keeps a real reserve in the ring while trimming the rest is the open
+opportunity, and it is worth more than it sounds, because 23 ms was measured
+rather than estimated.
+
+The diagnosis that the servo measures ring plus playback delay while the
+control law regulates the ring alone still stands as an observation about the
+code. What is now clear is that it is not, on its own, the cause of the XRUN --
+correcting it in the obvious direction made things worse.
 
 **The RX XRUN is a fast starve, not a slow drift.** The recovery at 346 s is
 preceded by a 9-second linear drain of the RX ALSA playback queue, 876 -> 780 ->

@@ -384,40 +384,26 @@ IoResult render_to_playback(Direction& direction,
             : IoResult::idle;
     }
 
-    // Regulate the ALSA playback queue, not the process-local ring alone.
+    // Keep the target occupancy in the process-local elastic ring. ALSA may
+    // expose an entire playback buffer at once; draining the ring into that
+    // hidden queue would recreate the large, movable latency this bridge is
+    // intended to remove.
     //
-    // The previous law held ring.size() at the target and left the playback
-    // queue unregulated. The queue is the half that underruns, and nothing
-    // restored it: the shared estimator is differential, and because one ppm is
-    // applied reciprocally to the two directions it can only move frames
-    // between them, never change how many are in flight overall. A queue that
-    // drifted down therefore kept drifting until it hit XRUN. That is the
-    // failure this bridge reproduced in every instrumented run -- ravenna-to-usb
-    // at 960-frame buffers, usb-to-ravenna at 384-frame ones -- always with the
-    // ring sitting healthy at its target while the queue drained to nothing.
-    //
-    // Holding the queue at the target gives it a restoring force and makes the
-    // control law agree with what the servo already measures, which is ring
-    // plus playback delay. The ring becomes the elastic reservoir and its drift
-    // is what the estimator corrects. Total latency is unchanged in kind: it
-    // was always ring plus queue, and this only decides which half holds the
-    // frames rather than adding any.
-    const auto buffer_frames = static_cast<std::size_t>(direction.playback.buffer());
-    const auto free_frames = static_cast<std::size_t>(available);
-    const std::size_t queued_frames = buffer_frames > free_frames ? buffer_frames - free_frames : 0;
-    const std::size_t queue_target = target_frames + 3;
-    if (queued_frames >= queue_target || direction.ring.size() <= usb16x16::FarrowResampler::kLookaheadFrames) {
+    // 2026-09-01: an attempt to regulate the ALSA playback queue here instead,
+    // holding it at the target and letting the ring float, was reverted. It
+    // drained the ring to the interpolator's 8-frame lookahead and left the
+    // pipeline with no elastic reserve at all, so the first scheduling hiccup
+    // underran: XRUN at 22 s against 331 s for this law. It did show that the
+    // pipeline is carrying roughly 380 frames of slack -- latency fell from
+    // 41.6 ms to 23.2 ms -- so the ring/queue split is worth tuning
+    // deliberately, but not by starving the ring.
+    if (direction.ring.size() <= target_frames + 3) {
         return IoResult::idle;
     }
-    // Output frames needed to restore the queue, and the most the ring can
-    // supply without starving the interpolator's lookahead window.
-    const std::size_t queue_deficit_frames = queue_target - queued_frames;
-    const double ring_supply_frames =
-        static_cast<double>(direction.ring.size() - usb16x16::FarrowResampler::kLookaheadFrames);
-    const auto ring_output_limit = static_cast<std::size_t>(ring_supply_frames / source_step);
+    const double excess_source_frames = static_cast<double>(direction.ring.size() - target_frames - 3);
+    const std::size_t safe_output_frames = static_cast<std::size_t>(excess_source_frames / source_step);
     const std::size_t wanted = std::min<std::size_t>(
-        std::min<std::size_t>(queue_deficit_frames, ring_output_limit),
-        std::min<std::size_t>(free_frames, kScratchFrames));
+        std::min<std::size_t>(available, kScratchFrames), safe_output_frames);
     if (wanted == 0) {
         return IoResult::idle;
     }
