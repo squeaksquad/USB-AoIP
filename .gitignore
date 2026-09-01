@@ -16,6 +16,9 @@ outputs/*.wav
 
 # Build products
 *.ko
+# ...except the protected USB baseline module, which is an immutable rollback
+# artifact rather than a build product. Hash is pinned in SHA256SUMS.
+!work/protected-baseline-*/usb_f_uac2.ko
 *.o
 *.a
 build/
