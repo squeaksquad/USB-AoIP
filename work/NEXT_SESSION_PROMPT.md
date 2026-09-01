@@ -2,77 +2,120 @@
 
 Paste the block below into a fresh Codex or Claude Code session to resume work.
 It is a condensed pointer to `PROJECT_HANDOFF.md` and
-`outputs/latency/2026-08-31-latency-results.md`, which remain authoritative
-where they conflict with this summary.
+`work/SAP_DISCOVERY_FINDING.md`, which remain authoritative where they conflict
+with this summary.
 
-Written 2026-09-01, against `main` @ `d85844f`.
+Written 2026-09-01 after the instrumentation run, against `main`.
 
 ---
 
 ```text
 Raspberry Pi 5 USB 16x16 / AES67 bridge. Repo: ~/Development/USB 16x16
-(github.com/squeaksquad/usb-16x16-aes67, main @ d85844f).
+(github.com/squeaksquad/usb-16x16-aes67).
 
-Read PROJECT_HANDOFF.md and outputs/latency/2026-08-31-latency-results.md
-first — they are authoritative and current as of 2026-09-01.
+Read in this order:
+  - PROJECT_HANDOFF.md, section "Phase 4 implementation status - 2026-09-01"
+    and its "Frame accounting from the instrumentation build - run 143219Z"
+  - work/SAP_DISCOVERY_FINDING.md
 
-WHERE THINGS STAND
-The full digital round trip (Mac -> USB -> Pi -> AES67 -> Ferrofish -> back) is
-measured, tuned, and soak-tested. Accepted stopgap: alsaloop --tlatency 3000,
-AES67 sink delay 576, driver-default ALSA buffering, 64-frame CoreAudio
-buffer = 20.688 ms median. Ten-minute soak was clean on every integrity
-measure. Known defect: a bimodal 12 ms step (one 576-frame buffer) in ~10% of
-samples, so do not publish a fixed latency to delay compensation.
+STATE
+The accepted operating point is still the dual-alsaloop stopgap: tlatency 3000,
+sink delay 576, 64-frame CoreAudio buffer, 32.792 ms median, ten-minute soak
+clean. No Phase 4 point is accepted.
 
-TASK: Phase 4 — replace the two alsaloop processes with one purpose-built
-real-time bridge using ONE shared clock-drift estimator across both
-directions. Everything else has been measured and eliminated:
-- Parameter tuning has hit its floor (tlatency 2000 and 1000 fail with
-  continuous RAVENNA playback underruns).
-- Scheduler latency has 14.5x headroom (cyclictest: 184 us worst case loaded
-  vs a 2667 us period), so NO PREEMPT_RT kernel and most of Phase 6 is off the
-  critical path. A kernel change would force rebuilding both the patched
-  usb_f_uac2 and the RAVENNA prototype LKM.
-- The bimodal step is two independent SRC servos fighting, which is exactly
-  what Phase 4's shared estimator is meant to fix.
-Validate against the existing harness so before/after is comparable.
+Phase 4 is implemented, not stubbed, and has now been measured with exact
+frame counters. Two things changed at the last session:
+
+1. The "336 lost TX frames" that blocked run 132356Z was NOT a loss. It was
+   tx_queue (the ALSA playback queue depth) shrinking 960 -> 624. The new
+   counters show TX conserves exactly: tx_input - tx_frames pinned at 288,
+   tx_occ pinned at 195, all run. Run 132356Z is the best Phase 4 candidate on
+   record and is no longer disqualified.
+
+2. Net rate transfer is asymmetric: TX applies NOTHING. Measured over 200 s
+   of steady running: TX out-in = +0 frames (0.00 ppm applied) while RX out-in
+   = -240 (-25.00 ppm), against a commanded -33.6 to -30.1 ppm.
+   This is NOT a missing reciprocal - main.cpp:594-596 correctly passes ratio
+   to TX and 1.0/ratio to RX. The likely mechanism is the occupancy guard in
+   render_to_playback (safe_output_frames = excess_source_frames / source_step),
+   which holds the ring at target_frames: tx_occ is pinned at 195 vs a target
+   of 192 all run, so TX output tracks TX input 1:1 by feedback and cancels the
+   commanded ratio. rx_occ is NOT pinned (drifts 398 -> 196), so RX carries the
+   correction. Verify this mechanism before rewriting - it is inferred from the
+   counters plus the code, not proven.
+
+Phase 4 latency is not yet competitive:
+  96/384/768/192   -> 40.2-42.6 ms  (3 runs)
+  96/960/1536/192  -> 76.9-82.5 ms  (4 runs, current pin)
+  dual alsaloop    -> 32.792 ms     (accepted, soaked)
+The large buffers were adopted for stability and cost ~36 ms. Since the TX
+frame loss was illusory, revisit the smaller 96/384/768/192 point before
+investing more in the large one.
+
+RX XRUNs are a fast starve, not a slow drift: the queue drains 876 -> 108 over
+9 s (~96 frames/s) with ring occupancy healthy at ~196 against a target of 192.
+Chase the converter's output scheduling, not ring sizing.
+
+TASKS, in order
+1. Work out why TX's commanded ratio nets to zero (see item 2 above), fix it,
+   then re-run 96/384/768/192 and 96/960/1536/192 and compare. Start by
+   confirming the occupancy-guard hypothesis - instrument the ring consumption
+   per render call. Pure on-Pi work.
+2. The 31.9 s first-RX-stream stall inside MergingRavennaALSA (see the finding
+   doc). Deterministic across 13 runs, only ever the FIRST sink after insmod;
+   sink 1 and both TX sources return in 0.000 s. It also holds the
+   session_manager lock, delaying the first SAP announcement by 11 s. Test
+   whether the cost is per-insmod or per-daemon-start, and whether adding a
+   throwaway sink early moves it off the critical path.
+3. A new operating point needs its own ten-minute loaded soak before acceptance.
+
+BLOCKED ON PHYSICAL / SWITCH ACCESS - do not attempt remotely
+  - Identifying switch ports 2 vs 3 (Ferrofish vs Metric Halo ULN-2 3d).
+  - The IGMP snooping A/B, and the better alternative of enabling the IGMP
+    querier. The A/B is interpreted per-port, so the port ID gates it.
 
 GOTCHAS THAT WILL OTHERWISE COST YOU HOURS
-1. After the AES67 daemon restarts, audio takes ~3.5 minutes to start flowing
-   (Ferrofish re-resolving subscriptions). Sometimes faster — never assume.
-2. NEVER gate a measurement on sink flags. receiving_rtp_packet: true with
-   clean seq/SSRC/payload flags occurs while the peer sends pure silence and
-   while the path is broken. Gate on a detected return signal, requiring
-   several consecutive passing probes.
-3. Keep --maximum-lag-ms under 250. Impulses repeat every 250 ms and the
-   correlator will otherwise lock a period late and report a plausible but
-   wrong result. Tell: high score with large per-impulse spread.
-4. Do NOT pass alsaloop --period/--buffer. The driver rounds up to a 2304-frame
-   buffer, worse than the 960 it picks by default. --tlatency is the real
-   buffer control.
-5. Sink delay 48 is unusable in any order — it breaks established streams too.
-6. Read sinks back via GET /api/sinks. GET /api/sink/N returns 404.
-7. Sink delay is changeable live via PUT /api/sink/{0,1} without a restart;
-   tlatency is not.
+1. Audio takes 263-267 s to start flowing after a daemon restart (n=7, fixed
+   timer, NOT device backoff). The Pi itself announces at T0+42.4 s (n=13).
+   The ~220 s gap is almost certainly the switch: IGMP group membership
+   interval 2x125+10 = 260 s on a link-local segment with no querier. It is a
+   network cost; no daemon or bridge work will shorten it.
+2. NEVER gate a measurement on sink flags. receiving_rtp_packet: true occurs
+   during pure silence and on a broken path. Gate on a detected return signal
+   across several consecutive probes.
+3. "return signal ready after N probes" is NOT when the path came up. The
+   settle gate's spread<=2-samples test is coupled to SRC convergence and adds
+   a variable 9-141 s. Read readiness-probe-*.json capturedAt for the real
+   turn-on.
+4. Keep --maximum-lag-ms under 250. Impulses repeat every 250 ms.
+5. Do NOT pass alsaloop --period/--buffer. --tlatency is the real control.
+6. Sink delay changes live via PUT /api/sink/{0,1} without a restart, so the
+   Ferrofish never re-subscribes. tlatency does not. Read sinks back via
+   GET /api/sinks; GET /api/sink/N returns 404.
+7. Sink delay 48 is unusable in any order - it breaks established streams too.
+8. bridge.log has no timestamps, but emits at 1 Hz (48000 frames per line).
 
 ENVIRONMENT
 - Pi: eth0 169.254.92.97 is the AoIP network; wlan0 192.168.1.201 is SSH and
   management. SSH working says nothing about AoIP health.
   ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201
-- Passwordless sudo is configured for five root-owned wrappers in
-  /usr/local/sbin (run-aes67-candidate-safe.sh, run-selfloop-candidate-safe.sh,
-  run-bridge-hold-safe.sh, run-ravenna-latency-safe.sh,
-  run-cyclictest-safe.sh). Tuning vars cross via env_keep, so the form is
-  VAR=value sudo -n /usr/local/sbin/script. Updating a wrapper needs a
-  password because they are root-owned — that is the safety property.
+- Passwordless sudo covers six root-owned wrappers in /usr/local/sbin,
+  including run-phase4-candidate-safe.sh. Form: VAR=value sudo -n /path/script.
+  Updating a wrapper needs a password because they are root-owned - that is the
+  safety property.
+- Phase 4 run form (the 143219Z invocation):
+    USB16X16_PHASE4_BUFFER_FRAMES=960 USB16X16_PHASE4_RING_FRAMES=1536 \
+      work/aes67-candidate/measure-phase4-roundtrip.sh 480 64 40 200
+  Defaults in measure-phase4-roundtrip.sh are buffer 384 / ring 768.
+  Budget ~15 min per run: ~264 s network wait + gate lag + the run itself.
 - Mac harness: work/latency-harness (Swift, CoreAudio impulse correlation).
-  Orchestrator: work/aes67-candidate/measure-aes67-roundtrip.sh
 
 RULES
 The USB module, usb-16x16.service, and setup script are immutable baselines;
 AES67 work must never disturb USB enumeration. Change one variable at a time.
-Every figure so far is reconnaissance except the one soak — a new operating
-point needs its own ten-minute soak before acceptance.
+Every figure to date was measured with IGMP snooping ENABLED - changing that
+changes the network under test. Every figure is reconnaissance except the one
+soaked stopgap.
 ```
 
 ---
@@ -91,3 +134,10 @@ point needs its own ten-minute soak before acceptance.
   set to `Low`. The fix is the QoS mode, not the port priority, since
   `Port-based` ignores the DSCP marks AES67 already sets. No measurable gain
   expected at current network load.
+- **Two small daemon-side items**, noted but not chased: PTP "lock" takes
+  exactly 10.00 s in all 13 runs, which is a fixed dwell rather than measured
+  convergence; and the daemon defers its first current-version announcement by
+  a full 30 s interval even though it can announce immediately.
+- **The settle gate's spread test** (`work/aes67-candidate/measure-aes67-roundtrip.sh`)
+  is coupled to SRC convergence and should probably be widened or made
+  drift-aware, since it will fail outright at a higher steady-state ppm.
