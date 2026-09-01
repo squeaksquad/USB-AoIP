@@ -299,6 +299,12 @@ struct Telemetry {
     std::atomic<std::uint64_t> rx_queue_below_period{0};
     std::atomic<std::uint64_t> tx_queue_samples{0};
     std::atomic<std::uint64_t> rx_queue_samples{0};
+    std::atomic<std::uint64_t> tx_capture_peak{0};
+    std::atomic<std::uint64_t> rx_capture_peak{0};
+    std::atomic<std::uint64_t> tx_capture_total{0};
+    std::atomic<std::uint64_t> rx_capture_total{0};
+    std::atomic<std::uint64_t> tx_capture_samples{0};
+    std::atomic<std::uint64_t> rx_capture_samples{0};
     std::atomic<std::uint64_t> tx_frames{0};
     std::atomic<std::uint64_t> rx_frames{0};
 };
@@ -326,6 +332,16 @@ struct Direction {
     std::size_t depth_floor{std::numeric_limits<std::size_t>::max()};
     std::uint64_t queue_below_period{0};
     std::uint64_t queue_samples{0};
+    // Frames captured but not yet read out of the ALSA capture buffer. This is
+    // the one stage of the pipeline the depth accounting never covered: the
+    // depth metric is ring plus playback queue only, and the buffer-192 run
+    // measured roughly 5 ms of latency change that depth could not explain
+    // while its RAVENNA capture buffer moved 384 -> 288. Sampled from the
+    // available() call capture_into_ring already makes every iteration, so it
+    // costs no extra syscall on the real-time path.
+    std::size_t capture_backlog_peak{0};
+    std::uint64_t capture_backlog_total{0};
+    std::uint64_t capture_backlog_samples{0};
     std::uint64_t input_frames{};
     std::uint64_t output_frames{};
     // Frames the resampler produced, and consumed ring input for, that
@@ -387,6 +403,15 @@ IoResult capture_into_ring(Direction& direction) noexcept {
     const snd_pcm_sframes_t available = direction.capture.available();
     if (available == -EPIPE || available == -ESTRPIPE) {
         return request_recovery(direction, "capture-avail", available);
+    }
+    if (available >= 0) {
+        // Sample before the zero-backlog early return below, so the mean is
+        // over every iteration rather than only the ones that found data. The
+        // latter would bias it upward and overstate the capture contribution.
+        const auto backlog = static_cast<std::size_t>(available);
+        direction.capture_backlog_peak = std::max(direction.capture_backlog_peak, backlog);
+        direction.capture_backlog_total += backlog;
+        ++direction.capture_backlog_samples;
     }
     if (available < 0 || available == 0) {
         return available < 0 && available != -EAGAIN
@@ -667,8 +692,18 @@ void publish_telemetry(const Direction& tx,
     telemetry.rx_queue_below_period.store(rx.queue_below_period, std::memory_order_relaxed);
     telemetry.tx_queue_samples.store(tx.queue_samples, std::memory_order_relaxed);
     telemetry.rx_queue_samples.store(rx.queue_samples, std::memory_order_relaxed);
+    telemetry.tx_capture_peak.store(tx.capture_backlog_peak, std::memory_order_relaxed);
+    telemetry.rx_capture_peak.store(rx.capture_backlog_peak, std::memory_order_relaxed);
+    telemetry.tx_capture_total.store(tx.capture_backlog_total, std::memory_order_relaxed);
+    telemetry.rx_capture_total.store(rx.capture_backlog_total, std::memory_order_relaxed);
+    telemetry.tx_capture_samples.store(tx.capture_backlog_samples, std::memory_order_relaxed);
+    telemetry.rx_capture_samples.store(rx.capture_backlog_samples, std::memory_order_relaxed);
     telemetry.tx_frames.store(tx.output_frames, std::memory_order_relaxed);
     telemetry.rx_frames.store(rx.output_frames, std::memory_order_relaxed);
+}
+
+double capture_mean(const std::uint64_t total, const std::uint64_t samples) noexcept {
+    return samples == 0 ? 0.0 : static_cast<double>(total) / static_cast<double>(samples);
 }
 
 void telemetry_loop(const Telemetry& telemetry) {
@@ -702,6 +737,12 @@ void telemetry_loop(const Telemetry& telemetry) {
                   << " rx_qlow=" << telemetry.rx_queue_below_period.load()
                   << " tx_qn=" << telemetry.tx_queue_samples.load()
                   << " rx_qn=" << telemetry.rx_queue_samples.load()
+                  << " tx_cappeak=" << telemetry.tx_capture_peak.load()
+                  << " rx_cappeak=" << telemetry.rx_capture_peak.load()
+                  << " tx_capmean=" << capture_mean(telemetry.tx_capture_total.load(),
+                                                    telemetry.tx_capture_samples.load())
+                  << " rx_capmean=" << capture_mean(telemetry.rx_capture_total.load(),
+                                                    telemetry.rx_capture_samples.load())
                   << " tx_frames=" << telemetry.tx_frames.load()
                   << " rx_frames=" << telemetry.rx_frames.load() << '\n';
     }
@@ -891,7 +932,15 @@ int run(const Options& options) {
               << ",\"tx_queue_below_period\":" << tx.queue_below_period
               << ",\"rx_queue_below_period\":" << rx.queue_below_period
               << ",\"tx_queue_samples\":" << tx.queue_samples
-              << ",\"rx_queue_samples\":" << rx.queue_samples << "}\n";
+              << ",\"rx_queue_samples\":" << rx.queue_samples
+              << ",\"tx_capture_peak\":" << tx.capture_backlog_peak
+              << ",\"rx_capture_peak\":" << rx.capture_backlog_peak
+              << ",\"tx_capture_mean\":"
+              << capture_mean(tx.capture_backlog_total, tx.capture_backlog_samples)
+              << ",\"rx_capture_mean\":"
+              << capture_mean(rx.capture_backlog_total, rx.capture_backlog_samples)
+              << ",\"tx_capture_samples\":" << tx.capture_backlog_samples
+              << ",\"rx_capture_samples\":" << rx.capture_backlog_samples << "}\n";
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
 }
 

@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=01858ee74600581e4444a05d9ba8ac0e1c11775cf717ef518a4eeeb7c0b605fa
+expected_bridge_sha256=ae1cf9ba014b9ddcfd8f07ca01f9e96ce1adf29711aa124390e9111d548c5a5e
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
