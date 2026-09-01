@@ -1,0 +1,120 @@
+===ptp/status
+{ "status": "locked", "gmid": "00-1D-C1-FF-FE-1D-27-DC", "jitter": 2 }
+
+===sources
+{
+  "sources": [
+  {
+    "id": 0,
+    "enabled": true,
+    "name": "USB 16x16 TX 01-08",
+    "io": "Audio Device",
+    "max_samples_per_packet": 48,
+    "codec": "L24",
+    "address": "239.69.16.1",
+    "ttl": 16,
+    "payload_type": 98,
+    "dscp": 34,
+    "refclk_ptp_traceable": false,
+    "map": [ 0, 1, 2, 3, 4, 5, 6, 7 ]
+  }, 
+  {
+    "id": 1,
+    "enabled": true,
+    "name": "USB 16x16 TX 09-16",
+    "io": "Audio Device",
+    "max_samples_per_packet": 48,
+    "codec": "L24",
+    "address": "239.69.16.2",
+    "ttl": 16,
+    "payload_type": 99,
+    "dscp": 34,
+    "refclk_ptp_traceable": false,
+    "map": [ 8, 9, 10, 11, 12, 13, 14, 15 ]
+  }  ]
+}
+
+===sinks
+{
+  "sinks": [
+  {
+    "id": 0,
+    "name": "FF-PULSE RX 49-56",
+    "io": "Audio Device",
+    "use_sdp": true,
+    "source": "",
+    "sdp": "v=0\r\no=- 93138004200 93138004200 IN IP4 169.254.248.189\r\ns=FF-PULSE-16-DX : 32\r\nc=IN IP4 239.69.121.9/32\r\nt=0 0\r\na=keywds:Dante\r\nm=audio 5004 RTP/AVP 103\r\ni=8 channels: Output 49, Output 50, Output 51, Output 52, Output 53, Output 54, Output 55, Output 56\r\na=recvonly\r\na=rtpmap:103 L24/48000/8\r\na=ptime:1\r\na=ts-refclk:ptp=IEEE1588-2008:00-1D-C1-FF-FE-1D-27-DC:0\r\na=mediaclk:direct=531217786\r\n",
+    "delay": 576,
+    "ignore_refclk_gmid": false,
+    "map": [ 0, 1, 2, 3, 4, 5, 6, 7 ]
+  }, 
+  {
+    "id": 1,
+    "name": "FF-PULSE RX 57-64",
+    "io": "Audio Device",
+    "use_sdp": true,
+    "source": "",
+    "sdp": "v=0\r\no=- 93138072383 93138072383 IN IP4 169.254.248.189\r\ns=FF-PULSE-16-DX : 31\r\nc=IN IP4 239.69.193.115/32\r\nt=0 0\r\na=keywds:Dante\r\nm=audio 5004 RTP/AVP 103\r\ni=8 channels: Output 57, Output 58, Output 59, Output 60, Output 61, Output 62, Output 63, Output 64\r\na=recvonly\r\na=rtpmap:103 L24/48000/8\r\na=ptime:1\r\na=ts-refclk:ptp=IEEE1588-2008:00-1D-C1-FF-FE-1D-27-DC:0\r\na=mediaclk:direct=531217786\r\n",
+    "delay": 576,
+    "ignore_refclk_gmid": false,
+    "map": [ 8, 9, 10, 11, 12, 13, 14, 15 ]
+  }  ]
+}
+
+===sink/status/0
+{
+  "sink_flags":
+  {  
+    "rtp_seq_id_error": false, 
+    "rtp_ssrc_error": false, 
+    "rtp_payload_type_error": false, 
+    "rtp_sac_error": false, 
+    "receiving_rtp_packet": true, 
+    "some_muted": false, 
+    "all_muted": false, 
+    "muted": false
+  },
+  "sink_min_time": 0
+}
+
+===sink/status/1
+{
+  "sink_flags":
+  {  
+    "rtp_seq_id_error": false, 
+    "rtp_ssrc_error": false, 
+    "rtp_payload_type_error": false, 
+    "rtp_sac_error": false, 
+    "receiving_rtp_packet": true, 
+    "some_muted": false, 
+    "all_muted": false, 
+    "muted": false
+  },
+  "sink_min_time": 0
+}
+
+===browse/sources/all
+{
+  "remote_sources": [
+  {
+    "source": "SAP",
+    "id": "sap:3187211945-28597",
+    "name": "FF-PULSE-16-DX : 31",
+    "domain": "",
+    "address": "169.254.248.189",
+    "sdp": "v=0\r\no=- 93138072383 93138072383 IN IP4 169.254.248.189\r\ns=FF-PULSE-16-DX : 31\r\nc=IN IP4 239.69.193.115/32\r\nt=0 0\r\na=keywds:Dante\r\nm=audio 5004 RTP/AVP 103\r\ni=8 channels: Output 57, Output 58, Output 59, Output 60, Output 61, Output 62, Output 63, Output 64\r\na=recvonly\r\na=rtpmap:103 L24/48000/8\r\na=ptime:1\r\na=ts-refclk:ptp=IEEE1588-2008:00-1D-C1-FF-FE-1D-27-DC:0\r\na=mediaclk:direct=531217786\r\n",
+    "last_seen": 11,
+    "announce_period": 31 
+  }, 
+  {
+    "source": "SAP",
+    "id": "sap:3187211945-55514",
+    "name": "FF-PULSE-16-DX : 32",
+    "domain": "",
+    "address": "169.254.248.189",
+    "sdp": "v=0\r\no=- 93138004200 93138004200 IN IP4 169.254.248.189\r\ns=FF-PULSE-16-DX : 32\r\nc=IN IP4 239.69.121.9/32\r\nt=0 0\r\na=keywds:Dante\r\nm=audio 5004 RTP/AVP 103\r\ni=8 channels: Output 49, Output 50, Output 51, Output 52, Output 53, Output 54, Output 55, Output 56\r\na=recvonly\r\na=rtpmap:103 L24/48000/8\r\na=ptime:1\r\na=ts-refclk:ptp=IEEE1588-2008:00-1D-C1-FF-FE-1D-27-DC:0\r\na=mediaclk:direct=531217786\r\n",
+    "last_seen": 11,
+    "announce_period": 31 
+  }  ]
+}
+

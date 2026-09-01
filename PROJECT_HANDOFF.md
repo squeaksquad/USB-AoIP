@@ -986,6 +986,72 @@ characteristic of its configuration.
 either way. For unattended operation the safer point is the better default; the
 faster one is available if the floor is accepted deliberately.
 
+**THIS ACCEPTANCE IS WITHDRAWN.** See "The 40-impulse soak is barely loaded"
+below. Both soaks carried 10 s of impulse traffic in 600 s, and under 200 s of
+sustained load this configuration failed.
+
+#### The stopgap re-baselines at 32.729 ms, and its 12 ms defect did not recur
+
+Run `223421Z`, 800 impulses over 200 s, `tlatency 3000`, sink delay 576,
+driver-default buffering -- the accepted stopgap configuration.
+
+| | documented (2026-08-31) | **re-baselined (2026-09-01)** |
+|---|---:|---:|
+| median | 20.688 ms | **32.729 ms** |
+| p95 | 32.833 ms | 33.063 ms |
+| spread | 12.896 ms (bimodal, 590 samples) | **0.333 ms (16 samples)** |
+| distribution | 28/31 low, 3/31 high | 77.4% at 1571, 17.8% at 1587, 5 transitions |
+
+**The documented 20.688 ms no longer holds.** Gotcha #2 warned that figures are
+not comparable across the IGMP snooping change and that the point must be
+re-baselined rather than compared. This is that re-baseline.
+
+**The 12 ms bimodal step did not reproduce.** The documented defect was 590
+samples; the entire spread today is 16 samples. The "unpublishable latency"
+objection to the stopgap is therefore much weaker than the older document says.
+
+**Correction to today's session:** the figure "32.792 ms stopgap" used
+throughout the commits above is wrong in provenance -- it is the *sink delay
+48* row, a configuration this document elsewhere calls unusable on this path.
+It coincidentally lands within 0.06 ms of the true current value, so
+conclusions drawn against it happen to survive, but they were right by luck.
+
+#### The 40-impulse soak is barely loaded, and Phase 4 fails under real load
+
+**`--impulses 40` at 250 ms spacing measures a 10 second window.** Every Phase 4
+acceptance soak recorded above ran 600 s of bridge with **10 s** of impulse
+traffic. The project rule asks for a *loaded* soak; those were not meaningfully
+loaded, and every "score 1.000, zero spread" figure describes 10 s, not 600.
+
+Run `224517Z` is the first Phase 4 run with sustained load: same
+`TX 192 / RX 96` configuration, 800 impulses over 200 s.
+
+**It failed.** `candidate_exit=33`. Zero restarts for 563 s, including the whole
+measurement, then TX `playback-avail code=-32` broken pipe with
+`playback_state=XRUN`, followed by a cascade of RX `capture-ring-full` at
+ring=768 and repeated re-priming. 45 recoveries in the final ~37 s. USB baseline
+survived.
+
+The measurement it produced before failing was excellent -- median 27.729 ms,
+88.2% of impulses on one sample, spread 10 samples (0.208 ms), score 0.929,
+against the stopgap's 0.333 ms spread and 0.306 -- but it comes from a run that
+then failed, so it is not a usable result.
+
+**The obvious explanation is wrong.** Mac CoreAudio teardown after the
+measurement does not explain it: the clean soaks ran 441 s and 228 s
+post-teardown without incident, while this failed 19 s after a measurement that
+left only 56 s. What distinguishes this run is 200 s of sustained impulse load
+against 10 s. `tx_qfloor` read 89 here against 124 in the clean soak. **The
+mechanism is not known and should not be guessed at.**
+
+**Under identical 800-impulse load the stopgap completed cleanly** (`223421Z`,
+`candidate_exit=0`) while Phase 4 did not. On equal footing that is a material
+disadvantage for Phase 4, and it is why the acceptance above is withdrawn.
+
+**Next step is reproduction, not a fix.** Establish whether `224517Z` repeats
+before theorising. If it does, the 800-impulse window becomes the acceptance
+standard and both Phase 4 points need re-soaking under it.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
