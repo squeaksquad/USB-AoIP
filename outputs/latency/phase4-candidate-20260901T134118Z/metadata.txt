@@ -1,0 +1,8 @@
+result_dir=/home/bdimaio/usb-16x16-work/logs/phase4-candidate-20260901T134118Z
+period_frames=96
+buffer_frames=960
+ring_frames=1536
+target_frames=192
+sink_delay=576
+candidate_seconds=480
+bridge_sha256=ee6379eb1788140dcf61e8bd56c4a6dbca928648a420501e3341afdab56c9875

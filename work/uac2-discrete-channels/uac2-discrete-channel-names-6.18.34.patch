@@ -1,0 +1,81 @@
+--- a/drivers/usb/gadget/function/f_uac2.c
++++ b/drivers/usb/gadget/function/f_uac2.c
+@@ -107,6 +107,25 @@
+ 	STR_AS_OUT_ALT1,
+ 	STR_AS_IN_ALT0,
+ 	STR_AS_IN_ALT1,
++	/* UAC2 iChannelNames names the first channel string. The remaining
++	 * channel names must immediately follow it in descriptor-index order.
++	 */
++	STR_CH_1,
++	STR_CH_2,
++	STR_CH_3,
++	STR_CH_4,
++	STR_CH_5,
++	STR_CH_6,
++	STR_CH_7,
++	STR_CH_8,
++	STR_CH_9,
++	STR_CH_10,
++	STR_CH_11,
++	STR_CH_12,
++	STR_CH_13,
++	STR_CH_14,
++	STR_CH_15,
++	STR_CH_16,
+ 	NUM_STR_DESCRIPTORS,
+ };
+ 
+@@ -1065,6 +1084,22 @@
+ 	strings_fn[STR_FU_IN].s = uac2_opts->p_fu_vol_name;
+ 	strings_fn[STR_AS_IN_ALT0].s = "Capture Inactive";
+ 	strings_fn[STR_AS_IN_ALT1].s = "Capture Active";
++	strings_fn[STR_CH_1].s = "1";
++	strings_fn[STR_CH_2].s = "2";
++	strings_fn[STR_CH_3].s = "3";
++	strings_fn[STR_CH_4].s = "4";
++	strings_fn[STR_CH_5].s = "5";
++	strings_fn[STR_CH_6].s = "6";
++	strings_fn[STR_CH_7].s = "7";
++	strings_fn[STR_CH_8].s = "8";
++	strings_fn[STR_CH_9].s = "9";
++	strings_fn[STR_CH_10].s = "10";
++	strings_fn[STR_CH_11].s = "11";
++	strings_fn[STR_CH_12].s = "12";
++	strings_fn[STR_CH_13].s = "13";
++	strings_fn[STR_CH_14].s = "14";
++	strings_fn[STR_CH_15].s = "15";
++	strings_fn[STR_CH_16].s = "16";
+ 
+ 	us = usb_gstrings_attach(cdev, fn_strings, ARRAY_SIZE(strings_fn));
+ 	if (IS_ERR(us))
+@@ -1088,9 +1123,9 @@
+ 	in_clk_src_desc.iClockSource = us[STR_CLKSRC_IN].id;
+ 	out_clk_src_desc.iClockSource = us[STR_CLKSRC_OUT].id;
+ 	usb_out_it_desc.iTerminal = us[STR_USB_IT].id;
+-	usb_out_it_desc.iChannelNames = us[STR_USB_IT_CH].id;
++	usb_out_it_desc.iChannelNames = us[STR_CH_1].id;
+ 	io_in_it_desc.iTerminal = us[STR_IO_IT].id;
+-	io_in_it_desc.iChannelNames = us[STR_IO_IT_CH].id;
++	io_in_it_desc.iChannelNames = us[STR_CH_1].id;
+ 	usb_in_ot_desc.iTerminal = us[STR_USB_OT].id;
+ 	io_out_ot_desc.iTerminal = us[STR_IO_OT].id;
+ 	std_as_out_if0_desc.iInterface = us[STR_AS_OUT_ALT0].id;
+@@ -1112,13 +1147,13 @@
+ 
+ 	/* Initialize the configurable parameters */
+ 	usb_out_it_desc.bNrChannels = num_channels(uac2_opts->c_chmask);
+-	usb_out_it_desc.bmChannelConfig = cpu_to_le32(uac2_opts->c_chmask);
++	usb_out_it_desc.bmChannelConfig = 0;
+ 	io_in_it_desc.bNrChannels = num_channels(uac2_opts->p_chmask);
+-	io_in_it_desc.bmChannelConfig = cpu_to_le32(uac2_opts->p_chmask);
++	io_in_it_desc.bmChannelConfig = 0;
+ 	as_out_hdr_desc.bNrChannels = num_channels(uac2_opts->c_chmask);
+-	as_out_hdr_desc.bmChannelConfig = cpu_to_le32(uac2_opts->c_chmask);
++	as_out_hdr_desc.bmChannelConfig = 0;
+ 	as_in_hdr_desc.bNrChannels = num_channels(uac2_opts->p_chmask);
+-	as_in_hdr_desc.bmChannelConfig = cpu_to_le32(uac2_opts->p_chmask);
++	as_in_hdr_desc.bmChannelConfig = 0;
+ 	as_out_fmt1_desc.bSubslotSize = uac2_opts->c_ssize;
+ 	as_out_fmt1_desc.bBitResolution = uac2_opts->c_ssize * 8;
+ 	as_in_fmt1_desc.bSubslotSize = uac2_opts->p_ssize;

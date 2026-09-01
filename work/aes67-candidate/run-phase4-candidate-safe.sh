@@ -1,0 +1,271 @@
+#!/bin/bash
+set -euo pipefail
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "run as root with sudo" >&2
+  exit 2
+fi
+
+work_root=/home/bdimaio/usb-16x16-work
+source_root="$work_root/aes67-daemon-src"
+daemon_binary="$source_root/build-daemon/aes67-daemon"
+module_binary="$work_root/aes67-source/ravenna-alsa-lkm-v2.1/driver/MergingRavennaALSA.ko"
+bridge_binary=/usr/local/libexec/usb16x16-rt-bridge
+original_config="$source_root/runtime/daemon-eth0.conf"
+original_status="$source_root/runtime/status.json"
+expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
+expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
+expected_bridge_sha256=dc5a49014d11342403faf4177c782a7ff0db6e9864f6a207c06044dcb8ad31d6
+expected_gmid=00-1D-C1-FF-FE-1D-27-DC
+
+candidate_seconds=${1:-360}
+period_frames=${2:-96}
+buffer_frames=${3:-384}
+ring_frames=${4:-768}
+target_frames=${5:-192}
+sink_delay=576
+timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+result_dir="$work_root/logs/phase4-candidate-$timestamp"
+ready_file=/tmp/usb16x16-phase4-candidate.ready
+temporary_root=
+daemon_pid=
+bridge_pid=
+
+for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frames" "$target_frames"; do
+  if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+    echo "candidate arguments must be unsigned integers" >&2
+    exit 10
+  fi
+done
+if [ "$candidate_seconds" -lt 60 ] || [ "$candidate_seconds" -gt 1200 ]; then
+  echo "candidate duration must be 60..1200 seconds" >&2
+  exit 11
+fi
+if { [ "$period_frames" -ne 48 ] && [ "$period_frames" -ne 96 ]; } ||
+   [ "$buffer_frames" -lt $((period_frames * 2)) ] ||
+   [ "$ring_frames" -lt $((target_frames + 8)) ] ||
+   [ "$target_frames" -lt "$period_frames" ]; then
+  echo "invalid period/buffer/ring/target relationship" >&2
+  exit 12
+fi
+
+for process_name in ptp4l aes67-daemon alsaloop; do
+  if pgrep -x "$process_name" >/dev/null; then
+    echo "refusing to start: $process_name is already running" >&2
+    exit 20
+  fi
+done
+if pgrep -f '^/usr/local/libexec/usb16x16-rt-bridge([[:space:]]|$)' >/dev/null; then
+  echo "refusing to start: usb16x16-rt-bridge is already running" >&2
+  exit 20
+fi
+if lsmod | grep -q '^MergingRavennaALSA '; then
+  echo "refusing to start: MergingRavennaALSA is already loaded" >&2
+  exit 21
+fi
+if [ "$(cat /sys/class/net/eth0/carrier)" != 1 ] ||
+   [ "$(cat /sys/class/net/eth0/speed)" != 1000 ]; then
+  echo "refusing to start: eth0 is not at 1 Gb/s with carrier" >&2
+  exit 22
+fi
+if [ "$(cat /sys/class/udc/*/state)" != configured ] ||
+   [ "$(cat /sys/class/udc/*/current_speed)" != high-speed ] ||
+   [ "$(systemctl is-active usb-16x16.service)" != active ]; then
+  echo "refusing to start: protected USB baseline is not healthy" >&2
+  exit 23
+fi
+
+for required_path in "$daemon_binary" "$module_binary" "$bridge_binary" "$original_config" "$original_status"; do
+  if [ ! -r "$required_path" ]; then
+    echo "missing required artifact: $required_path" >&2
+    exit 24
+  fi
+done
+if [ "$(sha256sum "$daemon_binary" | awk '{print $1}')" != "$expected_daemon_sha256" ]; then
+  echo "AES67 daemon hash mismatch" >&2
+  exit 25
+fi
+if [ "$(sha256sum "$module_binary" | awk '{print $1}')" != "$expected_module_sha256" ]; then
+  echo "RAVENNA module hash mismatch" >&2
+  exit 26
+fi
+if [ "$(sha256sum "$bridge_binary" | awk '{print $1}')" != "$expected_bridge_sha256" ] ||
+   [ "$(stat -c '%U:%G:%a' "$bridge_binary")" != root:root:755 ]; then
+  echo "Phase 4 bridge hash or ownership mismatch" >&2
+  exit 27
+fi
+
+original_config_sha256=$(sha256sum "$original_config" | awk '{print $1}')
+original_status_sha256=$(sha256sum "$original_status" | awk '{print $1}')
+temporary_root=$(mktemp -d /tmp/usb16x16-phase4-candidate.XXXXXX)
+mkdir -p "$result_dir"
+rm -f "$ready_file"
+
+cleanup() {
+  set +e
+  rm -f "$ready_file"
+  if [ -n "$bridge_pid" ] && kill -0 "$bridge_pid" 2>/dev/null; then
+    kill -INT "$bridge_pid"
+    for attempt in 1 2 3 4 5; do
+      kill -0 "$bridge_pid" 2>/dev/null || break
+      sleep 1
+    done
+    kill -TERM "$bridge_pid" 2>/dev/null || true
+  fi
+  if [ -n "$daemon_pid" ] && kill -0 "$daemon_pid" 2>/dev/null; then
+    kill -INT "$daemon_pid"
+    for attempt in 1 2 3 4 5; do
+      kill -0 "$daemon_pid" 2>/dev/null || break
+      sleep 1
+    done
+    kill -TERM "$daemon_pid" 2>/dev/null || true
+  fi
+  for attempt in 1 2 3 4 5; do
+    if ! lsmod | grep -q '^MergingRavennaALSA '; then
+      break
+    fi
+    /usr/sbin/rmmod MergingRavennaALSA 2>/dev/null || true
+    sleep 1
+  done
+  case "$temporary_root" in
+    /tmp/usb16x16-phase4-candidate.*) rm -rf "$temporary_root" ;;
+  esac
+  chown -R bdimaio:bdimaio "$result_dir" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM HUP
+
+sed "s|\"status_file\": \"[^\"]*\"|\"status_file\": \"$temporary_root/status.json\"|" \
+  "$original_config" > "$temporary_root/daemon.conf"
+sed 's/"delay": 576/"delay": 576/g' "$original_status" > "$temporary_root/status.json"
+
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); keys=("name","io","delay","use_sdp","source","sdp","ignore_refclk_gmid","map"); json.dump({k:d["sinks"][int(sys.argv[3])][k] for k in keys},open(sys.argv[2],"w"))' \
+  "$temporary_root/status.json" "$temporary_root/sink-0.json" 0
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); keys=("name","io","delay","use_sdp","source","sdp","ignore_refclk_gmid","map"); json.dump({k:d["sinks"][int(sys.argv[3])][k] for k in keys},open(sys.argv[2],"w"))' \
+  "$temporary_root/status.json" "$temporary_root/sink-1.json" 1
+
+/usr/sbin/insmod "$module_binary"
+"$daemon_binary" -c "$temporary_root/daemon.conf" > "$result_dir/daemon.log" 2>&1 &
+daemon_pid=$!
+
+api_ready=0
+for attempt in $(seq 1 30); do
+  if curl -fsS http://127.0.0.1:8080/api/ptp/status > "$result_dir/ptp-status.json"; then
+    api_ready=1
+    break
+  fi
+  kill -0 "$daemon_pid" 2>/dev/null || break
+  sleep 1
+done
+if [ "$api_ready" -ne 1 ]; then
+  echo "AES67 daemon API did not become ready" >&2
+  exit 28
+fi
+
+ptp_locked=0
+for attempt in $(seq 1 90); do
+  curl -fsS http://127.0.0.1:8080/api/ptp/status > "$result_dir/ptp-status.json"
+  if grep -Eq '"status"[[:space:]]*:[[:space:]]*"locked"' "$result_dir/ptp-status.json" &&
+     grep -qi "$expected_gmid" "$result_dir/ptp-status.json"; then
+    ptp_locked=1
+    break
+  fi
+  kill -0 "$daemon_pid" 2>/dev/null || break
+  sleep 1
+done
+if [ "$ptp_locked" -ne 1 ]; then
+  echo "PTP did not lock to expected GMID $expected_gmid" >&2
+  exit 29
+fi
+
+for sink_id in 0 1; do
+  curl -fsS -X PUT "http://127.0.0.1:8080/api/sink/$sink_id" \
+    -H 'Content-Type: application/json' \
+    --data-binary "@$temporary_root/sink-$sink_id.json" \
+    > "$result_dir/sink-$sink_id-put.json"
+done
+curl -fsS http://127.0.0.1:8080/api/sinks > "$result_dir/sinks-readback.json"
+if [ "$(grep -o '"delay"[[:space:]]*:[[:space:]]*576' "$result_dir/sinks-readback.json" | wc -l)" -ne 2 ]; then
+  echo "sink delay readback did not contain two 576-sample sinks" >&2
+  exit 30
+fi
+
+timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
+  --period "$period_frames" \
+  --buffer "$buffer_frames" \
+  --ring "$ring_frames" \
+  --target "$target_frames" \
+  --priority 90 \
+  --seconds "$candidate_seconds" \
+  > "$result_dir/bridge.log" 2>&1 &
+bridge_pid=$!
+
+sleep 4
+if ! kill -0 "$bridge_pid" 2>/dev/null; then
+  echo "Phase 4 bridge exited during startup" >&2
+  exit 31
+fi
+if ! grep -q '^NEGOTIATED ' "$result_dir/bridge.log"; then
+  echo "Phase 4 bridge did not report negotiated ALSA parameters" >&2
+  exit 32
+fi
+if grep -Eq '^BRIDGE .*tx_restarts=[1-9][0-9]*|^BRIDGE .*rx_restarts=[1-9][0-9]*' \
+    "$result_dir/bridge.log"; then
+  echo "Phase 4 bridge restarted an ALSA direction during startup" >&2
+  exit 33
+fi
+
+{
+  echo "result_dir=$result_dir"
+  echo "period_frames=$period_frames"
+  echo "buffer_frames=$buffer_frames"
+  echo "ring_frames=$ring_frames"
+  echo "target_frames=$target_frames"
+  echo "sink_delay=$sink_delay"
+  echo "candidate_seconds=$candidate_seconds"
+  echo "bridge_sha256=$expected_bridge_sha256"
+} > "$result_dir/metadata.txt"
+echo "$result_dir" > "$ready_file"
+echo "READY result_dir=$result_dir"
+
+while kill -0 "$bridge_pid" 2>/dev/null; do
+  if grep -Eq '^BRIDGE .*tx_restarts=[1-9][0-9]*|^BRIDGE .*rx_restarts=[1-9][0-9]*' \
+      "$result_dir/bridge.log"; then
+    echo "Phase 4 bridge restarted an ALSA direction during the candidate" >&2
+    exit 33
+  fi
+  sleep 1
+done
+
+set +e
+wait "$bridge_pid"
+bridge_status=$?
+set -e
+bridge_pid=
+case "$bridge_status" in
+  0|124|130|143) ;;
+  *)
+    echo "Phase 4 bridge failed with status $bridge_status" >&2
+    exit 34
+    ;;
+esac
+if grep -Eqi 'fatal:|xrun|overrun|underrun|broken pipe|restart[^s]' "$result_dir/bridge.log"; then
+  echo "Phase 4 bridge log contains a failure marker" >&2
+  exit 35
+fi
+if ! grep -Eq '^SUMMARY .*"tx_restarts":0,"rx_restarts":0' "$result_dir/bridge.log"; then
+  echo "Phase 4 bridge did not finish with zero direction restarts" >&2
+  exit 36
+fi
+if [ "$(sha256sum "$original_config" | awk '{print $1}')" != "$original_config_sha256" ] ||
+   [ "$(sha256sum "$original_status" | awk '{print $1}')" != "$original_status_sha256" ]; then
+  echo "protected AES67 prototype config changed unexpectedly" >&2
+  exit 37
+fi
+if [ "$(cat /sys/class/udc/*/state)" != configured ] ||
+   [ "$(cat /sys/class/udc/*/current_speed)" != high-speed ] ||
+   [ "$(systemctl is-active usb-16x16.service)" != active ]; then
+  echo "protected USB baseline failed during Phase 4 candidate" >&2
+  exit 38
+fi
+
+echo "Phase 4 candidate completed cleanly"

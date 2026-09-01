@@ -10,6 +10,7 @@ private struct Arguments {
     let outputChannel: Int
     let impulseCount: Int
     let maximumLagMilliseconds: Double
+    let otherChannelLoadAmplitude: Float
 
     init(_ values: [String]) throws {
         guard values.count >= 2 else { throw CLIError.usage }
@@ -20,7 +21,8 @@ private struct Arguments {
         var inputChannel = 1
         var outputChannel = 1
         var impulseCount = 20
-        var maximumLagMilliseconds = 500.0
+        var maximumLagMilliseconds = 200.0
+        var otherChannelLoadAmplitude: Float = 0
         var index = 2
         while index < values.count {
             switch values[index] {
@@ -54,8 +56,17 @@ private struct Arguments {
                 index += 2
             case "--maximum-lag-ms":
                 guard index + 1 < values.count,
-                      let parsed = Double(values[index + 1]), parsed > 0 else { throw CLIError.usage }
+                      let parsed = Double(values[index + 1]), parsed > 0, parsed < 250 else {
+                    throw CLIError.usage
+                }
                 maximumLagMilliseconds = parsed
+                index += 2
+            case "--other-channel-load-amplitude":
+                guard index + 1 < values.count,
+                      let parsed = Float(values[index + 1]), parsed >= 0, parsed <= 0.25 else {
+                    throw CLIError.usage
+                }
+                otherChannelLoadAmplitude = parsed
                 index += 2
             default:
                 throw CLIError.unknownArgument(values[index])
@@ -68,6 +79,7 @@ private struct Arguments {
         self.outputChannel = outputChannel
         self.impulseCount = impulseCount
         self.maximumLagMilliseconds = maximumLagMilliseconds
+        self.otherChannelLoadAmplitude = otherChannelLoadAmplitude
     }
 }
 
@@ -84,7 +96,8 @@ private enum CLIError: Error, CustomStringConvertible {
               usb16x16-latency list [--output FILE]
               usb16x16-latency measure [--device NAME] [--buffer-frames N]
                   [--input-channel N] [--output-channel N] [--impulses N]
-                  [--maximum-lag-ms N] [--output FILE]
+                  [--maximum-lag-ms N] [--other-channel-load-amplitude 0...0.25]
+                  [--output FILE]
             """
         case let .unknownArgument(argument):
             return "unknown argument: \(argument)"
@@ -127,7 +140,8 @@ do {
             inputChannel: arguments.inputChannel,
             outputChannel: arguments.outputChannel,
             impulseCount: arguments.impulseCount,
-            maximumLagMilliseconds: arguments.maximumLagMilliseconds
+            maximumLagMilliseconds: arguments.maximumLagMilliseconds,
+            otherChannelLoadAmplitude: arguments.otherChannelLoadAmplitude
         )
         try emit(
             encoded(LiveImpulseMeasurement.run(configuration: configuration)),

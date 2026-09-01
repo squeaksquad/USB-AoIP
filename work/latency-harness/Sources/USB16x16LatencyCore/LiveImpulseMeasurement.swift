@@ -35,6 +35,7 @@ public struct LiveMeasurementConfiguration: Codable, Equatable, Sendable {
     public var leadInMilliseconds: Double
     public var maximumLagMilliseconds: Double
     public var peakSearchRadiusSamples: Int
+    public var otherChannelLoadAmplitude: Float
 
     public init(
         deviceName: String = "USB 16x16",
@@ -45,8 +46,9 @@ public struct LiveMeasurementConfiguration: Codable, Equatable, Sendable {
         impulseAmplitude: Float = 0.25,
         intervalMilliseconds: Double = 250,
         leadInMilliseconds: Double = 500,
-        maximumLagMilliseconds: Double = 500,
-        peakSearchRadiusSamples: Int = 8
+        maximumLagMilliseconds: Double = 200,
+        peakSearchRadiusSamples: Int = 8,
+        otherChannelLoadAmplitude: Float = 0
     ) {
         self.deviceName = deviceName
         self.bufferFrames = bufferFrames
@@ -58,6 +60,19 @@ public struct LiveMeasurementConfiguration: Codable, Equatable, Sendable {
         self.leadInMilliseconds = leadInMilliseconds
         self.maximumLagMilliseconds = maximumLagMilliseconds
         self.peakSearchRadiusSamples = peakSearchRadiusSamples
+        self.otherChannelLoadAmplitude = otherChannelLoadAmplitude
+    }
+}
+
+struct DeterministicChannelLoad {
+    private var state: UInt32 = 0x9e37_79b9
+
+    mutating func next(amplitude: Float) -> Float {
+        state ^= state << 13
+        state ^= state >> 17
+        state ^= state << 5
+        let normalized = Float(Int32(bitPattern: state)) / Float(Int32.max)
+        return max(-1, min(1, normalized)) * amplitude
     }
 }
 
@@ -96,6 +111,7 @@ private final class MeasurementState: @unchecked Sendable {
     private var expectedInputSampleTime: Double?
     private var expectedOutputSampleTime: Double?
     private var completionSignaled = false
+    private var channelLoad = DeterministicChannelLoad()
 
     init(
         configuration: LiveMeasurementConfiguration,
@@ -169,6 +185,14 @@ private final class MeasurementState: @unchecked Sendable {
             let samples = data.assumingMemoryBound(to: Float.self)
             for frame in 0..<renderedFrames {
                 let absoluteFrame = outputFrameCounter + frame
+                if configuration.otherChannelLoadAmplitude > 0 {
+                    for channel in 0..<outputChannels
+                    where channel != configuration.outputChannel - 1 {
+                        samples[frame * outputChannels + channel] = channelLoad.next(
+                            amplitude: configuration.otherChannelLoadAmplitude
+                        )
+                    }
+                }
                 if impulseFrames.contains(absoluteFrame) {
                     samples[frame * outputChannels + configuration.outputChannel - 1] =
                         configuration.impulseAmplitude

@@ -42,3 +42,13 @@ import Testing
     #expect(statistics.maximumSamples == 104)
     #expect(statistics.minimumSamples == 100)
 }
+
+@Test func representativeChannelLoadIsDeterministicAndBounded() {
+    var first = DeterministicChannelLoad()
+    var second = DeterministicChannelLoad()
+    let a = (0..<1_000).map { _ in first.next(amplitude: 0.05) }
+    let b = (0..<1_000).map { _ in second.next(amplitude: 0.05) }
+    #expect(a == b)
+    #expect(a.allSatisfy { abs($0) <= 0.05 })
+    #expect(a.contains { abs($0) > 0.04 })
+}

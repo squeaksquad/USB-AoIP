@@ -24,8 +24,20 @@ path_hint=${USB16X16_PATH_HINT:-Route the Ferrofish inputs 49-64 back out to the
 candidate_seconds=${1:-120}
 coreaudio_frames=${2:-64}
 impulse_count=${3:-40}
-maximum_lag_ms=${4:-500}
-settle_seconds=${USB16X16_SETTLE_SECONDS:-8}
+maximum_lag_ms=${4:-200}
+required_signal_probes=${USB16X16_REQUIRED_SIGNAL_PROBES:-3}
+signal_probe_attempts=${USB16X16_SIGNAL_PROBE_ATTEMPTS:-150}
+remote_arguments=${USB16X16_REMOTE_ARGUMENTS:-}
+other_channel_load_amplitude=${USB16X16_OTHER_CHANNEL_LOAD_AMPLITUDE:-0}
+load_options=()
+if [[ "$other_channel_load_amplitude" != 0 ]]; then
+    load_options+=(--other-channel-load-amplitude "$other_channel_load_amplitude")
+fi
+
+if (( maximum_lag_ms >= 250 )); then
+    print -ru2 -- "error: maximum lag must remain below the 250 ms impulse interval"
+    exit 2
+fi
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 output_dir="$repo_root/outputs/latency"
@@ -72,6 +84,10 @@ ssh "${ssh_options[@]}" "$pi_target" \
             exit 20
         fi
     done
+    if pgrep -f '^/usr/local/libexec/usb16x16-rt-bridge([[:space:]]|$)' >/dev/null; then
+        echo 'usb16x16-rt-bridge is already running' >&2
+        exit 20
+    fi
     if lsmod | grep -q '^MergingRavennaALSA '; then
         echo 'MergingRavennaALSA is already loaded' >&2
         exit 21
@@ -119,27 +135,48 @@ remote_result_file=$(mktemp -t usb16x16-remote-result)
     fi
     print -r -- "$remote_result_dir" > "$remote_result_file"
 
-    # A fixed settle is not enough: for several seconds after the loops start
-    # the sinks latch rtp_seq_id_error and rtp_sac_error while the receive
-    # stream aligns. Measuring during that window captures nothing. Wait for
-    # both sinks to report clean flags instead of guessing a duration.
-    sleep "$settle_seconds"
-    for settle_attempt in {1..40}; do
-        if ssh "${ssh_options[@]}" "$pi_target" \
-            "for sink_id in 0 1; do
-                curl -fsS --max-time 4 \"http://127.0.0.1:8080/api/sink/status/\$sink_id\" || exit 1
-            done" 2>/dev/null \
-            | tr -d '\n ' \
-            | grep -q '"rtp_seq_id_error":false,"rtp_ssrc_error":false,"rtp_payload_type_error":false,"rtp_sac_error":false,"receiving_rtp_packet":true'
+    # Sink flags are explicitly not a readiness gate. They are clean during
+    # silence and during broken paths. Fire real impulses and require several
+    # consecutive probes with both signal level and delay spread passing.
+    consecutive_signal_probes=0
+    : > "$api_dir/settle.log"
+    for settle_attempt in $(seq 1 "$signal_probe_attempts"); do
+        probe_path="$api_dir/readiness-probe-${settle_attempt}.json"
+        if "$app_binary" measure \
+            --device "USB 16x16" \
+            --buffer-frames "$coreaudio_frames" \
+            --input-channel 1 \
+            --output-channel 1 \
+            --impulses 8 \
+            --maximum-lag-ms "$maximum_lag_ms" \
+            --output "$probe_path" \
+            >/dev/null 2>"$api_dir/readiness-probe-${settle_attempt}.log" &&
+            USB16X16_PROBE="$probe_path" /usr/bin/python3 <<'PYEOF'
+import json
+import os
+probe = json.load(open(os.environ["USB16X16_PROBE"]))
+delays = probe["correlation"]["perImpulseDelaySamples"]
+peak = float(probe["capturedPeak"])
+raise SystemExit(0 if peak >= 0.01 and max(delays) - min(delays) <= 2 else 1)
+PYEOF
         then
-            print -r -- "sinks clean after ${settle_attempt} check(s)" > "$api_dir/settle.log"
-            settle_ok=1
+            (( consecutive_signal_probes += 1 ))
+            print -r -- "probe $settle_attempt PASS consecutive=$consecutive_signal_probes" >> "$api_dir/settle.log"
+        else
+            consecutive_signal_probes=0
+            print -r -- "probe $settle_attempt FAIL consecutive=0" >> "$api_dir/settle.log"
+        fi
+        if (( consecutive_signal_probes >= required_signal_probes )); then
+            print -r -- "return signal ready after $settle_attempt probes" >> "$api_dir/settle.log"
+            signal_ready=1
             break
         fi
-        sleep 2
+        sleep 1
     done
-    if [[ -z "${settle_ok-}" ]]; then
-        print -r -- "sinks never reported clean flags" > "$api_dir/settle.log"
+    if [[ -z "${signal_ready-}" ]]; then
+        print -r -- "return signal never passed $required_signal_probes consecutive probes" >> "$api_dir/settle.log"
+        print -r -- "6" > "$measure_status_file"
+        exit 0
     fi
     api_snapshot before-measurement
     "$app_binary" measure \
@@ -149,6 +186,7 @@ remote_result_file=$(mktemp -t usb16x16-remote-result)
         --output-channel 1 \
         --impulses "$impulse_count" \
         --maximum-lag-ms "$maximum_lag_ms" \
+        "${load_options[@]}" \
         --output "$result_path" \
         >/dev/null 2>"$measure_log"
     measure_exit_code=$?
@@ -174,10 +212,28 @@ do
     fi
 done
 
+# The SAP watcher timestamps session announcements on the AoIP segment while the
+# candidate comes up. Read alongside settle.log it splits the ~3.5 minute
+# post-restart delay into its two halves: discovery, meaning the Pi announcing a
+# session, and resolution, meaning the Ferrofish acting on that announcement.
+# The two logs share a wall clock. Passive: it joins the SAP group and reads,
+# and it never touches the daemon, the sinks, or the sources. It is not on the
+# measurement path, so a failure here is logged and ignored rather than fatal.
+# Set USB16X16_SAP_WATCH=0 to skip it.
+sap_watch_log="$api_dir/sap-timeline.log"
+sap_watch_pid=""
+if [[ ${USB16X16_SAP_WATCH:-1} != 0 ]]; then
+    python3 "$script_dir/sap-watch.py" \
+        --duration $(( candidate_seconds + 900 )) \
+        --output "$sap_watch_log" &
+    sap_watch_pid=$!
+    print -r -- "sap watcher started (pid $sap_watch_pid) -> ${sap_watch_log:t}"
+fi
+
 print -r -- "=== starting Pi candidate (${candidate_seconds}s) ==="
 set +e
 ssh "${ssh_options[@]}" "$pi_target" \
-    "$remote_environment sudo -n $remote_script" > "$candidate_log" 2>&1 &
+    "$remote_environment sudo -n $remote_script $remote_arguments" > "$candidate_log" 2>&1 &
 candidate_pid=$!
 wait "$candidate_pid"
 candidate_status=$?
@@ -193,6 +249,15 @@ if kill -0 "$watcher_pid" 2>/dev/null; then
     kill -TERM "$watcher_pid" 2>/dev/null || true
 fi
 wait "$watcher_pid" 2>/dev/null || true
+
+if [[ -n "$sap_watch_pid" ]]; then
+    kill -TERM "$sap_watch_pid" 2>/dev/null || true
+    wait "$sap_watch_pid" 2>/dev/null || true
+    if [[ -s "$sap_watch_log" ]]; then
+        print -r -- "=== SAP timeline ==="
+        sed 's/^/  sap| /' "$sap_watch_log"
+    fi
+fi
 measure_status=$(cat "$measure_status_file" 2>/dev/null || print -r -- 1)
 remote_result_dir=$(cat "$remote_result_file" 2>/dev/null || print -r -- "")
 rm -f "$measure_status_file" "$remote_result_file"
@@ -207,6 +272,7 @@ ssh "${ssh_options[@]}" "$pi_target" \
     "test -z \"\$(pgrep -x alsaloop || true)\"
     test -z \"\$(pgrep -x aes67-daemon || true)\"
     test -z \"\$(pgrep -x ptp4l || true)\"
+    test -z \"\$(pgrep -f '^/usr/local/libexec/usb16x16-rt-bridge([[:space:]]|$)' || true)\"
     ! lsmod | grep -q '^MergingRavennaALSA '
     test \"\$(cat /sys/class/udc/*/state)\" = configured
     test \"\$(cat /sys/class/udc/*/current_speed)\" = high-speed

@@ -17,10 +17,16 @@ frames=${USB16X16_COREAUDIO_FRAMES:-64}
 output_channel=${USB16X16_OUTPUT_CHANNEL:-1}
 input_channel=${USB16X16_INPUT_CHANNEL:-1}
 impulses=${USB16X16_IMPULSES:-12}
-maximum_lag_ms=${USB16X16_MAXIMUM_LAG_MS:-500}
+maximum_lag_ms=${USB16X16_MAXIMUM_LAG_MS:-200}
 peak_threshold=${USB16X16_PEAK_THRESHOLD:-0.01}
 spread_limit=${USB16X16_SPREAD_LIMIT:-2}
+required_consecutive=${USB16X16_REQUIRED_CONSECUTIVE:-3}
 duration_seconds=${1:-1200}
+
+if (( maximum_lag_ms >= 250 )); then
+    print -ru2 -- "maximum lag must remain below the 250 ms impulse interval"
+    exit 2
+fi
 
 if [[ ! -x "$app_binary" ]]; then
     print -ru2 -- "missing harness app bundle: $app_binary"
@@ -37,6 +43,7 @@ print -r -- ""
 
 started=$SECONDS
 locked_once=0
+consecutive_locks=0
 iteration=0
 
 while (( SECONDS - started < duration_seconds )); do
@@ -103,7 +110,8 @@ open(os.environ["USB16X16_PROBE"] + ".locked", "w").write("1" if locked else "0"
 PYEOF
 
     if [[ "$(cat "$probe.locked" 2>/dev/null)" == 1 ]]; then
-        if (( locked_once == 0 )); then
+        (( consecutive_locks += 1 ))
+        if (( locked_once == 0 && consecutive_locks >= required_consecutive )); then
             locked_once=1
             print -r -- ""
             print -r -- "=================================================="
@@ -111,6 +119,8 @@ PYEOF
             print -r -- "=================================================="
             print -r -- ""
         fi
+    else
+        consecutive_locks=0
     fi
     sleep 1
 done

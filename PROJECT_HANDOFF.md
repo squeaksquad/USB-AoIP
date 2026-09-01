@@ -359,6 +359,30 @@ If the current stack cannot reach the target, build one purpose-specific real-ti
 
 If ASRC remains necessary, the observed clock error is only tens of ppm. Investigate a low-delay near-unity asynchronous converter, such as a short Farrow/fractional-delay or compact polyphase design, rather than a general arbitrary-ratio resampler.
 
+#### Phase 4 implementation status — 2026-09-01
+
+The bridge is implemented, not stubbed, under `work/phase4-bridge/`. It owns all
+four raw ALSA directions in one `SCHED_FIFO` process, uses locked/preallocated
+memory, MMAP I/O, fused S24_3LE/S32 conversion, two elastic rings, reciprocal
+near-unity Farrow conversion, and exactly one `SharedDriftEstimator`. The safe
+wrapper and the existing Mac impulse harness provide comparable guarded runs;
+any ALSA recovery rejects the candidate without touching USB enumeration.
+
+No Phase 4 operating point is accepted yet. The best clean reconnaissance run,
+`phase4-candidate-20260901T132356Z`, completed 480 seconds with zero direction
+recoveries and a valid 40-impulse result, but its TX playback queue lost 336
+frames, so it is not safe to extrapolate to the required soak. The following
+pipeline-depth estimator run, `phase4-candidate-20260901T134118Z`, reached an RX
+USB-playback XRUN after 393 seconds. Its latency snapshot is reconnaissance
+only; its durable value is the first passive SAP discovery timeline captured
+on the same wall clock as readiness.
+
+The currently pinned binary adds exact input-frame telemetry to distinguish
+capture rate, converter output, and playback consumption. It retains the
+implemented shared estimator but has not yet produced a candidate run. The
+dual-`alsaloop` `tlatency=3000`, sink-delay-576 point remains the accepted
+stopgap until a Phase 4 point completes its own ten-minute loaded soak.
+
 ### Phase 5: PTP-disciplined USB research
 
 This is the highest-upside path for sub-10 ms.
@@ -971,6 +995,9 @@ rather than relying on signals.
 | `work/aes67-candidate/sweep-sink-delay.sh` | Phase 2 sink-delay sweep wrapper |
 | `work/aes67-candidate/run-selfloop-candidate-safe.sh` | retained negative result, see below |
 | `work/latency-harness/watch-return-signal.sh` | fires repeated impulse bursts and reports lock or silence; the tool that found the 3.5 minute time-to-audio |
+| `work/aes67-candidate/measure-phase4-roundtrip.sh` | runs the single-process Phase 4 bridge through the same signal-gated harness |
+| `work/aes67-candidate/sap-watch.py` | passively timestamps SAP announcements so discovery and subscription resolution can be separated |
+| `work/phase4-bridge/` | implemented shared-estimator real-time bridge, guarded installer, tests, and pinned Pi artifact |
 
 `run-bridge-hold-safe.sh` still hard-codes `--period 96 --buffer 288` and
 therefore the worse 2304-frame buffering. Make it match the candidate wrapper's
@@ -995,11 +1022,13 @@ env-tunable, default-omitted behavior before using it for measurement.
    RAVENNA module unloaded.
 4. Remember that `eth0` at `169.254.92.97` is the AES67 network and `wlan0` at
    `192.168.1.201` is management. SSH working says nothing about AoIP health.
-5. **Begin Phase 4.** Every other lever has been measured and eliminated.
+5. **Continue Phase 4 estimator diagnosis.** Every other lever has been measured and eliminated.
    Parameter tuning of the dual `alsaloop` stack has reached its floor, and
    scheduling latency has 14.5x headroom, so the single purpose-built bridge
-   with one shared clock-drift estimator is the only remaining route to a
-   stable 10-20 ms.
+   with one shared clock-drift estimator remains the only route to a stable
+   10-20 ms. Start with the input/output/playback-consumption counter evidence
+   in the currently pinned diagnostic build; do not treat the bridge as an
+   accepted replacement yet.
 6. Validate Phase 4 against the same harness that produced these numbers so the
    before-and-after comparison is meaningful.
 7. Budget about 4 minutes of dead time per daemon restart, and prefer live
@@ -1010,8 +1039,9 @@ env-tunable, default-omitted behavior before using it for measurement.
    far is reconnaissance, not an acceptance soak.
 10. Then implement the persistent service plan, exposing latency mode and buffer
     parameters rather than baking in fixed values.
-11. The host channel-name requirement remains untouched; macOS still reports
-    UAC2 speaker positions rather than `1` through `16`.
+11. The host channel-name requirement is complete. macOS reports `1` through
+    `16` in both directions on the same native duplex `USB 16x16` device; the
+    setup script and `usb-16x16.service` remain unchanged.
 12. After the low-latency service is stable, implement DSP / Content mode as a
     separate optional profile.
 

@@ -756,3 +756,52 @@ not measure NIC interrupt servicing, USB gadget completion timing, or the
 RAVENNA driver's internal scheduling. It is necessary rather than sufficient
 evidence, but at 14.5x headroom the margin is wide enough that scheduling is
 not a plausible explanation for any behaviour observed in this session.
+
+## Phase 4 engineering evidence — 2026-09-01
+
+The purpose-built bridge is implemented in `work/phase4-bridge/`; it is not a
+stub. It uses one shared estimator and reciprocal converters, but no operating
+point has passed the required loaded ten-minute soak. The directories below
+must not be treated as twelve equivalent latency measurements.
+
+| Candidate directory | Evidence classification | Reason |
+|---|---|---|
+| `phase4-candidate-20260901T112548Z` | **Void for performance** | Initial bring-up controller saturated at +250 ppm with 18,461 TX and 19,858 RX recoveries. |
+| `phase4-candidate-20260901T113600Z` | **Void for performance** | Controller saturated at -250 ppm; 1 TX and 37 RX recoveries invalidate the correlated number. |
+| `phase4-candidate-20260901T120036Z` | **Void for performance** | One TX recovery; the direct capture-rate estimate was not yet lifecycle-safe. |
+| `phase4-candidate-20260901T121253Z` | **Void for performance** | Four TX and six RX recoveries under the cumulative phase variant. |
+| `phase4-candidate-20260901T122916Z` | **Void for performance** | Short failed run with one TX recovery and no completed measurement. |
+| `phase4-candidate-20260901T123725Z` | **Valid failure diagnostic** | First precise failure attribution: TX RAVENNA playback `snd_pcm_avail_update` returned `-EPIPE` while capture remained running and the ring remained healthy. |
+| `phase4-candidate-20260901T124131Z` | **Valid reconnaissance, rejected point** | 960-frame buffer produced a valid pre-failure 40-impulse snapshot (3779-sample median), then the same TX playback XRUN occurred; added buffering delayed rather than fixed it. |
+| `phase4-candidate-20260901T125518Z` | **Valid failure diagnostic** | Total-pipeline phase estimator still drained TX playback and reached a TX XRUN. |
+| `phase4-candidate-20260901T130552Z` | **Valid failure diagnostic** | Removing lifecycle rebase caused positive-estimate runaway and an early TX XRUN. |
+| `phase4-candidate-20260901T131032Z` | **Valid failure diagnostic** | Selective rebase overcorrected negative and moved the failure to RX USB playback. |
+| `phase4-candidate-20260901T132356Z` | **Valid clean reconnaissance, rejected point** | Zero recoveries for 480 seconds and a valid 40-impulse result (3961-sample median), but TX playback delay fell from 960 to 624 frames. Do not extrapolate it to a soak. |
+| `phase4-candidate-20260901T134118Z` | **Valid discovery/failure evidence** | First run with a passive SAP timeline. The bridge later reached RX USB-playback `-EPIPE`; its correlated snapshot is reconnaissance only and is intentionally not promoted into a latency comparison table. |
+
+### First discovery timeline: `134118Z`
+
+This run captured the SAP listener, readiness probes, and candidate on one wall
+clock. The watcher first observed both Ferrofish sessions at +276.93 seconds
+and both Pi transmit sessions at +282.38 seconds. The real-signal gate did not
+reach three consecutive passes until probe 61. That sequence is the important
+output. The incidental correlation scored 0.328 with a captured peak of 0.248;
+it is not a new operating-point claim. The candidate subsequently recovered RX
+USB playback and exited rejected.
+
+### Withdrawn and void artifacts
+
+- `aes67-roundtrip-64f-20260901T105453Z-api/` and
+  `aes67-roundtrip-64f-20260901T122244Z-api/` are zero-byte aborted output
+  directories. They are **void** and contain no API or measurement evidence.
+- Correlated JSON from a candidate that later reports a direction recovery may
+  diagnose the signal path before failure, but it does not validate that
+  operating point.
+- `phase4-candidate-20260901T132356Z` is the only complete restart-free Phase 4
+  candidate in this set. Its monotonically declining TX playback reserve still
+  rejects it for acceptance.
+
+The pinned build after these runs has SHA-256
+`dc5a49014d11342403faf4177c782a7ff0db6e9864f6a207c06044dcb8ad31d6`.
+It adds exact capture-frame telemetry only; the shared estimator remains fully
+implemented, and this instrumentation build has not yet been measured.

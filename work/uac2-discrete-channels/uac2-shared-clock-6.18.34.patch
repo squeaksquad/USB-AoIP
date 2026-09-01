@@ -1,0 +1,111 @@
+--- a/drivers/usb/gadget/function/f_uac2.c
++++ b/drivers/usb/gadget/function/f_uac2.c
+@@ -25,9 +25,9 @@
+  * The driver implements a simple UAC_2 topology.
+  * USB-OUT -> IT_1 -> FU -> OT_3 -> ALSA_Capture
+  * ALSA_Playback -> IT_2 -> FU -> OT_4 -> USB-IN
+- * Capture and Playback sampling rates are independently
+- *  controlled by two clock sources :
+- *    CLK_5 := c_srate, and CLK_6 := p_srate
++ * Capture and Playback sampling rates are independently controlled by two
++ * clock sources for simplex functions.  A duplex function uses one shared
++ * clock source and therefore requires identical capture/playback rate lists.
+  */
+ #define USB_OUT_CLK_ID	(out_clk_src_desc.bClockID)
+ #define USB_IN_CLK_ID	(in_clk_src_desc.bClockID)
+@@ -52,6 +52,7 @@
+ 
+ #define EPIN_EN(_opts) ((_opts)->p_chmask != 0)
+ #define EPOUT_EN(_opts) ((_opts)->c_chmask != 0)
++#define SHARED_CLK_EN(_opts) (EPIN_EN(_opts) && EPOUT_EN(_opts))
+ #define FUIN_EN(_opts) (EPIN_EN(_opts) \
+ 				&& ((_opts)->p_mute_present \
+ 				|| (_opts)->p_volume_present))
+@@ -832,7 +833,8 @@
+ 	if (EPIN_EN(opts))
+ 		headers[i++] = USBDHDR(&in_clk_src_desc);
+ 	if (EPOUT_EN(opts)) {
+-		headers[i++] = USBDHDR(&out_clk_src_desc);
++		if (!SHARED_CLK_EN(opts))
++			headers[i++] = USBDHDR(&out_clk_src_desc);
+ 		headers[i++] = USBDHDR(&usb_out_it_desc);
+ 
+ 		if (FUOUT_EN(opts))
+@@ -906,10 +908,15 @@
+ 		out_feature_unit_desc->bUnitID = i++;
+ 	if (FUIN_EN(opts))
+ 		in_feature_unit_desc->bUnitID = i++;
+-	if (EPOUT_EN(opts))
+-		out_clk_src_desc.bClockID = i++;
+-	if (EPIN_EN(opts))
++	if (SHARED_CLK_EN(opts)) {
+ 		in_clk_src_desc.bClockID = i++;
++		out_clk_src_desc.bClockID = in_clk_src_desc.bClockID;
++	} else {
++		if (EPOUT_EN(opts))
++			out_clk_src_desc.bClockID = i++;
++		if (EPIN_EN(opts))
++			in_clk_src_desc.bClockID = i++;
++	}
+ 
+ 	usb_out_it_desc.bCSourceID = out_clk_src_desc.bClockID;
+ 
+@@ -953,7 +960,8 @@
+ 	if (EPOUT_EN(opts)) {
+ 		u16 len = le16_to_cpu(ac_hdr_desc.wTotalLength);
+ 
+-		len += sizeof(out_clk_src_desc);
++		if (!SHARED_CLK_EN(opts))
++			len += sizeof(out_clk_src_desc);
+ 		len += sizeof(usb_out_it_desc);
+ 
+ 		if (FUOUT_EN(opts))
+@@ -991,6 +999,10 @@
+ 		msg = "incorrect playback sampling rate";
+ 	else if (!opts->c_srates[0])
+ 		msg = "incorrect capture sampling rate";
++	else if (SHARED_CLK_EN(opts) &&
++		 memcmp(opts->p_srates, opts->c_srates,
++			sizeof(opts->p_srates)))
++		msg = "shared clock requires identical playback/capture sampling rates";
+ 
+ 	else if (opts->p_volume_max <= opts->p_volume_min)
+ 		msg = "incorrect playback volume max/min";
+@@ -1543,7 +1555,7 @@
+ 
+ 			memset(&c, 0, sizeof(struct cntrl_cur_lay3));
+ 
+-			if (entity_id == USB_IN_CLK_ID)
++			if (SHARED_CLK_EN(opts) || entity_id == USB_IN_CLK_ID)
+ 				c.dCUR = cpu_to_le32(p_srate);
+ 			else if (entity_id == USB_OUT_CLK_ID)
+ 				c.dCUR = cpu_to_le32(c_srate);
+@@ -1618,7 +1630,7 @@
+ 			int srate;
+ 			int *srates;
+ 
+-			if (entity_id == USB_IN_CLK_ID)
++			if (SHARED_CLK_EN(opts) || entity_id == USB_IN_CLK_ID)
+ 				srates = opts->p_srates;
+ 			else if (entity_id == USB_OUT_CLK_ID)
+ 				srates = opts->c_srates;
+@@ -1704,6 +1716,7 @@
+ {
+ 	struct usb_function *fn = ep->driver_data;
+ 	struct g_audio *agdev = func_to_g_audio(fn);
++	struct f_uac2_opts *opts = g_audio_to_uac2_opts(agdev);
+ 	struct f_uac2 *uac2 = func_to_uac2(fn);
+ 	u32 val;
+ 
+@@ -1712,7 +1725,10 @@
+ 
+ 	val = le32_to_cpu(*((__le32 *)req->buf));
+ 	dev_dbg(&agdev->gadget->dev, "%s val: %d.\n", __func__, val);
+-	if (uac2->clock_id == USB_IN_CLK_ID) {
++	if (SHARED_CLK_EN(opts)) {
++		u_audio_set_playback_srate(agdev, val);
++		u_audio_set_capture_srate(agdev, val);
++	} else if (uac2->clock_id == USB_IN_CLK_ID) {
+ 		u_audio_set_playback_srate(agdev, val);
+ 	} else if (uac2->clock_id == USB_OUT_CLK_ID) {
+ 		u_audio_set_capture_srate(agdev, val);
