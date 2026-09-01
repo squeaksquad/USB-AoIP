@@ -44,17 +44,25 @@ frame counters. Two things changed at the last session:
    correction. Verify this mechanism before rewriting - it is inferred from the
    counters plus the code, not proven.
 
-Phase 4 latency is not yet competitive:
-  96/384/768/192   -> 40.2-42.6 ms  (3 runs)
-  96/960/1536/192  -> 76.9-82.5 ms  (4 runs, current pin)
-  dual alsaloop    -> 32.792 ms     (accepted, soaked)
-The large buffers were adopted for stability and cost ~36 ms. Since the TX
-frame loss was illusory, revisit the smaller 96/384/768/192 point before
-investing more in the large one.
+USE 96/384/768/192. Re-baselined 2026-09-01 on the instrumented binary:
+  96/384/768/192   -> 41.625 ms, score 1.000, spread 0 samples  <- best
+  96/960/1536/192  -> 84.291 ms, score 0.987, spread 8
+  dual alsaloop    -> 32.792 ms  (accepted, soaked)
+The large buffers were adopted for stability on a false premise (the illusory
+TX frame loss). They did not buy stability - they only moved the XRUN from TX
+to RX - and cost ~43 ms. The gap to the stopgap is 8.8 ms, not 51 ms.
 
-RX XRUNs are a fast starve, not a slow drift: the queue drains 876 -> 108 over
-9 s (~96 frames/s) with ring occupancy healthy at ~196 against a target of 192.
-Chase the converter's output scheduling, not ring sizing.
+THE XRUN IS ONE DEFECT, and it is the top thing to fix. Every instrumented run
+hits it: 393/348/473/314 s at 960/1536 (all ravenna-to-usb) and 331 s at
+384/768 (usb-to-ravenna). Identical signature either way - the ALSA playback
+queue drains monotonically to nothing while the elastic ring sits healthy at
+its 192 target. The direction that fails is whichever queue runs out of
+headroom first.
+
+It ties to item 2 above: TX transfers 1:1 with no rate correction applied, so
+nothing holds its playback queue stable and it drains at the raw USB-vs-PTP
+clock difference. PREDICTION TO TEST: fix the TX rate correction and the XRUN
+should disappear in both directions. Chase that before touching ring sizing.
 
 TASKS, in order
 1. Work out why TX's commanded ratio nets to zero (see item 2 above), fix it,
