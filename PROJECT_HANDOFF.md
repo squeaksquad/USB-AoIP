@@ -406,7 +406,40 @@ over 265 s of steady running:
 
 RX matches `1.0 / ratio` exactly. TX should be -31.68 ppm and is exactly 1:1.
 
-**Prime suspect, code-visible, not yet confirmed.** In `render_to_playback`:
+**ROOT CAUSE CONFIRMED 2026-09-01, run `172034Z`.** `snd_pcm_mmap_begin`
+returns fewer frames than requested on the RAVENNA playback device, and the
+resampler has already consumed ring input for the full produced count, so the
+remainder is silently discarded.
+
+| | dropped | apparent step | corrected for drops | commanded |
+|---|---:|---:|---:|---:|
+| TX | **583** | +31.29 ppm | **-16.97 ppm** | -27.17 ppm |
+| RX | **0** | +16.88 ppm | +16.88 ppm | +27.17 ppm |
+
+Removing the drops flips TX from +31.29 ppm to -16.97 ppm, against RX's
++16.88 ppm. **Those are mirror images to within 0.5%.** The shared estimator was
+applying a correct reciprocal pair the whole time; the drops inverted the
+apparent TX ratio and hid it. There is no rate-correction bug, and no servo bug.
+
+Three consequences, all of which this explains:
+
+1. **Real audio is lost** — 583 frames is 12.1 ms of discarded samples in 252 s
+   on the RAVENNA side.
+2. **It starves the TX playback queue.** Input is consumed but not all of it
+   reaches the device, so the queue drains with the ring healthy at target.
+   This run XRUNed at 252 s in `usb-to-ravenna` -- the dropping direction.
+3. **It corrupted every rate measurement on TX**, which is what sent two
+   separate investigations down dead ends: the occupancy-guard explanation and
+   the retraction that followed it.
+
+**The fix is a reorder, not new logic.** Call `snd_pcm_mmap_begin` first to
+learn how many frames ALSA will accept, then render exactly that many. Once
+input has been consumed it cannot be un-consumed, which is why the present order
+can only drop. Not yet implemented.
+
+The evidence below is what led here.
+
+**Prime suspect, code-visible, since confirmed.** In `render_to_playback`:
 
 ```c
 snd_pcm_uframes_t frames = produced;
