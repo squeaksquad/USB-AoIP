@@ -1,0 +1,194 @@
+[2026-09-01 08:12:54.054239] [0x00007fff548bae60] [info]    interface eth0 new IP address <169.254.92.97>
+[2026-09-01 08:12:54.054668] [0x00007fff5416f120] [info]    driver_manager:: event SetMasterOutputVolume -20
+[2026-09-01 08:12:54.054831] [0x00007fff548bae60] [info]    driver_manager:: setting interface eth0
+[2026-09-01 08:12:54.054889] [0x00007fff548bae60] [info]    driver_manager:: setting PTP Domain 0 DSCP 46
+[2026-09-01 08:12:54.055264] [0x00007fff5395f120] [info]    igmp:: joined multicast group 239.255.255.255 on 169.254.92.97
+[2026-09-01 08:12:54.055568] [0x00007fff5314f120] [info]    igmp:: joined multicast group 224.0.1.129 on 169.254.92.97
+[2026-09-01 08:12:54.055673] [0x00007fff5314f120] [info]    session_manager:: new PTP clock status unlocked
+[2026-09-01 08:12:54.057689] [0x00007fff548bae60] [info]    http_server:: binding to 0.0.0.0:8080
+[2026-09-01 08:12:54.060570] [0x00007fff5110f120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:12:54.061275] [0x00007fff5191f120] [info]    http_server:: GET /api/config response 200
+[2026-09-01 08:12:54.062909] [0x00007fff548bae60] [info]    driver_manager:: add RTP stream success handle 18446691775866755800
+[2026-09-01 08:12:54.063031] [0x00007fff548bae60] [info]    igmp:: joined multicast group 239.69.16.1 on 169.254.92.97
+[2026-09-01 08:12:54.063065] [0x00007fff548bae60] [info]    session_manager:: added source 0 18446691775866755800,0
+[2026-09-01 08:12:54.063133] [0x00007fff548bae60] [info]    driver_manager:: add RTP stream success handle 18446691775866757536
+[2026-09-01 08:12:54.063187] [0x00007fff548bae60] [info]    igmp:: joined multicast group 239.69.16.2 on 169.254.92.97
+[2026-09-01 08:12:54.063198] [0x00007fff548bae60] [info]    session_manager:: added source 1 18446691775866757536,0
+[2026-09-01 08:12:54.063213] [0x00007fff548bae60] [info]    session_manager:: using SDP 
+v=0
+o=- 93138004200 93138004200 IN IP4 169.254.248.189
+s=FF-PULSE-16-DX : 32
+c=IN IP4 239.69.121.9/32
+t=0 0
+a=keywds:Dante
+m=audio 5004 RTP/AVP 103
+i=8 channels: Output 49, Output 50, Output 51, Output 52, Output 53, Output 54, Output 55, Output 56
+a=recvonly
+a=rtpmap:103 L24/48000/8
+a=ptime:1
+a=ts-refclk:ptp=IEEE1588-2008:00-1D-C1-FF-FE-1D-27-DC:0
+a=mediaclk:direct=531217786
+
+[2026-09-01 08:12:54.063306] [0x00007fff548bae60] [warning] session_manager:: configured PTP grand master clock doesn't match the PTP clock in SDP at line 12
+[2026-09-01 08:12:54.063318] [0x00007fff548bae60] [info]    session_manager:: using SDP 
+v=0
+o=- 93138072383 93138072383 IN IP4 169.254.248.189
+s=FF-PULSE-16-DX : 31
+c=IN IP4 239.69.193.115/32
+t=0 0
+a=keywds:Dante
+m=audio 5004 RTP/AVP 103
+i=8 channels: Output 57, Output 58, Output 59, Output 60, Output 61, Output 62, Output 63, Output 64
+a=recvonly
+a=rtpmap:103 L24/48000/8
+a=ptime:1
+a=ts-refclk:ptp=IEEE1588-2008:00-1D-C1-FF-FE-1D-27-DC:0
+a=mediaclk:direct=531217786
+
+[2026-09-01 08:12:54.063369] [0x00007fff548bae60] [warning] session_manager:: configured PTP grand master clock doesn't match the PTP clock in SDP at line 12
+[2026-09-01 08:12:54.070429] [0x00007fff508ff120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:12:55.055828] [0x00007fff5314f120] [info]    sap::announcement 9e5
+[2026-09-01 08:12:55.055906] [0x00007fff5314f120] [info]    sap::announcement 92a4
+[2026-09-01 08:12:55.055928] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:12:55.081076] [0x00007fff43fff120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:12:56.091563] [0x00007fff437ef120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:12:57.102073] [0x00007fff42fdf120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:12:58.112499] [0x00007fff427cf120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:12:59.135691] [0x00007fff41fbf120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:13:00.150055] [0x00007fff5110f120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:13:01.164902] [0x00007fff5191f120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:13:02.179273] [0x00007fff508ff120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:13:03.193589] [0x00007fff43fff120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:13:04.056590] [0x00007fff5314f120] [info]    session_manager:: new PTP clock status locked
+[2026-09-01 08:13:04.213590] [0x00007fff437ef120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:13:04.231381] [0x00007fff42fdf120] [info]    session_manager:: using SDP 
+v=0
+o=- 93138004200 93138004200 IN IP4 169.254.248.189
+s=FF-PULSE-16-DX : 32
+c=IN IP4 239.69.121.9/32
+t=0 0
+a=keywds:Dante
+m=audio 5004 RTP/AVP 103
+i=8 channels: Output 49, Output 50, Output 51, Output 52, Output 53, Output 54, Output 55, Output 56
+a=recvonly
+a=rtpmap:103 L24/48000/8
+a=ptime:1
+a=ts-refclk:ptp=IEEE1588-2008:00-1D-C1-FF-FE-1D-27-DC:0
+a=mediaclk:direct=531217786
+
+[2026-09-01 08:13:04.231549] [0x00007fff42fdf120] [info]    session_manager:: media 0 sink addr 239.69.121.9:5004
+[2026-09-01 08:13:04.231558] [0x00007fff42fdf120] [info]    session_manager:: media 0 sink frame size 48
+[2026-09-01 08:13:04.231564] [0x00007fff42fdf120] [info]    session_manager:: media 0 playout delay 576
+[2026-09-01 08:13:36.114039] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:13:36.114213] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:13:36.114247] [0x00007fff42fdf120] [info]    driver_manager:: add RTP stream success handle 18446691775867201264
+[2026-09-01 08:13:36.114272] [0x00007fff5314f120] [info]    sap::deletion 9e5
+[2026-09-01 08:13:36.114302] [0x00007fff5314f120] [info]    sap::deletion 92a4
+[2026-09-01 08:13:36.114331] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:13:36.114354] [0x00007fff42fdf120] [info]    igmp:: joined multicast group 239.69.121.9 on 169.254.92.97
+[2026-09-01 08:13:36.114390] [0x00007fff42fdf120] [info]    session_manager:: added sink 0 18446691775867201264,0
+[2026-09-01 08:13:36.120166] [0x00007fff42fdf120] [info]    session_manager:: status file saved
+[2026-09-01 08:13:36.120309] [0x00007fff42fdf120] [info]    http_server:: PUT /api/sink/0 response 200
+[2026-09-01 08:13:36.134937] [0x00007fff427cf120] [info]    session_manager:: using SDP 
+v=0
+o=- 93138072383 93138072383 IN IP4 169.254.248.189
+s=FF-PULSE-16-DX : 31
+c=IN IP4 239.69.193.115/32
+t=0 0
+a=keywds:Dante
+m=audio 5004 RTP/AVP 103
+i=8 channels: Output 57, Output 58, Output 59, Output 60, Output 61, Output 62, Output 63, Output 64
+a=recvonly
+a=rtpmap:103 L24/48000/8
+a=ptime:1
+a=ts-refclk:ptp=IEEE1588-2008:00-1D-C1-FF-FE-1D-27-DC:0
+a=mediaclk:direct=531217786
+
+[2026-09-01 08:13:36.135091] [0x00007fff427cf120] [info]    session_manager:: media 0 sink addr 239.69.193.115:5004
+[2026-09-01 08:13:36.135101] [0x00007fff427cf120] [info]    session_manager:: media 0 sink frame size 48
+[2026-09-01 08:13:36.135109] [0x00007fff427cf120] [info]    session_manager:: media 0 playout delay 576
+[2026-09-01 08:13:36.135452] [0x00007fff427cf120] [info]    driver_manager:: add RTP stream success handle 18446691775867203000
+[2026-09-01 08:13:36.135499] [0x00007fff427cf120] [info]    igmp:: joined multicast group 239.69.193.115 on 169.254.92.97
+[2026-09-01 08:13:36.135523] [0x00007fff427cf120] [info]    session_manager:: added sink 1 18446691775867203000,0
+[2026-09-01 08:13:36.143729] [0x00007fff427cf120] [info]    session_manager:: status file saved
+[2026-09-01 08:13:36.143844] [0x00007fff427cf120] [info]    http_server:: PUT /api/sink/1 response 200
+[2026-09-01 08:13:36.160863] [0x00007fff41fbf120] [info]    http_server:: GET /api/sinks response 200
+[2026-09-01 08:13:36.168373] [0x00007fff5416f120] [info]    driver_manager:: event GetMasterOutputVolume -20
+[2026-09-01 08:13:36.168458] [0x00007fff5416f120] [info]    driver_manager:: event GetMasterOutputSwitch 0
+[2026-09-01 08:14:06.116790] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:14:06.116901] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:14:06.116927] [0x00007fff5314f120] [info]    sap::deletion 9e5
+[2026-09-01 08:14:06.116945] [0x00007fff5314f120] [info]    sap::deletion 92a4
+[2026-09-01 08:14:06.116973] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:14:36.119304] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:14:36.119411] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:14:36.119440] [0x00007fff5314f120] [info]    sap::deletion 9e5
+[2026-09-01 08:14:36.119461] [0x00007fff5314f120] [info]    sap::deletion 92a4
+[2026-09-01 08:14:36.119491] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:15:06.121800] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:15:06.121905] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:15:06.121936] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:15:36.124225] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:15:36.124327] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:15:36.124356] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:16:06.126648] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:16:06.126751] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:16:06.126782] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:16:36.129190] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:16:36.129330] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:16:36.129379] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:17:06.131991] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:17:06.132133] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:17:06.132173] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:17:36.134603] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:17:36.134734] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:17:36.134772] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:18:06.137289] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:18:06.137433] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:18:06.137476] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:18:12.857299] [0x00007fff5110f120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:18:12.870639] [0x00007fff5191f120] [info]    http_server:: GET /api/sources response 200
+[2026-09-01 08:18:12.888416] [0x00007fff508ff120] [info]    http_server:: GET /api/sinks response 200
+[2026-09-01 08:18:12.899566] [0x00007fff43fff120] [info]    http_server:: GET /api/sink/status/0 response 200
+[2026-09-01 08:18:12.910906] [0x00007fff437ef120] [info]    http_server:: GET /api/sink/status/1 response 200
+[2026-09-01 08:18:12.928443] [0x00007fff42fdf120] [info]    http_server:: GET /api/browse/sources/all response 200
+[2026-09-01 08:18:24.605478] [0x00007fff427cf120] [info]    http_server:: GET /api/ptp/status response 200
+[2026-09-01 08:18:24.618162] [0x00007fff41fbf120] [info]    http_server:: GET /api/sources response 200
+[2026-09-01 08:18:24.633982] [0x00007fff5110f120] [info]    http_server:: GET /api/sinks response 200
+[2026-09-01 08:18:24.644375] [0x00007fff5191f120] [info]    http_server:: GET /api/sink/status/0 response 200
+[2026-09-01 08:18:24.655271] [0x00007fff508ff120] [info]    http_server:: GET /api/sink/status/1 response 200
+[2026-09-01 08:18:24.672040] [0x00007fff43fff120] [info]    http_server:: GET /api/browse/sources/all response 200
+[2026-09-01 08:18:36.140014] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:18:36.140162] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:18:36.140206] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:19:06.142712] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:19:06.142851] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:19:06.142890] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:19:36.145460] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:19:36.145606] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:19:36.145649] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:20:06.148199] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:20:06.148341] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:20:06.148401] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:20:36.150866] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:20:36.151009] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:20:36.151058] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:21:06.153528] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:21:06.153675] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:21:06.153714] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:21:36.156180] [0x00007fff5314f120] [info]    sap::announcement 4919
+[2026-09-01 08:21:36.156323] [0x00007fff5314f120] [info]    sap::announcement eeb1
+[2026-09-01 08:21:36.156365] [0x00007fff5314f120] [info]    session_manager:: next SAP announcements in 30 secs
+[2026-09-01 08:21:36.261712] [0x00007fff548bae60] [info]    main:: got signal 2
+[2026-09-01 08:21:37.160654] [0x00007fff548bae60] [info]    session_manager:: status file saved
+[2026-09-01 08:21:37.160708] [0x00007fff548bae60] [info]    http_server: stopping ... 
+[2026-09-01 08:21:37.161121] [0x00007fff548bae60] [info]    rtsp_server: stopping ... 
+[2026-09-01 08:21:38.156696] [0x00007fff5314f120] [info]    sap::deletion 4919
+[2026-09-01 08:21:38.156810] [0x00007fff5314f120] [info]    sap::deletion eeb1
+[2026-09-01 08:21:38.156876] [0x00007fff5314f120] [info]    igmp:: left multicast group 224.0.1.129 on 169.254.92.97
+[2026-09-01 08:21:38.157199] [0x00007fff548bae60] [info]    igmp:: left multicast group 239.69.16.1 on 169.254.92.97
+[2026-09-01 08:21:38.157303] [0x00007fff548bae60] [info]    igmp:: left multicast group 239.69.16.2 on 169.254.92.97
+[2026-09-01 08:21:38.157548] [0x00007fff548bae60] [info]    igmp:: left multicast group 239.69.121.9 on 169.254.92.97
+[2026-09-01 08:21:38.157803] [0x00007fff548bae60] [info]    igmp:: left multicast group 239.69.193.115 on 169.254.92.97
+[2026-09-01 08:21:38.842667] [0x00007fff548bae60] [info]    main:: end 
+daemon exiting with code: 0

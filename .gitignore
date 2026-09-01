@@ -13,6 +13,12 @@ Pi Testing/
 outputs/*.wav
 *.log
 *.pcap
+# ...except the measurement evidence the handoff and findings cite directly.
+# These are the record behind the documented n= claims, not build noise.
+!outputs/latency/phase4-candidate-*/bridge.log
+!outputs/latency/phase4-candidate-*/daemon.log
+!outputs/latency/*-api/sap-timeline.log
+!outputs/latency/*-api/settle.log
 
 # Build products
 *.ko
