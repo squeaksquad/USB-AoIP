@@ -944,17 +944,54 @@ At 27.729 ms it still beats the stopgap by 5.06 ms while moving TX off the
 Spread at 480 s has not been predictive at this operating point.
 
 **Recommendation: adopt TX 192 / RX 96 over the 26.979 ms point**, subject to
-its own 600 s soak, which has not been run. Half a millisecond is not worth a
-queue floor that spends half its life under one device period in unattended
-operation, and both points beat the stopgap comfortably. If the faster point is
-kept instead, record the 25-frame floor as a known accepted risk rather than
-leaving it implicit.
+its own 600 s soak. That soak has since passed -- see below -- but it also
+corrects the price quoted here. **The +0.75 ms above is wrong**: it compares a
+480 s run against a 600 s soak. Like for like the cost is +1.75 ms.
+
+#### ACCEPTED: TX 192 / RX 96 -- 28.729 ms soaked, and two corrections
+
+Run `221301Z`, 600 s, buffer 192, `--tx-playback-prime 192
+--rx-playback-prime 96`. Zero restarts, zero drops, rates mirrored at
+-13.78 / +13.75 ppm.
+
+| 600 s soaks, like for like | median | `tx_queue_floor` | TX under a period |
+|---|---:|---:|---:|
+| `211118Z` prime 96 | **26.979 ms** | 25 fr | 50.07% |
+| `221301Z` **TX 192 / RX 96** | 28.729 ms | **124 fr** | **0.01%** |
+
+**The safety goal is achieved decisively:** TX's floor is 124 frames and it is
+under one RAVENNA period for 0.01% of samples, against 50.07% at prime 96. The
+cost is **+1.75 ms**, and 28.729 ms is still 4.06 ms below the stopgap.
+
+**Correction: the spread at buffer 192 is real, and was dismissed too quickly.**
+The note above discounts the 480 s scores on the grounds that `211118Z` soaked
+at 0.988 with zero spread. That generalised from one run. All four buffer-192
+runs:
+
+| run | score | spread |
+|---|---:|---:|
+| `202405Z` 480 s prime 96 | 0.884 | 9 |
+| `211118Z` 600 s prime 96 soak | **0.988** | **0** |
+| `214847Z` 480 s TX 192 / RX 96 | 0.898 | 8 |
+| `221301Z` 600 s TX 192 / RX 96 soak | 0.924 | 8 |
+
+Three of four sit at 8-9 samples and ~0.9. **The clean run is the outlier**,
+not the rule, and every buffer-384 run scores 1.000 with zero spread. So buffer
+192 does trade real impulse jitter for latency, which was the original reading
+before one soak overturned it. Do not treat `211118Z`'s perfect score as
+characteristic of its configuration.
+
+**Both points are now soaked and accepted.** The choice is 26.979 ms at a
+25-frame TX floor against 28.729 ms at 124, with ~0.17 ms of impulse spread
+either way. For unattended operation the safer point is the better default; the
+faster one is available if the floor is accepted deliberately.
 
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
 | `96/192/768/192` prime 96 | **211118Z, 600 s soak PASSED, ACCEPTED** | **26.979 ms** | **0.988** | **0 samples** |
+| `96/192/768/192` TX 192 / RX 96 | **221301Z, 600 s soak PASSED, ACCEPTED** | **28.729 ms** | 0.924 | 8 samples |
 | `96/192/768/192` TX 192 / RX 96 | 214847Z, 480 s, unsoaked | 27.729 ms | 0.898 | 8 samples |
 | `96/192/768/192` prime 96 | 202405Z, 480 s | 26.729 ms | 0.884 | 9 samples |
 | `96/384/768/192` prime 96 | **191326Z, 600 s soak PASSED** | **32.063 ms** | **1.000** | **0 samples** |
