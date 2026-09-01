@@ -1,90 +1,218 @@
-# SAP discovery timeline: the post-restart delay is mostly upstream of the Ferrofish
+# SAP discovery timeline: the delay is a fixed ~264 s network timer, not the daemon
 
-Status: one measured run. Not yet confirmed. Read the caveats before acting.
+Status: resolved on 2026-09-01. The daemon-side split is n=13, the
+return-signal turn-on n=7, and the Mac-side SAP capture n=2. The analysis was
+derived from already-committed data; run `143219Z` was then run against the new
+instrumentation build and reproduced every prediction.
 
-## Why this exists
+**This supersedes the previous revision of this document, which concluded that
+the Pi took ~282 s to announce and that Ferrofish resolution was fast. Both
+conclusions were wrong.** They rested on treating the Mac's SAP capture as a
+record of when the Pi *sent* an announcement. It is not; it records when the
+Mac's switch port was *delivered* one. The daemon's own log, already committed
+in every `phase4-candidate-*` directory, settles the difference.
 
-The documented "audio takes about 3 minutes 37 seconds to start flowing after
-the AES67 daemon restarts" conflates two independent things:
+## What the daemon log shows
 
-1. **Discovery** — how long until the Pi announces its sessions by SAP.
-2. **Resolution** — how long the Ferrofish then takes to act on the
-   announcement and start returning audio.
+The Pi announces at **T0 + 42.4 s**, not T0 + 282 s. Sampled over all twelve
+committed candidate runs, the startup is deterministic to within ~100 ms:
 
-`work/aes67-candidate/sap-watch.py` timestamps SAP announcements on the AoIP
-segment so the two can be separated. `measure-aes67-roundtrip.sh` starts it
-before the Pi candidate and writes `sap-timeline.log` into the run's API
-directory, sharing a wall clock with `settle.log`. `USB16X16_SAP_WATCH=0`
-skips it. It is passive and off the measurement path.
+| Phase | Duration | n=12 spread | Nature |
+|---|---:|---|---|
+| ssh, wrapper preflight, `insmod`, daemon exec | 0.35 s | — | legitimate |
+| daemon init: interface, IGMP joins, HTTP bind, sources added | 1.00 s | ±0.004 | legitimate |
+| PTP `unlocked` -> `locked` | 9.00 s | ±0.003 | fixed dwell, see below |
+| wrapper detects lock, `PUT /api/sink/0`, SDP parsed | 0.18 s | 0.165-0.199 | legitimate |
+| **first sink's `add RTP stream` blocked inside the RAVENNA LKM** | **31.88 s** | **31.849-31.927** | **target** |
+| first current-version SAP announcement | at **T0 + 42.40 s** | 42.036-42.105 | |
 
-## The measurement
+Legitimate startup, module load, and PTP lock together account for **10.5 s**.
+The remainder the task predicted — daemon ready but not yet announcing — is
+**31.9 s**, and it has a single identified cause.
 
-Run `aes67-roundtrip-64f-20260901T134118Z`, a Phase 4 candidate at
-`480 96 960 1536 192`:
+### The 31.9 s stall is one driver call, and only ever the first one
 
-| Wall clock | Offset | Event |
+The sink thread logs, unchanged in all twelve runs:
+
+```text
+09:41:29.204674  session_manager:: using SDP
+09:41:29.204827  session_manager:: media 0 sink addr 239.69.121.9:5004
+09:41:29.204842  session_manager:: media 0 playout delay 576
+          <-- 31.849 s, nothing logged, by any thread -->
+09:42:01.054173  driver_manager:: add RTP stream success handle ...
+09:42:01.054230  igmp:: joined multicast group 239.69.121.9
+09:42:01.054262  session_manager:: added sink 0
+```
+
+The gap sits entirely inside the driver call that creates the RX stream.
+Measured per direction, per run:
+
+| | sink 0 | sink 1 | sources 0 and 1 |
+|---|---:|---:|---:|
+| add-stream duration | 31.85-31.93 s | 0.000 s | 0.000 s |
+
+So it is not "adding streams is slow." It is a **one-time initialization
+inside `MergingRavennaALSA` on the first RX stream created after `insmod`**.
+Transmit streams do not pay it. The second sink does not pay it.
+
+### It also delays the announcement, by 11 s
+
+The SAP thread logged `next SAP announcements in 30 secs` at +1.00 s, so it
+intended to announce at +31.0 s. It logged nothing at +31.0 s and then fired at
++42.05 s — within 200 microseconds of `added sink 0`, in all twelve runs. It was
+not idle-looping with nothing to announce; it was blocked on the same
+`session_manager` lock the add-sink call holds. Cost to discovery: **11.05 s**
+of the 31.88 s stall. The other ~20.8 s hides behind the 30 s announcement
+timer, but is still fully on the critical path for the RX direction, which has
+no sinks until the call returns.
+
+### Two smaller daemon-side items, noted not chased
+
+- **PTP "lock" takes exactly 10.00 s** in all twelve runs (10.002-10.005).
+  A real acquisition would vary. This is a fixed dwell somewhere in the daemon
+  or the driver, not measured convergence.
+- **The first announcement is deferred a full 30 s interval.** The daemon can
+  announce immediately — in ten of the twelve runs it announces *stale* sessions
+  restored from `status.json` at +1.0 s, then re-announces current versions and
+  deletes the stale ones at +42 s. Current-version sources became announceable
+  ~10 ms after the +1.0 s tick and so missed it.
+
+## What the other 240 seconds actually is
+
+The Pi announced nine times before the Mac received one:
+
+```text
+09:42:01  09:42:31  09:43:01  09:43:31  09:44:01     <- sent, not delivered
+09:44:31  09:45:01  09:45:31                         <- sent, not delivered
+09:46:01                                             <- sent, and received
+```
+
+**240.0 s** in which the Pi was announcing every 30 s and the Mac received
+nothing. That is not a daemon target and no daemon change will shorten it.
+
+### The return audio came up before the Mac saw any SAP at all
+
+`readiness-probe-*.json` dates the audio path independently of SAP. Probes 1-47
+report `capture contains no signal at any candidate impulse lag`. Probe 48 is a
+clean full-level detection — captured peak 0.247 against an impulse amplitude of
+0.25, all 8 impulses found, correlation score 0.499.
+
+| Event | T0 + |
+|---|---:|
+| last probe with no signal (p47) | 257.8 s |
+| **first probe with return signal (p48)** | **262.8 s** |
+| Mac's first SAP packet of any kind (Ferrofish) | 276.9 s |
+| Mac's first SAP packet from the Pi | 282.4 s |
+
+The audio path was up and correlating **14 s before the Mac received its first
+SAP packet and 20 s before it received one from the Pi.** The previous
+revision's "audio flowed 30 s after the Pi announced, so resolution is fast" was
+reading a coincidence of the readiness gate (see below), not causation.
+
+### The turn-on is a fixed timer, n=7
+
+First probe with return signal, across every run that got that far:
+
+| Run (T0, UTC) | 113600 | 120034 | 121252 | 124130 | 132355 | 134118 | 143219 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| first signal, T0 + | 263 s | 266 s | 265 s | 263 s | 267 s | 263 s | **263 s** |
+
+Mean 264.3 s, full spread 4 s. `143219Z` was predicted at ~264 s before it ran
+and landed on 263 s. Device-side subscription backoff does not look
+like this. A fixed timer does.
+
+**264 s is the IGMP group membership interval.** The standard value is
+`robustness (2) x query interval (125 s) + max response time (10 s) = 260 s`,
+and the Pi joins its groups at T0 + 0.35 s. The segment is link-local
+(169.254/16) with a GS305EP and no router, so **there is no IGMP querier on it**.
+With snooping enabled and no querier, the switch has no membership state to
+maintain and withholds the groups until that interval expires, at which point it
+falls back to flooding and everything works at once.
+
+One cause explains both observations. Two ports — the Mac's (5) and the
+Ferrofish's (2 or 3) — went from receiving nothing to receiving normally inside
+the same ~20 s window, roughly 260 s after the Pi joined. Two independent
+device-level backoffs landing there together is far less likely.
+
+This is a hypothesis about the switch, formed without switch access. It is
+consistent with every committed measurement, and it predicts a specific,
+falsifiable A/B result (below).
+
+### The n=2 SAP capture brackets the switch event tightly
+
+Both runs behave identically, and together they bracket when forwarding starts.
+
+| | run 134118Z | run 143219Z |
+|---|---:|---:|
+| Pi's daemon announces current versions | T0 + 42.4 s | T0 + 43.0 s |
+| first return audio at the Mac | T0 + 263 s | T0 + 263 s |
+| Mac's first SAP packet (Ferrofish) | T0 + 276.9 s | T0 + 267.9 s |
+| Mac's first SAP packet (Pi) | T0 + 282.4 s | T0 + 282.3 s |
+| Pi announcements sent but not delivered | 8 | 8 |
+
+The Mac catches the Pi's **9th** announcement in both runs, because the Pi
+announces on a 30 s tick from ~+43 s (+43, +73, ... +283) and forwarding starts
+between 263 s and 268 s. Each source is then seen at its next scheduled
+announcement — the Ferrofish sooner because it is on a different 30.5 s phase.
+That is one switch-side event with two independent witnesses, twice.
+
+## The readiness gate adds a variable 9-141 s on top
+
+`measure-aes67-roundtrip.sh` gates on `peak >= 0.01` and
+`max(perImpulseDelaySamples) - min(...) <= 2`. The spread test is coupled to the
+shared drift estimator's convergence: 8 impulses at 250 ms span 1.75 s, and
+while the estimator slews toward -33 ppm the delay moves ~1.5 samples/s, so ~2.6
+samples of spread accumulate within a single probe. The gate can only pass when
+the ramp momentarily rounds favourably.
+
+Run 134118Z, probes 48-61: median latency falls monotonically 79.333 -> 77.646 ms
+while the bridge slews `ppm` at its 2 ppm/s limit. Sample spread per probe
+alternates 7, 2, 3, 10, 2, 10, 3, 3, 3, 3, 3, 2, 2, 2 — the PASS/FAIL pattern in
+`settle.log` exactly. Gap from first signal to declared ready, per run: 141, 9,
+55, 13, 22, 59, 100 s.
+
+The gate is not wrong to be strict, but its timing is an artifact of SRC
+convergence, not of the network. Do not read "ready after N probes" as when the
+path came up; read `readiness-probe-*.json` for that.
+
+## Corrected accounting of the 282 s
+
+| Segment | Duration | Owner |
 |---|---:|---|
-| 09:41:18 | +0.0 s | Harness starts; Mac joins `239.255.255.255` |
-| 09:42:09 | +51 s | Probe 1. Probes 1-58 all fail |
-| 09:45:55 | +276.9 s | First SAP packet of any kind, from the Ferrofish |
-| 09:46:01 | +282.4 s | Pi's first announcement, `Daemon fea9615c USB 16x16 TX 01-08` / `09-16` |
-| 09:46:31 | +312 s | Probe 59, first pass — **30 s after the Pi announced** |
-| 09:46:40 | +322 s | Probe 61, ready |
+| process start, `insmod`, daemon init, PTP lock, sink PUT | 10.5 s | legitimate |
+| first RX stream add-stream stall in the RAVENNA LKM | 31.9 s | **daemon/driver target** |
+| Pi announcing, switch not forwarding | 240.0 s | **network target** |
+| **total to the Mac's first sight of a Pi announcement** | **282.4 s** | |
 
-Result: correlation score 0.328, captured peak 0.248.
+Of the 282 s, **11%** is a daemon-side target, **4%** is legitimate, and **85%**
+is a switch behaviour that no amount of daemon work will improve.
 
-## What it means
-
-**Resolution is fast.** Audio flowed 30 seconds after the Pi's first
-announcement, which is one announcement interval. The Ferrofish acted about as
-quickly as it could. The earlier working theory, that the delay was Ferrofish
-subscription backoff, is not supported.
-
-**The wait is upstream of that**, in the 282 seconds before the Pi announced
-anything.
-
-**One observation in the same log is unexplained.** The Ferrofish announces
-every 30.5 s unconditionally and was powered and streaming throughout, yet the
-Mac saw no SAP at all for the first 276 seconds — roughly nine missed
-intervals — and then received both sources within six seconds of each other.
-Standalone tests on an otherwise idle segment saw the first Ferrofish
-announcement within one interval. Nine consecutive misses is not announcement
-phase. The likely cause is that the Mac's port was not being forwarded the
-group, which points at IGMP snooping or a lost membership refresh, not at the
-daemon.
-
-The two readings are not yet distinguishable from one run:
-
-- **A.** The Pi genuinely took ~282 s to announce, and the Ferrofish gap is a
-  separate switch-side problem.
-- **B.** Both sources were announcing normally and the switch was not
-  forwarding the group to the Mac's port until something refreshed it, in which
-  case the Mac's view understates how early the Ferrofish actually saw the Pi.
-
-Reading B would also mean `sap-timeline.log` measures when the *Mac* could see
-an announcement, not when the Pi sent it. That limit applies to every figure in
-the table above.
+If the switch forwarded multicast promptly, time to audio would be bounded by
+the Pi's own 42.4 s announcement, minus whatever the two fixes above recover.
 
 ## Next measurements, in order
 
-1. **IGMP snooping A/B.** One candidate run with snooping disabled on the
-   GS305EP, comparing the first-announcement offset against the 276.9 s above.
-   This is one variable, reversible, and now has a baseline. It separates
-   reading A from reading B. Note that every result in the repo to date was
-   collected with snooping enabled, so this changes the network under test and
-   must be recorded as such.
-2. **Split the 282 seconds.** Part of it is legitimate daemon startup, module
-   load, and PTP lock, none of which is a fault. The newly installed
-   instrumentation-only Phase 4 wrapper writes `bridge.log` and `daemon.log`
-   into each `phase4-candidate-*` directory; take the daemon-ready timestamp
-   from there and subtract. Only the remainder — daemon ready but not yet
-   announcing — is a real target.
-3. **Repeat.** Everything above is n=1.
+1. **IGMP snooping A/B — now has a prediction, not just a baseline.** With
+   snooping disabled on the GS305EP, first-return-signal should collapse from
+   264 s to roughly the Pi's announcement time plus one Ferrofish resolution
+   interval. If it stays near 264 s, the switch hypothesis is wrong and the
+   timer is inside the Ferrofish. Still blocked on identifying ports 2 vs 3, and
+   still changes the network under test — every figure in the repo to date was
+   collected with snooping enabled.
+2. **Enable the IGMP querier instead.** If the diagnosis is right, this fixes
+   the same 240 s without giving up snooping, and is the better production
+   answer. Also switch-UI work, so also blocked.
+3. **The 31.9 s first-RX-stream stall.** Fully on-Pi, not blocked by rack
+   access. Worth an `insmod`-to-first-sink experiment to see whether the cost is
+   per-`insmod` or per-daemon-start, and whether adding a throwaway sink early
+   moves it off the critical path.
+4. ~~**Repeat the Mac-side SAP capture.**~~ Done — run `143219Z`, n=2, and it
+   agrees with n=1 to within 0.6 s on the daemon side and 0.1 s on the Mac's
+   first sight of the Pi.
 
 ## AoIP segment inventory
 
-Established this session by mDNS and ARP on `en12` ("2.5G AOIP"). The Pi's
-address matches the handoff; the rest was previously unrecorded.
+Established by mDNS and ARP on `en12` ("2.5G AOIP").
 
 | Device | Link-local IP | MAC | Switch port |
 |---|---|---|---|
@@ -101,5 +229,23 @@ the port status page, or by correlating per-port byte counters with generated
 traffic. Resolve this before the snooping A/B, since interpreting a per-port
 change requires knowing which port is which.
 
-SAP announcements on this segment repeat about every 30.5 seconds. Allow a full
+SAP announcements on this segment repeat about every 30.5 s. Allow a full
 interval before concluding a source is silent.
+
+## Method
+
+The split was derived entirely from committed files. Run `143219Z` was then
+executed against the instrumentation build to test the predictions, and is
+included above.
+
+- `outputs/latency/phase4-candidate-*/daemon.log` — daemon-side timeline, n=13.
+- `outputs/latency/aes67-roundtrip-64f-*-api/readiness-probe-*.json` — audio-path
+  turn-on and the SRC ramp, n=7.
+- `outputs/latency/aes67-roundtrip-64f-{20260901T134118Z,20260901T143219Z}-api/sap-timeline.log`
+  — Mac-side SAP reception, n=2.
+- `bridge.log` has no timestamps but emits at 1 Hz (48000 frames per line),
+  which is enough to place the drift estimator's first movement.
+
+Mac and Pi wall clocks differ by about 36 ms, established by comparing send and
+receive timestamps for the same SAP packets. That is negligible at this scale
+and is ignored above.

@@ -377,10 +377,70 @@ USB-playback XRUN after 393 seconds. Its latency snapshot is reconnaissance
 only; its durable value is the first passive SAP discovery timeline captured
 on the same wall clock as readiness.
 
-The currently pinned binary adds exact input-frame telemetry to distinguish
-capture rate, converter output, and playback consumption. It retains the
-implemented shared estimator but has not yet produced a candidate run. The
-dual-`alsaloop` `tlatency=3000`, sink-delay-576 point remains the accepted
+#### Frame accounting from the instrumentation build — run 143219Z
+
+The instrumentation build has now produced a candidate run,
+`phase4-candidate-20260901T143220Z`, at the same operating point as the best
+clean run (`96/960/1536/192`, sink delay 576, 480 s). Only the binary changed.
+It resolved the open frame question and exposed a larger one.
+
+**The 336-frame TX loss was not a loss.** In `132356Z`, `tx_queue` fell 960 ->
+624, a difference of exactly 336, and that build had no input counters to
+distinguish a shrinking ALSA playback queue from vanished frames. With
+`tx_input` present, TX conserves exactly: `tx_input - tx_frames` is pinned at
+288 and `tx_occ` at 195 for the whole run. **Run `132356Z` is therefore not
+disqualified by frame loss**, and is the best Phase 4 candidate on record.
+
+**Net rate transfer is asymmetric: TX applies nothing.** Measured over 200 s of
+steady running, directly from the counters:
+
+| Direction | input frames | output frames | out - in | applied |
+|---|---:|---:|---:|---|
+| TX (USB capture -> RAVENNA playback) | 9,601,440 | 9,601,440 | **+0** | **0.00 ppm** |
+| RX (RAVENNA capture -> USB playback) | 9,601,680 | 9,601,440 | -240 | -25.00 ppm |
+
+Over that window the estimator commanded -33.6 to -30.1 ppm. TX transfers
+frames 1:1; RX carries the entire correction, and even RX's applied ratio does
+not track the commanded ppm.
+
+This is **not** a missing reciprocal. `main.cpp:594-596` does pass `ratio` to TX
+and `1.0 / ratio` to RX, as designed. The likely mechanism is the occupancy
+guard in `render_to_playback`: `safe_output_frames = excess_source_frames /
+source_step` throttles output to hold the elastic ring at `target_frames`. TX's
+ring is pinned at `tx_occ = 195` against a target of 192 for the entire run, so
+TX output tracks TX input 1:1 by feedback and the commanded ratio has no net
+effect. RX's occupancy is not pinned — it drifts 398 -> 196 across the run — so
+RX is where the correction actually lands.
+
+That is the single most important Phase 4 finding so far. The shared estimator
+is computing a sensible number that one direction then cancels, which defeats
+the purpose of having one estimator. Verify the mechanism before rewriting: the
+occupancy-servo explanation is inferred from the counters and the code, not
+proven.
+
+**The RX XRUN is a fast starve, not a slow drift.** The recovery at 346 s is
+preceded by a 9-second linear drain of the RX ALSA playback queue, 876 -> 780 ->
+684 -> 540 -> 492 -> 300 -> 204 -> 108 -> XRUN, about 96 frames/s or 2 ms/s.
+Ring occupancy stayed healthy at ~196 against a target of 192 throughout, so the
+converter had input available and simply stopped feeding playback fast enough.
+Chase the converter's output scheduling, not the ring sizing.
+
+#### Phase 4 latency is not yet competitive
+
+| Operating point | runs | median round trip |
+|---|---|---:|
+| `96/384/768/192` | 113600Z, 120034Z, 121252Z | 40.2-42.6 ms |
+| `96/960/1536/192` | 124130Z, 132355Z, 134118Z, 143219Z | 76.9-82.5 ms |
+| dual `alsaloop` tlatency 3000 (accepted stopgap) | soaked | **32.792 ms** |
+
+Run `143219Z` measured **76.917 ms** over 40 impulses, and exited 33 (an RX
+direction restart), so it is reconnaissance only. The larger buffers were
+adopted for stability and cost roughly 36 ms. Neither Phase 4 point currently
+beats the stopgap. Given that the TX frame loss was illusory, the smaller
+`96/384/768/192` point deserves a fresh look before more work goes into the
+large-buffer one.
+
+The dual-`alsaloop` `tlatency=3000`, sink-delay-576 point remains the accepted
 stopgap until a Phase 4 point completes its own ten-minute loaded soak.
 
 ### Phase 5: PTP-disciplined USB research
@@ -854,11 +914,22 @@ can black-hole multicast and take the streams down.
 
 ### Operational fact that dominates all testing
 
-**Audio takes about 3 minutes 37 seconds to start flowing after the AES67
-daemon restarts.** Measured directly with 77 timestamped impulse bursts: silent
-through burst 31, first lock at burst 32, stable thereafter. The likely
-mechanism is the Ferrofish re-resolving its subscriptions to the Pi transmit
-flows once the daemon presents new session state.
+**Audio takes 263-267 seconds to start flowing after the AES67 daemon
+restarts, and it is a fixed timer, not a device backoff.** Measured across
+seven runs from `readiness-probe-*.json`: 263, 266, 265, 263, 267, 263, 263 s.
+
+The mechanism is **not** the Ferrofish re-resolving subscriptions. The Pi's
+daemon announces its sessions at T0 + 42.4 s (n=13, deterministic to ~100 ms),
+and the audio path comes up ~220 s later. The best-supported explanation is the
+IGMP group membership interval, `2 x 125 + 10 = 260 s`, on a link-local segment
+with **no querier**: with snooping enabled and nothing to maintain membership
+state, the GS305EP withholds the groups until that interval expires and then
+falls back to flooding. See `work/SAP_DISCOVERY_FINDING.md` for the full split
+and the falsifiable A/B this predicts.
+
+Practical consequence: this is a *network* cost, not a daemon cost, and no
+amount of daemon or bridge work will shorten it. The Pi itself is ready in
+about 42 seconds.
 
 Consequences that must be respected by any future harness or service:
 
@@ -994,7 +1065,7 @@ rather than relying on signals.
 | `work/aes67-candidate/run-bridge-hold-safe.sh` | brings the bridge up and holds it for interactive routing, printing live sink status |
 | `work/aes67-candidate/sweep-sink-delay.sh` | Phase 2 sink-delay sweep wrapper |
 | `work/aes67-candidate/run-selfloop-candidate-safe.sh` | retained negative result, see below |
-| `work/latency-harness/watch-return-signal.sh` | fires repeated impulse bursts and reports lock or silence; the tool that found the 3.5 minute time-to-audio |
+| `work/latency-harness/watch-return-signal.sh` | fires repeated impulse bursts and reports lock or silence; the tool that first found the time-to-audio, later measured at 263-267 s |
 | `work/aes67-candidate/measure-phase4-roundtrip.sh` | runs the single-process Phase 4 bridge through the same signal-gated harness |
 | `work/aes67-candidate/sap-watch.py` | passively timestamps SAP announcements so discovery and subscription resolution can be separated |
 | `work/phase4-bridge/` | implemented shared-estimator real-time bridge, guarded installer, tests, and pinned Pi artifact |
