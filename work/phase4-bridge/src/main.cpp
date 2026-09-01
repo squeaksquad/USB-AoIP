@@ -251,6 +251,8 @@ struct Telemetry {
     std::atomic<std::uint64_t> rx_input_frames{0};
     std::atomic<std::uint64_t> tx_consumed_frames{0};
     std::atomic<std::uint64_t> rx_consumed_frames{0};
+    std::atomic<std::uint64_t> tx_dropped_frames{0};
+    std::atomic<std::uint64_t> rx_dropped_frames{0};
     std::atomic<std::uint64_t> tx_frames{0};
     std::atomic<std::uint64_t> rx_frames{0};
 };
@@ -267,6 +269,9 @@ struct Direction {
     bool playback_started{false};
     std::uint64_t input_frames{};
     std::uint64_t output_frames{};
+    // Frames the resampler produced, and consumed ring input for, that
+    // snd_pcm_mmap_begin then refused to take. They are discarded.
+    std::uint64_t dropped_frames{};
     std::uint64_t restarts{};
     const char* recovery_stage{"unknown"};
     snd_pcm_sframes_t recovery_code{};
@@ -421,6 +426,15 @@ IoResult render_to_playback(Direction& direction,
         return begin == -EAGAIN ? IoResult::idle
                                 : request_recovery(direction, "playback-mmap-begin", begin);
     }
+    // ALSA may hand back fewer frames than asked for when the playback buffer
+    // wraps. The resampler has already consumed ring input for the full
+    // produced count, so anything not taken here is silently discarded. Count
+    // it: it would both lose samples and make consumed/output_frames read
+    // higher than the commanded step, which is the TX signature under
+    // investigation.
+    if (frames < produced) {
+        direction.dropped_frames += produced - static_cast<std::uint64_t>(frames);
+    }
     for (snd_pcm_uframes_t frame = 0; frame < frames; ++frame) {
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
             write_area_sample(areas[channel], offset + frame, direction.playback.format(),
@@ -516,6 +530,8 @@ void publish_telemetry(const Direction& tx,
     telemetry.rx_input_frames.store(rx.input_frames, std::memory_order_relaxed);
     telemetry.tx_consumed_frames.store(tx.resampler.consumed_frames(), std::memory_order_relaxed);
     telemetry.rx_consumed_frames.store(rx.resampler.consumed_frames(), std::memory_order_relaxed);
+    telemetry.tx_dropped_frames.store(tx.dropped_frames, std::memory_order_relaxed);
+    telemetry.rx_dropped_frames.store(rx.dropped_frames, std::memory_order_relaxed);
     telemetry.tx_frames.store(tx.output_frames, std::memory_order_relaxed);
     telemetry.rx_frames.store(rx.output_frames, std::memory_order_relaxed);
 }
@@ -539,6 +555,8 @@ void telemetry_loop(const Telemetry& telemetry) {
                   << " rx_input=" << telemetry.rx_input_frames.load()
                   << " tx_consumed=" << telemetry.tx_consumed_frames.load()
                   << " rx_consumed=" << telemetry.rx_consumed_frames.load()
+                  << " tx_dropped=" << telemetry.tx_dropped_frames.load()
+                  << " rx_dropped=" << telemetry.rx_dropped_frames.load()
                   << " tx_frames=" << telemetry.tx_frames.load()
                   << " rx_frames=" << telemetry.rx_frames.load() << '\n';
     }
@@ -689,6 +707,8 @@ int run(const Options& options) {
               << ",\"rx_input_frames\":" << rx.input_frames
               << ",\"tx_consumed_frames\":" << tx.resampler.consumed_frames()
               << ",\"rx_consumed_frames\":" << rx.resampler.consumed_frames()
+              << ",\"tx_dropped_frames\":" << tx.dropped_frames
+              << ",\"rx_dropped_frames\":" << rx.dropped_frames
               << ",\"tx_frames\":" << tx.output_frames
               << ",\"rx_frames\":" << rx.output_frames << "}\n";
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
