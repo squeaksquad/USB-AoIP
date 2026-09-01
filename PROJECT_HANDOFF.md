@@ -835,10 +835,55 @@ Validation is now per direction against the buffer that direction actually
 negotiated, rather than against the larger of the two -- the devices do not
 always agree, and the buffer-192 run had RAVENNA at 288 with USB at 384.
 
+#### The capture stage is 1.6 ms, and the buffer effect is NOT in this process
+
+Two 480 s runs, prime fixed at 96, only the ALSA buffer request varied, on the
+capture-instrumented binary `ae1cf9ba`.
+
+| | buffer 384 | buffer 192 | delta |
+|---|---:|---:|---:|
+| median | 32.0625 ms | **26.729 ms** | **-5.33 ms** |
+| capture backlog mean | 77.2 fr (1.61 ms) | 75.0 fr (1.56 ms) | -0.05 ms |
+| depth floor total | 520 fr (10.83 ms) | 573 fr (11.94 ms) | **+1.11 ms** |
+| score / spread | 1.000 / 0 | **0.884 / 9** | |
+| negotiated RAVENNA | 128/384 | 128/288 | |
+| negotiated USB | 96/384 | 96/384 | unchanged |
+
+**The capture hypothesis is falsified.** The entire capture stage is 1.6 ms --
+mean backlog 37.6 frames on TX and 39.6 on RX, peaks 96 and 144. It moved
+0.05 ms. It cannot explain 5 ms under any circumstances, so the gap the earlier
+confounded run left unaccounted for is not capture buffering.
+
+**The effect is not in any buffer this process owns.** Latency fell 5.33 ms
+while the fully counted depth floor went **up** 1.11 ms. Capture backlog,
+elastic ring and playback queue are now all instrumented, and their total moves
+in the *wrong direction*. Whatever the RAVENNA ALSA buffer size does, it does
+not do it through occupancy inside the bridge.
+
+What tracks it is `ravenna_capture` and `ravenna_playback` going 384 -> 288;
+USB is unaffected, staying at 384 because it ignores the request outright. The
+RAVENNA device is the aes67-daemon's virtual ALSA endpoint, so the daemon and
+driver coupling is **where to look** -- stated as a location, not a mechanism.
+Two mechanisms have already been proposed here and both were wrong; instrument
+it before believing anything.
+
+**26.729 ms is the best figure the project has produced, 6.06 ms below the
+32.792 ms stopgap.** It is not accepted: no soak, and correlation fell to 0.884
+with 9 samples of real spread (min 1275, max 1284).
+
+**On the "1 ms scatter".** Every buffer-384 run lands all forty impulses on the
+same sample, and runs at identical settings differ by exactly 48 samples -- one
+1.000 ms step, with no within-run variation at all. That reads as quantisation
+in the correlation rather than instability. Buffer 192 is different: it varies
+*within* the run. So the buffer trades real jitter for latency, and quoting
+"+/-1 ms of scatter" at buffer 384 was probably describing resolution, not
+noise. Confirm against the harness, not with more bridge runs.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
+| `96/192/768/192` prime 96 | **buffer 192, capture-instrumented, unsoaked** | **26.729 ms** | 0.884 | 9 samples |
 | `96/384/768/192` prime 96 | **191326Z, 600 s soak PASSED** | **32.063 ms** | **1.000** | **0 samples** |
 | `96/384/768/192` prime 96 | 190400Z, 480 s | 31.063 ms | 1.000 | 0 samples |
 | `96/384/768/192` prime 192 | **185418Z, `--playback-prime` `02d2153c`** | **35.313 ms** | **1.000** | **0 samples** |
