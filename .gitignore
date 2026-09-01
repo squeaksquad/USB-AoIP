@@ -20,6 +20,8 @@ outputs/*.wav
 *.a
 build/
 build-*/
+.build/
+*.dSYM/
 node_modules/
 
 # Reproducible upstream checkout; pinned revisions are documented in the handoff

@@ -1,0 +1,14 @@
+{
+  "sink_flags":
+  {  
+    "rtp_seq_id_error": true, 
+    "rtp_ssrc_error": false, 
+    "rtp_payload_type_error": false, 
+    "rtp_sac_error": true, 
+    "receiving_rtp_packet": true, 
+    "some_muted": false, 
+    "all_muted": false, 
+    "muted": false
+  },
+  "sink_min_time": 0
+}

@@ -1,0 +1,6 @@
+result_dir=/home/bdimaio/usb-16x16-work/logs/aes67-candidate-20260901T015240Z
+period_frames=driver-default
+buffer_frames=driver-default
+target_latency_usec=5000
+sink_delay=48
+candidate_seconds=180
