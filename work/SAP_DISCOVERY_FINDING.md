@@ -1,4 +1,4 @@
-# SAP discovery timeline: the delay is a fixed ~264 s network timer, not the daemon
+# SAP discovery timeline: the delay was the switch's IGMP snooping, confirmed by A/B
 
 Status: resolved on 2026-09-01. The daemon-side split is n=13, the
 return-signal turn-on n=7, and the Mac-side SAP capture n=2. The analysis was
@@ -150,10 +150,46 @@ Ferrofish's (2 or 3) — went from receiving nothing to receiving normally insid
 the same ~20 s window, roughly 260 s after the Pi joined. Two independent
 device-level backoffs landing there together is far less likely.
 
-The remaining inference is about the switch's behaviour, not about the querier:
-that the GS305EP withholds rather than floods for exactly that interval. It is
-consistent with every committed measurement, and it predicts a specific,
-falsifiable A/B result (below).
+### Confirmed: the snooping A/B, 2026-09-01
+
+IGMP snooping was disabled on the GS305EP and the identical run repeated. It is
+the only variable that changed.
+
+| Measure | snooping ON (n=7) | snooping OFF | change |
+|---|---:|---:|---:|
+| Mac's first SAP packet, Pi | +282.3 s | **+1.20 s** | -281 s |
+| Mac's first SAP packet, Ferrofish | +267.9 s | **+5.17 s** | -263 s |
+| First return signal | 263-267 s | **<=52.4 s** | -211 s |
+| Probes to declared ready | 61-69 | **9** | |
+
+`<=52.4 s` is an upper bound, not the turn-on: probe 1 is simply the first probe
+the harness fires and it already had full signal. The audio path was live as
+soon as the Pi was.
+
+This also confirms the daemon-side split independently. The +1.20 s packet is
+the Pi's *stale* announcement, which the daemon log always showed being sent at
++1.0 s. With the switch out of the way the Mac sees it 0.2 s later. The Mac's
+SAP capture was measuring switch delivery, never Pi announcement.
+
+The original working theory, Ferrofish subscription backoff, is dead.
+
+### The mechanism, corrected
+
+`Block Unknown Multicast Address` is **off** on this switch, so unregistered
+multicast was already being flooded. The switch was therefore never simply
+withholding. What happens instead:
+
+1. The Pi and the Mac join the group at ~T0. Snooping **learns** it and builds a
+   member port list, so the group stops being "unknown" and stops being flooded.
+2. That list is incomplete or wrong. A v2/v3 report-handling quirk is plausible
+   — `Validate IGMPv3 IP Header` is off and macOS defaults to IGMPv3.
+3. With no querier, nothing refreshes the entry, so it ages out at the group
+   membership interval, ~260 s.
+4. The group reverts to "unknown", and because Block Unknown is off it is
+   **flooded** — and everything works at once.
+
+Same timer, same root cause, inverted mechanism: a stale snooping entry expiring
+*into* flooding, not a withhold expiring.
 
 ### The n=2 SAP capture brackets the switch event tightly
 
@@ -209,7 +245,23 @@ the Pi's own 42.4 s announcement, minus whatever the two fixes above recover.
 
 ## Next measurements, in order
 
-1. **IGMP snooping A/B — no longer blocked.** With snooping disabled on the
+1. ~~**IGMP snooping A/B.**~~ Done, see above. Confirmed.
+
+   What remains is the production decision, because **the GS305EP has no querier
+   function** — its Multicast page offers only Snooping, VLAN ID, Block Unknown
+   Multicast, Validate IGMPv3 and Static Router Port. A querier must therefore
+   come from a host on the segment, or not at all.
+
+   | Option | Cost |
+   |---|---|
+   | Leave snooping off | 68 Mbps flooded to every port, measured. Fine for the gigabit devices; **68% of link** for the 100 Mb Dante AVIO on port 4. At 96 kHz this roughly doubles and exceeds that port's capacity outright. |
+   | Snooping on + querier on the Pi or Mac | Restores per-port filtering and protects the AVIO, but adds an always-on dependency: if the querier dies, discovery breaks again 260 s later. |
+   | Static router port | Rejected. An mrouter port receives *all* multicast, so it moves the 68 Mbps onto whichever device is designated, and the audio path is ports 1<->3 so a router port on 5 would not fix it. It would also repair the Mac's SAP visibility while leaving the real path broken, blinding `sap-timeline.log`. |
+
+   Simplest mitigation for the only real objection: disable port 4 or unplug the
+   AVIO when it is not in use.
+
+2. **Superseded — the original A/B framing.** With snooping disabled on the
    GS305EP, first-return-signal should collapse from 264 s to roughly the Pi's
    announcement time plus one Ferrofish resolution interval, so about 45-75 s.
    If it stays near 264 s the switch hypothesis is wrong and the timer is inside

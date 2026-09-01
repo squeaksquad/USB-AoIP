@@ -1,0 +1,75 @@
+# sap-watch on en12 (169.254.227.116) joined 239.255.255.255:9875
+# start 2026-09-01T15:14:51Z (1788275691.870 epoch); duration cap 1380s
+# offset   wall-clock    source           event   session
++    1.20  11:14:53  169.254.92.97    NEW     Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821769
++    1.20  11:14:53  169.254.92.97    NEW     Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821771
++    5.17  11:14:57  169.254.248.189  NEW     FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++    5.17  11:14:57  169.254.248.189  NEW     FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++   35.69  11:15:27  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++   35.69  11:15:27  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++   42.29  11:15:34  169.254.92.97    CHANGE  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++   42.29  11:15:34  169.254.92.97    CHANGE  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++   66.20  11:15:58  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++   66.20  11:15:58  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++   72.30  11:16:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++   72.30  11:16:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++   96.73  11:16:28  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++   96.73  11:16:28  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  102.30  11:16:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  102.30  11:16:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  127.25  11:16:59  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  127.25  11:16:59  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  132.30  11:17:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  132.30  11:17:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  157.85  11:17:29  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  157.85  11:17:29  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  162.31  11:17:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  162.31  11:17:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  188.38  11:18:00  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  188.38  11:18:00  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  192.31  11:18:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  192.31  11:18:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  218.90  11:18:30  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  218.90  11:18:30  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  222.31  11:18:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  222.31  11:18:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  249.41  11:19:01  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  249.41  11:19:01  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  252.31  11:19:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  252.31  11:19:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  279.94  11:19:31  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  279.94  11:19:31  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  282.32  11:19:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  282.32  11:19:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  310.46  11:20:02  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  310.46  11:20:02  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  312.32  11:20:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  312.32  11:20:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  340.99  11:20:32  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  340.99  11:20:32  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  342.32  11:20:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  342.32  11:20:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  371.65  11:21:03  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  371.65  11:21:03  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  372.33  11:21:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  372.33  11:21:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  402.18  11:21:34  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  402.18  11:21:34  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  402.33  11:21:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  402.33  11:21:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  432.33  11:22:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  432.33  11:22:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  432.69  11:22:04  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  432.69  11:22:04  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  462.34  11:22:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  462.34  11:22:34  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  463.22  11:22:35  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  463.22  11:22:35  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
++  492.34  11:23:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 01-08  addr=239.69.16.1/16  o-version=1765821770
++  492.34  11:23:04  169.254.92.97    repeat  Daemon fea9615c USB 16x16 TX 09-16  addr=239.69.16.2/16  o-version=1765821772
++  493.74  11:23:05  169.254.248.189  repeat  FF-PULSE-16-DX : 31  addr=239.69.193.115/32  o-version=93138072383
++  493.74  11:23:05  169.254.248.189  repeat  FF-PULSE-16-DX : 32  addr=239.69.121.9/32  o-version=93138004200
+# --- summary ---
+# 169.254.248.189 first announcement +5.17s, 34 packet(s)
+# 169.254.92.97   first announcement +1.20s, 34 packet(s)
+# stopped after 519.3s
