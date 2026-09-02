@@ -20,9 +20,9 @@ unit_destination=/etc/systemd/system/usb16x16-aes67.service
 conf_destination=/etc/usb16x16/aes67.conf
 sudoers_destination=/etc/sudoers.d/usb16x16-aes67
 bridge_binary=/usr/local/libexec/usb16x16-rt-bridge
-expected_supervisor_sha256=1cb716a162aee5aff63293495875515b8992479193047f4c37949234238cbb43
-expected_unit_sha256=2d2a98929e973bbe13f3298e1435b2995a847f20de0129a4c54aceefccbfb23f
-expected_conf_sha256=61a72df14d612e800a45a4dd0b21200a73a39a83e59556cca722348e2b2a8612
+expected_supervisor_sha256=0eba45535fd3d94bee1a71d21de7478683aebfff6a2b9ced9fcf05b70da4a9eb
+expected_unit_sha256=77837e60e7a0660ce9d0c31c8077363805c118df6bdcdba9619417669eccd702
+expected_conf_sha256=a039a3cccc2e9d0d02cd77424384b6406fe7303af5fe3ceac22b94f8e49941ae
 expected_bridge_sha256=0254348cd21e119bd4a42a9450b616b3c2930abaff1ae836a72f5bcce3f58d5e
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
@@ -82,6 +82,13 @@ if [ ! -e "$conf_destination" ]; then
   echo "installed $conf_destination"
 elif [ "$(sha256_of "$conf_destination")" = "$expected_conf_sha256" ]; then
   echo "unchanged $conf_destination"
+elif grep -qx "$(sha256_of "$conf_destination")" <<'PREVIOUS'
+61a72df14d612e800a45a4dd0b21200a73a39a83e59556cca722348e2b2a8612
+PREVIOUS
+then
+  # an unedited copy of a previously shipped version: replace it
+  install -o root -g root -m 644 "$conf_source" "$conf_destination"
+  echo "updated $conf_destination (was the shipped version, unedited)"
 else
   install -o root -g root -m 644 "$conf_source" "$conf_destination.new"
   echo "kept operator-edited $conf_destination; shipped version is at $conf_destination.new"

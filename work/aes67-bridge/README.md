@@ -35,7 +35,10 @@ ssh -t -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
 
 The installer refuses if any staged file does not match its pinned hash, if
 the installed bridge is not `0254348c`, or if the service is active.
-It does not enable or start the service.
+It does not enable or start the service. An installed `aes67.conf` is
+replaced if it is an unedited copy of a version the installer has shipped
+before, kept (with the new version beside it as `aes67.conf.new`) if the
+operator has edited it.
 
 ## Operate
 
@@ -88,10 +91,22 @@ sudo systemctl enable usb16x16-aes67
 - Refuses to start over a running candidate measurement, `ptp4l`,
   `aes67-daemon`, `alsaloop` or another bridge.
 - Exits non-zero if the daemon or the bridge exits, if more than five
-  `RECOVER` lines arrive in any 60 s, or if the protected prototype config
-  changes; systemd restarts the whole sequence 10 s later. After three
-  failures inside five minutes it sleeps 60 s before exiting, so a broken
-  network is one journal line a minute.
+  `RECOVER` lines arrive in any 60 s with USB input still moving, or if
+  the protected prototype config changes; systemd restarts the whole
+  sequence 10 s later. After three failures inside five minutes it sleeps
+  60 s before exiting, so a broken network is one journal line a minute.
+- Recognises the host leaving: a `RECOVER` storm (ten or more in one
+  second, `HOST_STORM_RECOVERS_PER_SECOND`) while the USB capture frame
+  count in the BRIDGE line has stopped moving. The unplug measured 33-185
+  in the first second, and `/sys/class/udc/*/state` never changed, so that
+  file is not the signal. On a storm the supervisor stops the bridge only,
+  keeps the daemon and the module up, logs `STAGE host absent`, and waits
+  for a `dwc2` enumeration line in the kernel log or `HOST_RETRY_SECONDS`
+  (300), then starts the bridge again. A storm with USB input still moving
+  is not the host leaving and takes the ordinary stack-restart path.
+- A stop request during the daemon's 32 s sink PUT is honoured at once:
+  the long calls run in the background under `wait`, and the trap kills
+  them. `TimeoutStopSec` is 40 s.
 - Two minutes of stable running clears the failure history.
 - Known: every cold boot starts the bridge with a capture XRUN on both
   directions, which it re-primes through; two of three boots then needed

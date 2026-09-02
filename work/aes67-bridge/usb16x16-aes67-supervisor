@@ -51,6 +51,9 @@ wrapper_pattern='^(/usr/bin/|/bin/)?bash /usr/local/sbin/run-phase4-candidate-sa
 journal_bridge_every=10        # one BRIDGE line in N to the journal
 bridge_log_cap_mb=64           # rotate the tmpfs log once at this size
 recover_limit_per_minute=5     # more RECOVER lines than this in 60 s fails the run
+host_storm_per_second=10       # RECOVER lines in one second that, with USB input frozen, mean no host
+host_retry_s=300               # with no host, try the bridge again this often
+host_probe_s=5                 # poll interval while waiting for the host
 backoff_failures=3             # failures inside backoff_window_s before sleeping
 backoff_window_s=300
 backoff_sleep_s=60
@@ -61,8 +64,10 @@ profile_name=
 profile_key=
 daemon_pid=
 bridge_pid=
+foreground_pid=
 stopping=0
 stack_stopped=0
+host_absences=0
 
 # ---------------------------------------------------------------- helpers
 
@@ -78,6 +83,18 @@ stage() {
 pause() {
   sleep "$1" &
   wait $! 2>/dev/null || true
+}
+
+# Run a command in the background and wait for it, so a stop request during
+# a long call (the daemon's sink PUT takes 32 s) reaches the trap at once
+# instead of after the call returns. The trap kills the command.
+interruptible() {
+  "$@" &
+  foreground_pid=$!
+  local status=0
+  wait "$foreground_pid" || status=$?
+  foreground_pid=
+  return "$status"
 }
 
 require_root() {
@@ -119,7 +136,10 @@ load_conf() {
   journal_bridge_every=${conf[JOURNAL_BRIDGE_EVERY]:-$journal_bridge_every}
   bridge_log_cap_mb=${conf[BRIDGE_LOG_CAP_MB]:-$bridge_log_cap_mb}
   recover_limit_per_minute=${conf[RECOVER_LIMIT_PER_MINUTE]:-$recover_limit_per_minute}
-  for value in "$journal_bridge_every" "$bridge_log_cap_mb" "$recover_limit_per_minute"; do
+  host_storm_per_second=${conf[HOST_STORM_RECOVERS_PER_SECOND]:-$host_storm_per_second}
+  host_retry_s=${conf[HOST_RETRY_SECONDS]:-$host_retry_s}
+  for value in "$journal_bridge_every" "$bridge_log_cap_mb" "$recover_limit_per_minute" \
+               "$host_storm_per_second" "$host_retry_s"; do
     [[ $value =~ ^[1-9][0-9]*$ ]] || { say "service settings must be positive integers" >&2; return 1; }
   done
 }
@@ -222,14 +242,7 @@ stop_stack() {
   set +e
   if [ -n "$bridge_pid" ] && kill -0 "$bridge_pid" 2>/dev/null; then
     stage "stopping bridge"
-    kill -INT "$bridge_pid"
-    for _ in 1 2 3 4 5; do
-      kill -0 "$bridge_pid" 2>/dev/null || break
-      sleep 1
-    done
-    kill -TERM "$bridge_pid" 2>/dev/null
-    wait "$bridge_pid" 2>/dev/null
-    sleep 0.5   # let the sampler drain SUMMARY into the journal and the log
+    stop_bridge   # SIGINT, 5 s, SIGTERM; the sampler drains SUMMARY after
   fi
   bridge_pid=
   if [ -n "$daemon_pid" ] && kill -0 "$daemon_pid" 2>/dev/null; then
@@ -289,6 +302,10 @@ on_signal() {
   trap '' TERM INT HUP
   stopping=1
   stage "stop requested"
+  if [ -n "$foreground_pid" ]; then
+    kill "$foreground_pid" 2>/dev/null || true
+    foreground_pid=
+  fi
   stop_stack
   stage "stopped"
   exit 0
@@ -417,24 +434,91 @@ cmd_run() {
 
   # 5. Sinks, then readback. The daemon does not retry rejected sinks itself.
   for sink_id in 0 1; do
-    curl -fsS -X PUT "$api/api/sink/$sink_id" \
+    interruptible curl -fsS -m 120 -o "$daemon_dir/sink-$sink_id-put.json" -X PUT "$api/api/sink/$sink_id" \
       -H 'Content-Type: application/json' \
-      --data-binary "@$daemon_dir/sink-$sink_id.json" \
-      > "$daemon_dir/sink-$sink_id-put.json" 2>/dev/null ||
+      --data-binary "@$daemon_dir/sink-$sink_id.json" ||
       fail 30 "PUT /api/sink/$sink_id failed"
   done
-  curl -fsS "$api/api/sinks" > "$daemon_dir/sinks-readback.json" 2>/dev/null || fail 30 "GET /api/sinks failed"
+  interruptible curl -fsS -m 30 -o "$daemon_dir/sinks-readback.json" "$api/api/sinks" || fail 30 "GET /api/sinks failed"
   if [ "$(grep -o "\"delay\"[[:space:]]*:[[:space:]]*$sink_delay\b" "$daemon_dir/sinks-readback.json" | wc -l)" -ne 2 ]; then
     fail 30 "sink delay readback did not contain two $sink_delay-sample sinks"
   fi
   stage "sinks applied, delay $sink_delay"
 
-  # 6. Bridge, through the sampler: everything to the tmpfs log, rare lines
-  #    and one BRIDGE line in N to the journal. mawk needs -W interactive
-  #    for line-buffered reads from a pipe; without it the first lines sit
-  #    in its input buffer past the 4 s NEGOTIATED check.
+  # 6. Bridge, through the sampler.
+  start_bridge
+  stage "running"
+
+  # 7. Supervise. Any exit of the daemon or the bridge ends the run non-zero.
+  #    A RECOVER storm while USB input is frozen is the host leaving, not a
+  #    stack fault: the bridge alone stops and waits for the host.
+  local -a recover_window
+  local tick=0 recovers_now recovers_then cleared=0 started=$SECONDS
+  local recovers_prev=0 tx_input_prev= tx_input_now tx_qn_prev= tx_qn_now frozen=0 storm_pending=0 storm_size=0
+  for _ in $(seq 0 60); do recover_window+=(0); done
+  while true; do
+    pause 1
+    kill -0 "$bridge_pid" 2>/dev/null || {
+      set +e; wait "$bridge_pid"; local bridge_status=$?; set -e
+      bridge_pid=
+      fail 34 "Phase 4 bridge exited with status $bridge_status"
+    }
+    kill -0 "$daemon_pid" 2>/dev/null || { daemon_pid=; fail 33 "AES67 daemon exited"; }
+    recovers_now=$(wc -l < "$recovers_file")
+    # USB input frozen: the 1 Hz BRIDGE line advanced (tx_qn, the queue sample
+    # counter, moves every second the bridge loop runs) but tx_input, the USB
+    # capture frame count, did not.
+    tx_input_now=$(grep -o 'tx_input=[0-9]*' "$last_bridge_file" 2>/dev/null | cut -d= -f2 || true)
+    tx_qn_now=$(grep -o 'tx_qn=[0-9]*' "$last_bridge_file" 2>/dev/null | cut -d= -f2 || true)
+    if [ -n "$tx_input_now" ] && [ -n "$tx_qn_now" ] && [ "$tx_qn_now" != "$tx_qn_prev" ]; then
+      if [ "$tx_input_now" = "$tx_input_prev" ]; then frozen=$((frozen + 1)); else frozen=0; fi
+      tx_input_prev=$tx_input_now
+      tx_qn_prev=$tx_qn_now
+    fi
+    # A storm (many RECOVERs in one second) holds the 60 s rule for a few
+    # seconds while the next BRIDGE lines show whether USB input is moving.
+    if [ $((recovers_now - recovers_prev)) -ge "$host_storm_per_second" ]; then
+      storm_pending=3
+      storm_size=$((recovers_now - recovers_prev))
+    fi
+    recovers_prev=$recovers_now
+    if [ "$storm_pending" -gt 0 ]; then
+      if [ "$frozen" -ge 1 ]; then
+        host_absent "$storm_size"
+        recover_window=(); for _ in $(seq 0 60); do recover_window+=(0); done
+        tick=0; recovers_prev=0; tx_input_prev=; tx_qn_prev=; frozen=0; storm_pending=0
+        continue
+      fi
+      storm_pending=$((storm_pending - 1))
+    fi
+    recovers_then=${recover_window[$((tick % 61))]}
+    recover_window[$((tick % 61))]=$recovers_now
+    tick=$((tick + 1))
+    if [ "$storm_pending" -eq 0 ] && [ "$frozen" -eq 0 ] &&
+       [ $((recovers_now - recovers_then)) -gt "$recover_limit_per_minute" ]; then
+      fail 35 "more than $recover_limit_per_minute direction restarts in 60 s ($((recovers_now - recovers_then)))"
+    fi
+    if [ "$cleared" -eq 0 ] && [ $((SECONDS - started)) -ge "$stable_after_s" ]; then
+      rm -f "$failures_file"
+      cleared=1
+      stage "stable for ${stable_after_s}s, failure history cleared"
+    fi
+    if [ "$(sha256_of "$original_config")" != "$original_config_sha256" ] ||
+       [ "$(sha256_of "$original_status")" != "$original_status_sha256" ]; then
+      fail 37 "protected AES67 prototype config changed unexpectedly"
+    fi
+  done
+}
+
+# Start the bridge through the sampler: everything to the tmpfs log, rare
+# lines and one BRIDGE line in N to the journal. mawk needs -W interactive
+# for line-buffered reads from a pipe; without it the first lines sit in its
+# input buffer past the 4 s NEGOTIATED check. Resets the per-session counters.
+start_bridge() {
   local -a arguments
   mapfile -t arguments < <(bridge_arguments)
+  : > "$recovers_file"
+  rm -f "$last_bridge_file"
   stage "bridge starting: ${arguments[*]}"
   "$bridge_binary" "${arguments[@]}" \
     > >(exec mawk -W interactive -v every="$journal_bridge_every" -v logfile="$bridge_log" \
@@ -464,37 +548,57 @@ cmd_run() {
   kill -0 "$bridge_pid" 2>/dev/null || fail 31 "Phase 4 bridge exited during startup"
   grep -q '^NEGOTIATED ' "$bridge_log" || fail 32 "Phase 4 bridge did not report negotiated ALSA parameters"
   stage "bridge negotiated: $(grep -m1 '^NEGOTIATED ' "$bridge_log" | cut -c12-)"
-  stage "running"
+}
 
-  # 7. Supervise. Any exit of the daemon or the bridge ends the run non-zero.
-  local -a recover_window
-  local tick=0 recovers_now recovers_then cleared=0 started=$SECONDS
-  for _ in $(seq 0 60); do recover_window+=(0); done
+stop_bridge() {
+  [ -n "$bridge_pid" ] || return 0
+  if kill -0 "$bridge_pid" 2>/dev/null; then
+    kill -INT "$bridge_pid"
+    local attempt
+    for attempt in 1 2 3 4 5; do
+      kill -0 "$bridge_pid" 2>/dev/null || break
+      sleep 1
+    done
+    kill -TERM "$bridge_pid" 2>/dev/null || true
+    wait "$bridge_pid" 2>/dev/null || true
+    sleep 0.5   # let the sampler drain SUMMARY into the journal and the log
+  fi
+  bridge_pid=
+}
+
+# The host has gone: a RECOVER storm with USB input frozen (measured at the
+# unplug: 33-185 ring-full recoveries in the first second, /sys/class/udc
+# state unchanged, so that file cannot be the signal). Stop the bridge only,
+# keep the daemon and the module, and wait for a dwc2 enumeration line or the
+# retry interval, then start the bridge again. Restarting the whole stack here
+# would load and unload the module every minute for as long as the host is
+# away.
+host_absent() {
+  local storm=$1
+  host_absences=$((host_absences + 1))
+  stage "host absent: $storm recoveries in one second with USB input frozen (episode $host_absences); stopping the bridge and waiting"
+  stop_bridge
+  local since waited=0 reason=
+  since=$(date +%s)
   while true; do
-    pause 1
-    kill -0 "$bridge_pid" 2>/dev/null || {
-      set +e; wait "$bridge_pid"; local bridge_status=$?; set -e
-      bridge_pid=
-      fail 34 "Phase 4 bridge exited with status $bridge_status"
-    }
-    kill -0 "$daemon_pid" 2>/dev/null || { daemon_pid=; fail 33 "AES67 daemon exited"; }
-    recovers_now=$(wc -l < "$recovers_file")
-    recovers_then=${recover_window[$((tick % 61))]}
-    recover_window[$((tick % 61))]=$recovers_now
-    tick=$((tick + 1))
-    if [ $((recovers_now - recovers_then)) -gt "$recover_limit_per_minute" ]; then
-      fail 35 "more than $recover_limit_per_minute direction restarts in 60 s ($((recovers_now - recovers_then)))"
+    pause "$host_probe_s"
+    waited=$((waited + host_probe_s))
+    kill -0 "$daemon_pid" 2>/dev/null || { daemon_pid=; fail 33 "AES67 daemon exited while waiting for the host"; }
+    if journalctl -k --since "@$since" --no-pager -q 2>/dev/null | grep -qE 'dwc2 .*new (device|address)'; then
+      reason="host enumerated after ${waited}s"
+      break
     fi
-    if [ "$cleared" -eq 0 ] && [ $((SECONDS - started)) -ge "$stable_after_s" ]; then
-      rm -f "$failures_file"
-      cleared=1
-      stage "stable for ${stable_after_s}s, failure history cleared"
+    if [ "$waited" -ge "$host_retry_s" ]; then
+      reason="retry after ${waited}s without an enumeration"
+      break
     fi
-    if [ "$(sha256_of "$original_config")" != "$original_config_sha256" ] ||
-       [ "$(sha256_of "$original_status")" != "$original_status_sha256" ]; then
-      fail 37 "protected AES67 prototype config changed unexpectedly"
+    if [ $((waited % 60)) -eq 0 ]; then
+      stage "waiting for the host: udc=$(udc_state)/$(udc_speed) (${waited}s)"
     fi
   done
+  stage "host: $reason; starting the bridge"
+  start_bridge
+  stage "running"
 }
 
 # --------------------------------------------------------------- cleanup

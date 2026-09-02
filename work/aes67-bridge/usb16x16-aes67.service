@@ -17,7 +17,8 @@ ExecStopPost=/usr/local/sbin/usb16x16-aes67-supervisor cleanup
 Restart=on-failure
 RestartSec=10
 KillMode=mixed
-TimeoutStopSec=25
+# Stop: bridge 5 s, daemon 5 s, rmmod 5 s, plus an interrupted sink PUT.
+TimeoutStopSec=40
 SyslogIdentifier=usb16x16-aes67
 # The supervisor reads /etc/usb16x16/aes67.conf itself, with validation;
 # no EnvironmentFile= so a bad line is a logged refusal, not a silent skip.
