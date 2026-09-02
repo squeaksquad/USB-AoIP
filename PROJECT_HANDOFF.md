@@ -1657,6 +1657,66 @@ kill) against none in the candidate is not yet a rate. The soak's
 RECOVER count is the stall counter and each one now carries a monotonic
 time in the persistent journal.
 
+**The 32-frame CoreAudio measurement did not produce a number: two
+attempts, two different failures, neither attributable to 32 frames.**
+Same frozen point, `measure-phase4-roundtrip.sh 600 32 800 200`, service
+stopped under the coexistence rule each time.
+
+- **Attempt 1, `142917Z`.** Bridge started 10:30:00.12 local, and at
+  t = 5.007 s three of the four PCMs were in XRUN within 100 us with the
+  bridge's own wakeup gaps at 33 and 63 us: RAVENNA capture, RAVENNA
+  playback and USB playback; USB capture running. Floors before recovery
+  253 / 61, queues 349 / 157. The harness's first 32-frame probe had just
+  run (score 0.35, no median), every later probe found no signal, wrapper
+  exit 33. The Pi's kernel log at that second holds only the recovery
+  itself. 270 ms earlier an ssh session from the Mac closed
+  (`session-47.scope` deactivated). The RAVENNA driver's PTP lock had
+  dropped and re-locked at 10:29:28, 37 s earlier, which is its routine
+  re-lock (below), not this.
+- **Attempt 2, `143219Z`.** The wrapper started under sudo at
+  10:32:19.985 and the Pi hard-reset within about 30 s: the persistent
+  journal's last line is that sudo entry, no kernel message, no panic
+  trace, `get_throttled` 0x0 after the reboot. The sequence before it,
+  inside one boot: service insmod at boot, stop (rmmod), wrapper insmod
+  for attempt 1, cleanup rmmod, service insmod, stop (rmmod), wrapper
+  insmod, reset. Earlier boots survived more insmod/rmmod cycles than
+  that. The Pi rebooted on its own, the enabled service came up in 61 s
+  as designed, and wlan0 failed to associate for about 25 min
+  (`CTRL-EVENT-ASSOC-REJECT`, `no-secrets`) before NetworkManager brought
+  it back by itself; eth0 and mDNS were fine throughout. A 32-frame
+  measurement needs a reason before a third attempt.
+
+**MEASURED: the RAVENNA driver drops and re-acquires its PTP lock about
+8 s after every module load.** Kernel `PTP lock [0] status changed`
+sequence 0 -> 1 -> 2, then 2 -> 0 -> 1 -> 2 eight to nine seconds later,
+in every boot and every stop/start today (08:02:52/08:03:01,
+10:29:19/10:29:28, 10:30:58/10:31:07, boot 4 at 71.7/80.1 s and
+1627.8/1636.3 s). The daemon reports `locked` before the re-lock and the
+PUT of sink 0 then takes 32 s, so the bridge always starts about 30 s
+after it; harmless as sequenced, but it is a second unlock that nothing
+waits for, and it is now a known timeline feature.
+
+**Boot 4 (unplanned), 1609 s: eight RECOVERs in 1.1 s, the rule
+restarted the stack, audio back at 1672 s.** Shape: TX (RAVENNA playback)
+XRUN five times with `last_queue` 14-62 and normal 2 ms gaps, each
+re-prime draining in 200 ms, and RX `capture-ring-full` twice. That is
+USB input stopping and USB playback not consuming for about a second,
+both directions, with the bridge running and no PTP change: a host-side
+pause, the same signature as boot 2's cascade. No kernel line beside the
+recoveries. It began 9 s after an ssh login from the Mac over eth0 during
+the outage diagnosis, and 3 s before the harness's hung ssh was killed on
+the Mac. Earlier in the same boot, at 690 s, a 4.3 ms gap took TX's
+sampled floor from 179 to 95 with no RECOVER and nothing in the journal.
+
+**Three events, all within seconds of ssh session activity from the
+Mac:** the 4.8 ms stall at 2700 s (14 s after a session closed), attempt
+1's triple XRUN (0.27 s after a session closed), boot 4's cascade (9 s
+after a login). Not a mechanism, a pattern to test: the next instrument
+is a counter, not an explanation. Candidates that need no bridge change:
+`tx_pullmax` already flags a 192-frame pull; the persistent journal now
+timestamps every RECOVER, DEPTHSTEP, ssh session and PTP lock line on
+one monotonic clock. Correlate before proposing.
+
 **The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
 playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
 +32 s, in every warm and cold start; sink 1 then takes 10 ms. That is
