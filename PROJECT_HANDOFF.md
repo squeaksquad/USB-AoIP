@@ -1749,6 +1749,17 @@ what makes those fifty different is the open question. Test C, sixty
 sessions running the watch's exact command at 15 s spacing, watch
 stopped, is the next measurement.
 
+**Test C: zero in about 120 closes.** Sixty iterations at 15 s, each
+running the watch's exact command and a second short readout session,
+service watch stopped, 20:44-21:01 UTC: no RECOVER, no restart. With A
+and B that is about 133 controlled closes without a hit against three
+hits in about 150 natural ones. If the close triggers at all it does so
+at under about 2% and something else gates it; the controlled sessions
+differ from the natural ones only in spacing (15 s against 600 s) and in
+what else the Pi was doing. Not resolved. The service watch's sessions
+continue as the natural experiment, and every hit lands in the journal
+with its offset from the nearest close.
+
 **MEASURED: four runs against the running service, 64 and 32 frames, all
 on one sample.** `measure-under-service.sh` runs the Mac harness alone
 against the live service, no wrapper and no stack restart, so a RECOVER
