@@ -1591,7 +1591,7 @@ unchanged. The service is enabled and running profile `safe`.
 | 1. cold boot x3 | 61 s from kernel boot to `running` in all three, no wait stage, enabled unit, no intervention; **not clean at the bridge**, below |
 | 6. soak | called a pass at 2 h 25 min by the user: 418 M frames, zero restarts, 3 RECOVERs (the startup pair plus one 4.8 ms stall), 88 skips survived, zero drops, `tx_qfloor` 189 before the stall and 122 after, `rx_qfloor` 13, ppm -16.3 |
 | 4. USB unplug/replug | pass with findings: 33 RECOVERs in 0.85 s at unplug, rule tripped 1.6 s later, stack restarted, audio back 35 s after replug, no intervention; the UDC state never left `configured/high-speed`, so the host-presence gate cannot see an unplug (below) |
-| 5 | not yet run: Mac asleep an hour |
+| 5 | deferred: the second Mac never enumerated the gadget; run it when the first Mac is free |
 
 **Two service defects found and fixed during acceptance.** The first start
 failed its 4 s NEGOTIATED check because mawk buffers stdin reads on a pipe;
@@ -1843,6 +1843,34 @@ out at about 15858.6 s of series boot 5 (Pi local 21:22:20), back in at
   the hour is the cheaper first measurement.
 - `usb-16x16.service` stayed active and the gadget re-enumerated on its
   own. Nothing touched the USB baseline.
+
+**MEASURED: the absent-host loop, live, and two more service defects.**
+The cable was moved to a second Mac for the sleep test (2026-09-02
+21:36 local). That Mac never enumerated the gadget: no `dwc2` line at
+all on the Pi, not even a bus reset, through two ports and a reseat,
+while moving the cable back to the first Mac produced `new device is
+high-speed` within a second. Fault at the second Mac's port or cable
+end; the sleep test is deferred. Meanwhile the Pi showed what an absent
+host does to the service: each attempt reaches the bridge, takes a ring-
+full storm (185 RX `capture-ring-full` recoveries in the first second),
+trips the rule and restarts, one module load and unload per cycle at
+about 65 s, with the UDC state file still reading `configured/high-speed`
+from the previous host throughout. Stopped by hand after two cycles to
+spare the module. Two defects for the next supervisor revision:
+
+- **A stop during the sink PUT is killed by systemd.** `systemctl stop`
+  arrived while the supervisor was inside the daemon's 32 s sink 0 PUT;
+  bash defers the TERM trap until the foreground curl returns, the 25 s
+  `TimeoutStopSec` expired, systemd sent SIGKILL and the unit went to
+  `failed`. `ExecStopPost` still cleaned up and unloaded the module. Fix:
+  run the long curls in the background and `wait`, as `pause` already
+  does, and raise `TimeoutStopSec` to cover the PUT.
+- **The host-presence gate is blind**, as the unplug test showed, so the
+  supervisor needs the storm signature instead: a `capture-ring-full`
+  rate of tens per second with USB input frozen means no host, and the
+  right response is to stop the bridge and wait for a `dwc2` enumeration
+  line or for USB input to move, not to churn the module every minute.
+  Design to decide with the sleep result in hand.
 
 **The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
 playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
