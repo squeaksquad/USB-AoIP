@@ -1428,7 +1428,7 @@ its own depth, so whatever the sink delay shifts is absorbed somewhere with
 a small, setting-dependent residue. Reading a mechanism into the residue
 would be algebra on aggregates; it is recorded as a curve, not explained.
 
-This run's floors: TX 105, RX 93. Clean, ready after 3 probes.
+This run's floors: TX 109, RX 93. Clean, ready after 3 probes.
 
 **Sink delay is closed as a Phase 4 latency question.** 288 is worth 0.7 ms
 on one live point and nothing on repetition has been tried; not worth a
