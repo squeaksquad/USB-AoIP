@@ -110,9 +110,10 @@ GOTCHAS
    to audio after a daemon restart is at most ~52 s. If you see ~260 s,
    check snooping. See SAP_DISCOVERY_FINDING.md.
 2. Latency figures are not comparable across that change.
-3. The GS305EP's QoS mode was changed off Port-based on 2026-09-02; the
-   handoff's "AoIP switch QoS" section predates that. Confirm and record the
-   active mode before reasoning about the network.
+3. The GS305EP is in 802.1p/DSCP QoS mode since 2026-09-02 (it honours the
+   DSCP marks; PTP above media). Every latency figure up to the accepted
+   point was measured in Port-based mode. No difference is expected at
+   current load, but re-baseline rather than compare across it.
 4. NEVER gate a measurement on sink flags.
 5. Keep --maximum-lag-ms under 250.
 6. Sink delay: live PUT changes register but are not a latency lever under
@@ -179,8 +180,8 @@ loaded and repeated.
 - **The rate regression's free intercept** sets where the TX/RX split rests
   and is the last source of run-to-run scatter (floor 158 vs 193-197 on one
   configuration). A small differential bias would address it. Not started.
-- **AoIP switch QoS.** Mode changed off Port-based on 2026-09-02; the handoff
-  section is stale until the active mode is recorded.
+- **AoIP switch QoS.** Now 802.1p/DSCP. The accepted point has not been
+  re-measured since the change; one run would close that.
 - **The 31.9 s first-RX-stream stall** inside `MergingRavennaALSA`, n=13,
   deterministic, only ever the first sink after `insmod`.
 - **Two small daemon items**: PTP "lock" takes exactly 10.00 s every time, a

@@ -2070,10 +2070,14 @@ is wide enough that scheduling cannot explain anything observed.
 
 ### AoIP switch QoS
 
-**Stale as of 2026-09-02:** the GS305EP's QoS mode has been changed off
-`Port-based`. The active mode has not yet been recorded here; confirm it in
-the switch UI and update this section before reasoning about the network.
-The paragraphs below describe the state on 2026-09-01.
+**Updated 2026-09-02:** the GS305EP is now in `802.1p/DSCP` QoS mode, so
+the switch honours the DSCP marks AES67 already sets (media 34, PTP 46) and
+prioritises the clock above audio. This is the fix the paragraphs below
+recommend; they describe the `Port-based` state on 2026-09-01 and are kept
+for the reasoning. No latency figure has been re-measured across this
+change; every figure in this document up to and including the accepted
+combined point was taken in `Port-based` mode. Expect no measurable
+difference at current load, but re-baseline before comparing.
 
 The NETGEAR GS305EP was in `Port-based` QoS mode with port 1, which carries the
 Pi, set to `Low`. Every other port is higher. This is backwards, though it is
