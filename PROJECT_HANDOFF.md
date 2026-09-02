@@ -1476,6 +1476,55 @@ covered, priced from the two measured deltas at roughly 28 ms: about 4.5 ms
 under the stopgap with margin rather than phase. RX prime 144 would put RX's
 floor back over a period for about 1 ms more. Untested.
 
+#### MEASURED: the combined point -- 29.146 ms with TX's floor at 196, the first measured cover over the skip
+
+Run `031504Z`, 600 s, 800 impulses: `--target 128`, RAVENNA playback
+buffer 384, TX prime 288, RX prime 144, buffer 192, sink delay 576. Clean,
+zero restarts, ready after 3 probes. `NEGOTIATED` confirms
+`ravenna_capture=128/288 ravenna_playback=128/384`.
+
+| | target 128 alone `025906Z` | **combined `031504Z`** | stopgap |
+|---|---:|---:|---:|
+| median | 24.479 ms | **29.146 ms (1399)** | 32.729 ms |
+| score / spread | 0.932 / 10 | 0.947 / 9 | 0.306 / 16 |
+| `tx_qfloor` | 97 | **196** | |
+| TX samples under a period | 19% | **0** | |
+| TX queue at 1 Hz | | 240-350 | |
+| `rx_qfloor` | 61 | 60 | |
+| RX samples under a period | 20% | 24% | |
+| TX 144-pulls | 5 | 5, all survived | |
+| max wakeup gap | 2.0 ms | 2.0 / 2.1 ms | |
+
+**TX now carries cover.** A sampled floor of 196 against a 144-frame skip
+leaves 52 frames, about 1 ms, of device-side margin at the sawtooth minimum.
+Every previous point had that margin negative. It is not the full 96 the
+ceiling allows: TX primed at 288 + 61 overshoot = 349, short of the 384
+buffer, so the queue is not pinned full. TX prime 336 would pin it and put
+the floor near 240, for about 1 ms more.
+
+**RX prime 144 bought nothing, and the reason is a rule.** Across every run
+RX's floor has equalled its prime plus its overshoot minus 96: 96+93 -> 93,
+96+45 -> 45, 96+61 -> 61, and here 144+13 -> 60. The overshoot is a draw
+(13/45/61/93 observed), so RX's floor is a draw too. RX's consumer is the
+USB gadget, which pulls exactly 96 every 2 ms and never skips, so its
+sampled floor is its true minimum and RX has never failed at floors down to
+45. It is thin by design rather than by accident, but nobody chose it. To
+make it deterministic RX's queue would need to be pinned full like TX's,
+which on USB's 384 buffer costs about 5 ms; not recommended.
+
+**Accounting.** Depth-mean sum 766 frames: TX 452, RX 314. The median
+moved from 1175 (target 128 alone) by +224 samples for +96 TX prime, +48 RX
+prime, and the overshoot draws; it matches the priced figure of "near
+29 ms" from the two measured deltas.
+
+**Status.** 3.6 ms under the re-baselined stopgap, tighter spread, every
+counter clean, and TX's floor above the skip for the first time. One run.
+It needs repetition before anything is claimed: the TX overshoot draw
+(61 here, 93 elsewhere) moves the floor by the same amount, so expect 196
+to scatter by tens of frames while staying above 144. Three more runs, and
+`tx_qfloor` above 144 in all of them, is the acceptance test this document
+now asks for.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
@@ -1483,6 +1532,7 @@ floor back over a period for about 1 ms more. Untested.
 | `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96, RAVENNA playback 384 | 015059Z, 800 impulses, clean, `tx_qfloor` 122 | 30.146 ms | 0.944 | 10 samples |
 | `96/192/768/128` TX 192 / RX 96, **target 128** | **025906Z, 800 impulses, clean, `tx_qfloor` 97, `rx_qfloor` 61** | **24.479 ms** | 0.932 | 10 samples |
+| `96/192/768/128` target 128, RAVENNA playback 384, TX 288 / RX 144 | **031504Z, 800 impulses, clean, `tx_qfloor` 196, first point with skip cover** | **29.146 ms** | 0.947 | 9 samples |
 | `96/192/768/192` prime 96 | **211118Z, 600 s soak PASSED, ACCEPTED** | **26.979 ms** | **0.988** | **0 samples** |
 | `96/288/768/192` TX 288 / RX 96 | **4 runs, 800 impulses, 0 failures, tx_qfloor 144 invariant** | **29.979-30.979 ms** | ~0.92 | 8-10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **221301Z, 600 s soak PASSED, ACCEPTED** | **28.729 ms** | 0.924 | 8 samples |
