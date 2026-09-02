@@ -1635,6 +1635,27 @@ the same microsecond shows `gap_us=6526`, a 6.5 ms wakeup gap against a
 2.1 ms maximum in every loaded run. One occurrence; the soak decides
 whether it belongs to restarts after a kill.
 
+**MEASURED: a second stall under the service, 4.8 ms, with nothing beside
+it.** Soak, boot 3, monotonic 2700.27 s (about 44 min into the run, 32 s
+after the journald restart that made the journal persistent): RX
+`playback-avail` XRUN with `last_queue=192`, and TX's BRIDGE line for the
+same second reads `tx_pullmax=192 tx_gapmax_us=4820`. RX's queue holds
+about 4 ms, so any bridge wakeup gap past that empties USB playback; TX
+held 314 and survived with its floor at 122. The journal shows nothing
+else on the Pi in the ten seconds before it: the last ssh session had
+closed at 2686.5, the daemon's 30 s SAP announcement was at 2697.3 as in
+every run, no journald sync, `get_throttled` 0x0 at 47.7 C. The kernel's
+RAVENNA trigger and prepare lines at 2700.269 are the recovery itself.
+Bridge threads are SCHED_FIFO 90 on CPUs 2 and 3 with memory locked,
+`CONFIG_PREEMPT=y`, HZ 250, IRQs unpinned, governor `ondemand`: the same
+binary and kernel as every candidate run, where the largest gap in seven
+600 s runs was 2.1 ms. What the service adds is stdout through a pipe to
+mawk on CPU 1 and the unit's cgroup. Two stalls above 4.5 ms in about
+90 minutes of service time (this one and the 6.5 ms one after the bridge
+kill) against none in the candidate is not yet a rate. The soak's
+RECOVER count is the stall counter and each one now carries a monotonic
+time in the persistent journal.
+
 **The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
 playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
 +32 s, in every warm and cold start; sink 1 then takes 10 ms. That is
