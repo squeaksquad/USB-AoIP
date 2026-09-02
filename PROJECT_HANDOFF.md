@@ -1734,6 +1734,21 @@ the bridge at SCHED_FIFO 90 sees no gap while the driver's PCMs overrun
 and underrun together: whatever it is stalls the driver's timer path, not
 the bridge. Left open. The journal keeps accumulating timestamps.
 
+**CORRECTION: tests A and B were underpowered, and a third hit makes
+the session close the trigger.** Series boot 5, monotonic 12934.69 s:
+the same pair (RAVENNA capture XRUN and both playbacks XRUN, bridge gaps
+27 and 1982 us), 0.17 s after the service watch's session closed at
+12934.53, nothing else in the kernel log, six previous watch sessions
+that hour clean. Three tight-coupled events now, at 0.17, 0.27 and
+0.38 s after an sshd session close, out of roughly 150 sessions today:
+a per-session rate near 2%, against which thirteen clean sessions prove
+nothing (about three chances in four of seeing none). The chance that
+three events land inside 0.4 s of a close by accident is negligible. So
+the session close is involved and it fires about one time in fifty;
+what makes those fifty different is the open question. Test C, sixty
+sessions running the watch's exact command at 15 s spacing, watch
+stopped, is the next measurement.
+
 **MEASURED: four runs against the running service, 64 and 32 frames, all
 on one sample.** `measure-under-service.sh` runs the Mac harness alone
 against the live service, no wrapper and no stack restart, so a RECOVER
