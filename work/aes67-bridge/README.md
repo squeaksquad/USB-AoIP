@@ -1,0 +1,151 @@
+# usb16x16-aes67.service
+
+The accepted Phase 4 operating point as a persistent service on the Pi.
+Design and acceptance criteria are in `DEPLOYMENT_PLAN.md`; the measurements
+behind the point are in `PROJECT_HANDOFF.md` under "ACCEPTED: the combined
+point".
+
+| file | installs to |
+|---|---|
+| `usb16x16-aes67-supervisor` | `/usr/local/sbin/usb16x16-aes67-supervisor` |
+| `usb16x16-aes67.service` | `/etc/systemd/system/usb16x16-aes67.service` |
+| `aes67.conf` | `/etc/usb16x16/aes67.conf` (kept if the operator edited it) |
+| `install-aes67-service.sh` | run once with sudo from the staging directory |
+
+The installer also writes `/etc/sudoers.d/usb16x16-aes67` so `bdimaio` can
+start, stop, restart, enable and disable the unit, switch profiles, kill the
+daemon or the bridge for the acceptance tests, and reboot, all without a
+password. The USB gadget, `usb-16x16.service` and the setup script are not
+touched by any of this.
+
+## Install
+
+Stage from the Mac, verify the hashes, then run the installer once:
+
+```bash
+rsync -a work/aes67-bridge/{usb16x16-aes67-supervisor,usb16x16-aes67.service,aes67.conf,install-aes67-service.sh} \
+  audio-dev.local:usb-16x16-work/aes67-service/
+```
+
+```bash
+ssh -t -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
+  'sudo ~/usb-16x16-work/aes67-service/install-aes67-service.sh'
+```
+
+The installer refuses if any staged file does not match its pinned hash, if
+the installed bridge is not `0254348c`, or if the service is active.
+It does not enable or start the service.
+
+## Operate
+
+```bash
+sudo systemctl start usb16x16-aes67
+```
+
+```bash
+sudo systemctl stop usb16x16-aes67
+```
+
+```bash
+usb16x16-aes67-supervisor status
+```
+
+```bash
+journalctl -u usb16x16-aes67 -f
+```
+
+`status` prints the unit state, the selected profile, the last supervisor
+stage and its age, the last `BRIDGE` line reduced to ppm, queues, floors and
+restarts, the recovery count for this session, PTP status, sink delays, the
+UDC state and `usb-16x16.service`.
+
+The journal reads as a timeline of `STAGE` lines: `insmod`, `daemon API
+ready in Ns`, `ptp locked in Ns`, `sinks applied`, `bridge negotiated`,
+`running`. The daemon's own output is in the same journal under the
+identifier `aes67-daemon`. Every `PRIMED`, `NEGOTIATED`, `RECOVER`,
+`DEPTHSTEP` and `SUMMARY` line from the bridge goes to the journal, plus one
+`BRIDGE` line every 10 s. The full 1 Hz stream is at
+`/run/usb16x16/bridge.log` on tmpfs, truncated at every start and rotated
+once to `bridge.log.1` at 64 MB; it is the post-mortem for the current
+session only and does not survive a reboot.
+
+Enable at boot once the manual acceptance items pass:
+
+```bash
+sudo systemctl enable usb16x16-aes67
+```
+
+## What the supervisor does on its own
+
+- Waits, without failing, for the USB gadget to be `configured` at high
+  speed and for `eth0` to have carrier at 1 Gb/s, logging once a minute.
+  A sleeping Mac is a wait, not a restart loop.
+- Refuses to start over a running candidate measurement, `ptp4l`,
+  `aes67-daemon`, `alsaloop` or another bridge.
+- Exits non-zero if the daemon or the bridge exits, if more than five
+  `RECOVER` lines arrive in any 60 s, or if the protected prototype config
+  changes; systemd restarts the whole sequence 10 s later. After three
+  failures inside five minutes it sleeps 60 s before exiting, so a broken
+  network is one journal line a minute.
+- Two minutes of stable running clears the failure history.
+- On stop: SIGINT to the bridge and the daemon with 5 s grace each, then
+  SIGTERM, then `rmmod` with retries. `ExecStopPost` reaps anything left in
+  the unit's cgroup and unloads the module, but never touches a candidate's
+  processes.
+
+## Profiles
+
+`/etc/usb16x16/aes67.conf` carries `PROFILE=<name>` and one block per
+profile. Two ship:
+
+| profile | point | measured | cover | status |
+|---|---|---:|---|---|
+| `safe` | target 128, RAVENNA playback 384, TX 288, RX 144, buffer 192, sink delay 576 | 29.1 ms | TX floor 158-197 | accepted, default |
+| `fast` | target 128, TX 192, RX 96, buffer 192, sink delay 576 | 24.5 ms | none, TX floor 97 | experimental |
+
+```bash
+usb16x16-aes67-supervisor profiles
+```
+
+```bash
+sudo usb16x16-aes67-supervisor switch-profile fast
+```
+
+A switch rewrites the `PROFILE=` line (verified before the file is
+replaced) and restarts the service if it is active. Audio is gone for
+about a minute while the stack comes back. Adding a profile is a new block
+in the file and its four loaded runs; nothing else changes. The supervisor
+validates every block it selects with the same rules as the candidate
+wrapper, and refuses a block that fails.
+
+## Measure while the service exists
+
+The candidate wrapper and the service refuse to run over each other. The
+rule is: stop the service, measure, start it again.
+
+```bash
+ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 'sudo systemctl stop usb16x16-aes67'
+```
+
+Then the accepted-point measurement as documented in the pickup prompt
+(`measure-phase4-roundtrip.sh 600 64 800 200` with the Phase 4 shim
+environment), then:
+
+```bash
+ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 'sudo systemctl start usb16x16-aes67'
+```
+
+If the service is left running, the wrapper refuses with "aes67-daemon is
+already running". If a candidate is running, the service logs a refusal
+and retries on its backoff until the candidate ends.
+
+## Roll back
+
+```bash
+sudo systemctl disable --now usb16x16-aes67
+```
+
+Then `rmmod MergingRavennaALSA` if `lsmod` still shows it. The stopgap
+runner and the candidate wrapper remain installed and untouched. Removing
+the files entirely is the three destinations in the table above plus the
+sudoers fragment.

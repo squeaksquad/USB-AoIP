@@ -1,0 +1,630 @@
+#!/bin/bash
+# usb16x16-aes67-supervisor: run the accepted Phase 4 AES67 stack as a
+# long-lived service. The start sequence is the one the candidate wrapper
+# (run-phase4-candidate-safe.sh) validated, copied rather than called, with
+# service lifecycle semantics: it runs until signalled, tolerates bridge
+# direction restarts up to a limit, and exits non-zero on any stack failure
+# so systemd restarts the whole sequence.
+#
+# Subcommands:
+#   run                    the service body (default; root)
+#   cleanup                ExecStopPost: reap leftovers and unload the module (root)
+#   status                 one-screen state, works without root
+#   profiles               list the profiles in the configuration file
+#   switch-profile NAME    select a profile, restart the service if active (root)
+#
+# It never touches usb-16x16.service or the USB gadget. It refuses to start
+# over a running candidate measurement, and it waits (rather than fails) for
+# the USB host and the AoIP link.
+set -euo pipefail
+umask 022
+
+conf_file=${USB16X16_AES67_CONF:-/etc/usb16x16/aes67.conf}
+run_dir=/run/usb16x16
+daemon_dir=$run_dir/daemon
+stage_file=$run_dir/stage
+failures_file=$run_dir/failures
+recovers_file=$run_dir/recovers
+last_bridge_file=$run_dir/last-bridge
+bridge_log=$run_dir/bridge.log
+unit_name=usb16x16-aes67
+
+work_root=/home/bdimaio/usb-16x16-work
+source_root="$work_root/aes67-daemon-src"
+daemon_binary="$source_root/build-daemon/aes67-daemon"
+module_binary="$work_root/aes67-source/ravenna-alsa-lkm-v2.1/driver/MergingRavennaALSA.ko"
+bridge_binary=/usr/local/libexec/usb16x16-rt-bridge
+original_config="$source_root/runtime/daemon-eth0.conf"
+original_status="$source_root/runtime/status.json"
+candidate_wrapper=/usr/local/sbin/run-phase4-candidate-safe.sh
+candidate_ready_file=/tmp/usb16x16-phase4-candidate.ready
+expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
+expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
+expected_bridge_sha256=0254348cd21e119bd4a42a9450b616b3c2930abaff1ae836a72f5bcce3f58d5e
+expected_gmid=00-1D-C1-FF-FE-1D-27-DC
+api=http://127.0.0.1:8080
+
+bridge_pattern='^/usr/local/libexec/usb16x16-rt-bridge([[:space:]]|$)'
+wrapper_pattern='^(/usr/bin/|/bin/)?bash /usr/local/sbin/run-phase4-candidate-safe\.sh'
+
+# Service-level settings, overridable from the configuration file.
+journal_bridge_every=10        # one BRIDGE line in N to the journal
+bridge_log_cap_mb=64           # rotate the tmpfs log once at this size
+recover_limit_per_minute=5     # more RECOVER lines than this in 60 s fails the run
+backoff_failures=3             # failures inside backoff_window_s before sleeping
+backoff_window_s=300
+backoff_sleep_s=60
+stable_after_s=120             # bridge uptime that clears the failure history
+
+declare -A conf
+profile_name=
+profile_key=
+daemon_pid=
+bridge_pid=
+stopping=0
+stack_stopped=0
+
+# ---------------------------------------------------------------- helpers
+
+say() { printf '%s\n' "$*"; }
+stage() {
+  say "STAGE $*"
+  if [ -d "$run_dir" ] && [ -w "$run_dir" ]; then
+    printf '%s %s\n' "$(date +%s)" "$*" > "$stage_file.tmp" && mv -f "$stage_file.tmp" "$stage_file"
+  fi
+}
+
+# sleep that a signal can interrupt, so a stop request during a wait is prompt
+pause() {
+  sleep "$1" &
+  wait $! 2>/dev/null || true
+}
+
+require_root() {
+  if [ "$(id -u)" -ne 0 ]; then
+    say "run as root" >&2
+    exit 2
+  fi
+}
+
+sha256_of() { sha256sum "$1" | awk '{print $1}'; }
+
+udc_state() { cat /sys/class/udc/*/state 2>/dev/null | head -1; }
+udc_speed() { cat /sys/class/udc/*/current_speed 2>/dev/null | head -1; }
+eth0_carrier() { cat /sys/class/net/eth0/carrier 2>/dev/null || echo 0; }
+eth0_speed() { cat /sys/class/net/eth0/speed 2>/dev/null || echo 0; }
+
+module_loaded() { lsmod | grep -q '^MergingRavennaALSA '; }
+bridge_running() { pgrep -f "$bridge_pattern" >/dev/null; }
+wrapper_running() { pgrep -f "$wrapper_pattern" >/dev/null; }
+candidate_present() { [ -e "$candidate_ready_file" ] || wrapper_running; }
+
+# ------------------------------------------------------------ configuration
+
+load_conf() {
+  local line key value
+  [ -r "$conf_file" ] || { say "configuration file $conf_file is missing or unreadable" >&2; return 1; }
+  while IFS= read -r line || [ -n "$line" ]; do
+    [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
+    if [[ $line =~ ^([A-Z][A-Z0-9_]*)=\"([^\"]*)\"[[:space:]]*$ ]] ||
+       [[ $line =~ ^([A-Z][A-Z0-9_]*)=([A-Za-z0-9_.:/+-]*)[[:space:]]*$ ]]; then
+      key=${BASH_REMATCH[1]}
+      value=${BASH_REMATCH[2]}
+      conf[$key]=$value
+    else
+      say "bad line in $conf_file: $line" >&2
+      return 1
+    fi
+  done < "$conf_file"
+  journal_bridge_every=${conf[JOURNAL_BRIDGE_EVERY]:-$journal_bridge_every}
+  bridge_log_cap_mb=${conf[BRIDGE_LOG_CAP_MB]:-$bridge_log_cap_mb}
+  recover_limit_per_minute=${conf[RECOVER_LIMIT_PER_MINUTE]:-$recover_limit_per_minute}
+  for value in "$journal_bridge_every" "$bridge_log_cap_mb" "$recover_limit_per_minute"; do
+    [[ $value =~ ^[1-9][0-9]*$ ]] || { say "service settings must be positive integers" >&2; return 1; }
+  done
+}
+
+profile_key_of() {
+  local name=$1
+  [[ $name =~ ^[a-z][a-z0-9-]*$ ]] || return 1
+  name=${name//-/_}
+  printf '%s' "${name^^}"
+}
+
+# p FIELD -> value of the selected profile's field, empty if unset
+p() { printf '%s' "${conf[PROFILE_${profile_key}_$1]-}"; }
+
+profile_names() {
+  local key
+  for key in "${!conf[@]}"; do
+    if [[ $key =~ ^PROFILE_([A-Z0-9_]+)_TARGET$ ]]; then
+      local lower=${BASH_REMATCH[1],,}
+      printf '%s\n' "${lower//_/-}"
+    fi
+  done | sort
+}
+
+select_profile() {
+  profile_name=${1:-${conf[PROFILE]-}}
+  [ -n "$profile_name" ] || { say "PROFILE is not set in $conf_file" >&2; return 1; }
+  profile_key=$(profile_key_of "$profile_name") || { say "bad profile name: $profile_name" >&2; return 1; }
+  [ -n "$(p TARGET)" ] || { say "profile $profile_name has no block in $conf_file" >&2; return 1; }
+}
+
+# The same relationships the candidate wrapper validates, on the selected profile.
+validate_profile() {
+  local field
+  for field in PERIOD BUFFER RING TARGET PLAYBACK_PRIME PRIME_TRIM \
+               TX_PLAYBACK_PRIME RX_PLAYBACK_PRIME RAVENNA_PLAYBACK_BUFFER SINK_DELAY; do
+    [[ $(p "$field") =~ ^[0-9]+$ ]] || { say "profile $profile_name: $field must be an unsigned integer" >&2; return 1; }
+  done
+  case "$(p STATUS)" in
+    accepted|experimental) ;;
+    *) say "profile $profile_name: STATUS must be accepted or experimental" >&2; return 1 ;;
+  esac
+  local period buffer ring target prime trim tx rx rpb delay
+  period=$(p PERIOD); buffer=$(p BUFFER); ring=$(p RING); target=$(p TARGET)
+  prime=$(p PLAYBACK_PRIME); trim=$(p PRIME_TRIM); tx=$(p TX_PLAYBACK_PRIME)
+  rx=$(p RX_PLAYBACK_PRIME); rpb=$(p RAVENNA_PLAYBACK_BUFFER); delay=$(p SINK_DELAY)
+  if { [ "$period" -ne 48 ] && [ "$period" -ne 96 ]; } ||
+     [ "$buffer" -lt $((period * 2)) ] ||
+     [ "$ring" -lt $((target + 8)) ] ||
+     [ "$target" -lt "$period" ]; then
+    say "profile $profile_name: invalid period/buffer/ring/target relationship" >&2; return 1
+  fi
+  if [ "$prime" -ne 0 ] &&
+     { [ "$prime" -lt "$period" ] || [ "$prime" -gt "$buffer" ] ||
+       [ "$ring" -lt $((target + prime + 4)) ]; }; then
+    say "profile $profile_name: invalid playback-prime relationship" >&2; return 1
+  fi
+  if [ "$trim" -ne 0 ] && [ "$trim" -ne 1 ]; then
+    say "profile $profile_name: PRIME_TRIM must be 0 or 1" >&2; return 1
+  fi
+  if [ "$rpb" -ne 0 ] && { [ "$rpb" -lt $((period * 2)) ] || [ "$rpb" -gt 2048 ]; }; then
+    say "profile $profile_name: invalid RAVENNA_PLAYBACK_BUFFER" >&2; return 1
+  fi
+  if [ "$delay" -lt 48 ] || [ "$delay" -gt 2400 ]; then
+    say "profile $profile_name: SINK_DELAY must be 48..2400 samples" >&2; return 1
+  fi
+  local tx_limit=$buffer
+  [ "$rpb" -ne 0 ] && tx_limit=$rpb
+  local pair value limit
+  for pair in "$tx:$tx_limit" "$rx:$buffer"; do
+    value=${pair%%:*}; limit=${pair##*:}
+    if [ "$value" -ne 0 ] &&
+       { [ "$value" -lt "$period" ] || [ "$value" -gt "$limit" ] ||
+         [ "$ring" -lt $((target + value + 4)) ]; }; then
+      say "profile $profile_name: invalid per-direction playback-prime relationship" >&2; return 1
+    fi
+  done
+}
+
+bridge_arguments() {
+  printf '%s\n' \
+    --period "$(p PERIOD)" \
+    --buffer "$(p BUFFER)" \
+    --ring "$(p RING)" \
+    --target "$(p TARGET)" \
+    --playback-prime "$(p PLAYBACK_PRIME)" \
+    --prime-trim "$(p PRIME_TRIM)" \
+    --tx-playback-prime "$(p TX_PLAYBACK_PRIME)" \
+    --rx-playback-prime "$(p RX_PLAYBACK_PRIME)" \
+    --ravenna-playback-buffer "$(p RAVENNA_PLAYBACK_BUFFER)" \
+    --priority 90 \
+    --seconds 0
+}
+
+# ------------------------------------------------------------ stop and fail
+
+stop_stack() {
+  [ "$stack_stopped" -eq 1 ] && return 0
+  stack_stopped=1
+  set +e
+  if [ -n "$bridge_pid" ] && kill -0 "$bridge_pid" 2>/dev/null; then
+    stage "stopping bridge"
+    kill -INT "$bridge_pid"
+    for _ in 1 2 3 4 5; do
+      kill -0 "$bridge_pid" 2>/dev/null || break
+      sleep 1
+    done
+    kill -TERM "$bridge_pid" 2>/dev/null
+    wait "$bridge_pid" 2>/dev/null
+    sleep 0.5   # let the sampler drain SUMMARY into the journal and the log
+  fi
+  bridge_pid=
+  if [ -n "$daemon_pid" ] && kill -0 "$daemon_pid" 2>/dev/null; then
+    stage "stopping daemon"
+    kill -INT "$daemon_pid"
+    for _ in 1 2 3 4 5; do
+      kill -0 "$daemon_pid" 2>/dev/null || break
+      sleep 1
+    done
+    kill -TERM "$daemon_pid" 2>/dev/null
+    wait "$daemon_pid" 2>/dev/null
+  fi
+  daemon_pid=
+  unload_module
+  set -e
+}
+
+unload_module() {
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    module_loaded || return 0
+    /usr/sbin/rmmod MergingRavennaALSA 2>/dev/null || true
+    sleep 1
+  done
+  module_loaded && say "WARN MergingRavennaALSA is still loaded after five rmmod attempts"
+  return 0
+}
+
+record_failure() {
+  local now
+  now=$(date +%s)
+  {
+    if [ -r "$failures_file" ]; then
+      awk -v now="$now" -v window="$backoff_window_s" '$1 > now - window' "$failures_file"
+    fi
+    echo "$now"
+  } > "$failures_file.tmp"
+  mv -f "$failures_file.tmp" "$failures_file"
+  wc -l < "$failures_file"
+}
+
+fail() {
+  local code=$1; shift
+  say "FAIL $*" >&2
+  stage "failed: $*"
+  stop_stack
+  local count
+  count=$(record_failure)
+  if [ "$count" -ge "$backoff_failures" ]; then
+    stage "backoff: $count failures in $backoff_window_s s, sleeping $backoff_sleep_s s before exit"
+    pause "$backoff_sleep_s"
+  fi
+  exit "$code"
+}
+
+on_signal() {
+  trap '' TERM INT HUP
+  stopping=1
+  stage "stop requested"
+  stop_stack
+  stage "stopped"
+  exit 0
+}
+
+on_exit() {
+  local code=$?
+  if [ "$stopping" -ne 1 ] && [ "$stack_stopped" -ne 1 ]; then
+    stop_stack
+  fi
+  exit "$code"
+}
+
+# ------------------------------------------------------------------- run
+
+cmd_run() {
+  require_root
+  trap on_signal TERM INT HUP
+  trap on_exit EXIT
+
+  install -d -m 755 "$run_dir"
+  install -d -m 700 "$daemon_dir"
+  : > "$recovers_file"
+  rm -f "$last_bridge_file"
+
+  load_conf || fail 10 "configuration"
+  select_profile || fail 10 "configuration"
+  validate_profile || fail 10 "configuration"
+  stage "profile $profile_name ($(p STATUS), $(p MEASURED)): $(p DESCRIPTION)"
+
+  # 1. Refuse over a running candidate or any foreign stack process.
+  if candidate_present; then
+    fail 20 "a candidate measurement is running (ready file or wrapper present)"
+  fi
+  local process_name
+  for process_name in ptp4l aes67-daemon alsaloop; do
+    if pgrep -x "$process_name" >/dev/null; then
+      fail 20 "$process_name is already running"
+    fi
+  done
+  if bridge_running; then
+    fail 20 "usb16x16-rt-bridge is already running"
+  fi
+  if module_loaded; then
+    stage "MergingRavennaALSA left loaded by a previous session, unloading"
+    unload_module
+    module_loaded && fail 21 "MergingRavennaALSA is loaded and cannot be removed"
+  fi
+
+  local required_path
+  for required_path in "$daemon_binary" "$module_binary" "$bridge_binary" "$original_config" "$original_status"; do
+    [ -r "$required_path" ] || fail 24 "missing required artifact: $required_path"
+  done
+  [ "$(sha256_of "$daemon_binary")" = "$expected_daemon_sha256" ] || fail 25 "AES67 daemon hash mismatch"
+  [ "$(sha256_of "$module_binary")" = "$expected_module_sha256" ] || fail 26 "RAVENNA module hash mismatch"
+  if [ "$(sha256_of "$bridge_binary")" != "$expected_bridge_sha256" ] ||
+     [ "$(stat -c '%U:%G:%a' "$bridge_binary")" != root:root:755 ]; then
+    fail 27 "Phase 4 bridge hash or ownership mismatch"
+  fi
+  local original_config_sha256 original_status_sha256
+  original_config_sha256=$(sha256_of "$original_config")
+  original_status_sha256=$(sha256_of "$original_status")
+  if [ "$(grep -c '"delay": 576' "$original_status")" -ne 2 ]; then
+    fail 24 "protected status.json does not carry exactly two 576-sample sinks"
+  fi
+
+  # Wait, do not fail, for the USB host and the AoIP link.
+  local waited=0
+  while [ "$(udc_state)" != configured ] || [ "$(udc_speed)" != high-speed ] ||
+        [ "$(systemctl is-active usb-16x16.service)" != active ] ||
+        [ "$(eth0_carrier)" != 1 ] || [ "$(eth0_speed)" != 1000 ]; do
+    if [ $((waited % 60)) -eq 0 ]; then
+      stage "waiting for USB host and AoIP link: udc=$(udc_state)/$(udc_speed) usb-16x16=$(systemctl is-active usb-16x16.service) eth0 carrier=$(eth0_carrier) speed=$(eth0_speed) (${waited}s)"
+    fi
+    pause 5
+    waited=$((waited + 5))
+  done
+  [ "$waited" -gt 0 ] && stage "USB host and AoIP link present after ${waited}s"
+
+  # 2. Private daemon configuration with the profile's sink delay.
+  local sink_delay
+  sink_delay=$(p SINK_DELAY)
+  sed "s|\"status_file\": \"[^\"]*\"|\"status_file\": \"$daemon_dir/status.json\"|" \
+    "$original_config" > "$daemon_dir/daemon.conf"
+  sed "s/\"delay\": 576/\"delay\": $sink_delay/g" "$original_status" > "$daemon_dir/status.json"
+  local sink_id
+  for sink_id in 0 1; do
+    python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); keys=("name","io","delay","use_sdp","source","sdp","ignore_refclk_gmid","map"); json.dump({k:d["sinks"][int(sys.argv[3])][k] for k in keys},open(sys.argv[2],"w"))' \
+      "$daemon_dir/status.json" "$daemon_dir/sink-$sink_id.json" "$sink_id" ||
+      fail 24 "could not extract sink $sink_id from status.json"
+  done
+
+  # 3. Module, daemon, API.
+  /usr/sbin/insmod "$module_binary" || fail 21 "insmod failed"
+  stage "insmod"
+  systemd-cat -t aes67-daemon -p info "$daemon_binary" -c "$daemon_dir/daemon.conf" &
+  daemon_pid=$!
+  stage "daemon started pid $daemon_pid"
+
+  local api_ready=0 attempt
+  for attempt in $(seq 1 30); do
+    if curl -fsS "$api/api/ptp/status" > "$daemon_dir/ptp-status.json" 2>/dev/null; then
+      api_ready=1
+      break
+    fi
+    kill -0 "$daemon_pid" 2>/dev/null || break
+    pause 1
+  done
+  [ "$api_ready" -eq 1 ] || fail 28 "AES67 daemon API did not become ready"
+  stage "daemon API ready in ${attempt}s"
+
+  # 4. PTP lock to the expected grandmaster.
+  local ptp_locked=0
+  for attempt in $(seq 1 90); do
+    curl -fsS "$api/api/ptp/status" > "$daemon_dir/ptp-status.json" 2>/dev/null || true
+    if grep -Eq '"status"[[:space:]]*:[[:space:]]*"locked"' "$daemon_dir/ptp-status.json" &&
+       grep -qi "$expected_gmid" "$daemon_dir/ptp-status.json"; then
+      ptp_locked=1
+      break
+    fi
+    kill -0 "$daemon_pid" 2>/dev/null || break
+    pause 1
+  done
+  [ "$ptp_locked" -eq 1 ] || fail 29 "PTP did not lock to expected GMID $expected_gmid"
+  stage "ptp locked in ${attempt}s"
+
+  # 5. Sinks, then readback. The daemon does not retry rejected sinks itself.
+  for sink_id in 0 1; do
+    curl -fsS -X PUT "$api/api/sink/$sink_id" \
+      -H 'Content-Type: application/json' \
+      --data-binary "@$daemon_dir/sink-$sink_id.json" \
+      > "$daemon_dir/sink-$sink_id-put.json" 2>/dev/null ||
+      fail 30 "PUT /api/sink/$sink_id failed"
+  done
+  curl -fsS "$api/api/sinks" > "$daemon_dir/sinks-readback.json" 2>/dev/null || fail 30 "GET /api/sinks failed"
+  if [ "$(grep -o "\"delay\"[[:space:]]*:[[:space:]]*$sink_delay\b" "$daemon_dir/sinks-readback.json" | wc -l)" -ne 2 ]; then
+    fail 30 "sink delay readback did not contain two $sink_delay-sample sinks"
+  fi
+  stage "sinks applied, delay $sink_delay"
+
+  # 6. Bridge, through the sampler: everything to the tmpfs log, rare lines
+  #    and one BRIDGE line in N to the journal.
+  local -a arguments
+  mapfile -t arguments < <(bridge_arguments)
+  stage "bridge starting: ${arguments[*]}"
+  "$bridge_binary" "${arguments[@]}" \
+    > >(exec awk -v every="$journal_bridge_every" -v logfile="$bridge_log" \
+                 -v cap=$((bridge_log_cap_mb * 1024 * 1024)) \
+                 -v recovers="$recovers_file" -v last="$last_bridge_file" '
+      {
+        print > logfile; fflush(logfile)
+        bytes += length($0) + 1
+        if (bytes > cap) {
+          close(logfile)
+          system("mv -f \"" logfile "\" \"" logfile ".1\"")
+          bytes = 0
+        }
+      }
+      /^BRIDGE / {
+        n++
+        print > last; close(last)
+        if ((n - 1) % every == 0) { print; fflush() }
+        next
+      }
+      /^RECOVER / { print "1" >> recovers; close(recovers); print; fflush(); next }
+      { print; fflush() }
+    ') 2>&1 &
+  bridge_pid=$!
+
+  pause 4
+  kill -0 "$bridge_pid" 2>/dev/null || fail 31 "Phase 4 bridge exited during startup"
+  grep -q '^NEGOTIATED ' "$bridge_log" || fail 32 "Phase 4 bridge did not report negotiated ALSA parameters"
+  stage "bridge negotiated: $(grep -m1 '^NEGOTIATED ' "$bridge_log" | cut -c12-)"
+  stage "running"
+
+  # 7. Supervise. Any exit of the daemon or the bridge ends the run non-zero.
+  local -a recover_window
+  local tick=0 recovers_now recovers_then cleared=0 started=$SECONDS
+  for _ in $(seq 0 60); do recover_window+=(0); done
+  while true; do
+    pause 1
+    kill -0 "$bridge_pid" 2>/dev/null || {
+      set +e; wait "$bridge_pid"; local bridge_status=$?; set -e
+      bridge_pid=
+      fail 34 "Phase 4 bridge exited with status $bridge_status"
+    }
+    kill -0 "$daemon_pid" 2>/dev/null || { daemon_pid=; fail 33 "AES67 daemon exited"; }
+    recovers_now=$(wc -l < "$recovers_file")
+    recovers_then=${recover_window[$((tick % 61))]}
+    recover_window[$((tick % 61))]=$recovers_now
+    tick=$((tick + 1))
+    if [ $((recovers_now - recovers_then)) -gt "$recover_limit_per_minute" ]; then
+      fail 35 "more than $recover_limit_per_minute direction restarts in 60 s ($((recovers_now - recovers_then)))"
+    fi
+    if [ "$cleared" -eq 0 ] && [ $((SECONDS - started)) -ge "$stable_after_s" ]; then
+      rm -f "$failures_file"
+      cleared=1
+      stage "stable for ${stable_after_s}s, failure history cleared"
+    fi
+    if [ "$(sha256_of "$original_config")" != "$original_config_sha256" ] ||
+       [ "$(sha256_of "$original_status")" != "$original_status_sha256" ]; then
+      fail 37 "protected AES67 prototype config changed unexpectedly"
+    fi
+  done
+}
+
+# --------------------------------------------------------------- cleanup
+
+# ExecStopPost. The unit's cgroup has already been killed; this reaps
+# anything that escaped and unloads the module, but only when no candidate
+# measurement owns the stack.
+cmd_cleanup() {
+  require_root
+  if candidate_present; then
+    say "cleanup: candidate measurement present, leaving the stack alone"
+    exit 0
+  fi
+  local pid
+  for pid in $(pgrep -f "$bridge_pattern"; pgrep -x aes67-daemon); do
+    if grep -q "/$unit_name.service" "/proc/$pid/cgroup" 2>/dev/null; then
+      kill -TERM "$pid" 2>/dev/null || true
+    fi
+  done
+  sleep 1
+  if ! bridge_running && ! pgrep -x aes67-daemon >/dev/null; then
+    unload_module
+  fi
+  [ -d "$run_dir" ] && [ -w "$run_dir" ] && stage "stopped (cleanup)"
+  exit 0
+}
+
+# ---------------------------------------------------------------- status
+
+bridge_field() { printf '%s\n' "$1" | tr ' ' '\n' | awk -F= -v k="$2" '$1 == k {print $2; exit}'; }
+
+cmd_status() {
+  local active since
+  active=$(systemctl show -p ActiveState --value "$unit_name" 2>/dev/null || echo unknown)
+  since=$(systemctl show -p ActiveEnterTimestamp --value "$unit_name" 2>/dev/null || true)
+  say "$unit_name: $active${since:+ since $since}"
+  if load_conf 2>/dev/null && select_profile 2>/dev/null; then
+    say "profile: $profile_name ($(p STATUS), cover: $(p COVER), measured: $(p MEASURED))"
+  else
+    say "profile: configuration unreadable ($conf_file)"
+  fi
+  if [ -r "$stage_file" ]; then
+    local stamp text
+    read -r stamp text < "$stage_file"
+    say "stage: $text ($(( $(date +%s) - stamp ))s ago)"
+  else
+    say "stage: none"
+  fi
+  if [ -r "$last_bridge_file" ] && [ -s "$last_bridge_file" ]; then
+    local line
+    line=$(cat "$last_bridge_file")
+    say "bridge: ppm=$(bridge_field "$line" ppm) tx_queue=$(bridge_field "$line" tx_queue) rx_queue=$(bridge_field "$line" rx_queue) tx_qfloor=$(bridge_field "$line" tx_qfloor) rx_qfloor=$(bridge_field "$line" rx_qfloor) tx_pullmax=$(bridge_field "$line" tx_pullmax) tx_restarts=$(bridge_field "$line" tx_restarts) rx_restarts=$(bridge_field "$line" rx_restarts) ($(( $(date +%s) - $(stat -c %Y "$last_bridge_file") ))s ago)"
+  else
+    say "bridge: no BRIDGE line yet"
+  fi
+  if [ -r "$recovers_file" ]; then
+    say "recoveries this session: $(wc -l < "$recovers_file")"
+  fi
+  if [ -r "$failures_file" ]; then
+    say "recent failures: $(wc -l < "$failures_file") in the last ${backoff_window_s}s"
+  fi
+  local ptp sinks
+  if ptp=$(curl -fsS -m 2 "$api/api/ptp/status" 2>/dev/null); then
+    say "ptp: $(printf '%s' "$ptp" | tr -d '\n' | tr -s ' ')"
+  else
+    say "ptp: daemon API not answering"
+  fi
+  if sinks=$(curl -fsS -m 2 "$api/api/sinks" 2>/dev/null); then
+    say "sinks: delay $(printf '%s' "$sinks" | grep -o '"delay"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*$' | paste -sd/ -)"
+  fi
+  say "udc: $(udc_state) $(udc_speed)"
+  say "usb-16x16.service: $(systemctl is-active usb-16x16.service 2>/dev/null)"
+  say "eth0: carrier=$(eth0_carrier) speed=$(eth0_speed)"
+  say "module: $(module_loaded && echo loaded || echo not-loaded)"
+}
+
+# -------------------------------------------------------------- profiles
+
+cmd_profiles() {
+  load_conf || exit 1
+  local selected=${conf[PROFILE]-}
+  local name
+  for name in $(profile_names); do
+    profile_name=$name
+    profile_key=$(profile_key_of "$name")
+    local mark=' '
+    [ "$name" = "$selected" ] && mark='*'
+    say "$mark $name: $(p STATUS), cover: $(p COVER), measured: $(p MEASURED)"
+    say "    $(p DESCRIPTION)"
+    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY)"
+  done
+}
+
+cmd_switch_profile() {
+  require_root
+  [ "$#" -eq 1 ] || { say "usage: $0 switch-profile NAME" >&2; exit 2; }
+  local name=$1
+  load_conf || exit 1
+  select_profile "$name" || exit 1
+  validate_profile || exit 1
+  [ "$(grep -c '^PROFILE=' "$conf_file")" -eq 1 ] || { say "$conf_file must carry exactly one PROFILE= line" >&2; exit 1; }
+  local temporary
+  temporary=$(mktemp "$conf_file.XXXXXX")
+  sed "s/^PROFILE=.*/PROFILE=$name/" "$conf_file" > "$temporary"
+  if [ "$(grep -c '^PROFILE=' "$temporary")" -ne 1 ] || ! grep -qx "PROFILE=$name" "$temporary"; then
+    rm -f "$temporary"
+    say "profile rewrite failed verification, $conf_file untouched" >&2
+    exit 1
+  fi
+  chmod 644 "$temporary"
+  mv -f "$temporary" "$conf_file"
+  say "PROFILE=$name written to $conf_file ($(p STATUS), cover: $(p COVER), measured: $(p MEASURED))"
+  if [ "$(systemctl is-active "$unit_name" 2>/dev/null)" = active ]; then
+    say "restarting $unit_name: a profile switch restarts the stack, audio is gone for about a minute"
+    systemctl restart "$unit_name"
+  else
+    say "$unit_name is not active; the profile takes effect on the next start"
+  fi
+}
+
+# ------------------------------------------------------------------ main
+
+command=${1:-run}
+[ "$#" -gt 0 ] && shift
+case "$command" in
+  run) cmd_run ;;
+  cleanup) cmd_cleanup ;;
+  status) cmd_status ;;
+  profiles) cmd_profiles ;;
+  switch-profile) cmd_switch_profile "$@" ;;
+  *)
+    say "usage: $0 {run|cleanup|status|profiles|switch-profile NAME}" >&2
+    exit 2
+    ;;
+esac

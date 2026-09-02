@@ -1,0 +1,26 @@
+[Unit]
+Description=USB 16x16 AES67 bridge (Phase 4)
+After=network-online.target usb-16x16.service
+Wants=network-online.target
+# Deliberately no Requires= on usb-16x16.service: an AES67 failure must
+# never be able to stop or restart the USB gadget. The supervisor waits for
+# the gadget to be configured instead.
+# No start limit: a Mac asleep overnight must not leave the service dead in
+# the morning. The supervisor backs off on its own after three failures in
+# five minutes.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/usb16x16-aes67-supervisor run
+ExecStopPost=/usr/local/sbin/usb16x16-aes67-supervisor cleanup
+Restart=on-failure
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=25
+SyslogIdentifier=usb16x16-aes67
+# The supervisor reads /etc/usb16x16/aes67.conf itself, with validation;
+# no EnvironmentFile= so a bad line is a logged refusal, not a silent skip.
+
+[Install]
+WantedBy=multi-user.target
