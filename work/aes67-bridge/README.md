@@ -99,7 +99,9 @@ sudo systemctl enable usb16x16-aes67
   second, `HOST_STORM_RECOVERS_PER_SECOND`) while the USB capture frame
   count in the BRIDGE line has stopped moving. The unplug measured 33-185
   in the first second, and `/sys/class/udc/*/state` never changed, so that
-  file is not the signal. On a storm the supervisor stops the bridge only,
+  file is not the signal, and during a storm the bridge stops writing its
+  BRIDGE line, so a storm sustained for three seconds counts on its own).
+  On a storm the supervisor stops the bridge only,
   keeps the daemon and the module up, logs `STAGE host absent`, and waits
   for a `dwc2` enumeration line in the kernel log or `HOST_RETRY_SECONDS`
   (300), then starts the bridge again. A storm with USB input still moving

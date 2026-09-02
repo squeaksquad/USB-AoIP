@@ -454,7 +454,7 @@ cmd_run() {
   #    stack fault: the bridge alone stops and waits for the host.
   local -a recover_window
   local tick=0 recovers_now recovers_then cleared=0 started=$SECONDS
-  local recovers_prev=0 tx_input_prev= tx_input_now tx_qn_prev= tx_qn_now frozen=0 storm_pending=0 storm_size=0
+  local recovers_prev=0 tx_input_prev= tx_input_now tx_qn_prev= tx_qn_now frozen=0 storm_pending=0 storm_size=0 storm_seconds=0
   for _ in $(seq 0 60); do recover_window+=(0); done
   while true; do
     pause 1
@@ -477,16 +477,24 @@ cmd_run() {
     fi
     # A storm (many RECOVERs in one second) holds the 60 s rule for a few
     # seconds while the next BRIDGE lines show whether USB input is moving.
+    # Measured 2026-09-02: during a ring-full storm the bridge stops writing
+    # its BRIDGE line, so the frozen check may never get a new line; a storm
+    # sustained for three seconds is the host gone on its own (with a host
+    # present the largest burst seen is 8 in 1.1 s, cold-boot cascades are
+    # 6 in 60 s).
     if [ $((recovers_now - recovers_prev)) -ge "$host_storm_per_second" ]; then
       storm_pending=3
+      storm_seconds=$((storm_seconds + 1))
       storm_size=$((recovers_now - recovers_prev))
+    else
+      storm_seconds=0
     fi
     recovers_prev=$recovers_now
     if [ "$storm_pending" -gt 0 ]; then
-      if [ "$frozen" -ge 1 ]; then
-        host_absent "$storm_size"
+      if [ "$frozen" -ge 1 ] || [ "$storm_seconds" -ge 3 ]; then
+        host_absent "$storm_size" "$storm_seconds" "$frozen"
         recover_window=(); for _ in $(seq 0 60); do recover_window+=(0); done
-        tick=0; recovers_prev=0; tx_input_prev=; tx_qn_prev=; frozen=0; storm_pending=0
+        tick=0; recovers_prev=0; tx_input_prev=; tx_qn_prev=; frozen=0; storm_pending=0; storm_seconds=0
         continue
       fi
       storm_pending=$((storm_pending - 1))
@@ -574,9 +582,9 @@ stop_bridge() {
 # would load and unload the module every minute for as long as the host is
 # away.
 host_absent() {
-  local storm=$1
+  local storm=$1 seconds=${2:-1} frozen=${3:-0}
   host_absences=$((host_absences + 1))
-  stage "host absent: $storm recoveries in one second with USB input frozen (episode $host_absences); stopping the bridge and waiting"
+  stage "host absent: $storm recoveries in one second, storm ${seconds}s, USB input frozen ${frozen}s (episode $host_absences); stopping the bridge and waiting"
   stop_bridge
   local since waited=0 reason=
   since=$(date +%s)
