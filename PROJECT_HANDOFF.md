@@ -1525,6 +1525,55 @@ to scatter by tens of frames while staying above 144. Three more runs, and
 `tx_qfloor` above 144 in all of them, is the acceptance test this document
 now asks for.
 
+#### ACCEPTED: the combined point, four runs under load, TX floor above the skip in all of them
+
+Three repeats of `031504Z`, identical configuration: `--target 128`,
+RAVENNA playback buffer 384, TX prime 288, RX prime 144, buffer 192, sink
+delay 576, 600 s, 800 impulses each, run back to back on 2026-09-02.
+
+| run | median | samples | score | spread | TX / RX overshoot | `tx_qfloor` | `rx_qfloor` | TX under a period | skips | restarts |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `031504Z` | 29.146 ms | 1399 | 0.947 | 9 | 61 / 13 | **196** | 60 | 0 | 5 | 0 |
+| `034616Z` | 29.146 ms | 1399 | 0.946 | 10 | 61 / 13 | **197** | 61 | 0 | 10 | 0 |
+| `035724Z` | 29.146 ms | 1399 | 0.967 | 9 | 61 / 13 | **193** | 61 | 0 | 6 | 0 |
+| `040831Z` | 28.146 ms | 1351 | 0.945 | 9 | 61 / 13 | **158** | 61 | 0 | 5 | 0 |
+
+**Acceptance as this document now defines it: four 800-impulse runs, zero
+failures, and `tx_qfloor` above 144 in every one.** Passed. 26 skips
+survived across the four runs, none of them by phase: TX never once
+sampled under a period.
+
+**The prime overshoot has become deterministic.** At target 192 it drew
+45/61/93 per direction run to run; at target 128 it read 61 on TX and 13
+on RX in all four runs. Whatever phase relationship the lower threshold
+lands on, it lands on it repeatably. That removes one of the two sources
+of run-to-run scatter.
+
+**The remaining scatter is the differential's resting level.** Run
+`040831Z` settled with TX's depth mean at 415 against 450-453 in the other
+three, and RX correspondingly higher. That is the free intercept of the
+rate regression landing 37 frames differently, and it shows up twice: TX's
+floor at 158 rather than 193-197, and the median one 48-sample step lower
+at 1351. So the worst observed TX margin over the skip is 14 frames, the
+typical margin about 50, and the latency is 29.146 ms three times in four.
+Quote 29.1 ms and a floor of 158-197.
+
+**Against the stopgap:** 3.6 ms faster, spread 9-10 samples against 16,
+score 0.95 against 0.31, and no 12 ms bimodal defect. Against the fastest
+Phase 4 point measured (24.479 ms at target 128 alone): 4.7 ms slower, with
+the failure mode covered instead of left to phase.
+
+**What would widen the worst case.** TX prime 336 pins the 384 queue full
+(336 + 61 = 397 > 384), which takes the floor ceiling to 240 and removes the
+overshoot's influence on TX's floor entirely; the differential level would
+still move it. About +1 ms. Not measured. A differential bias in the
+estimator would address the level itself; small, and now the only scatter
+left.
+
+**This is the point to deploy.** Deployment does not exist and must be
+designed as its own piece of work; the wrapper is time-limited to 1200 s by
+design. Nothing here changes the USB baseline.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
@@ -1532,7 +1581,7 @@ now asks for.
 | `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96, RAVENNA playback 384 | 015059Z, 800 impulses, clean, `tx_qfloor` 122 | 30.146 ms | 0.944 | 10 samples |
 | `96/192/768/128` TX 192 / RX 96, **target 128** | **025906Z, 800 impulses, clean, `tx_qfloor` 97, `rx_qfloor` 61** | **24.479 ms** | 0.932 | 10 samples |
-| `96/192/768/128` target 128, RAVENNA playback 384, TX 288 / RX 144 | **031504Z, 800 impulses, clean, `tx_qfloor` 196, first point with skip cover** | **29.146 ms** | 0.947 | 9 samples |
+| `96/192/768/128` target 128, RAVENNA playback 384, TX 288 / RX 144 | **ACCEPTED: 031504Z, 034616Z, 035724Z, 040831Z, 800 impulses each, 0 failures, `tx_qfloor` 158-197** | **29.146 ms (x3), 28.146 ms (x1)** | 0.945-0.967 | 9-10 samples |
 | `96/192/768/192` prime 96 | **211118Z, 600 s soak PASSED, ACCEPTED** | **26.979 ms** | **0.988** | **0 samples** |
 | `96/288/768/192` TX 288 / RX 96 | **4 runs, 800 impulses, 0 failures, tx_qfloor 144 invariant** | **29.979-30.979 ms** | ~0.92 | 8-10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **221301Z, 600 s soak PASSED, ACCEPTED** | **28.729 ms** | 0.924 | 8 samples |
