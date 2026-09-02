@@ -1591,7 +1591,7 @@ unchanged. The service is enabled and running profile `safe`.
 | 1. cold boot x3 | 61 s from kernel boot to `running` in all three, no wait stage, enabled unit, no intervention; **not clean at the bridge**, below |
 | 6. soak | called a pass at 2 h 25 min by the user: 418 M frames, zero restarts, 3 RECOVERs (the startup pair plus one 4.8 ms stall), 88 skips survived, zero drops, `tx_qfloor` 189 before the stall and 122 after, `rx_qfloor` 13, ppm -16.3 |
 | 4. USB unplug/replug | pass; revised supervisor: host absent 3 s after the storm, bridge alone waits, audio 8.6 s after re-enumeration, no module churn (below). First revision: 33 RECOVERs in 0.85 s at unplug, rule tripped 1.6 s later, stack restarted, audio back 35 s after replug, no intervention; the UDC state never left `configured/high-speed`, so the host-presence gate cannot see an unplug (below) |
-| 5 | deferred: the second Mac never enumerated the gadget; run it when the first Mac is free |
+| 5. Mac asleep | pass, five-minute form: host absent 3 s after suspend, quiet wait, no restart, audio back at the first retry after wake (below); the hour is the same path repeated |
 
 **Two service defects found and fixed during acceptance.** The first start
 failed its 4 s NEGOTIATED check because mawk buffers stdin reads on a pipe;
@@ -1901,6 +1901,22 @@ unloaded. Audio 8.6 s after the enumeration, against 35 s and a full
 stack restart before. Item 4's contract is therefore met with a better
 shape, and the asleep-Mac test can run without churn whatever suspend
 does to the UDC state.
+
+**MEASURED: Mac asleep five minutes (item 5, short form).** Baseline
+22:10:19 local, uptime 18739. Twelve seconds later the storm and `host
+absent` (episode 2, 38 recoveries in one second, storm 3 s); bridge
+stopped, daemon and module kept, four quiet wait lines, UDC state
+`configured/high-speed` throughout. **Suspend looks exactly like an
+unplug to the Pi, and wake produces no enumeration line**: macOS resumes
+the device without a bus reset, so the `dwc2` signal cannot see a wake.
+The 300 s retry at 19056 fired before the Mac was awake and went back to
+waiting (episode 3); the next retry at 19366 found the awake Mac
+streaming again with no re-enumeration: `running` at 19369, USB input
+flowing, zero RECOVERs, zero service restarts, module never unloaded.
+So a sleeping host costs nothing but one bridge start and a 3 s storm
+per retry, and audio after wake returns within the retry interval plus
+about 8 s. Staged revision: retry 60 s, and the sampler forwards only
+the first 20 RECOVER lines of a storm to the journal.
 
 **The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
 playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
