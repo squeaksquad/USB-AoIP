@@ -1,236 +1,190 @@
 # Next-session pickup prompt
 
 Paste the block below into a fresh Codex or Claude Code session to resume work.
-It points at `PROJECT_HANDOFF.md` and `work/SAP_DISCOVERY_FINDING.md`, which are
-authoritative where they conflict with this summary.
+It points at `PROJECT_HANDOFF.md`, `work/aes67-bridge/DEPLOYMENT_PLAN.md` and
+`work/SAP_DISCOVERY_FINDING.md`, which are authoritative where they conflict
+with this summary.
 
-Rewritten 2026-09-01 (evening) after the mmap reorder landed, the ring/queue
-split was tuned, and the remaining defect was traced to the initial settle.
+Rewritten 2026-09-02 after the pull-burst instrumentation found the RAVENNA
+packet skip, the combined operating point was accepted on four loaded runs, and
+the deployment plan was written.
 
 ---
 
 ```text
 Raspberry Pi 5 USB 16x16 / AES67 bridge. Repo: ~/Development/USB 16x16
-(github.com/squeaksquad/usb-16x16-aes67, main).
+(github.com/squeaksquad/usb-16x16-aes67, main, pushed and clean).
 
-Read PROJECT_HANDOFF.md first. The Phase 4 sections were substantially rewritten
-on 2026-09-01; start at "Phase 4 implementation status" and read forward through
-"ROOT CAUSE: the initial settle is a lottery".
+Read work/aes67-bridge/DEPLOYMENT_PLAN.md first; it is the task. Then read
+PROJECT_HANDOFF.md from "ACCEPTED: the combined point" backwards through
+"MEASURED: the RAVENNA device skips one packet about every minute". Older
+Phase 4 sections are chronological and several carry retraction notes at the
+top; trust the note, keep the measurement.
 
-NOTHING IS BROKEN AND NOTHING IS HALF-FINISHED. The previous session's assigned
-fix landed, was verified, and is committed. What is open is a decision and a
-design problem, not a repair.
+NOTHING IS BROKEN. Phase 4 is accepted. The task is deployment, and the plan
+says to start by asking the seven decisions listed in it, in one batch.
 
-WHAT IS DONE AND CONFIRMED
-1. The XRUN's original cause is fixed. render_to_playback now calls
-   snd_pcm_mmap_begin BEFORE resampler.render and renders exactly what ALSA
-   granted. tx_dropped and rx_dropped have read 0 in every run since. TX went
-   from an impossible exact 1.000000000 to tracking its commanded ppm with RX
-   mirroring it. There is no rate bug and no servo bug; three sessions thought
-   otherwise and all three were wrong.
-2. The pipeline is instrumented end to end: capture backlog, elastic ring,
-   playback queue. Counters are behaviour-free and in SUMMARY plus 1 Hz
-   telemetry.
-3. Latency went 43.313 -> ~28 ms by tuning the prime depth.
+WHAT IS ACCEPTED (2026-09-02)
+Bridge 0254348c, target 128, buffer 192 with RAVENNA playback 384, TX prime
+288, RX prime 144, sink delay 576. Four 600 s runs at 800 impulses:
+29.146 ms x3 and 28.146 ms x1, score 0.945-0.967, spread 9-10 samples, zero
+restarts, tx_qfloor 158/193/196/197, rx_qfloor 60-61. That is 3.6 ms under
+the stopgap's re-baselined 32.729 ms with a third of its spread.
 
-THE OPEN DEFECT - read this before proposing anything
-Total pipeline depth is set at prime time and then CONSERVED, because the
-playback queue has no restoring force. The servo regresses ring+queue; the
-control law regulates the ring alone. Measured three separate ways.
+THE FAILURE MODE, MEASURED AND COVERED
+The RAVENNA device's steady pull runs about 15 ppm below its long-term rate
+and catches up by skipping one packet every 56-69 s. Each skip is a 144-frame
+pull (three packets) inside one 2 ms bridge wakeup gap, and it moves about
+40 frames of depth from TX to RX with the sum conserved. A skip that lands at
+the minimum of TX's 96-frame push sawtooth needs 144 frames in hand; every
+earlier XRUN was that. The accepted point keeps TX's sampled floor above 144
+in all four runs. RX's consumer never skips and RX has never failed.
 
-Applied to startup that means: whatever depth a run loses in its first ~30 s is
-lost for the life of the process. Two runs of one configuration, priming
-identically to TX depth 480:
+FOUR EXPLANATIONS WERE RETRACTED ON THE WAY, EACH BY MEASUREMENT. Do not
+re-propose them: the "startup lottery" (the 1 Hz tx_queue print is a
+stroboscope on 1 ms packet pulls; both runs toggled 285/237); a slow
+restoring force on depth (there is no leak, and a slow loop cannot cancel a
+periodic 48-frame skip); the live sink-delay lever (a live PUT changes the
+round trip by up to 2.3 ms non-monotonically and the bridge's depth never
+moves; 144 at startup lands on the same sample as 144 live); the earlier
+three in the handoff (CoreAudio teardown, sustained load, prime state).
 
-  224517Z  shed 48 frames by t=30  ->  tx_qfloor 89   ->  XRUN at 563 s
-  225802Z  shed  5 frames by t=30  ->  tx_qfloor 126  ->  clean 600 s
+INSTRUMENTS THAT NOW EXIST, ALL BEHAVIOUR-FREE, ALL IN bridge.log
+tx/rx_pullmax and _pullhist (device consumption between wakeups, 48-frame
+bins), tx/rx_gapmax_us (longest wakeup gap), tx/rx_dmean and _qmean
+(per-second means of ring+queue and queue; the conservation test),
+tx/rx_caphist (capture backlog per packet bin), DEPTHSTEP lines when the
+depth floor drops by a packet, RECOVER lines with the last sampled queue and
+gap, and SUMMARY *_before_recovery floors. On a failed run read floors from
+those, never from the plain SUMMARY floors, which the recovery cascade
+contaminates.
 
-So a Phase 4 point's entire safety margin is decided in its first thirty
-seconds by a transient nothing regulates. tx_qfloor scatters 89/104/124/126
-across identical runs. About one run in four lands low enough to fail.
+KNOBS THAT NOW EXIST
+Bridge: --ravenna-playback-buffer (per-PCM request; 0 = --buffer).
+Wrapper positionals: seconds period buffer ring target prime trim txprime
+rxprime ravenna_playback_buffer sink_delay. Shim env:
+USB16X16_PHASE4_{BUFFER,RING,TARGET,PLAYBACK_PRIME,TX_PLAYBACK_PRIME,
+RX_PLAYBACK_PRIME,RAVENNA_PLAYBACK_BUFFER}_FRAMES, USB16X16_PHASE4_SINK_DELAY,
+USB16X16_READY_MAX_SPREAD_SAMPLES (readiness spread limit; the shim sets 9
+because buffer 192 has an 8-sample bimodality and the old limit of 2 passed
+only by luck). work/aes67-candidate/sweep-phase4-sink-delay.sh runs one
+candidate and rewrites sinks live between points.
 
-THREE EXPLANATIONS WERE FALSIFIED BY MEASUREMENT before this one, and each cost
-a run: CoreAudio teardown (clean runs survived 441 s and 228 s post-teardown),
-sustained load (a clean 800-impulse run exists), and prime state (both runs
-prime identically). Do not re-propose them.
+MEASUREMENT STANDARDS
+800 impulses (200 s) for anything you intend to trust; 40 impulses is a ten
+second window. Never compare a 40-impulse score against an 800-impulse one.
+Report tx_qfloor and tx_pullmax alongside latency. Acceptance for any new
+point: four 800-impulse runs, zero failures, tx_qfloor above 144 in all.
+Latency at buffer 192 moves in 48-sample steps run to run; quote the mode
+and the range, not one run.
 
-THE REAL FIX is a restoring force on the playback queue. THE NAIVE VERSION HAS
-ALREADY BEEN TRIED AND FAILED CATASTROPHICALLY: regulating the queue to target
-while letting the ring float drained the ring to the interpolator's 8-frame
-reserve and XRUNed at 22 s against 331 s for the original law. Any correct
-version must act slowly and must never draw the ring below its reserve. The
-ring IS the jitter reservoir; that is not negotiable.
+HOW TO WORK ON THIS - EARNED THE HARD WAY
+1. INSTRUMENT BEFORE YOU FIX. Every real advance came from a ten-line
+   counter. The pull-burst counter found in 9 s what four sessions missed.
+2. DO NOT DO ALGEBRA ON AGGREGATES. Put a counter at the exact point.
+3. SEPARATE THE OBSERVATION FROM THE EXPLANATION. Retract explanations
+   freely; retract measurements only when the measurement is shown flawed.
+4. A 1 Hz PRINT OF A SAWTOOTH IS A STROBE. Use the per-iteration floors and
+   the per-second means; the print is for eyeballing only.
+5. SUSPICIOUSLY ROUND NUMBERS ARE A TELL, AND SO ARE MULTIPLES OF 48.
+   48 frames is one AES67 packet and one USB frame.
+6. ENUMERATE EVERY PIN BEFORE ASKING FOR AN INSTALL. Bridge hash in the
+   wrapper and the installer; wrapper hash in the installer. Changing the
+   wrapper changes its own hash.
+7. BUDGET THE USER'S PASSWORD. Batch, verify staged hashes, then give one
+   command.
+8. CHECK THE PROVENANCE OF ANY NUMBER YOU COMPARE AGAINST.
+9. NEVER BUILD ON THE PI WHILE A RUN IS MEASURING.
+10. GUARD EVERY SCRIPTED EDIT AND CHAIN THE COMMIT BEHIND IT.
+11. LONG RUNS: the tool's background timeout is shorter than a run. Launch
+    with python3 subprocess.Popen(start_new_session=True) to a log file,
+    watch with a polling Monitor that exits on a line starting with exit=,
+    and make the launcher print that marker on its own line. A killed
+    Mac-side run leaves the Pi wrapper running to its limit and it cannot be
+    stopped without the password.
+12. A pgrep -f FOR THE BRIDGE INSIDE AN ssh COMMAND MATCHES THE ssh SHELL
+    ITSELF. Anchor it: pgrep -f "^/usr/local/libexec/usb16x16-rt-bridge".
 
-MITIGATION UNDER TEST: raising TX's prime so a bad draw is survivable. Results
-are in PROJECT_HANDOFF.md. This does not fix the lottery, it only makes losing
-survivable, and it costs latency.
-
-MEASUREMENT STANDARDS - THE PREVIOUS SESSION GOT THIS WRONG
---impulses 40 at 250 ms spacing measures a TEN SECOND window. Soaks run with
-40 impulses carried 10 s of impulse traffic in 600 s and were called "loaded".
-They were not. Use 800 impulses (200 s) for anything you intend to trust.
-Correlation score is impulse-count sensitive: a 40-impulse run usually catches
-one latency level and scores 1.000; an 800-impulse run catches level changes and
-scores lower. NEVER compare a 40-impulse score against an 800-impulse score.
-
-Report tx_qfloor alongside latency. It is the safety metric and it varies run to
-run, so one clean soak establishes nothing. Repetition is the only way to
-characterise it.
-
-STATE OF THE COMPARISON
-Stopgap, re-baselined 2026-09-01 at 800 impulses: 32.729 ms median, spread
-0.333 ms. Its documented 20.688 ms is STALE - not comparable across the IGMP
-snooping change, exactly as gotcha 2 warns. Its documented 12 ms bimodal defect
-DID NOT REPRODUCE; the whole spread is now 16 samples. The old "FAILED on
-stability" verdict against the stopgap should be rechecked before it is used to
-justify anything.
-
-Phase 4 measures ~27.7-28.0 ms at buffer 192 with TX/RX prime 192/96 - about
-4.8 ms faster than the stopgap and tighter - but it is NOT deployable while one
-run in four can XRUN.
-
-Beware: a figure of "32.792 ms" appears in older commits and in the
-PROJECT_HANDOFF latency table as the stopgap. It is wrong in provenance - it is
-the sink-delay-48 row, a configuration documented as unusable on this path. It
-happens to land within 0.06 ms of the true current value.
-
-THERE IS NO DEPLOYMENT MECHANISM. Neither the stopgap nor Phase 4 runs as a
-service. usb-16x16.service is the USB gadget baseline and is immutable. Phase 4
-has only ever run under run-phase4-candidate-safe.sh, which is time-limited to
-60-1200 s and tears down afterwards. "Deploying" means designing something that
-does not exist. Ask before building it.
-
-HOW TO WORK ON THIS - EARNED THE HARD WAY, PLEASE READ
-1. INSTRUMENT BEFORE YOU FIX. A counter cannot make anything worse and costs
-   one run. A fix costs a build, an install that interrupts the user for a
-   password, a run, and possibly a revert. Every real advance in this project
-   came from a ten-line counter: consumed_frames, dropped_frames,
-   short_begin_frames, queue_floor, capture_backlog.
-
-2. DO NOT DO ALGEBRA ON AGGREGATES. Put a counter at the exact point you care
-   about instead of deriving it from three others.
-
-3. A CORRECT COMPONENT DOES NOT MEAN A CORRECT SYSTEM. A unit test proved
-   FarrowResampler exact; the bug was between the component and the system.
-
-4. SEPARATE THE OBSERVATION FROM THE EXPLANATION. Retract explanations freely;
-   retract measurements only when the measurement itself is shown flawed. This
-   session retracted two explanations (the prime overshoot was "waste"; the
-   48-sample steps were "quantisation") while their measurements stood.
-
-5. SUSPICIOUSLY ROUND NUMBERS ARE A TELL. Exactly 1.000000000 while being
-   commanded -27 ppm meant something was cancelling.
-
-6. A FIX THAT MAKES THINGS MUCH WORSE IS DATA. The prime-trim experiment caused
-   673 XRUNs and thereby proved the overshoot is the startup runway, not waste.
-
-7. ENUMERATE EVERY VERSION PIN BEFORE ASKING FOR AN INSTALL. The binary hash
-   lives in TWO places: install-candidate.sh and run-phase4-candidate-safe.sh.
-   Changing the wrapper changes its own hash, which is pinned in the installer.
-
-8. BUDGET THE USER'S PASSWORD. Batch changes, verify staged hashes before
-   asking, prefer observational builds when the next step is uncertain.
-
-9. CHECK THE PROVENANCE OF ANY NUMBER YOU COMPARE AGAINST. This session
-   propagated a wrong stopgap figure through a dozen commits because it came in
-   via a pickup prompt and was never traced to source. The handoff contradicted
-   itself and nobody had noticed.
-
-10. NEVER BUILD ON THE PI WHILE A RUN IS MEASURING. Compile load on a SCHED_FIFO
-    measurement can manufacture an XRUN and waste the run.
-
-11. ADD A GUARD TO EVERY SCRIPTED EDIT, AND CHAIN IT. An anchor that silently
-    fails to match writes nothing; if the commit is not chained behind the
-    edit's exit status you will commit an unrelated diff under a message
-    describing changes that never happened. It happened once here.
-
-GOTCHAS THAT WILL OTHERWISE COST YOU HOURS
-1. IGMP snooping is OFF on the GS305EP as of 2026-09-01, deliberately. Time to
-   audio after a daemon restart went from 263-267 s to at most 52 s. If you see
-   the old ~260 s behaviour, check snooping first. See SAP_DISCOVERY_FINDING.md.
-2. Latency figures are NOT comparable across that snooping change. Re-baseline
-   rather than compare. This bit the stopgap figure; see above.
-3. NEVER gate a measurement on sink flags. receiving_rtp_packet: true occurs
-   during pure silence and on a broken path.
-4. "return signal ready after N probes" is NOT when the path came up. Read
-   readiness-probe-*.json capturedAt. Settle time varies a lot run to run
-   (152 s and 343 s observed for identical configurations) and correlates with
-   how well that run settled.
-5. Keep --maximum-lag-ms under 250. Impulses repeat every 250 ms.
-6. Do NOT pass alsaloop --period/--buffer. --tlatency is the real control.
-7. Sink delay changes live via PUT /api/sink/{0,1}; tlatency does not. Read
-   sinks back via GET /api/sinks; GET /api/sink/N returns 404.
-8. bridge.log has no timestamps but emits at 1 Hz (48000 frames per line).
-9. Dante Controller holds UDP 9875, so sap-watch cannot bind while it is open.
-   Set USB16X16_SAP_WATCH=0 when you do not need the SAP timeline.
-10. The devices renegotiate ALSA buffers. Asking for 192 yields
-    ravenna=128/288 and usb=96/384 - USB ignores the request entirely. Read
-    NEGOTIATED before assuming a run tested what you asked for.
-11. The wrapper validates per-direction prime against the REQUESTED buffer, not
-    the negotiated one, so a prime above the request is rejected even when the
-    device could hold it. Request the larger buffer instead.
+GOTCHAS
+1. IGMP snooping is OFF on the GS305EP, deliberately, since 2026-09-01. Time
+   to audio after a daemon restart is at most ~52 s. If you see ~260 s,
+   check snooping. See SAP_DISCOVERY_FINDING.md.
+2. Latency figures are not comparable across that change.
+3. The GS305EP's QoS mode was changed off Port-based on 2026-09-02; the
+   handoff's "AoIP switch QoS" section predates that. Confirm and record the
+   active mode before reasoning about the network.
+4. NEVER gate a measurement on sink flags.
+5. Keep --maximum-lag-ms under 250.
+6. Sink delay: live PUT changes register but are not a latency lever under
+   Phase 4; the startup value is a wrapper argument now, also not a lever.
+7. bridge.log has no timestamps; 1 Hz lines. DEPTHSTEP and RECOVER carry
+   t_us since bridge start.
+8. Dante Controller holds UDP 9875; set USB16X16_SAP_WATCH=0.
+9. The devices renegotiate buffers: request 192 -> ravenna 128/288,
+   usb 96/384 (USB ignores requests). Read NEGOTIATED. RAVENNA playback can
+   be requested alone and comes back 128/384 for 384.
+10. The wrapper validates TX prime against the RAVENNA playback request when
+    one is given, otherwise against the shared buffer request.
+11. The Pi wrapper refuses to start over a running daemon or bridge, and the
+    future service must refuse over a running candidate. Stop one before
+    the other.
 
 ENVIRONMENT
-- Pi: eth0 169.254.92.97 is AoIP; wlan0 192.168.1.201 is SSH and management.
-  SSH working says nothing about AoIP health.
+- Pi: eth0 169.254.92.97 is AoIP; wlan0 192.168.1.201 is SSH.
   ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201
-- libasound2-dev is NOT installed. Build against the vendored copy:
+- Installed: bridge 0254348c, wrapper 1baa88a9. Verify:
+    ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
+      'sha256sum /usr/local/libexec/usb16x16-rt-bridge /usr/local/sbin/run-phase4-candidate-safe.sh'
+- Build (no libasound2-dev; vendored headers), source in ~/usb-16x16-work/
+  phase4-build, staging in phase4-install:
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
       -DALSA_INCLUDE_DIR=/home/bdimaio/usb-16x16-work/deps/libasound2-dev/usr/include \
       -DALSA_LIBRARY=/usr/lib/aarch64-linux-gnu/libasound.so.2
-  Source syncs to ~/usb-16x16-work/phase4-build, staging in phase4-install.
-- Installed bridge is ae1cf9ba (per-direction prime, prime-trim flag, queue and
-  depth floors, capture backlog). Verify before assuming:
-    ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
-      'sha256sum /usr/local/libexec/usb16x16-rt-bridge'
-- Installing needs the user's password by design. Give them exactly one command:
+- Install (password, once):
     ssh -t -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
       'sudo ~/usb-16x16-work/phase4-install/install-candidate.sh \
        ~/usb-16x16-work/phase4-install/usb16x16-rt-bridge \
        ~/usb-16x16-work/phase4-install/run-phase4-candidate-safe.sh'
-- Phase 4 run form (~13 min, 800-impulse standard):
-    USB16X16_SAP_WATCH=0 \
+- The accepted point, run form (~15 min):
+    USB16X16_SAP_WATCH=0 USB16X16_PHASE4_TARGET_FRAMES=128 \
     USB16X16_PHASE4_BUFFER_FRAMES=192 \
+    USB16X16_PHASE4_RAVENNA_PLAYBACK_BUFFER_FRAMES=384 \
     USB16X16_PHASE4_PLAYBACK_PRIME_FRAMES=96 \
-    USB16X16_PHASE4_TX_PLAYBACK_PRIME_FRAMES=192 \
-    USB16X16_PHASE4_RX_PLAYBACK_PRIME_FRAMES=96 \
+    USB16X16_PHASE4_TX_PLAYBACK_PRIME_FRAMES=288 \
+    USB16X16_PHASE4_RX_PLAYBACK_PRIME_FRAMES=144 \
     work/aes67-candidate/measure-phase4-roundtrip.sh 600 64 800 200
-  Other knobs: USB16X16_PHASE4_PRIME_TRIM (leave 0; turning it on causes 673
-  XRUNs, see the handoff), USB16X16_PHASE4_RING_FRAMES, _TARGET_FRAMES.
-- Stopgap run form, for comparison on equal footing:
+- Stopgap, for comparison:
     USB16X16_SAP_WATCH=0 USB16X16_TARGET_USEC=3000 USB16X16_SINK_DELAY=576 \
     work/aes67-candidate/measure-aes67-roundtrip.sh 600 64 800 200
-- Mac harness: work/latency-harness (Swift, CoreAudio impulse correlation).
-- Per-impulse data is in the result JSON under correlation.perImpulseDelaySamples.
-  Read it. The median alone hides multi-level distributions.
+- Mac harness: work/latency-harness. Per-impulse data is in the result JSON
+  under correlation.perImpulseDelaySamples; read it.
 
 RULES
 The USB module, usb-16x16.service, and setup script are immutable baselines;
-AES67 work must never disturb USB enumeration. One variable at a time. Every
-figure is reconnaissance until it is soaked under sustained load AND repeated,
-because the failure mode varies run to run.
+AES67 work must never disturb USB enumeration. Never run ptp4l beside the
+daemon. One variable at a time. Every figure is reconnaissance until it is
+loaded and repeated.
 ```
 
 ---
 
 ## Still open, not covered by the prompt
 
-- **Deployment mechanism.** Nothing persistent exists for either the stopgap or
-  Phase 4. This is unbuilt design work, not a missing config.
-- **The stopgap's stale verdict.** Its "FAILED on stability" rests on a 12 ms
-  bimodal defect that no longer reproduces. Its acceptance status deserves a
-  fresh look now that it re-baselines at 32.729 ms with 0.333 ms of spread.
-- **Host channel-name requirement.** Untouched. macOS still reports UAC2
-  speaker positions rather than `1` through `16`.
-- **Soak channel loading.** Soaks carry digital silence on the 15
-  non-measurement channels, which is not a literal satisfaction of the
-  acceptance criterion.
-- **AoIP switch QoS.** GS305EP is in `Port-based` mode, which ignores the DSCP
-  marks AES67 already sets. No measurable gain expected at current load.
+- **Deployment.** Designed, not built: `work/aes67-bridge/DEPLOYMENT_PLAN.md`,
+  including the profile mechanism and the tiered latency roadmap after it.
+- **Tier one latency levers**, after deployment: RAVENNA period 48 and RAVENNA
+  capture avail_min 48, one run each; see the plan.
+- **RX's floor is a draw of the prime overshoot**, 45-93 observed, and has
+  never caused a failure. Recorded, not addressed.
+- **The rate regression's free intercept** sets where the TX/RX split rests
+  and is the last source of run-to-run scatter (floor 158 vs 193-197 on one
+  configuration). A small differential bias would address it. Not started.
+- **AoIP switch QoS.** Mode changed off Port-based on 2026-09-02; the handoff
+  section is stale until the active mode is recorded.
 - **The 31.9 s first-RX-stream stall** inside `MergingRavennaALSA`, n=13,
   deterministic, only ever the first sink after `insmod`.
 - **Two small daemon items**: PTP "lock" takes exactly 10.00 s every time, a
   fixed dwell rather than convergence; and the daemon defers its first
   current-version SAP announcement by a full 30 s interval.
-- **The settle gate's spread test** is coupled to SRC convergence and will fail
-  outright at a higher steady-state ppm. Worth making drift-aware.
+- **Soak channel loading.** Soaks carry digital silence on the 15
+  non-measurement channels.

@@ -2070,7 +2070,12 @@ is wide enough that scheduling cannot explain anything observed.
 
 ### AoIP switch QoS
 
-The NETGEAR GS305EP is in `Port-based` QoS mode with port 1, which carries the
+**Stale as of 2026-09-02:** the GS305EP's QoS mode has been changed off
+`Port-based`. The active mode has not yet been recorded here; confirm it in
+the switch UI and update this section before reasoning about the network.
+The paragraphs below describe the state on 2026-09-01.
+
+The NETGEAR GS305EP was in `Port-based` QoS mode with port 1, which carries the
 Pi, set to `Low`. Every other port is higher. This is backwards, though it is
 currently harmless: the Ferrofish reported zero late packets over 12:22 at a
 2 ms receive setting with a 1.4 ms peak, no sink reported RTP errors, and PTP
