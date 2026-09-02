@@ -1589,7 +1589,8 @@ unchanged. The service is enabled and running profile `safe`.
 | 3. `kill -9` bridge | same shape, 62 s; one RECOVER 7.4 s into the restarted bridge (below) |
 | 7. coexistence measurement | stop, `20260902T114609Z`: 800 impulses, **27.646 ms** (1327), score 0.966, spread 10, `tx_qfloor` 172, 4 skips, zero restarts, gaps 2.0/2.1 ms; start again 47 s |
 | 1. cold boot x3 | 61 s from kernel boot to `running` in all three, no wait stage, enabled unit, no intervention; **not clean at the bridge**, below |
-| 4, 5, 6 | not yet run: USB unplug, Mac asleep an hour, eight-hour soak |
+| 6. soak | called a pass at 2 h 25 min by the user: 418 M frames, zero restarts, 3 RECOVERs (the startup pair plus one 4.8 ms stall), 88 skips survived, zero drops, `tx_qfloor` 189 before the stall and 122 after, `rx_qfloor` 13, ppm -16.3 |
+| 4, 5 | not yet run: USB unplug, Mac asleep an hour |
 
 **Two service defects found and fixed during acceptance.** The first start
 failed its 4 s NEGOTIATED check because mawk buffers stdin reads on a pipe;
