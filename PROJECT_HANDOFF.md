@@ -1590,7 +1590,8 @@ unchanged. The service is enabled and running profile `safe`.
 | 7. coexistence measurement | stop, `20260902T114609Z`: 800 impulses, **27.646 ms** (1327), score 0.966, spread 10, `tx_qfloor` 172, 4 skips, zero restarts, gaps 2.0/2.1 ms; start again 47 s |
 | 1. cold boot x3 | 61 s from kernel boot to `running` in all three, no wait stage, enabled unit, no intervention; **not clean at the bridge**, below |
 | 6. soak | called a pass at 2 h 25 min by the user: 418 M frames, zero restarts, 3 RECOVERs (the startup pair plus one 4.8 ms stall), 88 skips survived, zero drops, `tx_qfloor` 189 before the stall and 122 after, `rx_qfloor` 13, ppm -16.3 |
-| 4, 5 | not yet run: USB unplug, Mac asleep an hour |
+| 4. USB unplug/replug | pass with findings: 33 RECOVERs in 0.85 s at unplug, rule tripped 1.6 s later, stack restarted, audio back 35 s after replug, no intervention; the UDC state never left `configured/high-speed`, so the host-presence gate cannot see an unplug (below) |
+| 5 | not yet run: Mac asleep an hour |
 
 **Two service defects found and fixed during acceptance.** The first start
 failed its 4 s NEGOTIATED check because mawk buffers stdin reads on a pipe;
@@ -1810,6 +1811,38 @@ minute after boot only, and neither has appeared in a second attempt or
 a warm start. Wi-Fi: associated within 30 s of boot in one of five, and
 within five minutes in all five; the 25-minute outage after the hard
 reset was the long tail of the same thing, not a separate fault.
+
+**MEASURED: USB unplug and replug with the service running.** Cable
+out at about 15858.6 s of series boot 5 (Pi local 21:22:20), back in at
+15887.5 s, 29 s later.
+
+- At unplug the bridge logged one TX `playback-avail` XRUN (USB capture
+  stopped delivering) and then 32 RX `capture-ring-full` recoveries in
+  0.85 s (RAVENNA capture arriving, USB playback not consuming, the ring
+  refilling every 26 ms). The five-per-minute rule tripped at 15860.2,
+  1.6 s after the unplug, the stack stopped cleanly and systemd restarted
+  it at 15876.1. So "host gone" has a signature: a ring-full storm at
+  about 40 per second.
+- **The kernel logged nothing at the unplug and `/sys/class/udc/*/state`
+  stayed `configured` at `high-speed` throughout.** The Pi 5's dwc2
+  peripheral does not report the host's departure through that file, so
+  the supervisor's wait-for-host gate passed immediately and the second
+  attempt started with no host on the cable. Only the replug shows in
+  the kernel: `dwc2: new device is high-speed`, `new address 4` at
+  15887.5, the Mac re-enumerating.
+- The replug landed during the second attempt's PTP and sink stage, the
+  bridge started at 15918.5, negotiated, and ran clean with no startup
+  XRUN pair (a warm start), audio flowing 35 s after the replug. Had the
+  host stayed away, the bridge would have started anyway and the storm
+  would have tripped the rule again: an absent host is a restart loop
+  with a module load and unload per cycle, about every 75 s, slowing to
+  about 135 s once the backoff engages. That is the shape to expect from
+  the asleep-Mac test unless host suspend, unlike unplug, does change the
+  UDC state; nothing measured yet says which. Given the hard reset earlier
+  today sat next to module churn, a short sleep of a few minutes before
+  the hour is the cheaper first measurement.
+- `usb-16x16.service` stayed active and the gadget re-enumerated on its
+  own. Nothing touched the USB baseline.
 
 **The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
 playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
