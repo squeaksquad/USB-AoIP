@@ -261,6 +261,15 @@ mechanism above is how any of it ships if it ever does.
 
 ## Decisions to take before implementing
 
+Taken 2026-09-02, all as recommended: (1) manual start first, enable after
+items 2, 3 and 7 pass; (2) the supervisor waits for the UDC to be
+`configured` and eth0 at 1 Gb/s before `insmod`, logging once a minute,
+rather than fail-looping; (3) five RECOVER lines per 60 s; (4) one BRIDGE
+line in ten to the journal, full stream on tmpfs rotated once at 64 MB;
+(5, 7) `fast` ships as an experimental block, `safe` is the default;
+(6) TX prime 288 frozen, 336 on the post-deployment list. The daemon logs
+to the journal too. Implemented in this directory; see `README.md`.
+
 Ask these in one batch at the start of the session:
 
 1. Enable at boot from the first install, or manual start for the first
