@@ -1434,12 +1434,55 @@ This run's floors: TX 109, RX 93. Clean, ready after 3 probes.
 on one live point and nothing on repetition has been tried; not worth a
 run. The next lever is the ring target.
 
+#### MEASURED: ring target 128 -- 24.479 ms, 4.0 ms faster, and it spends queue floor to get there
+
+Run `025906Z`, 600 s, 800 impulses, `--target 128` with everything else as
+the 28.479 ms baseline (buffer 192, TX 192 / RX 96, sink delay 576). Clean,
+zero restarts, ready after 3 probes.
+
+| | baseline `012708Z` target 192 | **`025906Z` target 128** | change |
+|---|---:|---:|---:|
+| median | 28.479 ms (1367) | **24.479 ms (1175)** | **-192 samples, -4.000 ms** |
+| score / spread | 0.924 / 10 | 0.932 / 10 | |
+| prime overshoot, per direction | 93 | **61** | -32 |
+| depth-mean sum | 862 | **670** | -192 |
+| ring occupancy min (1 Hz) | 195 | 131 | target + 3, never drawn on |
+| `tx_qfloor` / `rx_qfloor` | 130 / 93 | **97 / 61** | |
+| TX / RX samples under a period | 0% / 3.3% | **19% / 20%** | |
+| max wakeup gap | 1.99 / 2.03 ms | 1.98 / 2.03 ms | unchanged |
+| TX 144-pulls | 10 | 5 | all survived |
+
+**Where the 4.0 ms came from.** The target fell by 64 per direction, which
+is 2.67 ms round trip. The other 1.33 ms is the prime overshoot, which fell
+from 93 to 61 per direction because the lower prime threshold is crossed on
+a different capture phase. Depth-mean sum dropped by exactly 192 frames and
+the median by exactly 192 samples. That is the fourth time depth has
+predicted latency to the sample at this buffer.
+
+**The ring itself is fine at 128.** Occupancy never went under target + 3,
+and the wakeup gap maximum is unchanged at 2 ms against 128 frames of
+cover. The ring reserve has still never been drawn on.
+
+**The cost is in the queues, not the ring.** The overshoot was part of what
+the queues held, so TX's floor is 97 and RX's is 61, under USB's 96-frame
+period, with a fifth of all samples in both directions below one period.
+Five skips were survived at a TX floor 47 frames short of what a skip at
+the sawtooth minimum needs. This point is faster than anything measured
+and less safe than anything measured.
+
+**The point to run next combines the two levers.** Target 128 with RAVENNA
+playback 384 and TX prime 288 restores the TX ceiling to 240 with the skip
+covered, priced from the two measured deltas at roughly 28 ms: about 4.5 ms
+under the stopgap with margin rather than phase. RX prime 144 would put RX's
+floor back over a period for about 1 ms more. Untested.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
 | `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96, RAVENNA playback 384 | 015059Z, 800 impulses, clean, `tx_qfloor` 122 | 30.146 ms | 0.944 | 10 samples |
+| `96/192/768/128` TX 192 / RX 96, **target 128** | **025906Z, 800 impulses, clean, `tx_qfloor` 97, `rx_qfloor` 61** | **24.479 ms** | 0.932 | 10 samples |
 | `96/192/768/192` prime 96 | **211118Z, 600 s soak PASSED, ACCEPTED** | **26.979 ms** | **0.988** | **0 samples** |
 | `96/288/768/192` TX 288 / RX 96 | **4 runs, 800 impulses, 0 failures, tx_qfloor 144 invariant** | **29.979-30.979 ms** | ~0.92 | 8-10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **221301Z, 600 s soak PASSED, ACCEPTED** | **28.729 ms** | 0.924 | 8 samples |
