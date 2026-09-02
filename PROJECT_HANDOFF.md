@@ -1734,6 +1734,57 @@ the bridge at SCHED_FIFO 90 sees no gap while the driver's PCMs overrun
 and underrun together: whatever it is stalls the driver's timer path, not
 the bridge. Left open. The journal keeps accumulating timestamps.
 
+**MEASURED: four runs against the running service, 64 and 32 frames, all
+on one sample.** `measure-under-service.sh` runs the Mac harness alone
+against the live service, no wrapper and no stack restart, so a RECOVER
+is counted rather than fatal. 800 impulses each, back to back, 2026-09-02
+16:20-16:36 UTC, service up since boot 4's restart:
+
+| frames | median | samples | spread | score | ready | RECOVERs |
+|---:|---:|---:|---:|---:|---:|---:|
+| 64 | 29.646 ms | 1423 | 10 | 0.960 | 3 probes | 0 |
+| 32 | 29.646 ms | 1423 | 10 | 0.954 | 3 probes | 0 |
+| 64 | 29.646 ms | 1423 | 9 | 0.957 | 3 probes | 0 |
+| 32 | 29.646 ms | 1423 | 10 | 0.954 | 3 probes | 0 |
+
+Two things follow. First, provenance: the harness computes delay from
+the IOProc's output and input `mSampleTime` on the device's own timeline
+(`LiveImpulseMeasurement.swift`), so the Mac's IO buffer is outside the
+measured path by construction. The "32-frame lever" was never measurable
+with this harness; the host-side saving, 0.67 ms per direction at 32
+against 64, is a DAW-side fact this loop cannot see. Second, the
+32-frame open ran clean twice under the service, which takes most of the
+weight off attempt 1's coincidence. Note also that all four service runs
+read 1423 against 1399/1351/1327 under the wrapper for the same binary
+and arguments; the quoted range for the point is now 27.6-29.6 ms, and
+the service's four runs are the tightest set yet.
+
+**MEASURED: five more cold boots, unattended.** Reboot, wait for ssh on
+wlan0 or eth0, wait for `running`, observe for four minutes:
+
+| series boot | to `running` | first 5 min | stable audio at | wlan0 at +30 s |
+|---:|---:|---|---:|---|
+| 1 | 61 s | startup pair, then 4 RX playback XRUNs in 4.6 s, rule tripped at 61.6 s, restart | 123 s | up |
+| 2 | 61 s | startup pair only | 61 s | not yet, up by +5 min |
+| 3 | 61 s | startup pair, TX playback XRUNs and RX ring-full, rule tripped at 77.5 s, restart | 139 s | not yet, up by +5 min |
+| 4 | 61 s | startup pair only | 61 s | not yet, up by +5 min |
+| 5 | 64 s | startup pair, then 4 RX playback XRUNs in 8 s, rule tripped at 68.7 s, restart | 130 s | not yet, up by +5 min |
+
+Today's total: eight cold boots, the startup capture-XRUN pair in all
+eight, a cascade with one stack restart in five of them, and every one
+of the five recovered on its own to a clean second attempt. So cold boot
+to stable audio is 61 s or about 125-140 s, with no intervention either
+way. Two cascade shapes: boots 1 and 5 are RX only, USB playback running
+dry every 0.6-3.5 s from a 157-frame prime with the bridge's gaps at
+11-17 us, that is the RX queue draining a few hundred frames per second
+faster than RAVENNA capture fills it; boot 3 and the morning's boot 2 are
+TX playback XRUNs with RX `capture-ring-full`, USB input stopped and USB
+playback not consuming. Both are USB-side rate shapes in the first
+minute after boot only, and neither has appeared in a second attempt or
+a warm start. Wi-Fi: associated within 30 s of boot in one of five, and
+within five minutes in all five; the 25-minute outage after the hard
+reset was the long tail of the same thing, not a separate fault.
+
 **The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
 playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
 +32 s, in every warm and cold start; sink 1 then takes 10 ms. That is
