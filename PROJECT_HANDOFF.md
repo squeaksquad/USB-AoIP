@@ -2295,13 +2295,10 @@ env-tunable, default-omitted behavior before using it for measurement.
    RAVENNA module unloaded.
 4. Remember that `eth0` at `169.254.92.97` is the AES67 network and `wlan0` at
    `192.168.1.201` is management. SSH working says nothing about AoIP health.
-5. **Continue Phase 4 estimator diagnosis.** Every other lever has been measured and eliminated.
-   Parameter tuning of the dual `alsaloop` stack has reached its floor, and
-   scheduling latency has 14.5x headroom, so the single purpose-built bridge
-   with one shared clock-drift estimator remains the only route to a stable
-   10-20 ms. Start with the input/output/playback-consumption counter evidence
-   in the currently pinned diagnostic build; do not treat the bridge as an
-   accepted replacement yet.
+5. **Phase 4 is accepted at 29.1 ms with the skip covered (2026-09-02).**
+   The next piece of work is the persistent service; the design and the
+   pickup prompt are in `work/aes67-bridge/DEPLOYMENT_PLAN.md`. Do not
+   re-tune the bridge inside that work.
 6. Validate Phase 4 against the same harness that produced these numbers so the
    before-and-after comparison is meaningful.
 7. Budget about 4 minutes of dead time per daemon restart, and prefer live
