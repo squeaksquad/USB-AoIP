@@ -160,6 +160,105 @@ or the wrapper is running, mirroring the wrapper's own refusal.
 Rollback is `systemctl disable --now usb16x16-aes67` plus `rmmod`; the
 stopgap runner and the candidate wrapper remain installed and untouched.
 
+## Profiles: latency modes as data, not code
+
+Every operating point this project has measured is the same binary with a
+different argument set, and every future tier below is too. So the service
+reads a named profile, and the eventual web UI switches profiles rather than
+editing numbers. A profile switch is a stack restart (about a minute to
+audio), which the UI must say out loud.
+
+`/etc/usb16x16/aes67.conf` holds `PROFILE=<name>` plus one block per
+profile; the supervisor expands the selected block into bridge arguments and
+the sink delay. Ship two, and keep the shape open for more:
+
+| profile | point | measured | skip cover | status |
+|---|---|---:|---|---|
+| `safe` | target 128, RAVENNA playback 384, TX 288, RX 144, buffer 192 | 29.1 ms | TX floor 158-197 | accepted, the default |
+| `fast` | target 128, TX 192, RX 96, buffer 192 | 24.5 ms | none; TX floor 97 | measured once, survival is phase |
+
+Each profile block carries the arguments, the sink delay, a one-line
+description, and a `cover` flag the UI shows next to the name. A profile
+that has not passed four loaded runs is marked `experimental` in the block
+and the UI shows that too. Adding a tier later is a new block and its runs;
+nothing else changes.
+
+The web UI itself is future work. The daemon already serves an HTTP API and
+page on port 8080; the bridge's `status` subcommand is designed to be the
+data source a small control page reads, and the supervisor should accept a
+`switch-profile <name>` subcommand from the start so the UI has one thing to
+call. Do not build the page in the deployment session.
+
+## Latency roadmap after deployment
+
+The accepted point sits at 29.1 ms. From the measurements so far, the round
+trip divides roughly as: bridge rings 5.3 ms, bridge device queues 8.8 ms,
+capture backlog 1.6 ms, RAVENNA playback buffer 1.7 ms (measured),
+RAVENNA capture side about 3.7 ms (inferred), Ferrofish about 3.5 ms, Mac
+CoreAudio at 64 frames plus USB framing 3-4 ms. The bridge owns about 16 ms,
+and nearly all of the queue depth exists for one reason: the RAVENNA
+device's once-a-minute three-packet pull.
+
+### Tier one: 29 -> about 25 ms, inside the current design, deploy-safe
+
+Two unexplored levers, one run each at 800 impulses, acceptance as for the
+accepted point (four loaded runs, `tx_qfloor` above 144 in all):
+
+1. **RAVENNA period 48.** The bridge already accepts `--period 48`; USB
+   ignores period requests, RAVENNA may not. If RAVENNA negotiates 64/144 or
+   similar, capture backlog and the minimum capture buffer both roughly
+   halve. Read `NEGOTIATED` first; if it comes back 128/288 the lever does
+   not exist and the run is still useful as a null result.
+2. **RAVENNA capture `avail_min` 48.** The capture histogram shows the
+   RAVENNA capture pointer advancing per packet, so waking on 48 rather than
+   96 halves RX's push sawtooth. RX's floor has followed
+   `prime + overshoot - 96` in every run; with 48-frame pushes that becomes
+   `- 48`, and RX prime can drop by about a period for the same floor. One
+   sw_params call behind a flag; a bridge rebuild and re-pin.
+
+Expected landing: 25-26 ms with cover kept. Becomes profile `safe` once
+accepted; the old `safe` block is kept under a dated name for rollback.
+
+### Tier two: 25 -> about 20 ms, remove the skip at its source
+
+The RAVENNA driver's steady pull runs about 15 ppm below its long-term
+rate and corrects by skipping a packet every 56-69 s (measured, sections
+"MEASURED: the RAVENNA device skips one packet" and following). The handoff
+also records that the prototype driver does not use the NIC's hardware
+clock and times itself in software. If its media clock were disciplined
+continuously rather than stepped, TX's cover requirement falls by three
+packets and the queues by 3-4 ms round trip.
+
+This is kernel work inside the Merging RAVENNA ALSA module, which is open
+source but sits on the protected rollback path. Rules: a separately named
+module build, the known-good module untouched and its restore commands
+written down first, one variable at a time. The pull-burst counter is the
+acceptance instrument: the tier is done when `tx_pull_max` reads 96 across
+four loaded runs, and only then are the queues trimmed. Stop condition: if
+the driver's clock path cannot be changed without touching its RTP timing,
+stop; the 3-4 ms is not worth the receive path.
+
+### Tier three: Phase 5, the USB gadget paced from PTP
+
+Collapses the rings and the drift half of the queues, perhaps 4-5 ms, by
+making the Mac follow a PTP-derived UAC2 rate through the gadget's
+asynchronous feedback, so the ASRC becomes near-unity and the reservoirs
+shrink to scheduling jitter. It does nothing about the skip, so it pays only
+after tier two. It is the deepest change in the project: the exact-source
+`usb_f_uac2` module that USB enumeration depends on. Same rules as tier two,
+plus cold-boot and macOS enumeration tests before the known-good module is
+ever unloaded. Handoff section "Phase 5: PTP-disciplined USB research" has
+the architecture sketch.
+
+### The floor
+
+Mac at 64 frames both ways, the Ferrofish, and the RAVENNA device's own
+buffering total 10-11 ms before the bridge holds a frame. With all three
+tiers done, this loop bottoms out around 14-16 ms. Below that is a 32-frame
+CoreAudio buffer, a different receiver than the Ferrofish, or hardware
+timestamping in the driver; none of it is Pi-side work, and the profile
+mechanism above is how any of it ships if it ever does.
+
 ## Decisions to take before implementing
 
 Ask these in one batch at the start of the session:
@@ -172,6 +271,7 @@ Ask these in one batch at the start of the session:
 5. Expose a second "fast" profile (target 128, TX 192 / RX 96, 24.5 ms, no
    skip cover) in `aes67.conf`, or ship only the accepted point?
 6. TX prime 288 as measured, or 336 with one confirming run first?
+7. Ship `fast` as a selectable profile marked experimental, or `safe` only?
 
 ## Pickup prompt for the implementation session
 
