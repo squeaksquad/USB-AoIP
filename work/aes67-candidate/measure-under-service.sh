@@ -89,10 +89,10 @@ print -r -- "measure_exit=$measure_exit result=$result_path"
 if (( measure_exit == 0 )) && [[ -s "$result_path" ]]; then
   /usr/bin/python3 - "$result_path" <<'PYEOF'
 import json, sys, collections
-d = json.load(open(sys.argv[1])); c = d["correlation"]
+d = json.load(open(sys.argv[1])); c = d["correlation"]; st = c.get("statistics", {})
 per = c.get("perImpulseDelaySamples") or []
 levels = collections.Counter(per).most_common(4)
-print(f"median={c.get('medianMilliseconds'):.3f} ms ({c.get('medianSamples')}) min={c.get('minimumSamples')} max={c.get('maximumSamples')} spread={c.get('maximumSamples')-c.get('minimumSamples')} score={c.get('score'):.3f} count={c.get('count')}")
+print(f"median={st.get('medianMilliseconds', 0):.3f} ms ({st.get('medianSamples')}) min={st.get('minimumSamples')} max={st.get('maximumSamples')} spread={(st.get('maximumSamples') or 0)-(st.get('minimumSamples') or 0)} score={c.get('score', 0):.3f} count={st.get('count')}")
 print("levels=" + " ".join(f"{s}x{n}" for s, n in levels))
 print(f"discontinuities in={d.get('inputDiscontinuities')} out={d.get('outputDiscontinuities')}")
 PYEOF
