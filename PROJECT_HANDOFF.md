@@ -1921,6 +1921,20 @@ per retry, and audio after wake returns within the retry interval plus
 about 8 s. Staged revision: retry 60 s, and the sampler forwards only
 the first 20 RECOVER lines of a storm to the journal.
 
+**MEASURED: the 60 s retry and the journal suppression, installed
+(supervisor `e300cc33`).** Unplug at about 22673 s of series boot 5:
+`host absent` at 22676.5 (episode 1, 38 in one second, storm 3 s),
+journal carried 20 RECOVER lines then `RECOVER storm: further ... tmpfs
+log only`, then `storm ended after 95 recoveries`. Retry at 22738.1
+(61.6 s later), `running` at 22742.1, storm, `host absent` at 22745.2
+(episode 2, `storm ended after 259`). Replug: `dwc2 new device` at
+22775.46, `host enumerated after 30s` at 22776.73 (1.3 s later), bridge
+`running` at 22780.75, USB input flowing. Zero service restarts, module
+never unloaded, zero RECOVER lines in the journal after the storm
+marker. Audio 5.3 s after the enumeration. The host-absence path is
+now measured end to end four times today: two unplugs, one suspend, one
+non-enumerating host, with both return signals (enumeration and retry).
+
 **The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
 playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
 +32 s, in every warm and cold start; sink 1 then takes 10 ms. That is
