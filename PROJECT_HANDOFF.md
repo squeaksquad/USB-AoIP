@@ -1578,9 +1578,12 @@ design. Nothing here changes the USB baseline.
 
 2026-09-02. `work/aes67-bridge/` holds the supervisor, unit, profile
 configuration, installer and README; `DEPLOYMENT_PLAN.md` there is the
-design and records the seven decisions. Installed on the Pi: supervisor
-`1cb716a1`, unit `2d2a9892`, `aes67.conf` `61a72df1`, bridge `0254348c`
-unchanged. The service is enabled and running profile `safe`.
+design and records the seven decisions. Installed on the Pi as of
+2026-09-02 23:00 local: supervisor `e300cc33`, unit `77837e60`,
+`aes67.conf` `f2e1531f` (host retry 60 s), bridge `0254348c` unchanged.
+The service is enabled and running profile `safe`. All seven acceptance
+items have run; the table below and the sections after it carry the
+results and the two supervisor revisions they forced.
 
 | item | result |
 |---|---|
