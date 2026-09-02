@@ -1311,11 +1311,54 @@ the full window. And a `pgrep -f` for the bridge from inside an ssh command
 matches the ssh shell's own command line; anchor the pattern as the wrapper
 does.
 
+#### MEASURED: RAVENNA playback at 384 alone costs 1.67 ms and buys no floor until the prime uses it
+
+Run `015059Z`, 600 s, 800 impulses, binary `0254348c`, buffer 192 with
+`--ravenna-playback-buffer 384`, TX 192 / RX 96. `NEGOTIATED` confirms the
+per-PCM request took: `ravenna_capture=128/288 ravenna_playback=128/384`,
+USB unchanged at 96/384. Zero restarts, zero drops, ready after 3 probes.
+
+| | `012708Z` RAVENNA playback 288 | **`015059Z` RAVENNA playback 384** | change |
+|---|---:|---:|---:|
+| median | 28.479 ms (1367) | **30.146 ms (1447)** | **+80 samples, +1.667 ms** |
+| score / spread | 0.924 / 10 | 0.944 / 10 | |
+| impulse levels | 700 on 1367, 92 on 1359 | 731 on 1447, 62 on 1439 | same 8-sample bimodality |
+| `tx_qfloor` | 130 | **122** | ceiling moved, floor did not |
+| `rx_qfloor` | 93 | 93 | |
+| TX 144-pulls | 10 | 4 | |
+| depth-mean sum | 862 | 862 | conserved again |
+
+**Latency: the playback side of the buffer effect is 1.67 ms.** The earlier
+runs moved both RAVENNA PCMs 384 -> 288 together and measured -5.33 ms. This
+moves playback alone and measures +1.67 ms, one third of it. The remainder
+sits with the capture buffer by subtraction, which is an inference from two
+runs and not a measurement; a capture-only request would measure it.
+
+**Floor: unchanged, as it had to be.** The prime still puts 192 + 93 frames
+in the queue, so the sawtooth sits where it did and the floor reads 122
+against 101/104/130 at buffer 288. The larger buffer only raises the
+ceiling from 144 to 240; using it means raising TX's prime into the new
+headroom, which costs about 1 ms per 48 frames on top of the 1.67 ms.
+
+**The trade this fixes, priced.** For TX to hold a skip deterministically
+it needs 144 frames at its sawtooth floor. At RAVENNA playback 384 that is
+TX prime 288 (queue capped at 384, floor ceiling 240, margin 96) for about
++2 ms, landing near 32 ms, the stopgap's re-baselined 32.729 ms. TX prime
+240 (floor 192, margin 48) lands near 31 ms. Neither is measured. The choice
+is between beating the stopgap by 2-4 ms with skip survival left to phase,
+or matching it with the skip covered.
+
+**One anomaly to keep.** The fourth 144-pull at t=421 moved TX's mean *up*
+17 frames and RX's down, the reverse of every other step recorded. Either
+the device stepped the other way or a three-packet pull coincided with the
+servo's own motion. Not explained; do not build on it.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
 | `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
+| `96/192/768/192` TX 192 / RX 96, RAVENNA playback 384 | 015059Z, 800 impulses, clean, `tx_qfloor` 122 | 30.146 ms | 0.944 | 10 samples |
 | `96/192/768/192` prime 96 | **211118Z, 600 s soak PASSED, ACCEPTED** | **26.979 ms** | **0.988** | **0 samples** |
 | `96/288/768/192` TX 288 / RX 96 | **4 runs, 800 impulses, 0 failures, tx_qfloor 144 invariant** | **29.979-30.979 ms** | ~0.92 | 8-10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **221301Z, 600 s soak PASSED, ACCEPTED** | **28.729 ms** | 0.924 | 8 samples |
