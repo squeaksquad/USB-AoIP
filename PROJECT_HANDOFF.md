@@ -1398,6 +1398,42 @@ floor 61 frames under what a skip at the sawtooth minimum needs. The draw is
 now spread across 83-130 for one configuration. Nothing about the skip cover
 has changed; this run is another point on the same razor.
 
+#### MEASURED: sink delay 144 at startup lands on the same sample as 144 applied live
+
+Run `024103Z`, 600 s, 800 impulses, sink delay 144 pinned by the wrapper
+before the bridge primed, readback confirmed on both sinks, everything else
+as the 28.479 ms baseline.
+
+| sink delay | how applied | median | samples |
+|---:|---|---:|---:|
+| 576 | baseline `012708Z` | 28.479 ms | 1367 |
+| 576 | live, sweep | 27.479 ms | 1319 |
+| 288 | live, sweep | 26.812 ms | 1287 |
+| 144 | live, sweep | 29.146 ms | 1399 |
+| **144** | **at startup** | **29.146 ms** | **1399** |
+| 96 | live, sweep | 28.146 ms | 1351 |
+
+**The live change did take effect after all, just not through anything the
+bridge counts.** Startup 144 and live 144 land on exactly the same sample.
+So the sink delay is a real, reproducible input to the round trip under
+Phase 4, and the bridge's ring and queue counters are simply not where it
+acts. The correction above stands on its evidence and is wrong in its
+conclusion: "never reaches the bridge" should read "never shows in the
+bridge's depth".
+
+**It is not a lever.** Across 576 -> 96, a span of 10 ms of configured
+delay, the measured round trip moves within a 2.3 ms band and not
+monotonically: 288 is the lowest point, 144 the highest. The bridge conserves
+its own depth, so whatever the sink delay shifts is absorbed somewhere with
+a small, setting-dependent residue. Reading a mechanism into the residue
+would be algebra on aggregates; it is recorded as a curve, not explained.
+
+This run's floors: TX 105, RX 93. Clean, ready after 3 probes.
+
+**Sink delay is closed as a Phase 4 latency question.** 288 is worth 0.7 ms
+on one live point and nothing on repetition has been tried; not worth a
+run. The next lever is the ring target.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
