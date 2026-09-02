@@ -70,8 +70,9 @@ identifier `aes67-daemon`. Every `PRIMED`, `NEGOTIATED`, `RECOVER`,
 once to `bridge.log.1` at 64 MB; it is the post-mortem for the current
 session only and does not survive a reboot. The Pi's journal is volatile
 too (Raspberry Pi OS ships `Storage=volatile`), so `journalctl -b` is the
-only boot you can read: capture a cold boot's timeline before the next
-reboot.
+only boot you can read unless `make-journal-persistent.sh` has been run
+once with sudo (it installs a `Storage=persistent` drop-in capped at
+256 MB and restarts journald).
 
 Enable at boot once the manual acceptance items pass:
 
