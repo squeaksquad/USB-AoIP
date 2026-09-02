@@ -1353,6 +1353,48 @@ or matching it with the skip covered.
 the device stepped the other way or a three-packet pull coincided with the
 servo's own motion. Not explained; do not build on it.
 
+#### MEASURED: a live sink-delay change never reaches the bridge
+
+One 720 s candidate, `022225Z`, buffer 192, TX 192 / RX 96, RAVENNA
+playback 288. After readiness, both sinks were rewritten over the daemon API
+with only `delay` changed, readback confirmed, 20 s settle, three readiness
+probes, then 200 impulses per point. Script:
+`work/aes67-candidate/sweep-phase4-sink-delay.sh`; results in
+`outputs/latency/phase4-sink-sweep-20260902T022225Z/`.
+
+| sink delay | applied at bridge second | median | spread | score |
+|---:|---:|---:|---:|---:|
+| 576 (as primed) | 287 | 27.479 ms | 10 | 0.922 |
+| 288 | 372 | 26.812 ms | 10 | 0.944 |
+| 144 | 461 | 29.146 ms | 9 | 0.882 |
+| 96 | 546 | 28.146 ms | 9 | 0.919 |
+
+**Not additive, not monotonic, and not visible to the bridge.** In the
+stopgap the sink delay was additive at close to 1:1, 11.5 ms across 576 -> 48.
+Here a 480-frame span moved the median by at most 2.3 ms in either direction.
+At every one of the four changes the bridge log shows nothing: zero
+recoveries, no re-prime, no capture burst (`rx_cappeak` held at 144, its
+normal value), and the RX ring and queue means continuing their slow servo
+drift straight through the change second. The one step in any window, at
+t=461, is a RAVENNA skip (`DEPTHSTEP`, pull 144) that happened to land there.
+
+So a live `PUT` with a new `delay` re-registers the sink but does not re-time
+the running capture stream the bridge reads. The scatter between points is
+the same 8-sample bimodality and run-to-run drift every buffer-192 run shows.
+
+**What this does and does not settle.** Changing the sink delay live is not a
+latency lever under Phase 4. Whether the value the wrapper pins at startup
+matters is still open: the stopgap's 1:1 result came from separate runs, each
+started at its delay. Testing that needs the delay as a wrapper argument, so
+a re-pin and an install, and separate runs per point.
+
+**This run's floors are the lowest yet:** `tx_qfloor` 83, `rx_qfloor` 45, TX
+depth mean about 390 against 422-451 in the previous four runs, with RX
+priming at overshoot 45 rather than 93. Five 144-pulls, all survived, at a
+floor 61 frames under what a skip at the sawtooth minimum needs. The draw is
+now spread across 83-130 for one configuration. Nothing about the skip cover
+has changed; this run is another point on the same razor.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
