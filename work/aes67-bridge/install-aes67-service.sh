@@ -69,7 +69,7 @@ bdimaio ALL=(root) NOPASSWD: /usr/bin/systemctl start usb16x16-aes67, \
     /usr/local/sbin/usb16x16-aes67-supervisor switch-profile *, \
     /usr/local/sbin/usb16x16-aes67-supervisor cleanup, \
     /usr/bin/pkill -9 -x aes67-daemon, \
-    /usr/bin/pkill -9 -x usb16x16-rt-bridge, \
+    /usr/bin/pkill -9 -f ^/usr/local/libexec/usb16x16-rt-bridge, \
     /usr/sbin/reboot
 EOF
 /usr/sbin/visudo -cf "$sudoers_temporary"

@@ -15,7 +15,8 @@ point".
 The installer also writes `/etc/sudoers.d/usb16x16-aes67` so `bdimaio` can
 start, stop, restart, enable and disable the unit, switch profiles, kill the
 daemon or the bridge for the acceptance tests, and reboot, all without a
-password. The USB gadget, `usb-16x16.service` and the setup script are not
+password. The bridge is matched by command line (`pkill -f`), because
+`pkill -x` cannot see a process name longer than 15 characters. The USB gadget, `usb-16x16.service` and the setup script are not
 touched by any of this.
 
 ## Install
