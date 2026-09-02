@@ -430,12 +430,14 @@ cmd_run() {
   stage "sinks applied, delay $sink_delay"
 
   # 6. Bridge, through the sampler: everything to the tmpfs log, rare lines
-  #    and one BRIDGE line in N to the journal.
+  #    and one BRIDGE line in N to the journal. mawk needs -W interactive
+  #    for line-buffered reads from a pipe; without it the first lines sit
+  #    in its input buffer past the 4 s NEGOTIATED check.
   local -a arguments
   mapfile -t arguments < <(bridge_arguments)
   stage "bridge starting: ${arguments[*]}"
   "$bridge_binary" "${arguments[@]}" \
-    > >(exec awk -v every="$journal_bridge_every" -v logfile="$bridge_log" \
+    > >(exec mawk -W interactive -v every="$journal_bridge_every" -v logfile="$bridge_log" \
                  -v cap=$((bridge_log_cap_mb * 1024 * 1024)) \
                  -v recovers="$recovers_file" -v last="$last_bridge_file" '
       {

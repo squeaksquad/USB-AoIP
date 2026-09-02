@@ -47,7 +47,7 @@ sudo systemctl stop usb16x16-aes67
 ```
 
 ```bash
-usb16x16-aes67-supervisor status
+/usr/local/sbin/usb16x16-aes67-supervisor status
 ```
 
 ```bash
@@ -104,11 +104,11 @@ profile. Two ship:
 | `fast` | target 128, TX 192, RX 96, buffer 192, sink delay 576 | 24.5 ms | none, TX floor 97 | experimental |
 
 ```bash
-usb16x16-aes67-supervisor profiles
+/usr/local/sbin/usb16x16-aes67-supervisor profiles
 ```
 
 ```bash
-sudo usb16x16-aes67-supervisor switch-profile fast
+sudo /usr/local/sbin/usb16x16-aes67-supervisor switch-profile fast
 ```
 
 A switch rewrites the `PROFILE=` line (verified before the file is
