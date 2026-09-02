@@ -1,0 +1,4 @@
+probe 1 PASS consecutive=1
+probe 2 PASS consecutive=2
+probe 3 PASS consecutive=3
+return signal ready after 3 probes

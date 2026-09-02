@@ -1214,10 +1214,102 @@ razor directly are a larger RAVENNA playback buffer (independently of the
 capture buffer) and finer wakeups if the devices advance their pointers per
 packet. Both are unmeasured.
 
+#### MEASURED: the RAVENNA device skips one packet about every minute, and the XRUN is that skip landing on the sawtooth floor
+
+Three 600 s runs on the pull-burst binary `4791d577`, all `96/192/768/192`
+with `--tx-playback-prime 192 --rx-playback-prime 96`, 2026-09-02. Two ran
+without impulse load by accident (see the gate finding below), which turned
+out to be useful: the device behaviour is identical with and without load.
+
+| run | load | outcome | `tx_qfloor` | `rx_qfloor` | TX pull max | 144-pulls | TX depth mean | RX depth mean |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| `005914Z` | none | clean | 101 | 93 | 144 | 7 | 422 | 440 |
+| `011349Z` | none | clean | 104 | 93 | 144 | 7 | 426 | 436 |
+| `012708Z` | **800 impulses** | **clean, 28.479 ms** | **130** | 93 | 144 | 10 | 451 | 411 |
+
+`012708Z`: 800 impulses, median 1367 samples, spread 10, score 0.924, with
+700 impulses on 1367 and 92 on 1359. Zero restarts, zero drops in all three.
+
+**1. The pull burst is measured, and it is three packets.** RAVENNA playback
+normally consumes 96 frames, two packets, between consecutive bridge
+observations. Seven to ten times per run it consumes **144 within one gap of
+at most 1.94 ms**. The bridge's longest gap between observations was 2.03 ms
+in any run, so this is not a stall on our side; the device took three
+packets in two milliseconds. USB playback never exceeded 96.
+
+**2. Each 144 pull is a timebase step, and the depth it moves is not lost.**
+In the same second as every 144 pull, TX's per-second depth mean drops by
+35-47 frames and RX's rises by the same amount. The sum of the two means sits
+at 858-865 for all three runs, from the first second to the last. Total depth
+is conserved exactly as this document said; what moves is the split between
+directions. The RAVENNA device advanced its clock by one packet: its playback
+consumed an extra 48 and its capture delivered an extra 48.
+
+**3. The steps are quasi-periodic and threshold-driven.** In steady state
+they arrive 56-69 s apart (one 262 s gap, and three doublets 4-7 s apart),
+and every one fires after TX's mean has climbed to about 440-473 frames.
+Between steps TX climbs at roughly 0.65 frames/s. Read as a mechanism, stated
+as an observation: the device's steady pull rate runs about 15 ppm below its
+long-term rate and it catches up by skipping a packet. The estimator tracks
+the long-term rate, which is correct, and it is why the commanded ppm hunts
+between -12.3 and -18.5 with roughly the step period. The differential is a
+45-frame sawtooth around a stable mean, not a leak.
+
+**4. This is the XRUN, and it settles the design question.** The failed run
+`224517Z` had a sampled TX floor of 116. A step that lands when the queue is
+at its 96-frame push sawtooth minimum needs 144 frames in hand, so survival
+at these floors is a matter of phase, and about ten steps per run gives the
+odds their chance. Today's floors of 101, 104 and 130 all survived 7-10
+steps; that is luck with better odds, not margin.
+
+**There is no leak to restore, so the slow restoring force proposed in the
+correction above is withdrawn.** A slow loop cannot cancel a periodic
+48-frame skip, and the mean it would hold is already held by the rate loop.
+What the pipeline needs is a fixed device-side margin: at the sawtooth floor,
+TX must hold two packets for the normal pull plus one for the skip. With the
+RAVENNA playback buffer at 288 the sampled floor cannot exceed 144 (the
+TX-288 point), which leaves that margin at zero. TX-288's four clean runs are
+better odds, not a guarantee.
+
+**5. Where the floor scatter comes from.** TX depth means of 422, 426 and 451
+gave floors of 101, 104 and 130: the run-to-run variation is where the
+differential's resting level lands, which the regression's free intercept
+leaves to chance. A differential phase term could hold that split at a chosen
+bias toward TX. It is worth perhaps 30 frames, paid for out of RX, whose own
+floor of 93 sits under USB's 96-frame pulls. A small lever, not the fix.
+
+**6. Capture granularity.** RAVENNA capture backlog lands in the 1-48 bin
+78-93k times per run, so its pointer advances per packet. USB capture never
+does; it moves in 96-frame periods. A 48-frame `avail_min` can halve RX's
+push sawtooth and cannot touch TX's.
+
+**Levers, in order.** (a) A per-PCM buffer request: RAVENNA playback at 384
+with capture held at 288 raises TX's floor ceiling from 144 to 240, and
+tests whether the 5 ms attributed to buffer 384 lives on the capture side.
+One variable, untested. (b) The differential bias above. (c) `avail_min` 48
+on RAVENNA capture for RX.
+
+**Harness gate finding, from `011349Z`.** The readiness probe required the
+eight impulses of a probe to land within 2 samples of each other. Buffer-192
+points have a real 8-sample bimodality (this loaded run: 700 impulses on 1367,
+92 on 1359), so a probe passed only when all eight happened to hit one level
+and three consecutive passes took luck: 23 probes on `225802Z`, never in 131
+probes here, while every one of those 131 probes measured 27.48 ms. The path
+was fine for ten minutes and the run carried no load. Fixed:
+`USB16X16_READY_MAX_SPREAD_SAMPLES`, default 2 so the stopgap path is
+unchanged, and the Phase 4 shim sets 9. `012708Z` was ready after 3 probes.
+
+**Two workflow notes.** The Pi wrapper survives the Mac-side ssh dropping and
+runs to its time limit, so a killed measurement still occupies the Pi for
+the full window. And a `pgrep -f` for the bridge from inside an ssh command
+matches the ssh shell's own command line; anchor the pattern as the wrapper
+does.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
+| `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
 | `96/192/768/192` prime 96 | **211118Z, 600 s soak PASSED, ACCEPTED** | **26.979 ms** | **0.988** | **0 samples** |
 | `96/288/768/192` TX 288 / RX 96 | **4 runs, 800 impulses, 0 failures, tx_qfloor 144 invariant** | **29.979-30.979 ms** | ~0.92 | 8-10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **221301Z, 600 s soak PASSED, ACCEPTED** | **28.729 ms** | 0.924 | 8 samples |

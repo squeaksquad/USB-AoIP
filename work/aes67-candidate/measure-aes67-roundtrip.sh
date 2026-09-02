@@ -26,6 +26,13 @@ coreaudio_frames=${2:-64}
 impulse_count=${3:-40}
 maximum_lag_ms=${4:-200}
 required_signal_probes=${USB16X16_REQUIRED_SIGNAL_PROBES:-3}
+# Largest per-impulse delay spread, in samples, a readiness probe may show and
+# still count as signal. The default of 2 suits paths that land every impulse
+# on one sample. Buffer-192 Phase 4 points carry a real 8-9 sample bimodality,
+# so at 2 a probe passes only when all eight impulses happen to hit one level
+# and three consecutive passes take luck: 23 probes on 2026-09-01, never in
+# 131 probes on 2026-09-02. The Phase 4 shim raises it.
+ready_max_spread_samples=${USB16X16_READY_MAX_SPREAD_SAMPLES:-2}
 signal_probe_attempts=${USB16X16_SIGNAL_PROBE_ATTEMPTS:-150}
 remote_arguments=${USB16X16_REMOTE_ARGUMENTS:-}
 other_channel_load_amplitude=${USB16X16_OTHER_CHANNEL_LOAD_AMPLITUDE:-0}
@@ -151,13 +158,14 @@ remote_result_file=$(mktemp -t usb16x16-remote-result)
             --maximum-lag-ms "$maximum_lag_ms" \
             --output "$probe_path" \
             >/dev/null 2>"$api_dir/readiness-probe-${settle_attempt}.log" &&
-            USB16X16_PROBE="$probe_path" /usr/bin/python3 <<'PYEOF'
+            USB16X16_PROBE="$probe_path" USB16X16_MAX_SPREAD="$ready_max_spread_samples" /usr/bin/python3 <<'PYEOF'
 import json
 import os
 probe = json.load(open(os.environ["USB16X16_PROBE"]))
 delays = probe["correlation"]["perImpulseDelaySamples"]
 peak = float(probe["capturedPeak"])
-raise SystemExit(0 if peak >= 0.01 and max(delays) - min(delays) <= 2 else 1)
+max_spread = int(os.environ["USB16X16_MAX_SPREAD"])
+raise SystemExit(0 if peak >= 0.01 and max(delays) - min(delays) <= max_spread else 1)
 PYEOF
         then
             (( consecutive_signal_probes += 1 ))

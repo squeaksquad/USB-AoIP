@@ -20,6 +20,8 @@ export USB16X16_REMOTE_READY_FILE=/tmp/usb16x16-phase4-candidate.ready
 export USB16X16_REMOTE_ARGUMENTS="$seconds $period_frames $buffer_frames $ring_frames $target_frames $playback_prime_frames $prime_trim $tx_playback_prime_frames $rx_playback_prime_frames"
 export USB16X16_PATH_LABEL="Phase 4 Ferrofish return path"
 export USB16X16_REQUIRED_SIGNAL_PROBES=3
+# Buffer-192 points show an 8-9 sample impulse bimodality; see the delegate.
+export USB16X16_READY_MAX_SPREAD_SAMPLES=${USB16X16_READY_MAX_SPREAD_SAMPLES:-9}
 
 exec "$script_dir/measure-aes67-roundtrip.sh" \
     "$seconds" "$coreaudio_frames" "$impulses" "$maximum_lag_ms"
