@@ -68,7 +68,10 @@ identifier `aes67-daemon`. Every `PRIMED`, `NEGOTIATED`, `RECOVER`,
 `BRIDGE` line every 10 s. The full 1 Hz stream is at
 `/run/usb16x16/bridge.log` on tmpfs, truncated at every start and rotated
 once to `bridge.log.1` at 64 MB; it is the post-mortem for the current
-session only and does not survive a reboot.
+session only and does not survive a reboot. The Pi's journal is volatile
+too (Raspberry Pi OS ships `Storage=volatile`), so `journalctl -b` is the
+only boot you can read: capture a cold boot's timeline before the next
+reboot.
 
 Enable at boot once the manual acceptance items pass:
 
@@ -89,6 +92,10 @@ sudo systemctl enable usb16x16-aes67
   failures inside five minutes it sleeps 60 s before exiting, so a broken
   network is one journal line a minute.
 - Two minutes of stable running clears the failure history.
+- Known: every cold boot starts the bridge with a capture XRUN on both
+  directions, which it re-primes through; two of three boots then needed
+  one stack restart before audio was stable. See the handoff section
+  "DEPLOYED: usb16x16-aes67.service".
 - On stop: SIGINT to the bridge and the daemon with 5 s grace each, then
   SIGTERM, then `rmmod` with retries. `ExecStopPost` reaps anything left in
   the unit's cgroup and unloads the module, but never touches a candidate's

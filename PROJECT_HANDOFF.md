@@ -1,6 +1,6 @@
 # Raspberry Pi 5 USB 16x16 / AES67 bridge handoff
 
-**Authoritative state:** 2026-09-01
+**Authoritative state:** 2026-09-02
 
 This document is the starting point for a fresh development session. It supersedes earlier architecture and baseline snapshots where they conflict. Do not infer that a planned service or latency optimization has already been implemented.
 
@@ -1573,6 +1573,79 @@ left.
 **This is the point to deploy.** Deployment does not exist and must be
 designed as its own piece of work; the wrapper is time-limited to 1200 s by
 design. Nothing here changes the USB baseline.
+
+#### DEPLOYED: usb16x16-aes67.service runs the accepted point; four of seven acceptance items pass, cold boot passes with a caveat
+
+2026-09-02. `work/aes67-bridge/` holds the supervisor, unit, profile
+configuration, installer and README; `DEPLOYMENT_PLAN.md` there is the
+design and records the seven decisions. Installed on the Pi: supervisor
+`1cb716a1`, unit `2d2a9892`, `aes67.conf` `61a72df1`, bridge `0254348c`
+unchanged. The service is enabled and running profile `safe`.
+
+| item | result |
+|---|---|
+| 2. stop/start x5 | 47-48 s to `running`, 4-6 s to stop, UDC `configured` and `usb-16x16.service` active throughout, module and processes gone after each stop |
+| 3. `kill -9` daemon | failure logged, cleanup, restart, `running` 61 s after the kill, one restart counted |
+| 3. `kill -9` bridge | same shape, 62 s; one RECOVER 7.4 s into the restarted bridge (below) |
+| 7. coexistence measurement | stop, `20260902T114609Z`: 800 impulses, **27.646 ms** (1327), score 0.966, spread 10, `tx_qfloor` 172, 4 skips, zero restarts, gaps 2.0/2.1 ms; start again 47 s |
+| 1. cold boot x3 | 61 s from kernel boot to `running` in all three, no wait stage, enabled unit, no intervention; **not clean at the bridge**, below |
+| 4, 5, 6 | not yet run: USB unplug, Mac asleep an hour, eight-hour soak |
+
+**Two service defects found and fixed during acceptance.** The first start
+failed its 4 s NEGOTIATED check because mawk buffers stdin reads on a pipe;
+`-W interactive` fixed it (plain mawk had written nothing after 1 s,
+interactive had the line). The sudoers entry for the bridge kill test used
+`pkill -x`, which cannot match a process name longer than 15 characters;
+it now matches the command line. Both needed a reinstall.
+
+**Item 7's latency is off the grid.** 1327 samples is 72 under the 1399
+mode and 24 under the 1351 run, with identical primes (61/13) and the
+skip covered (`tx_qfloor` 172). It meets every acceptance criterion and
+it is the lowest figure this configuration has produced. Recorded, not
+explained; the quoted range for the point is now 27.6-29.1 ms.
+
+**MEASURED: cold boot starts the bridge with a capture XRUN on both
+directions.** In all three boots the bridge's first `avail` on each capture
+PCM returned EPIPE, 67-158 us after start, before either direction primed:
+
+```
+RECOVER direction=usb-to-ravenna stage=capture-avail code=-32 error=Broken pipe capture_state=XRUN playback_state=PREPARED ring=0 last_queue=0 last_gap_us=0 t_us=67
+RECOVER direction=ravenna-to-usb stage=capture-avail code=-32 error=Broken pipe capture_state=XRUN playback_state=PREPARED ring=0 last_queue=0 last_gap_us=0 t_us=158
+```
+
+No warm start (`systemctl start` after a stop, or a restart after a kill)
+has shown this: every warm SUMMARY carries zero restarts at that point.
+No surviving candidate log has a RECOVER line at all. The bridge re-primes
+and boot 3 then ran clean (`tx_qfloor` 189, `rx_qfloor` 13, two RECOVERs
+total at 310 s). Boots 1 and 2 did not: boot 2 stepped TX's depth floor
+down 48 frames every 0.6 s from the re-prime (`pull=48`, gaps under 50 us,
+so RAVENNA playback consuming normally and USB capture delivering about
+1700 ppm short), took playback XRUNs at 3.5 s and 10 s, an RX
+`capture-ring-full` at 18 s, and the six-in-60-s rule restarted the stack
+at 74 s after boot. Boot 1 logged six RECOVERs and nothing more survives
+of it. So cold boot to *stable* audio was about 61 s once and roughly two
+minutes twice, with a stack restart in between. Where this lives is not
+known: the service, the first open of the gadget PCM after boot, the
+first load of the RAVENNA module, or the Mac re-enumerating the gadget.
+Instrument before proposing.
+
+**RECOVER after the bridge-kill restart.** 7.4 s into the restarted
+bridge, RX capture XRUN with both PCMs in XRUN, while TX's DEPTHSTEP in
+the same microsecond shows `gap_us=6526`, a 6.5 ms wakeup gap against a
+2.1 ms maximum in every loaded run. One occurrence; the soak decides
+whether it belongs to restarts after a kill.
+
+**The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
+playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
++32 s, in every warm and cold start; sink 1 then takes 10 ms. That is
+half the time to audio and it lives in the daemon or the driver, not the
+service. Untouched.
+
+**The Pi's journal is volatile** (`/usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf`,
+`Storage=volatile`; `/var/log/journal` exists but is unused). Every reboot
+discards the previous boot's timeline, which is why boots 1 and 2 are gone.
+A persistent journal is a root change and a decision for the user; without
+it, cold-boot post-mortems must be read before the next reboot.
 
 #### Phase 4 latency is not yet competitive
 
