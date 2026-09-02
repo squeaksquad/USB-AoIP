@@ -1717,6 +1717,23 @@ is a counter, not an explanation. Candidates that need no bridge change:
 timestamps every RECOVER, DEPTHSTEP, ssh session and PTP lock line on
 one monotonic clock. Correlate before proposing.
 
+**TESTED: an ssh session is not sufficient.** A fourth event made the
+pattern sharper first: boot 4 at 3675.68 s, RAVENNA capture and both
+playbacks in XRUN with the bridge's gaps at 32 us and 1952 us, 0.38 s
+after the service watch's own ssh session closed, with nothing logged in
+the 380 ms between (logind removed the session at 3675.30; the driver's
+next lines are the recovery). Then two controlled tests against the
+running service, 30 s apart, watch stopped: A, seven sessions running
+`true`; B, six sessions each reading the unit's whole journal as the
+watch does. Zero RECOVERs in either. So the two 0.3 s coincidences are
+not reproduced by the session alone; whatever fires is rare (about one
+per one to two hours of service time today) and the session, if it is
+involved at all, is not the whole stimulus. The driver has no kernel
+thread of its own in `ps -eL`, so its I/O runs from timer context, and
+the bridge at SCHED_FIFO 90 sees no gap while the driver's PCMs overrun
+and underrun together: whatever it is stalls the driver's timer path, not
+the bridge. Left open. The journal keeps accumulating timestamps.
+
 **The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
 playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
 +32 s, in every warm and cold start; sink 1 then takes 10 ms. That is
