@@ -1590,7 +1590,7 @@ unchanged. The service is enabled and running profile `safe`.
 | 7. coexistence measurement | stop, `20260902T114609Z`: 800 impulses, **27.646 ms** (1327), score 0.966, spread 10, `tx_qfloor` 172, 4 skips, zero restarts, gaps 2.0/2.1 ms; start again 47 s |
 | 1. cold boot x3 | 61 s from kernel boot to `running` in all three, no wait stage, enabled unit, no intervention; **not clean at the bridge**, below |
 | 6. soak | called a pass at 2 h 25 min by the user: 418 M frames, zero restarts, 3 RECOVERs (the startup pair plus one 4.8 ms stall), 88 skips survived, zero drops, `tx_qfloor` 189 before the stall and 122 after, `rx_qfloor` 13, ppm -16.3 |
-| 4. USB unplug/replug | pass with findings: 33 RECOVERs in 0.85 s at unplug, rule tripped 1.6 s later, stack restarted, audio back 35 s after replug, no intervention; the UDC state never left `configured/high-speed`, so the host-presence gate cannot see an unplug (below) |
+| 4. USB unplug/replug | pass; revised supervisor: host absent 3 s after the storm, bridge alone waits, audio 8.6 s after re-enumeration, no module churn (below). First revision: 33 RECOVERs in 0.85 s at unplug, rule tripped 1.6 s later, stack restarted, audio back 35 s after replug, no intervention; the UDC state never left `configured/high-speed`, so the host-presence gate cannot see an unplug (below) |
 | 5 | deferred: the second Mac never enumerated the gadget; run it when the first Mac is free |
 
 **Two service defects found and fixed during acceptance.** The first start
@@ -1871,6 +1871,36 @@ spare the module. Two defects for the next supervisor revision:
   right response is to stop the bridge and wait for a `dwc2` enumeration
   line or for USB input to move, not to churn the module every minute.
   Design to decide with the sleep result in hand.
+
+**DEPLOYED: supervisor revision, host absence handled without module
+churn.** Installed 2026-09-02 22:06 local: supervisor `cc5423e6`, unit
+`77837e60`, `aes67.conf` `a039a3cc`. Changes: the sink PUT and readback
+run under `wait` so a stop is honoured at once (`TimeoutStopSec` 40);
+a RECOVER storm (ten or more in one second) with USB input frozen, or
+sustained for three seconds, is the host gone: the bridge alone stops,
+the daemon and module stay, and the supervisor waits for a `dwc2`
+enumeration line in the kernel log or five minutes, then starts the
+bridge again. A storm with input moving keeps the stack-restart path.
+
+The first revision had a defect the test found at once: it required the
+BRIDGE line to advance to confirm frozen input, and **during a ring-full
+storm the bridge stops writing its 1 Hz BRIDGE line** (measured: the
+line stayed at the same `tx_qn` for 30 s while 2900 recoveries logged),
+so the branch never fired and the storm hold suppressed the old rule:
+an unbounded storm at 38 recoveries a second. The sustained-storm rule
+fixed it; with a host present the largest burst on record is 8 in 1.1 s.
+
+**MEASURED: the revised path, twice, both directions.** Service started
+with the cable on the non-enumerating second Mac: bridge `running` at
+18355.98 s, storm, `host absent` at 18359.02 (3.0 s later), bridge
+stopped, module and daemon kept, one wait line at 60 s. Cable moved back
+to the first Mac: `dwc2 new device` at 18426.08, `host enumerated after
+70s` at 18430.64, bridge `running` at 18434.66, USB input flowing, zero
+RECOVERs on the new bridge, zero service restarts, module never
+unloaded. Audio 8.6 s after the enumeration, against 35 s and a full
+stack restart before. Item 4's contract is therefore met with a better
+shape, and the asleep-Mac test can run without churn whatever suspend
+does to the UDC state.
 
 **The sink 0 PUT takes 32 s in every start.** `session_manager:: media 0
 playout delay 576` at +0 and `driver_manager:: add RTP stream success` at
