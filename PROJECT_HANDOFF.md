@@ -1055,6 +1055,13 @@ four runs of this configuration.
 
 #### ROOT CAUSE: the initial settle is a lottery and its outcome is permanent
 
+**EXPLANATION RETRACTED 2026-09-01, measurements retained.** See "CORRECTION:
+the 1 Hz queue reading is a stroboscope" below. The 285 -> 237 reading this
+section builds on is a sampling artefact that the clean run shows too; the
+per-iteration floors put the two runs about ten frames apart, not 48, and the
+XRUN was not preceded by any stall. The tables and counts below are still
+what was measured.
+
 Comparing the failed and clean 800-impulse runs, which prime identically:
 
 | | at prime | by t=30-40 s | `tx_qfloor` | TX under a period | outcome |
@@ -1143,6 +1150,69 @@ safety scatter are separate phenomena and must not be reasoned about together.
 
 **Cost.** 29.979-30.979 ms against 27.979-28.729 ms at TX 192, so roughly
 +2 ms, and 1.75-2.75 ms faster than the stopgap's re-baselined 32.729 ms.
+
+#### CORRECTION: the 1 Hz queue reading is a stroboscope, and the XRUN is a between-wakeup margin
+
+Re-reading `224517Z` and `225802Z` from the per-iteration floors rather than
+the 1 Hz print, on 2026-09-01.
+
+**`tx_queue` at 1 Hz is not a depth measurement.** The RAVENNA playback device
+pulls one AES67 packet per millisecond, 48 frames, and the 1 Hz sample lands
+either side of a pull: it reads 285 or 237 and nothing between for the first
+minute of *both* runs. The clean run toggles 285 -> 237 at t=40 exactly as the
+failed run does at t=22. Later in a run the sample phase slides with the servo
+ramp and the print wanders through 190-280. So "shed a discrete 48-frame chunk
+by t=30" was the strobe, not a loss. Both runs prime identically and both
+read `tx_dfloor` 432 at t=60.
+
+**What actually separates the runs**, from floors sampled every iteration:
+
+| | failed `224517Z` | clean `225802Z` |
+|---|---:|---:|
+| `tx_qfloor`, whole run before the XRUN | **116** | 126-128 |
+| `tx_qlow` (samples under one RAVENNA period) | 4,920 by t=100, rising ~6k/min | 0 until t=420, then 211 |
+| `tx_cappeak` | 96, never higher | 96 |
+| floors on the last line before RECOVER | unchanged since t=120 | -- |
+
+Ten frames of floor, not 48. And the failed run's queue spends roughly 12% of
+iterations under a period from t=60 onward while the clean run spends none:
+its sawtooth minimum sits just under 128 rather than just over. That is a
+phase draw between USB's 96-frame pushes every 2 ms and RAVENNA's 48-frame
+pulls every 1 ms.
+
+**No stall preceded the XRUN.** `tx_cappeak` stayed at 96 for the whole run,
+so the bridge thread never fell more than one USB period behind on capture.
+The floors on the last telemetry line before the RECOVER are the same as at
+t=120. The queue went from a sampled floor of 116 to empty between two
+wakeups. Nothing the bridge samples can see that interval: the device-side
+minimum is the sampled floor minus whatever the device pulls before the next
+wakeup, and that quantity has never been measured.
+
+**SUMMARY floors on a failed run are contaminated.** `224517Z` reports
+`tx_queue_floor` 89 in SUMMARY; the last line before the first RECOVER reads
+116, and 89 comes from the recovery cascade. The 89/104/124/126 scatter quoted
+above mixes both. Read floors from the last pre-RECOVER line, or from the
+`*_before_recovery` fields the next build adds.
+
+**TX-288's invariant floor of 144 is the buffer ceiling.** With prime 288 plus
+93 overshoot the queue is pinned full at 288 and the ring holds the surplus;
+the floor is buffer minus one push minus one pull, 288 - 96 - 48 = 144, and it
+cannot go higher at this buffer. The RAVENNA playback buffer of 288 frames is
+the ceiling on TX safety, and the mitigation already sits at it.
+
+**The depth floor steps down mid-run in every run**, by 48 or by 85-90
+frames, at random times: `tx_dfloor` 432 -> 401 -> 316 in the failed run,
+480 -> 415 -> 325 in `221302Z`, 528 -> 484 -> 396 in `232430Z`. Whether that
+is depth actually lost or the device pulling early is exactly what the
+existing counters cannot say, and it is the fact the restoring-force design
+depends on. Instrumented next; see the pull-burst build.
+
+**Consequences.** The failure is a razor margin everywhere, not a lottery in
+the first thirty seconds. A restoring force on depth is only worth building
+if the per-second mean depth is shown to leak. The levers that address the
+razor directly are a larger RAVENNA playback buffer (independently of the
+capture buffer) and finer wakeups if the devices advance their pointers per
+packet. Both are unmeasured.
 
 #### Phase 4 latency is not yet competitive
 

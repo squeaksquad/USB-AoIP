@@ -15,8 +15,8 @@ wrapper_source=$2
 bridge_destination=/usr/local/libexec/usb16x16-rt-bridge
 wrapper_destination=/usr/local/sbin/run-phase4-candidate-safe.sh
 sudoers_destination=/etc/sudoers.d/usb16x16-phase4
-expected_bridge_sha256=ae1cf9ba014b9ddcfd8f07ca01f9e96ce1adf29711aa124390e9111d548c5a5e
-expected_wrapper_sha256=397a22da65e3ce4b4c8b357662e8caa59c2dd28d8a4187e3568197e6848cad6f
+expected_bridge_sha256=4791d5779f567272faeffe5a8a9acdd3089a4a7d90c8b1e0eecc98a7509fd2a4
+expected_wrapper_sha256=eeac6a3b71c5e68d52132a4783b8fdfd3ce0432d61843e6c2b1247ba1a35663a
 
 if [ "$(sha256sum "$bridge_source" | awk '{print $1}')" != "$expected_bridge_sha256" ]; then
   echo "bridge source hash mismatch" >&2

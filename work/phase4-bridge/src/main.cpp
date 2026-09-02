@@ -36,6 +36,23 @@ constexpr std::size_t kServoSamplesPerUpdate = 100;
 constexpr std::size_t kMinimumRateSamples = 60;
 constexpr double kDifferentialFramesPerSecondPerPpm =
     2.0 * usb16x16::kNominalRate * 1.0e-6;
+// The pull-burst and capture-avail histograms are binned in AES67 packets:
+// the RAVENNA device moves 48 frames per 1 ms packet and the USB gadget 48
+// frames per 1 ms USB frame, so 48 is the quantum both devices work in.
+constexpr std::size_t kHistogramBinFrames = 48;
+// 0, 1-48, 49-96, 97-144, 145-192, 193+
+constexpr std::size_t kPullHistogramBins = 6;
+// 0, 1-48, 49-96, 97-144, 145+
+constexpr std::size_t kCaptureHistogramBins = 5;
+// A DEPTHSTEP line is emitted when the depth floor drops by at least this
+// much; the steps seen in the logs are 48 and about 85-90 frames.
+constexpr std::size_t kDepthStepReportFrames = 24;
+std::chrono::steady_clock::time_point process_started{};
+
+std::uint64_t elapsed_us() noexcept {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - process_started).count());
+}
 
 std::atomic<bool> stop_requested{false};
 
@@ -307,6 +324,20 @@ struct Telemetry {
     std::atomic<std::uint64_t> rx_capture_samples{0};
     std::atomic<std::uint64_t> tx_frames{0};
     std::atomic<std::uint64_t> rx_frames{0};
+    std::atomic<std::uint64_t> tx_pull_max{0};
+    std::atomic<std::uint64_t> rx_pull_max{0};
+    std::atomic<std::uint64_t> tx_pull_max_gap_us{0};
+    std::atomic<std::uint64_t> rx_pull_max_gap_us{0};
+    std::atomic<std::uint64_t> tx_gap_max_us{0};
+    std::atomic<std::uint64_t> rx_gap_max_us{0};
+    std::array<std::atomic<std::uint64_t>, kPullHistogramBins> tx_pull_histogram{};
+    std::array<std::atomic<std::uint64_t>, kPullHistogramBins> rx_pull_histogram{};
+    std::atomic<std::uint64_t> tx_depth_total{0};
+    std::atomic<std::uint64_t> rx_depth_total{0};
+    std::atomic<std::uint64_t> tx_queue_total{0};
+    std::atomic<std::uint64_t> rx_queue_total{0};
+    std::array<std::atomic<std::uint64_t>, kCaptureHistogramBins> tx_capture_histogram{};
+    std::array<std::atomic<std::uint64_t>, kCaptureHistogramBins> rx_capture_histogram{};
 };
 
 enum class IoResult { idle, progressed, recover };
@@ -342,6 +373,39 @@ struct Direction {
     std::size_t capture_backlog_peak{0};
     std::uint64_t capture_backlog_total{0};
     std::uint64_t capture_backlog_samples{0};
+    // What the playback device consumed between two consecutive bridge
+    // observations of its queue: the "pull burst". The queue floor is only
+    // ever sampled when the bridge is awake, so the device-side minimum is the
+    // sampled floor minus whatever the device pulls before the next wakeup.
+    // That gap is the number the XRUN depends on, and the floors cannot see
+    // it. Tracked from the available() call already made every iteration plus
+    // the frames committed since, so it costs one clock read per iteration.
+    bool have_queue_observation{false};
+    std::size_t queue_after_last_commit{0};
+    std::chrono::steady_clock::time_point last_queue_observation{};
+    std::size_t pull_max{0};
+    std::uint64_t pull_max_gap_us{0};
+    std::uint64_t observation_gap_max_us{0};
+    std::array<std::uint64_t, kPullHistogramBins> pull_histogram{};
+    std::size_t last_queue_depth{0};
+    std::uint64_t last_observation_gap_us{0};
+    // Running totals of queue depth and ring-plus-queue depth at the same
+    // sample point as the floors, so the telemetry thread can print a
+    // per-second mean. The mean is the conservation test: a real depth loss
+    // moves it, an early pull does not.
+    std::uint64_t depth_total{0};
+    std::uint64_t queue_total{0};
+    std::size_t depth_floor_reported{std::numeric_limits<std::size_t>::max()};
+    // Capture backlog at each observation, binned in packets, to show whether
+    // the capture pointer advances in sub-period steps at all.
+    std::array<std::uint64_t, kCaptureHistogramBins> capture_histogram{};
+    std::size_t last_capture_backlog{0};
+    // The floors as they stood at the first recovery. SUMMARY reports the
+    // floors over the whole process, which on a failed run includes the
+    // recovery cascade; run 224517Z read 89 in SUMMARY against 116 for the
+    // entire pre-XRUN run.
+    std::size_t queue_floor_before_recovery{std::numeric_limits<std::size_t>::max()};
+    std::size_t depth_floor_before_recovery{std::numeric_limits<std::size_t>::max()};
     std::uint64_t input_frames{};
     std::uint64_t output_frames{};
     // Frames the resampler produced, and consumed ring input for, that
@@ -412,6 +476,9 @@ IoResult capture_into_ring(Direction& direction) noexcept {
         direction.capture_backlog_peak = std::max(direction.capture_backlog_peak, backlog);
         direction.capture_backlog_total += backlog;
         ++direction.capture_backlog_samples;
+        direction.last_capture_backlog = backlog;
+        ++direction.capture_histogram[std::min(
+            (backlog + kHistogramBinFrames - 1) / kHistogramBinFrames, kCaptureHistogramBins - 1)];
     }
     if (available < 0 || available == 0) {
         return available < 0 && available != -EAGAIN
@@ -508,11 +575,37 @@ IoResult render_to_playback(Direction& direction,
     // this runs on every loop iteration. Only once playback is started: during
     // priming the queue is deliberately empty and would floor the statistic at
     // zero for reasons that say nothing about steady-state headroom.
+    bool observed = false;
     if (direction.playback_started) {
+        observed = true;
         const auto buffer_frames = static_cast<std::size_t>(direction.playback.buffer());
         const auto free_frames = static_cast<std::size_t>(available);
         const std::size_t queue_depth =
             buffer_frames > free_frames ? buffer_frames - free_frames : 0;
+        const auto now = std::chrono::steady_clock::now();
+        std::size_t pull = 0;
+        std::uint64_t gap_us = 0;
+        if (direction.have_queue_observation) {
+            // Frames the device consumed since we last looked: what we left
+            // in the queue after our last commit, less what is there now.
+            pull = direction.queue_after_last_commit > queue_depth
+                ? direction.queue_after_last_commit - queue_depth
+                : 0;
+            gap_us = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                now - direction.last_queue_observation).count());
+            if (pull > direction.pull_max) {
+                direction.pull_max = pull;
+                direction.pull_max_gap_us = gap_us;
+            }
+            direction.observation_gap_max_us = std::max(direction.observation_gap_max_us, gap_us);
+            ++direction.pull_histogram[std::min(
+                (pull + kHistogramBinFrames - 1) / kHistogramBinFrames, kPullHistogramBins - 1)];
+        }
+        direction.have_queue_observation = true;
+        direction.last_queue_observation = now;
+        direction.queue_after_last_commit = queue_depth;
+        direction.last_queue_depth = queue_depth;
+        direction.last_observation_gap_us = gap_us;
         direction.queue_floor = std::min(direction.queue_floor, queue_depth);
         direction.depth_floor =
             std::min(direction.depth_floor, direction.ring.size() + queue_depth);
@@ -520,6 +613,23 @@ IoResult render_to_playback(Direction& direction,
             ++direction.queue_below_period;
         }
         ++direction.queue_samples;
+        direction.queue_total += queue_depth;
+        direction.depth_total += direction.ring.size() + queue_depth;
+        if (direction.depth_floor + kDepthStepReportFrames <= direction.depth_floor_reported) {
+            // Rare by construction: only when the floor steps down by a
+            // packet or more, a handful of lines per run. Same path PRIMED
+            // and RECOVER already take.
+            direction.depth_floor_reported = direction.depth_floor;
+            std::cerr << "DEPTHSTEP direction=" << direction.name
+                      << " t_us=" << elapsed_us()
+                      << " depth_floor=" << direction.depth_floor
+                      << " ring=" << direction.ring.size()
+                      << " queue=" << queue_depth
+                      << " avail=" << available
+                      << " capture_backlog=" << direction.last_capture_backlog
+                      << " pull=" << pull
+                      << " gap_us=" << gap_us << '\n';
+        }
     }
 
     // Keep the target occupancy in the process-local elastic ring. ALSA may
@@ -590,6 +700,9 @@ IoResult render_to_playback(Direction& direction,
     if (committed < 0 || static_cast<snd_pcm_uframes_t>(committed) != frames) {
         return request_recovery(direction, "playback-mmap-commit", committed);
     }
+    if (observed) {
+        direction.queue_after_last_commit += frames;
+    }
     if (!direction.playback_started) {
         // MMAP commits do not auto-start these two hardware PCMs even after
         // the software start threshold is crossed. Without an explicit start,
@@ -613,7 +726,15 @@ void restart_direction(Direction& direction) {
               << (direction.recovery_code < 0 ? snd_strerror(static_cast<int>(direction.recovery_code)) : "none")
               << " capture_state=" << snd_pcm_state_name(direction.capture.state())
               << " playback_state=" << snd_pcm_state_name(direction.playback.state())
-              << " ring=" << direction.ring.size() << '\n';
+              << " ring=" << direction.ring.size()
+              << " last_queue=" << direction.last_queue_depth
+              << " last_gap_us=" << direction.last_observation_gap_us
+              << " t_us=" << elapsed_us() << '\n';
+    if (direction.restarts == 0) {
+        direction.queue_floor_before_recovery = direction.queue_floor;
+        direction.depth_floor_before_recovery = direction.depth_floor;
+    }
+    direction.have_queue_observation = false;
     direction.capture.drop();
     direction.playback.drop();
     direction.capture.prepare();
@@ -700,15 +821,73 @@ void publish_telemetry(const Direction& tx,
     telemetry.rx_capture_samples.store(rx.capture_backlog_samples, std::memory_order_relaxed);
     telemetry.tx_frames.store(tx.output_frames, std::memory_order_relaxed);
     telemetry.rx_frames.store(rx.output_frames, std::memory_order_relaxed);
+    telemetry.tx_pull_max.store(tx.pull_max, std::memory_order_relaxed);
+    telemetry.rx_pull_max.store(rx.pull_max, std::memory_order_relaxed);
+    telemetry.tx_pull_max_gap_us.store(tx.pull_max_gap_us, std::memory_order_relaxed);
+    telemetry.rx_pull_max_gap_us.store(rx.pull_max_gap_us, std::memory_order_relaxed);
+    telemetry.tx_gap_max_us.store(tx.observation_gap_max_us, std::memory_order_relaxed);
+    telemetry.rx_gap_max_us.store(rx.observation_gap_max_us, std::memory_order_relaxed);
+    for (std::size_t bin = 0; bin < kPullHistogramBins; ++bin) {
+        telemetry.tx_pull_histogram[bin].store(tx.pull_histogram[bin], std::memory_order_relaxed);
+        telemetry.rx_pull_histogram[bin].store(rx.pull_histogram[bin], std::memory_order_relaxed);
+    }
+    telemetry.tx_depth_total.store(tx.depth_total, std::memory_order_relaxed);
+    telemetry.rx_depth_total.store(rx.depth_total, std::memory_order_relaxed);
+    telemetry.tx_queue_total.store(tx.queue_total, std::memory_order_relaxed);
+    telemetry.rx_queue_total.store(rx.queue_total, std::memory_order_relaxed);
+    for (std::size_t bin = 0; bin < kCaptureHistogramBins; ++bin) {
+        telemetry.tx_capture_histogram[bin].store(tx.capture_histogram[bin], std::memory_order_relaxed);
+        telemetry.rx_capture_histogram[bin].store(rx.capture_histogram[bin], std::memory_order_relaxed);
+    }
 }
+
+template <typename Array>
+std::string format_histogram(const Array& histogram) {
+    std::string text;
+    for (std::size_t bin = 0; bin < histogram.size(); ++bin) {
+        if (bin != 0) {
+            text += '/';
+        }
+        text += std::to_string(static_cast<std::uint64_t>(histogram[bin]));
+    }
+    return text;
+}
+
+// Mean over the samples added since the previous call, for the per-second
+// window means. Returns 0 when no samples arrived in the window.
+struct WindowMean {
+    std::uint64_t last_total{0};
+    std::uint64_t last_samples{0};
+    double update(const std::uint64_t total, const std::uint64_t samples) noexcept {
+        const std::uint64_t delta_samples = samples - last_samples;
+        const double mean = delta_samples == 0
+            ? 0.0
+            : static_cast<double>(total - last_total) / static_cast<double>(delta_samples);
+        last_total = total;
+        last_samples = samples;
+        return mean;
+    }
+};
 
 double capture_mean(const std::uint64_t total, const std::uint64_t samples) noexcept {
     return samples == 0 ? 0.0 : static_cast<double>(total) / static_cast<double>(samples);
 }
 
 void telemetry_loop(const Telemetry& telemetry) {
+    WindowMean tx_depth_mean;
+    WindowMean rx_depth_mean;
+    WindowMean tx_queue_mean;
+    WindowMean rx_queue_mean;
     while (!stop_requested.load(std::memory_order_relaxed)) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
+        // Read the sample count once per direction so both window means in a
+        // line divide by the same count.
+        const std::uint64_t tx_samples = telemetry.tx_queue_samples.load();
+        const std::uint64_t rx_samples = telemetry.rx_queue_samples.load();
+        const double tx_dmean = tx_depth_mean.update(telemetry.tx_depth_total.load(), tx_samples);
+        const double rx_dmean = rx_depth_mean.update(telemetry.rx_depth_total.load(), rx_samples);
+        const double tx_qmean = tx_queue_mean.update(telemetry.tx_queue_total.load(), tx_samples);
+        const double rx_qmean = rx_queue_mean.update(telemetry.rx_queue_total.load(), rx_samples);
         std::cout << std::fixed << std::setprecision(3)
                   << "BRIDGE ppm=" << static_cast<double>(telemetry.ppm_milli.load()) / 1000.0
                   << " observed_ppm="
@@ -744,7 +923,21 @@ void telemetry_loop(const Telemetry& telemetry) {
                   << " rx_capmean=" << capture_mean(telemetry.rx_capture_total.load(),
                                                     telemetry.rx_capture_samples.load())
                   << " tx_frames=" << telemetry.tx_frames.load()
-                  << " rx_frames=" << telemetry.rx_frames.load() << '\n';
+                  << " rx_frames=" << telemetry.rx_frames.load()
+                  << " tx_dmean=" << tx_dmean
+                  << " rx_dmean=" << rx_dmean
+                  << " tx_qmean=" << tx_qmean
+                  << " rx_qmean=" << rx_qmean
+                  << " tx_pullmax=" << telemetry.tx_pull_max.load()
+                  << " rx_pullmax=" << telemetry.rx_pull_max.load()
+                  << " tx_pullmax_gap_us=" << telemetry.tx_pull_max_gap_us.load()
+                  << " rx_pullmax_gap_us=" << telemetry.rx_pull_max_gap_us.load()
+                  << " tx_gapmax_us=" << telemetry.tx_gap_max_us.load()
+                  << " rx_gapmax_us=" << telemetry.rx_gap_max_us.load()
+                  << " tx_pullhist=" << format_histogram(telemetry.tx_pull_histogram)
+                  << " rx_pullhist=" << format_histogram(telemetry.rx_pull_histogram)
+                  << " tx_caphist=" << format_histogram(telemetry.tx_capture_histogram)
+                  << " rx_caphist=" << format_histogram(telemetry.rx_capture_histogram) << '\n';
     }
 }
 
@@ -805,6 +998,7 @@ int run(const Options& options) {
 
     std::thread telemetry_thread(telemetry_loop, std::cref(telemetry));
     const auto started = std::chrono::steady_clock::now();
+    process_started = started;
     std::uint64_t last_telemetry_frame = 0;
     std::size_t rate_update_samples = 0;
     usb16x16::WindowedLinearRegression rate_regression;
@@ -940,7 +1134,25 @@ int run(const Options& options) {
               << ",\"rx_capture_mean\":"
               << capture_mean(rx.capture_backlog_total, rx.capture_backlog_samples)
               << ",\"tx_capture_samples\":" << tx.capture_backlog_samples
-              << ",\"rx_capture_samples\":" << rx.capture_backlog_samples << "}\n";
+              << ",\"rx_capture_samples\":" << rx.capture_backlog_samples
+              << ",\"tx_queue_floor_before_recovery\":" << summary_floor(tx.queue_floor_before_recovery)
+              << ",\"rx_queue_floor_before_recovery\":" << summary_floor(rx.queue_floor_before_recovery)
+              << ",\"tx_depth_floor_before_recovery\":" << summary_floor(tx.depth_floor_before_recovery)
+              << ",\"rx_depth_floor_before_recovery\":" << summary_floor(rx.depth_floor_before_recovery)
+              << ",\"tx_depth_mean\":" << capture_mean(tx.depth_total, tx.queue_samples)
+              << ",\"rx_depth_mean\":" << capture_mean(rx.depth_total, rx.queue_samples)
+              << ",\"tx_queue_mean\":" << capture_mean(tx.queue_total, tx.queue_samples)
+              << ",\"rx_queue_mean\":" << capture_mean(rx.queue_total, rx.queue_samples)
+              << ",\"tx_pull_max\":" << tx.pull_max
+              << ",\"rx_pull_max\":" << rx.pull_max
+              << ",\"tx_pull_max_gap_us\":" << tx.pull_max_gap_us
+              << ",\"rx_pull_max_gap_us\":" << rx.pull_max_gap_us
+              << ",\"tx_gap_max_us\":" << tx.observation_gap_max_us
+              << ",\"rx_gap_max_us\":" << rx.observation_gap_max_us
+              << ",\"tx_pull_histogram\":\"" << format_histogram(tx.pull_histogram) << '"'
+              << ",\"rx_pull_histogram\":\"" << format_histogram(rx.pull_histogram) << '"'
+              << ",\"tx_capture_histogram\":\"" << format_histogram(tx.capture_histogram) << '"'
+              << ",\"rx_capture_histogram\":\"" << format_histogram(rx.capture_histogram) << "\"}\n";
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
 }
 
