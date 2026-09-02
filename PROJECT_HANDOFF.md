@@ -1385,8 +1385,11 @@ the same 8-sample bimodality and run-to-run drift every buffer-192 run shows.
 **What this does and does not settle.** Changing the sink delay live is not a
 latency lever under Phase 4. Whether the value the wrapper pins at startup
 matters is still open: the stopgap's 1:1 result came from separate runs, each
-started at its delay. Testing that needs the delay as a wrapper argument, so
-a re-pin and an install, and separate runs per point.
+started at its delay. **The wrapper now takes the sink delay as its eleventh
+positional argument** (default 576, validated 48..2400, applied to both sinks
+before the bridge primes, readback checked against it), and the measure shim
+reads `USB16X16_PHASE4_SINK_DELAY`. Wrapper re-pinned and staged; the bridge
+binary is unchanged. Untested: one run per point is the experiment.
 
 **This run's floors are the lowest yet:** `tx_qfloor` 83, `rx_qfloor` 45, TX
 depth mean about 390 against 422-451 in the previous four runs, with RX

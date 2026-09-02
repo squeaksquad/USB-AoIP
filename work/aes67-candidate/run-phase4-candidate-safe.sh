@@ -37,7 +37,10 @@ rx_playback_prime_frames=${9:-0}
 # Buffer request for the RAVENNA playback PCM alone; 0 inherits buffer_frames.
 # Lifts TX's queue-floor ceiling without moving the RAVENNA capture buffer.
 ravenna_playback_buffer_frames=${10:-0}
-sink_delay=576
+# AES67 sink playout delay in samples, applied to both sinks before the bridge
+# primes. Changing it live after priming never reaches the bridge (sweep
+# 022225Z), so the value the run starts with is the one that can matter.
+sink_delay=${11:-576}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
 ready_file=/tmp/usb16x16-phase4-candidate.ready
@@ -48,7 +51,7 @@ bridge_pid=
 for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frames" "$target_frames" \
              "$playback_prime_frames" "$prime_trim" \
              "$tx_playback_prime_frames" "$rx_playback_prime_frames" \
-             "$ravenna_playback_buffer_frames"; do
+             "$ravenna_playback_buffer_frames" "$sink_delay"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -81,6 +84,10 @@ if [ "$ravenna_playback_buffer_frames" -ne 0 ] &&
      [ "$ravenna_playback_buffer_frames" -gt 2048 ]; }; then
   echo "invalid ravenna-playback-buffer" >&2
   exit 16
+fi
+if [ "$sink_delay" -lt 48 ] || [ "$sink_delay" -gt 2400 ]; then
+  echo "sink delay must be 48..2400 samples" >&2
+  exit 17
 fi
 # tx primes into RAVENNA playback, so it validates against that PCM's own
 # request when one is given; rx primes into USB playback at buffer_frames.
@@ -187,7 +194,7 @@ trap cleanup EXIT INT TERM HUP
 
 sed "s|\"status_file\": \"[^\"]*\"|\"status_file\": \"$temporary_root/status.json\"|" \
   "$original_config" > "$temporary_root/daemon.conf"
-sed 's/"delay": 576/"delay": 576/g' "$original_status" > "$temporary_root/status.json"
+sed "s/\"delay\": 576/\"delay\": $sink_delay/g" "$original_status" > "$temporary_root/status.json"
 
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); keys=("name","io","delay","use_sdp","source","sdp","ignore_refclk_gmid","map"); json.dump({k:d["sinks"][int(sys.argv[3])][k] for k in keys},open(sys.argv[2],"w"))' \
   "$temporary_root/status.json" "$temporary_root/sink-0.json" 0
@@ -235,8 +242,8 @@ for sink_id in 0 1; do
     > "$result_dir/sink-$sink_id-put.json"
 done
 curl -fsS http://127.0.0.1:8080/api/sinks > "$result_dir/sinks-readback.json"
-if [ "$(grep -o '"delay"[[:space:]]*:[[:space:]]*576' "$result_dir/sinks-readback.json" | wc -l)" -ne 2 ]; then
-  echo "sink delay readback did not contain two 576-sample sinks" >&2
+if [ "$(grep -o "\"delay\"[[:space:]]*:[[:space:]]*$sink_delay\b" "$result_dir/sinks-readback.json" | wc -l)" -ne 2 ]; then
+  echo "sink delay readback did not contain two $sink_delay-sample sinks" >&2
   exit 30
 fi
 
