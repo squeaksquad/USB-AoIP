@@ -104,7 +104,11 @@ sudo systemctl enable usb16x16-aes67
   On a storm the supervisor stops the bridge only,
   keeps the daemon and the module up, logs `STAGE host absent`, and waits
   for a `dwc2` enumeration line in the kernel log or `HOST_RETRY_SECONDS`
-  (300), then starts the bridge again. A storm with USB input still moving
+  (60), then starts the bridge again. A replug re-enumerates and is seen
+  within 5 s; a Mac waking from sleep does not re-enumerate, so the retry
+  is the wake signal and audio returns within the retry interval plus
+  about 8 s. During a storm the journal carries the first 20 RECOVER
+  lines and a marker; the full stream is on the tmpfs log. A storm with USB input still moving
   is not the host leaving and takes the ordinary stack-restart path.
 - A stop request during the daemon's 32 s sink PUT is honoured at once:
   the long calls run in the background under `wait`, and the trap kills

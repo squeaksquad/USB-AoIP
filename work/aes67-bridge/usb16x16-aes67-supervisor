@@ -52,7 +52,8 @@ journal_bridge_every=10        # one BRIDGE line in N to the journal
 bridge_log_cap_mb=64           # rotate the tmpfs log once at this size
 recover_limit_per_minute=5     # more RECOVER lines than this in 60 s fails the run
 host_storm_per_second=10       # RECOVER lines in one second that, with USB input frozen, mean no host
-host_retry_s=300               # with no host, try the bridge again this often
+host_retry_s=60                # with no host, try the bridge again this often (a wake from
+                               # sleep produces no enumeration line, so the retry is the signal)
 host_probe_s=5                 # poll interval while waiting for the host
 backoff_failures=3             # failures inside backoff_window_s before sleeping
 backoff_window_s=300
@@ -547,8 +548,15 @@ start_bridge() {
         if ((n - 1) % every == 0) { print; fflush() }
         next
       }
-      /^RECOVER / { print "1" >> recovers; close(recovers); print; fflush(); next }
-      { print; fflush() }
+      /^RECOVER / {
+        print "1" >> recovers; close(recovers)
+        storm++
+        if (storm <= 20) { print; fflush() }
+        else if (storm == 21) { print "RECOVER storm: further RECOVER and PRIMED lines go to the tmpfs log only"; fflush() }
+        next
+      }
+      /^PRIMED / { if (storm <= 20) { print; fflush() }; next }
+      { if (storm > 20) { print "RECOVER storm ended after " storm " recoveries"; fflush() }; storm = 0; print; fflush() }
     ') 2>&1 &
   bridge_pid=$!
 
