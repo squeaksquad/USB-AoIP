@@ -68,6 +68,13 @@ struct Options {
     unsigned int rate{48000};
     snd_pcm_uframes_t requested_period{96};
     snd_pcm_uframes_t requested_buffer{384};
+    // Buffer request for the RAVENNA playback PCM alone; zero means --buffer.
+    // The RAVENNA playback buffer caps TX's queue floor at buffer minus one
+    // push minus one pull (288 - 96 - 48 = 144 at buffer 288), and the device
+    // pulls three packets, 144 frames, between wakeups when it skips. Raising
+    // this PCM alone lifts that ceiling without moving the capture buffer,
+    // which is where the 5 ms attributed to buffer 384 may live.
+    snd_pcm_uframes_t ravenna_playback_buffer{0};
     std::size_t ring_frames{768};
     std::size_t target_frames{192};
     // Frames to prime into the ALSA playback queue. Zero means "the whole
@@ -101,6 +108,8 @@ struct Options {
         << "  --ravenna DEVICE       raw RAVENNA ALSA device\n"
         << "  --period FRAMES        requested ALSA period (48 or 96; default 96)\n"
         << "  --buffer FRAMES        requested ALSA buffer (default 384)\n"
+        << "  --ravenna-playback-buffer FRAMES\n"
+        << "                         buffer request for RAVENNA playback alone (0 = --buffer)\n"
         << "  --ring FRAMES          elastic-ring capacity (default 768)\n"
         << "  --target FRAMES        elastic-ring target (default 192)\n"
         << "  --playback-prime N     frames primed into the ALSA playback queue\n"
@@ -143,6 +152,8 @@ Options parse_options(const int argc, char** argv) {
             options.requested_period = parse_unsigned(value, "period");
         } else if (argument == "--buffer") {
             options.requested_buffer = parse_unsigned(value, "buffer");
+        } else if (argument == "--ravenna-playback-buffer") {
+            options.ravenna_playback_buffer = parse_unsigned(value, "ravenna-playback-buffer");
         } else if (argument == "--ring") {
             options.ring_frames = parse_unsigned(value, "ring");
         } else if (argument == "--target") {
@@ -175,6 +186,11 @@ Options parse_options(const int argc, char** argv) {
         options.target_frames < options.requested_period) {
         throw std::runtime_error("invalid buffer/ring/target relationship");
     }
+    if (options.ravenna_playback_buffer != 0 &&
+        (options.ravenna_playback_buffer < options.requested_period * 2 ||
+         options.ravenna_playback_buffer > 2048)) {
+        throw std::runtime_error("ravenna-playback-buffer must be 0 or between 2 periods and 2048");
+    }
     if (options.priority < 1 || options.priority > 98) {
         throw std::runtime_error("priority must be 1..98");
     }
@@ -193,11 +209,12 @@ public:
         const std::string& device,
         const snd_pcm_stream_t stream,
         const SampleFormat format,
-        const Options& options)
+        const Options& options,
+        const snd_pcm_uframes_t requested_buffer)
         : label_(std::move(label)), stream_(stream), format_(format) {
         alsa_check(snd_pcm_open(&handle_, device.c_str(), stream, SND_PCM_NONBLOCK),
                    label_ + " open " + device);
-        configure(options);
+        configure(options, requested_buffer);
     }
 
     ~Pcm() {
@@ -234,7 +251,7 @@ public:
     }
 
 private:
-    void configure(const Options& options) {
+    void configure(const Options& options, const snd_pcm_uframes_t requested_buffer) {
         snd_pcm_hw_params_t* hardware = nullptr;
         snd_pcm_sw_params_t* software = nullptr;
         snd_pcm_hw_params_alloca(&hardware);
@@ -259,7 +276,7 @@ private:
         direction = 0;
         alsa_check(snd_pcm_hw_params_set_period_size_near(handle_, hardware, &period_, &direction),
                    label_ + " period");
-        buffer_ = options.requested_buffer;
+        buffer_ = requested_buffer;
         alsa_check(snd_pcm_hw_params_set_buffer_size_near(handle_, hardware, &buffer_), label_ + " buffer");
         alsa_check(snd_pcm_hw_params(handle_, hardware), label_ + " apply hardware params");
 
@@ -942,10 +959,17 @@ void telemetry_loop(const Telemetry& telemetry) {
 }
 
 int run(const Options& options) {
-    Pcm usb_capture("USB capture", options.usb_device, SND_PCM_STREAM_CAPTURE, SampleFormat::s24_3le, options);
-    Pcm usb_playback("USB playback", options.usb_device, SND_PCM_STREAM_PLAYBACK, SampleFormat::s24_3le, options);
-    Pcm ravenna_capture("RAVENNA capture", options.ravenna_device, SND_PCM_STREAM_CAPTURE, SampleFormat::s32_le, options);
-    Pcm ravenna_playback("RAVENNA playback", options.ravenna_device, SND_PCM_STREAM_PLAYBACK, SampleFormat::s32_le, options);
+    const snd_pcm_uframes_t ravenna_playback_request = options.ravenna_playback_buffer != 0
+        ? options.ravenna_playback_buffer
+        : options.requested_buffer;
+    Pcm usb_capture("USB capture", options.usb_device, SND_PCM_STREAM_CAPTURE, SampleFormat::s24_3le, options,
+                    options.requested_buffer);
+    Pcm usb_playback("USB playback", options.usb_device, SND_PCM_STREAM_PLAYBACK, SampleFormat::s24_3le, options,
+                     options.requested_buffer);
+    Pcm ravenna_capture("RAVENNA capture", options.ravenna_device, SND_PCM_STREAM_CAPTURE, SampleFormat::s32_le, options,
+                        options.requested_buffer);
+    Pcm ravenna_playback("RAVENNA playback", options.ravenna_device, SND_PCM_STREAM_PLAYBACK, SampleFormat::s32_le, options,
+                         ravenna_playback_request);
 
     // Resolve the prime depth per direction: the direction override if set,
     // then the shared --playback-prime, then that direction's own negotiated

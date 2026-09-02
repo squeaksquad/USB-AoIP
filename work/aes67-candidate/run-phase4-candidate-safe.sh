@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=4791d5779f567272faeffe5a8a9acdd3089a4a7d90c8b1e0eecc98a7509fd2a4
+expected_bridge_sha256=0254348cd21e119bd4a42a9450b616b3c2930abaff1ae836a72f5bcce3f58d5e
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
@@ -34,6 +34,9 @@ prime_trim=${7:-0}
 # usb-to-ravenna (RAVENNA playback), rx is ravenna-to-usb (USB playback).
 tx_playback_prime_frames=${8:-0}
 rx_playback_prime_frames=${9:-0}
+# Buffer request for the RAVENNA playback PCM alone; 0 inherits buffer_frames.
+# Lifts TX's queue-floor ceiling without moving the RAVENNA capture buffer.
+ravenna_playback_buffer_frames=${10:-0}
 sink_delay=576
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
@@ -44,7 +47,8 @@ bridge_pid=
 
 for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frames" "$target_frames" \
              "$playback_prime_frames" "$prime_trim" \
-             "$tx_playback_prime_frames" "$rx_playback_prime_frames"; do
+             "$tx_playback_prime_frames" "$rx_playback_prime_frames" \
+             "$ravenna_playback_buffer_frames"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -72,10 +76,24 @@ if [ "$prime_trim" -ne 0 ] && [ "$prime_trim" -ne 1 ]; then
   echo "prime-trim must be 0 or 1" >&2
   exit 14
 fi
-for value in "$tx_playback_prime_frames" "$rx_playback_prime_frames"; do
+if [ "$ravenna_playback_buffer_frames" -ne 0 ] &&
+   { [ "$ravenna_playback_buffer_frames" -lt $((period_frames * 2)) ] ||
+     [ "$ravenna_playback_buffer_frames" -gt 2048 ]; }; then
+  echo "invalid ravenna-playback-buffer" >&2
+  exit 16
+fi
+# tx primes into RAVENNA playback, so it validates against that PCM's own
+# request when one is given; rx primes into USB playback at buffer_frames.
+tx_prime_buffer_limit=$buffer_frames
+if [ "$ravenna_playback_buffer_frames" -ne 0 ]; then
+  tx_prime_buffer_limit=$ravenna_playback_buffer_frames
+fi
+for pair in "$tx_playback_prime_frames:$tx_prime_buffer_limit" "$rx_playback_prime_frames:$buffer_frames"; do
+  value=${pair%%:*}
+  limit=${pair##*:}
   if [ "$value" -ne 0 ] &&
      { [ "$value" -lt "$period_frames" ] ||
-       [ "$value" -gt "$buffer_frames" ] ||
+       [ "$value" -gt "$limit" ] ||
        [ "$ring_frames" -lt $((target_frames + value + 4)) ]; }; then
     echo "invalid per-direction playback-prime relationship" >&2
     exit 15
@@ -231,6 +249,7 @@ timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
   --prime-trim "$prime_trim" \
   --tx-playback-prime "$tx_playback_prime_frames" \
   --rx-playback-prime "$rx_playback_prime_frames" \
+  --ravenna-playback-buffer "$ravenna_playback_buffer_frames" \
   --priority 90 \
   --seconds "$candidate_seconds" \
   > "$result_dir/bridge.log" 2>&1 &

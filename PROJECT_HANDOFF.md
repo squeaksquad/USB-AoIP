@@ -1286,8 +1286,14 @@ push sawtooth and cannot touch TX's.
 **Levers, in order.** (a) A per-PCM buffer request: RAVENNA playback at 384
 with capture held at 288 raises TX's floor ceiling from 144 to 240, and
 tests whether the 5 ms attributed to buffer 384 lives on the capture side.
-One variable, untested. (b) The differential bias above. (c) `avail_min` 48
-on RAVENNA capture for RX.
+One variable. **Implemented, untested**, in binary `0254348c`:
+`--ravenna-playback-buffer FRAMES` (0 = `--buffer`), the wrapper's tenth
+positional argument, and `USB16X16_PHASE4_RAVENNA_PLAYBACK_BUFFER_FRAMES` on
+the measure shim. The wrapper validates the TX prime against this request
+when it is given, so TX prime 288 with buffer 192 no longer needs buffer 288
+requested. Read `NEGOTIATED` to confirm what the device actually granted.
+(b) The differential bias above. (c) `avail_min` 48 on RAVENNA capture for
+RX.
 
 **Harness gate finding, from `011349Z`.** The readiness probe required the
 eight impulses of a probe to land within 2 samples of each other. Buffer-192
