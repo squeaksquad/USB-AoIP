@@ -27,15 +27,16 @@ pi() {
 }
 
 print -r -- "=== measure under service: ${frames} frames, ${impulses} impulses ($timestamp)"
-state=$(pi 'echo "$(systemctl is-active usb16x16-aes67) $(cut -d" " -f2- /run/usb16x16/stage 2>/dev/null | cut -c1-20) $(cut -d. -f1 /proc/uptime) $(wc -l < /run/usb16x16/recovers 2>/dev/null) $(grep -o "tx_restarts=[0-9]* rx_restarts=[0-9]*" /run/usb16x16/last-bridge 2>/dev/null)"')
+state=$(pi 'echo "$(systemctl is-active usb16x16-aes67) $(cut -d" " -f2- /run/usb16x16/stage 2>/dev/null | cut -c1-16 | tr "," " ") $(cut -d. -f1 /proc/uptime) $(wc -l < /run/usb16x16/recovers 2>/dev/null) $(grep -o "tx_restarts=[0-9]* rx_restarts=[0-9]*" /run/usb16x16/last-bridge 2>/dev/null)"')
 print -r -- "service before: $state"
-if [[ "${state%% *}" != active ]] || [[ "$state" != *" running "* ]]; then
+# stage reads "running" for the first two minutes and "stable for 120s, ..." after
+if [[ "${state%% *}" != active ]] || [[ "$state" != *" running "* && "$state" != *" stable for "* ]]; then
   print -r -- "service is not running; refusing"
   print -r -- "exit=2"
   exit 2
 fi
-start_uptime=$(print -r -- "$state" | awk '{print $3}')
-recovers_before=$(print -r -- "$state" | awk '{print $4}')
+start_uptime=$(print -r -- "$state" | awk '{print $(NF-3)}')
+recovers_before=$(print -r -- "$state" | awk '{print $(NF-2)}')
 
 if ! "$app_binary" inspect --device "USB 16x16" >/dev/null 2>&1; then
   print -r -- "CoreAudio does not expose USB 16x16; refusing"
