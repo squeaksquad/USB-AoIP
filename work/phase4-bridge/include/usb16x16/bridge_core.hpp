@@ -123,5 +123,7 @@ void pack_s24le(std::int32_t sample, std::uint8_t* destination) noexcept;
 void float_to_s24(float sample, std::uint8_t* destination) noexcept;
 [[nodiscard]] float s32_to_float(std::int32_t sample) noexcept;
 [[nodiscard]] std::int32_t float_to_s32(float sample) noexcept;
+// True when float_to_s24 / float_to_s32 will clamp this sample.
+[[nodiscard]] bool exceeds_full_scale(float sample) noexcept;
 
 } // namespace usb16x16

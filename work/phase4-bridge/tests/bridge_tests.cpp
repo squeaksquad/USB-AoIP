@@ -29,6 +29,48 @@ void test_packed_24() {
     }
 }
 
+void test_full_scale_conversion_does_not_wrap() {
+    // Regression for the 2026-09-02 crackle: a float at or above +1.0 must
+    // land on positive full scale, never wrap to negative full scale.
+    for (const float hot : {1.0F, 1.02F, 1.5F}) {
+        std::array<std::uint8_t, 3> bytes{};
+        usb16x16::float_to_s24(hot, bytes.data());
+        check(usb16x16::unpack_s24le(bytes.data()) == 8388607, "S24 positive full scale clamps");
+        check(usb16x16::float_to_s32(hot) == 2147483647, "S32 positive full scale clamps");
+    }
+    // The largest float below 1.0 is 1 - 2^-24: it rounds up to 8388608 in
+    // S24, which is where the old code wrapped, and is exact in S32.
+    {
+        const float just_under = std::nextafter(1.0F, 0.0F);
+        std::array<std::uint8_t, 3> bytes{};
+        usb16x16::float_to_s24(just_under, bytes.data());
+        check(usb16x16::unpack_s24le(bytes.data()) == 8388607, "S24 just under full scale clamps");
+        check(usb16x16::float_to_s32(just_under) == 2147483520, "S32 just under full scale is exact");
+    }
+    for (const float cold : {-1.0F, -1.02F, -1.5F}) {
+        std::array<std::uint8_t, 3> bytes{};
+        usb16x16::float_to_s24(cold, bytes.data());
+        check(usb16x16::unpack_s24le(bytes.data()) == -8388608, "S24 negative full scale clamps");
+        check(usb16x16::float_to_s32(cold) == -2147483648LL, "S32 negative full scale clamps");
+    }
+    // The largest representable S24 value round-trips unchanged.
+    {
+        std::array<std::uint8_t, 3> bytes{};
+        usb16x16::pack_s24le(8388607, bytes.data());
+        std::array<std::uint8_t, 3> again{};
+        usb16x16::float_to_s24(usb16x16::s24_to_float(bytes.data()), again.data());
+        check(usb16x16::unpack_s24le(again.data()) == 8388607, "S24 max survives float round trip");
+        check(usb16x16::float_to_s32(usb16x16::s32_to_float(2147483647)) == 2147483647,
+              "S32 max survives float round trip");
+        check(usb16x16::float_to_s32(usb16x16::s32_to_float(-2147483647 - 1)) == -2147483647 - 1,
+              "S32 min survives float round trip");
+    }
+    check(usb16x16::exceeds_full_scale(1.0F), "exactly +1.0 counts as clipped");
+    check(usb16x16::exceeds_full_scale(-1.0001F), "below -1.0 counts as clipped");
+    check(!usb16x16::exceeds_full_scale(-1.0F), "exactly -1.0 is representable");
+    check(!usb16x16::exceeds_full_scale(0.999F), "in-range sample is not clipped");
+}
+
 void test_ring_wrap() {
     usb16x16::AudioRing ring(12);
     std::vector<float> input(10 * usb16x16::kChannels);
@@ -178,6 +220,7 @@ void test_applied_ratio_correction() {
 
 int main() {
     test_packed_24();
+    test_full_scale_conversion_does_not_wrap();
     test_ring_wrap();
     test_resampler_unity();
     test_resampler_long_run_rate();

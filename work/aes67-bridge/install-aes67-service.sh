@@ -20,10 +20,10 @@ unit_destination=/etc/systemd/system/usb16x16-aes67.service
 conf_destination=/etc/usb16x16/aes67.conf
 sudoers_destination=/etc/sudoers.d/usb16x16-aes67
 bridge_binary=/usr/local/libexec/usb16x16-rt-bridge
-expected_supervisor_sha256=e300cc33a48ef905e550a43040d849197c8d8277270bc7d65131c62a9e1d1fa8
+expected_supervisor_sha256=95e5ba2f85523c7dc885229d76cf190f56a1a5582c95940385806b26afd33b6b
 expected_unit_sha256=77837e60e7a0660ce9d0c31c8077363805c118df6bdcdba9619417669eccd702
-expected_conf_sha256=4bd2f07069832fdc37bd935097f448db84f7b240fd4442f12a30ab9be7f6b820
-expected_bridge_sha256=0254348cd21e119bd4a42a9450b616b3c2930abaff1ae836a72f5bcce3f58d5e
+expected_conf_sha256=a811f5c375aaed1993fcdd4ad181898a58f6123081bc0b838a27ba974c91acde
+expected_bridge_sha256=f7226238d17207cac3cb7004bbb1aea4cbf2fbdc587231e324ccb3eb6836f419
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
 
@@ -86,6 +86,8 @@ elif grep -qx "$(sha256_of "$conf_destination")" <<'PREVIOUS'
 61a72df14d612e800a45a4dd0b21200a73a39a83e59556cca722348e2b2a8612
 a039a3cccc2e9d0d02cd77424384b6406fe7303af5fe3ceac22b94f8e49941ae
 f2e1531f2aa8c43de66cb219319d612e2e2dfea1af40c9775dbabd005d1e8db8
+4bd2f07069832fdc37bd935097f448db84f7b240fd4442f12a30ab9be7f6b820
+46995a455309001be04a98ccd61491b39c6f89894e462edb3868a5ad21018137
 PREVIOUS
 then
   # an unedited copy of a previously shipped version: replace it

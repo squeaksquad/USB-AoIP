@@ -206,9 +206,18 @@ float s24_to_float(const std::uint8_t* source) noexcept {
     return static_cast<float>(unpack_s24le(source)) / 8388608.0F;
 }
 
+// Both converters clamp in the integer domain, after rounding. The previous
+// form clamped the float to nextafter(1.0, 0) and rounded afterwards, and
+// that rounds back up to exactly +full scale: 8388607.5 -> 8388608 for S24
+// and 2147483647.9999998 -> 2147483648 for S32. pack_s24le clamps its integer
+// so the USB side survived, but the S32 cast wrapped to -2147483648, so every
+// positive intersample overshoot the Farrow interpolator produced on hot
+// material left the bridge as a negative full-scale sample on the AES67 wire.
+// Measured 2026-09-02: audible crackle on 0 dBFS masters, gone at -3 dB.
 void float_to_s24(const float sample, std::uint8_t* destination) noexcept {
-    const float clipped = std::clamp(sample, -1.0F, std::nextafter(1.0F, 0.0F));
-    pack_s24le(static_cast<std::int32_t>(std::lrint(clipped * 8388608.0F)), destination);
+    const double scaled = std::clamp(static_cast<double>(sample), -2.0, 2.0) * 8388608.0;
+    const auto rounded = static_cast<std::int32_t>(std::lrint(scaled));
+    pack_s24le(std::clamp(rounded, -8388608, 8388607), destination);
 }
 
 float s32_to_float(const std::int32_t sample) noexcept {
@@ -216,8 +225,16 @@ float s32_to_float(const std::int32_t sample) noexcept {
 }
 
 std::int32_t float_to_s32(const float sample) noexcept {
-    const double clipped = std::clamp(static_cast<double>(sample), -1.0, std::nextafter(1.0, 0.0));
-    return static_cast<std::int32_t>(std::llround(clipped * 2147483648.0));
+    const double scaled = std::clamp(static_cast<double>(sample), -2.0, 2.0) * 2147483648.0;
+    const auto rounded = std::llround(scaled);
+    return static_cast<std::int32_t>(std::clamp<long long>(rounded, -2147483648LL, 2147483647LL));
+}
+
+bool exceeds_full_scale(const float sample) noexcept {
+    // True when the integer converters will have to clamp: anything at or
+    // above +1.0, or below -1.0. +1.0 itself is not representable in either
+    // integer format, so it counts.
+    return !(sample < 1.0F) || sample < -1.0F;
 }
 
 } // namespace usb16x16

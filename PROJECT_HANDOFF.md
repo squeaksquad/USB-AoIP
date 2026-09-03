@@ -2845,6 +2845,159 @@ env-tunable, default-omitted behavior before using it for measurement.
 - The AES67 self-loop on `eth0` remains rejected and should not be retried; see
   the section above.
 
+## 2026-09-02 evening: crackle root cause, full-scale wrap fix, pitch servo staged
+
+**Symptom reported by the user:** crackle on playback when sending music
+from the Mac to the interface, clean when the Apple Music level is lowered,
+plus one dropout. The user's priority for this work is stability and
+accuracy first, with latency as low as that allows, and clean audio from a
+0 dBFS source without lowering the level.
+
+**ROOT CAUSE of the crackle, confirmed by test: the S32 converter wrapped
+at positive full scale.** `float_to_s32` clamped the float to
+`nextafter(1.0, 0)` and then rounded: `0.9999999999999999 * 2^31` rounds
+to `2147483648`, which the `int32_t` cast turns into `-2147483648`.
+`float_to_s24` had the same rounding (`8388607.5 -> 8388608`) but
+`pack_s24le` clamps its integer, so the USB side was safe. The RAVENNA
+playback side, the direction the user was listening to, was not: every
+positive intersample overshoot the Catmull-Rom interpolator produced on
+0 dBFS material left the bridge as a negative full-scale sample on the
+AES67 wire. That is a click on every clipped peak, gone at -3 dB. Verified
+with a standalone reproduction of the two conversion paths before any
+edit. Fix in `bridge_core.cpp`: both converters now round first and clamp
+in the integer domain; `exceeds_full_scale()` reports what would clamp,
+and the bridge counts it per direction (`tx_clip`/`rx_clip` on the BRIDGE
+line, `tx_clipped_samples`/`rx_clipped_samples` in SUMMARY). Regression
+test `test_full_scale_conversion_does_not_wrap` covers +1.0, +1.02, +1.5,
+the largest float below 1.0 (exact in S32 at 2147483520, clamped in S24),
+and the negative rail. Core tests pass on the Mac and the Pi.
+
+After the fix, a 0 dBFS source through the *resampler* path still has its
+intersample overs shaved (a soft clamp, not a wrap). That residual cannot
+be carried on a 24-bit wire at all; the only way to pass 0 dBFS material
+untouched is to not resample it, which is what the pitch servo below does.
+
+**The dropout: a 5.9 ms stall, in the journal.** Boot of 21:34 local, at
+2116 s of uptime (about 22:09): TX `playback-avail` XRUN with
+`last_queue=16 last_gap_us=5876`, RX capture and playback in XRUN at the
+same instant. Same family as the 4.8 ms and 6.5 ms service stalls already
+recorded; the estimator sat at -14 to -17 ppm with zero phase error and
+both floors (166/109) held from the 21:45 warm restart until that moment.
+Period 48 holds about 3.5 ms of TX queue, so a 6 ms stall is an XRUN by
+arithmetic. The stall is not a clock problem. Observed on the Pi at the
+time: governor `ondemand` at 1.7 GHz, USB gadget IRQ 34 and eth0 IRQ 108
+both at affinity 0-3 and counted entirely on CPU 0, wlan0 up. The
+5-minute cyclictest that deprioritised Phase 6 could not have seen a
+once-per-hour stall.
+
+**Phase 6 levers, staged as `work/pi-tuning/stall-tuning.sh`.** Runtime
+only, reversible, nothing under /etc, nothing touching the USB baseline:
+`governor performance|ondemand` and `irqs pin|unpin` (gadget + eth0 to
+CPU 1, away from the bridge's CPUs 2-3). One lever at a time, judged by
+the RECOVER count over hours (`status` prints it). Needs root; not yet
+run.
+
+**Phase 5 step 1, implemented: `--usb-pitch-servo 1`.** The 6.18 gadget
+exposes `Capture Pitch 1000000` (scales the feedback frequency the Mac's
+output follows) and `Playback Pitch 1000000` (scales the IN packet sizes
+through a residue accumulator), both 750000..1005000 in 1 ppm steps,
+confirmed in the Pi's own `u_audio.c`. With the servo on, both converters
+run at exactly 1.0 (the Farrow kernel at integer phase reproduces `y1`, so
+the path is bit transparent) and the shared estimator's ppm goes to the
+pitch controls instead: `pitch = 1000000 - (ppm + bias)`. Sign and gain
+check: a pitch offset of +pi ppm raises the differential depth at
+`2 * 48000e-6` frames/s, the same magnitude as the resampler ratio with
+the opposite sign, so the regression's applied-ratio correction integrates
+`1000000 - applied_pitch` and the estimator logic is otherwise untouched.
+`bias` is a slow level term, 0.05 ppm per frame of differential away from
+the setpoint captured when the rate estimate first engaged, clamped to
++-3 ppm, which holds the 1 ppm quantisation residual to about +-10 frames
+of wander (time constant about 210 s). Control writes happen on the
+telemetry thread, at most once per second; the audio thread only publishes
+the wanted value. Pitch is reset to nominal at start and on exit. New
+telemetry: `pitch=`, `bias_ppm=`, `pitch_errors=`; new lines `PITCHSERVO
+enabled` and `PITCHSERVO engaged setpoint_frames=`. Not yet run against
+hardware: the service holds the PCMs and the wrapper pins the binary hash,
+so the first run waits on the install below.
+
+**Staged, not installed.** Bridge `f7226238` (was `0254348c`), built on
+the Pi from `~/usb-16x16-work/phase4-servo-src`, ctest clean, copied to
+`work/phase4-bridge/artifacts/pi-aarch64/`. Wrapper `3a500d92` (twelfth
+positional `usb_pitch_servo`, default 0; `USB16X16_PHASE4_USB_PITCH_SERVO`
+on the Mac side). Supervisor `95e5ba2f` (optional profile key
+`USB_PITCH_SERVO`, absent means 0, `--usb-pitch-servo` in the argument
+list, shown by `profiles`). `aes67.conf` `46995a45` adds profile `servo`
+(experimental: the `safe` point with the servo on); `safe`, `safe-96` and
+`fast` are unchanged and `PROFILE=safe` still. Unit `77837e60` unchanged.
+Both installers carry the new hashes and `4bd2f070` joins the list of
+unedited shipped configs. Everything is in
+`~/usb-16x16-work/phase4-servo-install/` on the Pi. Install order, with
+the service stopped: `install-candidate.sh` (bridge + wrapper), then
+`install-aes67-service.sh` (supervisor + conf), then start.
+
+**INSTALLED 2026-09-02 22:38 local by the user**, both installers, service
+back on `safe`. First listening test: 0 dBFS music from Apple Music, clean,
+no clicks. The live BRIDGE line four minutes in read `tx_clip=3037
+rx_clip=9889`: the resampler path was clamping thousands of intersample
+overs on that material, every one of which the old binary would have sent
+as a negative full-scale click. A second stall of the driver-timer shape
+(all four PCMs in XRUN, bridge gaps 3-26 us, at 3116 s of uptime, 22:25
+local, 1000 s after the 5.9 ms one) landed before the reinstall.
+
+**MEASURED: run 1, profile `safe` on bridge `f7226238`, servo off.**
+`phase4-candidate-20260903T023841Z`, 600 s, 800 impulses at 64 frames,
+load 0.05: median **1251 samples, 26.063 ms**, spread 10 (1243-1253),
+score 0.934, `tx_qfloor` 191, `rx_qfloor` 109, `tx_pullmax` 48, gaps
+1.0/1.3 ms, zero restarts, zero drops, `tx_clip`/`rx_clip` 0 (the harness
+signal is not hot). Same level and shape as the four acceptance runs: the
+wrap fix and the per-sample clip check cost nothing on the real-time path.
+
+**MEASURED: run 2, the same point with `--usb-pitch-servo 1`.**
+`phase4-candidate-20260903T024954Z`, same arguments plus the servo:
+median **1239 samples, 25.813 ms, all 800 impulses on one sample, score
+1.000**, the first zero-spread 800-impulse run at the period-48 point and
+the cleanest run in the project. The 8-sample bimodality every resampler
+run carried is gone, which reads as the fractional phase of the converter:
+at ratio 1.0 the delay through the bridge is an integer and constant.
+Bridge: `PITCHSERVO enabled`, `PITCHSERVO engaged setpoint_frames=72` at
+60.0 s, pitch settled at 1000015 (mode; dithering 1000012-1000020 as the
+level term rides the device's 48-frame skips, bias touching the -3 ppm
+clamp once), `tx_consumed - tx_input` a constant 131 frames for the whole
+run (the converter at exactly 1.0), `tx_qfloor` 164, `rx_qfloor` 96,
+`tx_pullmax` 48, gaps 1.7/1.7 ms, zero restarts, zero drops, zero clips,
+zero pitch write errors, SUMMARY ppm -15.9. Both gadget pitch controls
+read 1000000 after exit. Service restarted on `safe` afterwards.
+
+Profile `servo` therefore has one clean loaded run at 25.8 ms with the
+audio path bit transparent; three more make it acceptable under the
+project's rule. Nothing about the servo moves a buffer, so its latency is
+the `safe` point's.
+
+**SWITCHED 2026-09-02 23:10 local by the user: the service runs profile
+`servo`.** `switch-profile servo` restarted the stack (stop at 5767 s of
+uptime, `running` at 5819 s, `PITCHSERVO enabled` at 5815 s, no startup
+XRUN pair). `/etc/usb16x16/aes67.conf` is `a811f5c3` (`PROFILE=servo`,
+otherwise `46995a45`); the repo copy and `install-aes67-service.sh` are
+pinned to it and `46995a45` joined the unedited-shipped list. The profile
+is still marked experimental on one clean run; three more loaded
+800-impulse runs are the remaining acceptance work, and the profile's
+STATUS/COVER/MEASURED strings should be updated when they pass. Rollback
+is `switch-profile safe`, the same binary with the resampler.
+
+**Measurement plan after the install, in order.**
+
+1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
+   the wrap fix alone must reproduce 25.6-27.3 ms with `tx_clip` counting
+   on hot material and zero restarts. One run is the regression check;
+   four is acceptance.
+2. The same run with `USB16X16_PHASE4_USB_PITCH_SERVO=1`: `pitch` should
+   settle near 1000015, `bias_ppm` inside +-1, `tx_clip`/`rx_clip` at zero
+   on the same material, floors at or above the resampler run's, latency
+   at the same level (the servo moves no buffer). Then a 0 dBFS listening
+   test.
+3. Governor `performance`, then IRQ pinning, one at a time, each judged
+   by RECOVERs over hours of service time.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

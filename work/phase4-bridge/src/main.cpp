@@ -94,8 +94,89 @@ struct Options {
     // (RAVENNA playback), rx is ravenna-to-usb (USB playback).
     std::size_t tx_playback_prime_frames{0};
     std::size_t rx_playback_prime_frames{0};
+    // Phase 5, step 1. Instead of resampling each direction by the shared
+    // estimator's ratio, drive the UAC2 gadget's "Capture Pitch 1000000" and
+    // "Playback Pitch 1000000" controls with it, so the Mac's USB stream runs
+    // at the PTP rate and both converters sit at exactly 1.0. At ratio 1.0
+    // the Farrow kernel reduces to a one-frame delay, so the audio path is
+    // bit transparent. A slow level term on the differential depth absorbs
+    // the 1 ppm pitch quantisation. Off by default: the deployed behaviour.
+    bool usb_pitch_servo{false};
     int priority{90};
     unsigned int seconds{0};
+};
+
+// Control interface name for the USB gadget card, derived from its PCM name:
+// "hw:CARD=UAC2Gadget,DEV=0" -> "hw:CARD=UAC2Gadget".
+std::string control_name_of(const std::string& pcm_device) {
+    const auto comma = pcm_device.find(',');
+    return comma == std::string::npos ? pcm_device : pcm_device.substr(0, comma);
+}
+
+constexpr int kNominalPitch = 1000000;
+// Level loop for the pitch servo: ppm of bias per frame of differential depth
+// away from the setpoint captured when the servo engaged, and its clamp. The
+// differential moves 0.096 frames/s per ppm, so 0.05 ppm/frame is a time
+// constant of about 210 s: slow against the Mac's feedback loop and the
+// estimator's 2 ppm/s slew, and enough to hold the 1 ppm quantisation
+// residual to about +-10 frames of wander.
+constexpr double kLevelBiasPpmPerFrame = 0.05;
+constexpr double kLevelBiasMaximumPpm = 3.0;
+
+// Writes the two UAC2 gadget pitch controls. Used from the telemetry thread
+// only; the audio thread publishes the wanted value through an atomic.
+class PitchControl {
+public:
+    explicit PitchControl(const std::string& control_device) {
+        alsa_check_static(snd_ctl_open(&ctl_, control_device.c_str(), 0),
+                          "control open " + control_device);
+        snd_ctl_elem_value_malloc(&capture_);
+        snd_ctl_elem_value_malloc(&playback_);
+        prepare(capture_, "Capture Pitch 1000000");
+        prepare(playback_, "Playback Pitch 1000000");
+        // Read once so a missing control fails at startup, not on the first write.
+        alsa_check_static(snd_ctl_elem_read(ctl_, capture_), "read Capture Pitch 1000000");
+        alsa_check_static(snd_ctl_elem_read(ctl_, playback_), "read Playback Pitch 1000000");
+    }
+
+    ~PitchControl() {
+        // Never leave the gadget pitched for whatever runs next.
+        (void)write(kNominalPitch);
+        snd_ctl_elem_value_free(capture_);
+        snd_ctl_elem_value_free(playback_);
+        snd_ctl_close(ctl_);
+    }
+
+    PitchControl(const PitchControl&) = delete;
+    PitchControl& operator=(const PitchControl&) = delete;
+
+    // Returns the first ALSA error, or 0.
+    [[nodiscard]] int write(const int pitch) noexcept {
+        snd_ctl_elem_value_set_integer(capture_, 0, pitch);
+        snd_ctl_elem_value_set_integer(playback_, 0, pitch);
+        const int first = snd_ctl_elem_write(ctl_, capture_);
+        const int second = snd_ctl_elem_write(ctl_, playback_);
+        return first < 0 ? first : (second < 0 ? second : 0);
+    }
+
+private:
+    static void alsa_check_static(const int result, const std::string& operation) {
+        if (result < 0) {
+            throw std::runtime_error(operation + ": " + snd_strerror(result));
+        }
+    }
+
+    static void prepare(snd_ctl_elem_value_t* value, const char* name) {
+        snd_ctl_elem_id_t* id = nullptr;
+        snd_ctl_elem_id_alloca(&id);
+        snd_ctl_elem_id_set_interface(id, SND_CTL_ELEM_IFACE_PCM);
+        snd_ctl_elem_id_set_name(id, name);
+        snd_ctl_elem_value_set_id(value, id);
+    }
+
+    snd_ctl_t* ctl_{};
+    snd_ctl_elem_value_t* capture_{};
+    snd_ctl_elem_value_t* playback_{};
 };
 
 [[noreturn]] void usage(const char* executable, const std::string& error = {}) {
@@ -118,6 +199,8 @@ struct Options {
         << "  --rx-playback-prime N  ravenna-to-usb override (0 = use --playback-prime)\n"
         << "  --prime-trim 0|1       discard the ring overshoot at prime time\n"
         << "                         (default 0 = keep it, historical behaviour)\n"
+        << "  --usb-pitch-servo 0|1  steer the USB gadget pitch controls to the PTP rate\n"
+        << "                         and run both converters at exactly 1.0 (default 0)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
     std::exit(error.empty() ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -170,6 +253,12 @@ Options parse_options(const int argc, char** argv) {
                 throw std::runtime_error("prime-trim must be 0 or 1");
             }
             options.prime_trim = parsed != 0;
+        } else if (argument == "--usb-pitch-servo") {
+            const unsigned long parsed = parse_unsigned(value, "usb-pitch-servo");
+            if (parsed > 1) {
+                throw std::runtime_error("usb-pitch-servo must be 0 or 1");
+            }
+            options.usb_pitch_servo = parsed != 0;
         } else if (argument == "--priority") {
             options.priority = static_cast<int>(parse_unsigned(value, "priority"));
         } else if (argument == "--seconds") {
@@ -355,6 +444,17 @@ struct Telemetry {
     std::atomic<std::uint64_t> rx_queue_total{0};
     std::array<std::atomic<std::uint64_t>, kCaptureHistogramBins> tx_capture_histogram{};
     std::array<std::atomic<std::uint64_t>, kCaptureHistogramBins> rx_capture_histogram{};
+    // Samples the integer converters had to clamp on the way out. Non-zero
+    // on hot material through the resampler; must be a structural zero once
+    // the pitch servo holds both converters at 1.0.
+    std::atomic<std::uint64_t> tx_clipped_samples{0};
+    std::atomic<std::uint64_t> rx_clipped_samples{0};
+    // Pitch servo: the value the audio thread wants applied, the value the
+    // telemetry thread last wrote, and the level bias in milli-ppm.
+    std::atomic<int> wanted_pitch{kNominalPitch};
+    std::atomic<int> applied_pitch{kNominalPitch};
+    std::atomic<std::int64_t> level_bias_ppm_milli{0};
+    std::atomic<std::uint64_t> pitch_write_errors{0};
 };
 
 enum class IoResult { idle, progressed, recover };
@@ -433,6 +533,8 @@ struct Direction {
     // Frames snd_pcm_mmap_begin declined to grant, whether or not any were
     // lost. Records that the short-begin condition still occurs.
     std::uint64_t short_begin_frames{};
+    // Output samples at or beyond full scale that the converter clamped.
+    std::uint64_t clipped_samples{};
     std::uint64_t restarts{};
     const char* recovery_stage{"unknown"};
     snd_pcm_sframes_t recovery_code{};
@@ -707,12 +809,15 @@ IoResult render_to_playback(Direction& direction,
         return IoResult::idle;
     }
     frames = static_cast<snd_pcm_uframes_t>(produced);
+    std::uint64_t clipped = 0;
     for (snd_pcm_uframes_t frame = 0; frame < frames; ++frame) {
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
-            write_area_sample(areas[channel], offset + frame, direction.playback.format(),
-                              direction.playback_scratch[frame * kChannels + channel]);
+            const float sample = direction.playback_scratch[frame * kChannels + channel];
+            clipped += usb16x16::exceeds_full_scale(sample) ? 1U : 0U;
+            write_area_sample(areas[channel], offset + frame, direction.playback.format(), sample);
         }
     }
+    direction.clipped_samples += clipped;
     const snd_pcm_sframes_t committed = snd_pcm_mmap_commit(direction.playback.handle(), offset, frames);
     if (committed < 0 || static_cast<snd_pcm_uframes_t>(committed) != frames) {
         return request_recovery(direction, "playback-mmap-commit", committed);
@@ -856,6 +961,8 @@ void publish_telemetry(const Direction& tx,
         telemetry.tx_capture_histogram[bin].store(tx.capture_histogram[bin], std::memory_order_relaxed);
         telemetry.rx_capture_histogram[bin].store(rx.capture_histogram[bin], std::memory_order_relaxed);
     }
+    telemetry.tx_clipped_samples.store(tx.clipped_samples, std::memory_order_relaxed);
+    telemetry.rx_clipped_samples.store(rx.clipped_samples, std::memory_order_relaxed);
 }
 
 template <typename Array>
@@ -890,13 +997,34 @@ double capture_mean(const std::uint64_t total, const std::uint64_t samples) noex
     return samples == 0 ? 0.0 : static_cast<double>(total) / static_cast<double>(samples);
 }
 
-void telemetry_loop(const Telemetry& telemetry) {
+// The pitch servo's control writes live here, off the audio thread: the
+// audio thread publishes wanted_pitch and this thread applies it, at most
+// once per second, which is well inside the estimator's own update rate.
+void apply_wanted_pitch(Telemetry& telemetry, PitchControl* pitch_control) noexcept {
+    if (pitch_control == nullptr) {
+        return;
+    }
+    const int wanted = telemetry.wanted_pitch.load(std::memory_order_relaxed);
+    if (wanted == telemetry.applied_pitch.load(std::memory_order_relaxed)) {
+        return;
+    }
+    const int result = pitch_control->write(wanted);
+    if (result < 0) {
+        telemetry.pitch_write_errors.fetch_add(1, std::memory_order_relaxed);
+        std::cerr << "PITCH write failed: " << snd_strerror(result) << '\n';
+        return;
+    }
+    telemetry.applied_pitch.store(wanted, std::memory_order_relaxed);
+}
+
+void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
     WindowMean tx_depth_mean;
     WindowMean rx_depth_mean;
     WindowMean tx_queue_mean;
     WindowMean rx_queue_mean;
     while (!stop_requested.load(std::memory_order_relaxed)) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
+        apply_wanted_pitch(telemetry, pitch_control);
         // Read the sample count once per direction so both window means in a
         // line divide by the same count.
         const std::uint64_t tx_samples = telemetry.tx_queue_samples.load();
@@ -954,7 +1082,13 @@ void telemetry_loop(const Telemetry& telemetry) {
                   << " tx_pullhist=" << format_histogram(telemetry.tx_pull_histogram)
                   << " rx_pullhist=" << format_histogram(telemetry.rx_pull_histogram)
                   << " tx_caphist=" << format_histogram(telemetry.tx_capture_histogram)
-                  << " rx_caphist=" << format_histogram(telemetry.rx_capture_histogram) << '\n';
+                  << " rx_caphist=" << format_histogram(telemetry.rx_capture_histogram)
+                  << " tx_clip=" << telemetry.tx_clipped_samples.load()
+                  << " rx_clip=" << telemetry.rx_clipped_samples.load()
+                  << " pitch=" << telemetry.applied_pitch.load()
+                  << " bias_ppm="
+                  << static_cast<double>(telemetry.level_bias_ppm_milli.load()) / 1000.0
+                  << " pitch_errors=" << telemetry.pitch_write_errors.load() << '\n';
     }
 }
 
@@ -1011,6 +1145,25 @@ int run(const Options& options) {
     usb16x16::SharedDriftEstimator estimator;
     Telemetry telemetry;
 
+    // Pitch servo state. The control handle is opened before memory is locked
+    // and the thread goes real-time, and it starts at nominal so the gadget is
+    // in a known state whatever the previous process left behind.
+    std::unique_ptr<PitchControl> pitch_control;
+    if (options.usb_pitch_servo) {
+        pitch_control = std::make_unique<PitchControl>(control_name_of(options.usb_device));
+        const int reset = pitch_control->write(kNominalPitch);
+        if (reset < 0) {
+            throw std::runtime_error(std::string("pitch reset: ") + snd_strerror(reset));
+        }
+        std::cout << "PITCHSERVO enabled control=" << control_name_of(options.usb_device)
+                  << " level_gain_ppm_per_frame=" << kLevelBiasPpmPerFrame
+                  << " level_clamp_ppm=" << kLevelBiasMaximumPpm << '\n';
+    }
+    bool have_rate_estimate = false;
+    bool have_level_setpoint = false;
+    double level_setpoint_frames = 0.0;
+    double level_bias_ppm = 0.0;
+
     // Capture readiness drives both pipelines. Including playback descriptors
     // makes poll return immediately whenever an ALSA output queue has space but
     // its elastic ring has no excess, producing a SCHED_FIFO busy loop.
@@ -1020,7 +1173,7 @@ int run(const Options& options) {
     ravenna_capture.start_capture();
     configure_realtime(options.priority);
 
-    std::thread telemetry_thread(telemetry_loop, std::cref(telemetry));
+    std::thread telemetry_thread(telemetry_loop, std::ref(telemetry), pitch_control.get());
     const auto started = std::chrono::steady_clock::now();
     process_started = started;
     std::uint64_t last_telemetry_frame = 0;
@@ -1051,7 +1204,10 @@ int run(const Options& options) {
             }
             progressed = tx_capture == IoResult::progressed || rx_capture == IoResult::progressed;
 
-            const double ratio = estimator.clock_ratio();
+            // With the pitch servo the correction is applied at the USB
+            // endpoints, so both converters run at exactly 1.0 and are bit
+            // transparent; without it, the historical reciprocal ratios.
+            const double ratio = options.usb_pitch_servo ? 1.0 : estimator.clock_ratio();
             const IoResult tx_playback = render_to_playback(tx, options.target_frames, ratio);
             const IoResult rx_playback = render_to_playback(rx, options.target_frames, 1.0 / ratio);
             if (tx_playback == IoResult::recover) {
@@ -1076,7 +1232,16 @@ int run(const Options& options) {
             if (telemetry_frame - last_telemetry_frame >= kTelemetryIntervalFrames) {
                 last_telemetry_frame = telemetry_frame;
                 const auto rate_sample_time = std::chrono::steady_clock::now();
-                applied_ppm_seconds += estimator.ppm() *
+                // The regression removes the trajectory of whatever correction
+                // is actually applied. With the servo that is the integer
+                // pitch the telemetry thread last wrote (nominal minus pitch
+                // has the same sign and gain on the differential as the
+                // resampler ratio), including the level bias, so the level
+                // loop's movements are not read back as drift.
+                const double applied_ppm = options.usb_pitch_servo
+                    ? static_cast<double>(kNominalPitch - telemetry.applied_pitch.load(std::memory_order_relaxed))
+                    : estimator.ppm();
+                applied_ppm_seconds += applied_ppm *
                     std::chrono::duration<double>(rate_sample_time - last_rate_integral_time).count();
                 last_rate_integral_time = rate_sample_time;
                 snd_pcm_sframes_t tx_playback_delay = 0;
@@ -1107,6 +1272,32 @@ int run(const Options& options) {
                         rate_regression.slope(corrected_slope)) {
                         estimator.update_rate_observation(
                             corrected_slope / kDifferentialFramesPerSecondPerPpm);
+                        have_rate_estimate = true;
+                    }
+                    if (options.usb_pitch_servo && have_rate_estimate) {
+                        // Level term: hold the differential where it sat when
+                        // the rate estimate first engaged. A positive pitch
+                        // offset raises the differential (TX fills faster, RX
+                        // drains faster), so a differential above the setpoint
+                        // wants a lower pitch, which is a higher subtracted ppm.
+                        if (!have_level_setpoint) {
+                            level_setpoint_frames = differential_pipeline_frames;
+                            have_level_setpoint = true;
+                            std::cerr << "PITCHSERVO engaged setpoint_frames=" << level_setpoint_frames
+                                      << " ppm=" << estimator.ppm() << " t_us=" << elapsed_us() << '\n';
+                        }
+                        level_bias_ppm = std::clamp(
+                            kLevelBiasPpmPerFrame * (differential_pipeline_frames - level_setpoint_frames),
+                            -kLevelBiasMaximumPpm, kLevelBiasMaximumPpm);
+                        const double wanted = static_cast<double>(kNominalPitch) -
+                            (estimator.ppm() + level_bias_ppm);
+                        const int pitch = static_cast<int>(std::clamp(std::lrint(wanted),
+                                                                      long{kNominalPitch - 250},
+                                                                      long{kNominalPitch + 250}));
+                        telemetry.wanted_pitch.store(pitch, std::memory_order_relaxed);
+                        telemetry.level_bias_ppm_milli.store(
+                            static_cast<std::int64_t>(std::llround(level_bias_ppm * 1000.0)),
+                            std::memory_order_relaxed);
                     }
                 }
                 publish_telemetry(tx, rx, estimator, telemetry);
@@ -1176,7 +1367,15 @@ int run(const Options& options) {
               << ",\"tx_pull_histogram\":\"" << format_histogram(tx.pull_histogram) << '"'
               << ",\"rx_pull_histogram\":\"" << format_histogram(rx.pull_histogram) << '"'
               << ",\"tx_capture_histogram\":\"" << format_histogram(tx.capture_histogram) << '"'
-              << ",\"rx_capture_histogram\":\"" << format_histogram(rx.capture_histogram) << "\"}\n";
+              << ",\"rx_capture_histogram\":\"" << format_histogram(rx.capture_histogram) << '"'
+              << ",\"tx_clipped_samples\":" << tx.clipped_samples
+              << ",\"rx_clipped_samples\":" << rx.clipped_samples
+              << ",\"usb_pitch_servo\":" << (options.usb_pitch_servo ? 1 : 0)
+              << ",\"pitch\":" << telemetry.applied_pitch.load()
+              << ",\"level_bias_ppm\":" << level_bias_ppm
+              << ",\"level_setpoint_frames\":" << level_setpoint_frames
+              << ",\"pitch_write_errors\":" << telemetry.pitch_write_errors.load() << "}\n";
+    // pitch_control's destructor restores nominal pitch after this returns.
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
 }
 
