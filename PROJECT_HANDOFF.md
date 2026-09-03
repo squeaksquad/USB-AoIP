@@ -1969,10 +1969,53 @@ discards the previous boot's timeline, which is why boots 1 and 2 are gone.
 A persistent journal is a root change and a decision for the user; without
 it, cold-boot post-mortems must be read before the next reboot.
 
+#### MEASURED: RAVENNA period 48 (tier one, lever 1): the lever exists, 25.6 ms, cover kept
+
+`--period 48` through the candidate wrapper (`USB16X16_PHASE4_PERIOD_FRAMES=48`),
+everything else the accepted point: target 128, buffer 192, RAVENNA playback
+384, TX prime 288, RX prime 144, sink delay 576, binary `0254348c`, 600 s,
+800 impulses at 64 CoreAudio frames, the service stopped for the run
+(2026-09-03 00:35 UTC, 2026-09-02 20:35 local).
+
+**NEGOTIATED came back 48 on every PCM**: `usb_capture=48/192
+usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384`. The
+roadmap's premise that USB ignores period requests was wrong: the gadget
+granted 48 too. So the one flag moves the period, and with it `avail_min`
+(the bridge sets `min(negotiated, requested)`), on both sides at once.
+Lever 2 as written, RAVENNA capture `avail_min` 48 behind its own flag, has
+nothing left to test: 48 is already what period 48 gives it. What this run
+does not separate is USB period 48 from RAVENNA period 48; a one-side
+variant needs a per-device period option in the bridge, not built.
+
+| run | median | samples | score | spread | TX / RX overshoot | `tx_qfloor` | `rx_qfloor` | TX under a period | `tx_pullmax` | RECOVERs | restarts |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `003546Z` | 25.563 ms | 1227 | 0.946 | 10 | 13 / 13 | **164** | 109 | 0 | **48** | 0 | 0 |
+
+Against the accepted point (wrapper mode 1399, 29.146 ms): 172 samples,
+3.6 ms faster, cover kept at 164 over the 144 bar. Per impulse: 1227 in
+734 of 800, 1219 in 38, the rest within two samples. Capture means 11.5
+frames both directions against 37-42 at period 96; the capture histograms
+hold bins 0 and 1 only, the pointer advancing per 48-frame packet. TX's
+prime overshoot fell from 61 to 13. RX's floor rose from 61 to 109 with
+the same 144 prime, as the roadmap predicted for 48-frame pushes. TX's
+floor settled by DEPTHSTEP from 432 at prime to 384 (7 ms), 336 (14 s) and
+295 (73 s), each step with `pull=48`, then held for the remaining 527 s:
+the same resting-level settle as before, now in 48-frame steps.
+
+**`tx_pullmax` 48, and no pull above 48 in the run.** Pull histogram
+`1908067/599987/0/0/0/0` (48-frame bins: zero, 1-48, 49-96, ...): 600k
+pulls of one packet at 1 kHz and nothing larger. Every period-96 run
+carried the 144-frame three-packet pull (bin 3, four of them in 600 s in
+`114608Z`). Either the skip does not occur at period 48, or it takes a
+shape this counter does not tell from a one-packet pull. Observation, not
+explanation. The 144-frame cover bar stays until the acceptance runs say
+whether it recurs.
+
 #### Phase 4 latency is not yet competitive
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
+| `48/192/768/128` **period 48**, RAVENNA playback 384, TX 288 / RX 144 | **003546Z, 800 impulses, clean, `tx_qfloor` 164, `tx_pullmax` 48; acceptance runs 2-4 pending** | **25.563 ms** | 0.946 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96, RAVENNA playback 384 | 015059Z, 800 impulses, clean, `tx_qfloor` 122 | 30.146 ms | 0.944 | 10 samples |
 | `96/192/768/128` TX 192 / RX 96, **target 128** | **025906Z, 800 impulses, clean, `tx_qfloor` 97, `rx_qfloor` 61** | **24.479 ms** | 0.932 | 10 samples |
