@@ -3441,6 +3441,34 @@ that the number is the same every start, which is the stability-first
 priority. Note that the wrap at delay 0 costs nothing audible: the reader
 takes the packet on its next lap, 4 ms later, intact.
 
+**MEASURED: the deployable point at startup,
+`phase4-sink-sweep-20260903T210028Z` (candidate 210028Z, 900 s), sink
+delay 96 at start, then live 576, then live 96, align on.** Startup 96:
+**1438 samples, 29.958 ms**, spread 0, score 1.000; live 576: 1342 (96
+below, the low lap again); live 96: 1438 on the sample. Zero restarts,
+zero clips, floors 162/109, gaps 1.2/1.5 ms, `ALIGN status=ok
+tick_period_us=999 wake_to_prepare_us=616 prepare_us=10`. Startup and
+live 96 agree, and the excursion through 576 left nothing behind.
+
+Across the three aligned sessions the 96 point read 1453, 1448, 1438: a
+15-sample (0.3 ms) window with no lap structure, against 1352-1598 for
+576 over six sessions (three aligned: 1549, 1352, 1342, so 576 lands on
+its low lap two times in three and costs 4 ms the third). The sink delay
+of 96 is therefore the stability-first choice: 30.0 ms every start,
+2 ms above 576's good draws and 2 ms below its bad one. What is left of
+the lottery (the 15 samples, plus the lap 576 and 168 ride) sits outside
+the RAVENNA capture phase: the RAVENNA playback trigger, the USB side, or
+the Ferrofish's receive buffer; the TX trigger is the same design applied
+to the other direction and is the next candidate if 0.3 ms matters.
+
+Service restarted on `servo` after the run. `servo-aligned` (sink delay
+96, align on) is staged in `~/usb-16x16-work/phase4-align-install/`
+(conf `14d74d92`, installer `461ded3b`; the bridge, wrapper and
+supervisor there are the installed ones) and needs
+`install-aes67-service.sh` with the service stopped, then
+`switch-profile servo-aligned`. Acceptance under the project's rule is
+still four loaded 800-impulse runs on the profile itself.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:

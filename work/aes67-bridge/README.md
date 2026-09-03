@@ -126,13 +126,16 @@ sudo systemctl enable usb16x16-aes67
 ## Profiles
 
 `/etc/usb16x16/aes67.conf` carries `PROFILE=<name>` and one block per
-profile. Three ship:
+profile. Six ship:
 
 | profile | point | measured | cover | status |
 |---|---|---:|---|---|
 | `safe` | period 48, target 128, RAVENNA playback 384, TX 288, RX 144, buffer 192, sink delay 576 | 25.6 ms (25.6-27.3) | TX floor 164-193 | accepted, default |
 | `safe-96` | period 96, otherwise as `safe` | 29.1 ms (28.1-29.1) | TX floor 158-197 | accepted, rollback for `safe` |
 | `fast` | target 128, TX 192, RX 96, buffer 192, sink delay 576 | 24.5 ms | none, TX floor 97 | experimental |
+| `servo` | as `safe` with the USB pitch servo (`USB_PITCH_SERVO=1`): converters at 1.0, bit transparent | 25.8 ms | TX floor 164 | experimental, running |
+| `servo-split` | `servo` with the per-direction level servo (`USB_PITCH_SERVO=2`) | not yet | as `servo` | experimental |
+| `servo-aligned` | `servo` with the aligned start (`ALIGN_START=1`) and sink delay 96: the RX playout is the same every start | 30.0 ms, 15-sample window over 3 sessions | TX floor 161-163 | experimental |
 
 ```bash
 /usr/local/sbin/usb16x16-aes67-supervisor profiles
