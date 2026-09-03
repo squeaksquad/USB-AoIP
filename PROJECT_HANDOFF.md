@@ -1991,6 +1991,7 @@ variant needs a per-device period option in the bridge, not built.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `003546Z` | 25.563 ms | 1227 | 0.946 | 10 | 13 / 13 | **164** | 109 | 0 | **48** | 0 | 0 |
 | `004724Z` | 25.563 ms | 1227 | 0.930 | 10 | 13 / 13 | **177** | 100 | 0 | **48** | 0 | 0 |
+| `005836Z` | 27.313 ms | 1311 | 0.988 | **0** | 13 / 13 | **193** | 109 | 0 | **48** | 0 | 0 |
 
 Against the accepted point (wrapper mode 1399, 29.146 ms): 172 samples,
 3.6 ms faster, cover kept at 164 over the 144 bar. Per impulse: 1227 in
@@ -2002,6 +2003,20 @@ the same 144 prime, as the roadmap predicted for 48-frame pushes. TX's
 floor settled by DEPTHSTEP from 432 at prime to 384 (7 ms), 336 (14 s) and
 295 (73 s), each step with `pull=48`, then held for the remaining 527 s:
 the same resting-level settle as before, now in 48-frame steps.
+
+**Run 3 landed 84 samples higher, on one sample.** `005836Z`: every one of
+the 800 impulses read 1311, the first zero-spread 800-impulse run in the
+project; runs 1 and 2 carried the familiar 8-sample bimodality (1219 under
+1227, 38 and 55 times). The bridge was as clean as the other two: floors
+193/109, no restart, no recovery, `tx_pullmax` 48. What differs is where
+TX settled: its depth floor stepped from 432 to 384 at 7 ms and to 336 at
+58 s, then held, where runs 1 and 2 took a third step to 295 and 311; its
+depth mean read 404 against 371 and 389. RX took its own step, 288 to 264
+at 251 s, the only RX DEPTHSTEP after prime in the three runs. Bridge depth
+alone does not add to 84 (TX plus RX depth means: 690, 694, 711), so part
+of the shift is outside the bridge's counters. Same resting-level scatter
+as the accepted point (29.1 x3, 28.1 x1), now 25.6 x2, 27.3 x1; quote the
+range until run 4 says which is the mode.
 
 **`tx_pullmax` 48, and no pull above 48 in the run.** Pull histogram
 `1908067/599987/0/0/0/0` (48-frame bins: zero, 1-48, 49-96, ...): 600k
@@ -2016,7 +2031,7 @@ whether it recurs.
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
-| `48/192/768/128` **period 48**, RAVENNA playback 384, TX 288 / RX 144 | **003546Z, 004724Z, 800 impulses each, clean, `tx_qfloor` 164, 177, `tx_pullmax` 48; acceptance runs 3-4 pending** | **25.563 ms** | 0.946 | 10 samples |
+| `48/192/768/128` **period 48**, RAVENNA playback 384, TX 288 / RX 144 | **003546Z, 004724Z, 005836Z, 800 impulses each, clean, `tx_qfloor` 164-193, `tx_pullmax` 48; acceptance run 4 pending** | **25.563 ms** | 0.946 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96, RAVENNA playback 384 | 015059Z, 800 impulses, clean, `tx_qfloor` 122 | 30.146 ms | 0.944 | 10 samples |
 | `96/192/768/128` TX 192 / RX 96, **target 128** | **025906Z, 800 impulses, clean, `tx_qfloor` 97, `rx_qfloor` 61** | **24.479 ms** | 0.932 | 10 samples |
