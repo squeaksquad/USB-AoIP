@@ -3221,7 +3221,7 @@ Then `sweep-phase4-sink-delay.sh` at 576 96 120 144 168 with the same
 tagging, to place the RX playout just above the arrival lead.
 
 **MEASURED: the within-session depth sweep, and the verdict.**
-`phase4-depth-sweep-20260903T160313Z` (candidate `phase4-candidate-
+`phase4-depth-sweep-20260903T160312Z` (candidate `phase4-candidate-
 20260903T160313Z`, 1200 s, mode 2, TX setpoint 336, RX 276, gain 0.05):
 three 200-impulse points in one session, readiness at bridge second 287.
 
