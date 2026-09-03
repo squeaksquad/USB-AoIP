@@ -3571,6 +3571,32 @@ starts the unit, which writes the value the runtime lever already holds.
 Staged in `~/usb-16x16-work/governor-install/`; needs the password once.
 The IRQ-pinning lever (2) stays runtime-only and unused.
 
+**INSTALLED AND VERIFIED BY REBOOT 2026-09-03 about 19:20 local: the
+governor is persistent.** The user installed `usb16x16-governor.service`
+(unit `00644010`, enabled); reboot at 77499 s of uptime. On the new boot:
+`usb16x16-governor.service` started at 6.96 s and set `performance` at
+7.20 s, `usb16x16-aes67.service` started at 15.40 s, all four CPUs
+`performance` at 2.4 GHz, UDC `configured/high-speed`, `usb-16x16.service`
+active, PTP locked in 10 s, sinks applied at 58 s, bridge running at 62 s
+on profile `servo-aligned`. Lever 1 no longer depends on anyone remembering
+it. (The script's "runtime only" wording in the journal line is the pinned
+stall-tuning script's own message; the unit is what makes it persist.)
+
+**FOUND on the same cold boot: the aligned start does not survive the
+known cold-boot XRUN.** The service's bridge logged `ALIGN status=failed
+reason=drain` and ran unaligned, then took three RX recoveries (USB
+playback XRUN at bridge 1.7, 4.2 and 7.6 s, the cold-boot cascade the
+record already describes) before settling with zero further recoveries.
+`drain` means the RAVENNA capture returned an error other than EAGAIN
+before the first wakeup was timed, which on a cold boot is the capture
+XRUN every boot starts with; the bridge gave up after one attempt, by
+design, and the session's RX playout is therefore one draw of the old
+lottery until the next service restart. Fix to make: on a drain or avail
+error the alignment should recover the capture (drop, prepare, start) and
+try again a few times before giving up, and the ALIGN line should carry
+the ALSA error text. Warm restarts (every `systemctl start` today, seven
+of them) aligned every time; only the cold boot fails.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
