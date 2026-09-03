@@ -3389,11 +3389,57 @@ install order as before with the service stopped: `install-candidate.sh`
 then `install-aes67-service.sh`. Service restarted on `servo` after the
 build.
 
-Measurement plan for the aligned start: two within-session sink-delay
-sweeps with align on at 576 96 120 144 168, separate sessions; the wrap
-point and the on-line offsets must agree between them. Then the
-`servo-aligned` profile's `SINK_DELAY` goes to the wrap point plus 24-48
-and one more run measures it against the same session's 576 baseline.
+**INSTALLED 2026-09-03 about 16:15 local by the user: bridge `767ae43d`,
+wrapper `9af0135d`, supervisor `f0b783c4`, conf `e662755b`.** Service left
+stopped for the sweeps.
+
+**MEASURED: two within-session sink-delay sweeps with the aligned start,
+`phase4-sink-sweep-20260903T202211Z` (candidate 202212Z) and
+`phase4-sink-sweep-20260903T204113Z` (candidate 204114Z).** Both on the
+`servo` point (period 48, target 128, primes 288/144, RAVENNA playback
+384, mode 1), `--align-start 1 --align-offset-us 600`, 1080 s candidates,
+live `PUT` per point, 20 s settle, readiness, 200 impulses; every point
+spread 0 and score 1.000, zero restarts, zero clips, TX floors 161/163, RX
+floor 109 in both, worst gaps 1.0/1.5 ms. The alignment itself was the
+same to the microsecond: `ALIGN status=ok tick_period_us=1000
+wake_to_prepare_us=616 prepare_us=11` and `615 / 11`, intervals 984-1001 us
+with the first (the backlog wake) short, as the median is there for.
+
+| sink delay | session 1 | session 2 | unaligned 164438Z | unaligned 172330Z |
+|---:|---:|---:|---:|---:|
+| 576 | 1549 | 1352 | 1598 | 1439 |
+| 96 | 1453 | 1448 | 1502 | 1535 |
+| 120 | 1477 | 1472 | 1526 | |
+| 144 | 1501 | 1496 | 1550 | |
+| 168 | 1333 | 1520 | 1382 | |
+
+**The aligned start makes the on-line points absolutely repeatable.** 96,
+120 and 144 read 1453/1477/1501 and 1448/1472/1496: sample-exact on
+`latency = C + delay` in both sessions with C five samples apart, where
+the two unaligned sessions had the same 96 point at 1502 and 1535, a
+33-sample scatter on top of their lap flips. The remaining 5 samples
+(0.1 ms) are outside the RAVENNA capture phase: the TX trigger, the USB
+side or the Ferrofish, one draw each. So the design did what it was for:
+one 48-sample term left the lottery and the RX playout is a constant.
+
+**Two points sit on edges and flipped a lap between the sessions, in
+opposite directions.** 576 (0 mod 192) read 1549 then 1352, one lap
+above the line and then on it; 168 read 1333 then 1520, one lap below the
+line and then on it. Each is within a few samples of a wrap boundary, so
+a few samples of the residual draw flip the whole lap, which is also what
+the 576 history says: 1352, 1382, 1439, 1549, 1564, 1598 across six
+sessions, lap-structured. 168 on its low lap (1333) is the best value the
+project has seen, but it is not a value that can be deployed: it is the
+other side of the same coin. The lower sweep (172330Z) found no value a
+lap above the line down to 48, so the smallest on-line delay is at or
+below 48 and the plan's rule (that plus a 24-48 margin) gives 96, 48
+below the upper edge. **Profile `servo-aligned` is set to `SINK_DELAY=96`**
+(conf `14d74d92`, `e662755b` joins the unedited-shipped list): 30.2 ms,
+repeatable to five samples, against the `servo` profile's 28.2-33.3 ms
+draw at 576. Latency is about even with the mean of that draw; the gain is
+that the number is the same every start, which is the stability-first
+priority. Note that the wrap at delay 0 costs nothing audible: the reader
+takes the packet on its next lap, 4 ms later, intact.
 
 **Measurement plan after the install, in order.**
 
