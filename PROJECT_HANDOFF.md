@@ -2064,7 +2064,38 @@ frames. **RTL Utility at 64 frames against this service: 1491 samples, 31.062 ms
 reported 376, the predicted 1239 + 252 exactly: the Mac-side cost (two
 IO buffers plus 124) did not move with the period. So the deployed point
 at the DAW is 31.1 ms at 64 frames and 29.7 ms at 32, against 34.9 and
-33.6 at period 96. A cold boot at period 48 follows.
+33.6 at period 96.
+
+**MEASURED: cold boot at period 48, watched over one ssh session, and
+what the self-healed boot costs.** Reboot issued 2026-09-03 01:33:39 UTC
+(boot `bd91bb5e`); the new boot answered on wlan0 31 s later and the
+session attached at 14 s of uptime. Timeline (seconds of uptime):
+profile line 13.9, insmod 14.5, daemon API 15.6, PTP locked 24.7, sinks
+applied 56.7, bridge starting 56.8, the startup capture-XRUN pair on both
+directions at 56.79 (as on every cold boot), `running` 60.8, then RX
+playback XRUNs at 58.7, 61.3 and 65.3 (queue 13 and 48 at the XRUN, the
+boot-1/boot-5 shape: USB playback running dry from the 144 prime, RX's
+depth floor stepping 288 to 144 in 24-frame pulls over the first 1.6 s
+of bridge time, three re-primes to 144). Five RECOVERs in all, the rule
+did not trip, no stack restart, `stable for 120s` at 180.4, no further
+recovery through 374 s. So this boot took the shorter path: audio at
+61 s, no second attempt.
+
+**But TX kept the depth it gained during RX's recoveries.** At the first
+BRIDGE line (57.8 s) TX read ring 131, queue 349, depth mean 450; by
+67.8 s, after the three RX re-primes, ring 480 and queue 384, and it
+stayed there: ring 394-468, queue pinned at 384 (full), depth mean 798
+at 368 s, against 371-404 in the four wrapper runs. RX itself settled at
+queue 145-183, floor 13. The bridge conserves depth after priming and the
+estimator matches rate, not level, so nothing drains it. **The service
+measured against this boot: `service-roundtrip-64f-20260903T014029Z`,
+median 1719, 35.813 ms, all 800 impulses on one sample, zero RECOVERs
+during the run**: 480 samples, ten periods, 10.0 ms above the 1239 of the
+warm start measured an hour earlier, and 3.6 ms above the period-96
+warm number. A cold boot that heals without a stack restart is therefore
+slower than one that restarts; the period-96 service runs were all taken
+after boot 4's restart, so this was never measured before. Warm-restart
+confirmation follows.
 
 **`tx_pullmax` 48, and no pull above 48 in the run.** Pull histogram
 `1908067/599987/0/0/0/0` (48-frame bins: zero, 1-48, 49-96, ...): 600k
