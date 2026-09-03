@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=da7df1c282cdab6a0c1943a3354af374bdc0cd3064b495553bf13bbf7f5d2793
+expected_bridge_sha256=170b10819bb4d50c0c118158bb7664fbbee33b55286542b7c57ac07d88d7c478
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
@@ -48,6 +48,9 @@ usb_pitch_servo=${12:-0}
 # depth at engagement. Only meaningful with usb_pitch_servo=2.
 tx_depth_frames=${13:-0}
 rx_depth_frames=${14:-0}
+# Mode 2 level gain in ppm per frame of depth error, (0, 0.1]. 0.05 turns 20
+# frames into 1 ppm; 0.01 sat in the 1 ppm quantisation dead zone (142307Z).
+level_gain=${15:-0.05}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
 ready_file=/tmp/usb16x16-phase4-candidate.ready
@@ -89,6 +92,14 @@ if [ "$prime_trim" -ne 0 ] && [ "$prime_trim" -ne 1 ]; then
 fi
 if [ "$usb_pitch_servo" -gt 2 ]; then
   echo "usb-pitch-servo must be 0, 1 or 2" >&2
+  exit 14
+fi
+if ! [[ "$level_gain" =~ ^0\.[0-9]{1,3}$ ]] || [ "$level_gain" = 0.000 ] || [ "$level_gain" = 0.00 ] || [ "$level_gain" = 0.0 ]; then
+  echo "level-gain must be a decimal in (0, 0.1], e.g. 0.05" >&2
+  exit 14
+fi
+if [ "$usb_pitch_servo" -ne 2 ] && [ "$level_gain" != 0.05 ]; then
+  echo "level-gain needs usb-pitch-servo 2" >&2
   exit 14
 fi
 if [ "$usb_pitch_servo" -ne 2 ] && { [ "$tx_depth_frames" -ne 0 ] || [ "$rx_depth_frames" -ne 0 ]; }; then
@@ -284,6 +295,7 @@ timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
   --usb-pitch-servo "$usb_pitch_servo" \
   --tx-depth "$tx_depth_frames" \
   --rx-depth "$rx_depth_frames" \
+  --level-gain "$level_gain" \
   --priority 90 \
   --seconds "$candidate_seconds" \
   > "$result_dir/bridge.log" 2>&1 &
@@ -318,6 +330,7 @@ fi
   echo "usb_pitch_servo=$usb_pitch_servo"
   echo "tx_depth_frames=$tx_depth_frames"
   echo "rx_depth_frames=$rx_depth_frames"
+  echo "level_gain=$level_gain"
   echo "candidate_seconds=$candidate_seconds"
   echo "bridge_sha256=$expected_bridge_sha256"
 } > "$result_dir/metadata.txt"

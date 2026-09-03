@@ -19,10 +19,11 @@ sink_delay=${USB16X16_PHASE4_SINK_DELAY:-576}
 usb_pitch_servo=${USB16X16_PHASE4_USB_PITCH_SERVO:-0}
 tx_depth_frames=${USB16X16_PHASE4_TX_DEPTH_FRAMES:-0}
 rx_depth_frames=${USB16X16_PHASE4_RX_DEPTH_FRAMES:-0}
+level_gain=${USB16X16_PHASE4_LEVEL_GAIN:-0.05}
 
 export USB16X16_REMOTE_CANDIDATE=/usr/local/sbin/run-phase4-candidate-safe.sh
 export USB16X16_REMOTE_READY_FILE=/tmp/usb16x16-phase4-candidate.ready
-export USB16X16_REMOTE_ARGUMENTS="$seconds $period_frames $buffer_frames $ring_frames $target_frames $playback_prime_frames $prime_trim $tx_playback_prime_frames $rx_playback_prime_frames $ravenna_playback_buffer_frames $sink_delay $usb_pitch_servo $tx_depth_frames $rx_depth_frames"
+export USB16X16_REMOTE_ARGUMENTS="$seconds $period_frames $buffer_frames $ring_frames $target_frames $playback_prime_frames $prime_trim $tx_playback_prime_frames $rx_playback_prime_frames $ravenna_playback_buffer_frames $sink_delay $usb_pitch_servo $tx_depth_frames $rx_depth_frames $level_gain"
 export USB16X16_PATH_LABEL="Phase 4 Ferrofish return path"
 export USB16X16_REQUIRED_SIGNAL_PROBES=3
 # Buffer-192 points show an 8-9 sample impulse bimodality; see the delegate.

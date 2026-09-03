@@ -185,13 +185,14 @@ void test_level_servo() {
     servo.set_setpoint(360.0);
     check(servo.have_setpoint() && servo.setpoint() == 360.0, "setpoint is retained");
     check(servo.update(360.0) == 0.0, "at the setpoint the bias is zero");
-    check(std::abs(servo.update(410.0) - 0.5) < 1.0e-12, "50 frames high gives +0.5 ppm at gain 0.01");
-    check(std::abs(servo.update(310.0) + 0.5) < 1.0e-12, "50 frames low gives -0.5 ppm");
-    check(std::abs(servo.update(540.0) - 1.8) < 1.0e-12, "180 frames high is 1.8 ppm, under the clamp");
-    check(std::abs(servo.update(180.0) + 1.8) < 1.0e-12, "180 frames low is -1.8 ppm");
+    check(std::abs(servo.update(370.0) - 0.5) < 1.0e-12, "10 frames high gives +0.5 ppm at gain 0.05");
+    check(std::abs(servo.update(350.0) + 0.5) < 1.0e-12, "10 frames low gives -0.5 ppm");
+    check(servo.update(540.0) == 2.0, "180 frames high clamps at 2 ppm");
+    check(servo.update(180.0) == -2.0, "180 frames low clamps at -2 ppm");
     // Beyond the wide-error threshold the wider clamp applies: the cold-boot
     // excess of about 480 frames drains at 4.8 ppm, not 2.
-    check(std::abs(servo.update(840.0) - 4.8) < 1.0e-12, "480 frames high uses the wide clamp region");
+    check(servo.update(840.0) == 8.0, "480 frames high uses the wide clamp");
+    check(servo.update(460.0) == 2.0, "100 frames high is under the wide threshold, so the normal 2 ppm clamp");
     check(servo.update(2000.0) == 8.0, "far above clamps at the wide limit");
     check(servo.bias() == 8.0, "bias is retained");
 

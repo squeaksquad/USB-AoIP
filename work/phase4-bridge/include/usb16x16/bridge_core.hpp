@@ -101,15 +101,17 @@ private:
 // Per-direction level law for the split USB pitch servo. Proportional only:
 // the plant (a depth fed by a rate difference) is already an integrator, so
 // a proportional pitch offset gives a first-order return to the setpoint
-// with no steady-state error. The gain is small so the loop tracks slow
-// drift and the 1 ppm pitch quantisation, not the RAVENNA device's 45-frame
-// once-a-minute sawtooth. A wider clamp applies while the error is large,
+// with no steady-state error. The pitch control steps in 1 ppm, so the gain
+// must turn a few tens of frames into a whole ppm or the loop sits in a dead
+// zone: 0.01 ppm/frame did exactly that (run 142307Z moved nothing in
+// 600 s). At 0.05 ppm/frame, 20 frames is 1 ppm and the time constant is
+// about 420 s per direction. A wider clamp applies while the error is large,
 // which is the cold-boot case: 480 frames of excess drain in minutes rather
 // than most of an hour.
 class LevelServo {
 public:
     struct Config {
-        double gain_ppm_per_frame{0.01};
+        double gain_ppm_per_frame{0.05};
         double clamp_ppm{2.0};
         double wide_error_frames{192.0};
         double wide_clamp_ppm{8.0};

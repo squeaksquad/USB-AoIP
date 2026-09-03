@@ -3081,6 +3081,38 @@ run 1's captured levels, expecting about 1 ms less with floors over
 cover; (3) a cold boot to watch the excess drain in place. Then the
 `--target` reduction as its own plan.
 
+**INSTALLED 2026-09-03 about 10:10 local by the user: bridge `da7df1c2`,
+wrapper `c7d63ac9`, supervisor `91845b6a`, conf `ba3c7a98`; service back
+on `servo` (mode 1).**
+
+**MEASURED: split servo run 1, mode 2, setpoints captured.**
+`phase4-candidate-20260903T141038Z`, 600 s, 800 impulses, load 0.05:
+median **1268 samples, 26.417 ms, all 800 on one sample, score 1.000**,
+zero restarts, zero clips. `PITCHSERVO engaged mode=2 tx_setpoint=384
+rx_setpoint=324`; depth means 380/315; floors 168/96; Capture and
+Playback Pitch identical for 592 of 600 s and 1 ppm apart for 8 s (max
+difference 1 ppm); biases within +-0.52 ppm all run against mode 1's
+3 ppm clamp-riding. **macOS tolerated the split**, at least at a 1 ppm
+divergence. Total depth 695 frames, the same as run `024954Z` (696), so
+the 29-sample difference from that run's 1239 is the resting-level
+scatter outside the bridge (1227-1311 for this point), not the servo.
+
+**MEASURED: split servo run 2, setpoints 48 frames lower (TX 336, RX
+276): the level loop did not move the depths.** `phase4-candidate-
+20260903T142307Z`: 1278 samples, 26.625 ms, zero spread, zero restarts,
+zero clips, but depth means 373/322 against setpoints 336/276, biases
+0.55/0.33 ppm all run, pitches 1000015/1000016. Cause: gain 0.01
+ppm/frame is inside the 1 ppm pitch quantisation: a 50-frame error asks
+for 0.5 ppm, which rounds away, and even a whole ppm moves a depth at
+0.048 frames/s (2.9 frames/min). The per-direction loop needs the
+differential loop's gain times two, not divided by five: mode 1's 0.05
+on the differential is 0.1 per direction. Fix: default gain 0.05
+(20 frames = 1 ppm, time constant about 420 s), and the gain is now a
+wrapper positional (15, `USB16X16_PHASE4_LEVEL_GAIN`), a supervisor
+profile key (`LEVEL_GAIN`, optional, absent = 0.05) and a bridge option,
+so the next adjustment needs no rebuild. Rebuild pending, with the
+service stopped this time.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:

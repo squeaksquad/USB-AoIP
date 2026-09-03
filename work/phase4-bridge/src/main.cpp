@@ -111,7 +111,7 @@ struct Options {
     // at engagement, which is mode 1's behaviour per direction.
     std::size_t tx_depth_frames{0};
     std::size_t rx_depth_frames{0};
-    double level_gain_ppm_per_frame{0.01};
+    double level_gain_ppm_per_frame{0.05};
     double level_clamp_ppm{2.0};
     int priority{90};
     unsigned int seconds{0};
@@ -220,7 +220,7 @@ private:
         << "  --tx-depth FRAMES      mode 2 setpoint for usb-to-ravenna depth, ring plus queue\n"
         << "                         (default 0 = capture the depth at engagement)\n"
         << "  --rx-depth FRAMES      mode 2 setpoint for ravenna-to-usb depth (default 0)\n"
-        << "  --level-gain PPM       mode 2 level gain in ppm per frame (default 0.01)\n"
+        << "  --level-gain PPM       mode 2 level gain in ppm per frame (default 0.05)\n"
         << "  --level-clamp PPM      mode 2 level bias clamp in ppm (default 2)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
@@ -324,7 +324,7 @@ Options parse_options(const int argc, char** argv) {
         throw std::runtime_error("priority must be 1..98");
     }
     if (options.tx_depth_frames != 0 || options.rx_depth_frames != 0 ||
-        options.level_gain_ppm_per_frame != 0.01 || options.level_clamp_ppm != 2.0) {
+        options.level_gain_ppm_per_frame != 0.05 || options.level_clamp_ppm != 2.0) {
         if (!options.split_pitch_servo) {
             throw std::runtime_error("--tx-depth, --rx-depth, --level-gain and --level-clamp need --usb-pitch-servo 2");
         }
