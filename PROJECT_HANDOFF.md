@@ -3220,6 +3220,44 @@ median must fall by the depth difference if the TX reading above is right.
 Then `sweep-phase4-sink-delay.sh` at 576 96 120 144 168 with the same
 tagging, to place the RX playout just above the arrival lead.
 
+**MEASURED: the within-session depth sweep, and the verdict.**
+`phase4-depth-sweep-20260903T160313Z` (candidate `phase4-candidate-
+20260903T160313Z`, 1200 s, mode 2, TX setpoint 336, RX 276, gain 0.05):
+three 200-impulse points in one session, readiness at bridge second 287.
+
+| bridge s | TX depth | RX depth | median |
+|---:|---:|---:|---:|
+| 287-338 | 394 | 288 | 1382 |
+| 480-533 | 388 | 267 | 1382 |
+| 843-895 | 346 | 289 | 1382 |
+
+Spread 0 and score 1.000 at every point, zero restarts, zero clips. TX
+depth moved 48 frames under the servo inside one draw of the start
+lottery and the round trip did not move one sample. **On the device
+timeline, servo-driven depth is invisible in both directions.** The
+driver reading above ("TX queue depth is latency at 1:1") is wrong as a
+statement about what the harness, RTL Utility and a DAW measure: the
+transmit schedule is a fixed map from sample index to tick fixed at
+trigger, and pitching the Mac to move the queue slides the Mac's clock,
+not the schedule. Prime-set depth (start time) shows, as the 2026-09-01
+prime series proved at 8 ms scale; servo-set depth does not.
+
+**Consequences.** (1) DAW-visible latency is set entirely at stream
+start: primes, buffer sizes, sink delay modulo the capture buffer, and
+the phase between the bridge's start and the tick grid (the 84-sample
+lottery). (2) Servo-held depth is free on that timeline: start with the
+smallest primes the first seconds survive, then let the servo raise the
+depth to the cover it needs. Safety no longer trades against latency.
+This needs a fill faster than the 2 ppm clamp, i.e. a wider clamp or a
+startup fill phase; design item. (3) The RX modulo lever (sink delay of
+arrival lead plus margin, mod 192, instead of 576) is a start-time
+quantity and should show; it is the next sweep. (4) Open: whether the
+wall-clock latency a performer hears follows the device timeline or the
+queue. The bridge's depth telemetry is the wall-clock number by
+definition; the harness cannot see it. One deliberate test later, with
+an external clock, not now. The 1382-sample session level itself is
+another draw of the lottery (1227-1382 now).
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
