@@ -2050,6 +2050,19 @@ samples, 3.83 ms, saved at the DAW. Less the 188-sample Mac-side cost
 measured at 32 frames, the device-timeline level is 1239, run 4's level.
 64-frame RTL Utility and `measure-under-service.sh` at this point follow.
 
+**MEASURED: the running service at period 48, 64 frames, 800 impulses.**
+`service-roundtrip-64f-20260903T012648Z`, 90 s after the service's
+two-minute stability mark: median 1239, **25.813 ms**, spread 10 (1231 to
+1241), score 0.935, 1239 in 716 of 800 and 1231 in 50, zero RECOVERs,
+zero restarts, `tx_qfloor` 174, `rx_qfloor` 119, `tx_pullmax` 48. The same
+level as wrapper run 4 and as RTL Utility's 1427 at 32 frames less the
+188-sample Mac-side cost. At period 96 the service read 1423 in all four
+of its runs, so the service is 184 samples, 3.83 ms, faster at 64 frames
+too: **quote the deployed point as 25.8 ms on the device timeline**,
+range 25.6-27.3 from the wrapper series, and 29.7 ms at the DAW at 32
+frames. Not yet measured: RTL Utility at 64 frames against this service
+(expected 1239 + 252 = 1491, 31.06 ms), and a cold boot at period 48.
+
 **`tx_pullmax` 48, and no pull above 48 in the run.** Pull histogram
 `1908067/599987/0/0/0/0` (48-frame bins: zero, 1-48, 49-96, ...): 600k
 pulls of one packet at 1 kHz and nothing larger. Every period-96 run
@@ -2063,7 +2076,7 @@ whether it recurs.
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
-| `48/192/768/128` **period 48**, RAVENNA playback 384, TX 288 / RX 144 | **ACCEPTED: 003546Z, 004724Z, 005836Z, 011007Z, 800 impulses each, 0 failures, `tx_qfloor` 164-193, `tx_pullmax` 48** | **25.563 ms** | 0.946 | 10 samples |
+| `48/192/768/128` **period 48**, RAVENNA playback 384, TX 288 / RX 144 | **ACCEPTED and DEPLOYED as `safe`: 003546Z, 004724Z, 005836Z, 011007Z, 800 impulses each, 0 failures, `tx_qfloor` 164-193, `tx_pullmax` 48; service 012648Z 25.813 ms** | **25.563 ms (x2), 25.813 ms, 27.313 ms** | 0.930-0.988 | 0-10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96, RAVENNA playback 384 | 015059Z, 800 impulses, clean, `tx_qfloor` 122 | 30.146 ms | 0.944 | 10 samples |
 | `96/192/768/128` TX 192 / RX 96, **target 128** | **025906Z, 800 impulses, clean, `tx_qfloor` 97, `rx_qfloor` 61** | **24.479 ms** | 0.932 | 10 samples |
