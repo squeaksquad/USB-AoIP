@@ -3690,6 +3690,29 @@ measured: the round trip of a session after an aligned recovery, which
 would need a sweep-style run with an induced pause in it; expected
 within a few samples of 1416-1453.
 
+**MEASURED 2026-09-03 19:44 local: the round trip of the session after
+the aligned recovery, `service-roundtrip-64f-20260903T234418Z`
+(measure-under-service.sh 64 800, no stack restart).** The session is the
+one above: warm start on bridge `38f44de9` aligned at 615 us, then the
+induced 20 ms pause at bridge second 57.7 that recovered both directions,
+TX re-primed and RX re-prepared on the tick grid at 607 us. **Median 1320
+samples, 27.500 ms, all 800 impulses on one sample, score 1.000**, zero
+RECOVERs during the run, zero discontinuities, `tx_qfloor` 168,
+`rx_qfloor` 109, `tx_pullmax` 48, gaps 1.1/1.6 ms, pitch 1000015, bias
+-0.1 ppm, `tx_clip`/`rx_clip` 0. The expectation above ("within a few
+samples of 1416-1453") did not hold: the recovered session sits 96
+samples, exactly two packets, below the accepted mode of 1416 and 80
+below the accepted window's floor of 1400, with the same zero spread and
+the same floors. Observation only; the pause recovered both directions,
+so the 96 could be the TX re-prime (the RAVENNA playback trigger, the one
+draw the aligned start does not pin) or the RX re-prepare phase, and one
+session does not say which is repeatable. 1320 is arithmetically the
+accepted sessions' `latency = C + delay` line at delay 0 (C = 1320/1325/
+1320/1304 for 1416/1421/1416/1400), noted, not claimed. Whether a
+recovered session is consistently two packets faster is a second induced
+pause and a second run; whether the term is TX's is the aligned TX
+trigger, the candidate already on the list.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
