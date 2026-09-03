@@ -2036,6 +2036,20 @@ a per-device period option), the service's own number at this point (the
 service runs the profile, `measure-under-service.sh` reads it), and 32
 CoreAudio frames, which the harness cannot see and RTL Utility can.
 
+**DEPLOYED: period 48 as profile `safe`, 2026-09-02 21:25 local.** The
+user ran the staged installer: `/etc/usb16x16/aes67.conf` `4bd2f070`
+(profiles `safe` at period 48, `safe-96` the former point, `fast`),
+supervisor `e300cc33`, unit `77837e60`, bridge `0254348c`, wrapper
+`1baa88a9` all unchanged. The service came back in 46 s (a warm start:
+insmod, daemon API 2 s, PTP locked 10 s, sinks applied at 42 s, bridge
+negotiated 48/192 on every PCM, `running` at 21:25:53), no startup XRUN
+pair, zero recoveries, floors 205/133 at 30 s. **RTL Utility against the
+new service at 32 CoreAudio frames: 1427 samples, 29.729 ms**, reported
+312, return level -21.6 dB, against 1611 at the period-96 point: 184
+samples, 3.83 ms, saved at the DAW. Less the 188-sample Mac-side cost
+measured at 32 frames, the device-timeline level is 1239, run 4's level.
+64-frame RTL Utility and `measure-under-service.sh` at this point follow.
+
 **`tx_pullmax` 48, and no pull above 48 in the run.** Pull histogram
 `1908067/599987/0/0/0/0` (48-frame bins: zero, 1-48, 49-96, ...): 600k
 pulls of one packet at 1 kHz and nothing larger. Every period-96 run
