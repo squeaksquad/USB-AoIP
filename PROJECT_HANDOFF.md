@@ -1789,6 +1789,28 @@ read 1423 against 1399/1351/1327 under the wrapper for the same binary
 and arguments; the quoted range for the point is now 27.6-29.6 ms, and
 the service's four runs are the tightest set yet.
 
+**MEASURED: the DAW-side number, RTL Utility at 64 and 32 frames.** Oblique
+Audio's RTL Utility, output 1 to input 1 of the USB 16x16 through the same
+Ferrofish return path, against the running service (2026-09-02 evening
+local, service up since 19:04). It measures on the Mac's IOProc timeline,
+which is what a DAW sees; the harness measures on the device's:
+
+| CoreAudio buffer | RTL Utility | samples | CoreAudio reported | harness, device timeline | Mac-side cost |
+|---:|---:|---:|---:|---:|---:|
+| 64 | 34.896 ms | 1675 | 376 | 1423 | 252 (5.25 ms) |
+| 32 | 33.562 ms | 1611 | 312 | 1423 | 188 (3.92 ms) |
+
+Three things follow. The 32-frame lever exists and is worth exactly 64
+samples, 1.33 ms, one buffer per direction: invisible to the harness by
+construction, now measured. The Mac side beyond the two IO buffers is a
+constant 124 samples (2.58 ms) at both settings, safety offsets plus USB
+framing; the roadmap had estimated the whole Mac contribution at 3-4 ms
+and it is 5.25 ms at 64 frames. CoreAudio's reported latency overstates
+the measured Mac-side cost by that same 124 samples at both settings, so
+the report is not the number to subtract. Return level -21.6 dB both
+times. Quote the point as 29.6 ms on the device timeline and 34.9 ms (64
+frames) or 33.6 ms (32 frames) at the DAW.
+
 **MEASURED: five more cold boots, unattended.** Reboot, wait for ssh on
 wlan0 or eth0, wait for `running`, observe for four minutes:
 

@@ -195,7 +195,8 @@ The accepted point sits at 29.1 ms. From the measurements so far, the round
 trip divides roughly as: bridge rings 5.3 ms, bridge device queues 8.8 ms,
 capture backlog 1.6 ms, RAVENNA playback buffer 1.7 ms (measured),
 RAVENNA capture side about 3.7 ms (inferred), Ferrofish about 3.5 ms, Mac
-CoreAudio at 64 frames plus USB framing 3-4 ms. The bridge owns about 16 ms,
+CoreAudio at 64 frames plus USB framing 5.25 ms (measured with RTL Utility:
+252 samples at 64 frames, 188 at 32, see the handoff). The bridge owns about 16 ms,
 and nearly all of the queue depth exists for one reason: the RAVENNA
 device's once-a-minute three-packet pull.
 
@@ -252,10 +253,11 @@ the architecture sketch.
 
 ### The floor
 
-Mac at 64 frames both ways, the Ferrofish, and the RAVENNA device's own
-buffering total 10-11 ms before the bridge holds a frame. With all three
-tiers done, this loop bottoms out around 14-16 ms. Below that is a 32-frame
-CoreAudio buffer, a different receiver than the Ferrofish, or hardware
+Mac at 64 frames both ways (5.25 ms measured), the Ferrofish, and the
+RAVENNA device's own buffering total 12-13 ms before the bridge holds a
+frame. With all three tiers done, this loop bottoms out around 16-17 ms.
+Below that is a 32-frame CoreAudio buffer (1.33 ms, measured), a
+different receiver than the Ferrofish, or hardware
 timestamping in the driver; none of it is Pi-side work, and the profile
 mechanism above is how any of it ships if it ever does.
 
