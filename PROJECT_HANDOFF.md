@@ -3520,6 +3520,32 @@ prepare_us=10`. Six aligned sessions at 96: 1453, 1448, 1438, 1416, 1421,
 loaded run remains. Service restarted on `servo-aligned` afterwards,
 aligned at 617 us.
 
+**MEASURED: acceptance run 4 of 4 on `servo-aligned`,
+`phase4-candidate-20260903T224111Z`, same arguments: median 1400 samples,
+29.167 ms, all 800 on one sample, score 1.000**, zero restarts, zero
+clips, zero pitch write errors, `tx_qfloor` 161, `rx_qfloor` 107,
+`tx_pullmax` 48, gaps 1.0/1.8 ms, pitch 1000015, bias -0.05 ppm, `ALIGN
+wake_to_prepare_us=617 prepare_us=18`. Service restarted on
+`servo-aligned` afterwards, aligned at 616 us.
+
+**ACCEPTED 2026-09-03: profile `servo-aligned`** (period 48, target 128,
+primes 288/144, RAVENNA playback 384, USB pitch servo mode 1, aligned
+start at 600 us, sink delay 96), on four loaded 800-impulse runs: 1416,
+1421, 1416, 1400 samples (29.2-29.6 ms), every impulse on one sample in
+every run, zero restarts, zero clips, TX floor 159-163 over the
+144-frame skip bar, RX floor 107-133, worst gaps 1.8 ms, the alignment
+615-618 us after the reference wakeup in every start including the
+service's own. Seven aligned sessions at 96 span 1400-1453 (53 samples,
+1.1 ms), no lap structure, against 1352-1598 at 576. It is the first
+accepted point with the audio path bit transparent and the RX playout
+fixed at start. The conf's `servo-aligned` block now says so (STATUS
+accepted, COVER, MEASURED; conf `40496730`, `7c08af39` joins the
+unedited-shipped list); it is staged in `phase4-align-install/` and
+needs one more `install-aes67-service.sh` with the service stopped; the
+running service's behaviour is unchanged by it. Rollback stays
+`switch-profile servo` (sink delay 576, historical start) or `safe`
+(the resampler).
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
