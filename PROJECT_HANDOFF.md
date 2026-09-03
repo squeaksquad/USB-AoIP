@@ -3546,6 +3546,14 @@ running service's behaviour is unchanged by it. Rollback stays
 `switch-profile servo` (sink delay 576, historical start) or `safe`
 (the resampler).
 
+**INSTALLED 2026-09-03 18:56 local by the user: conf `40496730`
+(`servo-aligned` marked accepted), service restarted on `servo-aligned`.**
+`status` now reads `servo-aligned (accepted, cover: TX floor 159-163 over
+the 144-frame skip bar, RX 107-133, measured: 29.5 ms (29.2-29.6), 4 x
+800 impulses, zero spread)`. `/etc/usb16x16/aes67.conf`, the repo copy
+and `install-aes67-service.sh` are all at `40496730`; nothing is staged
+that is not installed.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
