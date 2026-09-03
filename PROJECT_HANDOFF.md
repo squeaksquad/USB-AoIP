@@ -3498,6 +3498,16 @@ wider than the 15 samples the first three suggested, against the
 acceptance. Service restarted on `servo-aligned` afterwards, its own
 start aligned at 618 us.
 
+**MEASURED: acceptance run 2 of 4 on `servo-aligned`,
+`phase4-candidate-20260903T220840Z`, same arguments: median 1421 samples,
+29.604 ms, all 800 on one sample, score 1.000**, zero restarts, zero
+clips, zero pitch write errors, `tx_qfloor` 163, `rx_qfloor` 109,
+`tx_pullmax` 48, gaps 1.1/1.5 ms, pitch 1000015, bias 0.5 ppm, `ALIGN
+wake_to_prepare_us=617 prepare_us=12`; SAP timeline recorded this time
+(Dante Controller closed). Five aligned sessions at 96: 1453, 1448,
+1438, 1416, 1421. Two loaded runs remain. Service restarted on
+`servo-aligned` afterwards, aligned at 617 us.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:

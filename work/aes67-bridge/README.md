@@ -135,7 +135,7 @@ profile. Six ship:
 | `fast` | target 128, TX 192, RX 96, buffer 192, sink delay 576 | 24.5 ms | none, TX floor 97 | experimental |
 | `servo` | as `safe` with the USB pitch servo (`USB_PITCH_SERVO=1`): converters at 1.0, bit transparent | 25.8 ms | TX floor 164 | experimental, running |
 | `servo-split` | `servo` with the per-direction level servo (`USB_PITCH_SERVO=2`) | not yet | as `servo` | experimental |
-| `servo-aligned` | `servo` with the aligned start (`ALIGN_START=1`) and sink delay 96: the RX playout is the same every start | 29.5-30.3 ms, 37-sample window over 4 sessions; 1 loaded run of 4 | TX floor 161-163 | experimental |
+| `servo-aligned` | `servo` with the aligned start (`ALIGN_START=1`) and sink delay 96: the RX playout is the same every start | 29.5-30.3 ms, 37-sample window over 5 sessions; 2 loaded runs of 4 | TX floor 161-163 | experimental |
 
 ```bash
 /usr/local/sbin/usb16x16-aes67-supervisor profiles
