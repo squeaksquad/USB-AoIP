@@ -19,7 +19,7 @@ settle_seconds=${USB16X16_SWEEP_SETTLE_SECONDS:-20}
 max_spread=${USB16X16_READY_MAX_SPREAD_SAMPLES:-9}
 remote_ready_file=/tmp/usb16x16-phase4-candidate.ready
 # wrapper positional arguments: seconds period buffer ring target prime trim txprime rxprime ravenna_playback_buffer
-remote_arguments="$candidate_seconds ${USB16X16_PHASE4_PERIOD_FRAMES:-96} ${USB16X16_PHASE4_BUFFER_FRAMES:-192} ${USB16X16_PHASE4_RING_FRAMES:-768} ${USB16X16_PHASE4_TARGET_FRAMES:-192} ${USB16X16_PHASE4_PLAYBACK_PRIME_FRAMES:-96} 0 ${USB16X16_PHASE4_TX_PLAYBACK_PRIME_FRAMES:-192} ${USB16X16_PHASE4_RX_PLAYBACK_PRIME_FRAMES:-96} ${USB16X16_PHASE4_RAVENNA_PLAYBACK_BUFFER_FRAMES:-0} ${USB16X16_PHASE4_SINK_DELAY:-576}"
+remote_arguments="$candidate_seconds ${USB16X16_PHASE4_PERIOD_FRAMES:-96} ${USB16X16_PHASE4_BUFFER_FRAMES:-192} ${USB16X16_PHASE4_RING_FRAMES:-768} ${USB16X16_PHASE4_TARGET_FRAMES:-192} ${USB16X16_PHASE4_PLAYBACK_PRIME_FRAMES:-96} 0 ${USB16X16_PHASE4_TX_PLAYBACK_PRIME_FRAMES:-192} ${USB16X16_PHASE4_RX_PLAYBACK_PRIME_FRAMES:-96} ${USB16X16_PHASE4_RAVENNA_PLAYBACK_BUFFER_FRAMES:-0} ${USB16X16_PHASE4_SINK_DELAY:-576} ${USB16X16_PHASE4_USB_PITCH_SERVO:-0} ${USB16X16_PHASE4_TX_DEPTH_FRAMES:-0} ${USB16X16_PHASE4_RX_DEPTH_FRAMES:-0} ${USB16X16_PHASE4_LEVEL_GAIN:-0.05}"
 delays=("$@")
 (( ${#delays} == 0 )) && delays=(576 288 144 96)
 
@@ -105,6 +105,11 @@ print('readback delays', got)
 sys.exit(0 if got == [delay]*len(got) else 1)
 PYEOF" || { print -r -- "point delay=$delay SINK WRITE FAILED"; continue; }
     bridge_line=$(ssh "${ssh_options[@]}" "$pi_target" "grep -c '^BRIDGE' '$remote_result_dir/bridge.log'")
+    # The driver's minimum packet arrival lead for sink 0, microseconds, and
+    # the bridge depths: the sink delay acts modulo the capture buffer, and
+    # this says whether packets now arrive before their slot is read.
+    state=$(ssh "${ssh_options[@]}" "$pi_target" "sleep 5; tail -1 '$remote_result_dir/bridge.log' | grep -oE 'tx_occ=[0-9]+|rx_occ=[0-9]+|tx_queue=[0-9]+|rx_queue=[0-9]+|rx_qfloor=[0-9-]+|rx_cappeak=[0-9]+' | paste -sd ' '; echo -n ' sink_min_time='; curl -s http://127.0.0.1:8080/api/sink/status/0 | grep -oE '\"sink_min_time\": *[0-9]+' | grep -oE '[0-9]+\$'" 2>/dev/null | tr '\n' ' ')
+    print -r -- "state after apply: $state"
     print -r -- "applied delay=$delay at bridge_second=$bridge_line; settling ${settle_seconds}s"
     sleep "$settle_seconds"
     wait_ready "d$delay" 60

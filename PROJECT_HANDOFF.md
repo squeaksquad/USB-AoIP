@@ -3258,6 +3258,91 @@ definition; the harness cannot see it. One deliberate test later, with
 an external clock, not now. The 1382-sample session level itself is
 another draw of the lottery (1227-1382 now).
 
+**MEASURED: the within-session sink-delay sweep, and the RX modulo lever
+is exact.** `phase4-sink-sweep-20260903T164438Z` (candidate 164439Z, 900 s, profile
+`servo` point, mode 1), live `PUT` per point, 20 s settle, readiness,
+200 impulses, all spread 0 and score 1.000, zero restarts, zero clips:
+
+| sink delay | delay mod 192 | median | against 576 |
+|---:|---:|---:|---:|
+| 576 | 0 | 1598 | |
+| 96 | 96 | 1502 | **-96** |
+| 120 | 120 | 1526 | **-72** |
+| 144 | 144 | 1550 | **-48** |
+| 168 | 168 | 1382 | -216 |
+
+Three points sample-exact on `latency = constant + (delay mod 192)`,
+with the 576 baseline reading a full lap late (packets arrive after the
+zero slot is read and are taken one buffer later). The fourth point
+jumped down a lap plus 24: that `PUT` re-drew the alignment, which is
+also what the 2026-09-02 sweep's chaotic values look like in hindsight.
+So a live change is not a reliable way to apply the value; the
+profile's startup `SINK_DELAY` is (the 2026-09-02 result that startup
+144 equals live 144 stands). This session's own 576 level, 1598, is
+216 above the depth sweep's 1382 at the same point, so the start
+lottery is at least 192 + 24 wide and lap-structured. `sink_min_time`
+read 0 at every point and is not a usable indicator.
+
+**What to deploy:** the smallest delay that still sits on the line,
+plus a jitter margin. The lower sweep (576, 24, 48, 72, 96) finds the
+arrival lead: the first value that lands a lap above the line instead
+of on it.
+
+**MEASURED, then discarded: the first lower sweep (576, 24, 48, 72, 96),
+`phase4-sink-sweep-20260903T170050Z`.** Baseline 576 read 1564 (a third
+draw: 1382, 1598, 1564 at the same point). The daemon rejected 24 with
+HTTP 400, **and the rejected PUT left sink 0 removed** (`session_manager::
+sink 0 not in use` from then on); the 48 and 72 points updated sink 1
+only, so the harness, which listens on sink 0's channels, saw no signal.
+Those two "no signal" results say nothing about the arrival lead. The 96
+point failed because the candidate's 900 s clock ran out. Lessons: the
+daemon's minimum sink delay is above 24 (48 is accepted), and a rejected
+sink PUT is destructive, so a sweep must stay inside the accepted range.
+Rerun as 576, 48, 72, 96.
+
+**MEASURED: the lower sweep rerun, `phase4-sink-sweep-20260903T172330Z` (candidate 172330Z),
+576 48 72 96, both sinks confirmed at every point, zero restarts, zero
+clips, spread 0 everywhere.**
+
+| sink delay | median | against 576 | reading |
+|---:|---:|---:|---|
+| 576 | 1439 | | lap late, as always at delay 0 mod 192 |
+| 48 | 1487 | +48 | lap late |
+| 72 | 1511 | +72 | lap late |
+| 96 | 1535 | +96 | **lap late in this session**; on the line (-96) in 164438Z |
+
+A lap-late point reads baseline plus the delay, exactly, and the audio
+is intact: the reader takes the packet on its next pass, 192 frames
+later, no dropout. **So the wrap costs 4 ms, never silence, and the
+floor is between 96 and 144 samples of arrival lead, and it moves with
+the session.** The driver fixes the reader phase at capture prepare
+(`capture_buffer_pos = SAC mod L`, then 48 per tick): a packet in slot
+`x` is read at `SAC = x + delta`, `delta` being the interval from the
+prepare call to the next tick, anywhere in (0, 48]. The wrap condition
+is `delay + delta > arrival lead`; 96 clears it in one session and not
+in another, so the lead is in (96, 144). Any delay under about 144 is a
+per-session gamble: 1 ms saved or 3 ms lost. 168 is safe by at least 24
+frames and saves 0.5 ms; 144 saves 1 ms with a margin that can be a
+single frame. Session baselines at 576 now read 1382, 1439, 1564, 1598:
+a 216-sample spread, lap-structured, larger than the 48-per-direction
+tick phase can make. The likeliest second lap is at the Ferrofish: the
+Pi stamps packets `SAC - 48` and the Ferrofish plays at stamp + 96 (its
+2 ms setting), leaving the network about 48 frames of budget against an
+observed 1.4 ms peak, so some sessions' start phase would put the whole
+stream one Ferrofish buffer late. Not yet measured; Dante Controller's
+receive-latency view in a high session against a low one would show it.
+
+**Design this points at: an aligned start.** The bridge controls when
+the RAVENNA capture is prepared and when playback is triggered. If it
+observes the tick phase first (period wakeups on RAVENNA capture arrive
+once per tick) and re-prepares capture a known few tens of microseconds
+after a tick, `delta` becomes a constant near zero, the sink delay can
+be set to arrival lead plus a small margin (about 2 ms below today),
+and one 48-sample term leaves the lottery; the same for the playback
+trigger. That is a bridge change, one variable, measurable by the same
+within-session sweep. Until then the deployed 576 is the predictable
+choice; 168 is the safe small win.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
