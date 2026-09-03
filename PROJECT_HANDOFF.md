@@ -3164,6 +3164,62 @@ recovery, at the cost of nothing.
 Profile `servo-split` stays experimental with setpoints 0; `servo` stays
 the running profile.
 
+**READ: how the RAVENNA driver starts and times a stream (source in
+`work/aes67-linux-daemon/3rdparty/ravenna-alsa-lkm/driver`, byte-identical
+to the Pi's v2.1 build).** Everything runs off one PTP-disciplined 1 ms
+timer (the TIC, `tic_frame_size_at_1fs` 48) and one global sample-accurate
+counter (SAC).
+
+- **Capture (RX) is a SAC-addressed ring the size of the ALSA capture
+  buffer.** An RTP packet with timestamp `s` is written into the live-in
+  jitter buffer at offset `(s + sink_delay) mod L`, where `L` is the
+  negotiated ALSA capture buffer in frames, 192 at the period-48 point
+  (`get_live_in_jitter_buffer_offset`, `RTP_audio_stream.c:694,723`). The
+  reader starts at `SAC mod L` at prepare and advances one TIC frame per
+  tick (`audio_driver.c` prepare and interrupt). **So the sink delay acts
+  modulo the capture buffer**: 576 is 3 x 192, which is 0. The daemon's own
+  `playout_delay` is 0 and only feeds `runtime->delay` (the value
+  `snd_pcm_delay` adds), not the timing. This explains three things the
+  record could not: the sink delay being "not a lever" under Phase 4 (every
+  value was taken modulo 192), the stopgap's additive 1:1 sink delay (its
+  driver-default buffer was 960, so nothing wrapped), and the 5.33 ms that
+  buffer 384 -> 192 removed "from no buffer this process owns" (576 mod 384
+  is 192 frames, 4 ms, of extra playout). A packet arriving after its
+  slot's read time is read one full buffer later; `sink_min_time` in
+  `GET /api/sink/status/N` is the driver's minimum arrival lead in
+  microseconds and reads 0 today, meaning packets arrive after their
+  nominal use point at delay 0 and are played 192 frames (4 ms) after
+  their content SAC. **A sink delay of (arrival lead + jitter margin) mod
+  192 would move the RX playout from about 4 ms to about that margin**,
+  deterministically, without touching the bridge. Candidate values 96-168;
+  the 2026-09-02 live sweep saw 288 (that is 96) lowest and 144 highest,
+  which is consistent with arrival landing near those slots and needs the
+  within-session sweep below with `sink_min_time` recorded.
+- **Playback (TX) is an ordinary DMA-style ring.** The ALSA hw pointer
+  starts at 0 on prepare and advances 48 frames per TIC after trigger; each
+  tick copies the frame at the hw pointer into the internal live-out ring
+  and the sender stamps the packet with `SAC - 48` ("the SAC when the audio
+  was produced", `RTP_audio_stream.c:845`), whatever the age of the data.
+  The Ferrofish plays a packet at its RTP timestamp plus its own receive
+  latency (2 ms setting). So in this design the bridge's TX queue depth is
+  latency at 1:1 and the start lottery is the phase between the bridge's
+  prime and the TIC grid, at most 48 frames per direction, plus the RX
+  modulo above. That contradicts the four single-run mode-2 results, which
+  are each one draw of an 84-sample lottery and cannot resolve a 40-frame
+  effect. The next measurement is within one session.
+- **The internal rings are large** (`MR_ALSA_RINGBUFFER_NB_FRAMES`); only
+  the ALSA-side buffers set the modulo and the pointer behaviour above.
+
+**Two within-session experiments, scripts ready, not run.**
+`work/aes67-candidate/sweep-phase4-depth.sh`: one 1200 s candidate in mode
+2 with a TX setpoint under the prime level, 200-impulse harness points at
+chosen bridge seconds, each tagged with the depths, floors, pitches, biases
+and `sink_min_time` at that moment. Points 120/480/840 with TX 336 give
+about 385, 350, 336 frames of TX depth in one draw of the lottery; the
+median must fall by the depth difference if the TX reading above is right.
+Then `sweep-phase4-sink-delay.sh` at 576 96 120 144 168 with the same
+tagging, to place the RX playout just above the arrival lead.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
