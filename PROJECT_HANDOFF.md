@@ -3469,6 +3469,20 @@ supervisor there are the installed ones) and needs
 `switch-profile servo-aligned`. Acceptance under the project's rule is
 still four loaded 800-impulse runs on the profile itself.
 
+**INSTALLED AND SWITCHED 2026-09-03 17:36 local: the service runs profile
+`servo-aligned`.** The user installed conf `14d74d92` and ran
+`switch-profile servo-aligned` with the service still stopped, so the
+profile took effect on the start that followed: `sinks applied, delay 96`,
+`ALIGN status=ok tick_period_us=999 wake_to_prepare_us=616 prepare_us=13`,
+`running` at 17:37:14, no startup XRUN pair, zero recoveries, PTP locked,
+jitter 15. `/etc/usb16x16/aes67.conf` is `7c08af39` (`PROFILE=
+servo-aligned`, otherwise `14d74d92`); the repo copy and
+`install-aes67-service.sh` are pinned to it and `14d74d92` joined the
+unedited-shipped list. Rollback is `switch-profile servo`, the same
+binary with the historical start order and sink delay 576. Remaining
+acceptance work: four loaded 800-impulse runs on this profile, and the
+overnight stall watch continues under the `performance` governor.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
