@@ -3027,6 +3027,24 @@ night: mode 1's level bias sat at its 3 ppm clamp riding the RAVENNA
 device's 45-frame sawtooth, harmless but the reason mode 2 uses a lower
 gain.
 
+**MEASURED: one stall under `performance`, 09:52:34 local, monotonic
+44318 s, 10.6 h after the lever.** Shape: USB capture XRUN (TX,
+`last_gap_us=2457`) and USB playback XRUN (RX, `last_queue=144`,
+`last_gap_us=1032`) in the same instant, RAVENNA PCMs untouched: a
+USB-side event with the bridge 2.5 ms late, its largest gap since the
+switch (1.8 ms overnight). Context: a burst of six short ssh sessions
+from the Mac at 44296-44311 (an incremental bridge build, 6.5 s of CPU,
+ending at 44304, then four sub-second scp/validation sessions), the last
+closing 6.4 s before the stall. Not the tight 0.2-0.4 s coupling of the
+three earlier session-close hits, and the compile had been idle for 14 s,
+so it is recorded as unattributed. Rate under `performance` is now one in
+12.3 h against three in 1.75 h before it: a large reduction, not zero.
+Mode 1 re-primed both directions and continued (`tx_restarts=1
+rx_restarts=1`); RX's queue floor after the re-prime reads 54 against 96
+before, which is the case mode 2's absolute setpoints exist for.
+Practice going forward: no builds or staging on the Pi during a
+measurement window, and prefer the service stopped for any compile.
+
 **IMPLEMENTED, staged, not installed: the split pitch servo,
 `--usb-pitch-servo 2`, bridge `da7df1c2`.** Design, from the depth
 equations: TX depth rate is r_usb(1 + pi_c) - r_rav and RX depth rate is
