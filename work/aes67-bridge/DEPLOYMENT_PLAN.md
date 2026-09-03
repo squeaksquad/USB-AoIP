@@ -282,22 +282,148 @@ Ask these in one batch at the start of the session:
 6. TX prime 288 as measured, or 336 with one confirming run first?
 7. Ship `fast` as a selectable profile marked experimental, or `safe` only?
 
-## Pickup prompt for the implementation session
+## Pickup prompt for the next session (written 2026-09-02, deployment done)
 
 Copy this into the new chat:
 
-> Raspberry Pi 5 USB 16x16 / AES67 bridge, repo ~/Development/USB 16x16
-> (github.com/squeaksquad/usb-16x16-aes67, main, clean). Read
-> work/aes67-bridge/DEPLOYMENT_PLAN.md first, then PROJECT_HANDOFF.md from
-> "ACCEPTED: the combined point" back through "MEASURED: the RAVENNA device
-> skips one packet". The Phase 4 bridge is accepted at 29.1 ms with the skip
-> covered; nothing is broken. The task is to build the persistent service the
-> plan describes. Start by asking the six decisions in the plan in one batch.
-> Rules that still apply: usb-16x16.service, the USB module and the setup
-> script are immutable; never run ptp4l beside the daemon; installs need the
-> user's password, so batch them and verify staged hashes first; never build
-> or install on the Pi while a run is measuring; guard every scripted edit
-> and chain the commit behind it; a pgrep -f for the bridge from inside an
-> ssh command matches the ssh shell itself, anchor it like the wrapper does.
-> Pi: ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201; eth0 is
-> AoIP, wlan0 is management. Installed bridge is 0254348c, wrapper 1baa88a9.
+> Raspberry Pi 5 USB 16x16 / AES67 bridge. Repo ~/Development/USB 16x16
+> (github.com/squeaksquad/usb-16x16-aes67, main, pushed and clean).
+>
+> Read work/aes67-bridge/README.md first, then PROJECT_HANDOFF.md from
+> "DEPLOYED: usb16x16-aes67.service" forward through every section down
+> to "The sink 0 PUT takes 32 s in every start", then "ACCEPTED: the
+> combined point" for the operating point itself. work/aes67-bridge/
+> DEPLOYMENT_PLAN.md is the design, its decisions section records the
+> seven choices, and its "Latency roadmap" is where the next work is.
+>
+> NOTHING IS BROKEN. The Phase 4 point is deployed as usb16x16-aes67.service,
+> enabled at boot, running profile "safe", and all seven acceptance items
+> have passed. The task now is the user's choice from the open items below;
+> ask which before starting.
+>
+> WHAT IS INSTALLED (2026-09-02 23:00 local)
+> Bridge 0254348c, candidate wrapper 1baa88a9, supervisor e300cc33, unit
+> 77837e60, /etc/usb16x16/aes67.conf f2e1531f (profiles safe and fast, host
+> retry 60 s). Verify:
+>   ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
+>     'sha256sum /usr/local/libexec/usb16x16-rt-bridge \
+>      /usr/local/sbin/run-phase4-candidate-safe.sh \
+>      /usr/local/sbin/usb16x16-aes67-supervisor \
+>      /etc/systemd/system/usb16x16-aes67.service /etc/usb16x16/aes67.conf'
+> The Pi's journal is persistent. bdimaio can start, stop, restart, enable,
+> disable the unit, switch profiles, pkill the daemon or bridge, and reboot
+> without a password; anything else with sudo needs the user, so batch it,
+> verify staged hashes, and give one command.
+>
+> THE POINT
+> Target 128, buffer 192, RAVENNA playback 384, TX prime 288, RX prime 144,
+> sink delay 576. Quote 27.6-29.6 ms: the wrapper measured 29.146 x3,
+> 28.146, 27.646; four runs against the running service all read 29.646
+> (1423) at both 64 and 32 CoreAudio frames. The harness computes delay on
+> the device's sample timeline, so the Mac's IO buffer is outside what it
+> measures; the 32-frame question is closed, not answered. tx_qfloor
+> 158-205 across all runs, the 144-frame skip covered every time.
+>
+> WHAT THE SERVICE DOES, ALL MEASURED
+> Cold boot to running 61-64 s; about six boots in ten take one
+> self-healing stack restart in the first minute (stable audio at about
+> two minutes). Every cold boot starts the bridge with a capture-XRUN pair
+> on both directions; warm starts never do. Daemon or bridge death: stack
+> restart, audio in about a minute. Host gone (unplug, suspend, or a Mac
+> that will not enumerate): a RECOVER storm, "host absent" in 3 s, the
+> bridge alone stops, daemon and module stay, retry every 60 s. Host back:
+> audio 5 s after a dwc2 enumeration line, or within about 70 s after a
+> wake from sleep, which never re-enumerates. /sys/class/udc/*/state is
+> blind to all of it (stays "configured"). A stop is honoured within
+> seconds at any stage. The bridge stops writing its 1 Hz BRIDGE line
+> during a storm; the journal carries 20 RECOVER lines per storm and a
+> marker, the full stream is /run/usb16x16/bridge.log.
+>
+> OPEN ITEMS (the user picks)
+> 1. Tier one latency, from the roadmap: RAVENNA period 48 (--period 48,
+>    read NEGOTIATED first; 128/288 back means the lever does not exist),
+>    and RAVENNA capture avail_min 48 (one sw_params call behind a flag, a
+>    bridge rebuild and re-pin). One 800-impulse run each; acceptance is
+>    four loaded runs with tx_qfloor above 144. Expected landing 25-26 ms.
+> 2. The driver XRUN pair: rare (about one per one to two hours), RAVENNA
+>    capture and both playbacks in XRUN with the bridge's gaps normal, three
+>    times within 0.4 s of an ssh session close, 133 controlled closes
+>    without one. Journal timestamps accumulate; needs a counter, not a
+>    theory.
+> 3. The first-minute cold-boot cascade (USB-side rate shapes, two
+>    variants), self-healing; a counter if the extra minute ever matters.
+> 4. One hard reset with no journal trace, during a candidate start beside
+>    module load/unload churn, 2026-09-02 10:32 local. Not seen since.
+> 5. USB side, in order: a 48-frame gadget period as a separate configfs
+>    experiment (the 96 the driver returns is req_number x one packet, a
+>    multiple-of-48 tell); Phase 5 rate discipline only after tier two.
+>
+> MEASUREMENT MODES
+> Wrapper (stack restart, RECOVER fatal, the acceptance instrument):
+>   ssh ... 'sudo systemctl stop usb16x16-aes67'; then
+>   USB16X16_SAP_WATCH=0 USB16X16_PHASE4_TARGET_FRAMES=128 \
+>   USB16X16_PHASE4_BUFFER_FRAMES=192 \
+>   USB16X16_PHASE4_RAVENNA_PLAYBACK_BUFFER_FRAMES=384 \
+>   USB16X16_PHASE4_PLAYBACK_PRIME_FRAMES=96 \
+>   USB16X16_PHASE4_TX_PLAYBACK_PRIME_FRAMES=288 \
+>   USB16X16_PHASE4_RX_PLAYBACK_PRIME_FRAMES=144 \
+>   work/aes67-candidate/measure-phase4-roundtrip.sh 600 64 800 200
+>   then 'sudo systemctl start usb16x16-aes67'.
+> Against the running service (RECOVER counted, not fatal):
+>   work/aes67-candidate/measure-under-service.sh 64 800
+> 800 impulses for anything you intend to trust; report tx_qfloor and
+> tx_pullmax alongside latency; latency moves in 48-sample steps and
+> sometimes 24; quote the mode and the range.
+>
+> HOW TO WORK ON THIS, EARNED THE HARD WAY
+> Instrument before you fix. No algebra on aggregates. Separate the
+> observation from the explanation; a 13-session test does not clear a 2%
+> effect. A 1 Hz print is a strobe. Multiples of 48 are a tell. Enumerate
+> every pin before asking for an install; changing the wrapper or the
+> supervisor changes its own hash; the installer pins supervisor, unit and
+> conf and keeps an edited conf. Never build or install on the Pi while a
+> run is measuring. Guard every scripted edit and chain the commit. Long
+> runs: python3 Popen(start_new_session=True) to a log, a polling Monitor
+> that exits on a line starting with exit=, launcher prints the marker on
+> its own line; a killed Mac-side run leaves the Pi wrapper running. Watch
+> the Pi over ONE long ssh session, not a poll loop of sessions. A pgrep -f
+> for the bridge inside an ssh command matches the ssh shell; anchor it.
+> An outer bash heredoc ends at the first line matching its delimiter,
+> including one inside the text you are inserting.
+>
+> GOTCHAS
+> IGMP snooping is OFF on the GS305EP (time to audio ~52 s after a daemon
+> start; ~260 s means check snooping). The switch is in 802.1p/DSCP mode.
+> Never gate a measurement on sink flags. Keep --maximum-lag-ms under 250.
+> Sink delay is not a latency lever under Phase 4. Dante Controller holds
+> UDP 9875; set USB16X16_SAP_WATCH=0. The driver drops and re-locks PTP
+> about 8 s after every module load; the sink 0 PUT then takes 32 s, half
+> the time to audio, and lives in the daemon or driver. The wrapper and
+> the service refuse to run over each other. wlan0 can take up to a few
+> minutes to associate after a reboot; eth0 169.254.92.97 answers ssh
+> meanwhile. A second Mac set to "ask for new accessories" never
+> enumerated the gadget; unexplained.
+>
+> ENVIRONMENT
+> Pi: eth0 169.254.92.97 is AoIP; wlan0 192.168.1.201 is SSH.
+>   ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201
+> Build (no libasound2-dev; vendored headers), source ~/usb-16x16-work/
+> phase4-build, staging phase4-install (bridge) and aes67-service (service):
+>   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+>     -DALSA_INCLUDE_DIR=/home/bdimaio/usb-16x16-work/deps/libasound2-dev/usr/include \
+>     -DALSA_LIBRARY=/usr/lib/aarch64-linux-gnu/libasound.so.2
+> Bridge install: sudo ~/usb-16x16-work/phase4-install/install-candidate.sh
+>   <bridge> <wrapper>   (pins in wrapper, installer and supervisor)
+> Service install: sudo systemctl stop usb16x16-aes67 &&
+>   sudo ~/usb-16x16-work/aes67-service/install-aes67-service.sh &&
+>   sudo systemctl start usb16x16-aes67
+> Mac harness: work/latency-harness; per-impulse data in the result JSON
+> under correlation.perImpulseDelaySamples, statistics under
+> correlation.statistics.
+>
+> RULES
+> The USB module, usb-16x16.service and the setup script are immutable
+> baselines; AES67 work must never disturb USB enumeration. Never run ptp4l
+> beside the daemon. One variable at a time. Every figure is reconnaissance
+> until it is loaded and repeated. Any bridge change re-pins the wrapper,
+> the candidate installer and the supervisor.
