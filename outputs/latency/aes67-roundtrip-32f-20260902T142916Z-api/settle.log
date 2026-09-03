@@ -1,0 +1,5 @@
+probe 1 PASS consecutive=1
+probe 2 FAIL consecutive=0
+probe 3 FAIL consecutive=0
+probe 4 FAIL consecutive=0
+probe 5 FAIL consecutive=0
