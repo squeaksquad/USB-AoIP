@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=38f44de920359459274bd2191df5a13b6451cf116a318078c9f8003cba8c2498
+expected_bridge_sha256=ee3b528665940cde90af06bd846c92a85f1c96d4d236697538d9a8daeb8ba61b
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
@@ -58,6 +58,14 @@ level_gain=${15:-0.05}
 # a non-default offset needs align_start=1.
 align_start=${16:-0}
 align_offset_us=${17:-600}
+# Aligned TX trigger (0 or 1): the RAVENNA playback trigger, at start and at
+# every TX recovery, waits for the next tick-grid point plus
+# align_tx_offset_us on the grid the aligned start measured, so the trigger's
+# phase inside a 1 ms tick (the last per-session draw, up to 48 frames on TX)
+# is a constant. Needs align_start=1; a non-default offset needs
+# align_tx_trigger=1.
+align_tx_trigger=${18:-0}
+align_tx_offset_us=${19:-600}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
 ready_file=/tmp/usb16x16-phase4-candidate.ready
@@ -69,7 +77,8 @@ for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frame
              "$playback_prime_frames" "$prime_trim" \
              "$tx_playback_prime_frames" "$rx_playback_prime_frames" \
              "$ravenna_playback_buffer_frames" "$sink_delay" "$usb_pitch_servo" \
-             "$tx_depth_frames" "$rx_depth_frames" "$align_start" "$align_offset_us"; do
+             "$tx_depth_frames" "$rx_depth_frames" "$align_start" "$align_offset_us" \
+             "$align_tx_trigger" "$align_tx_offset_us"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -123,6 +132,22 @@ if [ "$align_offset_us" -gt 10000 ]; then
 fi
 if [ "$align_start" -ne 1 ] && [ "$align_offset_us" -ne 600 ]; then
   echo "align-offset-us needs align-start 1" >&2
+  exit 14
+fi
+if [ "$align_tx_trigger" -gt 1 ]; then
+  echo "align-tx-trigger must be 0 or 1" >&2
+  exit 14
+fi
+if [ "$align_tx_offset_us" -gt 10000 ]; then
+  echo "align-tx-offset-us must be 0..10000" >&2
+  exit 14
+fi
+if [ "$align_tx_trigger" -ne 1 ] && [ "$align_tx_offset_us" -ne 600 ]; then
+  echo "align-tx-offset-us needs align-tx-trigger 1" >&2
+  exit 14
+fi
+if [ "$align_tx_trigger" -eq 1 ] && [ "$align_start" -ne 1 ]; then
+  echo "align-tx-trigger needs align-start 1" >&2
   exit 14
 fi
 if [ "$tx_depth_frames" -ne 0 ] && [ "$tx_depth_frames" -lt $((target_frames + 144 + period_frames)) ]; then
@@ -317,6 +342,8 @@ timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
   --level-gain "$level_gain" \
   --align-start "$align_start" \
   --align-offset-us "$align_offset_us" \
+  --align-tx-trigger "$align_tx_trigger" \
+  --align-tx-offset-us "$align_tx_offset_us" \
   --priority 90 \
   --seconds "$candidate_seconds" \
   > "$result_dir/bridge.log" 2>&1 &
@@ -354,6 +381,8 @@ fi
   echo "level_gain=$level_gain"
   echo "align_start=$align_start"
   echo "align_offset_us=$align_offset_us"
+  echo "align_tx_trigger=$align_tx_trigger"
+  echo "align_tx_offset_us=$align_tx_offset_us"
   echo "candidate_seconds=$candidate_seconds"
   echo "bridge_sha256=$expected_bridge_sha256"
 } > "$result_dir/metadata.txt"

@@ -3713,6 +3713,98 @@ recovered session is consistently two packets faster is a second induced
 pause and a second run; whether the term is TX's is the aligned TX
 trigger, the candidate already on the list.
 
+**Chosen 2026-09-03 evening by the user as the next phase: the aligned
+TX trigger.** The record's own candidate for the residual window (seven
+aligned sessions 1400-1453 at sink delay 96, and the 1320 after a
+recovery above): the RAVENNA playback trigger is the one start-time draw
+the aligned capture start does not pin.
+
+**READ first, in the driver source (`audio_driver.c`, `manager.c`): the
+trigger phase is the TX draw.** `mr_alsa_audio_pcm_trigger(START)` calls
+`start_interrupts`, which only mutes the output buffer and sets
+`m_bIsPlaybackIO`; `prepare` zeroes `playback_buffer_pos`. Nothing about
+time is captured at the trigger. The next TIC after it copies the period
+at position 0 into the live-out ring and the sender stamps it `SAC - 48`
+whatever its age, so the time the primed frames wait before their first
+tick is the phase between the bridge's `snd_pcm_start` and the tick
+grid, uniform inside 1 ms: up to 48 frames, per session and per TX
+recovery. The same 1 ms timer drives the capture ticks the aligned
+start already measures, so the grid is known to the bridge.
+
+**IMPLEMENTED, staged, not installed: the aligned TX trigger, bridge
+`ee3b5286`.** `--align-tx-trigger 0|1` (default 0, needs
+`--align-start 1`) and `--align-tx-offset-us N` (default 600, at most
+10000, a non-default value needs the trigger on). With it on, the
+RAVENNA playback trigger, at start and at every TX recovery (a TX
+recovery re-primes and re-triggers through the same path), sleeps on the
+monotonic clock to the next `reference + offset + n * tick` at least
+50 us away (`next_aligned_time`, the tick the start measured) before
+`snd_pcm_start`, at most one tick of sleep on the audio thread, which the
+aligned RX recovery already relies on. The reference is the RX
+direction's last fresh RAVENNA capture wake (`last_fresh_wake_ns`,
+read through a `tick_source` pointer), seeded with the start
+alignment's own reference wake (`AlignResult::reference_ns`, new) for a
+trigger before the loop has seen a fresh wake; a reference older than
+100 ms is refused (the tick is known to 1 us, so projecting a grid
+100 ms forward can be off by 50 us) and the trigger runs unaligned and
+says so. One line on stderr per trigger: `ALIGN trigger
+direction=usb-to-ravenna status=ok source=fresh-wake|start-reference
+wake_age_us= wake_to_start_us= sleep_result= t_us=`, or
+`status=unaligned reason=no-reference|stale-reference`. SUMMARY gains
+`align_tx_trigger`, `align_tx_triggers`, `align_tx_unaligned_triggers`,
+`align_tx_wake_to_start_us` (last). Off, the TX path is byte-for-byte
+the installed binary's; the RX alignment and its recovery are untouched
+(the seed is a separate field, so RX's recovery behaviour with the
+trigger off is unchanged). Expected: `wake_to_start_us` about 600-620
+at every start and TX recovery, and the session level the same across
+sessions to a few samples.
+
+Built on the Pi in `~/usb-16x16-work/phase4-align4-src` (source hashes
+match the repo), clean under `-Werror`, ctest clean on the Mac and the
+Pi, the four invalid option combinations refused (`--align-tx-trigger`
+without `--align-start`, value 2, a non-default offset without the
+trigger, offset above 10000). **Caveat:** the compile ran with the
+service running (no measurement or stall experiment in flight; the
+memory's rule is compile with the service stopped or say so).
+
+Wired through: wrapper `228018b2` (positionals 18/19 `align_tx_trigger`,
+`align_tx_offset_us`, defaults 0/600, validated like the bridge, in
+`metadata.txt`; `USB16X16_PHASE4_ALIGN_TX_TRIGGER` /
+`USB16X16_PHASE4_ALIGN_TX_OFFSET_US` on the Mac side in
+`measure-phase4-roundtrip.sh` and both sweeps), supervisor `ab34a5d6`
+(optional profile keys `ALIGN_TX_TRIGGER` / `ALIGN_TX_OFFSET_US`, absent
+= off / 600, shown by `profiles` as `tx trigger 1/600 us`; bridge hash
+re-pinned), conf `59a23d5e` (new experimental profile
+`servo-aligned-both`: the `servo-aligned` block plus the trigger on at
+600; `PROFILE=servo-aligned` unchanged, 34 lines added and none
+changed), unit `77837e60` unchanged, `install-candidate.sh` `4211df76`,
+`install-aes67-service.sh` `55a419df` with `40496730` added to the
+unedited-shipped list. Every profile validates through the staged
+supervisor's parser against the staged conf, and the staged conf differs
+from the installed one by the new block only.
+
+**FOUND on the way, a conf hazard now written into the conf's comment:**
+the block was first named `servo-aligned-tx`, whose keys spell
+`PROFILE_SERVO_ALIGNED_TX_...`, the same strings as the accepted
+`servo-aligned` block's `TX_PLAYBACK_PRIME` and `TX_DEPTH` fields; the
+staged supervisor's `profiles` listing showed `servo-aligned` with its
+TX prime silently read as 96. A profile name must never be another
+profile's name plus `tx` or `rx`. Caught by reading the listing before
+anything was installed; the installed conf was never touched.
+
+Staged in `~/usb-16x16-work/phase4-align4-install/`; install order as
+before with the service stopped: `install-candidate.sh` then
+`install-aes67-service.sh`. The service keeps `servo-aligned`, whose
+behaviour the new binary does not change; `servo-aligned-both` is the
+candidate. Measurement plan, wrapper runs, one variable: (1) two
+sessions with the trigger on at 600 us, 200 impulses each, against the
+1400-1453 window: the level should repeat to a few samples; (2) one
+session each at 300 and 850 us: if the trigger phase is the lever, the
+level must fall 14-15 samples (0.3 ms) per 300 us of later trigger,
+sample-exact, which also places the safe deployable offset; (3) four
+loaded 800-impulse runs at the chosen offset for acceptance, then
+`switch-profile servo-aligned-both`.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:

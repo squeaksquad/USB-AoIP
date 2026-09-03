@@ -64,6 +64,11 @@ constexpr int kAlignAttempts = 4;
 constexpr std::int64_t kAlignRecoveryMarginNs = 50000;
 constexpr std::int64_t kAlignOffsetDefaultUs = 600;
 constexpr std::int64_t kAlignOffsetMaximumUs = 10000;
+// The aligned TX trigger projects the tick grid forward from its reference
+// wake; the tick is known to the microsecond, so a reference older than
+// this could be off by more than the wake jitter and the trigger runs
+// unaligned instead (reason=stale-reference).
+constexpr std::int64_t kAlignReferenceMaximumAgeNs = 100000000;
 std::chrono::steady_clock::time_point process_started{};
 
 std::uint64_t elapsed_us() noexcept {
@@ -147,6 +152,18 @@ struct Options {
     // Off by default: the historical start order. TX is untouched.
     bool align_start{false};
     std::int64_t align_offset_us{kAlignOffsetDefaultUs};
+    // Aligned TX trigger, needs --align-start 1. In the driver a playback
+    // trigger only raises a flag; the next tick copies the first period
+    // from position 0 and stamps it SAC - 48 whatever the trigger's phase
+    // inside that tick, so the phase between the bridge's snd_pcm_start and
+    // the tick grid is a per-session draw of up to 48 frames on TX, the one
+    // draw the aligned capture start leaves (seven aligned sessions at sink
+    // delay 96 spanned 53 samples). With this on, the RAVENNA playback
+    // trigger, at start and at every TX recovery, sleeps to the next
+    // reference wake + offset + n * tick on the grid the aligned start
+    // measured (at most one tick) before snd_pcm_start. Off by default.
+    bool align_tx_trigger{false};
+    std::int64_t align_tx_offset_us{kAlignOffsetDefaultUs};
     int priority{90};
     unsigned int seconds{0};
 };
@@ -261,6 +278,11 @@ private:
         << "                         (default 0)\n"
         << "  --align-offset-us N    that offset, microseconds after the reference wakeup\n"
         << "                         (default 600, at most 10000)\n"
+        << "  --align-tx-trigger 0|1 trigger RAVENNA playback a fixed offset after a tick on\n"
+        << "                         the grid the aligned start measured (default 0; needs\n"
+        << "                         --align-start 1)\n"
+        << "  --align-tx-offset-us N that offset, microseconds after the reference wakeup\n"
+        << "                         (default 600, at most 10000)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
     std::exit(error.empty() ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -346,6 +368,14 @@ Options parse_options(const int argc, char** argv) {
             options.align_start = parsed != 0;
         } else if (argument == "--align-offset-us") {
             options.align_offset_us = static_cast<std::int64_t>(parse_unsigned(value, "align-offset-us"));
+        } else if (argument == "--align-tx-trigger") {
+            const unsigned long parsed = parse_unsigned(value, "align-tx-trigger");
+            if (parsed > 1) {
+                throw std::runtime_error("align-tx-trigger must be 0 or 1");
+            }
+            options.align_tx_trigger = parsed != 0;
+        } else if (argument == "--align-tx-offset-us") {
+            options.align_tx_offset_us = static_cast<std::int64_t>(parse_unsigned(value, "align-tx-offset-us"));
         } else if (argument == "--priority") {
             options.priority = static_cast<int>(parse_unsigned(value, "priority"));
         } else if (argument == "--seconds") {
@@ -375,6 +405,15 @@ Options parse_options(const int argc, char** argv) {
     }
     if (!options.align_start && options.align_offset_us != kAlignOffsetDefaultUs) {
         throw std::runtime_error("--align-offset-us needs --align-start 1");
+    }
+    if (options.align_tx_offset_us > kAlignOffsetMaximumUs) {
+        throw std::runtime_error("align-tx-offset-us must be 0..10000");
+    }
+    if (!options.align_tx_trigger && options.align_tx_offset_us != kAlignOffsetDefaultUs) {
+        throw std::runtime_error("--align-tx-offset-us needs --align-tx-trigger 1");
+    }
+    if (options.align_tx_trigger && !options.align_start) {
+        throw std::runtime_error("--align-tx-trigger needs --align-start 1");
     }
     if (options.tx_depth_frames != 0 || options.rx_depth_frames != 0 ||
         options.level_gain_ppm_per_frame != 0.05 || options.level_clamp_ppm != 2.0) {
@@ -626,6 +665,19 @@ struct Direction {
     std::int64_t align_offset_ns{0};
     std::int64_t last_fresh_wake_ns{0};
     std::uint64_t realigned_recoveries{0};
+    // Aligned playback trigger (TX only, with --align-tx-trigger). The grid
+    // is the tick the aligned start measured; the reference is the RAVENNA
+    // capture direction's last fresh wake, read through tick_source, or the
+    // start alignment's own reference wake before the loop has seen one.
+    // Zero align_trigger_tick_ns means the historical trigger, straight
+    // after the first commit.
+    const Direction* tick_source{nullptr};
+    std::int64_t align_trigger_tick_ns{0};
+    std::int64_t align_trigger_offset_ns{0};
+    std::int64_t align_trigger_seed_ns{0};
+    std::uint64_t aligned_triggers{0};
+    std::uint64_t unaligned_triggers{0};
+    std::int64_t last_trigger_wake_to_start_us{-1};
     // What the playback device consumed between two consecutive bridge
     // observations of its queue: the "pull burst". The queue floor is only
     // ever sampled when the bridge is awake, so the device-side minimum is the
@@ -775,6 +827,52 @@ IoResult capture_into_ring(Direction& direction, const std::int64_t iteration_ns
     }
     direction.input_frames += frames;
     return IoResult::progressed;
+}
+
+// Sleeps to the next reference wake + offset + n * tick before the caller
+// triggers the playback, at most one tick plus the margin. Returns the
+// reference wake used, or 0 when the trigger had to run unaligned (no
+// reference yet, or one older than kAlignReferenceMaximumAgeNs), which is
+// logged as such so an unaligned session is never mistaken for an aligned
+// one. Runs on the audio thread; the other direction holds at least two
+// periods of playback queue across one tick of sleep, as the aligned RX
+// recovery already relies on.
+std::int64_t align_playback_trigger(Direction& direction, int& sleep_result) noexcept {
+    std::int64_t wake_ns = direction.tick_source != nullptr ? direction.tick_source->last_fresh_wake_ns : 0;
+    const char* source = "fresh-wake";
+    if (wake_ns <= 0) {
+        wake_ns = direction.align_trigger_seed_ns;
+        source = "start-reference";
+    }
+    const std::int64_t now_ns = monotonic_now_ns();
+    if (wake_ns <= 0 || now_ns - wake_ns > kAlignReferenceMaximumAgeNs) {
+        ++direction.unaligned_triggers;
+        std::cerr << "ALIGN trigger direction=" << direction.name
+                  << " status=unaligned reason=" << (wake_ns <= 0 ? "no-reference" : "stale-reference")
+                  << " wake_age_us=" << (wake_ns <= 0 ? -1 : (now_ns - wake_ns) / 1000)
+                  << " t_us=" << elapsed_us() << '\n';
+        return 0;
+    }
+    const std::int64_t reference_ns = wake_ns + direction.align_trigger_offset_ns;
+    const std::int64_t target_ns = usb16x16::next_aligned_time(
+        reference_ns, direction.align_trigger_tick_ns, now_ns + kAlignRecoveryMarginNs);
+    timespec target{};
+    target.tv_sec = static_cast<time_t>(target_ns / 1000000000LL);
+    target.tv_nsec = static_cast<long>(target_ns % 1000000000LL);
+    do {
+        sleep_result = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &target, nullptr);
+    } while (sleep_result == EINTR && !stop_requested.load(std::memory_order_relaxed));
+    const std::int64_t before_start_ns = monotonic_now_ns();
+    direction.last_trigger_wake_to_start_us =
+        (before_start_ns - (target_ns - direction.align_trigger_offset_ns)) / 1000;
+    ++direction.aligned_triggers;
+    std::cerr << "ALIGN trigger direction=" << direction.name
+              << " status=ok source=" << source
+              << " wake_age_us=" << (before_start_ns - wake_ns) / 1000
+              << " wake_to_start_us=" << direction.last_trigger_wake_to_start_us
+              << " sleep_result=" << sleep_result
+              << " t_us=" << elapsed_us() << '\n';
+    return wake_ns;
 }
 
 IoResult render_to_playback(Direction& direction,
@@ -970,6 +1068,10 @@ IoResult render_to_playback(Direction& direction,
         // the software start threshold is crossed. Without an explicit start,
         // each queue remains full in PREPARED state until the elastic ring
         // overflows and recovery repeats.
+        if (direction.align_trigger_tick_ns > 0) {
+            int sleep_result = 0;
+            align_playback_trigger(direction, sleep_result);
+        }
         const int start_result = direction.playback.start();
         if (start_result < 0) {
             return request_recovery(direction, "playback-start", start_result);
@@ -1069,6 +1171,9 @@ struct AlignResult {
     std::int64_t tick_period_us{0};
     std::int64_t wake_to_prepare_us{0};
     std::int64_t prepare_us{0};
+    // The reference wake, monotonic ns: the last observed tick wakeup, which
+    // seeds the aligned TX trigger's grid until the loop sees a fresh wake.
+    std::int64_t reference_ns{0};
     std::string intervals_us;
     std::string reason;
 };
@@ -1204,6 +1309,7 @@ AlignResult align_ravenna_capture(Pcm& capture, const std::int64_t offset_us) {
     result.tick_period_us = (usb16x16::median_wake_interval(wakes) + 500) / 1000;
 
     const std::int64_t reference_ns = wakes.back();
+    result.reference_ns = reference_ns;
     const std::int64_t target_ns = reference_ns + offset_us * 1000;
     timespec target{};
     target.tv_sec = static_cast<time_t>(target_ns / 1000000000LL);
@@ -1542,6 +1648,14 @@ int run(const Options& options) {
             // is the grid. TX is untouched.
             rx.align_tick_ns = align.tick_period_us * 1000;
             rx.align_offset_ns = options.align_offset_us * 1000;
+            if (options.align_tx_trigger) {
+                // TX triggers on the same grid; RX's fresh wakes carry the
+                // reference forward, the start's own reference wake seeds it.
+                tx.tick_source = &rx;
+                tx.align_trigger_tick_ns = align.tick_period_us * 1000;
+                tx.align_trigger_offset_ns = options.align_tx_offset_us * 1000;
+                tx.align_trigger_seed_ns = align.reference_ns;
+            }
         }
         usb_capture.start_capture();
     } else {
@@ -1814,7 +1928,11 @@ int run(const Options& options) {
               << ",\"align_recoveries\":" << rx.realigned_recoveries
               << ",\"align_tick_period_us\":" << align.tick_period_us
               << ",\"align_wake_to_prepare_us\":" << align.wake_to_prepare_us
-              << ",\"align_prepare_us\":" << align.prepare_us << "}\n";
+              << ",\"align_prepare_us\":" << align.prepare_us
+              << ",\"align_tx_trigger\":" << (options.align_tx_trigger ? 1 : 0)
+              << ",\"align_tx_triggers\":" << tx.aligned_triggers
+              << ",\"align_tx_unaligned_triggers\":" << tx.unaligned_triggers
+              << ",\"align_tx_wake_to_start_us\":" << tx.last_trigger_wake_to_start_us << "}\n";
     // pitch_control's destructor restores nominal pitch after this returns.
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
 }

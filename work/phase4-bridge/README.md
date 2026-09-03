@@ -54,12 +54,14 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`38f44de920359459274bd2191df5a13b6451cf116a318078c9f8003cba8c2498`
-(2026-09-03: aligned start, `--align-start 1` with `--align-offset-us`, default
-600: the RAVENNA capture is re-prepared a fixed offset after one of its tick
-wakeups so the driver's reader phase is constant; an attempt that meets the
-cold-boot XRUN recovers the capture and retries, up to four times; an RX
-recovery re-prepares on the same tick phase). Previous binaries: `99f37408`
+`ee3b528665940cde90af06bd846c92a85f1c96d4d236697538d9a8daeb8ba61b`
+(2026-09-03: aligned TX trigger, `--align-tx-trigger 1` with
+`--align-tx-offset-us`, default 600, needs `--align-start 1`: the RAVENNA
+playback trigger, at start and at every TX recovery, sleeps to the next
+tick-grid point plus the offset on the tick the aligned start measured, so
+the trigger's phase inside a tick is a constant; logs `ALIGN trigger` and
+counts in SUMMARY). Previous binaries: `38f44de9` (aligned start with the
+retry and the aligned RX recovery), `99f37408`
 (aligned start with the retry, unaligned recovery), `767ae43d` (aligned start without the retry),
 `170b1081` (split servo at gain 0.05, `--level-gain`),
 `da7df1c2` (split servo at gain 0.01, dead zone), `f7226238` (wrap fix, servo mode 1) and
