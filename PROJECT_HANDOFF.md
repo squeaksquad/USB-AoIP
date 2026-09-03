@@ -3640,6 +3640,32 @@ profile, bridge `99f37408`, governor persistent through
 (`install-candidate.sh`, `install-aes67-service.sh`,
 `install-governor-unit.sh`), nothing staged that is not installed.
 
+**IMPLEMENTED, staged, not installed: the aligned RX recovery, bridge
+`38f44de9`.** The start procedure cannot run at a recovery (its 8 ms of
+observation would take the live TX direction down), so the tick phase is
+kept instead: on every loop iteration the RX direction notes the
+iteration's start time when its RAVENNA capture holds exactly one period
+after an empty look (a fresh tick, not a backlog serviced late;
+`last_fresh_wake_ns`). An RX recovery then drops both PCMs, prepares the
+playback, and sleeps on the monotonic clock to the next `wake + offset +
+n * tick` (`next_aligned_time` in the core, unit-tested; the tick is the
+one the start alignment measured) that is at least 50 us away, at most
+one tick, before preparing and starting the capture. It logs `ALIGN
+recovery direction=ravenna-to-usb wake_age_us= wake_to_prepare_us=
+prepare_us=` on the RECOVER path and SUMMARY counts `align_recoveries`.
+The reference carries the loop's service latency (tens of us) where the
+start procedure's does not, so a recovered session may sit a few samples
+from a started one; still one tick phase, not a draw. With align off, or
+before the first fresh wake, the recovery is the historical one; TX
+recovery is untouched. ctest clean on the Mac and the Pi, built with the
+service stopped. Wrapper `5979bdcf`, supervisor `d8e5729b` (bridge hash
+only), conf `40496730` unchanged, installers and README re-pinned. Staged
+in `~/usb-16x16-work/phase4-align3-install/`; install order as before.
+Proof after the install: an induced 10 ms pause of the service's bridge
+(`kill -STOP`, `sleep 0.01`, `kill -CONT` as root) forces both directions
+to recover, and the RX RECOVER must be followed by the `ALIGN recovery`
+line with `wake_to_prepare_us` near 600.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:

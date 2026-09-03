@@ -161,6 +161,13 @@ private:
 // (the wake that drains a backlog) and a late wake on the way; fewer than
 // two wake times give 0. Even counts take the mean of the two middles.
 [[nodiscard]] std::int64_t median_wake_interval(const std::vector<std::int64_t>& wake_times) noexcept;
+// The first instant reference + n * period, n >= 0, that is not before
+// not_before: where a recovery re-prepares the RAVENNA capture so it lands
+// on the same tick phase the start alignment chose. period must be
+// positive; a not_before at or before the reference returns the reference.
+[[nodiscard]] std::int64_t next_aligned_time(std::int64_t reference,
+                                             std::int64_t period,
+                                             std::int64_t not_before) noexcept;
 
 [[nodiscard]] std::int32_t unpack_s24le(const std::uint8_t* source) noexcept;
 void pack_s24le(std::int32_t sample, std::uint8_t* destination) noexcept;

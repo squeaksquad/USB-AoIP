@@ -121,6 +121,17 @@ std::int64_t median_wake_interval(const std::vector<std::int64_t>& wake_times) n
     return (intervals[middle - 1] + intervals[middle]) / 2;
 }
 
+std::int64_t next_aligned_time(const std::int64_t reference,
+                               const std::int64_t period,
+                               const std::int64_t not_before) noexcept {
+    if (period <= 0 || not_before <= reference) {
+        return reference;
+    }
+    const std::int64_t elapsed = not_before - reference;
+    const std::int64_t periods = (elapsed + period - 1) / period;
+    return reference + periods * period;
+}
+
 SharedDriftEstimator::SharedDriftEstimator() : SharedDriftEstimator(Config{}) {}
 
 SharedDriftEstimator::SharedDriftEstimator(const Config config) : config_(config) {}

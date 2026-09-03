@@ -218,6 +218,21 @@ void test_median_wake_interval() {
     check(median_wake_interval({0, 1000, 2004, 3004, 4010}) == 1002, "even count takes the mean of the two middles");
 }
 
+void test_next_aligned_time() {
+    using usb16x16::next_aligned_time;
+    check(next_aligned_time(1000, 100, 900) == 1000, "not_before at or before the reference gives the reference");
+    check(next_aligned_time(1000, 100, 1000) == 1000, "exactly the reference is not before it");
+    check(next_aligned_time(1000, 100, 1001) == 1100, "one past the reference is the next period");
+    check(next_aligned_time(1000, 100, 1100) == 1100, "exactly a period later lands on it");
+    check(next_aligned_time(1000, 100, 1250) == 1300, "two and a half periods later rounds up");
+    check(next_aligned_time(1000, 0, 5000) == 1000, "a zero period gives the reference");
+    // The bridge's numbers: a wake 3.7 s ago on a 999 us tick, prepare wanted no sooner than now + 50 us.
+    const std::int64_t wake = 123456789000, tick = 999000, now = wake + 3700123456;
+    const std::int64_t target = next_aligned_time(wake, tick, now + 50000);
+    check(target >= now + 50000 && target < now + 50000 + tick, "the target is inside one tick of the earliest allowed instant");
+    check((target - wake) % tick == 0, "the target is on the wake's tick grid");
+}
+
 void test_windowed_regression() {
     usb16x16::WindowedLinearRegression regression;
     double slope = 0.0;
@@ -270,6 +285,7 @@ int main() {
     test_shared_rate_estimator();
     test_level_servo();
     test_median_wake_interval();
+    test_next_aligned_time();
     test_windowed_regression();
     test_applied_ratio_correction();
     if (failures != 0) {

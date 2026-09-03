@@ -59,6 +59,9 @@ constexpr std::size_t kAlignWakeups = 8;
 // that meets an error recovers the capture and tries again; warm starts
 // align on the first attempt. Each attempt is at most about 200 ms.
 constexpr int kAlignAttempts = 4;
+// A recovery re-prepares the RAVENNA capture no sooner than this after the
+// decision, so the prepare call can land on the chosen instant.
+constexpr std::int64_t kAlignRecoveryMarginNs = 50000;
 constexpr std::int64_t kAlignOffsetDefaultUs = 600;
 constexpr std::int64_t kAlignOffsetMaximumUs = 10000;
 std::chrono::steady_clock::time_point process_started{};
@@ -66,6 +69,12 @@ std::chrono::steady_clock::time_point process_started{};
 std::uint64_t elapsed_us() noexcept {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - process_started).count());
+}
+
+std::int64_t monotonic_now_ns() noexcept {
+    timespec now{};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return static_cast<std::int64_t>(now.tv_sec) * 1000000000LL + now.tv_nsec;
 }
 
 std::atomic<bool> stop_requested{false};
@@ -605,6 +614,18 @@ struct Direction {
     std::size_t capture_backlog_peak{0};
     std::uint64_t capture_backlog_total{0};
     std::uint64_t capture_backlog_samples{0};
+    // Aligned recovery (RX only, with --align-start). The tick phase is
+    // kept from this capture's own wakeups: the iteration start time of the
+    // last wake that found exactly one period after an empty look, which is
+    // a fresh tick and not a backlog serviced late. A recovery then sleeps
+    // to the next reference + offset + n * tick before re-preparing, at most
+    // one tick, which the other direction survives where the start
+    // procedure's 8 ms would not. Zero align_tick_ns means the historical
+    // unaligned recovery.
+    std::int64_t align_tick_ns{0};
+    std::int64_t align_offset_ns{0};
+    std::int64_t last_fresh_wake_ns{0};
+    std::uint64_t realigned_recoveries{0};
     // What the playback device consumed between two consecutive bridge
     // observations of its queue: the "pull burst". The queue floor is only
     // ever sampled when the bridge is awake, so the device-side minimum is the
@@ -697,7 +718,7 @@ void write_area_sample(const snd_pcm_channel_area_t& area,
     std::memcpy(address, &value, sizeof(value));
 }
 
-IoResult capture_into_ring(Direction& direction) noexcept {
+IoResult capture_into_ring(Direction& direction, const std::int64_t iteration_ns) noexcept {
     const snd_pcm_sframes_t available = direction.capture.available();
     if (available == -EPIPE || available == -ESTRPIPE) {
         return request_recovery(direction, "capture-avail", available);
@@ -707,6 +728,10 @@ IoResult capture_into_ring(Direction& direction) noexcept {
         // over every iteration rather than only the ones that found data. The
         // latter would bias it upward and overstate the capture contribution.
         const auto backlog = static_cast<std::size_t>(available);
+        if (backlog == static_cast<std::size_t>(direction.capture.period()) &&
+            direction.last_capture_backlog == 0) {
+            direction.last_fresh_wake_ns = iteration_ns;
+        }
         direction.capture_backlog_peak = std::max(direction.capture_backlog_peak, backlog);
         direction.capture_backlog_total += backlog;
         ++direction.capture_backlog_samples;
@@ -974,13 +999,40 @@ void restart_direction(Direction& direction) {
     direction.have_queue_observation = false;
     direction.capture.drop();
     direction.playback.drop();
-    direction.capture.prepare();
     direction.playback.prepare();
     direction.ring.clear();
     direction.resampler.reset();
     direction.primed = false;
     direction.playback_started = false;
     ++direction.restarts;
+    if (direction.align_tick_ns > 0 && direction.last_fresh_wake_ns > 0) {
+        // Re-prepare on the tick phase the start alignment chose: the next
+        // reference + offset + n * tick from now, at most one tick away.
+        const std::int64_t reference_ns = direction.last_fresh_wake_ns + direction.align_offset_ns;
+        const std::int64_t target_ns = usb16x16::next_aligned_time(
+            reference_ns, direction.align_tick_ns, monotonic_now_ns() + kAlignRecoveryMarginNs);
+        timespec target{};
+        target.tv_sec = static_cast<time_t>(target_ns / 1000000000LL);
+        target.tv_nsec = static_cast<long>(target_ns % 1000000000LL);
+        int sleep_result = 0;
+        do {
+            sleep_result = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &target, nullptr);
+        } while (sleep_result == EINTR && !stop_requested.load(std::memory_order_relaxed));
+        const std::int64_t before_prepare_ns = monotonic_now_ns();
+        direction.capture.prepare();
+        const std::int64_t after_prepare_ns = monotonic_now_ns();
+        direction.capture.start_capture();
+        ++direction.realigned_recoveries;
+        std::cerr << "ALIGN recovery direction=" << direction.name
+                  << " wake_age_us=" << (before_prepare_ns - direction.last_fresh_wake_ns) / 1000
+                  << " wake_to_prepare_us=" << (before_prepare_ns - (target_ns - direction.align_offset_ns)) / 1000
+                  << " prepare_us=" << (after_prepare_ns - before_prepare_ns) / 1000
+                  << " sleep_result=" << sleep_result
+                  << " t_us=" << elapsed_us() << '\n';
+        direction.last_fresh_wake_ns = 0;
+        return;
+    }
+    direction.capture.prepare();
     direction.capture.start_capture();
 }
 
@@ -1009,12 +1061,6 @@ void configure_realtime(const int priority) {
     if (result != 0) {
         throw std::runtime_error("SCHED_FIFO failed: " + std::string(std::strerror(result)));
     }
-}
-
-std::int64_t monotonic_now_ns() noexcept {
-    timespec now{};
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return static_cast<std::int64_t>(now.tv_sec) * 1000000000LL + now.tv_nsec;
 }
 
 struct AlignResult {
@@ -1491,6 +1537,12 @@ int run(const Options& options) {
                   << " prepare_us=" << align.prepare_us
                   << " intervals_us=" << align.intervals_us
                   << (align.ok ? "" : " reason=" + align.reason) << '\n';
+        if (align.ok) {
+            // RX recoveries re-prepare on the same phase; the measured tick
+            // is the grid. TX is untouched.
+            rx.align_tick_ns = align.tick_period_us * 1000;
+            rx.align_offset_ns = options.align_offset_us * 1000;
+        }
         usb_capture.start_capture();
     } else {
         usb_capture.start_capture();
@@ -1517,8 +1569,9 @@ int run(const Options& options) {
 
             bool progressed = false;
             bool restarted = false;
-            const IoResult tx_capture = capture_into_ring(tx);
-            const IoResult rx_capture = capture_into_ring(rx);
+            const std::int64_t iteration_ns = monotonic_now_ns();
+            const IoResult tx_capture = capture_into_ring(tx, iteration_ns);
+            const IoResult rx_capture = capture_into_ring(rx, iteration_ns);
             if (tx_capture == IoResult::recover) {
                 restart_direction(tx);
                 restarted = true;
@@ -1758,6 +1811,7 @@ int run(const Options& options) {
               << ",\"align_start\":" << (options.align_start ? 1 : 0)
               << ",\"align_ok\":" << (align.ok ? 1 : 0)
               << ",\"align_attempts\":" << align.attempts
+              << ",\"align_recoveries\":" << rx.realigned_recoveries
               << ",\"align_tick_period_us\":" << align.tick_period_us
               << ",\"align_wake_to_prepare_us\":" << align.wake_to_prepare_us
               << ",\"align_prepare_us\":" << align.prepare_us << "}\n";
