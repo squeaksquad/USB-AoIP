@@ -294,7 +294,7 @@ Ask these in one batch at the start of the session:
 6. TX prime 288 as measured, or 336 with one confirming run first?
 7. Ship `fast` as a selectable profile marked experimental, or `safe` only?
 
-## Pickup prompt for the next session (written 2026-09-03, period 48 accepted)
+## Pickup prompt for the next session (written 2026-09-03, period 48 deployed)
 
 Copy this into the new chat:
 
@@ -308,30 +308,19 @@ Copy this into the new chat:
 > design; its "Latency roadmap" carries tier one's result and tiers two
 > and three.
 >
-> NOTHING IS BROKEN. usb16x16-aes67.service is enabled at boot and running.
-> Period 48 was accepted 2026-09-03 on four loaded runs and staged as
-> profile "safe" (the period-96 point kept as "safe-96"). FIRST CHECK
-> WHETHER IT WAS INSTALLED: /etc/usb16x16/aes67.conf 4bd2f070 means yes,
-> f2e1531f means the service still runs period 96 and the staged install
-> below is the first step. Then the task is the user's choice from the
-> open items; ask which before starting.
+> NOTHING IS BROKEN. usb16x16-aes67.service is enabled at boot and running
+> profile "safe" = period 48, installed 2026-09-02 21:25 local (conf
+> 4bd2f070; the period-96 point is kept as "safe-96"). The task is the
+> user's choice from the open items; ask which before starting.
 >
-> WHAT IS INSTALLED (as of 2026-09-02 23:00 local; conf may have moved)
+> WHAT IS INSTALLED (2026-09-03 02:00 UTC)
 > Bridge 0254348c, candidate wrapper 1baa88a9, supervisor e300cc33, unit
-> 77837e60, /etc/usb16x16/aes67.conf f2e1531f or 4bd2f070. Verify:
+> 77837e60, /etc/usb16x16/aes67.conf 4bd2f070. Verify:
 >   ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
 >     'sha256sum /usr/local/libexec/usb16x16-rt-bridge \
 >      /usr/local/sbin/run-phase4-candidate-safe.sh \
 >      /usr/local/sbin/usb16x16-aes67-supervisor \
 >      /etc/systemd/system/usb16x16-aes67.service /etc/usb16x16/aes67.conf'
-> STAGED in ~/usb-16x16-work/aes67-service/ on the Pi, hashes verified,
-> all three profile blocks validated with the installed supervisor:
-> aes67.conf 4bd2f070 and install-aes67-service.sh 07245735 (conf pin
-> moved, f2e1531f added to its previous-version list; supervisor and unit
-> unchanged). Install is one command, service stopped for about a minute:
->   sudo systemctl stop usb16x16-aes67 &&
->   sudo ~/usb-16x16-work/aes67-service/install-aes67-service.sh &&
->   sudo systemctl start usb16x16-aes67
 > The Pi's journal is persistent. bdimaio can start, stop, restart, enable,
 > disable the unit, switch profiles, pkill the daemon or bridge, and reboot
 > without a password; anything else with sudo needs the user, so batch it,
@@ -347,10 +336,22 @@ Copy this into the new chat:
 > RECOVERs, tx_pullmax 48 in all four: the 144-frame three-packet pull seen
 > in every period-96 run did not appear (observation, not explanation; the
 > 144 cover bar stays). Each run's level is set at start (all readiness
-> probes read the run's median) and the scatter is the resting level. Not
-> yet measured at this point: the running service's own number
-> (measure-under-service.sh), RTL Utility at 64 and 32 frames.
-> The period-96 point (safe-96): 27.6-29.6 ms, tx_qfloor 158-205.
+> probes read the run's median) and the scatter is the resting level.
+> The running service after a warm start: 1239 (25.813 ms) and 1227
+> (25.563 ms), zero RECOVERs. RTL Utility against it: 31.062 ms (1491) at
+> 64 frames, 29.729 ms (1427) at 32, both exactly harness plus the Mac-side
+> cost. The period-96 point (safe-96): 27.6-29.6 ms, tx_qfloor 158-205.
+>
+> THE COLD-BOOT COST (one boot, measured 2026-09-03)
+> A cold boot at period 48 took the shorter path (startup XRUN pair, three
+> RX playback XRUNs by 65 s, no rule trip, audio at 61 s) but TX kept the
+> depth it gained while RX re-primed: ring 400-470 and queue pinned at 384
+> for the rest of the boot, depth mean 798 against 359-404. The service
+> read 1719 (35.813 ms, zero spread) against that boot, 480 samples = ten
+> periods = 10.0 ms above a warm start; a systemctl restart brought it
+> back to 1227. Depth is conserved after priming and the estimator matches
+> rate, not level. Never measured at period 96 (all service runs there
+> followed a restart), so it may be old.
 >
 > THE DAW-SIDE NUMBER
 > RTL Utility against the period-96 service: 34.896 ms (1675) at 64
@@ -376,12 +377,18 @@ Copy this into the new chat:
 > marker, the full stream is /run/usb16x16/bridge.log.
 >
 > OPEN ITEMS (the user picks)
-> 1. Install the staged period-48 profile (command above), then measure
->    the service at the new point: measure-under-service.sh 64 800, one
->    cold boot watched for the first five minutes (the startup XRUN pair
->    and the cascade were characterised at period 96), and RTL Utility at
->    64 and 32 frames for the DAW-side figure. Roll back with
->    sudo usb16x16-aes67-supervisor switch-profile safe-96.
+> 1. The cold-boot cost. Instrument first: two more watched cold boots,
+>    each followed by measure-under-service.sh 64 800, to see whether the
+>    excess is always 480 and whether a rule-tripped boot (which restarts
+>    the stack) comes back at 1227-1239. Then the fix, one of: the
+>    supervisor restarts the bridge once after any RECOVER in the first
+>    minute (service-side, deploy-safe, costs the boots that heal in place
+>    the same minute the rule-tripped ones already pay), or the bridge
+>    re-primes both directions when either recovers (bridge change: re-pin
+>    wrapper, installer, supervisor). Operational workaround today:
+>    sudo systemctl restart usb16x16-aes67 after a cold boot.
+>    Roll back the profile with: sudo usb16x16-aes67-supervisor
+>    switch-profile safe-96.
 > 2. Tier two, from the roadmap: the driver's stepped media clock. First
 >    a counter, not a fix: whether the skip still occurs at period 48 and
 >    what shape it takes (tx_pullmax 48 in four runs says the three-packet

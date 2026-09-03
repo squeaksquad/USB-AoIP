@@ -2094,8 +2094,23 @@ during the run**: 480 samples, ten periods, 10.0 ms above the 1239 of the
 warm start measured an hour earlier, and 3.6 ms above the period-96
 warm number. A cold boot that heals without a stack restart is therefore
 slower than one that restarts; the period-96 service runs were all taken
-after boot 4's restart, so this was never measured before. Warm-restart
-confirmation follows.
+after boot 4's restart, so this was never measured before.
+
+**Warm restart, same boot: back to 1227.** `systemctl restart` at 640 s
+of uptime, `running` at 693 s (53 s, no startup XRUN pair, no RECOVER),
+TX ring 131, queue 251, depth mean 359 after a two-minute settle;
+`service-roundtrip-64f-20260903T014732Z`: median 1227, 25.563 ms, spread 10, score 0.911, zero RECOVERs,
+floors 166/109, `tx_pullmax` 48. So the deployed point's 25.6-25.8 ms
+holds for any start that primes cleanly, and **a cold boot that heals
+in place costs 10 ms until the next restart.** Two ways to close it,
+neither built: the supervisor restarts the bridge once after the
+first-minute cascade (service-side, deploy-safe, about a minute of extra
+outage on the boots that need it, which is what the rule-tripped boots
+already pay), or the bridge re-primes both directions when either
+recovers, since the depth is gained by TX while RX re-primes. Instrument
+first: two more watched cold boots with a service measurement each, to
+see whether the excess is always 480 and whether a rule-tripped boot
+comes back at 1227-1239. One boot so far.
 
 **`tx_pullmax` 48, and no pull above 48 in the run.** Pull histogram
 `1908067/599987/0/0/0/0` (48-frame bins: zero, 1-48, 49-96, ...): 600k
