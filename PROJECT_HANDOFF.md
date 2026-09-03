@@ -2996,6 +2996,23 @@ several hours of service time; the servo profile's BRIDGE line at the
 start read gaps 1.4/1.8 ms, zero restarts, pitch 1000014, zero clips.
 Does not survive a reboot.
 
+**Decided 2026-09-02, late: the next latency step is a per-direction
+level servo, to be planned on 2026-09-03 after the morning stall count.**
+Tonight's servo drives Capture Pitch and Playback Pitch with one value,
+which holds the TX/RX split but leaves their sum where the prime put it.
+Driving the two controls separately gives each direction its own level
+loop, so the prime stops mattering, the cold-boot depth excess heals in
+place, and each depth can be trimmed to its required cover. Depths in
+the servo run: TX 367 frames, RX 329, against a cover need near 200 and
+150 if the worst wakeup gap stays at 2 ms; about 7 ms on the table, none
+of it safe while 6 ms stalls exist. Open question to test first: whether
+macOS tolerates its input and output rates differing by a few ppm for
+minutes while levels correct. Also on the list once depths are servo-held:
+re-test the sink delay (closed as a non-lever only because the conserved
+depth absorbed it), the 32-frame DAW buffer (1.33 ms, measured), packet
+time below 1 ms, and 96 kHz end to end. Realistic landing on this
+transport: 18-20 ms device timeline.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
