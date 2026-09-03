@@ -1969,7 +1969,7 @@ discards the previous boot's timeline, which is why boots 1 and 2 are gone.
 A persistent journal is a root change and a decision for the user; without
 it, cold-boot post-mortems must be read before the next reboot.
 
-#### MEASURED: RAVENNA period 48 (tier one, lever 1): the lever exists, 25.6 ms, cover kept
+#### ACCEPTED: period 48 (tier one, lever 1): four loaded runs, 25.6-27.3 ms, TX floor 164-193, no pull above 48
 
 `--period 48` through the candidate wrapper (`USB16X16_PHASE4_PERIOD_FRAMES=48`),
 everything else the accepted point: target 128, buffer 192, RAVENNA playback
@@ -1992,6 +1992,7 @@ variant needs a per-device period option in the bridge, not built.
 | `003546Z` | 25.563 ms | 1227 | 0.946 | 10 | 13 / 13 | **164** | 109 | 0 | **48** | 0 | 0 |
 | `004724Z` | 25.563 ms | 1227 | 0.930 | 10 | 13 / 13 | **177** | 100 | 0 | **48** | 0 | 0 |
 | `005836Z` | 27.313 ms | 1311 | 0.988 | **0** | 13 / 13 | **193** | 109 | 0 | **48** | 0 | 0 |
+| `011007Z` | 25.813 ms | 1239 | 0.934 | 10 | 13 / 13 | **178** | 109 | 0 | **48** | 0 | 0 |
 
 Against the accepted point (wrapper mode 1399, 29.146 ms): 172 samples,
 3.6 ms faster, cover kept at 164 over the 144 bar. Per impulse: 1227 in
@@ -2018,6 +2019,23 @@ of the shift is outside the bridge's counters. Same resting-level scatter
 as the accepted point (29.1 x3, 28.1 x1), now 25.6 x2, 27.3 x1; quote the
 range until run 4 says which is the mode.
 
+**Run 4 and the verdict.** `011007Z`: 1239 (25.813 ms), 12 samples above
+runs 1 and 2, the familiar bimodality (1231 under 1239, 49 times), floors
+178/109, clean. **Acceptance as defined for the accepted point: four
+800-impulse runs, zero failures, `tx_qfloor` above 144 in every one.
+Passed**, with floors 164, 177, 193, 178 (worst margin 20 frames over
+the bar, against 14 at period 96) and `tx_pullmax` 48 in all four. Latency
+1227 x2, 1239, 1311: **quote 25.6-27.3 ms, mode 25.6**, against 27.6-29.6
+at period 96. The level of each run is set at start: all three readiness
+probes read the run's own median every time (1227, 1227, 1311, 1239), and
+nothing drifted within a run. Sinks read 576/576, PTP locked on the same
+grandmaster, and the daemon logs are the same shape in all four; the
+scatter is the bridge's resting level and something outside its counters,
+as before. Not measured here: a USB-only or RAVENNA-only period 48 (needs
+a per-device period option), the service's own number at this point (the
+service runs the profile, `measure-under-service.sh` reads it), and 32
+CoreAudio frames, which the harness cannot see and RTL Utility can.
+
 **`tx_pullmax` 48, and no pull above 48 in the run.** Pull histogram
 `1908067/599987/0/0/0/0` (48-frame bins: zero, 1-48, 49-96, ...): 600k
 pulls of one packet at 1 kHz and nothing larger. Every period-96 run
@@ -2031,7 +2049,7 @@ whether it recurs.
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
-| `48/192/768/128` **period 48**, RAVENNA playback 384, TX 288 / RX 144 | **003546Z, 004724Z, 005836Z, 800 impulses each, clean, `tx_qfloor` 164-193, `tx_pullmax` 48; acceptance run 4 pending** | **25.563 ms** | 0.946 | 10 samples |
+| `48/192/768/128` **period 48**, RAVENNA playback 384, TX 288 / RX 144 | **ACCEPTED: 003546Z, 004724Z, 005836Z, 011007Z, 800 impulses each, 0 failures, `tx_qfloor` 164-193, `tx_pullmax` 48** | **25.563 ms** | 0.946 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96, RAVENNA playback 384 | 015059Z, 800 impulses, clean, `tx_qfloor` 122 | 30.146 ms | 0.944 | 10 samples |
 | `96/192/768/128` TX 192 / RX 96, **target 128** | **025906Z, 800 impulses, clean, `tx_qfloor` 97, `rx_qfloor` 61** | **24.479 ms** | 0.932 | 10 samples |
