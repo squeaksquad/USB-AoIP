@@ -3617,6 +3617,29 @@ The proof is the next cold boot's ALIGN line reading `status=ok
 attempts=2` or so; the previous bridge `767ae43d` stays installed until
 then.
 
+**INSTALLED 2026-09-03 about 19:25 local by the user: bridge `99f37408`,
+wrapper `2f2354e1`, supervisor `16308997`; VERIFIED BY COLD BOOT.** Reboot
+at the user's request; on the new boot the governor unit set
+`performance` at 7.0 s, the service was running at 60.7 s on
+`servo-aligned`, and the bridge logged **`ALIGN status=ok attempts=2
+tick_period_us=999 wake_to_prepare_us=614 prepare_us=8`**: the first
+attempt met the cold-boot XRUN, the second aligned, and the phase landed
+where every warm start has (614-618 us). The cold-boot cascade then took
+one TX recovery (RAVENNA playback XRUN at bridge 5.3 s) and settled with
+no further recoveries; a TX recovery re-primes the RAVENNA playback and
+leaves the aligned RAVENNA capture untouched, so the RX playout of this
+session is the aligned one. Known gap, unchanged: an RX recovery
+re-prepares the RAVENNA capture through the ordinary unaligned path, so a
+session that takes one is back in the old lottery until the next start;
+aligning the recovery path is a small follow-up if RX recoveries turn
+out to happen outside cold boots (none has in the accepted runs).
+
+State at the end of 2026-09-03: service on the accepted `servo-aligned`
+profile, bridge `99f37408`, governor persistent through
+`usb16x16-governor.service`, everything installed matching the repo
+(`install-candidate.sh`, `install-aes67-service.sh`,
+`install-governor-unit.sh`), nothing staged that is not installed.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
