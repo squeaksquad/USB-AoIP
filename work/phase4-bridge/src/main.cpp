@@ -23,6 +23,7 @@
 #include <string_view>
 #include <sys/mman.h>
 #include <thread>
+#include <time.h>
 #include <unistd.h>
 #include <vector>
 
@@ -47,6 +48,14 @@ constexpr std::size_t kCaptureHistogramBins = 5;
 // A DEPTHSTEP line is emitted when the depth floor drops by at least this
 // much; the steps seen in the logs are 48 and about 85-90 frames.
 constexpr std::size_t kDepthStepReportFrames = 24;
+// Aligned start: wakeups timed before the RAVENNA capture is re-prepared, the
+// default and largest offset from the reference wakeup to the prepare call.
+// Eight wakeups are seven intervals, an odd count for the median, and 8 ms
+// of observation. 600 us sits past the wake latency and well inside the
+// 1 ms tick; anything up to ten ticks is allowed for experiments.
+constexpr std::size_t kAlignWakeups = 8;
+constexpr std::int64_t kAlignOffsetDefaultUs = 600;
+constexpr std::int64_t kAlignOffsetMaximumUs = 10000;
 std::chrono::steady_clock::time_point process_started{};
 
 std::uint64_t elapsed_us() noexcept {
@@ -113,6 +122,17 @@ struct Options {
     std::size_t rx_depth_frames{0};
     double level_gain_ppm_per_frame{0.05};
     double level_clamp_ppm{2.0};
+    // Aligned start. The RAVENNA driver fixes its capture reader's phase at
+    // snd_pcm_prepare (capture_buffer_pos = SAC mod L) anywhere inside one
+    // 1 ms tick, so a packet's arrival lead over its read slot is a
+    // per-session draw of up to 48 frames, and the sink delay that clears
+    // the wrap moves with it (2026-09-03 sweeps: 96 cleared in one session
+    // and wrapped in the next). With this on, the bridge first watches the
+    // tick through RAVENNA capture period wakeups, then re-prepares that
+    // capture a fixed offset after a wakeup, so the phase is a constant.
+    // Off by default: the historical start order. TX is untouched.
+    bool align_start{false};
+    std::int64_t align_offset_us{kAlignOffsetDefaultUs};
     int priority{90};
     unsigned int seconds{0};
 };
@@ -222,6 +242,11 @@ private:
         << "  --rx-depth FRAMES      mode 2 setpoint for ravenna-to-usb depth (default 0)\n"
         << "  --level-gain PPM       mode 2 level gain in ppm per frame (default 0.05)\n"
         << "  --level-clamp PPM      mode 2 level bias clamp in ppm (default 2)\n"
+        << "  --align-start 0|1      re-prepare RAVENNA capture a fixed offset after one of its\n"
+        << "                         period wakeups, so the driver's reader phase is constant\n"
+        << "                         (default 0)\n"
+        << "  --align-offset-us N    that offset, microseconds after the reference wakeup\n"
+        << "                         (default 600, at most 10000)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
     std::exit(error.empty() ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -299,6 +324,14 @@ Options parse_options(const int argc, char** argv) {
             options.level_gain_ppm_per_frame = parse_double(value, "level-gain");
         } else if (argument == "--level-clamp") {
             options.level_clamp_ppm = parse_double(value, "level-clamp");
+        } else if (argument == "--align-start") {
+            const unsigned long parsed = parse_unsigned(value, "align-start");
+            if (parsed > 1) {
+                throw std::runtime_error("align-start must be 0 or 1");
+            }
+            options.align_start = parsed != 0;
+        } else if (argument == "--align-offset-us") {
+            options.align_offset_us = static_cast<std::int64_t>(parse_unsigned(value, "align-offset-us"));
         } else if (argument == "--priority") {
             options.priority = static_cast<int>(parse_unsigned(value, "priority"));
         } else if (argument == "--seconds") {
@@ -322,6 +355,12 @@ Options parse_options(const int argc, char** argv) {
     }
     if (options.priority < 1 || options.priority > 98) {
         throw std::runtime_error("priority must be 1..98");
+    }
+    if (options.align_offset_us > kAlignOffsetMaximumUs) {
+        throw std::runtime_error("align-offset-us must be 0..10000");
+    }
+    if (!options.align_start && options.align_offset_us != kAlignOffsetDefaultUs) {
+        throw std::runtime_error("--align-offset-us needs --align-start 1");
     }
     if (options.tx_depth_frames != 0 || options.rx_depth_frames != 0 ||
         options.level_gain_ppm_per_frame != 0.05 || options.level_clamp_ppm != 2.0) {
@@ -940,7 +979,7 @@ void restart_direction(Direction& direction) {
     direction.capture.start_capture();
 }
 
-std::vector<pollfd> make_poll_descriptors(const std::array<Pcm*, 2>& pcms) {
+std::vector<pollfd> make_poll_descriptors(const std::vector<Pcm*>& pcms) {
     std::vector<pollfd> descriptors;
     for (Pcm* pcm : pcms) {
         const int count = snd_pcm_poll_descriptors_count(pcm->handle());
@@ -965,6 +1004,134 @@ void configure_realtime(const int priority) {
     if (result != 0) {
         throw std::runtime_error("SCHED_FIFO failed: " + std::string(std::strerror(result)));
     }
+}
+
+std::int64_t monotonic_now_ns() noexcept {
+    timespec now{};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return static_cast<std::int64_t>(now.tv_sec) * 1000000000LL + now.tv_nsec;
+}
+
+struct AlignResult {
+    bool ok{false};
+    std::int64_t tick_period_us{0};
+    std::int64_t wake_to_prepare_us{0};
+    std::int64_t prepare_us{0};
+    std::string intervals_us;
+    std::string reason;
+};
+
+// Discard everything a capture holds so its poll descriptor blocks until the
+// next period wakeup. False on an error other than EAGAIN.
+bool drain_capture(Pcm& capture) noexcept {
+    for (int pass = 0; pass < 8; ++pass) {
+        const snd_pcm_sframes_t available = capture.available();
+        if (available == 0 || available == -EAGAIN) {
+            return true;
+        }
+        if (available < 0) {
+            return false;
+        }
+        snd_pcm_uframes_t frames = static_cast<snd_pcm_uframes_t>(available);
+        const snd_pcm_channel_area_t* areas = nullptr;
+        snd_pcm_uframes_t offset = 0;
+        const int begin = snd_pcm_mmap_begin(capture.handle(), &areas, &offset, &frames);
+        if (begin < 0) {
+            return begin == -EAGAIN;
+        }
+        if (frames == 0) {
+            return true;
+        }
+        if (snd_pcm_mmap_commit(capture.handle(), offset, frames) < 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// The aligned start. Times kAlignWakeups period wakeups of the RAVENNA
+// capture, which arrive once per driver tick; the median interval is the
+// tick and the last wakeup the reference. Sleeps on the monotonic clock to
+// the reference plus the offset, then drops, prepares and starts the
+// capture, so the reader phase the driver fixes at prepare is the same
+// every session instead of anywhere inside a tick. Runs at SCHED_FIFO before
+// the audio loop with the USB capture not yet started: its 4 ms buffer would
+// not survive the 8 ms of observation. On any failure the capture is
+// restarted unaligned and the run continues; the ALIGN line says so.
+AlignResult align_ravenna_capture(Pcm& capture, const std::int64_t offset_us) {
+    AlignResult result;
+    auto descriptors = make_poll_descriptors({&capture});
+    std::vector<std::int64_t> wakes;
+    wakes.reserve(kAlignWakeups);
+    const auto give_up = [&](std::string reason) {
+        result.reason = std::move(reason);
+        capture.drop();
+        capture.prepare();
+        alsa_check(capture.start(), capture.label() + " start");
+        return result;
+    };
+    if (!drain_capture(capture)) {
+        return give_up("drain");
+    }
+    int timeouts = 0;
+    while (wakes.size() < kAlignWakeups) {
+        if (stop_requested.load(std::memory_order_relaxed)) {
+            return give_up("stopped");
+        }
+        const int poll_result = ::poll(descriptors.data(), descriptors.size(), 20);
+        if (poll_result < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return give_up(std::string("poll ") + std::strerror(errno));
+        }
+        if (poll_result == 0) {
+            if (++timeouts > 10) {
+                return give_up("no wakeups");
+            }
+            continue;
+        }
+        const snd_pcm_sframes_t available = capture.available();
+        if (available < 0 && available != -EAGAIN) {
+            return give_up(std::string("avail ") + snd_strerror(static_cast<int>(available)));
+        }
+        if (available <= 0) {
+            continue;
+        }
+        wakes.push_back(monotonic_now_ns());
+        if (!drain_capture(capture)) {
+            return give_up("drain");
+        }
+    }
+    for (std::size_t index = 1; index < wakes.size(); ++index) {
+        if (index != 1) {
+            result.intervals_us += '/';
+        }
+        result.intervals_us += std::to_string((wakes[index] - wakes[index - 1]) / 1000);
+    }
+    result.tick_period_us = (usb16x16::median_wake_interval(wakes) + 500) / 1000;
+
+    const std::int64_t reference_ns = wakes.back();
+    const std::int64_t target_ns = reference_ns + offset_us * 1000;
+    timespec target{};
+    target.tv_sec = static_cast<time_t>(target_ns / 1000000000LL);
+    target.tv_nsec = static_cast<long>(target_ns % 1000000000LL);
+    int sleep_result = 0;
+    do {
+        sleep_result = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &target, nullptr);
+    } while (sleep_result == EINTR && !stop_requested.load(std::memory_order_relaxed));
+    if (sleep_result != 0) {
+        return give_up(std::string("sleep ") + std::strerror(sleep_result));
+    }
+    capture.drop();
+    const std::int64_t before_prepare_ns = monotonic_now_ns();
+    capture.prepare();
+    const std::int64_t after_prepare_ns = monotonic_now_ns();
+    alsa_check(capture.start(), capture.label() + " start");
+    result.wake_to_prepare_us = (before_prepare_ns - reference_ns) / 1000;
+    result.prepare_us = (after_prepare_ns - before_prepare_ns) / 1000;
+    result.ok = true;
+    return result;
 }
 
 void publish_telemetry(const Direction& tx,
@@ -1259,9 +1426,28 @@ int run(const Options& options) {
     // its elastic ring has no excess, producing a SCHED_FIFO busy loop.
     auto poll_descriptors = make_poll_descriptors({&usb_capture, &ravenna_capture});
 
-    usb_capture.start_capture();
-    ravenna_capture.start_capture();
-    configure_realtime(options.priority);
+    AlignResult align;
+    if (options.align_start) {
+        // RAVENNA capture first and alone, so its wakeups are all the
+        // alignment poll sees and the USB capture cannot overrun while the
+        // tick is observed; USB capture starts once the phase is set.
+        ravenna_capture.start_capture();
+        configure_realtime(options.priority);
+        align = align_ravenna_capture(ravenna_capture, options.align_offset_us);
+        std::cout << "ALIGN status=" << (align.ok ? "ok" : "failed")
+                  << " offset_us=" << options.align_offset_us
+                  << " wakeups=" << kAlignWakeups
+                  << " tick_period_us=" << align.tick_period_us
+                  << " wake_to_prepare_us=" << align.wake_to_prepare_us
+                  << " prepare_us=" << align.prepare_us
+                  << " intervals_us=" << align.intervals_us
+                  << (align.ok ? "" : " reason=" + align.reason) << '\n';
+        usb_capture.start_capture();
+    } else {
+        usb_capture.start_capture();
+        ravenna_capture.start_capture();
+        configure_realtime(options.priority);
+    }
 
     std::thread telemetry_thread(telemetry_loop, std::ref(telemetry), pitch_control.get());
     const auto started = std::chrono::steady_clock::now();
@@ -1519,7 +1705,12 @@ int run(const Options& options) {
               << ",\"tx_bias_ppm\":" << tx_level.bias()
               << ",\"rx_bias_ppm\":" << rx_level.bias()
               << ",\"tx_depth_setpoint\":" << telemetry.tx_depth_setpoint.load()
-              << ",\"rx_depth_setpoint\":" << telemetry.rx_depth_setpoint.load() << "}\n";
+              << ",\"rx_depth_setpoint\":" << telemetry.rx_depth_setpoint.load()
+              << ",\"align_start\":" << (options.align_start ? 1 : 0)
+              << ",\"align_ok\":" << (align.ok ? 1 : 0)
+              << ",\"align_tick_period_us\":" << align.tick_period_us
+              << ",\"align_wake_to_prepare_us\":" << align.wake_to_prepare_us
+              << ",\"align_prepare_us\":" << align.prepare_us << "}\n";
     // pitch_control's destructor restores nominal pitch after this returns.
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
 }

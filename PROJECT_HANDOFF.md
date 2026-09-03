@@ -3343,6 +3343,58 @@ trigger. That is a bridge change, one variable, measurable by the same
 within-session sweep. Until then the deployed 576 is the predictable
 choice; 168 is the safe small win.
 
+**IMPLEMENTED, staged, not installed: the aligned start, bridge
+`767ae43d`.** `--align-start 0|1` (default 0) and `--align-offset-us N`
+(default 600, at most 10000; a non-default offset needs align-start 1).
+With it on, the bridge starts the RAVENNA capture first and alone, goes
+real-time, drains that capture, then times eight of its period wakeups
+(one per driver tick) with `poll` on its descriptor alone, draining after
+each so the next poll blocks until the next tick. The median of the seven
+intervals (`median_wake_interval` in the core, unit-tested: a short first
+interval and one late wake do not move it) is the tick period and the last
+wake the reference. An absolute `clock_nanosleep` on `CLOCK_MONOTONIC` to
+the reference plus the offset, then drop, prepare, start on the RAVENNA
+capture, so the reader phase the driver fixes at prepare (`capture_buffer_pos
+= SAC mod L`) is the same every session instead of anywhere inside a tick.
+Only then does the USB capture start: one deviation from the agreed order
+("after both captures are started"), because the USB capture's 192-frame
+buffer is 4 ms and the observation takes 8 ms, so it would overrun and
+register a direction restart before the run began, which the wrapper
+rejects at startup. With align off the start order is byte-for-byte the
+historical one; modes 0/1/2 and TX are untouched, and a direction
+recovery still re-prepares unaligned. One `ALIGN` line on stdout:
+`status=ok|failed offset_us wakeups tick_period_us wake_to_prepare_us
+prepare_us intervals_us` (`wake_to_prepare_us` is measured from the
+reference wake to the prepare call, after the drop; `prepare_us` is the
+call's duration), plus `reason=` on failure, in which case the capture is
+restarted unaligned and the run continues. SUMMARY gains `align_start`,
+`align_ok`, `align_tick_period_us`, `align_wake_to_prepare_us`,
+`align_prepare_us`. Built on the Pi in `phase4-servo-src` with the service
+stopped (about 15 s of compile), ctest clean on the Mac and the Pi, the
+option validation exercised on the Pi.
+
+Wired through: wrapper `9af0135d` (positionals 16/17 `align_start`,
+`align_offset_us`, defaults 0/600, validated like the bridge;
+`USB16X16_PHASE4_ALIGN_START` / `USB16X16_PHASE4_ALIGN_OFFSET_US` on the
+Mac side in `measure-phase4-roundtrip.sh`, `sweep-phase4-sink-delay.sh`
+and `sweep-phase4-depth.sh`), supervisor `f0b783c4` (optional profile keys
+`ALIGN_START` / `ALIGN_OFFSET_US`, absent = off / 600, shown by
+`profiles`), `aes67.conf` `e662755b` (new experimental profile
+`servo-aligned`: the `servo` block with `ALIGN_START=1`, `SINK_DELAY` still
+576 until the sweeps below place it; `PROFILE=servo` unchanged), unit
+`77837e60` unchanged, both installers re-pinned, `52591f6f` added to the
+unedited-shipped list. Every profile block validates through the
+supervisor's own parser. Staged in `~/usb-16x16-work/phase4-align-install/`;
+install order as before with the service stopped: `install-candidate.sh`
+then `install-aes67-service.sh`. Service restarted on `servo` after the
+build.
+
+Measurement plan for the aligned start: two within-session sink-delay
+sweeps with align on at 576 96 120 144 168, separate sessions; the wrap
+point and the on-line offsets must agree between them. Then the
+`servo-aligned` profile's `SINK_DELAY` goes to the wrap point plus 24-48
+and one more run measures it against the same session's 576 baseline.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:

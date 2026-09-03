@@ -155,6 +155,13 @@ private:
     std::size_t next_{};
 };
 
+// The aligned start observes the RAVENNA driver's tick through capture
+// period wakeups and needs the tick period from a handful of wake times.
+// The median of the consecutive intervals ignores a short first interval
+// (the wake that drains a backlog) and a late wake on the way; fewer than
+// two wake times give 0. Even counts take the mean of the two middles.
+[[nodiscard]] std::int64_t median_wake_interval(const std::vector<std::int64_t>& wake_times) noexcept;
+
 [[nodiscard]] std::int32_t unpack_s24le(const std::uint8_t* source) noexcept;
 void pack_s24le(std::int32_t sample, std::uint8_t* destination) noexcept;
 [[nodiscard]] float s24_to_float(const std::uint8_t* source) noexcept;

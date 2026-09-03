@@ -104,6 +104,23 @@ double LevelServo::update(const double depth_frames) noexcept {
     return bias_;
 }
 
+std::int64_t median_wake_interval(const std::vector<std::int64_t>& wake_times) noexcept {
+    if (wake_times.size() < 2) {
+        return 0;
+    }
+    std::vector<std::int64_t> intervals;
+    intervals.reserve(wake_times.size() - 1);
+    for (std::size_t index = 1; index < wake_times.size(); ++index) {
+        intervals.push_back(wake_times[index] - wake_times[index - 1]);
+    }
+    std::sort(intervals.begin(), intervals.end());
+    const std::size_t middle = intervals.size() / 2;
+    if (intervals.size() % 2 == 1) {
+        return intervals[middle];
+    }
+    return (intervals[middle - 1] + intervals[middle]) / 2;
+}
+
 SharedDriftEstimator::SharedDriftEstimator() : SharedDriftEstimator(Config{}) {}
 
 SharedDriftEstimator::SharedDriftEstimator(const Config config) : config_(config) {}

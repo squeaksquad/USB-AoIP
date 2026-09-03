@@ -204,6 +204,20 @@ void test_level_servo() {
     check(strong.update(132.0) == 3.0, "configured gain and clamp are honoured");
 }
 
+void test_median_wake_interval() {
+    using usb16x16::median_wake_interval;
+    check(median_wake_interval({}) == 0, "no wakes gives no period");
+    check(median_wake_interval({5000}) == 0, "one wake gives no period");
+    check(median_wake_interval({0, 1000}) == 1000, "two wakes give their interval");
+    // Eight wakes on a 1000 us tick: the first interval is short (the wake
+    // that drained a backlog) and one wake in the middle is 300 us late, so
+    // its neighbours read 1300 and 700. The median is the tick.
+    check(median_wake_interval({0, 400, 1400, 2400, 3700, 4400, 5400, 6400}) == 1000,
+          "median of seven intervals ignores the short first and the late wake");
+    // Five wakes are four intervals: 1000, 1004, 1000, 1006, whose two middles are 1000 and 1004.
+    check(median_wake_interval({0, 1000, 2004, 3004, 4010}) == 1002, "even count takes the mean of the two middles");
+}
+
 void test_windowed_regression() {
     usb16x16::WindowedLinearRegression regression;
     double slope = 0.0;
@@ -255,6 +269,7 @@ int main() {
     test_estimator_bounds();
     test_shared_rate_estimator();
     test_level_servo();
+    test_median_wake_interval();
     test_windowed_regression();
     test_applied_ratio_correction();
     if (failures != 0) {

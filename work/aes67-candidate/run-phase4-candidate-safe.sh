@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=170b10819bb4d50c0c118158bb7664fbbee33b55286542b7c57ac07d88d7c478
+expected_bridge_sha256=767ae43d4c4e7715994aa12d1e53b0ac0c40c04fb2b73bd96961caee5af1dbbd
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
@@ -51,6 +51,13 @@ rx_depth_frames=${14:-0}
 # Mode 2 level gain in ppm per frame of depth error, (0, 0.1]. 0.05 turns 20
 # frames into 1 ppm; 0.01 sat in the 1 ppm quantisation dead zone (142307Z).
 level_gain=${15:-0.05}
+# Aligned start (0 or 1): the bridge times eight RAVENNA capture wakeups,
+# then re-prepares that capture align_offset_us after the last one, so the
+# driver's reader phase (fixed at prepare, anywhere inside a 1 ms tick) is a
+# constant instead of a per-session draw. Offset in microseconds, 0..10000;
+# a non-default offset needs align_start=1.
+align_start=${16:-0}
+align_offset_us=${17:-600}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
 ready_file=/tmp/usb16x16-phase4-candidate.ready
@@ -62,7 +69,7 @@ for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frame
              "$playback_prime_frames" "$prime_trim" \
              "$tx_playback_prime_frames" "$rx_playback_prime_frames" \
              "$ravenna_playback_buffer_frames" "$sink_delay" "$usb_pitch_servo" \
-             "$tx_depth_frames" "$rx_depth_frames"; do
+             "$tx_depth_frames" "$rx_depth_frames" "$align_start" "$align_offset_us"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -104,6 +111,18 @@ if [ "$usb_pitch_servo" -ne 2 ] && [ "$level_gain" != 0.05 ]; then
 fi
 if [ "$usb_pitch_servo" -ne 2 ] && { [ "$tx_depth_frames" -ne 0 ] || [ "$rx_depth_frames" -ne 0 ]; }; then
   echo "tx/rx depth setpoints need usb-pitch-servo 2" >&2
+  exit 14
+fi
+if [ "$align_start" -gt 1 ]; then
+  echo "align-start must be 0 or 1" >&2
+  exit 14
+fi
+if [ "$align_offset_us" -gt 10000 ]; then
+  echo "align-offset-us must be 0..10000" >&2
+  exit 14
+fi
+if [ "$align_start" -ne 1 ] && [ "$align_offset_us" -ne 600 ]; then
+  echo "align-offset-us needs align-start 1" >&2
   exit 14
 fi
 if [ "$tx_depth_frames" -ne 0 ] && [ "$tx_depth_frames" -lt $((target_frames + 144 + period_frames)) ]; then
@@ -296,6 +315,8 @@ timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
   --tx-depth "$tx_depth_frames" \
   --rx-depth "$rx_depth_frames" \
   --level-gain "$level_gain" \
+  --align-start "$align_start" \
+  --align-offset-us "$align_offset_us" \
   --priority 90 \
   --seconds "$candidate_seconds" \
   > "$result_dir/bridge.log" 2>&1 &
@@ -331,6 +352,8 @@ fi
   echo "tx_depth_frames=$tx_depth_frames"
   echo "rx_depth_frames=$rx_depth_frames"
   echo "level_gain=$level_gain"
+  echo "align_start=$align_start"
+  echo "align_offset_us=$align_offset_us"
   echo "candidate_seconds=$candidate_seconds"
   echo "bridge_sha256=$expected_bridge_sha256"
 } > "$result_dir/metadata.txt"

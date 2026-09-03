@@ -40,7 +40,7 @@ candidate_wrapper=/usr/local/sbin/run-phase4-candidate-safe.sh
 candidate_ready_file=/tmp/usb16x16-phase4-candidate.ready
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=170b10819bb4d50c0c118158bb7664fbbee33b55286542b7c57ac07d88d7c478
+expected_bridge_sha256=767ae43d4c4e7715994aa12d1e53b0ac0c40c04fb2b73bd96961caee5af1dbbd
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 api=http://127.0.0.1:8080
 
@@ -161,6 +161,10 @@ servo() { local value; value=$(p USB_PITCH_SERVO); printf '%s' "${value:-0}"; }
 depth() { local value; value=$(p "$1_DEPTH"); printf '%s' "${value:-0}"; }
 # LEVEL_GAIN is the optional mode-2 level gain in ppm per frame; absent means 0.05.
 gain() { local value; value=$(p LEVEL_GAIN); printf '%s' "${value:-0.05}"; }
+# ALIGN_START (0 or 1) and ALIGN_OFFSET_US are the optional aligned start:
+# absent means off and 600 us, the historical start order.
+align() { local value; value=$(p ALIGN_START); printf '%s' "${value:-0}"; }
+align_offset() { local value; value=$(p ALIGN_OFFSET_US); printf '%s' "${value:-600}"; }
 
 profile_names() {
   local key
@@ -202,6 +206,15 @@ validate_profile() {
     { say "profile $profile_name: LEVEL_GAIN must be a decimal in (0, 0.1]" >&2; return 1; }
   if [ "$(servo)" -ne 2 ] && [ "$(gain)" != 0.05 ]; then
     say "profile $profile_name: LEVEL_GAIN needs USB_PITCH_SERVO=2" >&2; return 1
+  fi
+  case "$(align)" in
+    0|1) ;;
+    *) say "profile $profile_name: ALIGN_START must be 0 or 1" >&2; return 1 ;;
+  esac
+  [[ $(align_offset) =~ ^[0-9]+$ ]] && [ "$(align_offset)" -le 10000 ] ||
+    { say "profile $profile_name: ALIGN_OFFSET_US must be an unsigned integer up to 10000" >&2; return 1; }
+  if [ "$(align)" -ne 1 ] && [ "$(align_offset)" -ne 600 ]; then
+    say "profile $profile_name: ALIGN_OFFSET_US needs ALIGN_START=1" >&2; return 1
   fi
   if [ "$(depth TX)" -ne 0 ] && [ "$(depth TX)" -lt $(( $(p TARGET) + 144 + $(p PERIOD) )) ]; then
     say "profile $profile_name: TX_DEPTH is below TARGET + 144 + PERIOD" >&2; return 1
@@ -265,6 +278,8 @@ bridge_arguments() {
     --tx-depth "$(depth TX)" \
     --rx-depth "$(depth RX)" \
     --level-gain "$(gain)" \
+    --align-start "$(align)" \
+    --align-offset-us "$(align_offset)" \
     --priority 90 \
     --seconds 0
 }
@@ -738,7 +753,7 @@ cmd_profiles() {
     [ "$name" = "$selected" ] && mark='*'
     say "$mark $name: $(p STATUS), cover: $(p COVER), measured: $(p MEASURED)"
     say "    $(p DESCRIPTION)"
-    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain)"
+    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us"
   done
 }
 
