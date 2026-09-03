@@ -126,11 +126,12 @@ sudo systemctl enable usb16x16-aes67
 ## Profiles
 
 `/etc/usb16x16/aes67.conf` carries `PROFILE=<name>` and one block per
-profile. Two ship:
+profile. Three ship:
 
 | profile | point | measured | cover | status |
 |---|---|---:|---|---|
-| `safe` | target 128, RAVENNA playback 384, TX 288, RX 144, buffer 192, sink delay 576 | 29.1 ms | TX floor 158-197 | accepted, default |
+| `safe` | period 48, target 128, RAVENNA playback 384, TX 288, RX 144, buffer 192, sink delay 576 | 25.6 ms (25.6-27.3) | TX floor 164-193 | accepted, default |
+| `safe-96` | period 96, otherwise as `safe` | 29.1 ms (28.1-29.1) | TX floor 158-197 | accepted, rollback for `safe` |
 | `fast` | target 128, TX 192, RX 96, buffer 192, sink delay 576 | 24.5 ms | none, TX floor 97 | experimental |
 
 ```bash
