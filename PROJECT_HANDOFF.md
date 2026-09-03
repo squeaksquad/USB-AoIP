@@ -3666,6 +3666,30 @@ Proof after the install: an induced 10 ms pause of the service's bridge
 to recover, and the RX RECOVER must be followed by the `ALIGN recovery`
 line with `wake_to_prepare_us` near 600.
 
+**INSTALLED 2026-09-03 19:37 local by the user: bridge `38f44de9`,
+wrapper `5979bdcf`, supervisor `d8e5729b`; VERIFIED by an induced pause.**
+Service start aligned on attempt 1 (615 us). The user paused the
+service's bridge for about 20 ms (`kill -STOP`, `sleep 0.02`,
+`kill -CONT`) at bridge second 57.7: both directions recovered from
+capture XRUN (TX first, RX 63 us later), and the RX recovery logged
+**`ALIGN recovery direction=ravenna-to-usb wake_age_us=38607
+wake_to_prepare_us=607 prepare_us=23 sleep_result=0`**: the re-prepare
+landed 607 us after the tick grid the start had chosen (600 asked, 7 us
+of sleep overshoot), one tick at most after the decision, then both
+directions re-primed. Exactly one recovery per direction, floors 205/109
+afterwards, worst gaps 1.0/1.1 ms since, service running. So an RX
+recovery now keeps the session on the aligned phase; the recovered
+session's RX playout should sit within a few samples of a started one
+(the reference carries the loop's service latency), and the only way
+left back into the old lottery is align failing four times at start.
+
+State at the end of 2026-09-03: service on the accepted `servo-aligned`
+profile, bridge `38f44de9`, governor persistent, everything installed
+matching the repo, nothing staged that is not installed. Not yet
+measured: the round trip of a session after an aligned recovery, which
+would need a sweep-style run with an induced pause in it; expected
+within a few samples of 1416-1453.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
