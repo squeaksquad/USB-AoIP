@@ -2984,6 +2984,18 @@ is still marked experimental on one clean run; three more loaded
 STATUS/COVER/MEASURED strings should be updated when they pass. Rollback
 is `switch-profile safe`, the same binary with the resampler.
 
+**Lever 1 started 2026-09-02 about 23:19 local: governor `performance`
+on all four CPUs, runtime only.** Set by the user with `stall-tuning.sh`
+at roughly 6300 s of uptime in the boot of 21:34; all cores now read
+2.4 GHz, IRQ affinity still stock (0-3), 47.2 C. Baseline for the
+comparison: 11 RECOVER lines this boot, the last at 3116 s, three stall
+events (2116 s bridge gap 5.9 ms; 3116 s all four PCMs with the bridge
+awake; the boot's own first-minute cascade), plus the startup pair. Judge
+the lever by RECOVER lines with monotonic timestamps after 6300 s over
+several hours of service time; the servo profile's BRIDGE line at the
+start read gaps 1.4/1.8 ms, zero restarts, pitch 1000014, zero clips.
+Does not survive a reboot.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
