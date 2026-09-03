@@ -3483,6 +3483,21 @@ binary with the historical start order and sink delay 576. Remaining
 acceptance work: four loaded 800-impulse runs on this profile, and the
 overnight stall watch continues under the `performance` governor.
 
+**MEASURED: acceptance run 1 of 4 on profile `servo-aligned`,
+`phase4-candidate-20260903T213935Z`, 600 s, 800 impulses at 64 frames,
+load 0.05: median 1416 samples, 29.500 ms, all 800 on one sample, score
+1.000**, zero restarts, zero clips, zero pitch write errors, `tx_qfloor`
+159, `rx_qfloor` 107, `tx_pullmax` 48, gaps 1.1/1.8 ms, pitch 1000015,
+bias 0.75 ppm, `ALIGN status=ok tick_period_us=1000 wake_to_prepare_us=615
+prepare_us=12`. (The Mac-side SAP watcher could not bind UDP 9875 because
+Dante Controller held it, so this run has no SAP timeline; nothing else
+was affected.) The 96 point has now read 1453, 1448, 1438 and 1416 across
+four aligned sessions: a 37-sample (0.8 ms) window with no lap structure,
+wider than the 15 samples the first three suggested, against the
+216-sample lap-structured spread at 576. Three loaded runs remain for
+acceptance. Service restarted on `servo-aligned` afterwards, its own
+start aligned at 618 us.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
