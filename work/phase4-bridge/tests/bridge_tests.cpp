@@ -177,6 +177,32 @@ void test_shared_rate_estimator() {
           "rate estimate remains reciprocal");
 }
 
+void test_level_servo() {
+    usb16x16::LevelServo servo;
+    check(!servo.have_setpoint(), "level servo starts without a setpoint");
+    check(servo.update(400.0) == 0.0, "no setpoint means no bias");
+
+    servo.set_setpoint(360.0);
+    check(servo.have_setpoint() && servo.setpoint() == 360.0, "setpoint is retained");
+    check(servo.update(360.0) == 0.0, "at the setpoint the bias is zero");
+    check(std::abs(servo.update(410.0) - 0.5) < 1.0e-12, "50 frames high gives +0.5 ppm at gain 0.01");
+    check(std::abs(servo.update(310.0) + 0.5) < 1.0e-12, "50 frames low gives -0.5 ppm");
+    check(std::abs(servo.update(540.0) - 1.8) < 1.0e-12, "180 frames high is 1.8 ppm, under the clamp");
+    check(std::abs(servo.update(180.0) + 1.8) < 1.0e-12, "180 frames low is -1.8 ppm");
+    // Beyond the wide-error threshold the wider clamp applies: the cold-boot
+    // excess of about 480 frames drains at 4.8 ppm, not 2.
+    check(std::abs(servo.update(840.0) - 4.8) < 1.0e-12, "480 frames high uses the wide clamp region");
+    check(servo.update(2000.0) == 8.0, "far above clamps at the wide limit");
+    check(servo.bias() == 8.0, "bias is retained");
+
+    usb16x16::LevelServo::Config tight;
+    tight.gain_ppm_per_frame = 0.05;
+    tight.clamp_ppm = 3.0;
+    usb16x16::LevelServo strong(tight);
+    strong.set_setpoint(72.0);
+    check(strong.update(132.0) == 3.0, "configured gain and clamp are honoured");
+}
+
 void test_windowed_regression() {
     usb16x16::WindowedLinearRegression regression;
     double slope = 0.0;
@@ -227,6 +253,7 @@ int main() {
     test_shared_estimator_sign_and_reciprocal();
     test_estimator_bounds();
     test_shared_rate_estimator();
+    test_level_servo();
     test_windowed_regression();
     test_applied_ratio_correction();
     if (failures != 0) {

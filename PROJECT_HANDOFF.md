@@ -3013,6 +3013,56 @@ depth absorbed it), the 32-frame DAW buffer (1.33 ms, measured), packet
 time below 1 ms, and 96 kHz end to end. Realistic landing on this
 transport: 18-20 ms device timeline.
 
+**MEASURED overnight, 2026-09-03: lever 1 (governor `performance`)
+held for 10.2 h of service time with zero stalls.** RECOVER count stayed
+at 11 (last at 3116 s), worst bridge wakeup gap 1.8 ms across the whole
+night on profile `servo`, zero restarts, same boot, IRQ affinity still
+stock. Against three stall events in the 105 min before the lever, and
+the longer history of one per one to two hours, ten quiet hours would
+occur by chance well under one time in a hundred. Called at 09:33 local
+with the user; the watch continues. `performance` is runtime-only and
+needs a persistent form before the next reboot. The stall margin the
+bridge has to cover is therefore about 2 ms, not 6. Observation from the
+night: mode 1's level bias sat at its 3 ppm clamp riding the RAVENNA
+device's 45-frame sawtooth, harmless but the reason mode 2 uses a lower
+gain.
+
+**IMPLEMENTED, staged, not installed: the split pitch servo,
+`--usb-pitch-servo 2`, bridge `da7df1c2`.** Design, from the depth
+equations: TX depth rate is r_usb(1 + pi_c) - r_rav and RX depth rate is
+r_rav - r_usb(1 + pi_p), so Capture Pitch = nominal - (ppm + tx_bias)
+and Playback Pitch = nominal - (ppm - rx_bias), each bias a
+proportional `LevelServo` on that direction's depth (ring plus playback
+queue): gain 0.01 ppm/frame, clamp 2 ppm, and a wide clamp of 8 ppm
+beyond 192 frames of error so a cold-boot excess of 480 frames drains in
+minutes. The shared estimator is untouched; its applied-ratio correction
+integrates the mean of the two applied pitches, which is exact for the
+differential. Setpoints `--tx-depth`/`--rx-depth` are absolute frames,
+0 = capture at engagement; the bridge, wrapper and supervisor refuse a
+TX setpoint under target + 144 + period and an RX setpoint under target
++ 2 periods, and refuse any setpoint outside mode 2. New telemetry:
+`pitch_p`, `tx_bias`, `rx_bias`, `tx_set`, `rx_set`; `PITCHSERVO engaged
+mode=2` carries both setpoints and depths. Modes 0 and 1 are unchanged
+code paths. Core tests cover the level law (`test_level_servo`); ctest
+passes on the Mac and the Pi, option validation exercised on the Pi.
+
+Staged in `~/usb-16x16-work/phase4-split-install/`: bridge `da7df1c2`,
+wrapper `c7d63ac9` (positional 13/14 `tx_depth_frames`/`rx_depth_frames`,
+`USB16X16_PHASE4_TX_DEPTH_FRAMES`/`RX` on the Mac side), supervisor
+`91845b6a` (optional `TX_DEPTH`/`RX_DEPTH` keys), `aes67.conf` `ba3c7a98`
+(new experimental profile `servo-split`, mode 2, setpoints 0; the `servo`
+profile's strings now record its one run; `PROFILE=servo` unchanged),
+installers pinned, `a811f5c3` added to the unedited-shipped list. Install
+order as before, service stopped: `install-candidate.sh` then
+`install-aes67-service.sh`.
+
+Runs planned, in order: (1) mode 2 with setpoints 0, 600 s, 800
+impulses, loaded: the macOS tolerance test, expecting 25.8 ms, zero
+spread, `pitch` and `pitch_p` within 4 ppm; (2) setpoints 48 frames under
+run 1's captured levels, expecting about 1 ms less with floors over
+cover; (3) a cold boot to watch the excess drain in place. Then the
+`--target` reduction as its own plan.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:

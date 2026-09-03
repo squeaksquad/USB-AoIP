@@ -102,6 +102,17 @@ struct Options {
     // bit transparent. A slow level term on the differential depth absorbs
     // the 1 ppm pitch quantisation. Off by default: the deployed behaviour.
     bool usb_pitch_servo{false};
+    // Mode 2: the split servo. Capture Pitch and Playback Pitch are driven
+    // separately, each with its own level loop, so TX and RX hold their own
+    // depths (ring plus playback queue). The shared estimator still supplies
+    // the common rate term. Mode 1 is unchanged.
+    bool split_pitch_servo{false};
+    // Absolute depth setpoints for mode 2, in frames; 0 captures the depth
+    // at engagement, which is mode 1's behaviour per direction.
+    std::size_t tx_depth_frames{0};
+    std::size_t rx_depth_frames{0};
+    double level_gain_ppm_per_frame{0.01};
+    double level_clamp_ppm{2.0};
     int priority{90};
     unsigned int seconds{0};
 };
@@ -151,9 +162,11 @@ public:
     PitchControl& operator=(const PitchControl&) = delete;
 
     // Returns the first ALSA error, or 0.
-    [[nodiscard]] int write(const int pitch) noexcept {
-        snd_ctl_elem_value_set_integer(capture_, 0, pitch);
-        snd_ctl_elem_value_set_integer(playback_, 0, pitch);
+    [[nodiscard]] int write(const int pitch) noexcept { return write(pitch, pitch); }
+
+    [[nodiscard]] int write(const int capture_pitch, const int playback_pitch) noexcept {
+        snd_ctl_elem_value_set_integer(capture_, 0, capture_pitch);
+        snd_ctl_elem_value_set_integer(playback_, 0, playback_pitch);
         const int first = snd_ctl_elem_write(ctl_, capture_);
         const int second = snd_ctl_elem_write(ctl_, playback_);
         return first < 0 ? first : (second < 0 ? second : 0);
@@ -199,8 +212,16 @@ private:
         << "  --rx-playback-prime N  ravenna-to-usb override (0 = use --playback-prime)\n"
         << "  --prime-trim 0|1       discard the ring overshoot at prime time\n"
         << "                         (default 0 = keep it, historical behaviour)\n"
-        << "  --usb-pitch-servo 0|1  steer the USB gadget pitch controls to the PTP rate\n"
-        << "                         and run both converters at exactly 1.0 (default 0)\n"
+        << "  --usb-pitch-servo 0|1|2\n"
+        << "                         1: steer both USB gadget pitch controls together to the PTP\n"
+        << "                         rate and run both converters at exactly 1.0; 2: the same,\n"
+        << "                         with Capture and Playback Pitch driven separately so each\n"
+        << "                         direction holds its own depth (default 0)\n"
+        << "  --tx-depth FRAMES      mode 2 setpoint for usb-to-ravenna depth, ring plus queue\n"
+        << "                         (default 0 = capture the depth at engagement)\n"
+        << "  --rx-depth FRAMES      mode 2 setpoint for ravenna-to-usb depth (default 0)\n"
+        << "  --level-gain PPM       mode 2 level gain in ppm per frame (default 0.01)\n"
+        << "  --level-clamp PPM      mode 2 level bias clamp in ppm (default 2)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
     std::exit(error.empty() ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -211,6 +232,16 @@ unsigned long parse_unsigned(const char* value, const std::string_view name) {
     errno = 0;
     const unsigned long parsed = std::strtoul(value, &end, 10);
     if (errno != 0 || end == value || *end != '\0') {
+        throw std::runtime_error("invalid " + std::string(name));
+    }
+    return parsed;
+}
+
+double parse_double(const char* value, const std::string_view name) {
+    char* end = nullptr;
+    errno = 0;
+    const double parsed = std::strtod(value, &end);
+    if (errno != 0 || end == value || *end != '\0' || !std::isfinite(parsed)) {
         throw std::runtime_error("invalid " + std::string(name));
     }
     return parsed;
@@ -255,10 +286,19 @@ Options parse_options(const int argc, char** argv) {
             options.prime_trim = parsed != 0;
         } else if (argument == "--usb-pitch-servo") {
             const unsigned long parsed = parse_unsigned(value, "usb-pitch-servo");
-            if (parsed > 1) {
-                throw std::runtime_error("usb-pitch-servo must be 0 or 1");
+            if (parsed > 2) {
+                throw std::runtime_error("usb-pitch-servo must be 0, 1 or 2");
             }
             options.usb_pitch_servo = parsed != 0;
+            options.split_pitch_servo = parsed == 2;
+        } else if (argument == "--tx-depth") {
+            options.tx_depth_frames = parse_unsigned(value, "tx-depth");
+        } else if (argument == "--rx-depth") {
+            options.rx_depth_frames = parse_unsigned(value, "rx-depth");
+        } else if (argument == "--level-gain") {
+            options.level_gain_ppm_per_frame = parse_double(value, "level-gain");
+        } else if (argument == "--level-clamp") {
+            options.level_clamp_ppm = parse_double(value, "level-clamp");
         } else if (argument == "--priority") {
             options.priority = static_cast<int>(parse_unsigned(value, "priority"));
         } else if (argument == "--seconds") {
@@ -282,6 +322,29 @@ Options parse_options(const int argc, char** argv) {
     }
     if (options.priority < 1 || options.priority > 98) {
         throw std::runtime_error("priority must be 1..98");
+    }
+    if (options.tx_depth_frames != 0 || options.rx_depth_frames != 0 ||
+        options.level_gain_ppm_per_frame != 0.01 || options.level_clamp_ppm != 2.0) {
+        if (!options.split_pitch_servo) {
+            throw std::runtime_error("--tx-depth, --rx-depth, --level-gain and --level-clamp need --usb-pitch-servo 2");
+        }
+    }
+    if (options.split_pitch_servo) {
+        // A TX setpoint must leave the ring its target plus the 144-frame
+        // RAVENNA skip plus one period of push sawtooth in the queue; RX
+        // must leave the target plus two periods.
+        const std::size_t tx_minimum = options.target_frames + 144 + options.requested_period;
+        const std::size_t rx_minimum = options.target_frames + 2 * options.requested_period;
+        if (options.tx_depth_frames != 0 && options.tx_depth_frames < tx_minimum) {
+            throw std::runtime_error("tx-depth is below the target plus the skip cover plus one period");
+        }
+        if (options.rx_depth_frames != 0 && options.rx_depth_frames < rx_minimum) {
+            throw std::runtime_error("rx-depth is below the target plus two periods");
+        }
+        if (options.level_gain_ppm_per_frame <= 0.0 || options.level_gain_ppm_per_frame > 0.1 ||
+            options.level_clamp_ppm <= 0.0 || options.level_clamp_ppm > 10.0) {
+            throw std::runtime_error("level-gain must be in (0, 0.1] and level-clamp in (0, 10]");
+        }
     }
     return options;
 }
@@ -455,6 +518,14 @@ struct Telemetry {
     std::atomic<int> applied_pitch{kNominalPitch};
     std::atomic<std::int64_t> level_bias_ppm_milli{0};
     std::atomic<std::uint64_t> pitch_write_errors{0};
+    // Mode 2: wanted_pitch/applied_pitch carry Capture Pitch, these carry
+    // Playback Pitch and the two level loops.
+    std::atomic<int> wanted_playback_pitch{kNominalPitch};
+    std::atomic<int> applied_playback_pitch{kNominalPitch};
+    std::atomic<std::int64_t> tx_bias_ppm_milli{0};
+    std::atomic<std::int64_t> rx_bias_ppm_milli{0};
+    std::atomic<std::int64_t> tx_depth_setpoint{-1};
+    std::atomic<std::int64_t> rx_depth_setpoint{-1};
 };
 
 enum class IoResult { idle, progressed, recover };
@@ -1005,16 +1076,19 @@ void apply_wanted_pitch(Telemetry& telemetry, PitchControl* pitch_control) noexc
         return;
     }
     const int wanted = telemetry.wanted_pitch.load(std::memory_order_relaxed);
-    if (wanted == telemetry.applied_pitch.load(std::memory_order_relaxed)) {
+    const int wanted_playback = telemetry.wanted_playback_pitch.load(std::memory_order_relaxed);
+    if (wanted == telemetry.applied_pitch.load(std::memory_order_relaxed) &&
+        wanted_playback == telemetry.applied_playback_pitch.load(std::memory_order_relaxed)) {
         return;
     }
-    const int result = pitch_control->write(wanted);
+    const int result = pitch_control->write(wanted, wanted_playback);
     if (result < 0) {
         telemetry.pitch_write_errors.fetch_add(1, std::memory_order_relaxed);
         std::cerr << "PITCH write failed: " << snd_strerror(result) << '\n';
         return;
     }
     telemetry.applied_pitch.store(wanted, std::memory_order_relaxed);
+    telemetry.applied_playback_pitch.store(wanted_playback, std::memory_order_relaxed);
 }
 
 void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
@@ -1088,7 +1162,12 @@ void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
                   << " pitch=" << telemetry.applied_pitch.load()
                   << " bias_ppm="
                   << static_cast<double>(telemetry.level_bias_ppm_milli.load()) / 1000.0
-                  << " pitch_errors=" << telemetry.pitch_write_errors.load() << '\n';
+                  << " pitch_errors=" << telemetry.pitch_write_errors.load()
+                  << " pitch_p=" << telemetry.applied_playback_pitch.load()
+                  << " tx_bias=" << static_cast<double>(telemetry.tx_bias_ppm_milli.load()) / 1000.0
+                  << " rx_bias=" << static_cast<double>(telemetry.rx_bias_ppm_milli.load()) / 1000.0
+                  << " tx_set=" << telemetry.tx_depth_setpoint.load()
+                  << " rx_set=" << telemetry.rx_depth_setpoint.load() << '\n';
     }
 }
 
@@ -1156,13 +1235,24 @@ int run(const Options& options) {
             throw std::runtime_error(std::string("pitch reset: ") + snd_strerror(reset));
         }
         std::cout << "PITCHSERVO enabled control=" << control_name_of(options.usb_device)
-                  << " level_gain_ppm_per_frame=" << kLevelBiasPpmPerFrame
-                  << " level_clamp_ppm=" << kLevelBiasMaximumPpm << '\n';
+                  << " mode=" << (options.split_pitch_servo ? 2 : 1)
+                  << " level_gain_ppm_per_frame="
+                  << (options.split_pitch_servo ? options.level_gain_ppm_per_frame : kLevelBiasPpmPerFrame)
+                  << " level_clamp_ppm="
+                  << (options.split_pitch_servo ? options.level_clamp_ppm : kLevelBiasMaximumPpm)
+                  << " tx_depth=" << options.tx_depth_frames
+                  << " rx_depth=" << options.rx_depth_frames << '\n';
     }
     bool have_rate_estimate = false;
     bool have_level_setpoint = false;
     double level_setpoint_frames = 0.0;
     double level_bias_ppm = 0.0;
+    // Mode 2 level loops, one per direction.
+    usb16x16::LevelServo::Config level_config;
+    level_config.gain_ppm_per_frame = options.level_gain_ppm_per_frame;
+    level_config.clamp_ppm = options.level_clamp_ppm;
+    usb16x16::LevelServo tx_level(level_config);
+    usb16x16::LevelServo rx_level(level_config);
 
     // Capture readiness drives both pipelines. Including playback descriptors
     // makes poll return immediately whenever an ALSA output queue has space but
@@ -1238,8 +1328,12 @@ int run(const Options& options) {
                 // has the same sign and gain on the differential as the
                 // resampler ratio), including the level bias, so the level
                 // loop's movements are not read back as drift.
+                // In mode 2 the two controls differ by the level terms; the
+                // differential sees their mean, exactly.
                 const double applied_ppm = options.usb_pitch_servo
-                    ? static_cast<double>(kNominalPitch - telemetry.applied_pitch.load(std::memory_order_relaxed))
+                    ? static_cast<double>(kNominalPitch) -
+                        0.5 * (static_cast<double>(telemetry.applied_pitch.load(std::memory_order_relaxed)) +
+                               static_cast<double>(telemetry.applied_playback_pitch.load(std::memory_order_relaxed)))
                     : estimator.ppm();
                 applied_ppm_seconds += applied_ppm *
                     std::chrono::duration<double>(rate_sample_time - last_rate_integral_time).count();
@@ -1274,12 +1368,57 @@ int run(const Options& options) {
                             corrected_slope / kDifferentialFramesPerSecondPerPpm);
                         have_rate_estimate = true;
                     }
-                    if (options.usb_pitch_servo && have_rate_estimate) {
-                        // Level term: hold the differential where it sat when
-                        // the rate estimate first engaged. A positive pitch
-                        // offset raises the differential (TX fills faster, RX
-                        // drains faster), so a differential above the setpoint
-                        // wants a lower pitch, which is a higher subtracted ppm.
+                    if (options.split_pitch_servo && have_rate_estimate) {
+                        // Mode 2. TX depth rate is r_usb(1 + pi_c) - r_rav, so
+                        // a TX depth above its setpoint wants a lower Capture
+                        // Pitch: pitch_c = nominal - (ppm + tx_bias). RX depth
+                        // rate is r_rav - r_usb(1 + pi_p), so an RX depth above
+                        // its setpoint wants a higher Playback Pitch:
+                        // pitch_p = nominal - (ppm - rx_bias). The estimator's
+                        // correction integrates the mean of the two, above.
+                        const double tx_depth =
+                            static_cast<double>(tx.ring.size()) + static_cast<double>(tx_playback_delay);
+                        const double rx_depth =
+                            static_cast<double>(rx.ring.size()) + static_cast<double>(rx_playback_delay);
+                        if (!have_level_setpoint) {
+                            tx_level.set_setpoint(options.tx_depth_frames != 0
+                                ? static_cast<double>(options.tx_depth_frames) : tx_depth);
+                            rx_level.set_setpoint(options.rx_depth_frames != 0
+                                ? static_cast<double>(options.rx_depth_frames) : rx_depth);
+                            have_level_setpoint = true;
+                            telemetry.tx_depth_setpoint.store(
+                                static_cast<std::int64_t>(std::llround(tx_level.setpoint())), std::memory_order_relaxed);
+                            telemetry.rx_depth_setpoint.store(
+                                static_cast<std::int64_t>(std::llround(rx_level.setpoint())), std::memory_order_relaxed);
+                            std::cerr << "PITCHSERVO engaged mode=2 tx_setpoint=" << tx_level.setpoint()
+                                      << " rx_setpoint=" << rx_level.setpoint()
+                                      << " tx_depth=" << tx_depth << " rx_depth=" << rx_depth
+                                      << " ppm=" << estimator.ppm() << " t_us=" << elapsed_us() << '\n';
+                        }
+                        const double tx_bias = tx_level.update(tx_depth);
+                        const double rx_bias = rx_level.update(rx_depth);
+                        const auto to_pitch = [](const double wanted) {
+                            return static_cast<int>(std::clamp(std::lrint(wanted),
+                                                               long{kNominalPitch - 250},
+                                                               long{kNominalPitch + 250}));
+                        };
+                        telemetry.wanted_pitch.store(
+                            to_pitch(static_cast<double>(kNominalPitch) - (estimator.ppm() + tx_bias)),
+                            std::memory_order_relaxed);
+                        telemetry.wanted_playback_pitch.store(
+                            to_pitch(static_cast<double>(kNominalPitch) - (estimator.ppm() - rx_bias)),
+                            std::memory_order_relaxed);
+                        telemetry.tx_bias_ppm_milli.store(
+                            static_cast<std::int64_t>(std::llround(tx_bias * 1000.0)), std::memory_order_relaxed);
+                        telemetry.rx_bias_ppm_milli.store(
+                            static_cast<std::int64_t>(std::llround(rx_bias * 1000.0)), std::memory_order_relaxed);
+                    } else if (options.usb_pitch_servo && have_rate_estimate) {
+                        // Mode 1. Level term: hold the differential where it
+                        // sat when the rate estimate first engaged. A positive
+                        // pitch offset raises the differential (TX fills
+                        // faster, RX drains faster), so a differential above
+                        // the setpoint wants a lower pitch, which is a higher
+                        // subtracted ppm. Both controls get the same value.
                         if (!have_level_setpoint) {
                             level_setpoint_frames = differential_pipeline_frames;
                             have_level_setpoint = true;
@@ -1295,6 +1434,7 @@ int run(const Options& options) {
                                                                       long{kNominalPitch - 250},
                                                                       long{kNominalPitch + 250}));
                         telemetry.wanted_pitch.store(pitch, std::memory_order_relaxed);
+                        telemetry.wanted_playback_pitch.store(pitch, std::memory_order_relaxed);
                         telemetry.level_bias_ppm_milli.store(
                             static_cast<std::int64_t>(std::llround(level_bias_ppm * 1000.0)),
                             std::memory_order_relaxed);
@@ -1370,11 +1510,16 @@ int run(const Options& options) {
               << ",\"rx_capture_histogram\":\"" << format_histogram(rx.capture_histogram) << '"'
               << ",\"tx_clipped_samples\":" << tx.clipped_samples
               << ",\"rx_clipped_samples\":" << rx.clipped_samples
-              << ",\"usb_pitch_servo\":" << (options.usb_pitch_servo ? 1 : 0)
+              << ",\"usb_pitch_servo\":" << (options.split_pitch_servo ? 2 : (options.usb_pitch_servo ? 1 : 0))
               << ",\"pitch\":" << telemetry.applied_pitch.load()
               << ",\"level_bias_ppm\":" << level_bias_ppm
               << ",\"level_setpoint_frames\":" << level_setpoint_frames
-              << ",\"pitch_write_errors\":" << telemetry.pitch_write_errors.load() << "}\n";
+              << ",\"pitch_write_errors\":" << telemetry.pitch_write_errors.load()
+              << ",\"playback_pitch\":" << telemetry.applied_playback_pitch.load()
+              << ",\"tx_bias_ppm\":" << tx_level.bias()
+              << ",\"rx_bias_ppm\":" << rx_level.bias()
+              << ",\"tx_depth_setpoint\":" << telemetry.tx_depth_setpoint.load()
+              << ",\"rx_depth_setpoint\":" << telemetry.rx_depth_setpoint.load() << "}\n";
     // pitch_control's destructor restores nominal pitch after this returns.
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
 }

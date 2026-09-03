@@ -98,6 +98,42 @@ private:
     bool have_rate_observation_{};
 };
 
+// Per-direction level law for the split USB pitch servo. Proportional only:
+// the plant (a depth fed by a rate difference) is already an integrator, so
+// a proportional pitch offset gives a first-order return to the setpoint
+// with no steady-state error. The gain is small so the loop tracks slow
+// drift and the 1 ppm pitch quantisation, not the RAVENNA device's 45-frame
+// once-a-minute sawtooth. A wider clamp applies while the error is large,
+// which is the cold-boot case: 480 frames of excess drain in minutes rather
+// than most of an hour.
+class LevelServo {
+public:
+    struct Config {
+        double gain_ppm_per_frame{0.01};
+        double clamp_ppm{2.0};
+        double wide_error_frames{192.0};
+        double wide_clamp_ppm{8.0};
+    };
+
+    LevelServo() = default;
+    explicit LevelServo(Config config) : config_(config) {}
+
+    void set_setpoint(double frames) noexcept;
+    [[nodiscard]] bool have_setpoint() const noexcept { return have_setpoint_; }
+    [[nodiscard]] double setpoint() const noexcept { return setpoint_; }
+    // Bias in ppm, positive when the depth sits above the setpoint. The
+    // caller decides the sign it applies to its pitch control.
+    double update(double depth_frames) noexcept;
+    [[nodiscard]] double bias() const noexcept { return bias_; }
+    [[nodiscard]] const Config& config() const noexcept { return config_; }
+
+private:
+    Config config_{};
+    double setpoint_{};
+    bool have_setpoint_{};
+    double bias_{};
+};
+
 class WindowedLinearRegression {
 public:
     static constexpr std::size_t kCapacity = 120;

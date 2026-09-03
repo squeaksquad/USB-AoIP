@@ -40,7 +40,7 @@ candidate_wrapper=/usr/local/sbin/run-phase4-candidate-safe.sh
 candidate_ready_file=/tmp/usb16x16-phase4-candidate.ready
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=f7226238d17207cac3cb7004bbb1aea4cbf2fbdc587231e324ccb3eb6836f419
+expected_bridge_sha256=da7df1c282cdab6a0c1943a3354af374bdc0cd3064b495553bf13bbf7f5d2793
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 api=http://127.0.0.1:8080
 
@@ -157,6 +157,8 @@ p() { printf '%s' "${conf[PROFILE_${profile_key}_$1]-}"; }
 # USB_PITCH_SERVO is optional in a profile block; absent means 0, the
 # resampler path every accepted profile was measured on.
 servo() { local value; value=$(p USB_PITCH_SERVO); printf '%s' "${value:-0}"; }
+# TX_DEPTH / RX_DEPTH are optional mode-2 setpoints; absent means 0 (capture).
+depth() { local value; value=$(p "$1_DEPTH"); printf '%s' "${value:-0}"; }
 
 profile_names() {
   local key
@@ -183,9 +185,23 @@ validate_profile() {
     [[ $(p "$field") =~ ^[0-9]+$ ]] || { say "profile $profile_name: $field must be an unsigned integer" >&2; return 1; }
   done
   case "$(servo)" in
-    0|1) ;;
-    *) say "profile $profile_name: USB_PITCH_SERVO must be 0 or 1" >&2; return 1 ;;
+    0|1|2) ;;
+    *) say "profile $profile_name: USB_PITCH_SERVO must be 0, 1 or 2" >&2; return 1 ;;
   esac
+  local direction depth_value
+  for direction in TX RX; do
+    depth_value=$(depth "$direction")
+    [[ $depth_value =~ ^[0-9]+$ ]] || { say "profile $profile_name: ${direction}_DEPTH must be an unsigned integer" >&2; return 1; }
+    if [ "$depth_value" -ne 0 ] && [ "$(servo)" -ne 2 ]; then
+      say "profile $profile_name: ${direction}_DEPTH needs USB_PITCH_SERVO=2" >&2; return 1
+    fi
+  done
+  if [ "$(depth TX)" -ne 0 ] && [ "$(depth TX)" -lt $(( $(p TARGET) + 144 + $(p PERIOD) )) ]; then
+    say "profile $profile_name: TX_DEPTH is below TARGET + 144 + PERIOD" >&2; return 1
+  fi
+  if [ "$(depth RX)" -ne 0 ] && [ "$(depth RX)" -lt $(( $(p TARGET) + 2 * $(p PERIOD) )) ]; then
+    say "profile $profile_name: RX_DEPTH is below TARGET + 2 * PERIOD" >&2; return 1
+  fi
   case "$(p STATUS)" in
     accepted|experimental) ;;
     *) say "profile $profile_name: STATUS must be accepted or experimental" >&2; return 1 ;;
@@ -239,6 +255,8 @@ bridge_arguments() {
     --rx-playback-prime "$(p RX_PLAYBACK_PRIME)" \
     --ravenna-playback-buffer "$(p RAVENNA_PLAYBACK_BUFFER)" \
     --usb-pitch-servo "$(servo)" \
+    --tx-depth "$(depth TX)" \
+    --rx-depth "$(depth RX)" \
     --priority 90 \
     --seconds 0
 }
@@ -712,7 +730,7 @@ cmd_profiles() {
     [ "$name" = "$selected" ] && mark='*'
     say "$mark $name: $(p STATUS), cover: $(p COVER), measured: $(p MEASURED)"
     say "    $(p DESCRIPTION)"
-    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo)"
+    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX)"
   done
 }
 

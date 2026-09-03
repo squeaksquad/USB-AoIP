@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=f7226238d17207cac3cb7004bbb1aea4cbf2fbdc587231e324ccb3eb6836f419
+expected_bridge_sha256=da7df1c282cdab6a0c1943a3354af374bdc0cd3064b495553bf13bbf7f5d2793
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
@@ -44,6 +44,10 @@ sink_delay=${11:-576}
 # Phase 5 step 1: 1 steers the USB gadget pitch controls to the PTP rate and
 # runs both converters at exactly 1.0 (bit transparent); 0 is the resampler.
 usb_pitch_servo=${12:-0}
+# Mode 2 depth setpoints (ring plus playback queue, frames); 0 captures the
+# depth at engagement. Only meaningful with usb_pitch_servo=2.
+tx_depth_frames=${13:-0}
+rx_depth_frames=${14:-0}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
 ready_file=/tmp/usb16x16-phase4-candidate.ready
@@ -54,7 +58,8 @@ bridge_pid=
 for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frames" "$target_frames" \
              "$playback_prime_frames" "$prime_trim" \
              "$tx_playback_prime_frames" "$rx_playback_prime_frames" \
-             "$ravenna_playback_buffer_frames" "$sink_delay" "$usb_pitch_servo"; do
+             "$ravenna_playback_buffer_frames" "$sink_delay" "$usb_pitch_servo" \
+             "$tx_depth_frames" "$rx_depth_frames"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -82,8 +87,20 @@ if [ "$prime_trim" -ne 0 ] && [ "$prime_trim" -ne 1 ]; then
   echo "prime-trim must be 0 or 1" >&2
   exit 14
 fi
-if [ "$usb_pitch_servo" -ne 0 ] && [ "$usb_pitch_servo" -ne 1 ]; then
-  echo "usb-pitch-servo must be 0 or 1" >&2
+if [ "$usb_pitch_servo" -gt 2 ]; then
+  echo "usb-pitch-servo must be 0, 1 or 2" >&2
+  exit 14
+fi
+if [ "$usb_pitch_servo" -ne 2 ] && { [ "$tx_depth_frames" -ne 0 ] || [ "$rx_depth_frames" -ne 0 ]; }; then
+  echo "tx/rx depth setpoints need usb-pitch-servo 2" >&2
+  exit 14
+fi
+if [ "$tx_depth_frames" -ne 0 ] && [ "$tx_depth_frames" -lt $((target_frames + 144 + period_frames)) ]; then
+  echo "tx-depth is below target + 144 (skip cover) + one period" >&2
+  exit 14
+fi
+if [ "$rx_depth_frames" -ne 0 ] && [ "$rx_depth_frames" -lt $((target_frames + 2 * period_frames)) ]; then
+  echo "rx-depth is below target + two periods" >&2
   exit 14
 fi
 if [ "$ravenna_playback_buffer_frames" -ne 0 ] &&
@@ -265,6 +282,8 @@ timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
   --rx-playback-prime "$rx_playback_prime_frames" \
   --ravenna-playback-buffer "$ravenna_playback_buffer_frames" \
   --usb-pitch-servo "$usb_pitch_servo" \
+  --tx-depth "$tx_depth_frames" \
+  --rx-depth "$rx_depth_frames" \
   --priority 90 \
   --seconds "$candidate_seconds" \
   > "$result_dir/bridge.log" 2>&1 &
@@ -297,6 +316,8 @@ fi
   echo "rx_playback_prime_frames=$rx_playback_prime_frames"
   echo "sink_delay=$sink_delay"
   echo "usb_pitch_servo=$usb_pitch_servo"
+  echo "tx_depth_frames=$tx_depth_frames"
+  echo "rx_depth_frames=$rx_depth_frames"
   echo "candidate_seconds=$candidate_seconds"
   echo "bridge_sha256=$expected_bridge_sha256"
 } > "$result_dir/metadata.txt"

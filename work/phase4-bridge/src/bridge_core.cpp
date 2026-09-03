@@ -85,6 +85,25 @@ std::size_t FarrowResampler::render(AudioRing& source,
     return produced;
 }
 
+void LevelServo::set_setpoint(const double frames) noexcept {
+    setpoint_ = frames;
+    have_setpoint_ = true;
+    bias_ = 0.0;
+}
+
+double LevelServo::update(const double depth_frames) noexcept {
+    if (!have_setpoint_ || !std::isfinite(depth_frames)) {
+        bias_ = 0.0;
+        return bias_;
+    }
+    const double error = depth_frames - setpoint_;
+    const double clamp = std::abs(error) > config_.wide_error_frames
+        ? config_.wide_clamp_ppm
+        : config_.clamp_ppm;
+    bias_ = std::clamp(config_.gain_ppm_per_frame * error, -clamp, clamp);
+    return bias_;
+}
+
 SharedDriftEstimator::SharedDriftEstimator() : SharedDriftEstimator(Config{}) {}
 
 SharedDriftEstimator::SharedDriftEstimator(const Config config) : config_(config) {}

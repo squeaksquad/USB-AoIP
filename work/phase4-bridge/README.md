@@ -54,9 +54,10 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`f7226238d17207cac3cb7004bbb1aea4cbf2fbdc587231e324ccb3eb6836f419`
-(2026-09-02: full-scale wrap fix, clip counters, `--usb-pitch-servo`). The
-previous accepted binary was `0254348c`.
+`da7df1c282cdab6a0c1943a3354af374bdc0cd3064b495553bf13bbf7f5d2793`
+(2026-09-03: split pitch servo, `--usb-pitch-servo 2` with `--tx-depth` and
+`--rx-depth`). Previous binaries: `f7226238` (wrap fix, servo mode 1) and
+`0254348c` (last resampler-only accepted binary).
 
 ## Candidate installation and measurement
 
