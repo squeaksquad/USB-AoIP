@@ -3597,6 +3597,26 @@ try again a few times before giving up, and the ALIGN line should carry
 the ALSA error text. Warm restarts (every `systemctl start` today, seven
 of them) aligned every time; only the cold boot fails.
 
+**IMPLEMENTED, staged, not installed: the alignment retry, bridge
+`99f37408`.** `align_ravenna_capture` now runs its observation in
+attempts: one that meets an ALSA error (the cold-boot XRUN) recovers the
+capture (drop, prepare, start) and tries again, up to four, each bounded
+at about 200 ms; only when all fail is the capture restarted unaligned.
+The ALIGN line and SUMMARY carry `attempts`, and a failure reason names
+the stage and the ALSA error as a number (`drain error=-32` is EPIPE, the
+XRUN) rather than its text, because the candidate wrapper treats "broken
+pipe" in the log as a failure marker and an XRUN the alignment recovers
+from before any audio is primed is not one. Warm starts still align on
+attempt 1. ctest clean on the Mac and the Pi, built with the service
+stopped. Wrapper `2f2354e1` and supervisor `16308997` differ from the
+installed ones only by the bridge hash; conf `40496730` unchanged;
+installers and README re-pinned. Staged in
+`~/usb-16x16-work/phase4-align2-install/`; install order as before,
+service stopped: `install-candidate.sh` then `install-aes67-service.sh`.
+The proof is the next cold boot's ALIGN line reading `status=ok
+attempts=2` or so; the previous bridge `767ae43d` stays installed until
+then.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:

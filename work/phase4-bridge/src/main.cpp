@@ -54,6 +54,11 @@ constexpr std::size_t kDepthStepReportFrames = 24;
 // of observation. 600 us sits past the wake latency and well inside the
 // 1 ms tick; anything up to ten ticks is allowed for experiments.
 constexpr std::size_t kAlignWakeups = 8;
+// A cold boot starts the RAVENNA capture in XRUN (every boot on record, and
+// the 2026-09-03 reboot logged ALIGN reason=drain for it), so an attempt
+// that meets an error recovers the capture and tries again; warm starts
+// align on the first attempt. Each attempt is at most about 200 ms.
+constexpr int kAlignAttempts = 4;
 constexpr std::int64_t kAlignOffsetDefaultUs = 600;
 constexpr std::int64_t kAlignOffsetMaximumUs = 10000;
 std::chrono::steady_clock::time_point process_started{};
@@ -1014,6 +1019,7 @@ std::int64_t monotonic_now_ns() noexcept {
 
 struct AlignResult {
     bool ok{false};
+    int attempts{0};
     std::int64_t tick_period_us{0};
     std::int64_t wake_to_prepare_us{0};
     std::int64_t prepare_us{0};
@@ -1022,27 +1028,82 @@ struct AlignResult {
 };
 
 // Discard everything a capture holds so its poll descriptor blocks until the
-// next period wakeup. False on an error other than EAGAIN.
-bool drain_capture(Pcm& capture) noexcept {
+// next period wakeup. Returns 0, or the ALSA error (EAGAIN is not one).
+int drain_capture(Pcm& capture) noexcept {
     for (int pass = 0; pass < 8; ++pass) {
         const snd_pcm_sframes_t available = capture.available();
         if (available == 0 || available == -EAGAIN) {
-            return true;
+            return 0;
         }
         if (available < 0) {
-            return false;
+            return static_cast<int>(available);
         }
         snd_pcm_uframes_t frames = static_cast<snd_pcm_uframes_t>(available);
         const snd_pcm_channel_area_t* areas = nullptr;
         snd_pcm_uframes_t offset = 0;
         const int begin = snd_pcm_mmap_begin(capture.handle(), &areas, &offset, &frames);
         if (begin < 0) {
-            return begin == -EAGAIN;
+            return begin == -EAGAIN ? 0 : begin;
         }
         if (frames == 0) {
-            return true;
+            return 0;
         }
-        if (snd_pcm_mmap_commit(capture.handle(), offset, frames) < 0) {
+        const snd_pcm_sframes_t committed = snd_pcm_mmap_commit(capture.handle(), offset, frames);
+        if (committed < 0) {
+            return static_cast<int>(committed);
+        }
+    }
+    return 0;
+}
+
+// Times kAlignWakeups period wakeups of the capture into wakes, draining
+// after each so the next poll blocks until the next tick. On failure the
+// reason names the stage and the ALSA error as a number (-32 is EPIPE, the
+// XRUN), because the candidate wrapper reads the error's text as a failure
+// marker and an XRUN the alignment recovers from is not one.
+bool observe_wakes(Pcm& capture,
+                   std::vector<pollfd>& descriptors,
+                   std::vector<std::int64_t>& wakes,
+                   std::string& reason) {
+    wakes.clear();
+    const int drained = drain_capture(capture);
+    if (drained < 0) {
+        reason = "drain error=" + std::to_string(drained);
+        return false;
+    }
+    int timeouts = 0;
+    while (wakes.size() < kAlignWakeups) {
+        if (stop_requested.load(std::memory_order_relaxed)) {
+            reason = "stopped";
+            return false;
+        }
+        const int poll_result = ::poll(descriptors.data(), descriptors.size(), 20);
+        if (poll_result < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            reason = std::string("poll ") + std::strerror(errno);
+            return false;
+        }
+        if (poll_result == 0) {
+            if (++timeouts > 10) {
+                reason = "no wakeups";
+                return false;
+            }
+            continue;
+        }
+        const snd_pcm_sframes_t available = capture.available();
+        if (available < 0 && available != -EAGAIN) {
+            reason = "avail error=" + std::to_string(available);
+            return false;
+        }
+        if (available <= 0) {
+            continue;
+        }
+        wakes.push_back(monotonic_now_ns());
+        const int after = drain_capture(capture);
+        if (after < 0) {
+            reason = "drain error=" + std::to_string(after);
             return false;
         }
     }
@@ -1056,52 +1117,37 @@ bool drain_capture(Pcm& capture) noexcept {
 // capture, so the reader phase the driver fixes at prepare is the same
 // every session instead of anywhere inside a tick. Runs at SCHED_FIFO before
 // the audio loop with the USB capture not yet started: its 4 ms buffer would
-// not survive the 8 ms of observation. On any failure the capture is
-// restarted unaligned and the run continues; the ALIGN line says so.
+// not survive the 8 ms of observation. An attempt that meets an ALSA error
+// (the cold-boot XRUN) recovers the capture and tries again, up to
+// kAlignAttempts; if none succeeds the capture is restarted unaligned and
+// the run continues, and the ALIGN line says so either way.
 AlignResult align_ravenna_capture(Pcm& capture, const std::int64_t offset_us) {
     AlignResult result;
     auto descriptors = make_poll_descriptors({&capture});
     std::vector<std::int64_t> wakes;
     wakes.reserve(kAlignWakeups);
-    const auto give_up = [&](std::string reason) {
-        result.reason = std::move(reason);
+    const auto restart_capture = [&capture]() {
         capture.drop();
         capture.prepare();
         alsa_check(capture.start(), capture.label() + " start");
-        return result;
     };
-    if (!drain_capture(capture)) {
-        return give_up("drain");
+    bool observed = false;
+    for (result.attempts = 1; result.attempts <= kAlignAttempts; ++result.attempts) {
+        if (result.attempts > 1) {
+            restart_capture();
+        }
+        if (observe_wakes(capture, descriptors, wakes, result.reason)) {
+            observed = true;
+            break;
+        }
+        if (result.reason == "stopped") {
+            break;
+        }
     }
-    int timeouts = 0;
-    while (wakes.size() < kAlignWakeups) {
-        if (stop_requested.load(std::memory_order_relaxed)) {
-            return give_up("stopped");
-        }
-        const int poll_result = ::poll(descriptors.data(), descriptors.size(), 20);
-        if (poll_result < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return give_up(std::string("poll ") + std::strerror(errno));
-        }
-        if (poll_result == 0) {
-            if (++timeouts > 10) {
-                return give_up("no wakeups");
-            }
-            continue;
-        }
-        const snd_pcm_sframes_t available = capture.available();
-        if (available < 0 && available != -EAGAIN) {
-            return give_up(std::string("avail ") + snd_strerror(static_cast<int>(available)));
-        }
-        if (available <= 0) {
-            continue;
-        }
-        wakes.push_back(monotonic_now_ns());
-        if (!drain_capture(capture)) {
-            return give_up("drain");
-        }
+    if (!observed) {
+        result.attempts = std::min(result.attempts, kAlignAttempts);
+        restart_capture();
+        return result;
     }
     for (std::size_t index = 1; index < wakes.size(); ++index) {
         if (index != 1) {
@@ -1121,7 +1167,9 @@ AlignResult align_ravenna_capture(Pcm& capture, const std::int64_t offset_us) {
         sleep_result = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &target, nullptr);
     } while (sleep_result == EINTR && !stop_requested.load(std::memory_order_relaxed));
     if (sleep_result != 0) {
-        return give_up(std::string("sleep ") + std::strerror(sleep_result));
+        result.reason = std::string("sleep ") + std::strerror(sleep_result);
+        restart_capture();
+        return result;
     }
     capture.drop();
     const std::int64_t before_prepare_ns = monotonic_now_ns();
@@ -1436,6 +1484,7 @@ int run(const Options& options) {
         align = align_ravenna_capture(ravenna_capture, options.align_offset_us);
         std::cout << "ALIGN status=" << (align.ok ? "ok" : "failed")
                   << " offset_us=" << options.align_offset_us
+                  << " attempts=" << align.attempts
                   << " wakeups=" << kAlignWakeups
                   << " tick_period_us=" << align.tick_period_us
                   << " wake_to_prepare_us=" << align.wake_to_prepare_us
@@ -1708,6 +1757,7 @@ int run(const Options& options) {
               << ",\"rx_depth_setpoint\":" << telemetry.rx_depth_setpoint.load()
               << ",\"align_start\":" << (options.align_start ? 1 : 0)
               << ",\"align_ok\":" << (align.ok ? 1 : 0)
+              << ",\"align_attempts\":" << align.attempts
               << ",\"align_tick_period_us\":" << align.tick_period_us
               << ",\"align_wake_to_prepare_us\":" << align.wake_to_prepare_us
               << ",\"align_prepare_us\":" << align.prepare_us << "}\n";

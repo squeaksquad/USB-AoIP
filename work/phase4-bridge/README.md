@@ -54,10 +54,12 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`767ae43d4c4e7715994aa12d1e53b0ac0c40c04fb2b73bd96961caee5af1dbbd`
+`99f37408c6fa59eeafea563cc49992ce81122453e43f2a97b69f4f36137baffb`
 (2026-09-03: aligned start, `--align-start 1` with `--align-offset-us`, default
 600: the RAVENNA capture is re-prepared a fixed offset after one of its tick
-wakeups so the driver's reader phase is constant). Previous binaries:
+wakeups so the driver's reader phase is constant; an attempt that meets the
+cold-boot XRUN recovers the capture and retries, up to four times). Previous
+binaries: `767ae43d` (aligned start without the retry),
 `170b1081` (split servo at gain 0.05, `--level-gain`),
 `da7df1c2` (split servo at gain 0.01, dead zone), `f7226238` (wrap fix, servo mode 1) and
 `0254348c` (last resampler-only accepted binary).
