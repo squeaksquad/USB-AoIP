@@ -3508,6 +3508,18 @@ wake_to_prepare_us=617 prepare_us=12`; SAP timeline recorded this time
 1438, 1416, 1421. Two loaded runs remain. Service restarted on
 `servo-aligned` afterwards, aligned at 617 us.
 
+**MEASURED: acceptance run 3 of 4 on `servo-aligned`,
+`phase4-candidate-20260903T222751Z`, same arguments: median 1416 samples,
+29.500 ms, all 800 on one sample, score 1.000**, zero restarts, zero
+clips, zero pitch write errors, `tx_qfloor` 160, `rx_qfloor` 133 (the RX
+floor sat a period higher than the 107-109 of the earlier runs, the
+prime's overshoot landing differently), `tx_pullmax` 48, gaps 1.0/1.5 ms,
+pitch 1000015, bias -0.05 ppm, `ALIGN wake_to_prepare_us=615
+prepare_us=10`. Six aligned sessions at 96: 1453, 1448, 1438, 1416, 1421,
+1416; the three loaded 800-impulse runs read 1416, 1421, 1416. One
+loaded run remains. Service restarted on `servo-aligned` afterwards,
+aligned at 617 us.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
