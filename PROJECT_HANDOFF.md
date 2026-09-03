@@ -3113,6 +3113,57 @@ profile key (`LEVEL_GAIN`, optional, absent = 0.05) and a bridge option,
 so the next adjustment needs no rebuild. Rebuild pending, with the
 service stopped this time.
 
+**INSTALLED 2026-09-03 about 11:00 local: bridge `170b1081` (gain 0.05
+default, `--level-gain`), wrapper `c2979d9c`, supervisor `c12d380a`, conf
+`52591f6f`; service on `servo`.**
+
+**MEASURED: split servo at gain 0.05, setpoints TX 336 / RX 276, prime
+288/144.** `phase4-candidate-20260903T150250Z`: 1283 samples, 26.729 ms,
+zero spread, zero restarts, zero clips. The TX loop now moves: depth 432
+at engagement, 390 at 219 s, 385 at 369 s, 342 at 526 s, bias at the
+2 ppm clamp while travelling and 0.3 on arrival; TX floor fell to 121
+as it came down. RX mean 316 against 276: the device's 45-frame skip
+each minute outruns what a 2 ppm loop removes (about 6 frames a minute),
+so RX cannot be pulled 40 frames against the sawtooth at this clamp. The
+impulse window (about bridge time 150-350 s) saw TX near 385, so this
+run does not test depth against latency.
+
+**MEASURED: the same with TX prime 240, so the trimmed depth is in place
+before the impulses.** `phase4-candidate-20260903T153736Z`: TX depth
+336 at engagement and 343-347 through the whole impulse window (RX
+298-316), floors 120/109, zero restarts, zero clips, pitches within
+2 ppm: **1299 samples, 27.063 ms, zero spread.** Forty frames less TX
+depth than runs 141038Z/142307Z/150250Z (1268/1278/1283 at TX about
+385) and the round trip went up 16-31 samples.
+
+**CONCLUSION: the bridge's TX depth is slack, not latency.** Across the
+four mode-2 runs the round trip read 1268, 1278, 1283, 1299 while TX
+depth in the impulse window was 380, 373, 385, 345 and RX 315, 322,
+316, 305: no relation, and the run-to-run scatter (1227-1311 across
+the point's history) is larger than any depth change tried. This is the
+same fact the record already held in three forms: "the level of each run
+is set at start", the buffer-384-to-192 result that cut 5.3 ms while the
+counted depth rose, and the sink delay that is not a lever. The
+presentation time of the RAVENNA stream is fixed when the stream starts;
+the queue only determines how far ahead of that deadline the bridge
+writes. Trimming the queue buys margin loss and nothing else.
+
+**What this does to the latency plan.** The lever is the start
+alignment: what sets the RTP timeline relative to PTP and to the USB
+timeline at the moment the RAVENNA playback starts, and the same
+question for capture. That is also, almost certainly, the 84-sample
+(1.75 ms) run-to-run lottery. The next work is read-only: the RAVENNA
+ALSA driver's playback start path (timestamp assignment, base period,
+buffer coupling) and the daemon's stream setup, to find what the
+alignment depends on and whether a bridge-side start policy can pin it
+low and repeatable. The `--target` reduction and any further depth trim
+are off the list until that is understood. Mode 2 keeps its value as a
+hold: the depth no longer depends on the prime lottery and heals after a
+recovery, at the cost of nothing.
+
+Profile `servo-split` stays experimental with setpoints 0; `servo` stays
+the running profile.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
