@@ -1990,6 +1990,7 @@ variant needs a per-device period option in the bridge, not built.
 | run | median | samples | score | spread | TX / RX overshoot | `tx_qfloor` | `rx_qfloor` | TX under a period | `tx_pullmax` | RECOVERs | restarts |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `003546Z` | 25.563 ms | 1227 | 0.946 | 10 | 13 / 13 | **164** | 109 | 0 | **48** | 0 | 0 |
+| `004724Z` | 25.563 ms | 1227 | 0.930 | 10 | 13 / 13 | **177** | 100 | 0 | **48** | 0 | 0 |
 
 Against the accepted point (wrapper mode 1399, 29.146 ms): 172 samples,
 3.6 ms faster, cover kept at 164 over the 144 bar. Per impulse: 1227 in
@@ -2015,7 +2016,7 @@ whether it recurs.
 
 | Operating point | run | median | score | spread |
 |---|---|---:|---:|---:|
-| `48/192/768/128` **period 48**, RAVENNA playback 384, TX 288 / RX 144 | **003546Z, 800 impulses, clean, `tx_qfloor` 164, `tx_pullmax` 48; acceptance runs 2-4 pending** | **25.563 ms** | 0.946 | 10 samples |
+| `48/192/768/128` **period 48**, RAVENNA playback 384, TX 288 / RX 144 | **003546Z, 004724Z, 800 impulses each, clean, `tx_qfloor` 164, 177, `tx_pullmax` 48; acceptance runs 3-4 pending** | **25.563 ms** | 0.946 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96 | **012708Z, 800 impulses, pull-burst binary, clean, `tx_qfloor` 130** | **28.479 ms** | 0.924 | 10 samples |
 | `96/192/768/192` TX 192 / RX 96, RAVENNA playback 384 | 015059Z, 800 impulses, clean, `tx_qfloor` 122 | 30.146 ms | 0.944 | 10 samples |
 | `96/192/768/128` TX 192 / RX 96, **target 128** | **025906Z, 800 impulses, clean, `tx_qfloor` 97, `rx_qfloor` 61** | **24.479 ms** | 0.932 | 10 samples |
