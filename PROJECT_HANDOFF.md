@@ -2060,8 +2060,11 @@ level as wrapper run 4 and as RTL Utility's 1427 at 32 frames less the
 of its runs, so the service is 184 samples, 3.83 ms, faster at 64 frames
 too: **quote the deployed point as 25.8 ms on the device timeline**,
 range 25.6-27.3 from the wrapper series, and 29.7 ms at the DAW at 32
-frames. Not yet measured: RTL Utility at 64 frames against this service
-(expected 1239 + 252 = 1491, 31.06 ms), and a cold boot at period 48.
+frames. **RTL Utility at 64 frames against this service: 1491 samples, 31.062 ms**,
+reported 376, the predicted 1239 + 252 exactly: the Mac-side cost (two
+IO buffers plus 124) did not move with the period. So the deployed point
+at the DAW is 31.1 ms at 64 frames and 29.7 ms at 32, against 34.9 and
+33.6 at period 96. A cold boot at period 48 follows.
 
 **`tx_pullmax` 48, and no pull above 48 in the run.** Pull histogram
 `1908067/599987/0/0/0/0` (48-frame bins: zero, 1-48, 49-96, ...): 600k
