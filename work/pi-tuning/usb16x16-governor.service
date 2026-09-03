@@ -1,0 +1,22 @@
+[Unit]
+Description=USB 16x16: performance CPU governor for the AES67 bridge (Phase 6 lever 1)
+# Lever 1 of the stall work: governor performance on all four CPUs, run
+# runtime-only from 2026-09-02 23:19 local and judged over the night and
+# the day after (one USB-side stall in 12.3 h against three in the 1.75 h
+# before it). This unit makes it survive a reboot. Nothing in userspace on
+# this Pi sets the governor at boot (no raspi-config unit, no cpufrequtils),
+# so the kernel's ondemand default is what this replaces. It calls the
+# installed, root-owned, hash-pinned stall-tuning script rather than
+# writing sysfs itself, so there is one place the lever lives. Stopping
+# the unit puts ondemand back, which is the rollback.
+ConditionPathExists=/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+Before=usb16x16-aes67.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/usb16x16-stall-tuning governor performance
+ExecStop=/usr/local/sbin/usb16x16-stall-tuning governor ondemand
+
+[Install]
+WantedBy=multi-user.target

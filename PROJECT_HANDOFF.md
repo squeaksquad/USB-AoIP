@@ -3554,6 +3554,23 @@ the 144-frame skip bar, RX 107-133, measured: 29.5 ms (29.2-29.6), 4 x
 and `install-aes67-service.sh` are all at `40496730`; nothing is staged
 that is not installed.
 
+**STAGED, not installed: the persistent form of lever 1,
+`work/pi-tuning/usb16x16-governor.service` (unit `00644010`) with
+`install-governor-unit.sh`.** Nothing in userspace on this Pi sets the
+governor at boot (no `raspi-config` unit, no `cpufrequtils`, no
+`/etc/default/cpufrequtils`), so the kernel's `ondemand` default is what
+the runtime lever has been overriding since 2026-09-02 23:19 and what a
+reboot would restore. The unit is a `oneshot` with `RemainAfterExit`,
+`Before=usb16x16-aes67.service`, `ExecStart` calling the installed,
+root-owned, hash-pinned `usb16x16-stall-tuning governor performance` and
+`ExecStop` calling `governor ondemand`, so the lever still lives in one
+script and `systemctl disable --now usb16x16-governor.service` is the
+rollback. The installer pins the unit's hash and refuses unless the
+installed stall-tuning script is the `bde240b8` one; it enables and
+starts the unit, which writes the value the runtime lever already holds.
+Staged in `~/usb-16x16-work/governor-install/`; needs the password once.
+The IRQ-pinning lever (2) stays runtime-only and unused.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
