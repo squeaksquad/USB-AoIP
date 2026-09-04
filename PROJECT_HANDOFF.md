@@ -4382,9 +4382,86 @@ a bridge session: five at 11:58 UTC (session 11:54), one at 13:16 (session
 (37 min in), none at 13:19-13:20, none across the 600 s soak. The bridge
 reports `tx_dropped`/`rx_dropped`/`tx_qlow`/`rx_qlow` 0 throughout and
 the pitch servo is still converging in those minutes (1000021 at 13:15
-falling to 1000015 by 13:17). Unexplained; 41 samples is not a multiple
-of the 13-frame USB packet. Next time a session starts, run the 64-frame
-noise probe at 1, 5 and 10 minutes to bound when the holes stop.
+falling to 1000015 by 13:17). `gaps2.py` on the 13:16 dump: the 41 samples are
+zero-substituted in place, the generator realigns after the run with a
+delta change of 0, so audio was lost and silence put in its place with no
+timing shift, the same signature as the req 2 drops at 64, at a far lower
+rate. That points at the USB path in the session's first minutes (the
+pitch servo is still moving the feedback rate then), not at the bridge's
+queues. 41 samples is not a multiple of the 13-frame packet. Tested 15:33-15:44 UTC on a
+fresh session (restart by the user at 15:32 UTC, same profile, pin still
+on, ALIGN ok attempt 1, TX `align_dropped=53`): 64-frame noise probes at
++60 s, +300 s and +600 s after PRIMED (`start60s-`, `start300s-`,
+`start600s-noise-ch2-64f-100imp`) all read 0.0% with no zero run at all.
+So the holes are not a session-start effect. Tally so far: 6 holes in
+10 probes of 26 s each, clustered (five in one probe, one in another,
+none in the other eight), all exactly 41 samples, all at 64 frames, none
+at 32/16/512, none seen by the impulse runs or the soak. Sporadic and
+unexplained; the Mac side is the open suspect since the Pi's counters
+never move. `req_number=8` remains the only lever with a mechanism behind
+it, untested. Session telemetry at +10 min: `tx_qfloor` 153, `rx_qfloor`
+96, `tx_pullmax` 48, pitch 1000019, zero RECOVERs; the pull watch and the
+lever-2 clock restart from 15:33 UTC.
+
+**FOUND 2026-09-04 15:50-16:00 UTC: the 41-sample holes sit on the Pi's
+48-frame grid, not on the USB packet grid.** Campaign on the 15:33 UTC
+session (`camp64-1..5`, `camp128-1..5`, `drop1`, each a 26 s channel-2
+noise probe): at 64 frames one hole in 130 s, at 128 frames three holes
+in 130 s, all exactly 41 samples, so the holes are not an IO-size effect
+(128 was clean in every earlier probe by chance). Timestamps: 15:54:53.640
+UTC (64 frames) and 15:55:36.147/.151/.156 UTC (128 frames, three holes
+whose starts are 192 and 240 samples apart). Every hole in a session
+starts at the same phase on the 48-sample grid relative to the loop's
+return point (offset 29 for all four holes of this session, offset 10 for
+the 13:16 hole of the previous session) while the phase on the 13-frame
+USB packet grid is random (3, 4, 5, 2, 8). A fixed 48-frame phase per
+bridge session is the bridge period and the RAVENNA packet; the Mac's
+isochronous scheduling has no 1 ms grid. So the zeros are made on the
+Pi side of the loop and `req_number` is not the lever; it never was for
+these.
+
+What the Pi shows at those instants: nothing. Bridge `tx_dropped`,
+`rx_dropped`, `tx_qlow`, `rx_qlow` 0, restarts 0, gap maxima unchanged,
+floors 153/96, no journal line from any unit within 15 s of either
+instant, no ssh login within 59 s. `eth0` `rx_dropped` climbs at about
+0.5/s all the time (29935 at 16:00 UTC over 16.6 h, 14 in a 27 s probe
+that had no hole), so it is background, not the signal; `rx_missed`,
+`rx_over`, `rx_fifo`, softnet drops all 0. Sink flags are the sticky
+`rtp_seq_id_error`/`rtp_sac_error`/`all_muted` as always. The Mac's
+unified log around the 13:15:43.8 UTC hole has nothing from
+`usbaudiod`, `AppleUSBAudio` or `IOUSBHost` beyond the routine 2 s
+microframe calibration lines, and coreaudiod's RTAID lines are periodic
+RMS reports, not glitch reports.
+
+Working hypothesis: a late RTP packet concealed as silence by the
+RAVENNA driver (a 48-frame packet arriving about 41 samples, 0.85 ms,
+after its playout point leaves 41 zeros and 7 real samples), on either
+leg of the Ferrofish loop; three holes 4-5 ms apart would be one late
+burst. 41 is constant across sessions and IO sizes, which fits a fixed
+receive window better than random jitter. The Ferrofish's own late-packet
+counter and peak (it read zero late over 12:22 with a 1.4 ms peak at a
+2 ms receive setting on 2026-09-02) is the cheapest check and is the
+user's to read. On the Pi the next instrument is a bridge-side zero-run
+detector on the RAVENNA capture and on the USB capture, which would name
+the leg; it is a build, so it waits for a service stop. Until then the
+holes are a 0.003-0.01% concealment residual, inaudible on the loop
+tests, and not a stability matter.
+
+*Inbound leg cleared 16:20-16:29 UTC.* The user opened Dante Controller's
+Latency tab for FF-PULSE-16-DX (streams 239.69.16.1 and .2 at the 2 ms
+receive setting) while twenty back-to-back 64-frame noise probes ran
+(`ff-01..20`, 520 s). One hole, 41 samples, at 16:25:48.185 UTC in
+`ff-14`, phase 29 on the 48 grid like every other hole of this session.
+The Ferrofish read late 0 on both streams across the window, peak 1.3 ms
+against average 1.2 ms, so no packet from the Pi arrived even 0.1 ms off
+its mean. The zeros are therefore made on the return leg or inside the
+Pi: the Ferrofish's transmit, the switch, the RAVENNA driver's receive
+(sink delay 576, so a 0.85 ms late packet would not be late there
+either), or the bridge's own ravenna-to-usb path. A bridge-side zero-run
+detector on the RAVENNA capture, with a matching one on the USB capture,
+names the point where the zeros first appear; that is the next build.
+Rate in this session: 6 holes in 1030 s of probing, about one per 3 min,
+in bursts.
 
 ## Next-session checklist
 
