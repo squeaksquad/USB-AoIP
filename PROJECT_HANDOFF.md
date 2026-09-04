@@ -4790,6 +4790,16 @@ there until he edits it). Still owed: the A/B back to 96 that closes the
 late-packet reading, and the standard RTL Utility figure at 32 frames,
 which the user reads (expect about 32.1 ms, 0.8 ms over 31.292).
 
+**RTL Utility at 32 frames on `servo-aligned-both-240-rx120-sd144`, read
+by the user 2026-09-04 about 22:15 UTC: 32.083 ms**, 0.79 ms over the
+31.292 of rx120 at sink delay 96, the same 38 samples the harness read
+(1352 against 1314). This is the standard figure for the accepted point.
+
+**A/B started 22:20:44 UTC: back to `servo-aligned-both-240-rx120`
+(sink delay 96)** by `switch-profile`, sinks read 96, ALIGN ok, zero
+RECOVERs, the detector live, Apple Music on the loop. Watching for the
+holes to return; the result closes or reopens the late-packet reading.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
