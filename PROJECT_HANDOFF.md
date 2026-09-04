@@ -4745,6 +4745,51 @@ experimental until it has its four loaded 800-impulse runs and the
 sixteen-channel soak; its level should read about 1362 at 64 frames,
 48 over rx120's 1314.
 
+**ACCEPTED 2026-09-04 21:39-21:54 UTC: profile
+`servo-aligned-both-240-rx120-sd144`, gadget `req_number=4`, bridge
+`b65b84ee`.** Measured against the running service (session since
+20:57:27 UTC), Apple Music paused, harness alone,
+`measure-under-service.sh 64 800 sd144`, the same arguments as every
+acceptance since `servo-aligned-both`. Gate first: one channel-2 noise
+probe at 64 frames (`sd144accept-noise-ch2-64f-100imp` in
+`outputs/latency/usb-holes-20260904/`) read 0.0% zeros and no zero run of
+4 or more in 1.24 M samples.
+
+| run | file | frames | samples | ms | levels | score | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | `sd144-roundtrip-64f-20260904T213931Z` | 64 | 1352 | 28.167 | 1352 x800 | 1.000 | 151 | 96 | 48 | 0 |
+| 2 | `sd144-roundtrip-64f-20260904T214312Z` | 64 | 1352 | 28.167 | 1352 x800 | 1.000 | 151 | 96 | 48 | 0 |
+| 3 | `sd144-roundtrip-64f-20260904T214652Z` | 64 | 1352 | 28.167 | 1352 x800 | 1.000 | 151 | 96 | 48 | 0 |
+| 4 | `sd144-roundtrip-64f-20260904T215033Z` | 64 | 1352 | 28.167 | 1352 x800 | 1.000 | 151 | 96 | 48 | 0 |
+
+3200 impulses on one sample, zero spread, zero discontinuities, zero
+restarts, zero clips, zero drops, pitch 1000011-1000018, worst gaps
+1074/1725 us (session maxima, unchanged by the runs), `tx_pullmax` 48
+(`rx_pullmax` 96 once in the window). 1352 is 38 samples over rx120's
+1314 at the same gadget, not the 48 one packet of sink delay predicts;
+the 10-sample difference is a reader-phase term against the packet grid,
+the same kind the 96/120/144 sweep of 2026-09-03 showed (five samples
+apart on the line there), recorded, not explained.
+
+**SOAKED 21:54-22:04 UTC, sixteen channels loaded.**
+`USB16X16_OTHER_LOAD=0.1 measure-under-service.sh 64 2400 sd144soak`:
+`sd144soak-roundtrip-64f-20260904T215413Z`, 600 s, 2400 impulses at 64
+frames with channels 2-16 at 0.1, all 2400 on **1352 samples
+(28.167 ms)**, spread 0, score 1.000, zero discontinuities, zero
+RECOVERs, zero restarts, `tx_clip`/`rx_clip` 0, `tx_dropped`/`rx_dropped`
+0, `tx_qfloor` 151 and `rx_qfloor` 96 on all 1620 telemetry lines of the
+27-minute chain, pitch 1000011-1000018. The zero-run detector ran
+throughout and saw no unpaired run at `ravenna-capture` from 21:39 to
+22:05 UTC; with fifteen channels of continuous noise for the 600 s soak
+that is a second hole-free window at 144 on top of the 34.5 min of music,
+45 min of continuous signal in all against four holes in 31 min at 96.
+Checklist item 9 is met for this operating point; the conf block is
+`accepted` (conf `46fd274f`, installer repinned, staged on the Pi; the
+live operator conf carries the block the user pasted, `STATUS=experimental`
+there until he edits it). Still owed: the A/B back to 96 that closes the
+late-packet reading, and the standard RTL Utility figure at 32 frames,
+which the user reads (expect about 32.1 ms, 0.8 ms over 31.292).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
