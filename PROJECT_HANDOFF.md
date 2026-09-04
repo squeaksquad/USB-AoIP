@@ -4594,6 +4594,31 @@ side within a quarter millisecond of an underrun. The RX floor is a
 running minimum from session start, so it reflects that one early event,
 not steady state.
 
+**INSTALLED 2026-09-04 20:18 UTC by the user: bridge `b65b84ee`, wrapper
+`6282b108`, supervisor `5c3c4004`; live conf `001b0d20` kept and given
+`ZERO_RUN_DETECT=1` by hand.** On the way he stopped `usb-16x16` instead
+of `usb16x16-aes67` (20:15 UTC): the gadget went to `not attached`, the
+Mac lost the device, and the service fell into its wait-for-host loop;
+`systemctl start usb-16x16` brought the gadget back and the Mac
+re-enumerated, no harm. Service running at 20:19:16 UTC on
+`servo-aligned-both-240-rx120`, `ZERORUN enabled min_frames=8
+max_frames=480`, ALIGN ok attempt 1 (tick 999 us), TX PRIMED
+`align_dropped=54 front_age_frames=448`, servo engaged at 60 s, zero
+RECOVERs. First readings: all four `zr_*` at `0/0/0/0` for two minutes
+while the Mac sent silence (a run that never ends is never counted), then
+from 20:21:10 UTC the fourth field, `long_runs`, climbing at 4 per second
+on every stage in lockstep (20, 60, 100, ..., 532 by 20:23:13) with the
+first three still 0: that is the impulse harness, one impulse every 250 ms
+on one channel with silence between, each 12000-frame gap ending as one
+long run, present at every stage because the stage counters see the same
+signal round the loop; it is the expected reading and says nothing about
+holes. No `ZERORUN` line yet in the first four minutes. One thing to
+watch: this session's `tx_pullmax`/`rx_pullmax` read 144 with
+`tx_gapmax_us` 3005 and `rx_gapmax_us` 3054 from the first ten seconds
+(`rx_qfloor` 13, `rx_qlow` 1), a 3 ms stall at start that did not
+RECOVER; the previous session read 1098/1642 after a minute. If a later
+BRIDGE line shows the gap maxima moving, the stall family is back.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
