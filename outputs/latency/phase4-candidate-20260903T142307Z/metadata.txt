@@ -1,0 +1,15 @@
+result_dir=/home/bdimaio/usb-16x16-work/logs/phase4-candidate-20260903T142307Z
+period_frames=48
+buffer_frames=192
+ring_frames=768
+target_frames=128
+playback_prime_frames=96
+prime_trim=0
+tx_playback_prime_frames=288
+rx_playback_prime_frames=144
+sink_delay=576
+usb_pitch_servo=2
+tx_depth_frames=336
+rx_depth_frames=276
+candidate_seconds=600
+bridge_sha256=da7df1c282cdab6a0c1943a3354af374bdc0cd3064b495553bf13bbf7f5d2793
