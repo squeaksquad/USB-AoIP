@@ -4007,6 +4007,68 @@ observes it himself before a session tests it.
 3. Governor `performance`, then IRQ pinning, one at a time, each judged
    by RECOVERs over hours of service time.
 
+**ACCEPTED 2026-09-04 02:23-02:57 UTC: profile `servo-aligned-both-240`**
+(servo-aligned-both with `TX_PLAYBACK_PRIME=240`, one variable), on four
+loaded 800-impulse runs in one service session on the installed bridge
+`40bec748`, no stack restart between runs. The user added the block to
+the live conf and ran `switch-profile servo-aligned-both-240` himself at
+about 02:20 UTC and read RTL Utility at 32 frames at 29.292 ms (30.542 on
+`servo-aligned-both`, 60 samples less). The session's PRIMED line: TX
+`queue_prime=240 align_dropped=48 prime_phase_us=650
+first_tick_wait_us=1347 front_age_frames=448` (496 minus the 48 the
+prime gave up, as predicted); aligned start on attempt 1 at 616 us,
+trigger at 602 us.
+
+| run | file | frames | samples | ms | levels | score | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | `both240-roundtrip-32f-20260904T022331Z` | 32 | 1210 | 25.208 | 1210 x641, 1218 x159 | 0.446 | 159 | 96 | 48 | 0 |
+| 2 | `both240-roundtrip-64f-20260904T024546Z` | 64 | 1218 | 25.375 | 1218 x800 | 1.000 | 159 | 96 | 48 | 0 |
+| 3 | `both240-roundtrip-64f-20260904T024926Z` | 64 | 1218 | 25.375 | 1218 x800 | 1.000 | 159 | 96 | 48 | 0 |
+| 4 | `both240-roundtrip-64f-20260904T025306Z` | 64 | 1218 | 25.375 | 1218 x800 | 1.000 | 159 | 96 | 48 | 0 |
+
+Zero restarts, zero clips, worst gaps 1.1/1.8 ms, pitch 1000014-1000018,
+`tx_pullmax` 48 throughout. The TX floor read 205 unloaded (the same
+201-207 band as prime 288) and fell to 159 in the first minute of the
+first loaded run, 15 frames over the 144-frame skip bar, and held there
+for the rest of the session; the handoff's arithmetic (153-159) was for
+the loaded floor. Conf `81e8c092` carries the block as accepted (`ea9158ab`
+joins the unedited-shipped list, installer `fb0eff86`); staged on the Pi
+in `~/usb-16x16-work/phase4-prime240-install/` with the installed bridge
+and the unchanged unit and supervisor. `PROFILE=servo-aligned` is
+unchanged in the shipped conf, as before. The live conf is
+operator-edited (it carries the experimental block the user pasted), so
+the installer will keep it and write the shipped one to
+`/etc/usb16x16/aes67.conf.new`; the running profile is unaffected by the
+install either way. 192 is not on the table until a skip counter over
+hours of service time shows no pull above 48 at period 48.
+
+**Correction: the harness level does not depend on `--buffer-frames`.**
+The line above that says a run at 32 frames is 64 samples under the same
+run at 64 is wrong. The harness works in device sample time: on
+2026-09-02 runs at 32 and 64 both read 1423, and on 2026-09-04 probes at
+32, 48, 64, 96 and 512 all read 1210-1218 on this profile. Run 1 at 32
+and runs 2-4 at 64 are the same measurement. RTL at 32 reads roughly
+harness + 190 samples (29.292 ms = 1406 samples against 1210-1218).
+
+**Level against `servo-aligned-both`, recorded, not explained.** The
+accepted runs read 1318-1333 at 01:05-01:50 UTC; this profile reads
+1210-1218 at 02:23-02:57, 100-123 samples lower, of which the prime
+accounts for 48. RTL moved 60. The recorded session drift is about 20
+samples an hour, which does not cover the rest. The 1210/1218 pair in run
+1 is the 8-sample bimodality again, switching in runs of about four
+impulses (about once a second) inside a probe; runs 2-4 sat on 1218 alone.
+
+**Mac-side defect during the session, unexplained.** From 02:27 UTC the
+harness at 32 frames captured digital silence (zero energy over a full
+10 s probe, every channel pair), and the readiness gate failed 40 probes
+in a row twice (runs 2 and 3 of the first chain); probes at 64, 96 and
+512 passed intermittently at first and then reliably. The Pi was clean
+throughout (zero RECOVERs, floor 159, UDC configured/high-speed). Quitting
+RTL Utility, REAPER and iZotope RX changed nothing. RTL Utility itself
+had measured fine at 32 at about 02:17, and run 1 at 32 measured 800
+impulses at 02:23-02:27. Runs 2-4 were therefore taken at 64 frames. A
+run at 64 takes about 3.6 minutes (800 impulses at 250 ms), not 10.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
