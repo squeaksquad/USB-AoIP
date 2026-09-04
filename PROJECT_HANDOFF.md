@@ -4653,17 +4653,21 @@ still land: this is a return packet that never arrived, dropped at the
 switch or the Pi NIC and concealed as 41 zeros by the RAVENNA receive.
 This is the 41-sample hole the record chased since 11:58 UTC. It is not
 USB, not the bridge queues, not the Mac. `req_number` (3/8) cannot touch
-it; that lever is closed for these holes. The eth0 `rx_dropped` counter
+it; that lever is closed for these holes (and, with the 19-sample event
+explained as music content below, closed entirely). The eth0 `rx_dropped` counter
 climbing ~0.5/s is the standing suspect (most of it unrelated multicast,
 a tiny fraction the audio return); the GS305EP switch's handling of the
 return multicast is the thing to look at next, and a longer detector soak
 gives the true rate and whether it is bursty.
 
 *20:28:55 UTC, length 19, channel ch1.* Present at all four stages, first
-at `usb-capture`, so injected on the Mac->Pi USB OUT path (the Mac's
-CoreAudio output or the gadget receive) and carried around the whole loop.
-A separate, rarer hole on the req-family path; this is the only one
-`req_number` could address, and it is 19 samples, not 41.
+at `usb-capture`, carried around the whole loop. The parallel session
+(commit `32db65f`) identified this as the start of Apple Music playback:
+Mac source material, genuine content silence on the left channel, not a
+dropped-audio hole. So it is not a defect and not on any leg the bridge
+owns. With event 1 explained as content and event 2 as return-leg loss,
+there is no evidence of a USB OUT drop at `req_number=4` at all, and the
+req sweep (3/8) has nothing left to fix on either count. Close it.
 
 Detector counters at 20:31 UTC: `zr_usbcap=1/19/19/...`
 `zr_ravcap=2/60/41/...` (events/frames/longest/long_runs; `long_runs` is
