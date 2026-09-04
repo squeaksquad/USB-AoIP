@@ -4573,6 +4573,27 @@ against lever 2 (IRQ pinning), whose clock restarts from 19:48:33 UTC.
 The `phase4-zerorun` work is the bridge-side zero-run detector this
 record asked for; its install is the next service stop.
 
+**INSTALLED 2026-09-04 20:18 UTC by the user: the zero-run detector
+bridge `b65b84ee`, ZERORUN enabled on the rx120 profile.** Service up at
+20:18:29 UTC, `NEGOTIATED` then `ZERORUN enabled min_frames=8
+max_frames=480 stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback`,
+`PITCHSERVO enabled`, ALIGN ok attempt 1, TX `align_dropped=54`, pin and
+governor intact, zero RECOVERs, `zr_*` all 0/0/0/0 at start. A 24-probe
+64-frame noise campaign is running to catch a hole and read the stage it
+flags.
+
+*RX floor dropped to 13 this session start, a single early RAVENNA skip.*
+`rx_pullmax=144` (a triple-packet pull, the device skip the record
+describes) landed about 20 s in, at 20:19:23 UTC, while the RX cushion was
+still building, and pinned the running-minimum `rx_qfloor` at 13 for the
+session; `rx_queue` is 168, occupancy 144, zero drops, zero RECOVERs. Not
+a regression (the skip is RAVENNA behaviour, unrelated to the new binary)
+and not a live danger, but 13 frames (0.27 ms) is the thinnest RX margin
+recorded, against the usual 96, and shows an early skip can bring the RX
+side within a quarter millisecond of an underrun. The RX floor is a
+running minimum from session start, so it reflects that one early event,
+not steady state.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
