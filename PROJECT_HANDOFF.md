@@ -4722,6 +4722,29 @@ a driver-side artefact independent of margin, and the next instrument is
 on the wire (a capture on the switch mirror or the Pi NIC with the RTP
 sequence numbers).
 
+**MEASURED 2026-09-04 20:57-21:32 UTC: sink delay 144 stops the holes.**
+The user switched to `servo-aligned-both-240-rx120-sd144` (the running
+profile with the RX playout margin at 144 instead of 96, one variable) at
+20:57:27 UTC and played Apple Music on both channels. In 34.5 minutes:
+299 zero runs at `ravenna-capture`, every one paired to a `usb-capture`
+run of the same length and channel 900-1200 frames earlier (the material
+itself, first at 21:01:48, last at 21:27:58, so the signal was continuous),
+zero unpaired, zero of length 41, zero RECOVERs, gap maxima 1058/1715 us
+(no start stall this session), TX floor 151, RX floor 96. The previous
+session at 96 made four holes in 31 minutes of the same music; at that
+rate 4.4 were expected here and none came, about a 1 in 80 chance if 144
+had changed nothing, and the earlier probe sessions ran nearer one per
+3 minutes. Reading: the holes are packets arriving late against the
+reader by up to about 41 samples beyond the 96-sample margin, and one
+more packet of margin covers them, at a cost of 48 samples (1 ms) on the
+round trip. One session; the A/B that closes it is a return to 96 with
+the holes back, then 144 again. Where the lateness is made (Ferrofish
+transmit, switch, Pi NIC or driver receive) is still open, and it only
+matters now if the 1 ms is wanted back. The sd144 profile stays
+experimental until it has its four loaded 800-impulse runs and the
+sixteen-channel soak; its level should read about 1362 at 64 frames,
+48 over rx120's 1314.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
