@@ -4069,6 +4069,22 @@ had measured fine at 32 at about 02:17, and run 1 at 32 measured 800
 impulses at 02:23-02:27. Runs 2-4 were therefore taken at 64 frames. A
 run at 64 takes about 3.6 minutes (800 impulses at 250 ms), not 10.
 
+**Within-session drift measured 2026-09-04: none.** Two more 800-impulse
+runs at 64 frames on the same `servo-aligned-both-240` session, no
+restart, one hour apart: `both240drift-roundtrip-64f-20260904T031550Z`
+median 1218 (1218 x690, 1210 x110) and `...T041926Z` median 1218 (1218
+x571, 1210 x229), both zero RECOVERs, `tx_qfloor` 159, `rx_qfloor` 96,
+`tx_pullmax` 48. With run 1 at 02:23 (1210 x641, 1218 x159) and runs 2-4
+(1218 x800), the session's level has not moved in two hours; the only
+thing that moves is the share of impulses on each side of the 8-sample
+pair. The 20-samples-an-hour figure recorded earlier is therefore a
+between-session term, set at the session start (bridge start or the
+harness's own device open), not a clock drifting while a session runs.
+The unexplained 60 of the 100-123 drop against `servo-aligned-both` is
+of that kind too. Service time on this profile at 04:23 UTC: two hours,
+zero RECOVERs, `tx_pullmax` 48 (the pull watch for prime 192 continues
+from here).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
