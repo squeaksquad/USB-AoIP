@@ -3885,6 +3885,59 @@ same to a few samples; the residual 11 is then whatever is left on the
 USB side or the Ferrofish; (3) four loaded 800-impulse runs for
 acceptance and `switch-profile servo-aligned-both`.
 
+**INSTALLED 2026-09-03 about 20:45 local by the user: bridge `40bec748`,
+wrapper `009e3b75`, supervisor `fe49f406`, conf `2029ef8f`.** The
+service installer started the service; the user stopped it again for the
+sessions (the candidate wrapper refuses over the daemon, and the first
+launch did: "aes67-daemon is already running").
+
+**MEASURED 2026-09-04 00:40-01:05 UTC: five wrapper sessions on bridge
+`40bec748`, trigger at 600 us, 240 s, 200 impulses, load 0.05.**
+
+| session | prime | candidate | prime phase | first-tick wait | dropped | front age | samples | ms | tx_qfloor |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | off | `004023Z` | 542 us (derived) | 1443 us (derived) | 0 | 501 (derived) | 1345 | 28.021 | 216 |
+| 2 | off | `004522Z` | 587 us (derived) | 1398 us (derived) | 0 | 499 (derived) | 1344 | 28.000 | 216 |
+| 3 | on | `005023Z` | 562 us | 1437 us | 52 | 496 | 1339 | 27.896 | 206 |
+| 4 | on | `005523Z` | 650 us | 1349 us | 48 | 496 | 1330 | 27.708 | 206 |
+| 5 | on | `010023Z` | 596 us | 1401 us | 51 | 496 | 1339 (199), 1331 (1) | 27.896 | 205 |
+
+Every session: aligned start on attempt 1 at 614-617 us, trigger at
+601-603 us, zero restarts, zero clips, `tx_pullmax` 48, score 0.997-1.000.
+
+**Instrument defect in `40bec748`:** with the prime flag off the PRIMED
+line prints `prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1`;
+the fields are only computed inside the flag's branch, so the claim above
+that a flag-off session logs the instrument is wrong. The flag-off values
+in the table are derived from the logged times instead: the reference
+wake is the trigger's `t_us` minus its `wake_age_us`, the first tick after
+the trigger is that wake plus 2000 us minus the 15 us wake latency, and
+the wait is that minus the PRIMED `t_us`. A source fix (compute the
+fields whenever the grid is known, drop only with the flag) was written,
+passed the core tests, and was reverted unbuilt so the repo matches the
+installed binary; it is a five-line change for the next build.
+
+**The model holds on all six trigger-on sessions and the drop does what
+it was built to do.** Sessions 1 and 2 (prime off) differ by 45 us of
+wait and 1 sample; the prime-on sessions held `front_age_frames` at 496
+against waits of 1349-1437 us by dropping 48-52 frames, and read 1339,
+1330, 1339 where the age arithmetic predicts about 5 samples under the
+prime-off pair (1344-1345): measured 1339. The earlier four trigger
+sessions fit the same arithmetic: the prime lands 540-650 us after its
+reference wake in every session (it is the USB fill after the aligned
+start, not a uniform draw), so at trigger offsets 300 and 600 the first
+tick is the same tick and the level the same (1339-1350), and at 850 the
+trigger catches the tick before it, one lap lower (1299).
+
+**What is left: the 8-sample bimodality, not a draw.** Session 5 put 199
+impulses on 1339 and one on 1331; sessions 3 and 4 sat on 1339 and 1330
+with the same front age. That is the 8-9 sample bimodality the readiness
+limit already allows for at buffer 192 (`USB16X16_READY_MAX_SPREAD_SAMPLES`
+9), on the USB or Mac side, and it is the whole residual: three prime-on
+sessions span 9 samples against 53 for seven aligned-start sessions and
+216 lap-structured at 576. Acceptance runs follow on the installed
+binary and the `servo-aligned-both` profile as installed.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
