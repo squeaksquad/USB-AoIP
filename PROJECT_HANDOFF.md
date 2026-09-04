@@ -4819,6 +4819,19 @@ point is `servo-aligned-both-240-rx120-sd144`; the service was left on
 `servo-aligned-both-240-rx120` (96) at the end of the A/B and needs
 switching back.
 
+**DONE 2026-09-04 23:19-23:25 UTC: the service is back on
+`servo-aligned-both-240-rx120-sd144`** (switch at 23:19:44 UTC, sinks
+144, zero RECOVERs) and the user carried the accepted labels into the
+live conf: the block's DESCRIPTION, STATUS (`accepted`), COVER and
+MEASURED lines copied from the shipped `46fd274f` by a root python
+one-liner with an atomic replace, four lines changed, live conf now
+`398a06b9`, no restart (labels only), `profiles` shows the block as accepted.
+The operating point of record is sd144: 1352 samples at 64 frames
+(28.167 ms), RTL Utility at 32 32.083 ms, gadget `req_number=4`, bridge
+`b65b84ee` with the zero-run detector on. Open: where the late packets
+are made (0.79 ms on the table), the RX PRIMED `front_age_frames -1`
+fix, the req 3/8 sweep, and TX prime 192 behind a day of `tx_pullmax`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
@@ -4837,9 +4850,11 @@ switching back.
    `PUT /api/sink/{0,1}` changes for anything that supports them.
 8. Never gate a measurement on sink flags. Gate on a detected return signal.
 9. Once an operating point is chosen, run the required ten-minute clean
-   acceptance soak with all sixteen channels loaded. Done 2026-09-04 13:01
-   UTC for `servo-aligned-both-240-rx120` at gadget `req_number=4` (see
-   "SOAKED 12:50-13:01 UTC"); any new operating point needs its own.
+    acceptance soak with all sixteen channels loaded. Done 2026-09-04 22:04
+    UTC for `servo-aligned-both-240-rx120-sd144` at gadget `req_number=4`
+    (see "SOAKED 21:54-22:04 UTC"), and earlier that day for rx120 at
+    sink delay 96, which the 41-sample holes then retired; any new
+    operating point needs its own.
 10. Then implement the persistent service plan, exposing latency mode and buffer
     parameters rather than baking in fixed values.
 11. The host channel-name requirement is complete. macOS reports `1` through
