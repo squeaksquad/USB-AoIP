@@ -4265,9 +4265,13 @@ in `~/usb-16x16-work/phase4-rx120-record-install/` with the unchanged
 bridge, unit and supervisor; a documentation-only install, whenever the
 service is next stopped.
 
-Making 4 permanent: install the staged script over the installed one
-(its default is 4 when no second argument is given) and remove the
-drop-in; both are the user's sudo, not done yet.
+Made permanent 12:20 UTC: the user installed the staged script over
+`/usr/local/sbin/setup-usb-16x16` (now `b11fd358`, root 755; its default
+is 4 with no second argument) and removed the drop-in; the unit's
+ExecStart is the plain `start`, so a reboot binds with 4. The original
+script is `work/protected-baseline-2026-08-31/setup-usb-16x16`
+(`d3031e22`) for rollback. Gadget at 4, service clean, no rebind was
+needed.
 
 ## Next-session checklist
 
