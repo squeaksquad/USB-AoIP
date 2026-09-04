@@ -3805,6 +3805,86 @@ sample-exact, which also places the safe deployable offset; (3) four
 loaded 800-impulse runs at the chosen offset for acceptance, then
 `switch-profile servo-aligned-both`.
 
+**INSTALLED 2026-09-03 about 20:00 local by the user: bridge `ee3b5286`,
+wrapper `228018b2`, supervisor `ab34a5d6`, conf `59a23d5e`; service left
+stopped for the sessions.**
+
+**MEASURED 2026-09-04 00:03-00:23 UTC: four wrapper sessions with the
+aligned TX trigger, candidates `000317Z`, `000817Z`, `001319Z`,
+`001831Z` (240 s, 200 impulses at 64 frames, load 0.05, the
+`servo-aligned` point).** Every session: `ALIGN status=ok attempts=1`
+at 614-616 us, `ALIGN trigger status=ok source=fresh-wake` at the
+commanded phase to 1-2 us (601, 602, 302, 851), `ring_at_prime` 432 in
+all four (the USB capture's fill after the aligned start is
+deterministic), zero restarts, zero clips, every impulse on one sample,
+score 1.000, `tx_pullmax` 48.
+
+| session | trigger offset | samples | ms | tx_qfloor | rx_qfloor |
+|---|---:|---:|---:|---:|---:|
+| 1 | 600 | 1339 | 27.896 | 210 | 109 |
+| 2 | 600 | 1350 | 28.125 | 216 | 109 |
+| 3 | 300 | 1349 | 28.104 | 216 | 96 |
+| 4 | 850 | 1299 | 27.062 | 160 | 96 |
+
+**The trigger's phase inside a tick is not the lever; the model was
+wrong and the driver source says why.** The tick that follows the
+trigger copies ALSA position 0 whatever the trigger's phase inside that
+tick, so moving the trigger from 300 to 600 us changes nothing (1349
+against 1339/1350), and a later trigger only changes *which* tick comes
+first: at 850 us the session read one lap lower (1299, 40-51 under the
+others) with its TX floor one period lower (160 against 210-216), the
+level and the floor moving together. The 300/600 pair is not
+sample-exact either: 1339, 1350, 1349, an 11-sample residual that the
+aligned trigger did not touch. What sets the TX playout is the age of
+the ring's front frame at the first tick after the trigger, and that age
+is the prime instant (a USB capture wake, whose phase against the tick
+grid is a per-session draw of one tick) plus the wait to that tick; the
+aligned trigger made the trigger's phase a constant and left the prime's
+where it was, so the draw survived, with a lap flip added at the
+offset's edge. Note the level with the trigger on (1299-1350) sits 50-100
+samples under the accepted profile's 1400-1453 window for a reason the
+record does not yet hold; the recovered session's 1320 is in the same
+band. Observation; not explained.
+
+**IMPLEMENTED, staged, not installed: the aligned TX prime, bridge
+`40bec748`.** `--align-tx-prime 0|1` (default 0, needs
+`--align-tx-trigger 1`). With it on, the TX prime (at start and after a
+TX recovery) holds until the ring holds `prime + longest wait - shortest
+wait` (468 at this point, so the 480 fill), computes the trigger target
+(`next_aligned_time` from the grid, 200 us ahead to cover the prime's
+own rendering) and the first tick after it, and drops from the ring's
+front `ring + wait - (prime + longest wait)` frames, so the front
+frame's age at that first tick is `prime_frames + longest wait` = 419 +
+70 = 489 frames whatever this session's wait (450-1450 us at offset
+600). The trigger then sleeps to the same target. Deterministic by
+construction at the top of the present draw band (about +10 samples on
+the 600 us sessions' mean), which is the stability-first trade the sink
+delay already made. **With the flag off the prime is byte-for-byte the
+previous behaviour but PRIMED now carries the instrument:**
+`align_dropped prime_phase_us first_tick_wait_us front_age_frames
+capture_wake_age_us`, so a flag-off session logs the wait the model says
+its level follows; SUMMARY gains `align_tx_prime`,
+`align_tx_prime_dropped`, `align_tx_prime_phase_us`,
+`align_tx_first_tick_wait_us`, `align_tx_front_age_frames`. Built on
+the Pi in `phase4-align5-src` with the service stopped and no run
+measuring, clean under `-Werror`, ctest clean on both, the two invalid
+combinations refused. Wrapper `009e3b75` (positional 20
+`align_tx_prime`, `USB16X16_PHASE4_ALIGN_TX_PRIME` on the Mac side),
+supervisor `fe49f406` (`ALIGN_TX_PRIME`, absent = 0), conf `2029ef8f`
+(`servo-aligned-both` now carries `ALIGN_TX_PRIME=1`; `59a23d5e` joins
+the unedited-shipped list), `install-candidate.sh` `647bdd32`,
+`install-aes67-service.sh` `62d279b7`. Staged in
+`~/usb-16x16-work/phase4-align5-install/`, install order as before.
+
+Measurement plan after the install: (1) two sessions with the trigger
+on and the prime **off**: the instrument alone; the levels must follow
+`first_tick_wait_us` (48 samples per ms) and `front_age_frames`, which
+tests the model before the fix is trusted; (2) three sessions with the
+prime on at 600 us: `front_age_frames` 489 every time and the level the
+same to a few samples; the residual 11 is then whatever is left on the
+USB side or the Ferrofish; (3) four loaded 800-impulse runs for
+acceptance and `switch-profile servo-aligned-both`.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:

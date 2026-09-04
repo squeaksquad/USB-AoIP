@@ -54,14 +54,15 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`ee3b528665940cde90af06bd846c92a85f1c96d4d236697538d9a8daeb8ba61b`
-(2026-09-03: aligned TX trigger, `--align-tx-trigger 1` with
-`--align-tx-offset-us`, default 600, needs `--align-start 1`: the RAVENNA
-playback trigger, at start and at every TX recovery, sleeps to the next
-tick-grid point plus the offset on the tick the aligned start measured, so
-the trigger's phase inside a tick is a constant; logs `ALIGN trigger` and
-counts in SUMMARY). Previous binaries: `38f44de9` (aligned start with the
-retry and the aligned RX recovery), `99f37408`
+`40bec74849bd726ef6c01b05aec9c07e7593beb66be86145ad265388bef1bac0`
+(2026-09-04: aligned TX prime, `--align-tx-prime 1`, needs
+`--align-tx-trigger 1`: the TX prime waits for one more period of ring,
+computes the trigger target and the first tick from the measured grid, and
+drops from the ring's front the frames that make the front frame's age at
+that first tick a constant; PRIMED carries `align_dropped prime_phase_us
+first_tick_wait_us front_age_frames` with the prime flag on or off).
+Previous binaries: `ee3b5286` (aligned TX trigger), `38f44de9` (aligned
+start with the retry and the aligned RX recovery), `99f37408`
 (aligned start with the retry, unaligned recovery), `767ae43d` (aligned start without the retry),
 `170b1081` (split servo at gain 0.05, `--level-gain`),
 `da7df1c2` (split servo at gain 0.01, dead zone), `f7226238` (wrap fix, servo mode 1) and

@@ -40,7 +40,7 @@ candidate_wrapper=/usr/local/sbin/run-phase4-candidate-safe.sh
 candidate_ready_file=/tmp/usb16x16-phase4-candidate.ready
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=ee3b528665940cde90af06bd846c92a85f1c96d4d236697538d9a8daeb8ba61b
+expected_bridge_sha256=40bec74849bd726ef6c01b05aec9c07e7593beb66be86145ad265388bef1bac0
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 api=http://127.0.0.1:8080
 
@@ -169,6 +169,8 @@ align_offset() { local value; value=$(p ALIGN_OFFSET_US); printf '%s' "${value:-
 # TX trigger on the same tick grid: absent means off and 600 us.
 align_tx() { local value; value=$(p ALIGN_TX_TRIGGER); printf '%s' "${value:-0}"; }
 align_tx_offset() { local value; value=$(p ALIGN_TX_OFFSET_US); printf '%s' "${value:-600}"; }
+# ALIGN_TX_PRIME (0 or 1) is the optional aligned TX prime; absent means off.
+align_tx_prime() { local value; value=$(p ALIGN_TX_PRIME); printf '%s' "${value:-0}"; }
 
 profile_names() {
   local key
@@ -231,6 +233,13 @@ validate_profile() {
   fi
   if [ "$(align_tx)" -eq 1 ] && [ "$(align)" -ne 1 ]; then
     say "profile $profile_name: ALIGN_TX_TRIGGER needs ALIGN_START=1" >&2; return 1
+  fi
+  case "$(align_tx_prime)" in
+    0|1) ;;
+    *) say "profile $profile_name: ALIGN_TX_PRIME must be 0 or 1" >&2; return 1 ;;
+  esac
+  if [ "$(align_tx_prime)" -eq 1 ] && [ "$(align_tx)" -ne 1 ]; then
+    say "profile $profile_name: ALIGN_TX_PRIME needs ALIGN_TX_TRIGGER=1" >&2; return 1
   fi
   if [ "$(depth TX)" -ne 0 ] && [ "$(depth TX)" -lt $(( $(p TARGET) + 144 + $(p PERIOD) )) ]; then
     say "profile $profile_name: TX_DEPTH is below TARGET + 144 + PERIOD" >&2; return 1
@@ -298,6 +307,7 @@ bridge_arguments() {
     --align-offset-us "$(align_offset)" \
     --align-tx-trigger "$(align_tx)" \
     --align-tx-offset-us "$(align_tx_offset)" \
+    --align-tx-prime "$(align_tx_prime)" \
     --priority 90 \
     --seconds 0
 }
@@ -771,7 +781,7 @@ cmd_profiles() {
     [ "$name" = "$selected" ] && mark='*'
     say "$mark $name: $(p STATUS), cover: $(p COVER), measured: $(p MEASURED)"
     say "    $(p DESCRIPTION)"
-    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us"
+    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime)"
   done
 }
 

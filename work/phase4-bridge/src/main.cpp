@@ -69,6 +69,10 @@ constexpr std::int64_t kAlignOffsetMaximumUs = 10000;
 // this could be off by more than the wake jitter and the trigger runs
 // unaligned instead (reason=stale-reference).
 constexpr std::int64_t kAlignReferenceMaximumAgeNs = 100000000;
+// The aligned TX prime computes its trigger target at the prime wake and
+// then renders the prime before sleeping to it, so the target is placed
+// this far ahead rather than kAlignRecoveryMarginNs.
+constexpr std::int64_t kAlignPrimeMarginNs = 200000;
 std::chrono::steady_clock::time_point process_started{};
 
 std::uint64_t elapsed_us() noexcept {
@@ -164,6 +168,17 @@ struct Options {
     // measured (at most one tick) before snd_pcm_start. Off by default.
     bool align_tx_trigger{false};
     std::int64_t align_tx_offset_us{kAlignOffsetDefaultUs};
+    // Aligned TX prime, needs --align-tx-trigger 1. What the aligned trigger
+    // does not fix: the first tick after the trigger copies position 0
+    // whatever the trigger's phase inside that tick, so the TX playout is
+    // the age of the ring's front frame at that first tick, and that age is
+    // set by the prime instant (a USB capture wake) relative to the tick
+    // grid: a per-session draw of one tick. With this on, the prime waits
+    // for one more period of ring, computes the trigger target and the
+    // first tick from the grid, and drops from the ring's front exactly the
+    // frames that make the front frame's age at the first tick a constant
+    // (prime depth plus the longest possible wait). Off by default.
+    bool align_tx_prime{false};
     int priority{90};
     unsigned int seconds{0};
 };
@@ -283,6 +298,9 @@ private:
         << "                         --align-start 1)\n"
         << "  --align-tx-offset-us N that offset, microseconds after the reference wakeup\n"
         << "                         (default 600, at most 10000)\n"
+        << "  --align-tx-prime 0|1   drop ring front frames at the TX prime so the front\n"
+        << "                         frame's age at the first tick is constant (default 0;\n"
+        << "                         needs --align-tx-trigger 1)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
     std::exit(error.empty() ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -376,6 +394,12 @@ Options parse_options(const int argc, char** argv) {
             options.align_tx_trigger = parsed != 0;
         } else if (argument == "--align-tx-offset-us") {
             options.align_tx_offset_us = static_cast<std::int64_t>(parse_unsigned(value, "align-tx-offset-us"));
+        } else if (argument == "--align-tx-prime") {
+            const unsigned long parsed = parse_unsigned(value, "align-tx-prime");
+            if (parsed > 1) {
+                throw std::runtime_error("align-tx-prime must be 0 or 1");
+            }
+            options.align_tx_prime = parsed != 0;
         } else if (argument == "--priority") {
             options.priority = static_cast<int>(parse_unsigned(value, "priority"));
         } else if (argument == "--seconds") {
@@ -414,6 +438,9 @@ Options parse_options(const int argc, char** argv) {
     }
     if (options.align_tx_trigger && !options.align_start) {
         throw std::runtime_error("--align-tx-trigger needs --align-start 1");
+    }
+    if (options.align_tx_prime && !options.align_tx_trigger) {
+        throw std::runtime_error("--align-tx-prime needs --align-tx-trigger 1");
     }
     if (options.tx_depth_frames != 0 || options.rx_depth_frames != 0 ||
         options.level_gain_ppm_per_frame != 0.05 || options.level_clamp_ppm != 2.0) {
@@ -678,6 +705,19 @@ struct Direction {
     std::uint64_t aligned_triggers{0};
     std::uint64_t unaligned_triggers{0};
     std::int64_t last_trigger_wake_to_start_us{-1};
+    // Aligned TX prime (--align-tx-prime). The prime records the instant it
+    // ran (a capture wake), its phase on the grid, the first tick that will
+    // follow the planned trigger, and the frames it dropped; the planned
+    // trigger target is handed to the trigger so both use one grid point.
+    bool align_prime{false};
+    std::int64_t pending_trigger_target_ns{0};
+    std::int64_t last_prime_ns{0};
+    std::int64_t last_prime_phase_us{-1};
+    std::int64_t last_first_tick_wait_us{-1};
+    std::size_t last_ring_at_prime{0};
+    std::size_t last_prime_dropped{0};
+    std::int64_t last_front_age_frames{-1};
+    std::int64_t last_capture_wake_ns{0};
     // What the playback device consumed between two consecutive bridge
     // observations of its queue: the "pull burst". The queue floor is only
     // ever sampled when the bridge is awake, so the device-side minimum is the
@@ -780,6 +820,9 @@ IoResult capture_into_ring(Direction& direction, const std::int64_t iteration_ns
         // over every iteration rather than only the ones that found data. The
         // latter would bias it upward and overstate the capture contribution.
         const auto backlog = static_cast<std::size_t>(available);
+        if (backlog > 0) {
+            direction.last_capture_wake_ns = iteration_ns;
+        }
         if (backlog == static_cast<std::size_t>(direction.capture.period()) &&
             direction.last_capture_backlog == 0) {
             direction.last_fresh_wake_ns = iteration_ns;
@@ -854,8 +897,11 @@ std::int64_t align_playback_trigger(Direction& direction, int& sleep_result) noe
         return 0;
     }
     const std::int64_t reference_ns = wake_ns + direction.align_trigger_offset_ns;
-    const std::int64_t target_ns = usb16x16::next_aligned_time(
-        reference_ns, direction.align_trigger_tick_ns, now_ns + kAlignRecoveryMarginNs);
+    const std::int64_t target_ns = direction.pending_trigger_target_ns > now_ns
+        ? direction.pending_trigger_target_ns
+        : usb16x16::next_aligned_time(
+              reference_ns, direction.align_trigger_tick_ns, now_ns + kAlignRecoveryMarginNs);
+    direction.pending_trigger_target_ns = 0;
     timespec target{};
     target.tv_sec = static_cast<time_t>(target_ns / 1000000000LL);
     target.tv_nsec = static_cast<long>(target_ns % 1000000000LL);
@@ -891,6 +937,54 @@ IoResult render_to_playback(Direction& direction,
         if (direction.ring.size() < prime_frames) {
             return IoResult::idle;
         }
+        // Aligned TX prime: the wait from this instant to the first tick
+        // after the planned trigger lies in (margin + tick - offset,
+        // margin + 2 * tick - offset]; hold the prime until the ring can
+        // absorb the longest wait, then drop from the front so that the
+        // front frame's age at the first tick is prime_frames plus the
+        // longest wait, whatever this session's draw of the wait.
+        std::size_t align_drop = 0;
+        if (direction.align_prime && direction.align_trigger_tick_ns > 0) {
+            const std::int64_t wake_ns = direction.tick_source != nullptr && direction.tick_source->last_fresh_wake_ns > 0
+                ? direction.tick_source->last_fresh_wake_ns
+                : direction.align_trigger_seed_ns;
+            const std::int64_t now_ns = monotonic_now_ns();
+            const std::int64_t tick_ns = direction.align_trigger_tick_ns;
+            // Frames per tick from the rate the bridge enforces (48 kHz), not the
+            // period: 48 at a 1000 us tick whatever period was negotiated.
+            const std::int64_t frames_per_tick = (48000LL * tick_ns + 500000000LL) / 1000000000LL;
+            // Waits in frames: the shortest rounded down, the longest up.
+            const std::int64_t min_wait_ns = kAlignPrimeMarginNs + tick_ns - direction.align_trigger_offset_ns;
+            const std::int64_t max_wait_ns = min_wait_ns + tick_ns;
+            const std::int64_t min_wait_frames = min_wait_ns * frames_per_tick / tick_ns;
+            const std::int64_t max_wait_frames = (max_wait_ns * frames_per_tick + tick_ns - 1) / tick_ns;
+            const std::int64_t age_frames = static_cast<std::int64_t>(prime_frames) + max_wait_frames;
+            if (wake_ns <= 0 || now_ns - wake_ns > kAlignReferenceMaximumAgeNs) {
+                // No usable grid: prime and trigger as the aligned trigger alone would.
+                direction.align_prime = false;
+            } else if (static_cast<std::int64_t>(direction.ring.size()) < age_frames - min_wait_frames) {
+                return IoResult::idle;
+            } else {
+                const std::int64_t target_ns = usb16x16::next_aligned_time(
+                    wake_ns + direction.align_trigger_offset_ns, tick_ns, now_ns + kAlignPrimeMarginNs);
+                const std::int64_t first_tick_ns = target_ns - direction.align_trigger_offset_ns + tick_ns;
+                const std::int64_t wait_ns = first_tick_ns - now_ns;
+                const std::int64_t wait_frames = wait_ns * frames_per_tick / tick_ns;
+                const std::int64_t drop = static_cast<std::int64_t>(direction.ring.size()) + wait_frames - age_frames;
+                align_drop = static_cast<std::size_t>(std::clamp<std::int64_t>(
+                    drop, 0, static_cast<std::int64_t>(direction.ring.size() - prime_frames)));
+                direction.pending_trigger_target_ns = target_ns;
+                direction.last_prime_ns = now_ns;
+                direction.last_prime_phase_us = ((now_ns - wake_ns) % tick_ns) / 1000;
+                direction.last_first_tick_wait_us = wait_ns / 1000;
+                direction.last_front_age_frames = static_cast<std::int64_t>(direction.ring.size() - align_drop) + wait_frames;
+                direction.last_prime_dropped = align_drop;
+                if (align_drop > 0) {
+                    direction.ring.pop(align_drop);
+                }
+            }
+        }
+        direction.last_ring_at_prime = direction.ring.size() + align_drop;
         // The ring is checked on capture wakeups, so it can overshoot the
         // threshold by a whole capture period before this is reached. Whatever
         // it overshoots by becomes permanent pipeline depth: total depth is set
@@ -914,7 +1008,13 @@ IoResult render_to_playback(Direction& direction,
                   << " ring_at_prime=" << ring_at_prime
                   << " overshoot=" << overshoot
                   << " trimmed=" << trimmed
-                  << " queue_prime=" << queue_prime << '\n';
+                  << " queue_prime=" << queue_prime
+                  << " align_dropped=" << align_drop
+                  << " prime_phase_us=" << direction.last_prime_phase_us
+                  << " first_tick_wait_us=" << direction.last_first_tick_wait_us
+                  << " front_age_frames=" << direction.last_front_age_frames
+                  << " capture_wake_age_us=" << (direction.last_capture_wake_ns > 0 ? (monotonic_now_ns() - direction.last_capture_wake_ns) / 1000 : -1)
+                  << " t_us=" << elapsed_us() << '\n';
         direction.primed = true;
     }
 
@@ -1655,6 +1755,7 @@ int run(const Options& options) {
                 tx.align_trigger_tick_ns = align.tick_period_us * 1000;
                 tx.align_trigger_offset_ns = options.align_tx_offset_us * 1000;
                 tx.align_trigger_seed_ns = align.reference_ns;
+                tx.align_prime = options.align_tx_prime;
             }
         }
         usb_capture.start_capture();
@@ -1932,7 +2033,12 @@ int run(const Options& options) {
               << ",\"align_tx_trigger\":" << (options.align_tx_trigger ? 1 : 0)
               << ",\"align_tx_triggers\":" << tx.aligned_triggers
               << ",\"align_tx_unaligned_triggers\":" << tx.unaligned_triggers
-              << ",\"align_tx_wake_to_start_us\":" << tx.last_trigger_wake_to_start_us << "}\n";
+              << ",\"align_tx_wake_to_start_us\":" << tx.last_trigger_wake_to_start_us
+              << ",\"align_tx_prime\":" << (options.align_tx_prime ? 1 : 0)
+              << ",\"align_tx_prime_dropped\":" << tx.last_prime_dropped
+              << ",\"align_tx_prime_phase_us\":" << tx.last_prime_phase_us
+              << ",\"align_tx_first_tick_wait_us\":" << tx.last_first_tick_wait_us
+              << ",\"align_tx_front_age_frames\":" << tx.last_front_age_frames << "}\n";
     // pitch_control's destructor restores nominal pitch after this returns.
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
 }
