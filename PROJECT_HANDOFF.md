@@ -3979,6 +3979,20 @@ CoreAudio cycle phase against the USB frame grid. A run of sessions
 with the Mac-side device held open, or the same session measured twice
 an hour apart under the service, would separate the two.
 
+**Standard changed by the user 2026-09-04: RTL Utility at 32 CoreAudio
+frames is the reference measurement going forward.** The user reports
+30.542 ms round trip with it on the running service. RTL at 32 reads the
+harness's sample count plus the Mac-side cost of 188 samples (3.9 ms);
+at 64 the cost was 252. All figures above this line are the harness at
+64 frames; a harness run at 32 frames (`--buffer-frames 32`,
+`measure-under-service.sh 32 800`) is 64 samples (1.33 ms) under the
+same run at 64, and about 3.9 ms under RTL at 32. Quote which.
+
+**Next lever, chosen by the user: the TX prime**, 288 to 240 first, on
+the record's own arithmetic (TX floor 201-207 over the 144-frame skip
+bar; `tx_pullmax` 48 in every period-48 run). The user sets it and
+observes it himself before a session tests it.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
