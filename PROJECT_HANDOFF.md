@@ -4677,6 +4677,51 @@ detector's audio path byte-identical to before. The bridge stays on
 sample) or the profile reverted to the shipped bridge once the return-leg
 question is closed.
 
+**FOUND 2026-09-04 20:31-20:53 UTC: the 41-sample holes enter the Pi
+in the RAVENNA capture, on both music channels, at phase 0 of the
+capture's 48-frame period; the Mac, the bridge and the USB gadget are
+cleared.** Apple Music on the loop from 20:28 UTC with the detector live.
+Pairing every `ravenna-capture` run against the `usb-capture` runs of the
+same length and channel 900-1200 frames earlier (the loop offset measured
+1010-1187): 100 of 104 return-side runs have a Mac-side partner and are
+the material itself, single-channel runs of 8-207 exact zeros in the
+tracks (the flood the user saw at 20:46:45 is one of those, lengths 8-64,
+channels `0x0001`/`0x0002` separately, `tx_clip` and `rx_clip` 0, so not
+clipping). The four unmatched runs are the holes: 20:31:00.605,
+20:40:37.430, 20:49:58.115, 20:50:12.311 UTC, every one `length=41
+channels=0x0003 nchan=2 start_mod48=0` at `ravenna-capture` (starts
+34000848, 61688448, 88601184, 89282592, all multiples of 48), each
+reappearing at `usb-playback` with start minus 1 and nothing at
+`usb-capture` or `ravenna-playback`. So the zeros are already in the
+RAVENNA capture buffer when the bridge reads it, they begin on the
+driver's period boundary and cover 41 of the 48 frames, and the bridge
+hands them to the Mac unchanged. What is left as the maker: the
+Ferrofish's transmit, the switch, the Pi's NIC and the RAVENNA driver's
+receive (a packet 41 samples late against the reader, or a packet lost
+and the slot read before its replacement, fits the 41/7 split; the driver
+has no counter to say which). Rate in this session 4 in 31 min of music,
+about one per 8 min, two of them 14 s apart. Two coincidences checked and
+dismissed: the 20:50:12 hole landed in the same second as an ssh login
+(systemd session scope creation on the Pi), so twenty logins 3 s apart
+were made 20:52:24-20:53:29 UTC and produced one hole (20:52:38.036, the
+same signature), against 0.14 expected at the background rate: logins are
+not a trigger, or a weak one at most. Nothing else in the journal within
+4 s of any hole; `eth0 rx_dropped` at its 0.5/s background (38671),
+`rx_errors` and `rx_missed_errors` 0. Note also a login every five
+minutes at hh:m4:13 UTC from 192.168.1.58 that is not the user's shell.
+
+Next lever, the user's call: the RX playout margin. The profile runs
+sink delay 96, exactly two packets. If a late packet is the maker, a
+larger margin absorbs it: a copy of `servo-aligned-both-240-rx120` with
+`SINK_DELAY=144` (one variable) is staged in the repo conf as
+`servo-aligned-both-240-rx120-sd144`, experimental; the live conf is
+operator-edited, so the block goes in by hand and `switch-profile`
+restarts the stack. Holes gone at 144 says late packet, margin was the
+lever, cost 1 ms; holes unchanged at 144 and at 576 says lost packet or
+a driver-side artefact independent of margin, and the next instrument is
+on the wire (a capture on the switch mirror or the Pi NIC with the RTP
+sequence numbers).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
