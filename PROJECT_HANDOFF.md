@@ -4619,6 +4619,20 @@ watch: this session's `tx_pullmax`/`rx_pullmax` read 144 with
 RECOVER; the previous session read 1098/1642 after a minute. If a later
 BRIDGE line shows the gap maxima moving, the stall family is back.
 
+**First ZERORUN, 20:28:55 UTC: the Mac, not a hole.** The moment Apple
+Music started, one 19-frame run on channel 1 alone (`channels=0x0001`)
+appeared at `usb-capture` (start 28018532, utc .976), then
+`ravenna-playback` (.979), `ravenna-capture` (start 28019542, .995) and
+`usb-playback` (.999), same length and channel at every stage. Zeros
+already present in the USB capture were made on the Mac: the first
+milliseconds of a fade-in below one 24-bit LSB on the left channel. The
+instrument is validated end to end on a real event: a run entering at
+the first stage is carried through the other three with its length and
+channel intact. The stamps put USB capture to RAVENNA capture at about
+19 ms with 1 ms read granularity, so the Mac and the two USB legs share
+roughly 12 ms of the 31.3 ms RTL at 32. A real hole reads 41, is absent
+from `usb-capture`, and with music on both channels carries `nchan=2`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
