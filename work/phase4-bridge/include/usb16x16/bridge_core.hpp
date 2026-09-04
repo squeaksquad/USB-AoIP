@@ -169,6 +169,69 @@ private:
                                              std::int64_t period,
                                              std::int64_t not_before) noexcept;
 
+// Zero-run detector, the instrument for the exactly-41-sample holes of
+// 2026-09-04. Per channel it counts consecutive frames whose sample is
+// exactly zero and, when the run ends, reports it if its length lies in
+// [minimum, maximum]; channels whose runs share a start and a length are
+// coalesced into one event with a channel mask, so an all-channel hole is
+// one event with mask 0xffff. A channel that is silent (a run that never
+// ends, or one longer than the maximum, which is a real gap in the
+// material and counted as such) produces no event, so undriven channels
+// cost nothing. Placed at the four points where audio enters or leaves the
+// bridge, it names the stage where zeros first appear. Real-time safe:
+// fixed storage, no allocation after construction, one compare per sample.
+class ZeroRunDetector {
+public:
+    struct Config {
+        std::size_t minimum_frames{8};
+        std::size_t maximum_frames{480};
+    };
+    struct Event {
+        std::uint64_t start_frame{};
+        std::size_t length{};
+        std::uint32_t channel_mask{};
+    };
+    static constexpr std::size_t kEventCapacity = 8;
+
+    ZeroRunDetector() = default;
+    explicit ZeroRunDetector(Config config) : config_(config) {}
+
+    // Forget every open run without reporting it: a direction restart.
+    void reset() noexcept;
+    // first_frame_position is the stream position of frame 0 of this block,
+    // monotonic across calls; a run may span any number of calls.
+    void observe(const float* interleaved, std::size_t frames, std::uint64_t first_frame_position) noexcept;
+    bool pop_event(Event& event) noexcept;
+
+    [[nodiscard]] const Config& config() const noexcept { return config_; }
+    // Events reported, including any the queue could not hold.
+    [[nodiscard]] std::uint64_t events() const noexcept { return events_; }
+    // Frames inside reported events (one count per event, not per channel).
+    [[nodiscard]] std::uint64_t zero_frames() const noexcept { return zero_frames_; }
+    [[nodiscard]] std::size_t longest() const noexcept { return longest_; }
+    // Per-channel runs that exceeded the maximum: silence, not holes.
+    [[nodiscard]] std::uint64_t long_runs() const noexcept { return long_runs_; }
+    [[nodiscard]] std::uint64_t dropped_events() const noexcept { return dropped_events_; }
+
+private:
+    void end_run(std::size_t channel) noexcept;
+    void enqueue(const Event& event) noexcept;
+
+    Config config_{};
+    std::array<std::uint64_t, kChannels> run_start_{};
+    std::array<std::size_t, kChannels> run_length_{};
+    std::array<Event, kChannels> pending_{};
+    std::size_t pending_count_{};
+    std::array<Event, kEventCapacity> events_queue_{};
+    std::size_t queue_head_{};
+    std::size_t queue_count_{};
+    std::uint64_t events_{};
+    std::uint64_t zero_frames_{};
+    std::size_t longest_{};
+    std::uint64_t long_runs_{};
+    std::uint64_t dropped_events_{};
+};
+
 [[nodiscard]] std::int32_t unpack_s24le(const std::uint8_t* source) noexcept;
 void pack_s24le(std::int32_t sample, std::uint8_t* destination) noexcept;
 [[nodiscard]] float s24_to_float(const std::uint8_t* source) noexcept;

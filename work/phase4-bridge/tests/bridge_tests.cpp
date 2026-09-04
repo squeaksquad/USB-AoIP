@@ -272,6 +272,131 @@ void test_applied_ratio_correction() {
           "corrected phase regression removes the applied ratio trajectory");
 }
 
+// A block of `frames` frames with every channel at a non-zero value, then
+// `zero_frames` frames of exact zero on the channels in `mask`, then
+// `frames` more non-zero frames. Written so a detector can be fed the same
+// stream in any split.
+std::vector<float> zero_run_stream(const std::size_t frames,
+                                   const std::size_t zero_frames,
+                                   const std::uint32_t mask) {
+    std::vector<float> stream((2 * frames + zero_frames) * usb16x16::kChannels, 0.001F);
+    for (std::size_t frame = frames; frame < frames + zero_frames; ++frame) {
+        for (std::size_t channel = 0; channel < usb16x16::kChannels; ++channel) {
+            if ((mask & (1U << channel)) != 0U) {
+                stream[frame * usb16x16::kChannels + channel] = 0.0F;
+            }
+        }
+    }
+    return stream;
+}
+
+void test_zero_run_detector() {
+    using usb16x16::ZeroRunDetector;
+    ZeroRunDetector::Event event{};
+
+    // The 2026-09-04 hole: 41 exact zeros on every channel, split across
+    // two observe calls at an arbitrary point, is one event with the full
+    // mask, the right start and the right length.
+    {
+        ZeroRunDetector detector;
+        const auto stream = zero_run_stream(100, 41, 0xFFFFU);
+        detector.observe(stream.data(), 120, 5000);
+        check(!detector.pop_event(event), "no event before the run ends");
+        detector.observe(stream.data() + 120 * usb16x16::kChannels, 121, 5120);
+        check(detector.pop_event(event), "all-channel hole reports one event");
+        check(event.start_frame == 5100, "hole start is the stream position of its first zero frame");
+        check(event.length == 41, "hole length is 41");
+        check(event.channel_mask == 0xFFFFU, "hole mask covers all sixteen channels");
+        check(!detector.pop_event(event), "one hole is one event, not sixteen");
+        check(detector.events() == 1 && detector.zero_frames() == 41 && detector.longest() == 41,
+              "counters record the hole once");
+        check(detector.long_runs() == 0 && detector.dropped_events() == 0, "nothing else is counted");
+    }
+    // A run under the minimum is ignored; one over the maximum is silence
+    // and counted per channel as a long run, not reported.
+    {
+        ZeroRunDetector detector(ZeroRunDetector::Config{8, 480});
+        const auto brief = zero_run_stream(10, 7, 0xFFFFU);
+        detector.observe(brief.data(), 27, 0);
+        check(!detector.pop_event(event) && detector.events() == 0, "a 7-frame run is under the minimum");
+        const auto silence = zero_run_stream(10, 481, 0xFFFFU);
+        detector.observe(silence.data(), 501, 27);
+        check(!detector.pop_event(event) && detector.events() == 0, "a 481-frame run is silence, not a hole");
+        check(detector.long_runs() == 16, "the long run is counted once per channel");
+        const auto boundary = zero_run_stream(10, 480, 0xFFFFU);
+        detector.observe(boundary.data(), 500, 528);
+        check(detector.pop_event(event) && event.length == 480, "exactly the maximum is reported");
+        const auto minimum = zero_run_stream(10, 8, 0x0004U);
+        detector.observe(minimum.data(), 28, 1028);
+        check(detector.pop_event(event) && event.length == 8 && event.channel_mask == 0x0004U,
+              "exactly the minimum on one channel is reported with that channel's bit");
+    }
+    // Two channels whose runs end on the same frame with different starts
+    // are two events; the ones that match coalesce.
+    {
+        ZeroRunDetector detector;
+        std::vector<float> stream(60 * usb16x16::kChannels, 0.5F);
+        for (std::size_t frame = 10; frame < 30; ++frame) {
+            stream[frame * usb16x16::kChannels + 1] = 0.0F;
+            stream[frame * usb16x16::kChannels + 9] = 0.0F;
+        }
+        for (std::size_t frame = 20; frame < 30; ++frame) {
+            stream[frame * usb16x16::kChannels + 3] = 0.0F;
+        }
+        detector.observe(stream.data(), 60, 0);
+        check(detector.pop_event(event) && event.start_frame == 10 && event.length == 20 &&
+                  event.channel_mask == ((1U << 1) | (1U << 9)),
+              "channels 1 and 9 share a run and one event");
+        check(detector.pop_event(event) && event.start_frame == 20 && event.length == 10 &&
+                  event.channel_mask == (1U << 3),
+              "channel 3's shorter run is its own event");
+        check(!detector.pop_event(event), "no third event");
+    }
+    // reset() forgets an open run: a direction restart must not report the
+    // ring that was cleared as a hole.
+    {
+        ZeroRunDetector detector;
+        std::vector<float> zeros(20 * usb16x16::kChannels, 0.0F);
+        std::vector<float> signal(20 * usb16x16::kChannels, 0.25F);
+        detector.observe(signal.data(), 20, 0);
+        detector.observe(zeros.data(), 20, 20);
+        detector.reset();
+        detector.observe(signal.data(), 20, 40);
+        check(!detector.pop_event(event) && detector.events() == 0, "a run open at reset is not reported");
+    }
+    // The queue holds kEventCapacity events; further ones are counted as
+    // dropped but still tallied.
+    {
+        ZeroRunDetector detector;
+        const auto one = zero_run_stream(4, 10, 0xFFFFU);
+        for (std::size_t repeat = 0; repeat < ZeroRunDetector::kEventCapacity + 3; ++repeat) {
+            detector.observe(one.data(), 18, repeat * 18);
+        }
+        check(detector.events() == ZeroRunDetector::kEventCapacity + 3, "every hole is tallied");
+        check(detector.dropped_events() == 3, "holes beyond the queue are counted as dropped");
+        std::size_t popped = 0;
+        while (detector.pop_event(event)) {
+            ++popped;
+        }
+        check(popped == ZeroRunDetector::kEventCapacity, "the queue drains its capacity");
+    }
+    // Silent channels never report: a stream with only channel 2 driven and
+    // a hole on channel 2 yields one event with only bit 2.
+    {
+        ZeroRunDetector detector;
+        std::vector<float> stream(200 * usb16x16::kChannels, 0.0F);
+        for (std::size_t frame = 0; frame < 200; ++frame) {
+            stream[frame * usb16x16::kChannels + 2] = (frame >= 100 && frame < 141) ? 0.0F : 0.1F;
+        }
+        detector.observe(stream.data(), 200, 0);
+        check(detector.pop_event(event) && event.start_frame == 100 && event.length == 41 &&
+                  event.channel_mask == (1U << 2),
+              "a hole on the one driven channel carries only that channel");
+        check(!detector.pop_event(event) && detector.long_runs() == 0,
+              "undriven channels report nothing while their runs stay open");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -288,6 +413,7 @@ int main() {
     test_next_aligned_time();
     test_windowed_regression();
     test_applied_ratio_correction();
+    test_zero_run_detector();
     if (failures != 0) {
         std::cerr << failures << " test(s) failed\n";
         return EXIT_FAILURE;

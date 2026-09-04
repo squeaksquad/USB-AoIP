@@ -10,6 +10,7 @@
 #include <cmath>
 #include <csignal>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -73,6 +74,16 @@ constexpr std::int64_t kAlignReferenceMaximumAgeNs = 100000000;
 // then renders the prime before sleeping to it, so the target is placed
 // this far ahead rather than kAlignRecoveryMarginNs.
 constexpr std::int64_t kAlignPrimeMarginNs = 200000;
+// Zero-run detector window. 8 frames is far above anything dithered
+// material or the channel-2 noise probe produces by chance and far below
+// the 41-sample holes; 480 frames (ten packets, 10 ms) and longer is a gap
+// in the material, counted but not reported. Both are flags.
+constexpr std::size_t kZeroRunMinimumDefault = 8;
+constexpr std::size_t kZeroRunMaximumDefault = 480;
+constexpr std::size_t kZeroRunMaximumLimit = 48000;
+// ZERORUN lines per direction per process; the counters keep going after.
+// One hole every three minutes is 480 a day, so this is pathology cover.
+constexpr std::uint64_t kZeroRunLineCap = 4096;
 std::chrono::steady_clock::time_point process_started{};
 
 std::uint64_t elapsed_us() noexcept {
@@ -179,6 +190,18 @@ struct Options {
     // frames that make the front frame's age at the first tick a constant
     // (prime depth plus the longest possible wait). Off by default.
     bool align_tx_prime{false};
+    // Zero-run detector (2026-09-04). Exactly-41-sample runs of zeros on
+    // the loop, phase-locked to the Pi's 48-frame grid, that neither the
+    // bridge's counters nor the driver's flags see. With this on, every
+    // block of audio entering (USB capture, RAVENNA capture) and leaving
+    // (RAVENNA playback, USB playback) the bridge is scanned per channel
+    // for runs of exact zeros between the two lengths, and each run is
+    // logged as a ZERORUN line naming its stage; the stage where the zeros
+    // first appear is the leg they are made on. Off by default: the audio
+    // path is byte-for-byte the previous behaviour with it off or on.
+    bool zero_run_detect{false};
+    std::size_t zero_run_minimum_frames{kZeroRunMinimumDefault};
+    std::size_t zero_run_maximum_frames{kZeroRunMaximumDefault};
     int priority{90};
     unsigned int seconds{0};
 };
@@ -301,6 +324,13 @@ private:
         << "  --align-tx-prime 0|1   drop ring front frames at the TX prime so the front\n"
         << "                         frame's age at the first tick is constant (default 0;\n"
         << "                         needs --align-tx-trigger 1)\n"
+        << "  --zero-run-detect 0|1  scan every block entering and leaving the bridge for runs\n"
+        << "                         of exact zeros per channel and log each as ZERORUN with its\n"
+        << "                         stage (default 0; behaviour-free instrument)\n"
+        << "  --zero-run-min N       shortest run reported, frames (default 8; needs\n"
+        << "                         --zero-run-detect 1)\n"
+        << "  --zero-run-max N       longest run reported, frames; longer is silence, counted\n"
+        << "                         not reported (default 480, at most 48000)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
     std::exit(error.empty() ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -400,6 +430,16 @@ Options parse_options(const int argc, char** argv) {
                 throw std::runtime_error("align-tx-prime must be 0 or 1");
             }
             options.align_tx_prime = parsed != 0;
+        } else if (argument == "--zero-run-detect") {
+            const unsigned long parsed = parse_unsigned(value, "zero-run-detect");
+            if (parsed > 1) {
+                throw std::runtime_error("zero-run-detect must be 0 or 1");
+            }
+            options.zero_run_detect = parsed != 0;
+        } else if (argument == "--zero-run-min") {
+            options.zero_run_minimum_frames = parse_unsigned(value, "zero-run-min");
+        } else if (argument == "--zero-run-max") {
+            options.zero_run_maximum_frames = parse_unsigned(value, "zero-run-max");
         } else if (argument == "--priority") {
             options.priority = static_cast<int>(parse_unsigned(value, "priority"));
         } else if (argument == "--seconds") {
@@ -441,6 +481,16 @@ Options parse_options(const int argc, char** argv) {
     }
     if (options.align_tx_prime && !options.align_tx_trigger) {
         throw std::runtime_error("--align-tx-prime needs --align-tx-trigger 1");
+    }
+    if (options.zero_run_minimum_frames < 1 ||
+        options.zero_run_maximum_frames < options.zero_run_minimum_frames ||
+        options.zero_run_maximum_frames > kZeroRunMaximumLimit) {
+        throw std::runtime_error("zero-run-min must be at least 1 and zero-run-max between it and 48000");
+    }
+    if (!options.zero_run_detect &&
+        (options.zero_run_minimum_frames != kZeroRunMinimumDefault ||
+         options.zero_run_maximum_frames != kZeroRunMaximumDefault)) {
+        throw std::runtime_error("--zero-run-min and --zero-run-max need --zero-run-detect 1");
     }
     if (options.tx_depth_frames != 0 || options.rx_depth_frames != 0 ||
         options.level_gain_ppm_per_frame != 0.05 || options.level_clamp_ppm != 2.0) {
@@ -645,6 +695,18 @@ struct Telemetry {
     std::atomic<std::int64_t> rx_bias_ppm_milli{0};
     std::atomic<std::int64_t> tx_depth_setpoint{-1};
     std::atomic<std::int64_t> rx_depth_setpoint{-1};
+    // Zero-run detector, one set per stage: events, frames inside events,
+    // longest event, per-channel runs beyond the maximum (silence).
+    struct ZeroRunCounters {
+        std::atomic<std::uint64_t> events{0};
+        std::atomic<std::uint64_t> frames{0};
+        std::atomic<std::uint64_t> longest{0};
+        std::atomic<std::uint64_t> long_runs{0};
+    };
+    ZeroRunCounters usb_capture_zero;
+    ZeroRunCounters ravenna_playback_zero;
+    ZeroRunCounters ravenna_capture_zero;
+    ZeroRunCounters usb_playback_zero;
 };
 
 enum class IoResult { idle, progressed, recover };
@@ -769,6 +831,16 @@ struct Direction {
     snd_pcm_sframes_t playback_delay{};
     std::array<float, kScratchFrames * kChannels> capture_scratch{};
     std::array<float, kScratchFrames * kChannels> playback_scratch{};
+    // Zero-run detectors on the block read from this direction's capture
+    // and on the block written to its playback, with the stage names the
+    // ZERORUN lines carry. Off unless --zero-run-detect 1.
+    bool zero_run_detect{false};
+    std::string_view capture_stage;
+    std::string_view playback_stage;
+    usb16x16::ZeroRunDetector capture_zero;
+    usb16x16::ZeroRunDetector playback_zero;
+    std::uint64_t zero_run_lines{0};
+    std::uint64_t zero_run_lines_suppressed{0};
 
     Direction(const std::string_view direction_name,
               Pcm& capture_pcm,
@@ -783,6 +855,58 @@ IoResult request_recovery(Direction& direction,
     direction.recovery_stage = stage;
     direction.recovery_code = code;
     return IoResult::recover;
+}
+
+// Wall-clock stamp for a ZERORUN line, so a hole can be set beside the
+// Mac's dump timestamps and the Ferrofish's counters without the journal.
+// Formats into a fixed buffer; no allocation.
+void format_utc_now(char* buffer, const std::size_t size) noexcept {
+    timespec now{};
+    clock_gettime(CLOCK_REALTIME, &now);
+    tm parts{};
+    gmtime_r(&now.tv_sec, &parts);
+    const int milliseconds = static_cast<int>((now.tv_nsec / 1000000L) % 1000L);
+    std::snprintf(buffer, size, "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
+                  parts.tm_year + 1900, parts.tm_mon + 1, parts.tm_mday,
+                  parts.tm_hour, parts.tm_min, parts.tm_sec, milliseconds);
+}
+
+// Drains a detector's events as ZERORUN lines. Runs on the audio thread,
+// the same path PRIMED, RECOVER and DEPTHSTEP take, because a hole is
+// about one event in three minutes; the per-direction cap bounds it.
+// start_mod48 is the run's phase on the bridge's own 48-frame count, a
+// per-session constant when the holes sit on the RAVENNA packet grid.
+void report_zero_runs(Direction& direction,
+                      usb16x16::ZeroRunDetector& detector,
+                      const std::string_view stage) noexcept {
+    usb16x16::ZeroRunDetector::Event event{};
+    while (detector.pop_event(event)) {
+        if (direction.zero_run_lines >= kZeroRunLineCap) {
+            ++direction.zero_run_lines_suppressed;
+            continue;
+        }
+        ++direction.zero_run_lines;
+        std::size_t channels = 0;
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            channels += (event.channel_mask >> channel) & 1U;
+        }
+        // Sized for GCC's format-range analysis, which cannot bound tm
+        // fields; the stamp itself is 24 bytes.
+        char utc[96];
+        format_utc_now(utc, sizeof(utc));
+        char mask[16];
+        std::snprintf(mask, sizeof(mask), "0x%04x", event.channel_mask & 0xFFFFU);
+        std::cerr << "ZERORUN stage=" << stage
+                  << " direction=" << direction.name
+                  << " start=" << event.start_frame
+                  << " length=" << event.length
+                  << " channels=" << mask
+                  << " nchan=" << channels
+                  << " start_mod48=" << event.start_frame % 48
+                  << " events=" << detector.events()
+                  << " t_us=" << elapsed_us()
+                  << " utc=" << utc << '\n';
+    }
 }
 
 float read_area_sample(const snd_pcm_channel_area_t& area,
@@ -867,6 +991,12 @@ IoResult capture_into_ring(Direction& direction, const std::int64_t iteration_ns
     if (!direction.ring.push(direction.capture_scratch.data(), frames)) {
         return request_recovery(direction, "capture-ring-push",
                                 static_cast<snd_pcm_sframes_t>(direction.ring.size()));
+    }
+    if (direction.zero_run_detect) {
+        // The block as the device delivered it, positioned on this
+        // direction's cumulative input count.
+        direction.capture_zero.observe(direction.capture_scratch.data(), frames, direction.input_frames);
+        report_zero_runs(direction, direction.capture_zero, direction.capture_stage);
     }
     direction.input_frames += frames;
     return IoResult::progressed;
@@ -1156,6 +1286,12 @@ IoResult render_to_playback(Direction& direction,
         }
     }
     direction.clipped_samples += clipped;
+    if (direction.zero_run_detect) {
+        // The block as the bridge hands it to the device, positioned on
+        // this direction's cumulative output count.
+        direction.playback_zero.observe(direction.playback_scratch.data(), frames, direction.output_frames);
+        report_zero_runs(direction, direction.playback_zero, direction.playback_stage);
+    }
     const snd_pcm_sframes_t committed = snd_pcm_mmap_commit(direction.playback.handle(), offset, frames);
     if (committed < 0 || static_cast<snd_pcm_uframes_t>(committed) != frames) {
         return request_recovery(direction, "playback-mmap-commit", committed);
@@ -1204,6 +1340,9 @@ void restart_direction(Direction& direction) {
     direction.playback.prepare();
     direction.ring.clear();
     direction.resampler.reset();
+    // A run open across the restart is the cleared ring, not a hole.
+    direction.capture_zero.reset();
+    direction.playback_zero.reset();
     direction.primed = false;
     direction.playback_started = false;
     ++direction.restarts;
@@ -1501,6 +1640,25 @@ void publish_telemetry(const Direction& tx,
     }
     telemetry.tx_clipped_samples.store(tx.clipped_samples, std::memory_order_relaxed);
     telemetry.rx_clipped_samples.store(rx.clipped_samples, std::memory_order_relaxed);
+    const auto publish_zero = [](const usb16x16::ZeroRunDetector& detector,
+                                 Telemetry::ZeroRunCounters& counters) {
+        counters.events.store(detector.events(), std::memory_order_relaxed);
+        counters.frames.store(detector.zero_frames(), std::memory_order_relaxed);
+        counters.longest.store(detector.longest(), std::memory_order_relaxed);
+        counters.long_runs.store(detector.long_runs(), std::memory_order_relaxed);
+    };
+    publish_zero(tx.capture_zero, telemetry.usb_capture_zero);
+    publish_zero(tx.playback_zero, telemetry.ravenna_playback_zero);
+    publish_zero(rx.capture_zero, telemetry.ravenna_capture_zero);
+    publish_zero(rx.playback_zero, telemetry.usb_playback_zero);
+}
+
+// events/frames/longest/long_runs, the BRIDGE and SUMMARY form.
+std::string format_zero_counters(const Telemetry::ZeroRunCounters& counters) {
+    return std::to_string(counters.events.load()) + '/' +
+           std::to_string(counters.frames.load()) + '/' +
+           std::to_string(counters.longest.load()) + '/' +
+           std::to_string(counters.long_runs.load());
 }
 
 template <typename Array>
@@ -1634,7 +1792,11 @@ void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
                   << " tx_bias=" << static_cast<double>(telemetry.tx_bias_ppm_milli.load()) / 1000.0
                   << " rx_bias=" << static_cast<double>(telemetry.rx_bias_ppm_milli.load()) / 1000.0
                   << " tx_set=" << telemetry.tx_depth_setpoint.load()
-                  << " rx_set=" << telemetry.rx_depth_setpoint.load() << '\n';
+                  << " rx_set=" << telemetry.rx_depth_setpoint.load()
+                  << " zr_usbcap=" << format_zero_counters(telemetry.usb_capture_zero)
+                  << " zr_ravplay=" << format_zero_counters(telemetry.ravenna_playback_zero)
+                  << " zr_ravcap=" << format_zero_counters(telemetry.ravenna_capture_zero)
+                  << " zr_usbplay=" << format_zero_counters(telemetry.usb_playback_zero) << '\n';
     }
 }
 
@@ -1688,6 +1850,27 @@ int run(const Options& options) {
     rx.playback_prime_frames = rx_prime;
     tx.prime_trim = options.prime_trim;
     rx.prime_trim = options.prime_trim;
+    // Stage names in signal order round the loop: USB capture is the Mac's
+    // output arriving, RAVENNA playback the wire out, RAVENNA capture the
+    // wire back, USB playback the Mac's input leaving.
+    tx.capture_stage = "usb-capture";
+    tx.playback_stage = "ravenna-playback";
+    rx.capture_stage = "ravenna-capture";
+    rx.playback_stage = "usb-playback";
+    if (options.zero_run_detect) {
+        usb16x16::ZeroRunDetector::Config zero_config;
+        zero_config.minimum_frames = options.zero_run_minimum_frames;
+        zero_config.maximum_frames = options.zero_run_maximum_frames;
+        for (Direction* direction : {&tx, &rx}) {
+            direction->zero_run_detect = true;
+            direction->capture_zero = usb16x16::ZeroRunDetector(zero_config);
+            direction->playback_zero = usb16x16::ZeroRunDetector(zero_config);
+        }
+        std::cout << "ZERORUN enabled min_frames=" << options.zero_run_minimum_frames
+                  << " max_frames=" << options.zero_run_maximum_frames
+                  << " stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback"
+                  << " line_cap=" << kZeroRunLineCap << '\n';
+    }
     usb16x16::SharedDriftEstimator estimator;
     Telemetry telemetry;
 
@@ -2038,7 +2221,19 @@ int run(const Options& options) {
               << ",\"align_tx_prime_dropped\":" << tx.last_prime_dropped
               << ",\"align_tx_prime_phase_us\":" << tx.last_prime_phase_us
               << ",\"align_tx_first_tick_wait_us\":" << tx.last_first_tick_wait_us
-              << ",\"align_tx_front_age_frames\":" << tx.last_front_age_frames << "}\n";
+              << ",\"align_tx_front_age_frames\":" << tx.last_front_age_frames
+              << ",\"zero_run_detect\":" << (options.zero_run_detect ? 1 : 0)
+              << ",\"zero_run_min\":" << options.zero_run_minimum_frames
+              << ",\"zero_run_max\":" << options.zero_run_maximum_frames
+              << ",\"zero_usb_capture\":\"" << format_zero_counters(telemetry.usb_capture_zero) << '"'
+              << ",\"zero_ravenna_playback\":\"" << format_zero_counters(telemetry.ravenna_playback_zero) << '"'
+              << ",\"zero_ravenna_capture\":\"" << format_zero_counters(telemetry.ravenna_capture_zero) << '"'
+              << ",\"zero_usb_playback\":\"" << format_zero_counters(telemetry.usb_playback_zero) << '"'
+              << ",\"zero_run_lines\":" << tx.zero_run_lines + rx.zero_run_lines
+              << ",\"zero_run_lines_suppressed\":" << tx.zero_run_lines_suppressed + rx.zero_run_lines_suppressed
+              << ",\"zero_run_dropped_events\":"
+              << tx.capture_zero.dropped_events() + tx.playback_zero.dropped_events() +
+                 rx.capture_zero.dropped_events() + rx.playback_zero.dropped_events() << "}\n";
     // pitch_control's destructor restores nominal pitch after this returns.
     return tx.restarts == 0 && rx.restarts == 0 ? EXIT_SUCCESS : 2;
 }

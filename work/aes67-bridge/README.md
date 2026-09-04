@@ -67,7 +67,8 @@ The journal reads as a timeline of `STAGE` lines: `insmod`, `daemon API
 ready in Ns`, `ptp locked in Ns`, `sinks applied`, `bridge negotiated`,
 `running`. The daemon's own output is in the same journal under the
 identifier `aes67-daemon`. Every `PRIMED`, `NEGOTIATED`, `RECOVER`,
-`DEPTHSTEP` and `SUMMARY` line from the bridge goes to the journal, plus one
+`DEPTHSTEP`, `ZERORUN` (with `ZERO_RUN_DETECT=1` in the profile) and
+`SUMMARY` line from the bridge goes to the journal, plus one
 `BRIDGE` line every 10 s. The full 1 Hz stream is at
 `/run/usb16x16/bridge.log` on tmpfs, truncated at every start and rotated
 once to `bridge.log.1` at 64 MB; it is the post-mortem for the current

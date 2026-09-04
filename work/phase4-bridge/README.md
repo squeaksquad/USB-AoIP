@@ -54,14 +54,26 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`40bec74849bd726ef6c01b05aec9c07e7593beb66be86145ad265388bef1bac0`
-(2026-09-04: aligned TX prime, `--align-tx-prime 1`, needs
-`--align-tx-trigger 1`: the TX prime waits for one more period of ring,
-computes the trigger target and the first tick from the measured grid, and
-drops from the ring's front the frames that make the front frame's age at
-that first tick a constant; PRIMED carries `align_dropped prime_phase_us
-first_tick_wait_us front_age_frames` with the prime flag on or off).
-Previous binaries: `ee3b5286` (aligned TX trigger), `38f44de9` (aligned
+`b65b84ee2aa33cde52e99a8275730c19be2269b5d55904382aeb17b341a33118`
+(2026-09-04: zero-run detector, `--zero-run-detect 1`, with
+`--zero-run-min` and `--zero-run-max` (8 and 480 frames): every block
+read from a capture and written to a playback is scanned per channel for
+runs of exact zeros, and each run inside the window is logged as a
+`ZERORUN` line naming its stage, `usb-capture`, `ravenna-playback`,
+`ravenna-capture` or `usb-playback`, with its start position on that
+direction's frame count, its length, the channel mask, the start's phase
+on the 48-frame grid and a UTC stamp; BRIDGE carries
+`zr_usbcap/zr_ravplay/zr_ravcap/zr_usbplay` as
+events/frames/longest/long-runs and SUMMARY the same plus the line
+counts. Runs longer than the maximum are silence, counted not reported;
+a direction restart forgets its open runs. Behaviour-free: the audio
+path is identical with the flag off, which is the default).
+Previous binaries: `40bec748` (aligned TX prime: the TX prime waits for
+one more period of ring, computes the trigger target and the first tick
+from the measured grid, and drops from the ring's front the frames that
+make the front frame's age at that first tick a constant; PRIMED carries
+`align_dropped prime_phase_us first_tick_wait_us front_age_frames`),
+`ee3b5286` (aligned TX trigger), `38f44de9` (aligned
 start with the retry and the aligned RX recovery), `99f37408`
 (aligned start with the retry, unaligned recovery), `767ae43d` (aligned start without the retry),
 `170b1081` (split servo at gain 0.05, `--level-gain`),

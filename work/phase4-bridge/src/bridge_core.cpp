@@ -231,6 +231,82 @@ bool WindowedLinearRegression::slope(double& result) const noexcept {
     return std::isfinite(result);
 }
 
+void ZeroRunDetector::reset() noexcept {
+    run_length_.fill(0);
+    run_start_.fill(0);
+    pending_count_ = 0;
+}
+
+void ZeroRunDetector::end_run(const std::size_t channel) noexcept {
+    const std::size_t length = run_length_[channel];
+    if (length > config_.maximum_frames) {
+        ++long_runs_;
+        return;
+    }
+    if (length < config_.minimum_frames) {
+        return;
+    }
+    const auto bit = static_cast<std::uint32_t>(1U << channel);
+    for (std::size_t index = 0; index < pending_count_; ++index) {
+        Event& pending = pending_[index];
+        if (pending.start_frame == run_start_[channel] && pending.length == length) {
+            pending.channel_mask |= bit;
+            return;
+        }
+    }
+    // pending_ has one slot per channel, so this never overflows.
+    pending_[pending_count_++] = Event{run_start_[channel], length, bit};
+}
+
+void ZeroRunDetector::enqueue(const Event& event) noexcept {
+    ++events_;
+    zero_frames_ += event.length;
+    longest_ = std::max(longest_, event.length);
+    if (queue_count_ == kEventCapacity) {
+        ++dropped_events_;
+        return;
+    }
+    events_queue_[(queue_head_ + queue_count_) % kEventCapacity] = event;
+    ++queue_count_;
+}
+
+void ZeroRunDetector::observe(const float* interleaved,
+                              const std::size_t frames,
+                              const std::uint64_t first_frame_position) noexcept {
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        const std::uint64_t position = first_frame_position + frame;
+        const float* samples = interleaved + frame * kChannels;
+        pending_count_ = 0;
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            if (samples[channel] == 0.0F) {
+                if (run_length_[channel] == 0) {
+                    run_start_[channel] = position;
+                }
+                ++run_length_[channel];
+            } else if (run_length_[channel] != 0) {
+                end_run(channel);
+                run_length_[channel] = 0;
+            }
+        }
+        // Runs that ended on this frame with the same start and length are
+        // one event; different lengths are separate events.
+        for (std::size_t index = 0; index < pending_count_; ++index) {
+            enqueue(pending_[index]);
+        }
+        pending_count_ = 0;
+    }
+}
+
+bool ZeroRunDetector::pop_event(Event& event) noexcept {
+    if (queue_count_ == 0) {
+        return false;
+    }
+    event = events_queue_[queue_head_];
+    queue_head_ = (queue_head_ + 1) % kEventCapacity;
+    --queue_count_;
+    return true;
+}
+
 std::int32_t unpack_s24le(const std::uint8_t* source) noexcept {
     std::uint32_t value = static_cast<std::uint32_t>(source[0]) |
                           (static_cast<std::uint32_t>(source[1]) << 8U) |

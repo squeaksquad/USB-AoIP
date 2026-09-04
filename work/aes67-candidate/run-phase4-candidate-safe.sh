@@ -15,7 +15,7 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
-expected_bridge_sha256=40bec74849bd726ef6c01b05aec9c07e7593beb66be86145ad265388bef1bac0
+expected_bridge_sha256=b65b84ee2aa33cde52e99a8275730c19be2269b5d55904382aeb17b341a33118
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 candidate_seconds=${1:-360}
@@ -70,6 +70,11 @@ align_tx_offset_us=${19:-600}
 # drops from the ring's front the frames that make the front frame's age at
 # the first tick after the trigger a constant. Needs align_tx_trigger=1.
 align_tx_prime=${20:-0}
+# Zero-run detector (0 or 1): the bridge scans every block entering and
+# leaving it for per-channel runs of exact zeros (8 to 480 frames) and logs
+# each as a ZERORUN line naming its stage, so the 41-sample holes can be
+# placed on the leg that makes them. Behaviour-free; off by default.
+zero_run_detect=${21:-0}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-candidate-$timestamp"
 ready_file=/tmp/usb16x16-phase4-candidate.ready
@@ -82,7 +87,7 @@ for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frame
              "$tx_playback_prime_frames" "$rx_playback_prime_frames" \
              "$ravenna_playback_buffer_frames" "$sink_delay" "$usb_pitch_servo" \
              "$tx_depth_frames" "$rx_depth_frames" "$align_start" "$align_offset_us" \
-             "$align_tx_trigger" "$align_tx_offset_us" "$align_tx_prime"; do
+             "$align_tx_trigger" "$align_tx_offset_us" "$align_tx_prime" "$zero_run_detect"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -160,6 +165,10 @@ if [ "$align_tx_prime" -gt 1 ]; then
 fi
 if [ "$align_tx_prime" -eq 1 ] && [ "$align_tx_trigger" -ne 1 ]; then
   echo "align-tx-prime needs align-tx-trigger 1" >&2
+  exit 14
+fi
+if [ "$zero_run_detect" -gt 1 ]; then
+  echo "zero-run-detect must be 0 or 1" >&2
   exit 14
 fi
 if [ "$tx_depth_frames" -ne 0 ] && [ "$tx_depth_frames" -lt $((target_frames + 144 + period_frames)) ]; then
@@ -357,6 +366,7 @@ timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
   --align-tx-trigger "$align_tx_trigger" \
   --align-tx-offset-us "$align_tx_offset_us" \
   --align-tx-prime "$align_tx_prime" \
+  --zero-run-detect "$zero_run_detect" \
   --priority 90 \
   --seconds "$candidate_seconds" \
   > "$result_dir/bridge.log" 2>&1 &
@@ -397,6 +407,7 @@ fi
   echo "align_tx_trigger=$align_tx_trigger"
   echo "align_tx_offset_us=$align_tx_offset_us"
   echo "align_tx_prime=$align_tx_prime"
+  echo "zero_run_detect=$zero_run_detect"
   echo "candidate_seconds=$candidate_seconds"
   echo "bridge_sha256=$expected_bridge_sha256"
 } > "$result_dir/metadata.txt"

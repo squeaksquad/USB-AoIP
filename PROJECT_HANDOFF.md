@@ -4463,6 +4463,116 @@ names the point where the zeros first appear; that is the next build.
 Rate in this session: 6 holes in 1030 s of probing, about one per 3 min,
 in bursts.
 
+**IMPLEMENTED, staged, not installed: the zero-run detector, bridge
+`b65b84ee`.** `--zero-run-detect 0|1` (default 0), `--zero-run-min N`
+(default 8) and `--zero-run-max N` (default 480, at most 48000; the two
+lengths need detect 1). With it on, the block read from each capture
+(`usb-capture`, `ravenna-capture`) and the block written to each playback
+(`ravenna-playback`, `usb-playback`) is scanned per channel for runs of
+exact zeros. A run that ends with a length inside the window is one
+`ZERORUN` line on stderr: `stage direction start length channels nchan
+start_mod48 events t_us utc`. Channels whose runs share a start and a
+length are coalesced into one line with a mask (an all-channel hole is one
+line, `channels=0xffff nchan=16`); runs longer than the maximum are
+silence, counted as `long_runs` and not reported; an undriven channel
+never reports; a direction restart forgets its open runs. The audio path
+is byte-for-byte the previous behaviour with the flag off or on; the cost
+is one float compare per sample at the four points. BRIDGE gains
+`zr_usbcap zr_ravplay zr_ravcap zr_usbplay`, each
+events/frames/longest/long_runs; SUMMARY the same as `zero_usb_capture`
+and so on, plus `zero_run_detect`, `zero_run_min`, `zero_run_max`,
+`zero_run_lines` (cap 4096 per direction), `zero_run_lines_suppressed`
+and `zero_run_dropped_events` (an 8-event queue per stage; a drop is
+counted, never blocks). `start` is the direction's cumulative frame count
+(input frames for a capture, output frames for a playback), so
+`start_mod48` is the hole's phase on the bridge's own 48-grid, a
+per-session constant if the holes sit on the packet grid as the Mac-side
+analysis says; `utc` is `CLOCK_REALTIME` at the line, so a hole sets
+beside the Mac's dump stamps without the journal. Reading the stages: a
+hole at `ravenna-capture` (and then `usb-playback`) but not `usb-capture`
+is made on the return leg before the Pi, the Ferrofish's transmit, the
+switch or the driver's receive; at `usb-playback` only, in the bridge's
+ravenna-to-usb path; at neither while the Mac sees it, on the USB
+playback gadget or the Mac. Core tests add seven cases (a 41-frame hole
+split across two reads, the window edges, coalescing against a shorter
+run ending on the same frame, reset, queue overflow, one driven channel);
+ctest clean on the Mac (clang 21) and the Pi (gcc 14, `-Werror`); the two
+invalid flag combinations refused. Wrapper `6282b108` (positional 21
+`zero_run_detect`, `USB16X16_PHASE4_ZERO_RUN_DETECT` on the Mac side),
+supervisor `5c3c4004` (`ZERO_RUN_DETECT`, absent = 0, shown by
+`profiles`), conf `85ccc0fe` (`servo-aligned-both-240-rx120` carries
+`ZERO_RUN_DETECT=1`; `e6f91364` joins the unedited-shipped list), unit
+unchanged `77837e60`, `install-candidate.sh` `64ef9da0`,
+`install-aes67-service.sh` `cf6222bc`. The live conf `001b0d20` is
+operator-edited, so the installer will keep it and write the shipped one
+to `aes67.conf.new`: for the detector to run under the service, add
+`PROFILE_SERVO_ALIGNED_BOTH_240_RX120_ZERO_RUN_DETECT=1` to the live
+block by hand (absent means off). Source in
+`~/usb-16x16-work/phase4-zerorun-src/`, staged in
+`~/usb-16x16-work/phase4-zerorun-install/`, hashes verified there;
+install order as before, with the service stopped: `install-candidate.sh`
+then `install-aes67-service.sh`.
+
+**Build incident 19:47 UTC, and a rule.** The bridge was built on the Pi
+with the service running, `nice -n 19 taskset -c 0`, one job, against the
+convention of building with the service stopped. The first attempt
+(19:47:01-11 UTC) failed on GCC's `-Wformat-truncation`, which clang had
+not raised. At 19:47:27, sixteen seconds after it ended, both captures
+XRUNned together (RECOVER `capture-avail` on both, `last_gap_us` 3550 on
+rx, `rx_gapmax_us` 3550, `tx_gapmax_us` 3009), three RECOVER pairs by
+19:47:33, eight inside the minute, and the supervisor restarted the stack
+at 19:47:34; the new session was running at 19:48:37 UTC with zero
+RECOVERs since and the IRQ pinning still in place (irq 34 and 108 on CPU
+1). The second build (19:47:41-46) ran during the restart. That was the
+first RECOVER in the 4.2 h session and in the whole lever-2 window, so a
+build-induced stall is the likely reading (990 MB of RAM, about 480 MB
+available, a g++ run on the 2000-line `main.cpp` is enough to force
+reclaim) though not proven; the lever-2 judgment restarts from 19:48:37
+UTC. Rule from here: no builds on the Pi while the service runs, whatever
+the nice level; syntax-check on the Mac first (the Pi's ALSA headers plus
+stubs for `endian.h`, `clock_nanosleep`, `TIMER_ABSTIME` and `ESTRPIPE`
+let clang check the whole file), then build with the service stopped.
+
+**Measurement plan after the install.** (1) Start the service with
+`ZERO_RUN_DETECT=1` in the live block; the journal must show the
+`ZERORUN enabled min_frames=8 max_frames=480` line and BRIDGE the four
+`zr_*` fields at `0/0/0/0`. (2) Run the channel-2 noise probes as before
+(26 s back to back, or `measure-under-service.sh 64 100` in a loop) and
+wait for holes; every Mac-side hole from `zeros.py` should match a
+`ZERORUN` line by `utc` to within a second, and the set of stages that
+carry it names the leg. (3) With music on all channels, `nchan` says
+whether a hole is all-channel; `long_runs` climbs on every gap in the
+material and means nothing on its own.
+
+**STALL 2026-09-04 19:47:27 UTC on the IRQ-pinned session, during a
+parallel bridge build on the Pi; the supervisor restarted the service.**
+The 15:33 UTC session ran 4 h 14 min with zero RECOVERs, then
+`DEPTHSTEP direction=ravenna-to-usb ... pull=144 gap_us=3550` at
+19:47:27 UTC, both captures in XRUN (`Broken pipe`) at once, RECOVER and
+re-prime, again at 19:47:29 (gaps 895/1100 us) and 19:47:33, eight
+direction restarts in 60 s, `FAIL more than 5 direction restarts in 60 s
+(8)`, SUMMARY `tx_restarts 4 rx_restarts 4`, exit 35, systemd restart
+counter 1, service back at 19:47:51 UTC and the bridge PRIMED at 19:48:33
+(ALIGN ok attempt 1, TX `align_dropped=52`, floors 164/96 at 19:50, pin
+and governor intact). The 3.55 ms gap is the 4-6 ms stall family.
+
+What was happening on the Pi: a second session (not this one) was
+building a bridge in `~/usb-16x16-work/phase4-zerorun-src/` with the
+service running: sources edited 19:42-19:43 UTC, a fresh cmake configure
+at 19:47:01, `bridge_core.cpp.o` and the test binary at 19:47:03-05,
+`main.cpp` edited 19:47:31, the bridge binary (`b65b84ee`) linked
+19:47:46, and `phase4-zerorun-install/` staged 19:49:23; ssh logins from
+the Mac at 19:38, 19:40 (a refused `sudo true`), 19:45, 19:46:45,
+19:46:47 and 19:47:01 besides this session's 5-minute watch. The stall
+landed 22 s after the compile burst. This is the third time a stall has
+followed a build or ssh burst on the Pi within seconds (2026-09-03: 14 s
+after an incremental compile, 6 s after a burst of ssh sessions). Still
+not proven as a cause, but three for three; treat a build on the Pi
+while the service runs as an expected stall, and do not count this event
+against lever 2 (IRQ pinning), whose clock restarts from 19:48:33 UTC.
+The `phase4-zerorun` work is the bridge-side zero-run detector this
+record asked for; its install is the next service stop.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
