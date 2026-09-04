@@ -4800,6 +4800,25 @@ by the user 2026-09-04 about 22:15 UTC: 32.083 ms**, 0.79 ms over the
 RECOVERs, the detector live, Apple Music on the loop. Watching for the
 holes to return; the result closes or reopens the late-packet reading.
 
+**A/B result, 22:33-23:01 UTC: the holes come back at 96.** The music
+reached the device from 22:33 (Apple Music's playback session on the USB
+16x16 began then, not at the switch), and stopped at about 23:01. In
+those 28 minutes: one hole, 22:43:03.862 UTC, `length=41 channels=0x0003`
+at `ravenna-capture` with no `usb-capture` partner, the same signature as
+the four of the earlier 96 session; zero RECOVERs; 45 material runs paired
+to the Mac. Pooled over both 96 sessions: 5 holes in 59 minutes of music,
+about one per 12 minutes, bursty. At 144: 0 in 45 minutes of continuous
+signal (34.5 of music, 10 of fifteen-channel noise). The chance of 0 in
+45 minutes at the 96 rate is about 1 in 40. The reading stands: a packet
+arriving late against the RAVENNA reader by up to about 41 samples beyond
+a 96-sample margin, covered by one more packet of margin at 0.79 ms
+(RTL at 32: 32.083 against 31.292). Where the lateness is made
+(Ferrofish transmit, switch, Pi NIC or driver receive) is still open and
+is now a latency question only, worth 0.79 ms. The accepted operating
+point is `servo-aligned-both-240-rx120-sd144`; the service was left on
+`servo-aligned-both-240-rx120` (96) at the end of the A/B and needs
+switching back.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
