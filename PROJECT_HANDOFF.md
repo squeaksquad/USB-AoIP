@@ -4633,6 +4633,46 @@ channel intact. The stamps put USB capture to RAVENNA capture at about
 roughly 12 ms of the 31.3 ms RTL at 32. A real hole reads 41, is absent
 from `usb-capture`, and with music on both channels carries `nchan=2`.
 
+**ANSWERED 2026-09-04 20:28-20:31 UTC: the 41-sample holes are on the
+AES67 return leg, not USB.** The zero-run detector caught two holes on the
+live streams during a 24-probe noise campaign (the Mac probes captured
+channel 2 and missed both; the detector reads all 16). Read the four
+stages in loop order: usb-capture (Mac->Pi USB OUT), ravenna-playback
+(Pi->Ferrofish), ravenna-capture (Ferrofish->Pi return), usb-playback
+(Pi->Mac USB IN).
+
+*20:31:00 UTC, length 41, channels ch1+ch2, `start_mod48=0`.* Present at
+`ravenna-capture` and `usb-playback` (both `direction=ravenna-to-usb`),
+ABSENT at `usb-capture` and `ravenna-playback`. So it was injected when
+the bridge read the Ferrofish return through the RAVENNA driver; the
+outbound half of the loop was clean at that instant. The start is on the
+48-frame RAVENNA packet grid. The Ferrofish transmit late counter reads 0
+(user confirmed on Dante Controller), so the Ferrofish sent on time, and
+the sink playout buffer is 576 frames, so a merely late packet would
+still land: this is a return packet that never arrived, dropped at the
+switch or the Pi NIC and concealed as 41 zeros by the RAVENNA receive.
+This is the 41-sample hole the record chased since 11:58 UTC. It is not
+USB, not the bridge queues, not the Mac. `req_number` (3/8) cannot touch
+it; that lever is closed for these holes. The eth0 `rx_dropped` counter
+climbing ~0.5/s is the standing suspect (most of it unrelated multicast,
+a tiny fraction the audio return); the GS305EP switch's handling of the
+return multicast is the thing to look at next, and a longer detector soak
+gives the true rate and whether it is bursty.
+
+*20:28:55 UTC, length 19, channel ch1.* Present at all four stages, first
+at `usb-capture`, so injected on the Mac->Pi USB OUT path (the Mac's
+CoreAudio output or the gadget receive) and carried around the whole loop.
+A separate, rarer hole on the req-family path; this is the only one
+`req_number` could address, and it is 19 samples, not 41.
+
+Detector counters at 20:31 UTC: `zr_usbcap=1/19/19/...`
+`zr_ravcap=2/60/41/...` (events/frames/longest/long_runs; `long_runs` is
+the undriven silent channels, correctly not reported). Zero RECOVERs, the
+detector's audio path byte-identical to before. The bridge stays on
+`b65b84ee` with ZERORUN on; it can be left on (one float compare per
+sample) or the profile reverted to the shipped bridge once the return-leg
+question is closed.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
