@@ -4085,6 +4085,79 @@ of that kind too. Service time on this profile at 04:23 UTC: two hours,
 zero RECOVERs, `tx_pullmax` 48 (the pull watch for prime 192 continues
 from here).
 
+**ACCEPTED 2026-09-04 10:52-11:07 UTC: profile `servo-aligned-both-240-rx120`**
+(servo-aligned-both-240 with `RX_PLAYBACK_PRIME=120`, one variable), on
+four loaded 800-impulse runs at 64 frames in one service session on the
+installed bridge `40bec748`, no stack restart between runs. The user
+appended the block to the live conf at 10:43 UTC and ran `switch-profile
+servo-aligned-both-240-rx120` at 10:47; the service came up on attempt 1
+(ALIGN ok at 618 us, TX trigger ok at 602 us). The session's PRIMED lines:
+RX `queue_prime=120 intended=251 ring_at_prime=288 overshoot=37
+front_age_frames=-1` (the flag-off instrument, fix still unbuilt); TX
+`queue_prime=240 align_dropped=58 overshoot=3 prime_phase_us=453
+front_age_frames=448`.
+
+| run | file | frames | samples | ms | levels | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---:|---|---:|---:|---:|---:|
+| 1 | `both240rx120-roundtrip-64f-20260904T105221Z` | 64 | 1168 | 24.333 | 1164 x400, 1172 x400 | 158 | 96 | 48 | 0 |
+| 2 | `both240rx120-roundtrip-64f-20260904T105601Z` | 64 | 1168 | 24.333 | 1164 x400, 1172 x400 | 154 | 96 | 48 | 0 |
+| 3 | `both240rx120-roundtrip-64f-20260904T105941Z` | 64 | 1168 | 24.333 | 1164 x400, 1172 x400 | 152 | 96 | 48 | 0 |
+| 4 | `both240rx120-roundtrip-64f-20260904T110322Z` | 64 | 1168 | 24.333 | 1164 x400, 1172 x400 | 150 | 96 | 48 | 0 |
+
+Zero restarts, zero clips, zero discontinuities, worst gaps 1.06/1.63 ms,
+pitch 1000014-1000016, `tx_pullmax` 48 throughout (pull histogram
+4127148/1193112/0/0/0/0). RTL Utility at 64 frames read 29.667 ms against
+30.625 on `servo-aligned-both-240` a few minutes earlier (RTL at 32 errored
+on the Mac both times; 30.625 at 64 is 29.292 at 32 plus the 64 samples
+the buffer adds, to the digit). Conf `2fa48cb6` carries the block as
+accepted (`81e8c092` joins the unedited-shipped list, installer
+`3edf5f40`); staged on the Pi in `~/usb-16x16-work/phase4-rx120-install/`
+with the installed bridge, unit and supervisor (all three byte-identical
+to what is installed). The live conf is operator-edited (it carries the
+two pasted blocks, hash `001b0d20`), so the installer will keep it and
+write the shipped one to `/etc/usb16x16/aes67.conf.new`. `PROFILE=` in the
+shipped conf is unchanged.
+
+**Three things the runs said that the prediction did not.**
+
+1. *The level moved 50 samples, not 24.* 1218 to 1168 on the harness, 46
+   samples (0.958 ms) on RTL at 64. The prime change was 24 frames. The
+   other 24-26 are unexplained; they are of the same size as the
+   unexplained 60 in the 240 acceptance and may be the same session-start
+   term.
+2. *`rx_qfloor` did not move.* 96 loaded and unloaded, the same as at prime
+   144, while `rx_queue` at 1 Hz dropped by exactly 24 (192 to 168). The
+   RX floor is set by something other than the prime, so the change took
+   0.5 ms of latency and cost no RX margin. `rx_pullmax` 96 as before.
+3. *The TX floor is 8-9 frames lower than the night before and still
+   falling slowly.* 158 unloaded at four minutes, then 154, 152, 150 at
+   the end of each loaded run (a running minimum), 6 over the 144 bar at
+   the end. The TX side is nominally untouched by this change; what
+   differs is `align_dropped=58` against 48 in the 240 session: the
+   aligned TX prime gave up 10 more frames at start, and the floor sits
+   about that much lower (159 minus 10 is 149). The align drop is a
+   session-start variable, so the TX margin over the bar is set at each
+   start and is thin on this session. Check `tx_qfloor` before relying
+   on this profile after any restart; if a session starts with
+   `align_dropped` much over 58 the floor will sit at the bar.
+
+**The 1164/1172 pair alternates impulse by impulse, a harness artifact of
+the 64-frame gate.** All 800 impulses in all four runs went a, b, a, b
+with no run longer than one. The 250 ms impulse spacing is 12000 samples,
+187.5 buffers of 64, so successive impulses land on opposite half-buffer
+phases; the 8-sample pair is the two phases quantizing to different
+levels. Last night's drift runs at 64 already showed the same strict
+alternation in stretches, mixed with stretches on 1218 alone (both phases
+on one level), and the 32-frame run switched in runs of 3-43. The median
+of an even split is the midpoint, 1168, which is on the 3-sample grid
+only by accident (1164 and 1172 are 8 apart, 1168 is not on the 1210/1218
+grid). Compare profiles by the pair's midpoint or by RTL, not by which
+side of the pair a run lands on.
+
+`tx_pullmax` read 48 at 8 h 05 min of service time on `servo-aligned-both-240`
+(10:25 UTC, pull histogram 90940284/29098162/0/0/0/0) before the switch;
+the pull watch for TX prime 192 restarts from the 10:47 session start.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
