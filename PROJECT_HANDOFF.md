@@ -4273,6 +4273,119 @@ script is `work/protected-baseline-2026-08-31/setup-usb-16x16`
 (`d3031e22`) for rollback. Gadget at 4, service clean, no rebind was
 needed.
 
+**DEFERRED 2026-09-04 12:20 UTC: the req_number sweep.** Read at 12:16
+UTC on the running service (bridge session since 11:54:56 UTC, gadget at
+4, script `b11fd358`): `tx_pullmax` 48, `tx_qfloor` 160, `rx_qfloor` 96,
+TX `align_dropped` 49, zero RECOVERs; RX PRIMED still prints
+`front_age_frames -1`. The user chose to keep 4 and move on: the 150-sample
+cost is a latency question, at most about 2 ms recoverable, and the only
+accuracy residual is the five 41-sample holes at 64 frames (0.02%), which
+can be re-checked without touching the gadget by one more channel-2 noise
+probe at 64 on the running service; only if they recur is `req_number=8`
+worth a stop. TX prime 192 waits on `tx_pullmax` reading 48 after a day.
+
+If the sweep is run later, one variable per stop, in this order: 3, 8,
+then 4 with `p_hs_bint=c_hs_bint=1`. The unit passes no second argument,
+so the edit is the default in `REQ_NUMBER=${2:-4}` (line 17 of the
+installed script); the bint edit flips the two `printf '%s\n' 0 >
+"$F/[pc]_hs_bint"` lines (80 and 85). Per point: `sudo systemctl stop
+usb16x16-aes67`, the edit, `sudo systemctl restart usb-16x16`, `sudo
+systemctl start usb16x16-aes67`, confirm `req_number` and
+`configured/high-speed`, wait for PRIMED, then noise probes at 512/64/32/16
+(`USB16X16_DUMP=<raw> usb16x16-latency measure --device "USB 16x16"
+--buffer-frames N --output-channel 1 --input-channel 2
+--other-channel-load-amplitude 0.1 --impulses 100 --maximum-lag-ms 200`,
+then `zeros.py <raw> N`), impulse probes on channel 1 at 64 and 32, and
+the journal's `tx_qfloor`/`rx_qfloor`/`tx_pullmax`/RECOVERs. Rollback
+copy of `b11fd358`: `~/usb-16x16-work/gadget-req4/setup-usb-16x16-req`.
+The documentation-only conf install in
+`~/usb-16x16-work/phase4-rx120-record-install/` still waits for the next
+service stop.
+
+**ACCEPTED 2026-09-04 12:31-12:47 UTC: `servo-aligned-both-240-rx120` on
+the clean loop, gadget `req_number=4`.** The 10:52-11:07 UTC acceptance of
+this profile was measured while the USB path dropped every second impulse,
+so it was re-run on the same service session (bridge `40bec748`, session
+since 11:54:56 UTC, TX `align_dropped=49`), no stack restart, harness
+alone (`measure-under-service.sh 64 800 rx120req4`, the same arguments as
+every acceptance since `servo-aligned-both`). Gate first: one channel-2
+noise probe at 64 frames (`accept-noise-ch2-64f-100imp` in
+`outputs/latency/usb-holes-20260904/`) read 0.0% zeros and no zero run of
+4 or more in 1.24 M samples; the five 41-sample holes of the 11:58 UTC
+probe did not recur, so `req_number=8` has nothing to fix.
+
+| run | file | frames | samples | ms | levels | score | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | `rx120req4-roundtrip-64f-20260904T123205Z` | 64 | 1314 | 27.375 | 1314 x800 | 1.000 | 160 | 96 | 48 | 0 |
+| 2 | `rx120req4-roundtrip-64f-20260904T123549Z` | 64 | 1314 | 27.375 | 1314 x800 | 1.000 | 160 | 96 | 48 | 0 |
+| 3 | `rx120req4-roundtrip-64f-20260904T123931Z` | 64 | 1314 | 27.375 | 1314 x800 | 1.000 | 160 | 96 | 48 | 0 |
+| 4 | `rx120req4-roundtrip-64f-20260904T124319Z` | 64 | 1314 | 27.375 | 1314 x800 | 1.000 | 160 | 96 | 48 | 0 |
+
+3200 impulses on one sample, zero spread, zero discontinuities, zero
+restarts, zero clips, pitch 1000011-1000017 (1000015 modal), worst gaps
+1.539/1.861 ms (session maxima, unchanged by the runs), `tx_pullmax` 48
+with the pull histogram still all in the first two bins. The TX floor held
+160 for the whole session (align_dropped 49, 16 over the 144 bar), against
+150-158 on the align_dropped-58 session. This is the level the corrected
+conf `e6f91364` already records (1314 at req 4, RTL at 32 31.292 ms), so
+no further conf edit is needed.
+
+**SOAKED 12:50-13:01 UTC, sixteen channels loaded.** `measure-under-service.sh`
+gained an optional `USB16X16_OTHER_LOAD` (deterministic noise on the other
+15 channels for the main run only; the readiness probes stay unloaded).
+`USB16X16_OTHER_LOAD=0.1 measure-under-service.sh 64 2400 rx120req4soak`:
+`rx120req4soak-roundtrip-64f-20260904T125026Z`, 600 s, 2400 impulses at
+64 frames with channels 2-16 at 0.1, all 2400 on **1314 samples
+(27.375 ms)**, spread 0, score 1.000, zero discontinuities, zero RECOVERs,
+zero restarts, `tx_clip`/`rx_clip` 0, `tx_dropped`/`rx_dropped` 0,
+`tx_qfloor` 160 and `rx_qfloor` 96 on all 66 telemetry lines in the
+window, `tx_pullmax` 48, pitch 1000010-1000018 (1000015 modal). Checklist
+item 9 is met for this operating point.
+
+**Lever 1 verdict, read 2026-09-04 13:10 UTC: governor `performance` is
+clean over 17.5 hours.** This boot (2026-09-03 23:22 UTC, governor set by
+`usb16x16-governor.service` at 7 s) has three RECOVER lines, all in the
+cold-boot cascade and the 23:39 UTC profile switch on 2026-09-03; none in
+the four service sessions since (23:39 UTC yesterday through 13:10 UTC
+today, restarts at 10:47, 11:13 and 11:47 UTC), which include the two
+acceptances and the soak. IRQ affinity is still stock (`irq 34`
+`1000480000.usb` and `irq 108` `eth0` on 0-3, both serviced on CPU 0 in
+practice), so lever 2, `usb16x16-stall-tuning irqs pin` (both to CPU 1,
+runtime only, `irqs unpin` reverts), is the next single variable, judged
+the same way over hours of service time.
+
+**DONE 2026-09-04 13:12-13:13 UTC by the user: documentation-only conf
+install and lever 2, IRQ pinning.** With the service stopped he ran the
+`phase4-rx120-record-install` installer: supervisor `fe49f406` and unit
+`77837e60` reinstalled byte-identical, the live operator-edited conf
+`001b0d20` kept, shipped `e6f91364` written to `/etc/usb16x16/aes67.conf.new`.
+Service back at 13:13:25 UTC on `servo-aligned-both-240-rx120`, ALIGN ok
+on attempt 1 at 600 us, TX PRIMED `align_dropped=55 prime_phase_us=510
+first_tick_wait_us=1487 front_age_frames=448`, RX `front_age_frames=-1`
+as before. Then `usb16x16-stall-tuning irqs pin`: `irq 34`
+(`1000480000.usb`) and `irq 108` (`eth0`) now on CPU 1 and their CPU 1
+counters climbing (1.7 M and 270 k at 13:20 UTC), governor `performance`,
+gadget `req_number=4`. Judge by RECOVERs over hours of service; `irqs
+unpin` reverts.
+
+Probes on the pinned session (`irqpin-*` in `usb-holes-20260904/`):
+channel-1 impulses at 64 read **1287 samples (26.812 ms)** on all 100,
+which is 27 under the 1314 of the 11:54 session with `align_dropped` 55
+against 49; the session-start term again, 1287-1314 is the band for this
+profile at req 4. Noise probes: 64 at 13:16 UTC one 41-sample zero run at
+3.6 s into the capture (0.003%); 64 again at 13:19 and 32 at 13:20 clean.
+
+*The 41-sample hole is a session-start event, not a lever effect.* Every
+hole seen so far is exactly 41 samples and falls in the first minutes of
+a bridge session: five at 11:58 UTC (session 11:54), one at 13:16 (session
+13:13, before and after the pin the counters are the same); none at 12:31
+(37 min in), none at 13:19-13:20, none across the 600 s soak. The bridge
+reports `tx_dropped`/`rx_dropped`/`tx_qlow`/`rx_qlow` 0 throughout and
+the pitch servo is still converging in those minutes (1000021 at 13:15
+falling to 1000015 by 13:17). Unexplained; 41 samples is not a multiple
+of the 13-frame USB packet. Next time a session starts, run the 64-frame
+noise probe at 1, 5 and 10 minutes to bound when the holes stop.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
@@ -4291,8 +4404,9 @@ needed.
    `PUT /api/sink/{0,1}` changes for anything that supports them.
 8. Never gate a measurement on sink flags. Gate on a detected return signal.
 9. Once an operating point is chosen, run the required ten-minute clean
-   acceptance soak with all sixteen channels loaded; every figure recorded so
-   far is reconnaissance, not an acceptance soak.
+   acceptance soak with all sixteen channels loaded. Done 2026-09-04 13:01
+   UTC for `servo-aligned-both-240-rx120` at gadget `req_number=4` (see
+   "SOAKED 12:50-13:01 UTC"); any new operating point needs its own.
 10. Then implement the persistent service plan, exposing latency mode and buffer
     parameters rather than baking in fixed values.
 11. The host channel-name requirement is complete. macOS reports `1` through

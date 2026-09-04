@@ -14,6 +14,11 @@ maximum_lag_ms=${USB16X16_MAX_LAG_MS:-200}
 ready_max_spread=${USB16X16_READY_MAX_SPREAD_SAMPLES:-9}
 required_probes=${USB16X16_REQUIRED_SIGNAL_PROBES:-3}
 probe_attempts=${USB16X16_SIGNAL_PROBE_ATTEMPTS:-40}
+# Optional deterministic load on the other 15 channels for the main run only
+# (USB16X16_OTHER_LOAD=0.1); the readiness probes stay unloaded.
+other_load=${USB16X16_OTHER_LOAD:-}
+load_args=()
+if [[ -n "$other_load" ]]; then load_args=(--other-channel-load-amplitude "$other_load"); fi
 app_binary="$repo_root/work/latency-harness/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 out_dir="$repo_root/outputs/latency"
@@ -81,7 +86,7 @@ if [[ -z "$signal_ready" ]]; then
 fi
 
 "$app_binary" measure --device "USB 16x16" --buffer-frames "$frames" \
-  --input-channel 1 --output-channel 1 --impulses "$impulses" \
+  --input-channel 1 --output-channel 1 --impulses "$impulses" "${load_args[@]}" \
   --maximum-lag-ms "$maximum_lag_ms" --output "$result_path" \
   >/dev/null 2>"$api_dir/measure.log"
 measure_exit=$?
