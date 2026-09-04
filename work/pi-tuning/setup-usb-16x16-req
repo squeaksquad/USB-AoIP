@@ -1,0 +1,109 @@
+#!/bin/bash
+set -euo pipefail
+
+G=/sys/kernel/config/usb_gadget/studio_audio
+F="$G/functions/uac2.usb0"
+C="$G/configs/c.1"
+LINK="$C/uac2.usb0"
+UDC=1000480000.usb
+
+# Experiment 2026-09-04: the number of queued USB requests per direction.
+# The installed script writes 2 (the kernel default). At 64 CoreAudio frames
+# and below the Mac's USB audio driver drops isochronous data in both
+# directions (75% zeros at 64, 87% at 32, 0% at 128 and 512, measured with
+# the harness's channel-2 noise probe with the bridge clean). Two queued
+# requests at 125 us microframes is 250 us of slack against the host's
+# scheduling. Usage: setup-usb-16x16 start [REQ_NUMBER]; default 4.
+REQ_NUMBER=${2:-4}
+case "$REQ_NUMBER" in
+	''|*[!0-9]*) echo "REQ_NUMBER must be an unsigned integer" >&2; exit 2 ;;
+esac
+
+stop_gadget() {
+	if [[ ! -d "$G" ]]; then
+		return
+	fi
+
+	if [[ -f "$G/UDC" ]]; then
+		printf '\n' > "$G/UDC" || true
+	fi
+
+	if [[ -L "$LINK" ]]; then
+		unlink "$LINK"
+	fi
+
+	if [[ -d "$F" ]]; then
+		rmdir "$F"
+	fi
+
+	rmdir "$C/strings/0x409" 2>/dev/null || true
+	rmdir "$C" 2>/dev/null || true
+	rmdir "$G/strings/0x409" 2>/dev/null || true
+	rmdir "$G" 2>/dev/null || true
+}
+
+start_gadget() {
+	if ! mountpoint -q /sys/kernel/config; then
+		mount -t configfs configfs /sys/kernel/config
+	fi
+
+	modprobe -r g_ether 2>/dev/null || true
+	modprobe libcomposite
+	modprobe usb_f_uac2
+
+	stop_gadget
+
+	if [[ ! -e "/sys/class/udc/$UDC" ]]; then
+		echo "UDC $UDC is not available" >&2
+		exit 1
+	fi
+
+	mkdir -p "$G/strings/0x409"
+	mkdir -p "$C/strings/0x409"
+
+	# Prototype VID/PID only; obtain a production USB VID/PID before shipping.
+	printf '%s\n' 0x1d6b > "$G/idVendor"
+	printf '%s\n' 0x0104 > "$G/idProduct"
+	printf '%s\n' 0x0200 > "$G/bcdUSB"
+	printf '%s\n' 0x0100 > "$G/bcdDevice"
+
+	printf '%s\n' AUDDEV001 > "$G/strings/0x409/serialnumber"
+	printf '%s\n' 'Bryan DiMaio' > "$G/strings/0x409/manufacturer"
+	printf '%s\n' 'USB 16x16' > "$G/strings/0x409/product"
+	printf '%s\n' 'UAC2 Audio' > "$C/strings/0x409/configuration"
+
+	mkdir "$F"
+
+	printf '%s\n' 65535 > "$F/p_chmask"
+	printf '%s\n' 48000 > "$F/p_srate"
+	printf '%s\n' 3 > "$F/p_ssize"
+	printf '%s\n' 0 > "$F/p_hs_bint"
+
+	printf '%s\n' 65535 > "$F/c_chmask"
+	printf '%s\n' 48000 > "$F/c_srate"
+	printf '%s\n' 3 > "$F/c_ssize"
+	printf '%s\n' 0 > "$F/c_hs_bint"
+	printf '%s\n' async > "$F/c_sync"
+
+	printf '%s\n' "$REQ_NUMBER" > "$F/req_number"
+	printf '%s\n' 5 > "$F/fb_max"
+	printf '%s\n' 'USB 16x16' > "$F/function_name"
+	printf '%s\n' 'USB 16x16' > "$F/if_ctrl_name"
+
+	ln -s "$F" "$LINK"
+	printf '%s\n' "$UDC" > "$G/UDC"
+}
+
+case "${1:-start}" in
+	start)
+		start_gadget
+		echo "gadget bound with req_number=$(cat "$F/req_number") fb_max=$(cat "$F/fb_max")"
+		;;
+	stop)
+		stop_gadget
+		;;
+	*)
+		echo "Usage: $0 {start|stop}" >&2
+		exit 2
+		;;
+esac

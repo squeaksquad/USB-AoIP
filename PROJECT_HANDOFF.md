@@ -4141,8 +4141,10 @@ shipped conf is unchanged.
    on this profile after any restart; if a session starts with
    `align_dropped` much over 58 the floor will sit at the bar.
 
-**The 1164/1172 pair alternates impulse by impulse, a harness artifact of
-the 64-frame gate.** All 800 impulses in all four runs went a, b, a, b
+**The 1164/1172 pair alternates impulse by impulse.** (Corrected below,
+"USB drops at small IO sizes": the pair is dropped audio, not a harness
+phase; 1172 is the level and 1164 marks a lost impulse. The paragraph is
+kept as written.) All 800 impulses in all four runs went a, b, a, b
 with no run longer than one. The 250 ms impulse spacing is 12000 samples,
 187.5 buffers of 64, so successive impulses land on opposite half-buffer
 phases; the 8-sample pair is the two phases quantizing to different
@@ -4157,6 +4159,115 @@ side of the pair a run lands on.
 `tx_pullmax` read 48 at 8 h 05 min of service time on `servo-aligned-both-240`
 (10:25 UTC, pull histogram 90940284/29098162/0/0/0/0) before the switch;
 the pull watch for TX prime 192 restarts from the 10:47 session start.
+
+**FOUND 2026-09-04 11:15-12:05 UTC: the Mac's USB audio path drops
+isochronous data at CoreAudio IO sizes of 64 frames and below, and the
+fix is the gadget's request depth.** Chasing "RTL Utility errors at 32
+frames" with the harness patched to dump its raw capture
+(`USB16X16_DUMP=path`, `USB16X16_IMPULSE_LEN=n`, and a `diag:` line on
+stderr; committed with this entry). With deterministic noise on channel 2
+(`--other-channel-load-amplitude 0.1`, captured on channel 2) the returned
+stream matched the generator sample for sample where present, with no
+timing shift, and was exact zeros elsewhere. On the installed gadget
+(`req_number=2`), with the bridge clean and the music paused, 100-impulse
+probes read:
+
+| frames | zeros in the returned stream | zero runs |
+|---:|---:|---|
+| 512 | 0.0% | none in 26 s |
+| 128 | 0.0% | none in 26 s |
+| 64 | 75.0% | 32-55 samples, one per 64, phase-stable |
+| 32 | 86.9% | about 331 samples |
+
+The same 64-sample periodicity showed at 64, 128 (earlier, with RTL
+Utility open at 32), 256 and 512, so it is the device's running IO size
+that matters, not the probe's; the user heard the outgoing music break up
+while RTL Utility held the device at 32 and heard it clean the moment it
+was quit. macOS logs nothing (coreaudiod is not in the unified log); the
+Pi logs nothing (zero RECOVERs, all four PCMs running, PTP locked, jitter
+6). The daemon's sink flags read sticky `rtp_seq_id_error`,
+`rtp_sac_error` and `all_muted` on both sinks throughout; as the record
+says, they gate nothing.
+
+*What the harness had been reporting.* The correlator's peak search
+radius is 8. An impulse that never returns leaves an all-zero window and
+the per-impulse delay comes out as the true lag minus 8. Impulses are
+12000 samples apart, 32 modulo 64, so successive impulses alternate
+between the live and dead halves of the 64-sample cycle. Every "8-sample
+pair" since 2026-09-04 02:23 UTC was this: 1218 real / 1210 lost, 1172
+real / 1164 lost. Fraction of impulses lost per run: servo-aligned-both
+00:55-01:39 UTC six runs 0%; both240 02:23 (32 frames) 80%; both240
+02:45-02:53 0%; drift pair 13% and 28%; rx120 10:52-11:07 50% in each of
+four. The medians, 1218 and 1168, and "zero spread" claims for the
+alternating runs are therefore wrong by 0-8 samples; the levels stand as
+the upper value of each pair. The servo-aligned-both acceptance was the
+last one measured on a clean loop. The harness now prints a `diag:` line
+with `rawInputPeak`, `copiedFrames`, `placementMisses` and the marker
+indices on every run; a run whose levels split 8 apart is a dropped-audio
+run, not a bimodal one.
+
+*The lever.* The UAC2 function was bound with `req_number=2` (the kernel
+default) and `p_hs_bint=c_hs_bint=0` (auto). dwc2 debugfs shows the
+streaming endpoints at 624-byte packets, 13 frames of 16 x 24-bit, a
+250 us interval, so two queued requests were 500 us of slack per
+direction against the host's scheduling. The user stopped the AES67
+service and the gadget unit and rebound the gadget from
+`~/usb-16x16-work/gadget-req4/setup-usb-16x16-req start 4`, a copy of the
+installed script (`d3031e22`, identical to the protected baseline) that
+takes the request count as its second argument (copy in
+`work/pi-tuning/setup-usb-16x16-req`, hash `b11fd358`). The supervisor
+then waited on `systemctl is-active usb-16x16.service`, which a hand-bound
+gadget does not satisfy; a runtime drop-in
+`/run/systemd/system/usb-16x16.service.d/req4.conf` (`ExecStart=` reset
+to the staged script with `start 4`) and `systemctl start usb-16x16`
+cleared it. That drop-in is what holds `req_number=4` now; a reboot
+returns to the installed script and 2.
+
+| frames | req 2 | req 4 |
+|---:|---:|---:|
+| 512 | 0.0% | 0.0% |
+| 128 | 0.0% | 0.0% |
+| 64 | 75.0% | 0.02% (five 41-sample runs in 1.24 M samples) |
+| 32 | 86.9% | 0.0% |
+| 16 | not run | 0.0% |
+
+Impulse probes on channel 1 at 512, 64 and 32 with req 4: 1314 samples
+(27.375 ms) on every one of 300 impulses, no phantoms; RTL Utility at 32
+read 31.292 ms and 16-frame runs completed. Pi: zero RECOVERs,
+`tx_qfloor` 160-167, `rx_qfloor` 96, `tx_pullmax` 48, pitch 1000015.
+The user chose to keep 4 (12:05 UTC).
+
+*The cost.* About 150 samples: the clean-loop level on
+`servo-aligned-both-240-rx120` was 1159-1172 with req 2 and is 1314 with
+req 4, and RTL at 32 is 31.292 against an expected 28.1. Two extra
+250 us requests per direction account for about 1 ms of that; the rest is
+unexplained. The bridge's queues did not change. Next levers, each one
+stop/rebind/start: `req_number=3` to see whether the latency scales per
+request and 32 stays clean; `req_number=8` to see whether the five
+residual holes at 64 go; an explicit `p_hs_bint`/`c_hs_bint` of 1
+(125 us packets, 6 frames) with 4 requests for the same slack at half the
+queued time. Every future harness gate should be preceded by one noise
+probe (`--input-channel 2 --other-channel-load-amplitude 0.1`, the
+`zeros.py` in `outputs/latency/usb-holes-20260904/`) reading 0.0% at the
+gate's buffer size, and the gate itself can now run at 32 or 64; a level
+split 8 apart means the loop is dropping again.
+
+*Phase 5 and 6.* Neither addresses this. Phase 6 is Pi scheduling; Phase
+5 changes the rate the host follows through the gadget's feedback, not the
+request depth against host jitter, and it is measured with exactly the
+64- and 32-frame runs this corrupted. Request depth first, clean loop
+verified, then Phase 5.
+
+The `servo-aligned-both-240-rx120` block's comment and MEASURED string
+are corrected to say 1172 at req 2 and 1314 at req 4: conf `e6f91364`,
+installer `20f7c719` (`2fa48cb6` joins the unedited-shipped list), staged
+in `~/usb-16x16-work/phase4-rx120-record-install/` with the unchanged
+bridge, unit and supervisor; a documentation-only install, whenever the
+service is next stopped.
+
+Making 4 permanent: install the staged script over the installed one
+(its default is 4 when no second argument is given) and remove the
+drop-in; both are the user's sudo, not done yet.
 
 ## Next-session checklist
 

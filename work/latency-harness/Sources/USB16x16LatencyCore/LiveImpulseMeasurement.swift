@@ -108,10 +108,21 @@ private final class MeasurementState: @unchecked Sendable {
     private(set) var impulseOutputSampleTimes: [Double] = []
     private(set) var inputDiscontinuities = 0
     private(set) var outputDiscontinuities = 0
+    // Diagnostics: raw input as delivered, independent of placement.
+    private(set) var rawInputPeak: Float = 0
+    private(set) var inputCallbacksWithData = 0
+    private(set) var inputCallbacksSkipped = 0
+    private(set) var copiedFrames = 0
+    private(set) var placementMisses = 0
+    private(set) var firstOutputSampleTime: Double?
+    private(set) var firstInputSampleTime: Double?
+    private(set) var lastInputSampleTime: Double?
+    private(set) var firstInputByteSize: UInt32 = 0
     private var expectedInputSampleTime: Double?
     private var expectedOutputSampleTime: Double?
     private var completionSignaled = false
     private var channelLoad = DeterministicChannelLoad()
+    static let impulseLength: Int = Int(ProcessInfo.processInfo.environment["USB16X16_IMPULSE_LEN"] ?? "1") ?? 1
 
     init(
         configuration: LiveMeasurementConfiguration,
@@ -168,6 +179,7 @@ private final class MeasurementState: @unchecked Sendable {
         }
 
         let outputSampleTime = outputTime.pointee.mSampleTime
+        if firstOutputSampleTime == nil { firstOutputSampleTime = outputSampleTime }
         if let expectedOutputSampleTime,
            abs(outputSampleTime - expectedOutputSampleTime) > 0.5 {
             outputDiscontinuities += 1
@@ -197,6 +209,10 @@ private final class MeasurementState: @unchecked Sendable {
                     samples[frame * outputChannels + configuration.outputChannel - 1] =
                         configuration.impulseAmplitude
                     impulseOutputSampleTimes.append(outputSampleTime + Double(frame))
+                } else if Self.impulseLength > 1,
+                          (1..<Self.impulseLength).contains(where: { impulseFrames.contains(absoluteFrame - $0) }) {
+                    samples[frame * outputChannels + configuration.outputChannel - 1] =
+                        configuration.impulseAmplitude
                 }
             }
         }
@@ -207,6 +223,11 @@ private final class MeasurementState: @unchecked Sendable {
             UnsafeMutablePointer(mutating: inputData)
         )
         let inputSampleTime = inputTime.pointee.mSampleTime
+        if firstInputSampleTime == nil {
+            firstInputSampleTime = inputSampleTime
+            firstInputByteSize = inputBuffers.first?.mDataByteSize ?? 0
+        }
+        lastInputSampleTime = inputSampleTime
         if inputBaseSampleTime == nil { inputBaseSampleTime = inputSampleTime }
         if let expectedInputSampleTime,
            abs(inputSampleTime - expectedInputSampleTime) > 0.5 {
@@ -224,14 +245,24 @@ private final class MeasurementState: @unchecked Sendable {
             )
             let destinationStart = Int((inputSampleTime - base).rounded())
             let samples = data.assumingMemoryBound(to: Float.self)
+            inputCallbacksWithData += 1
+            for frame in 0..<inputFrames {
+                let value = abs(samples[frame * inputChannels + configuration.inputChannel - 1])
+                if value > rawInputPeak { rawInputPeak = value }
+            }
             if destinationStart >= 0, destinationStart < capture.count {
                 let copyCount = min(inputFrames, capture.count - destinationStart)
+                copiedFrames += copyCount
                 for frame in 0..<copyCount {
                     capture[destinationStart + frame] =
                         samples[frame * inputChannels + configuration.inputChannel - 1]
                 }
+            } else {
+                placementMisses += 1
             }
             expectedInputSampleTime = inputSampleTime + Double(inputFrames)
+        } else {
+            inputCallbacksSkipped += 1
         }
 
         if !completionSignaled, outputFrameCounter >= totalFrames {
@@ -371,6 +402,24 @@ public enum LiveImpulseMeasurement {
         let stopStatus = AudioDeviceStop(AudioDeviceID(during.deviceID), ioProcID)
         debug("stop returned \(stopStatus)")
         try check(stopStatus, "stop audio device")
+        if let dumpPath = ProcessInfo.processInfo.environment["USB16X16_DUMP"] {
+            let data = state.capture.withUnsafeBufferPointer { Data(buffer: $0) }
+            try? data.write(to: URL(fileURLWithPath: dumpPath))
+            let markers = state.impulseOutputSampleTimes.map { Int(($0 - (state.inputBaseSampleTime ?? 0)).rounded()) }
+            try? (markers.map(String.init).joined(separator: ",") + "\n").write(toFile: dumpPath + ".markers", atomically: true, encoding: .utf8)
+        }
+        FileHandle.standardError.write(Data((
+            "diag: callbacks=\(state.callbackCount) inputWithData=\(state.inputCallbacksWithData)" +
+            " inputSkipped=\(state.inputCallbacksSkipped) copiedFrames=\(state.copiedFrames)" +
+            " placementMisses=\(state.placementMisses) rawInputPeak=\(state.rawInputPeak)" +
+            " capturePeak=\(state.capture.map(abs).max() ?? 0)" +
+            " firstOut=\(state.firstOutputSampleTime ?? -1) firstIn=\(state.firstInputSampleTime ?? -1)" +
+            " lastIn=\(state.lastInputSampleTime ?? -1) firstInBytes=\(state.firstInputByteSize)" +
+            " outputFrames=\(state.outputFrameCounter) inDisc=\(state.inputDiscontinuities)" +
+            " outDisc=\(state.outputDiscontinuities)" +
+            " peakIndex=\(peakIndexOf(state.capture)) captureCount=\(state.capture.count)" +
+            " markers=\(state.impulseOutputSampleTimes.prefix(4).map { Int(($0 - (state.inputBaseSampleTime ?? 0)).rounded()) })" +
+            " nonZeroSpan=\(nonZeroSpanOf(state.capture))\n").utf8))
         guard waitResult == .success else {
             throw LiveMeasurementError.timedOut(
                 callbacks: state.callbackCount,
@@ -412,6 +461,23 @@ public enum LiveImpulseMeasurement {
             capturedPeak: state.capture.map(abs).max() ?? 0,
             correlation: correlation
         )
+    }
+
+    private static func peakIndexOf(_ capture: [Float]) -> Int {
+        var best = 0; var bestValue: Float = -1
+        for (index, value) in capture.enumerated() where abs(value) > bestValue {
+            bestValue = abs(value); best = index
+        }
+        return best
+    }
+
+    private static func nonZeroSpanOf(_ capture: [Float]) -> String {
+        var first = -1; var last = -1; var count = 0
+        for (index, value) in capture.enumerated() where value != 0 {
+            if first < 0 { first = index }
+            last = index; count += 1
+        }
+        return "\(first)..\(last) (\(count) nonzero)"
     }
 
     private static func check(_ status: OSStatus, _ operation: String) throws {
