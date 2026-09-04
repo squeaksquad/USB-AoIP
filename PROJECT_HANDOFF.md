@@ -3938,6 +3938,47 @@ sessions span 9 samples against 53 for seven aligned-start sessions and
 216 lap-structured at 576. Acceptance runs follow on the installed
 binary and the `servo-aligned-both` profile as installed.
 
+**ACCEPTED 2026-09-04 01:05-01:50 UTC: profile `servo-aligned-both`**
+(period 48, target 128, primes 288/144, RAVENNA playback 384, USB pitch
+servo mode 1, aligned RAVENNA capture start at 600 us, aligned TX
+trigger at 600 us, aligned TX prime, sink delay 96), on four loaded
+800-impulse runs of 600 s at 64 frames on the installed bridge
+`40bec748`:
+
+| run | candidate | prime phase | first-tick wait | dropped | front age | samples | ms | tx_qfloor | rx_qfloor |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `010528Z` | 447 us | 1552 us | 58 | 496 | 1333 | 27.771 | 206 | 96 |
+| 2 | `011641Z` | 426 us | 1571 us | 59 | 496 | 1324 | 27.583 | 201 | 96 |
+| 3 | `012754Z` | 660 us | 1339 us | 48 | 496 | 1321 | 27.521 | 207 | 109 |
+| 4 | `013907Z` | 422 us | 1577 us | 59 | 496 | 1318 | 27.458 | 205 | 96 |
+
+Every impulse on one sample in every run, score 1.000, zero restarts,
+zero clips, zero pitch write errors, `tx_pullmax` 48, worst gaps
+1.0/1.8 ms, aligned start on attempt 1 at 615-617 us, trigger at 602 us,
+pitch 1000014-1000015. TX floor 201-207 over the 144-frame skip bar. It
+is 1.7-2.0 ms under the accepted `servo-aligned` (1400-1453) with the
+front-frame age at the first tick held at 496 frames by construction
+against waits of 1339-1577 us. Conf `ea9158ab` marks the block accepted
+(STATUS, COVER, MEASURED; `2029ef8f` joins the unedited-shipped list;
+`install-aes67-service.sh` `75a024c7`); `PROFILE=servo-aligned` is
+unchanged in the conf, so the switch is a `switch-profile` after the
+conf install. Staged in `phase4-align5-install/`.
+
+**Two observations on the residual, recorded, not explained.** (1) The
+seven prime-on sessions read 1339, 1330, 1339, 1333, 1324, 1321, 1318:
+every one is 1 mod 3, a 3-sample grid (62.5 us at 48 kHz, half a
+high-speed microframe), six steps wide, and no session with the age
+pinned has landed off it. (2) They fall with wall-clock time: 1339 at
+00:50, 1318 at 01:39 UTC, 21 samples in 50 minutes, with the age, the
+floors and the pitch unchanged; the earlier `servo-aligned` acceptance
+runs went 1416, 1421, 1416, 1400 over 45 minutes, a similar drift. The
+term is set at session start on the USB or Mac side (the level is fixed
+inside a session to the sample) and moves between sessions on a slow
+clock; the harness's own device open is a candidate, so is the Mac's
+CoreAudio cycle phase against the USB frame grid. A run of sessions
+with the Mac-side device held open, or the same session measured twice
+an hour apart under the service, would separate the two.
+
 **Measurement plan after the install, in order.**
 
 1. Profile `safe` with the new binary, 600 s, 800 impulses at 64 frames:
