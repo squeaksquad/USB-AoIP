@@ -5442,6 +5442,52 @@ stack. Rollback is `switch-profile
 servo-aligned-both-240-rx120-sd144-tx192-target64` (accepted, floors
 108/77) or `...-target64-seed15` (160/50).
 
+**GATE FAILED, then a Mac-side hole state, 2026-09-05 10:52-11:02 UTC:
+`...-target64-seed15-primes144` is unmeasured, and a new rule.** The user
+appended the block (live conf `f0c14c0e`) and switched at 10:52 UTC; RTL
+Utility at 32, read at session start: 26.667 ms. The session primed as
+designed: RX PRIMED `intended=211 ring_at_prime=240 overshoot=29
+queue_prime=144` (the 240 bin), TX PRIMED `queue_prime=144
+align_dropped=69 front_age_frames=288`, `PITCHSERVO seeded` and engaged on
+-14.78 at 60 s, `rx_qfloor` 96 and `tx_qfloor` 115 unloaded, zero
+RECOVERs. The 64-frame gate probe then read **8.4% zeros**, 14839 runs of
+4-9 samples at offsets 4 and 36 mod 64, and a second probe 12.0% at 0 and
+32 (`primes144gate-` and `primes144gate2-noise-ch2-64f-100imp` in
+`usb-holes-20260904/`); the chain was not launched. On the Pi the zero-run
+detector (its first real use) placed the holes: 8 exact zeros every 96
+frames on channels 1-2 at `usb-capture`, the Mac-to-Pi leg, from
+10:54:08.972 UTC, the second my first probe opened the device, carried
+unchanged through `ravenna-playback`, round the Ferrofish and back
+(`ravenna-capture`, `usb-playback`), about 500 events a second, the
+8192-line cap reached; `tx_qfloor`/`rx_qfloor`/pitch/RECOVERs untouched,
+so the frame rate was right and the zeros were inside the frames the Mac
+sent. The user heard it as jitter and a digital mismatch on playback. The
+gadget's OUT path advances by `req->actual` and never zero-fills (Pi
+`u_audio.c`), which put the maker on the Mac's output engine. Rolled back
+to target64 at 10:58:31 UTC: the holes continued on the fresh session
+(15501 events in its first 31 s), so not the profile. Cleared by the user
+at about 11:02 UTC with `sudo killall coreaudiod` on the Mac and `sudo
+systemctl restart usb-16x16` on the Pi in immediate succession (which one
+did it is not known); the AES67 stack restarted itself on the host loss
+and the target64 session of 11:02:20 UTC runs with `zr_usbcap` 0, floors
+154/77 unloaded, gadget re-bound `req_number=4`, `configured/high-speed`.
+The short counters (`tx_short`/`rx_short`) that looked alarming read the
+same in every session and are the behaviour-free mmap-begin accounting,
+not a symptom. Logs:
+`outputs/latency/phase5-20260905/bridge-primes144-session-20260905T105239Z.log`.
+
+What is different about this probe: it was the first gate ever run while
+the user's playback was live on the device (every earlier probe ran with
+the Mac idle apart from the harness). The stopgap reading is that two
+CoreAudio clients, one changing the IO buffer to 64, put AppleUSBAudio's
+output into a state that survived the Pi-side restarts. **Rule: no harness
+probe or measurement while the user is playing audio through the device;
+ask first.** primes144 is unmeasured, not failed: the point primed and
+held exactly as predicted before the probe, and its acceptance runs need
+a clean Mac (playback idle) and a fresh session. Conf `6ce387f4`
+(installer `f25b8689`, `1099fbe1` joins the unedited-shipped list) carries
+that in the block's MEASURED string. The point of record stays target64.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
