@@ -5054,6 +5054,21 @@ something at RX start, unloaded and loaded alike, and it is the next
 thing to instrument on the RX side together with the `front_age_frames
 -1` fix.
 
+**RTL Utility at 32 frames on `servo-aligned-both-240-rx120-sd144-tx192`,
+read by the user 2026-09-05 about 01:50 UTC: 31.375 ms**, 0.708 ms (34
+samples) under the 32.083 of sd144, the harness difference (1318 against
+1352) to the sample. This is the standard figure for the accepted point.
+Conf `ec4b587b` carries it in the block's MEASURED string (installer
+`d3b49785`, `848cc08d` joins the unedited-shipped list). The operating point of
+record is now tx192: 1318 samples at 64 frames (27.458 ms), RTL Utility at
+32 31.375 ms, gadget `req_number=4`, bint 0, bridge `b65b84ee`, sink delay
+144, TX prime 192, TX floor 105. Open, in order of what they are worth:
+the RX floor's per-session 96/109 and the RX PRIMED `front_age_frames -1`
+fix (up to 2 ms hiding on the RX side, unknown until instrumented); where
+the late packets are made (0.79 ms); and, with the TX floor now at 105
+over a bar near 96, no further TX prime step without a lower bar, which
+would need the worst wakeup gap measured over days, not sessions.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
