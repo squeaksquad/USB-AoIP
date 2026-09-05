@@ -5172,6 +5172,28 @@ conversation record of 2026-09-05 and summarised in `DEPLOYMENT_PLAN.md`
 tier three. Nothing installed, nothing changed on the Pi; the service
 session of 01:20:23 UTC continues.
 
+**STAGED 2026-09-05 02:40 UTC: Phase 5 Stage B1, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target64`** (tx192 with
+`TARGET=64` instead of 128, one variable; experimental). The bridge's own
+bounds allow it (`target >= period`, `ring >= target + 8`, the prime
+threshold is `target + queue_prime + 3`, the Farrow needs three frames of
+ring and the ring is held at target + 3), and the supervisor's validation
+passes: repo conf `d2648790` (installer `4286e393`, `ec4b587b` joins the
+unedited-shipped list), the block alone as
+`~/usb-16x16-work/target64-block.conf` (`7401ce58`), both checked with
+`profiles` against a copy of the live conf (`50fe5b49`) and against the
+repo conf on the Pi, exit 0, the block listed with `target 64` and every
+other key equal to tx192. Expected from the 2026-09-03 1:1 result: about
+1190 samples at 64 frames (24.8 ms), RTL at 32 about 28.7 ms. The floors
+are the acceptance question: the 2026-09-03 run lost 33 frames of TX floor
+to the prime overshoot when the target fell, before the aligned prime
+existed. Gate as usual: noise probe at 64, four `measure-under-service.sh
+64 800 target64` runs, the 600 s soak, RTL at 32 by the user. Retire the
+block if the floors follow the target. Nothing installed; the live conf
+is operator-edited, so the block goes in by hand (`cat` append) and
+`switch-profile` restarts the stack. Rollback is `switch-profile
+servo-aligned-both-240-rx120-sd144-tx192`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
