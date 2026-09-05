@@ -5991,6 +5991,33 @@ High from the wrap through about 550, a drop of about 43 between 550 and
 (`RX_PRIME_PHASE_WINDOW="600,700"`, conf `52e82dcb`, installer
 `127dc23f`, `c9cce445` joins the unedited-shipped list) brackets it.
 
+**MEASURED 2026-09-05 15:16 UTC: pw600 reads 1098 at phase 695; the map is
+complete enough and the operating window is 730-800.** `PRIME window ...
+status=hit ring=192 phase_us=695 window_us=600,700 waited_ms=34458`,
+`PRIMED ring_at_prime=192 overshoot=5`, TX `front_age_frames=336`, floors
+157/77, zero RECOVERs. Harness (`pw600-roundtrip-64f-...`): **1098**
+(22.88 ms). The map on bridge `2a158386`, all at ring 192, TX front age
+336, 200 impulses each, spread 0:
+
+| phase at RX prime (us) | level | RX floor |
+|---:|---:|---:|
+| 67 | 1157 | 125 |
+| 382 | 1132 | 77 |
+| 544 | 1134 | 77 |
+| 548 | 1137 | 77 |
+| 695 | 1098 | 77 |
+| 765 | 1094 | 77 |
+| 944 | 1107 | 77 |
+
+A sawtooth: high through about 550, a drop of about 40 between 548 and
+695, the floor from 695 to about 950 with its minimum near 765, and the
+climb back over the wrap. Plain restarts land in the 380-550 band. The
+operating block `...-target64-phase760` (`RX_PRIME_PHASE_WINDOW="730,800"`,
+conf `d6f463a6`, installer `6e4765fa`, `52e82dcb` joins the
+unedited-shipped list) puts every session on the floor with about 35 us
+of margin each side; expected about 1094, RTL at 32 about 26.7 ms. Its
+acceptance is the full set plus a second session on the same level.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
