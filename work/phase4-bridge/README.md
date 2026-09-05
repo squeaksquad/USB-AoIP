@@ -54,8 +54,12 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`e6bc98ac967d5958261db410bf7a4057a1c40498f0d9d4d2f595ac2152f280fe`
-(2026-09-05: `--pitch-seed PPM`, Phase 5 Stage B2: with the pitch servo
+`006fc65e5ae4d61b81e3aa2dbd468182ca2644f07deb11c30e8edc169511d622`
+(2026-09-05: `--level-shift FRAMES`, Phase 5 Stage B3: in mode 1 the
+differential setpoint captured at engagement is lowered by twice FRAMES,
+moving that many frames of servo-held depth from usb-to-ravenna to
+ravenna-to-usb; 0 = unchanged, behaviour identical to `e6bc98ac` at 0).
+Previous binary `e6bc98ac` (2026-09-05: `--pitch-seed PPM`, Phase 5 Stage B2: with the pitch servo
 on, both gadget pitch controls and the shared estimator start at the seed
 before the prime instead of at nominal, removing the 46-frame warm-up
 drift every session showed; `PITCHSERVO seeded ppm= pitch=` line, 0 =

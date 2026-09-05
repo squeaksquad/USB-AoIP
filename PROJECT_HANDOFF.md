@@ -5579,6 +5579,26 @@ Repin list for the new binary: `install-candidate.sh`,
 `install-aes67-service.sh`, and the supervisor's own
 `expected_bridge_sha256`.
 
+**BUILT and STAGED 2026-09-05 12:30 UTC: bridge `006fc65e`
+(`--level-shift`), the B3 install set, all three pins moved.** Service
+stopped by the user at about 12:27 UTC; built on the Pi from
+`~/usb-16x16-work/phase4-shift-src` (`main.cpp` `29e7c9b7`, Release,
+zero warnings), ctest 1/1, binary SHA-256
+`006fc65e5ae4d61b81e3aa2dbd468182ca2644f07deb11c30e8edc169511d622`, in
+`work/phase4-bridge/artifacts/pi-aarch64/` (README updated, `e6bc98ac`
+previous). At `--level-shift 0`, the supervisor default for every block
+without `LEVEL_SHIFT_FRAMES`, behaviour is `e6bc98ac`'s. Pins: supervisor
+`expected_bridge_sha256` (the one missed on B2) now `006fc65e`, supervisor
+`d46202b0`; `install-candidate.sh` `c3843e21` (bridge `006fc65e`, wrapper
+`6282b108`); `install-aes67-service.sh` `ac55c1ea` (supervisor `d46202b0`,
+unit `77837e60`, conf `705c7906`, bridge `006fc65e`). Staged:
+`~/usb-16x16-work/phase4-shift-install/` and
+`~/usb-16x16-work/aes67-shift30-install/` (with `shift30-block.conf`
+`45d22160`); the new supervisor validates the live conf, exit 0. Install
+order, service stopped: `install-candidate.sh`, `install-aes67-service.sh`
+(keeps the operator-edited live conf), append the block, `switch-profile`
+(writes PROFILE only while inactive), `systemctl start`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
