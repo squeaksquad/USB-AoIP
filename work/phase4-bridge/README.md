@@ -54,8 +54,14 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`98eeb083a80900b6234f610adc5566af1bc00fb7e1a461dbc1b2245366bb69c5`
-(2026-09-05: aligned RX trigger and prime, `--align-rx-trigger`,
+`abab6732b1425e41dad29efde9a5c52dfc70819bf7332b0ce82a0ffed2608900`
+(2026-09-05: grid-phase instrument, `phase_us` on every BRIDGE line and
+`grid_phase_us` on both PRIMED lines, the RAVENNA tick against the USB
+frame grid; and `--rx-prime-phase-window LOW,HIGH` with
+`--rx-prime-phase-timeout-s N`, which holds the RX prime, discarding ring
+excess, until that phase is inside the window; window off by default,
+behaviour identical to `98eeb083` apart from the telemetry field).
+Previous binary `98eeb083` (2026-09-05: aligned RX trigger and prime, `--align-rx-trigger`,
 `--align-rx-offset-us`, `--align-rx-prime`: the USB playback triggers on
 the host's 1 ms frame grid read as the USB capture's fresh wakes, and the
 RX prime drops from the ring's front so the front frame's age at the

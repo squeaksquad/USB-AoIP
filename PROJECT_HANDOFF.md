@@ -5851,6 +5851,26 @@ harness level, then a window block. Source in
 `~/usb-16x16-work/aes67-phase-install/`. Build waits for a service stop;
 pin list as before.
 
+**BUILT and STAGED 2026-09-05 14:35 UTC: bridge `abab6732` (grid-phase
+instrument and RX prime phase window), all three pins moved.** Service
+stopped by the user at about 14:32 UTC; built on the Pi from
+`~/usb-16x16-work/phase4-phase-src` (`main.cpp` `687db660`, Release,
+zero warnings), ctest 1/1 including `test_grid_phase`, binary SHA-256
+`abab6732b1425e41dad29efde9a5c52dfc70819bf7332b0ce82a0ffed2608900`, in
+`work/phase4-bridge/artifacts/pi-aarch64/` (README updated, `98eeb083`
+previous). With no window key, which every existing block has, behaviour
+is `98eeb083`'s plus the `phase_us` field. Pins: supervisor
+`expected_bridge_sha256` `abab6732`, supervisor `f94aa06f`;
+`install-candidate.sh` `b733552f`; `install-aes67-service.sh` `de1e40f3`
+(supervisor `f94aa06f`, unit `77837e60`, conf `c7092ea1`, bridge
+`abab6732`). Staged: `~/usb-16x16-work/phase4-phase-install/` and
+`~/usb-16x16-work/aes67-phase-install/`; the new supervisor validates
+the live conf, exit 0. Install order, service stopped:
+`install-candidate.sh`, `install-aes67-service.sh` (keeps the live
+conf), `switch-profile ...-target64` (PROFILE only while inactive), then
+`systemctl start`. First use: target64 for several sessions, reading
+`grid_phase_us` on the RX PRIMED line and the harness level of each.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
