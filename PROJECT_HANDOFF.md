@@ -5488,6 +5488,63 @@ a clean Mac (playback idle) and a fresh session. Conf `6ce387f4`
 (installer `f25b8689`, `1099fbe1` joins the unedited-shipped list) carries
 that in the block's MEASURED string. The point of record stays target64.
 
+**MEASURED 2026-09-05 11:06-12:05 UTC: `...-target64-seed15-primes144`
+is stable with both floors over their bars, and 29 samples slower than
+target64.** Second session of the block, playback idle throughout (the new
+rule), switch at 11:06 UTC: `PITCHSERVO seeded`, RX PRIMED `intended=211
+ring_at_prime=240 overshoot=29 queue_prime=144`, TX PRIMED `queue_prime=144
+align_dropped=74 overshoot=3`, engaged on -14.77 at 60 s. Gate probe
+(`primes144gate3-noise-ch2-64f-100imp`) 0.0% zeros, no runs. The chain's
+first launch never ran (the chain script had only been written inside the
+branch the spoiled gate skipped; 30 minutes idle, nothing else affected);
+relaunched 11:39 UTC:
+
+| run | file | frames | samples | ms | levels | score | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | `primes144-roundtrip-64f-20260905T113932Z` | 64 | 1156 | 24.083 | 1156 x800 | 1.000 | 110 | 98 | 48 | 0 |
+| 2 | `primes144-roundtrip-64f-20260905T114308Z` | 64 | 1156 | 24.083 | 1156 x800 | 1.000 | 110 | 98 | 48 | 0 |
+| 3 | `primes144-roundtrip-64f-20260905T114644Z` | 64 | 1156 | 24.083 | 1156 x800 | 1.000 | 110 | 98 | 48 | 0 |
+| 4 | `primes144-roundtrip-64f-20260905T115021Z` | 64 | 1156 | 24.083 | 1156 x800 | 1.000 | 110 | 98 | 48 | 0 |
+| soak | `primes144soak-roundtrip-64f-20260905T115357Z`, `USB16X16_OTHER_LOAD=0.1`, 600 s | 64 | 1156 | 24.083 | 1156 x2400 | 1.000 | 110 | 96 | 48 | 0 |
+
+5600 impulses on one sample, spread 0, zero RECOVERs, restarts, clips,
+drops, `tx_qlow` and `rx_qlow` 0 on all 3524 lines of the 59-minute
+session, detector 0 runs, gaps 1.44/1.63 ms, pitch 1000010-1000019,
+`tx_pullmax` 48, one 96-frame RX pull at 1729 s (11:35 UTC) that took
+`rx_qfloor` from 98 to 96 exactly. Full-rate log
+`outputs/latency/phase5-20260905/bridge-primes144-session-20260905T110616Z.log`.
+
+*Floors:* TX 147 primed, 111 from 16 s, 110 loaded (the 144 prime gave
+back 50 of seed15's 160, as priced). RX 125 at prime, exactly the
+`240 - 64 - 51` the bin arithmetic predicted, 117 by 12 s, 98 through the
+loaded runs, 96 after the double pull: the first point whose RX floor sits
+at the 96 bar with a double pull already absorbed. Stable by every gate
+this record uses.
+
+*Level:* 1156, 29 over target64 (1127) and 54 over seed15 (1102). The RX
+bin move shows at its full 48 and the TX prime step, which moved
+`front_age_frames` 336 to 288, did not give its 48 back on the device
+timeline. Not explained. Two more things the level says: the earlier
+primes144 session (10:52 UTC) read RTL 26.667 at 32 before its gate was
+spoiled, which is 1092-1102 in harness terms, so this profile's level
+differs by about 55 between its two sessions, well outside the 31-wide
+session-start band seen on rx120; and on this session `tx_dmean` rose 48
+over the hour (238 to 285) while `rx_dmean` fell 26, with the level loop
+holding its 61-frame setpoint, which is servo-held motion and by the
+2026-09-03 result invisible to the harness. The RTL reading for this
+session is owed.
+
+*Standing:* three points now measured on the seed binary. target64 (1127,
+floors 108/77, accepted) is the lowest stable level; seed15 (1102, 160/50)
+is lower but RX-thin; primes144 (1156, 110/96) is the safest and 0.6 ms
+slower. The conf-only rebalance therefore does not pay on latency. The
+lever left in B3 is the mode-1 explicit level setpoint (a bridge flag):
+move about 30 frames of servo-held depth from TX to RX on seed15, floors
+about 130/80 at 1102, no prime change, invisible on the device timeline by
+the 2026-09-03 result. Conf `1ae47899` (installer `d0605556`, `6ce387f4`
+joins the unedited-shipped list) carries the block's MEASURED and COVER
+strings, `STATUS=experimental`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
