@@ -5944,6 +5944,28 @@ live conf with zero bad lines, exit 0. Install order, service stopped:
 start` (PROFILE is already pw850 in the live conf, so the start lands on
 the window and the clean 944 read follows).
 
+**MEASURED 2026-09-05 14:47-14:55 UTC on bridge `2a158386`: the held prime
+lands the ring at 192 and phase 944 reads 1107.** Installs by the user,
+start on pw850 (the live conf already selected it): `PRIME window
+direction=ravenna-to-usb status=hit ring=192 phase_us=944
+window_us=850,950 waited_ms=27271 discarded=1309056`, then `PRIMED
+direction=ravenna-to-usb grid_phase_us=944 ring_at_prime=192 overshoot=5`,
+the unheld numbers exactly; TX `front_age_frames=336`; `rx_qfloor` 77,
+`tx_qfloor` 151 unloaded, zero RECOVERs. Harness, 200 impulses at 64
+(`pw850b-roundtrip-64f-...`): **1107**, spread 0, the corrected prediction
+from the overshoot session (1150 - 43) to the sample. So at phase 944 the
+level is 1107 (23.06 ms) against 1132-1137 at 382-548 and target64's
+accepted 1127: the window chooses the draw, and the far side of the
+cycle is worth 25-30 samples over the plain restarts and 20 over the
+best plain draw on record. Two more probes staged to place the minimum:
+`...-target64-pw700` (`RX_PRIME_PHASE_WINDOW="700,800"`) and
+`...-target64-pw100` (`"50,150"`), block files in
+`~/usb-16x16-work/aes67-hold-install/`, validated against the live conf
+plus both blocks with zero bad lines. Noted from the previous (old-binary)
+pw850 session's last line: `tx_qfloor` 65 late in that session, on the
+binary whose hold left the RX ring one bin high; not seen on `2a158386`
+(151 at the read); watch it.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
