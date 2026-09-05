@@ -5258,6 +5258,24 @@ bin for RX floor 125 at 1 ms back, is the user's call. The live conf
 carries the block as pasted (`STATUS=experimental`) either way. Rollback is
 `switch-profile servo-aligned-both-240-rx120-sd144-tx192`.
 
+**ACCEPTED 2026-09-05 03:15 UTC by the user, at RX floor 77:
+`servo-aligned-both-240-rx120-sd144-tx192-target64`.** The operating point
+of record is now target64: 1127 samples at 64 frames (23.479 ms), RTL
+Utility at 32 27.396 ms, gadget `req_number=4`, bint 0, bridge `b65b84ee`,
+sink delay 144, TX prime 192, RX prime 120, ring target 64, TX floor 108
+loaded, RX floor 77 (arithmetic, see the MEASURED entry above). Conf
+`f4ba358f` carries the block as accepted (installer `8b053272`, `bc674a29`
+joins the unedited-shipped list). Staged on the Pi in
+`~/usb-16x16-work/aes67-target64-install/` (shipped conf, installer,
+supervisor `5c3c4004` and unit `77837e60` unchanged) with
+`copy-target64-labels.py`, the tx192 label copier with the target64 prefix:
+labels only, atomic replace, dry run without `--apply`. Rollback is
+`switch-profile servo-aligned-both-240-rx120-sd144-tx192`. Phase 5 next:
+the pitch seed (Stage B2, a bridge build, so it waits for a service stop),
+then the RX prime bin and TX prime retrim (B3); target 48 is a further
+block if wanted, bounded by `target >= period`, at RX floor 93 by the same
+arithmetic unless the RX prime moves bins.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
