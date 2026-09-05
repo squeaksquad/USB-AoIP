@@ -4989,6 +4989,71 @@ instrumented. The service was left on bint 1 / req 8 at the end of the
 pass; rollback to the accepted gadget is removing the drop-in, a
 `daemon-reload`, and a gadget restart with the service stopped.
 
+**ACCEPTED 2026-09-05 01:22-01:37 UTC: profile
+`servo-aligned-both-240-rx120-sd144-tx192`** (sd144 with
+`TX_PLAYBACK_PRIME=192`, one variable), gadget `req_number=4`, bint 0,
+script `b11fd358`, bridge `b65b84ee`. The lever the record had parked
+behind a skip counter: `tx_pullmax` has read 48 on every session at period
+48 since 2026-09-03 with the pull histogram empty above the second bin, so
+the three-packet pull the 144-frame bar covered is absent at this period
+and the TX prime can drop by one period. Staged in the repo conf as
+experimental (`82614fdf`, installer repinned, `46fd274f` to the
+unedited-shipped list), the block copied to the Pi as
+`~/usb-16x16-work/tx192-block.conf` (`9bd5408e`) and checked with
+`profiles` against a copy of the live conf; the user appended it to the
+live conf (`9690340e`) and ran `switch-profile` at 01:21 UTC. Session:
+ALIGN ok attempt 1, TX PRIMED `queue_prime=192 align_dropped=56
+overshoot=5 front_age_frames=400`, RX PRIMED unchanged, `STAGE running`
+01:21:10 UTC. Gate first: channel-2 noise probe at 64
+(`tx192gate-noise-ch2-64f-100imp` in `usb-holes-20260904/`) 0.0% zeros,
+no run of 4 or more in 1.24 M samples. Then `measure-under-service.sh 64
+800 tx192` four times in one chain, harness alone, RTL Utility idle:
+
+| run | file | frames | samples | ms | levels | score | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | `tx192-roundtrip-64f-20260905T012225Z` | 64 | 1318 | 27.458 | 1318 x800 | 1.000 | 112 | 109 | 48 | 0 |
+| 2 | `tx192-roundtrip-64f-20260905T012601Z` | 64 | 1318 | 27.458 | 1318 x800 | 1.000 | 105 | 109 | 48 | 0 |
+| 3 | `tx192-roundtrip-64f-20260905T012937Z` | 64 | 1318 | 27.458 | 1318 x800 | 1.000 | 105 | 109 | 48 | 0 |
+| 4 | `tx192-roundtrip-64f-20260905T013312Z` | 64 | 1318 | 27.458 | 1318 x800 | 1.000 | 105 | 109 | 48 | 0 |
+
+3200 impulses on one sample, zero spread, zero discontinuities, zero
+restarts, zero clips, zero drops, gaps 1.05/1.62 ms (session maxima),
+`tx_pullmax` 48 (histogram 5495487/1591169/0/0/0/0 at the end of the
+session), pitch 1000014-1000016. **1318 is 34 samples (0.71 ms) under
+sd144's 1352**, not the 48 of the prime change; the 14-sample residue is
+the same session-start term the rx120 step carried (24 predicted, 50
+measured, there in the other direction), recorded, not explained. The TX
+floor fell from 197 unloaded to 112 in the first loaded run and 105 from
+the second onward, 2 over the 103 predicted from sd144's 151, over a bar
+of one period plus the worst wakeup gap (48 + about 96); `tx_qlow` 0 on
+every telemetry line.
+
+**SOAKED 01:37-01:47 UTC, sixteen channels loaded.** `USB16X16_OTHER_LOAD=0.1
+measure-under-service.sh 64 2400 tx192soak`:
+`tx192soak-roundtrip-64f-20260905T013703Z`, 600 s, 2400 impulses at 64
+frames with channels 2-16 at 0.1, all 2400 on **1318 samples (27.458
+ms)**, spread 0, score 1.000, zero discontinuities, zero RECOVERs, zero
+restarts, `tx_clip`/`rx_clip` 0, `tx_dropped`/`rx_dropped` 0, `tx_qfloor`
+105 and `tx_qlow` 0 on all 160 BRIDGE lines of the 26-minute session,
+`rx_qfloor` 109, the zero-run detector 0 runs at every stage (its only
+line is the enable line at start). Checklist item 9 is met for this
+operating point. Conf `848cc08d` carries the block as accepted
+(installer `17c41b98`, `82614fdf` joins the unedited-shipped list); the
+live conf carries the user's pasted block with `STATUS=experimental` until
+he edits the labels, as for sd144. Still owed: the standard RTL Utility
+figure at 32 frames, which the user reads (expect about 31.4 ms, 0.7 ms
+under 32.083). Rollback is `switch-profile
+servo-aligned-both-240-rx120-sd144`.
+
+Noted on the way: `rx_qfloor` read 109 for this whole session on the
+accepted gadget, where the sd144 acceptance read 96 and the 01:17 UTC
+session on the same gadget read 96 within its first minute. So the 96/109
+split is not the gadget's endpoint configuration after all (retracting
+the reading in the sweep entries above); it is set per session by
+something at RX start, unloaded and loaded alike, and it is the next
+thing to instrument on the RX side together with the `front_age_frames
+-1` fix.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
