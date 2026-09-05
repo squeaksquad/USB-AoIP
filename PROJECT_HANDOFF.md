@@ -5314,6 +5314,30 @@ the first minute instead of falling 46, TX floor about 150 loaded, no
 settle overshoot, level unchanged at 1127; the 1 ms is cashed by a TX
 prime 144 block afterwards (B3).
 
+**BUILT and STAGED 2026-09-05 03:44-03:50 UTC: bridge `e6bc98ac`
+(`--pitch-seed`), the B2 install set.** The user stopped the service at
+about 03:42 UTC (the USB gadget stays up); built on the Pi from
+`~/usb-16x16-work/phase4-seed-src` (`main.cpp` `146ed8d8`, Release,
+`-Wall -Wextra -Wpedantic -Werror`, zero warnings), ctest 1/1 passed
+including `test_estimator_seed`, binary SHA-256
+`e6bc98ac967d5958261db410bf7a4057a1c40498f0d9d4d2f595ac2152f280fe`,
+copied to `work/phase4-bridge/artifacts/pi-aarch64/` (README updated;
+`b65b84ee` is the previous binary). Behaviour at `--pitch-seed 0`, which
+every existing profile gets from the supervisor's default, is the previous
+binary's. Installers repinned: `install-candidate.sh` `765ce364` (bridge
+`e6bc98ac`, wrapper `6282b108` unchanged), `install-aes67-service.sh`
+`2e2a8f64` (supervisor `ca2fffb2`, unit `77837e60` unchanged, conf
+`196786be`, bridge `e6bc98ac`; `f4ba358f` joins the unedited-shipped
+list). Staged on the Pi: `~/usb-16x16-work/phase4-seed-install/` (binary,
+wrapper, installer) and `~/usb-16x16-work/aes67-seed15-install/`
+(supervisor, unit, conf, installer). The live conf (`b60ea8e6`) is
+operator-edited, so the service installer will keep it and leave the
+shipped conf beside it as `.new`; the seed15 block goes in by hand as
+before. Install order, service stopped: `install-candidate.sh`, then
+`install-aes67-service.sh`, then start. Rollback: the previous binary
+`b65b84ee` is in git history and `switch-profile` to any block without
+`PITCH_SEED_PPM` runs the new binary at seed 0.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

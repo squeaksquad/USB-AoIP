@@ -54,8 +54,13 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`b65b84ee2aa33cde52e99a8275730c19be2269b5d55904382aeb17b341a33118`
-(2026-09-04: zero-run detector, `--zero-run-detect 1`, with
+`e6bc98ac967d5958261db410bf7a4057a1c40498f0d9d4d2f595ac2152f280fe`
+(2026-09-05: `--pitch-seed PPM`, Phase 5 Stage B2: with the pitch servo
+on, both gadget pitch controls and the shared estimator start at the seed
+before the prime instead of at nominal, removing the 46-frame warm-up
+drift every session showed; `PITCHSERVO seeded ppm= pitch=` line, 0 =
+off, behaviour identical to the previous binary at 0).
+Previous binary `b65b84ee` (2026-09-04: zero-run detector, `--zero-run-detect 1`, with
 `--zero-run-min` and `--zero-run-max` (8 and 480 frames): every block
 read from a capture and written to a playback is scanned per channel for
 runs of exact zeros, and each run inside the window is logged as a
