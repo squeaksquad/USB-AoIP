@@ -171,6 +171,12 @@ align_tx() { local value; value=$(p ALIGN_TX_TRIGGER); printf '%s' "${value:-0}"
 align_tx_offset() { local value; value=$(p ALIGN_TX_OFFSET_US); printf '%s' "${value:-600}"; }
 # ALIGN_TX_PRIME (0 or 1) is the optional aligned TX prime; absent means off.
 align_tx_prime() { local value; value=$(p ALIGN_TX_PRIME); printf '%s' "${value:-0}"; }
+# ALIGN_RX_TRIGGER (0 or 1), ALIGN_RX_OFFSET_US and ALIGN_RX_PRIME (0 or 1)
+# are the optional aligned RX trigger and prime on the host's USB frame grid
+# (2026-09-05): absent means off and 600 us.
+align_rx() { local value; value=$(p ALIGN_RX_TRIGGER); printf '%s' "${value:-0}"; }
+align_rx_offset() { local value; value=$(p ALIGN_RX_OFFSET_US); printf '%s' "${value:-600}"; }
+align_rx_prime() { local value; value=$(p ALIGN_RX_PRIME); printf '%s' "${value:-0}"; }
 # ZERO_RUN_DETECT (0 or 1) is the optional zero-run detector, a behaviour-free
 # instrument that logs ZERORUN lines for runs of exact zeros per stage; absent
 # means off.
@@ -254,6 +260,25 @@ validate_profile() {
   esac
   if [ "$(align_tx_prime)" -eq 1 ] && [ "$(align_tx)" -ne 1 ]; then
     say "profile $profile_name: ALIGN_TX_PRIME needs ALIGN_TX_TRIGGER=1" >&2; return 1
+  fi
+  case "$(align_rx)" in
+    0|1) ;;
+    *) say "profile $profile_name: ALIGN_RX_TRIGGER must be 0 or 1" >&2; return 1 ;;
+  esac
+  [[ $(align_rx_offset) =~ ^[0-9]+$ ]] && [ "$(align_rx_offset)" -le 10000 ] ||
+    { say "profile $profile_name: ALIGN_RX_OFFSET_US must be an unsigned integer up to 10000" >&2; return 1; }
+  if [ "$(align_rx)" -ne 1 ] && [ "$(align_rx_offset)" -ne 600 ]; then
+    say "profile $profile_name: ALIGN_RX_OFFSET_US needs ALIGN_RX_TRIGGER=1" >&2; return 1
+  fi
+  if [ "$(align_rx)" -eq 1 ] && [ "$(align)" -ne 1 ]; then
+    say "profile $profile_name: ALIGN_RX_TRIGGER needs ALIGN_START=1" >&2; return 1
+  fi
+  case "$(align_rx_prime)" in
+    0|1) ;;
+    *) say "profile $profile_name: ALIGN_RX_PRIME must be 0 or 1" >&2; return 1 ;;
+  esac
+  if [ "$(align_rx_prime)" -eq 1 ] && [ "$(align_rx)" -ne 1 ]; then
+    say "profile $profile_name: ALIGN_RX_PRIME needs ALIGN_RX_TRIGGER=1" >&2; return 1
   fi
   case "$(zero_run)" in
     0|1) ;;
@@ -340,6 +365,9 @@ bridge_arguments() {
     --align-tx-trigger "$(align_tx)" \
     --align-tx-offset-us "$(align_tx_offset)" \
     --align-tx-prime "$(align_tx_prime)" \
+    --align-rx-trigger "$(align_rx)" \
+    --align-rx-offset-us "$(align_rx_offset)" \
+    --align-rx-prime "$(align_rx_prime)" \
     --zero-run-detect "$(zero_run)" \
     --pitch-seed "$(seed)" \
     --level-shift "$(shift_frames)" \
@@ -816,7 +844,7 @@ cmd_profiles() {
     [ "$name" = "$selected" ] && mark='*'
     say "$mark $name: $(p STATUS), cover: $(p COVER), measured: $(p MEASURED)"
     say "    $(p DESCRIPTION)"
-    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) zero-run $(zero_run) seed $(seed) ppm shift $(shift_frames)"
+    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) rx trigger $(align_rx)/$(align_rx_offset) us prime $(align_rx_prime) zero-run $(zero_run) seed $(seed) ppm shift $(shift_frames)"
   done
 }
 

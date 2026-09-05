@@ -74,6 +74,13 @@ constexpr std::int64_t kAlignReferenceMaximumAgeNs = 100000000;
 // then renders the prime before sleeping to it, so the target is placed
 // this far ahead rather than kAlignRecoveryMarginNs.
 constexpr std::int64_t kAlignPrimeMarginNs = 200000;
+// Aligned RX prime: how long the prime may wait for the first fresh wake of
+// its reference grid (the USB capture) before priming unaligned. 5 ms is
+// five USB frames; the ring has room for it (target + prime + 240 < 768).
+constexpr std::int64_t kAlignPrimeReferenceWaitNs = 5000000;
+// The USB frame grid the RX alignment uses: 48 frames at 48 kHz, one host
+// frame, whatever the negotiated period.
+constexpr std::int64_t kUsbFrameTickNs = 1000000;
 // Zero-run detector window. 8 frames is far above anything dithered
 // material or the channel-2 noise probe produces by chance and far below
 // the 41-sample holes; 480 frames (ten packets, 10 ms) and longer is a gap
@@ -207,6 +214,21 @@ struct Options {
     // frames that make the front frame's age at the first tick a constant
     // (prime depth plus the longest possible wait). Off by default.
     bool align_tx_prime{false};
+    // Aligned RX trigger and prime (2026-09-05, Phase 5), need --align-start
+    // 1. RX plays out into the USB playback queue that the host drains on
+    // its own 1 ms frame grid, so the phase between the RAVENNA tick grid
+    // (redrawn at every stack start) and the host's frames is a per-session
+    // draw of up to one frame on RX, the one draw the aligned TX prime
+    // leaves: sessions with identical PRIMED numbers measured 34-64 samples
+    // apart. With these on, RX mirrors TX with the roles swapped: the USB
+    // playback trigger sleeps to the next USB capture fresh wake + offset +
+    // n * 1 ms (the USB capture's period wakes are locked to the host's
+    // frames), and the RX prime drops from the ring's front the frames that
+    // make the front frame's age at the first host frame after the trigger
+    // a constant. Off by default.
+    bool align_rx_trigger{false};
+    std::int64_t align_rx_offset_us{kAlignOffsetDefaultUs};
+    bool align_rx_prime{false};
     // Zero-run detector (2026-09-04). Exactly-41-sample runs of zeros on
     // the loop, phase-locked to the Pi's 48-frame grid, that neither the
     // bridge's counters nor the driver's flags see. With this on, every
@@ -344,6 +366,12 @@ private:
         << "                         --align-start 1)\n"
         << "  --align-tx-offset-us N that offset, microseconds after the reference wakeup\n"
         << "                         (default 600, at most 10000)\n"
+        << "  --align-rx-trigger 0|1\n"
+        << "                         trigger the USB playback on the host's 1 ms frame grid\n"
+        << "                         (USB capture fresh wakes) plus --align-rx-offset-us\n"
+        << "  --align-rx-offset-us N offset on that grid (default 600)\n"
+        << "  --align-rx-prime 0|1   drop from the RX ring at prime so the front frame's age\n"
+        << "                         at the first host frame after the trigger is a constant\n"
         << "  --align-tx-prime 0|1   drop ring front frames at the TX prime so the front\n"
         << "                         frame's age at the first tick is constant (default 0;\n"
         << "                         needs --align-tx-trigger 1)\n"
@@ -463,6 +491,20 @@ Options parse_options(const int argc, char** argv) {
                 throw std::runtime_error("align-tx-prime must be 0 or 1");
             }
             options.align_tx_prime = parsed != 0;
+        } else if (argument == "--align-rx-trigger") {
+            const unsigned long parsed = parse_unsigned(value, "align-rx-trigger");
+            if (parsed > 1) {
+                throw std::runtime_error("align-rx-trigger must be 0 or 1");
+            }
+            options.align_rx_trigger = parsed != 0;
+        } else if (argument == "--align-rx-offset-us") {
+            options.align_rx_offset_us = static_cast<std::int64_t>(parse_unsigned(value, "align-rx-offset-us"));
+        } else if (argument == "--align-rx-prime") {
+            const unsigned long parsed = parse_unsigned(value, "align-rx-prime");
+            if (parsed > 1) {
+                throw std::runtime_error("align-rx-prime must be 0 or 1");
+            }
+            options.align_rx_prime = parsed != 0;
         } else if (argument == "--zero-run-detect") {
             const unsigned long parsed = parse_unsigned(value, "zero-run-detect");
             if (parsed > 1) {
@@ -514,6 +556,18 @@ Options parse_options(const int argc, char** argv) {
     }
     if (options.align_tx_prime && !options.align_tx_trigger) {
         throw std::runtime_error("--align-tx-prime needs --align-tx-trigger 1");
+    }
+    if (options.align_rx_offset_us > kAlignOffsetMaximumUs) {
+        throw std::runtime_error("align-rx-offset-us must be 0..10000");
+    }
+    if (!options.align_rx_trigger && options.align_rx_offset_us != kAlignOffsetDefaultUs) {
+        throw std::runtime_error("--align-rx-offset-us needs --align-rx-trigger 1");
+    }
+    if (options.align_rx_trigger && !options.align_start) {
+        throw std::runtime_error("--align-rx-trigger needs --align-start 1");
+    }
+    if (options.align_rx_prime && !options.align_rx_trigger) {
+        throw std::runtime_error("--align-rx-prime needs --align-rx-trigger 1");
     }
     if (options.zero_run_minimum_frames < 1 ||
         options.zero_run_maximum_frames < options.zero_run_minimum_frames ||
@@ -805,6 +859,10 @@ struct Direction {
     // follow the planned trigger, and the frames it dropped; the planned
     // trigger target is handed to the trigger so both use one grid point.
     bool align_prime{false};
+    // Aligned prime without a start-reference seed (RX): the instant the
+    // prime first found its ring full enough while the reference grid had
+    // no fresh wake yet, plus the wait allowance; 0 = not waiting.
+    std::int64_t align_prime_wait_deadline_ns{0};
     std::int64_t pending_trigger_target_ns{0};
     std::int64_t last_prime_ns{0};
     std::int64_t last_prime_phase_us{-1};
@@ -1122,7 +1180,19 @@ IoResult render_to_playback(Direction& direction,
             const std::int64_t min_wait_frames = min_wait_ns * frames_per_tick / tick_ns;
             const std::int64_t max_wait_frames = (max_wait_ns * frames_per_tick + tick_ns - 1) / tick_ns;
             const std::int64_t age_frames = static_cast<std::int64_t>(prime_frames) + max_wait_frames;
-            if (wake_ns <= 0 || now_ns - wake_ns > kAlignReferenceMaximumAgeNs) {
+            if (wake_ns <= 0 && direction.align_trigger_seed_ns == 0) {
+                // No seed and no fresh wake yet (RX, whose grid is the USB
+                // capture): hold the prime briefly for the first one.
+                if (direction.align_prime_wait_deadline_ns == 0) {
+                    direction.align_prime_wait_deadline_ns = now_ns + kAlignPrimeReferenceWaitNs;
+                }
+                if (now_ns < direction.align_prime_wait_deadline_ns) {
+                    return IoResult::idle;
+                }
+                std::cerr << "ALIGN prime direction=" << direction.name
+                          << " status=unaligned reason=no-reference-wake t_us=" << elapsed_us() << '\n';
+                direction.align_prime = false;
+            } else if (wake_ns <= 0 || now_ns - wake_ns > kAlignReferenceMaximumAgeNs) {
                 // No usable grid: prime and trigger as the aligned trigger alone would.
                 direction.align_prime = false;
             } else if (static_cast<std::int64_t>(direction.ring.size()) < age_frames - min_wait_frames) {
@@ -2003,6 +2073,16 @@ int run(const Options& options) {
                 tx.align_trigger_seed_ns = align.reference_ns;
                 tx.align_prime = options.align_tx_prime;
             }
+            if (options.align_rx_trigger) {
+                // RX triggers and primes on the host's frame grid, read as
+                // the USB capture's fresh wakes; no start reference exists
+                // for that grid, so the prime waits for the first one.
+                rx.tick_source = &tx;
+                rx.align_trigger_tick_ns = kUsbFrameTickNs;
+                rx.align_trigger_offset_ns = options.align_rx_offset_us * 1000;
+                rx.align_trigger_seed_ns = 0;
+                rx.align_prime = options.align_rx_prime;
+            }
         }
         usb_capture.start_capture();
     } else {
@@ -2292,6 +2372,15 @@ int run(const Options& options) {
               << ",\"align_tx_prime_phase_us\":" << tx.last_prime_phase_us
               << ",\"align_tx_first_tick_wait_us\":" << tx.last_first_tick_wait_us
               << ",\"align_tx_front_age_frames\":" << tx.last_front_age_frames
+              << ",\"align_rx_trigger\":" << (options.align_rx_trigger ? 1 : 0)
+              << ",\"align_rx_triggers\":" << rx.aligned_triggers
+              << ",\"align_rx_unaligned_triggers\":" << rx.unaligned_triggers
+              << ",\"align_rx_wake_to_start_us\":" << rx.last_trigger_wake_to_start_us
+              << ",\"align_rx_prime\":" << (options.align_rx_prime ? 1 : 0)
+              << ",\"align_rx_prime_dropped\":" << rx.last_prime_dropped
+              << ",\"align_rx_prime_phase_us\":" << rx.last_prime_phase_us
+              << ",\"align_rx_first_tick_wait_us\":" << rx.last_first_tick_wait_us
+              << ",\"align_rx_front_age_frames\":" << rx.last_front_age_frames
               << ",\"zero_run_detect\":" << (options.zero_run_detect ? 1 : 0)
               << ",\"zero_run_min\":" << options.zero_run_minimum_frames
               << ",\"zero_run_max\":" << options.zero_run_maximum_frames

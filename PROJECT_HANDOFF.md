@@ -5674,6 +5674,51 @@ shift30 (1154, 119/66) are measured and stay experimental. Conf
 list). Rollback for service is `switch-profile
 servo-aligned-both-240-rx120-sd144-tx192-target64`.
 
+**RTL Utility at 32 frames on target64, session of 12:53 UTC, read by the
+user: 28.104 ms**, 0.708 ms (34 samples) over the 27.396 the point was
+accepted on. So the session lottery is on the accepted point too, with
+the same PRIMED numbers, and it is about a period wide: the record's
+"session-start term" is not a seed effect and not a bridge-depth effect.
+
+**IMPLEMENTED 2026-09-05 13:10 UTC, not yet built: the aligned RX trigger
+and prime, bridge `--align-rx-trigger`, `--align-rx-offset-us`,
+`--align-rx-prime`, and profile `...-target64-rxalign`.** Reading of the
+shelves: every point measured today lands 34-64 samples apart between
+sessions with identical PRIMED numbers (target64 27.396 and 28.104; seed15
+1102 and shift30 1154 with the same ring fill 192, overshoot 5, TX
+`front_age_frames` 336 and `align_dropped` 65). The RX playout is drained
+by the host on its own 1 ms USB frames, and the RAVENNA tick grid is
+redrawn at every stack start, so the phase between the two is a
+per-session draw of up to one frame on RX: the one start phase the bridge
+never aligned (the `front_age_frames -1` item open since 2026-09-04). The
+build mirrors TX with the roles swapped. Bridge: RX gets
+`tick_source = &tx` (the USB capture's fresh wakes, its period wakes being
+locked to the host's frames), a fixed 1 ms tick (`kUsbFrameTickNs`, 48
+frames at 48 kHz whatever the negotiated period), the same
+`align_playback_trigger` before the USB playback start and the same
+prime-time drop computation, so RX PRIMED reports `prime_phase_us`,
+`first_tick_wait_us`, `front_age_frames` and `align_dropped` like TX. RX
+has no start-alignment seed for that grid, so a prime that finds no fresh
+USB wake yet holds for up to 5 ms (`kAlignPrimeReferenceWaitNs`, five
+frames, within the ring) and then primes unaligned with an `ALIGN prime
+... status=unaligned reason=no-reference-wake` line; TX's path is
+unchanged (it always has a seed). Options validated like TX's
+(`--align-rx-trigger` needs `--align-start 1`, the prime needs the
+trigger, offset 0..10000). SUMMARY carries `align_rx_*`. `main.cpp`
+`91fbea05`, syntax-checked clean on the Mac. Supervisor: keys
+`ALIGN_RX_TRIGGER`, `ALIGN_RX_OFFSET_US`, `ALIGN_RX_PRIME` (absent 0/600/0,
+validated like the TX keys), passed through, shown by `profiles` as `rx
+trigger N/M us prime P` (`6c97e61b`). Conf `db094139` adds the block on
+the accepted target64 base with the three RX keys on, no seed, one lever
+(installer `8f85ea4f`, `3f087d41` joins the unedited-shipped list);
+validated on the Pi against the repo conf and the live conf plus the
+block, exit 0. Source in `~/usb-16x16-work/phase4-rxalign-src`, block and
+supervisor in `~/usb-16x16-work/aes67-rxalign-install/`. Acceptance for
+this lever is different: two sessions, each with the gate, four loaded
+800-impulse runs and the soak, and the two levels equal; below or at
+target64's 27.4 is the expectation. Build waits for a service stop; the
+pin list is the supervisor's `expected_bridge_sha256` and both installers.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
