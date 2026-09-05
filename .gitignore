@@ -17,6 +17,7 @@ outputs/*.wav
 # These are the record behind the documented n= claims, not build noise.
 !outputs/latency/phase4-candidate-*/bridge.log
 !outputs/latency/phase4-candidate-*/daemon.log
+!outputs/latency/phase5-20260905/*.log
 !outputs/latency/*-api/sap-timeline.log
 !outputs/latency/*-api/settle.log
 

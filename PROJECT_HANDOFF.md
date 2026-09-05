@@ -5092,6 +5092,86 @@ timestamped log of `rx_qfloor` changes would show; unloaded and loaded
 alike, RX cover stays 96 over the 48-frame push, as every accepted profile
 has read.
 
+**Phase 5 Stage A, 2026-09-05 02:12-02:25 UTC: the clock terms priced, the
+kernel module step closed.** Phase 5's userspace half shipped on 2026-09-02
+as `--usb-pitch-servo 1` (the Mac follows the RAVENNA rate through the
+gadget's pitch controls, both converters at exactly 1.0), so before any
+exact-source `usb_f_uac2` work the question was what clock-related depth
+the servo leaves behind. `outputs/latency/phase5-20260905/servo-start.py`
+reads bridge logs (full-rate tmpfs, candidate `bridge.log`, or a journal
+export split by PID) and reports per session the warm-up drift, pitch
+settle, post-settle band, ring extremes and floors; `servo-start-results.md`
+holds its output over the running tx192 session's full-rate log
+(`bridge-tx192-session-20260905T012106Z.log`, 3056 s from 01:21:10 UTC,
+copied from `/run/usb16x16/bridge.log`), every service session in the
+journal since the servo binary (42 sessions, 2026-09-02 22:32 to
+2026-09-05 01:21 UTC, one BRIDGE line in ten) and the 17 aligned mode-1
+candidate runs of 2026-09-03/04. Frames per direction, 48 = 1 ms.
+
+1. *Warm-up drift: 46 frames TX, 43 RX, every session.* The estimator
+   needs 60 observations before it steers, and pitch sits at nominal for
+   those 60 s while the clocks differ by about 15 ppm, so TX's depth mean
+   falls 46 (351 to 305 on this session, 407 to 361 on the 288-prime
+   sessions) and RX's rises 43 to 45, in 39 of 42 service sessions and all
+   17 candidates within 3 frames (the three outliers are the 2026-09-03
+   19:06 and 19:23 UTC restart storms and one 13:40 session at 66). The
+   level loop then captures the drifted split as its setpoint and holds it
+   for the session, so the 46 frames are permanent: on this session
+   `tx_qfloor` read 197 for the first 27 s (prime 192 plus overshoot 5) and
+   149 from 01:21:38 UTC, before any load. Pitch then settles to 1000014-17
+   in 26-150 s (median 95) with a 4-8 ppm overshoot. This is 1 ms of TX
+   prime that a seeded pitch (the converged 15 ppm written at prime,
+   estimator reset to it) would keep; RX's 43 goes into its ring (`rx_occ`
+   131 to 144-192) and touches no floor.
+2. *Post-settle quantisation band: about 10 frames per direction.*
+   Unloaded stretches after settle hold the TX-minus-RX differential in a
+   9-30 frame band (this session idle 1560-2100 s: -29..-8) with the bias
+   term inside +-1.1 ppm. That band, 0.2 ms, is the only term a kernel-side
+   fine-pitch or PTP-derived feedback would touch. Under the plan's bar of
+   20 frames per direction the exact-source module step of Phase 5 is
+   closed; `DEPLOYMENT_PLAN.md` tier three carries the correction.
+3. *The ring reserve has never been used.* `tx_occ` minimum 131 and
+   `rx_occ` minimum 131 (target 128 plus 3) in every one of the 59 sessions
+   and runs; the RX ring rises to 192 as the sink for RX-side wander. The
+   2026-09-03 target-128 run moved the round trip 1:1 with the target
+   (64 per direction, 2.67 ms), so target 64 and then 48 are the next
+   profile-only levers, worth up to 160 frames (3.3 ms) on the device
+   timeline if the aligned prime keeps the floors where the 2026-09-03 run
+   could not. Risk to check first: the prime waits on ring level, and the
+   Farrow history.
+4. *The loaded TX floor is set by transient dips, not the sawtooth.* On the
+   full-rate log the differential dips to -105..-110 about ten times during
+   loaded runs 2-4 and the soak (291-1553 s), never in run 1 (-28..-6),
+   never idle; each dip is 60-100 frames for a few seconds with the bias
+   clamped at -3 ppm, `tx_gapmax_us` steady at 1035-1064 so the bridge did
+   not stall, and `tx_qfloor` went 149 to 113 two seconds into run 1
+   (01:22:27) and to 105 at 382 s in run 2. The 1 Hz `tx_queue` minimum in
+   those windows is 154-156 against the floor's 105, so the intra-second
+   sawtooth under load is about 50 deep. Where the dips are made (the Mac's
+   OUT stream under harness load, or the Pi's USB capture) is not assigned;
+   it matters because the harness is also the instrument, and a DAW may or
+   may not produce them. Observation only.
+5. *RX floor 96 is a 96-frame host pull, to the second.* `rx_qfloor` went
+   109 to 96 at 2155 s, 01:57:05 UTC, on the line where `rx_pullmax` first
+   read 96 (49 before), `rx_queue` 180 to 144, the differential -21 to +41
+   in one second and the bias slammed to +3.0: the Mac took two IN packets
+   in one pull, the RX queue lost one period, and the running minimum
+   recorded it. The 02:05 UTC reading in the entry above is that event
+   seen through the journal's one-in-ten sampling. So the RX floor is
+   96 whenever the host makes one double pull, and 109 until it does; the
+   time-to-floor is the time to the first such pull, not a slow process.
+   The positive excursions from 2125 s on (+30..+59, five of them to
+   02:05 UTC) are the same kind of host event, after the loaded windows.
+
+Where Phase 5 stands: the lever left in the clock path is the seed (1 ms of
+TX prime, a bridge flag plus a profile key); the lever the servo made safe
+is the ring target (up to 3.3 ms, profile only); the kernel step is closed
+on this evidence. Order: ring target 64 block first (no build, the larger
+number), then the seed, then the prime retrim. The plan is in the
+conversation record of 2026-09-05 and summarised in `DEPLOYMENT_PLAN.md`
+tier three. Nothing installed, nothing changed on the Pi; the service
+session of 01:20:23 UTC continues.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

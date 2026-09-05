@@ -261,6 +261,22 @@ plus cold-boot and macOS enumeration tests before the known-good module is
 ever unloaded. Handoff section "Phase 5: PTP-disciplined USB research" has
 the architecture sketch.
 
+**Corrected 2026-09-05 (handoff "Phase 5 Stage A").** The userspace half of
+this tier shipped on 2026-09-02 as `--usb-pitch-servo 1`: the Mac already
+follows the RAVENNA rate through the gadget's pitch controls and both
+converters run at exactly 1.0. What the servo left behind was priced from
+42 service sessions and 17 candidate runs
+(`outputs/latency/phase5-20260905/`): a fixed warm-up drift of 46 frames
+per direction while pitch sits at nominal for the estimator's first 60 s
+(1 ms of TX prime, recoverable by seeding the pitch), a post-settle
+quantisation band of about 10 frames per direction (0.2 ms, the only term
+a kernel-side feedback would touch), and a ring reserve at target 128 that
+has never been drawn below 131 in any session (up to 3.3 ms round trip,
+a profile change). The kernel module step is therefore closed unless a
+later measurement finds a clock term above 20 frames per direction; the
+remaining bridge-side terms are the ring target, the seed, and the Pi
+wakeup gap (Phase 6).
+
 ### The floor
 
 Mac at 64 frames both ways (5.25 ms measured), the Ferrofish, and the
