@@ -5978,6 +5978,19 @@ steps down somewhere between 550 and 765 and climbs slowly after; the
 minimum is at or just past that step. pw100 (50-150) is next for the
 wrap side; a 600-700 probe may then bracket the step.
 
+**MEASURED 2026-09-05 15:08 UTC: pw100 reads 1157 at phase 67, RX floor
+125; the map is a sawtooth and pw600 brackets its step.** `PRIME window
+... status=hit ring=192 phase_us=67 window_us=50,150 waited_ms=4`,
+`PRIMED ring_at_prime=192 overshoot=5`, TX `front_age_frames=336`,
+`rx_qfloor` 125 (the RX queue one bin higher at this phase, as the
+aligned RX prime's 240 fill gave), `tx_qfloor` 202, zero RECOVERs.
+Harness (`pw100-roundtrip-64f-...`): **1157** (24.10 ms). The map: 67 ->
+1157, 382 -> 1132, 544 -> 1134, 548 -> 1137, 765 -> 1094, 944 -> 1107.
+High from the wrap through about 550, a drop of about 43 between 550 and
+765, a slow climb after. The minimum is just past the drop; pw600
+(`RX_PRIME_PHASE_WINDOW="600,700"`, conf `52e82dcb`, installer
+`127dc23f`, `c9cce445` joins the unedited-shipped list) brackets it.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
