@@ -5903,6 +5903,31 @@ with zero bad lines and lists the block. The live conf gets the same
 one-line edit in place. Rule for the record: a window value in a block is
 always `"LOW,HIGH"`.
 
+**MEASURED 2026-09-05 14:36-14:42 UTC: the window works, phase 944 read
+1150 with 43 frames of hold overshoot on it, and the hold is fixed to
+leave the ring where an unheld start does (implemented, not built).**
+After the quoting fix the user switched to pw850 at about 14:35 UTC.
+Bridge log: `PRIME window direction=ravenna-to-usb status=hit
+phase_us=944 window_us=850,950 waited_ms=29338 discarded=1408229`, then
+`PRIMED direction=ravenna-to-usb grid_phase_us=944 ring_at_prime=235
+overshoot=48` (the plain draws prime at 192, overshoot 5); TX PRIMED
+`front_age_frames=336` as always. Harness, 200 impulses at 64
+(`pw850-roundtrip-64f-20260905T144013Z`): **1150**, spread 0, zero
+RECOVERs; `rx_qfloor` 120 against 77 on every unheld target64 session,
+`tx_qfloor` 150. The 43 of extra RX floor is the extra ring: the hold
+drained the ring only to the 187 threshold, so the push that crossed it
+landed at 235 rather than 192, one 48-frame bin more RX depth, which the
+level carries 1:1. Corrected, phase 944 is about 1107, under every unheld
+draw (1132-1137 at 382-548 us) by 25-30, so the mapping has the sign the
+slide predicted and the far side of the cycle is the low side. Fix
+(`main.cpp` `d9502f07`, syntax-checked clean): while holding, the ring is
+drained to the largest whole number of capture periods below the prime
+level (144 for 187 at period 48), so the crossing push lands at 192
+exactly as an unheld start; the `PRIME window` line now also reports
+`ring=`. Source staged in `~/usb-16x16-work/phase4-hold-src`. Build
+waits for a service stop; then the pw850 read repeats clean, and two more
+windows (say 700-800 and 50-150) place the minimum.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

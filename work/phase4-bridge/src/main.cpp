@@ -1228,11 +1228,19 @@ IoResult render_to_playback(Direction& direction,
                 const bool inside = have_phase &&
                     usb16x16::phase_in_window(phase_ns, direction.phase_window_low_ns, direction.phase_window_high_ns);
                 if (!inside && now_ns < direction.phase_wait_deadline_ns) {
-                    // Keep the ring at the prime level while holding so the
-                    // capture never overflows it; the discarded frames are
-                    // counted, and no playback has started yet.
-                    if (direction.ring.size() > prime_frames) {
-                        const std::size_t excess = direction.ring.size() - prime_frames;
+                    // Hold: drain the ring to the largest whole number of
+                    // capture periods below the prime level, so the push that
+                    // finally crosses the threshold lands the ring exactly
+                    // where an unheld start lands (192 for a 187 threshold at
+                    // period 48, not 235). Draining only to the threshold
+                    // left the next push as a 48-frame overshoot, one bin
+                    // more RX depth (measured 2026-09-05: RX floor 120 and
+                    // level +43 on the first held session). The discarded
+                    // frames are counted; no playback has started yet.
+                    const std::size_t period = static_cast<std::size_t>(direction.capture.period());
+                    const std::size_t hold_level = period > 0 ? ((prime_frames - 1) / period) * period : prime_frames;
+                    if (direction.ring.size() > hold_level) {
+                        const std::size_t excess = direction.ring.size() - hold_level;
                         direction.ring.pop(excess);
                         direction.phase_wait_discarded += excess;
                     }
@@ -1240,6 +1248,7 @@ IoResult render_to_playback(Direction& direction,
                 }
                 std::cerr << "PRIME window direction=" << direction.name
                           << " status=" << (inside ? "hit" : "timeout")
+                          << " ring=" << direction.ring.size()
                           << " phase_us=" << (have_phase ? phase_ns / 1000 : -1)
                           << " window_us=" << direction.phase_window_low_ns / 1000 << ',' << direction.phase_window_high_ns / 1000
                           << " waited_ms=" << (now_ns - direction.phase_wait_started_ns) / 1000000
