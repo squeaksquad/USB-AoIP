@@ -4832,6 +4832,55 @@ The operating point of record is sd144: 1352 samples at 64 frames
 are made (0.79 ms on the table), the RX PRIMED `front_age_frames -1`
 fix, the req 3/8 sweep, and TX prime 192 behind a day of `tx_pullmax`.
 
+**MEASURED 2026-09-05 00:02-00:06 UTC: `req_number=3`, the first point of
+the sweep, costs nothing against 4 and is clean down to 16 frames.** The
+user stopped the AES67 service (23:55:33 UTC, the sd144 session of 23:19
+with zero RECOVERs), held 3 with a runtime drop-in
+(`/run/systemd/system/usb-16x16.service.d/req3.conf`, `ExecStart=` reset to
+`/usr/local/sbin/setup-usb-16x16 start 3`; the installed script stays
+`b11fd358`, a reboot returns to 4), `daemon-reload`, restarted the gadget
+(bound 23:58:11 UTC, `req_number=3`, `configured`, high-speed; a first
+attempt without the drop-in directory rebound at 4 and was redone) and
+started the service at 00:02:06 UTC on `servo-aligned-both-240-rx120-sd144`
+(ALIGN ok attempt 1, TX `align_dropped=49`, RX PRIMED still
+`front_age_frames=-1`). RTL Utility at 32 frames, read by the user right
+after: **32.042 ms**, 2 samples under the 32.083 of `req_number=4`. Then,
+harness alone, RTL Utility idle, 100 impulses each, in
+`outputs/latency/usb-holes-20260904/` as `req3-*`:
+
+| probe | frames | result |
+|---|---:|---|
+| noise ch2 | 512 | 0.0% zeros, no run of 4 or more in 1.24 M samples |
+| noise ch2 | 64 | 0.0%, no run (req 4's first probe at 64 had five 41-sample runs) |
+| noise ch2 | 32 | 0.0%, no run |
+| noise ch2 | 16 | 0.0%, no run |
+| impulse ch1 | 64 | **1350** on all 100, score 1.000, no discontinuities |
+| impulse ch1 | 32 | **1350** on all 100, score 1.000, no discontinuities |
+
+Pi over the pass (session 4 minutes old, unloaded apart from the probes):
+zero RECOVERs, zero restarts, zero drops, zero clips, `tx_qfloor` 159,
+`rx_qfloor` 107, `tx_pullmax` 48, `rx_pullmax` 85, gaps 1.08/1.91 ms,
+pitch 1000013, detector 0 runs at every tap.
+
+Reading. The level is 1350 against 1352 at req 4 on the same profile, so
+the request count from 3 to 4 costs about 2 samples, not the 48 per
+request the "two extra 250 us requests per direction" arithmetic
+predicted, and the ~150-sample step between req 2 (1159-1172) and req 4
+(1314) is not per-request. Either it all lands between 2 and 3, or the
+req 2 level was itself an artefact of a loop that was dropping every
+second impulse and the true clean-loop level at 2 was never measured.
+Request count is therefore not a latency lever above 2; point 8 of the
+sweep has nothing left to answer (it existed for the five residual holes,
+which did not recur at 4 and do not exist at 3). The one point that still
+tests something is the packet interval: `p_hs_bint=c_hs_bint=1` (125 us
+packets, 6 frames) with 4 requests, the same slack in half the queued
+time, one variable against the accepted point. Also noted, not explained:
+`rx_qfloor` reads 107 here against 96 on every req 4 session, and
+`rx_pullmax` 85 against 96; the RX floor, which did not follow the RX
+prime, may follow the USB playback request depth. A loaded floor needs the
+800-impulse runs, which this point did not get: 3 is measured, not
+accepted, and the service is left on 3 pending the next point.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
