@@ -5808,6 +5808,49 @@ measurement makes possible and it is where the record points next. Conf
 77) remains the lowest; rxalign (1202-1215, RX 96) is the most
 predictable and the safest. The user's call which runs tonight.
 
+**RTL Utility at 32 frames on rxalign session 2, read by the user at
+about 14:00 UTC: 28.958 ms**, 1.562 ms (75 samples) over target64's
+27.396, the harness difference (1202 against 1127) to the sample.
+
+**IMPLEMENTED 2026-09-05 14:20 UTC, not yet built: the grid-phase
+instrument and the RX prime phase window (the re-roll, done as a wait).**
+Why a wait and not a restart: the RAVENNA tick grid follows PTP and the
+host's USB frame grid is the Mac's own crystal, so their phase slides
+through a full 1 ms cycle at the offset the pitch servo corrects in the
+data rate, about 15 ppm, one cycle per 67 s or so. A bridge restart
+takes two seconds and would land where it started; holding the prime
+until the phase is where the level is best is the mechanism that picks
+the draw. Nothing in the record maps phase to level yet, so the build is
+two parts. (1) Instrument, always on: `phase_us` in every BRIDGE line,
+the RX capture's last fresh wake against the USB capture's last fresh
+wake modulo one USB frame (`grid_phase_ns` in `bridge_core.hpp`, unit
+tested with `phase_in_window`), and `grid_phase_us=` on both PRIMED
+lines, so every session from here records the phase it primed at and
+the harness level then maps it. (2) `--rx-prime-phase-window LOW,HIGH`
+(microseconds, HIGH < LOW wraps) with `--rx-prime-phase-timeout-s N`
+(default 80, at least one full slide): the RX prime holds while the phase
+is outside the window, popping the ring down to the prime level each
+wake so the capture never overflows it (the discarded frames are
+counted; no playback has started), then primes with a `PRIME window
+direction=ravenna-to-usb status=hit|timeout phase_us= waited_ms=
+discarded=` line. Needs `--align-start 1`; independent of the RX
+alignment flags, so it can run on the plain target64 base where the
+level follows the draw. SUMMARY carries `rx_prime_grid_phase_us`,
+`rx_prime_phase_window`, `rx_prime_phase_discarded`. `main.cpp`
+`687db660`, `bridge_core.hpp` and `bridge_tests.cpp` changed,
+syntax-checked clean on the Mac. Supervisor: optional keys
+`RX_PRIME_PHASE_WINDOW` (`LOW,HIGH`, needs `ALIGN_START=1`) and
+`RX_PRIME_PHASE_TIMEOUT_S` (1..600, default 80), passed only when a
+window is set, shown by `profiles` as `phase window LOW,HIGH/N s`
+(`f3e2b55f`, installer `baa523a5`, conf `c7092ea1` unchanged); validated
+on the Pi against the repo conf and the live conf, exit 0. No new
+profile block yet: the first use is observation on target64 (the level
+follows the draw there), several sessions with `grid_phase_us` and the
+harness level, then a window block. Source in
+`~/usb-16x16-work/phase4-phase-src`, supervisor in
+`~/usb-16x16-work/aes67-phase-install/`. Build waits for a service stop;
+pin list as before.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

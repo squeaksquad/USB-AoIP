@@ -165,6 +165,31 @@ private:
 // not_before: where a recovery re-prepares the RAVENNA capture so it lands
 // on the same tick phase the start alignment chose. period must be
 // positive; a not_before at or before the reference returns the reference.
+// Phase of one periodic grid against another: where `wake` falls inside the
+// `tick`-long cycle that starts at `reference`, in [0, tick). Used for the
+// RAVENNA tick grid (an RX capture fresh wake) against the host's USB frame
+// grid (a USB capture fresh wake); the two drift at the crystal offset the
+// pitch servo corrects, so the value slides through a full cycle over
+// roughly a minute and the level a session starts at depends on it.
+[[nodiscard]] inline std::int64_t grid_phase_ns(const std::int64_t wake,
+                                                const std::int64_t reference,
+                                                const std::int64_t tick) noexcept {
+    if (tick <= 0) {
+        return 0;
+    }
+    const std::int64_t remainder = (wake - reference) % tick;
+    return remainder < 0 ? remainder + tick : remainder;
+}
+
+// True when `phase` lies inside [low, high]; a window with high < low wraps
+// around the cycle end, so {900000, 100000} at a 1 ms tick covers the 200 us
+// straddling the boundary.
+[[nodiscard]] inline bool phase_in_window(const std::int64_t phase,
+                                          const std::int64_t low,
+                                          const std::int64_t high) noexcept {
+    return low <= high ? (phase >= low && phase <= high) : (phase >= low || phase <= high);
+}
+
 [[nodiscard]] std::int64_t next_aligned_time(std::int64_t reference,
                                              std::int64_t period,
                                              std::int64_t not_before) noexcept;

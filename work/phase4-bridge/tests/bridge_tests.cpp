@@ -234,6 +234,18 @@ void test_median_wake_interval() {
     check(median_wake_interval({0, 1000, 2004, 3004, 4010}) == 1002, "even count takes the mean of the two middles");
 }
 
+void test_grid_phase() {
+    check(usb16x16::grid_phase_ns(1500, 1000, 1000) == 500, "phase inside the cycle");
+    check(usb16x16::grid_phase_ns(3500, 1000, 1000) == 500, "phase wraps by whole cycles");
+    check(usb16x16::grid_phase_ns(700, 1000, 1000) == 700, "negative difference wraps to positive");
+    check(usb16x16::grid_phase_ns(5, 0, 0) == 0, "zero tick is zero phase");
+    check(usb16x16::phase_in_window(300, 200, 400), "inside a plain window");
+    check(!usb16x16::phase_in_window(500, 200, 400), "outside a plain window");
+    check(usb16x16::phase_in_window(950, 900, 100), "inside a wrapping window, high side");
+    check(usb16x16::phase_in_window(50, 900, 100), "inside a wrapping window, low side");
+    check(!usb16x16::phase_in_window(500, 900, 100), "outside a wrapping window");
+}
+
 void test_next_aligned_time() {
     using usb16x16::next_aligned_time;
     check(next_aligned_time(1000, 100, 900) == 1000, "not_before at or before the reference gives the reference");
@@ -427,6 +439,7 @@ int main() {
     test_estimator_seed();
     test_level_servo();
     test_median_wake_interval();
+    test_grid_phase();
     test_next_aligned_time();
     test_windowed_regression();
     test_applied_ratio_correction();

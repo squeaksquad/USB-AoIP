@@ -229,6 +229,21 @@ struct Options {
     bool align_rx_trigger{false};
     std::int64_t align_rx_offset_us{kAlignOffsetDefaultUs};
     bool align_rx_prime{false};
+    // RX prime phase window (2026-09-05). The RAVENNA tick grid and the
+    // host's USB frame grid drift at the crystal offset the pitch servo
+    // corrects in the data rate, so their phase slides through a full 1 ms
+    // cycle in about a minute, and the level a session starts at is set by
+    // where that phase sits when RX primes (the aligned RX prime makes it a
+    // constant by paying the worst case; this picks the draw instead). With
+    // a window set, the RX prime holds, discarding ring excess, until the
+    // phase of its own fresh wake against the USB capture's lies inside
+    // [low, high] microseconds (high < low wraps), or the timeout passes and
+    // it primes anyway with a logged line. The phase is reported every
+    // second as phase_us whether or not a window is set.
+    bool rx_prime_phase_window{false};
+    std::int64_t rx_prime_phase_low_us{0};
+    std::int64_t rx_prime_phase_high_us{0};
+    std::int64_t rx_prime_phase_timeout_s{80};
     // Zero-run detector (2026-09-04). Exactly-41-sample runs of zeros on
     // the loop, phase-locked to the Pi's 48-frame grid, that neither the
     // bridge's counters nor the driver's flags see. With this on, every
@@ -372,6 +387,11 @@ private:
         << "  --align-rx-offset-us N offset on that grid (default 600)\n"
         << "  --align-rx-prime 0|1   drop from the RX ring at prime so the front frame's age\n"
         << "                         at the first host frame after the trigger is a constant\n"
+        << "  --rx-prime-phase-window LOW,HIGH\n"
+        << "                         hold the RX prime until the RAVENNA tick's phase against\n"
+        << "                         the USB frame grid is inside [LOW,HIGH] us (HIGH<LOW wraps)\n"
+        << "  --rx-prime-phase-timeout-s N\n"
+        << "                         prime anyway after N seconds of holding (default 80)\n"
         << "  --align-tx-prime 0|1   drop ring front frames at the TX prime so the front\n"
         << "                         frame's age at the first tick is constant (default 0;\n"
         << "                         needs --align-tx-trigger 1)\n"
@@ -491,6 +511,23 @@ Options parse_options(const int argc, char** argv) {
                 throw std::runtime_error("align-tx-prime must be 0 or 1");
             }
             options.align_tx_prime = parsed != 0;
+        } else if (argument == "--rx-prime-phase-window") {
+            const std::string text(value);
+            const auto comma = text.find(',');
+            if (comma == std::string::npos) {
+                throw std::runtime_error("rx-prime-phase-window must be LOW,HIGH in microseconds");
+            }
+            options.rx_prime_phase_low_us = static_cast<std::int64_t>(parse_unsigned(text.substr(0, comma).c_str(), "rx-prime-phase-window low"));
+            options.rx_prime_phase_high_us = static_cast<std::int64_t>(parse_unsigned(text.substr(comma + 1).c_str(), "rx-prime-phase-window high"));
+            if (options.rx_prime_phase_low_us > 999 || options.rx_prime_phase_high_us > 999) {
+                throw std::runtime_error("rx-prime-phase-window bounds must be 0..999 us");
+            }
+            options.rx_prime_phase_window = true;
+        } else if (argument == "--rx-prime-phase-timeout-s") {
+            options.rx_prime_phase_timeout_s = static_cast<std::int64_t>(parse_unsigned(value, "rx-prime-phase-timeout-s"));
+            if (options.rx_prime_phase_timeout_s < 1 || options.rx_prime_phase_timeout_s > 600) {
+                throw std::runtime_error("rx-prime-phase-timeout-s must be 1..600");
+            }
         } else if (argument == "--align-rx-trigger") {
             const unsigned long parsed = parse_unsigned(value, "align-rx-trigger");
             if (parsed > 1) {
@@ -568,6 +605,9 @@ Options parse_options(const int argc, char** argv) {
     }
     if (options.align_rx_prime && !options.align_rx_trigger) {
         throw std::runtime_error("--align-rx-prime needs --align-rx-trigger 1");
+    }
+    if (options.rx_prime_phase_window && !options.align_start) {
+        throw std::runtime_error("--rx-prime-phase-window needs --align-start 1");
     }
     if (options.zero_run_minimum_frames < 1 ||
         options.zero_run_maximum_frames < options.zero_run_minimum_frames ||
@@ -773,6 +813,9 @@ struct Telemetry {
     std::atomic<int> wanted_pitch{kNominalPitch};
     std::atomic<int> applied_pitch{kNominalPitch};
     std::atomic<std::int64_t> level_bias_ppm_milli{0};
+    // RAVENNA tick grid phase against the USB frame grid, microseconds in
+    // [0, 1000), or -1 before both grids have a fresh wake.
+    std::atomic<std::int64_t> grid_phase_us{-1};
     std::atomic<std::uint64_t> pitch_write_errors{0};
     // Mode 2: wanted_pitch/applied_pitch carry Capture Pitch, these carry
     // Playback Pitch and the two level loops.
@@ -863,6 +906,17 @@ struct Direction {
     // prime first found its ring full enough while the reference grid had
     // no fresh wake yet, plus the wait allowance; 0 = not waiting.
     std::int64_t align_prime_wait_deadline_ns{0};
+    // Grid phase (RX only): this direction's fresh wake against the phase
+    // reference direction's fresh wake, modulo one USB frame; reported as
+    // phase_us and, with a window, gating the prime.
+    const Direction* phase_reference{nullptr};
+    bool phase_window{false};
+    std::int64_t phase_window_low_ns{0};
+    std::int64_t phase_window_high_ns{0};
+    std::int64_t phase_wait_deadline_ns{0};
+    std::int64_t phase_wait_started_ns{0};
+    std::int64_t last_prime_grid_phase_us{-1};
+    std::uint64_t phase_wait_discarded{0};
     std::int64_t pending_trigger_target_ns{0};
     std::int64_t last_prime_ns{0};
     std::int64_t last_prime_phase_us{-1};
@@ -1158,6 +1212,42 @@ IoResult render_to_playback(Direction& direction,
         if (direction.ring.size() < prime_frames) {
             return IoResult::idle;
         }
+        // Grid phase at this prime instant, for the record and, with a
+        // window set, as the gate: hold and discard until the phase is
+        // inside the window or the timeout passes.
+        if (direction.phase_reference != nullptr) {
+            const std::int64_t own_wake = direction.last_fresh_wake_ns;
+            const std::int64_t reference_wake = direction.phase_reference->last_fresh_wake_ns;
+            const std::int64_t now_ns = monotonic_now_ns();
+            const bool have_phase = own_wake > 0 && reference_wake > 0;
+            const std::int64_t phase_ns = have_phase ? usb16x16::grid_phase_ns(own_wake, reference_wake, kUsbFrameTickNs) : -1;
+            if (direction.phase_window) {
+                if (direction.phase_wait_started_ns == 0) {
+                    direction.phase_wait_started_ns = now_ns;
+                }
+                const bool inside = have_phase &&
+                    usb16x16::phase_in_window(phase_ns, direction.phase_window_low_ns, direction.phase_window_high_ns);
+                if (!inside && now_ns < direction.phase_wait_deadline_ns) {
+                    // Keep the ring at the prime level while holding so the
+                    // capture never overflows it; the discarded frames are
+                    // counted, and no playback has started yet.
+                    if (direction.ring.size() > prime_frames) {
+                        const std::size_t excess = direction.ring.size() - prime_frames;
+                        direction.ring.pop(excess);
+                        direction.phase_wait_discarded += excess;
+                    }
+                    return IoResult::idle;
+                }
+                std::cerr << "PRIME window direction=" << direction.name
+                          << " status=" << (inside ? "hit" : "timeout")
+                          << " phase_us=" << (have_phase ? phase_ns / 1000 : -1)
+                          << " window_us=" << direction.phase_window_low_ns / 1000 << ',' << direction.phase_window_high_ns / 1000
+                          << " waited_ms=" << (now_ns - direction.phase_wait_started_ns) / 1000000
+                          << " discarded=" << direction.phase_wait_discarded
+                          << " t_us=" << elapsed_us() << '\n';
+            }
+            direction.last_prime_grid_phase_us = have_phase ? phase_ns / 1000 : -1;
+        }
         // Aligned TX prime: the wait from this instant to the first tick
         // after the planned trigger lies in (margin + tick - offset,
         // margin + 2 * tick - offset]; hold the prime until the ring can
@@ -1237,6 +1327,7 @@ IoResult render_to_playback(Direction& direction,
             trimmed = overshoot;
         }
         std::cerr << "PRIMED direction=" << direction.name
+                  << " grid_phase_us=" << direction.last_prime_grid_phase_us
                   << " intended=" << prime_frames
                   << " ring_at_prime=" << ring_at_prime
                   << " overshoot=" << overshoot
@@ -1888,6 +1979,7 @@ void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
                   << " tx_clip=" << telemetry.tx_clipped_samples.load()
                   << " rx_clip=" << telemetry.rx_clipped_samples.load()
                   << " pitch=" << telemetry.applied_pitch.load()
+                  << " phase_us=" << telemetry.grid_phase_us.load()
                   << " bias_ppm="
                   << static_cast<double>(telemetry.level_bias_ppm_milli.load()) / 1000.0
                   << " pitch_errors=" << telemetry.pitch_write_errors.load()
@@ -2072,6 +2164,15 @@ int run(const Options& options) {
                 tx.align_trigger_offset_ns = options.align_tx_offset_us * 1000;
                 tx.align_trigger_seed_ns = align.reference_ns;
                 tx.align_prime = options.align_tx_prime;
+            }
+            // The RX grid phase is always observed once the USB capture runs;
+            // the window gates the prime only when set.
+            rx.phase_reference = &tx;
+            if (options.rx_prime_phase_window) {
+                rx.phase_window = true;
+                rx.phase_window_low_ns = options.rx_prime_phase_low_us * 1000;
+                rx.phase_window_high_ns = options.rx_prime_phase_high_us * 1000;
+                rx.phase_wait_deadline_ns = monotonic_now_ns() + options.rx_prime_phase_timeout_s * 1000000000LL;
             }
             if (options.align_rx_trigger) {
                 // RX triggers and primes on the host's frame grid, read as
@@ -2274,6 +2375,12 @@ int run(const Options& options) {
                             std::memory_order_relaxed);
                     }
                 }
+                if (rx.phase_reference != nullptr && rx.last_fresh_wake_ns > 0 &&
+                    rx.phase_reference->last_fresh_wake_ns > 0) {
+                    telemetry.grid_phase_us.store(
+                        usb16x16::grid_phase_ns(rx.last_fresh_wake_ns, rx.phase_reference->last_fresh_wake_ns, kUsbFrameTickNs) / 1000,
+                        std::memory_order_relaxed);
+                }
                 publish_telemetry(tx, rx, estimator, telemetry);
             }
 
@@ -2381,6 +2488,9 @@ int run(const Options& options) {
               << ",\"align_rx_prime_phase_us\":" << rx.last_prime_phase_us
               << ",\"align_rx_first_tick_wait_us\":" << rx.last_first_tick_wait_us
               << ",\"align_rx_front_age_frames\":" << rx.last_front_age_frames
+              << ",\"rx_prime_grid_phase_us\":" << rx.last_prime_grid_phase_us
+              << ",\"rx_prime_phase_window\":" << (options.rx_prime_phase_window ? 1 : 0)
+              << ",\"rx_prime_phase_discarded\":" << rx.phase_wait_discarded
               << ",\"zero_run_detect\":" << (options.zero_run_detect ? 1 : 0)
               << ",\"zero_run_min\":" << options.zero_run_minimum_frames
               << ",\"zero_run_max\":" << options.zero_run_maximum_frames
