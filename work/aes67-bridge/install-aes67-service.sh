@@ -22,7 +22,7 @@ sudoers_destination=/etc/sudoers.d/usb16x16-aes67
 bridge_binary=/usr/local/libexec/usb16x16-rt-bridge
 expected_supervisor_sha256=8812bd190ade7fc106d950f61362b26929ff6dcb97e4ef1cb188093051be04ef
 expected_unit_sha256=77837e60e7a0660ce9d0c31c8077363805c118df6bdcdba9619417669eccd702
-expected_conf_sha256=0ae3617b9f863ec50973e5b9d310b694fcf6195143f7d79bf2cdcc990ae0e566
+expected_conf_sha256=fb6739aa57f6b4fc2d564ca91f434a1284b49e6bf5ba5651559117afbb648f83
 expected_bridge_sha256=2a1583866f57aeaa7ae986e1ac27705b826347fe86e1f3225dd893107088fcd7
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
@@ -128,6 +128,7 @@ d6f463a6f6cd6678c595506780f370f7b09fc0e0144a6dad16005f15b0518426
 5a2de43b5d4b5770c958657b534e4aad546e8ff5efbee8b47172ad95e0d020d9
 9428db88fb62199929a44b3462081993e1891be07147ba227d7dd64511932f61
 dc3fa09752e7bc7aaffc93ba87815dfe7ac47f704ce7ee934374d57b5e705df4
+0ae3617b9f863ec50973e5b9d310b694fcf6195143f7d79bf2cdcc990ae0e566
 PREVIOUS
 then
   # an unedited copy of a previously shipped version: replace it

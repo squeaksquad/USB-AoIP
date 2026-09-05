@@ -6136,8 +6136,8 @@ Gate (`phase450agate-noise-ch2-64f-100imp`) 0.0% zeros. Runs
 (`phase450a-roundtrip-64f-20260905T230908Z`, `231244Z`, `231620Z`,
 `231956Z`): all 3200 on **1089** (22.688 ms), spread 0, zero RECOVERs.
 Soak (`phase450asoak-...T232332Z`, 600 s loaded): median 1089, minimum
-1081, spread 8, score 0.980, zero RECOVERs: about 2% of impulses 8
-samples early, the dropped-impulse signature of the 2026-09-04 USB
+1081, spread 8, score 0.980, zero RECOVERs: 2304 impulses on 1089 and 96 on
+1081, 4% of them 8 samples early, the dropped-impulse signature of the 2026-09-04 USB
 campaign, on no other soak today. Pi side clean throughout: `tx_qfloor`
 108 loaded from 189 s, `rx_qfloor` 77, `tx_qlow`/`rx_qlow` 0, no drops,
 no clips, gaps 1.12/1.63 ms. Log
