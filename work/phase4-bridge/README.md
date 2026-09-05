@@ -54,8 +54,15 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`006fc65e5ae4d61b81e3aa2dbd468182ca2644f07deb11c30e8edc169511d622`
-(2026-09-05: `--level-shift FRAMES`, Phase 5 Stage B3: in mode 1 the
+`98eeb083a80900b6234f610adc5566af1bc00fb7e1a461dbc1b2245366bb69c5`
+(2026-09-05: aligned RX trigger and prime, `--align-rx-trigger`,
+`--align-rx-offset-us`, `--align-rx-prime`: the USB playback triggers on
+the host's 1 ms frame grid read as the USB capture's fresh wakes, and the
+RX prime drops from the ring's front so the front frame's age at the
+first host frame after the trigger is a constant, the TX method with the
+roles swapped; the prime holds up to 5 ms for the first USB reference;
+all off by default, behaviour identical to `006fc65e` when off).
+Previous binary `006fc65e` (2026-09-05: `--level-shift FRAMES`, Phase 5 Stage B3: in mode 1 the
 differential setpoint captured at engagement is lowered by twice FRAMES,
 moving that many frames of servo-held depth from usb-to-ravenna to
 ravenna-to-usb; 0 = unchanged, behaviour identical to `e6bc98ac` at 0).

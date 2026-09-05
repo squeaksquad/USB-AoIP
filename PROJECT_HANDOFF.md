@@ -5719,6 +5719,27 @@ this lever is different: two sessions, each with the gate, four loaded
 target64's 27.4 is the expectation. Build waits for a service stop; the
 pin list is the supervisor's `expected_bridge_sha256` and both installers.
 
+**BUILT and STAGED 2026-09-05 13:20 UTC: bridge `98eeb083` (aligned RX
+trigger and prime), the rxalign install set, all three pins moved.**
+Service stopped by the user at about 13:17 UTC; built on the Pi from
+`~/usb-16x16-work/phase4-rxalign-src` (`main.cpp` `91fbea05`, Release,
+zero warnings), ctest 1/1, binary SHA-256
+`98eeb083a80900b6234f610adc5566af1bc00fb7e1a461dbc1b2245366bb69c5`, in
+`work/phase4-bridge/artifacts/pi-aarch64/` (README updated, `006fc65e`
+previous). With the three RX keys absent, which every existing block has,
+behaviour is `006fc65e`'s. Pins: supervisor `expected_bridge_sha256`
+`98eeb083`, supervisor `a2caefbf`; `install-candidate.sh` `8ecf130b`
+(bridge `98eeb083`, wrapper `6282b108`); `install-aes67-service.sh`
+`a997bab7` (supervisor `a2caefbf`, unit `77837e60`, conf `db094139`,
+bridge `98eeb083`). Staged: `~/usb-16x16-work/phase4-rxalign-install/`
+and `~/usb-16x16-work/aes67-rxalign-install/` (with `rxalign-block.conf`
+`3bac7e74`); the new supervisor validates the live conf, exit 0. Install
+order, service stopped: `install-candidate.sh`, `install-aes67-service.sh`
+(keeps the operator-edited live conf), append the block, `switch-profile`
+(writes PROFILE only while inactive), `systemctl start`. The previous
+binary's first start coincided with the hard stop of 12:13 UTC; watch
+this one's first start the same way.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
