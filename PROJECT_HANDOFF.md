@@ -5352,6 +5352,74 @@ exit 0. The user re-runs `install-aes67-service.sh` and restarts the
 service. Add to the repin list for any new binary: the supervisor's pin as
 well as both installers.
 
+**MEASURED 2026-09-05 03:49-04:21 UTC: Phase 5 Stage B2, the pitch seed
+works, and it moves the margin from RX to TX rather than creating it.**
+After the supervisor fix the user re-ran `install-aes67-service.sh` and
+restarted; session 03:49:10 UTC on
+`servo-aligned-both-240-rx120-sd144-tx192-target64-seed15` (bridge
+`e6bc98ac`, supervisor `45651a81`, live conf `d9843c95`): `PITCHSERVO
+seeded ppm=-15 pitch=1000015`, ALIGN ok attempt 1, TX PRIMED
+`queue_prime=192 align_dropped=71 overshoot=6 front_age_frames=336`, RX
+PRIMED `ring_at_prime=192 overshoot=5`, `PITCHSERVO engaged
+setpoint_frames=160 ppm=-14.8021` at 60 s: the first rate observation
+landed on the seed, no slew, no overshoot, pitch 1000011-1000018 for the
+whole session. `tx_dmean` 289 at 1 s, 297 at 60 s, 293 at 120 s, 294 at
+the end: the 46-frame warm-up fall is gone, as designed. RTL Utility at 32
+frames, read by the user at session start: **26.875 ms**. Gate probe
+(`seed15gate-noise-ch2-64f-100imp` in `usb-holes-20260904/`) 0.0% zeros,
+no run of 4 or more. Then the chain, harness alone:
+
+| run | file | frames | samples | ms | levels | score | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | `seed15-roundtrip-64f-20260905T035625Z` | 64 | 1102 | 22.958 | 1102 x800 | 1.000 | 160 | 51 | 48 | 0 |
+| 2 | `seed15-roundtrip-64f-20260905T040001Z` | 64 | 1102 | 22.958 | 1102 x800 | 1.000 | 160 | 50 | 48 | 0 |
+| 3 | `seed15-roundtrip-64f-20260905T040337Z` | 64 | 1102 | 22.958 | 1102 x800 | 1.000 | 160 | 50 | 48 | 0 |
+| 4 | `seed15-roundtrip-64f-20260905T040712Z` | 64 | 1102 | 22.958 | 1102 x800 | 1.000 | 160 | 50 | 48 | 0 |
+| soak | `seed15soak-roundtrip-64f-20260905T041048Z`, `USB16X16_OTHER_LOAD=0.1`, 600 s | 64 | 1102 | 22.958 | 1102 x2400 | 1.000 | 160 | 50 | 48 | 0 |
+
+5600 impulses on one sample, spread 0, zero RECOVERs (recovers file
+empty, no RECOVER line), zero restarts, clips, drops, `tx_qlow` and
+`rx_qlow` 0 on all 1771 BRIDGE lines of the 30-minute session, detector 0
+runs, gaps 1.06/1.63 ms, `tx_pullmax` 48, `rx_pullmax` 49 (no 96 pull this
+session). Full-rate log
+`outputs/latency/phase5-20260905/bridge-seed15-session-20260905T034910Z.log`.
+
+*The floors.* TX: 198 primed, 162 from 16 s, 160 loaded and held through
+every run and the soak, against target64's 108 loaded: the seed kept the
+46 the warm-up drift used to take, plus a few. RX: 77 at prime as the
+arithmetic says, 74 at 6 s, then 71, 69, 67, 66 through the first loaded
+run and 50 at 586-587 s (03:58:57 UTC, during run 1), held there for the
+rest. On target64 RX gained 43 frames during warm-up and its floor never
+moved from 77; here RX stays at its primed level and carries the loaded
+dips alone. Depth is conserved and the seed only chooses the split: the
+level loop holds the differential where it sat at engagement (160 here,
+67 on target64, both by design), so the seed moved about 50 frames of
+loaded margin from RX to TX. One 96-frame host pull at the worst phase
+would leave RX 2. Not a point of record on its own.
+
+*The level.* 1102, 25 under target64's 1127, and RTL 26.875 against
+27.396, the same 25 on both instruments. Servo-held depth is invisible on
+the device timeline, so this should have been 1127; the difference is
+inside the session-start band (31 wide on rx120) and is one session. A
+seeded session cannot slide its USB phase against the tick grid during the
+first minute (rates locked from t=0, where an unseeded one slides a full
+period in about 67 s at 15 ppm), which is a candidate mechanism for the
+band itself. Recorded, not explained.
+
+*What B3 is now.* With the seed the split is set by the primes and held.
+Three ways to spend the 50 TX frames, all conf-only: (a) TX prime 144
+alone: floors about 112/50, level about 1054, RX too thin; (b) RX prime
+into the 240 bin (126-173) alone: floors 160/98, level about 1150; (c)
+both: floors about 112/98, level unchanged at about 1102, both over
+their bars. Or (d) a bridge flag for an explicit mode-1 level setpoint
+(the differential bias of the 2026-09-02 record, now pointed the other
+way) that moves servo-held depth from TX to RX for free on the device
+timeline: about 30 frames each way gives floors about 130/80 at 1102
+with no prime change. (c) is the conf-only path; (d) is the one that pays
+without giving anything back. Conf `ed23c829` carries the seed15 block
+with its MEASURED and COVER strings (installer `71513f2b`, `196786be`
+joins the unedited-shipped list), `STATUS=experimental`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
