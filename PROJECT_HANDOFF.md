@@ -5545,6 +5545,40 @@ the 2026-09-03 result. Conf `1ae47899` (installer `d0605556`, `6ce387f4`
 joins the unedited-shipped list) carries the block's MEASURED and COVER
 strings, `STATUS=experimental`.
 
+**RTL Utility at 32 frames on the primes144 session of 11:06 UTC, read by
+the user at about 12:10 UTC: 28.000 ms**, 0.604 ms (29 samples) over
+target64's 27.396, the harness difference (1156 against 1127) to the
+sample. So the level of that session is confirmed on both instruments, and
+the 26.667 read on the block's first session (10:52 UTC, gate spoiled) is
+a real 64-sample difference between two sessions of one block, twice the
+31-wide band seen on rx120. Recorded; the session-start term is now the
+largest unexplained number in the budget.
+
+**IMPLEMENTED 2026-09-05 12:20 UTC, not yet built: Phase 5 Stage B3 by the
+level lever, bridge `--level-shift FRAMES` and profile
+`...-target64-seed15-shift30`.** Bridge: `--level-shift FRAMES` (double,
+-480..480, default 0, mode 1 only; refused with mode 2 or without the
+servo): the mode-1 setpoint captured at engagement becomes the captured
+differential minus twice FRAMES, so a positive shift walks FRAMES of
+servo-held depth from usb-to-ravenna to ravenna-to-usb at the level loop's
+3 ppm clamp (about 200 s for 30); the `PITCHSERVO engaged` line now carries
+`captured_frames=` and `level_shift=`, the enabled line `level_shift=`,
+SUMMARY `level_shift_frames`. `main.cpp` `29e7c9b7`, syntax-checked clean
+on the Mac. Supervisor: optional key `LEVEL_SHIFT_FRAMES` (absent 0,
+number, non-zero needs `USB_PITCH_SERVO=1`), passed as `--level-shift`,
+shown by `profiles` as `shift N` (`710a0d71`). Conf `705c7906` adds the
+block (seed15 with `LEVEL_SHIFT_FRAMES=30`, experimental; installer
+`e55c0e41`, `1ae47899` joins the unedited-shipped list), validated on the
+Pi against the repo conf and the live conf plus the block, exit 0. Source
+in `~/usb-16x16-work/phase4-shift-src`, block and supervisor in
+`~/usb-16x16-work/aes67-shift30-install/`. Premise, from the 2026-09-03
+depth sweep: servo-held depth does not move the round trip, so the level
+should stay at seed15's 1102 with floors about 130/80; the level not
+moving is itself part of the acceptance. Build waits for a service stop.
+Repin list for the new binary: `install-candidate.sh`,
+`install-aes67-service.sh`, and the supervisor's own
+`expected_bridge_sha256`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

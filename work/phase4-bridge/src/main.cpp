@@ -165,6 +165,14 @@ struct Options {
     // there, so the first minute runs at the rate the last session
     // converged to. Off at 0. Needs --usb-pitch-servo.
     double pitch_seed_ppm{0.0};
+    // Phase 5 Stage B3. Mode 1 holds the TX-minus-RX differential where it
+    // sat when the rate estimate engaged. This moves that setpoint: a
+    // positive shift moves this many frames of servo-held depth from TX to
+    // RX (the differential setpoint drops by twice the shift), a negative
+    // one the other way. Servo-held depth is invisible on the device
+    // timeline (handoff 2026-09-03), so it repartitions the floors without
+    // moving the round trip. 0 = capture the differential unchanged.
+    double level_shift_frames{0.0};
     // Aligned start. The RAVENNA driver fixes its capture reader's phase at
     // snd_pcm_prepare (capture_buffer_pos = SAC mod L) anywhere inside one
     // 1 ms tick, so a packet's arrival lead over its read slot is a
@@ -321,6 +329,10 @@ private:
         << "  --level-gain PPM       mode 2 level gain in ppm per frame (default 0.05)\n"
         << "  --pitch-seed PPM       start both pitch controls at nominal minus PPM and the\n"
         << "                         estimator at PPM, before the prime (default 0 = nominal)\n"
+        << "  --level-shift FRAMES   mode 1: move this many frames of servo-held depth from\n"
+        << "                         usb-to-ravenna to ravenna-to-usb (negative: the other\n"
+        << "                         way) by lowering the differential setpoint captured at\n"
+        << "                         engagement by twice FRAMES (default 0)\n"
         << "  --level-clamp PPM      mode 2 level bias clamp in ppm (default 2)\n"
         << "  --align-start 0|1      re-prepare RAVENNA capture a fixed offset after one of its\n"
         << "                         period wakeups, so the driver's reader phase is constant\n"
@@ -423,6 +435,11 @@ Options parse_options(const int argc, char** argv) {
             options.pitch_seed_ppm = parse_double(value, "pitch-seed");
             if (!(options.pitch_seed_ppm >= -250.0 && options.pitch_seed_ppm <= 250.0)) {
                 throw std::runtime_error("pitch-seed must be within -250..250 ppm");
+            }
+        } else if (argument == "--level-shift") {
+            options.level_shift_frames = parse_double(value, "level-shift");
+            if (!(options.level_shift_frames >= -480.0 && options.level_shift_frames <= 480.0)) {
+                throw std::runtime_error("level-shift must be within -480..480 frames");
             }
         } else if (argument == "--align-start") {
             const unsigned long parsed = parse_unsigned(value, "align-start");
@@ -1908,7 +1925,8 @@ int run(const Options& options) {
                   << (options.split_pitch_servo ? options.level_clamp_ppm : kLevelBiasMaximumPpm)
                   << " tx_depth=" << options.tx_depth_frames
                   << " rx_depth=" << options.rx_depth_frames
-                  << " seed_ppm=" << options.pitch_seed_ppm << '\n';
+                  << " seed_ppm=" << options.pitch_seed_ppm
+                  << " level_shift=" << options.level_shift_frames << '\n';
         if (options.pitch_seed_ppm != 0.0) {
             // Seed before any capture starts: the controls carry nominal
             // minus seed from the first frame, the telemetry thread sees the
@@ -1934,6 +1952,9 @@ int run(const Options& options) {
         }
     } else if (options.pitch_seed_ppm != 0.0) {
         throw std::runtime_error("pitch-seed needs --usb-pitch-servo");
+    }
+    if (options.level_shift_frames != 0.0 && (!options.usb_pitch_servo || options.split_pitch_servo)) {
+        throw std::runtime_error("level-shift needs --usb-pitch-servo 1");
     }
     bool have_rate_estimate = false;
     bool have_level_setpoint = false;
@@ -2148,9 +2169,14 @@ int run(const Options& options) {
                         // the setpoint wants a lower pitch, which is a higher
                         // subtracted ppm. Both controls get the same value.
                         if (!have_level_setpoint) {
-                            level_setpoint_frames = differential_pipeline_frames;
+                            // A shift of S frames from TX to RX lowers TX by S
+                            // and raises RX by S, so the differential moves by
+                            // -2S; the level loop walks there at its clamp.
+                            level_setpoint_frames = differential_pipeline_frames - 2.0 * options.level_shift_frames;
                             have_level_setpoint = true;
                             std::cerr << "PITCHSERVO engaged setpoint_frames=" << level_setpoint_frames
+                                      << " captured_frames=" << differential_pipeline_frames
+                                      << " level_shift=" << options.level_shift_frames
                                       << " ppm=" << estimator.ppm() << " t_us=" << elapsed_us() << '\n';
                         }
                         level_bias_ppm = std::clamp(
@@ -2243,6 +2269,7 @@ int run(const Options& options) {
               << ",\"level_bias_ppm\":" << level_bias_ppm
               << ",\"level_setpoint_frames\":" << level_setpoint_frames
               << ",\"pitch_seed_ppm\":" << options.pitch_seed_ppm
+              << ",\"level_shift_frames\":" << options.level_shift_frames
               << ",\"pitch_write_errors\":" << telemetry.pitch_write_errors.load()
               << ",\"playback_pitch\":" << telemetry.applied_playback_pitch.load()
               << ",\"tx_bias_ppm\":" << tx_level.bias()

@@ -180,6 +180,11 @@ zero_run() { local value; value=$(p ZERO_RUN_DETECT); printf '%s' "${value:-0}";
 # estimator there, before the prime, instead of running the first minute at
 # nominal. Absent means 0, the measured behaviour of every earlier profile.
 seed() { local value; value=$(p PITCH_SEED_PPM); printf '%s' "${value:-0}"; }
+# LEVEL_SHIFT_FRAMES is the optional mode-1 level shift (Phase 5 Stage B3):
+# frames of servo-held depth moved from usb-to-ravenna to ravenna-to-usb
+# (negative: the other way) by lowering the differential setpoint captured
+# at engagement. Absent means 0, the captured setpoint unchanged.
+shift_frames() { local value; value=$(p LEVEL_SHIFT_FRAMES); printf '%s' "${value:-0}"; }
 
 profile_names() {
   local key
@@ -261,6 +266,13 @@ validate_profile() {
   if [ "$(seed)" != 0 ] && [ "$(servo)" -eq 0 ]; then
     say "profile $profile_name: PITCH_SEED_PPM needs USB_PITCH_SERVO" >&2; return 1
   fi
+  case "$(shift_frames)" in
+    -[0-9]*|[0-9]*) ;;
+    *) say "profile $profile_name: LEVEL_SHIFT_FRAMES must be a number" >&2; return 1 ;;
+  esac
+  if [ "$(shift_frames)" != 0 ] && [ "$(servo)" -ne 1 ]; then
+    say "profile $profile_name: LEVEL_SHIFT_FRAMES needs USB_PITCH_SERVO=1" >&2; return 1
+  fi
   if [ "$(depth TX)" -ne 0 ] && [ "$(depth TX)" -lt $(( $(p TARGET) + 144 + $(p PERIOD) )) ]; then
     say "profile $profile_name: TX_DEPTH is below TARGET + 144 + PERIOD" >&2; return 1
   fi
@@ -330,6 +342,7 @@ bridge_arguments() {
     --align-tx-prime "$(align_tx_prime)" \
     --zero-run-detect "$(zero_run)" \
     --pitch-seed "$(seed)" \
+    --level-shift "$(shift_frames)" \
     --priority 90 \
     --seconds 0
 }
@@ -803,7 +816,7 @@ cmd_profiles() {
     [ "$name" = "$selected" ] && mark='*'
     say "$mark $name: $(p STATUS), cover: $(p COVER), measured: $(p MEASURED)"
     say "    $(p DESCRIPTION)"
-    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) zero-run $(zero_run) seed $(seed) ppm"
+    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) zero-run $(zero_run) seed $(seed) ppm shift $(shift_frames)"
   done
 }
 
