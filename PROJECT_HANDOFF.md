@@ -5740,6 +5740,74 @@ order, service stopped: `install-candidate.sh`, `install-aes67-service.sh`
 binary's first start coincided with the hard stop of 12:13 UTC; watch
 this one's first start the same way.
 
+**MEASURED 2026-09-05 13:04-13:59 UTC, two sessions: the aligned RX
+prime holds its constant (RX `front_age_frames` 264 from two different
+draws), the sessions land 13 samples apart where unaligned points landed
+34-64 apart, and the constant costs 75-88 over target64's low draw.**
+Installs by the user (bridge `98eeb083`, supervisor `a2caefbf`, live conf
+with the rxalign block), profile `...-target64-rxalign`, playback idle
+throughout, no hard stop this time.
+
+Session 1 (13:04:30 UTC): RX PRIMED `ring_at_prime=234 overshoot=47
+align_dropped=6 prime_phase_us=362 first_tick_wait_us=637
+front_age_frames=264` (the prime held for the first USB reference, so the
+ring took one more push), `ALIGN trigger direction=ravenna-to-usb
+status=ok source=fresh-wake wake_to_start_us=602`; TX PRIMED
+`align_dropped=64 front_age_frames=336`. Gate
+(`rxalign1gate-noise-ch2-64f-100imp`) 0.0% zeros. Session 2 (13:33:40
+UTC, `systemctl restart`): RX PRIMED `ring_at_prime=190 overshoot=3
+align_dropped=50 prime_phase_us=454 first_tick_wait_us=1545
+front_age_frames=264`, trigger ok fresh-wake 602 us; TX `align_dropped=69
+front_age_frames=336`. Gate (`rxalign2gate-`) 0.0% zeros. Different
+draws of the wait (637 and 1545 us), different drops (6 and 50), the same
+front age both times: the mechanism does what the TX one does.
+
+| session | run | file | samples | ms | levels | score | tx_qfloor | rx_qfloor | RECOVERs |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|
+| 1 | 1-4 | `rxalign1-roundtrip-64f-20260905T130714Z`, `131049Z`, `131424Z`, `131759Z` | 1215 | 25.312 | 1215 x800 each | 1.000 | 109 | 96 | 0 |
+| 1 | soak | `rxalign1soak-roundtrip-64f-20260905T132134Z`, 600 s loaded | 1215 | 25.312 | 1215 x2400 | 1.000 | 109 | 96 | 0 |
+| 2 | 1-4 | `rxalign2-roundtrip-64f-20260905T133429Z`, `133805Z`, `134140Z`, `134515Z` | 1202 | 25.042 | 1202 x800 each | 1.000 | 107 | 96 | 0 |
+| 2 | soak | `rxalign2soak-roundtrip-64f-20260905T134850Z`, 600 s loaded | 1202 | 25.042 | 1202 x2400 | 1.000 | 107 | 96 | 0 |
+
+11200 impulses, spread 0 within each session, zero RECOVERs, restarts,
+clips, drops, `tx_qlow` and `rx_qlow` 0 on all 1658 + 1545 lines,
+detector 0 runs, `tx_pullmax` 48, gaps 1.10/1.64 ms. Logs
+`outputs/latency/phase5-20260905/bridge-rxalign1-session-20260905T130430Z.log`
+and `bridge-rxalign2-session-20260905T133340Z.log`.
+
+*Floors:* RX 96 from the first second on both sessions and never lower
+under any load, the first point to hold the RX bar through everything
+(target64 reads 77 by the bin arithmetic; the aligned prime's held ring
+puts RX in the next bin at 264 - 64 - 51 = 149 minus the loaded dips).
+TX 109/107 loaded, as target64.
+
+*Level:* 1215 and 1202. The 13-sample residue is the lottery that remains
+(two microframes' worth; the host's 125 us pull grain or the Ferrofish
+side), against 34 on target64 and 52-64 on the seed points. The cost is
+the constant itself: the aligned prime holds the front frame's age at
+`prime + longest wait` (187 + 77 = 264), so every session pays the
+worst-case draw where target64 pays its actual draw (1127 on a good day,
+1161 on a bad one). Structurally a deterministic RX cannot beat the
+lottery's best draw this way; it can only match its worst, and at
+`margin 200 us + 2 ticks - offset 600 us = 1.6 ms` of wait allowance it
+sits 40-50 above even that. Two ways to spend this: (a) tighten the
+allowance (offset 950 us and a 50 us margin bring the longest wait from
+77 to about 50 frames, worth about 25), conf plus a constant; (b) the
+other use of a measured phase: instead of paying for the worst draw,
+re-roll it. The RAVENNA tick grid is redrawn at every bridge start (the
+driver logs `base period set` on each PCM open), so a bridge that exits
+with a distinct code when its RX prime phase falls outside a chosen
+window, and a supervisor that restarts the bridge alone on that code
+(one second, no stack restart), would land every session on the best
+draw, about 1127 or below, at RX floor 96. That is the lever this
+measurement makes possible and it is where the record points next. Conf
+`c7092ea1` carries the block's MEASURED and COVER (installer `3d7b5da8`,
+`db094139` joins the unedited-shipped list), `STATUS=experimental`.
+
+*Standing for service:* target64 (accepted, 1127-1161 by the draw, RX
+77) remains the lowest; rxalign (1202-1215, RX 96) is the most
+predictable and the safest. The user's call which runs tonight.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
