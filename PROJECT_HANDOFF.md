@@ -5928,6 +5928,22 @@ exactly as an unheld start; the `PRIME window` line now also reports
 waits for a service stop; then the pw850 read repeats clean, and two more
 windows (say 700-800 and 50-150) place the minimum.
 
+**BUILT and STAGED 2026-09-05 15:05 UTC: bridge `2a158386` (hold drains
+to whole periods), all three pins moved.** Service stopped by the user at
+about 15:02 UTC; built from `~/usb-16x16-work/phase4-hold-src`
+(`main.cpp` `d9502f07`, zero warnings), ctest 1/1, SHA-256
+`2a1583866f57aeaa7ae986e1ac27705b826347fe86e1f3225dd893107088fcd7`, in
+`work/phase4-bridge/artifacts/pi-aarch64/` (README updated, `abab6732`
+previous). Pins: supervisor `expected_bridge_sha256` `2a158386`, and both
+installers (`install-candidate.sh`, `install-aes67-service.sh`) carry the
+new bridge and supervisor hashes; conf unchanged. Staged in
+`~/usb-16x16-work/phase4-hold-install/` and
+`~/usb-16x16-work/aes67-hold-install/`; the new supervisor validates the
+live conf with zero bad lines, exit 0. Install order, service stopped:
+`install-candidate.sh`, `install-aes67-service.sh`, then `systemctl
+start` (PROFILE is already pw850 in the live conf, so the start lands on
+the window and the clean 944 read follows).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

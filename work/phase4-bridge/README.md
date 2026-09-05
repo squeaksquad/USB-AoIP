@@ -54,8 +54,12 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`abab6732b1425e41dad29efde9a5c52dfc70819bf7332b0ce82a0ffed2608900`
-(2026-09-05: grid-phase instrument, `phase_us` on every BRIDGE line and
+`2a1583866f57aeaa7ae986e1ac27705b826347fe86e1f3225dd893107088fcd7`
+(2026-09-05: the RX prime phase window's hold drains the ring to a whole
+number of capture periods below the prime level, so a held prime lands
+the ring where an unheld start does; `PRIME window` reports `ring=`;
+otherwise `abab6732`).
+Previous binary `abab6732` (2026-09-05: grid-phase instrument, `phase_us` on every BRIDGE line and
 `grid_phase_us` on both PRIMED lines, the RAVENNA tick against the USB
 frame grid; and `--rx-prime-phase-window LOW,HIGH` with
 `--rx-prime-phase-timeout-s N`, which holds the RX prime, discarding ring
