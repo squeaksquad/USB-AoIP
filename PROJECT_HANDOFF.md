@@ -4881,6 +4881,60 @@ prime, may follow the USB playback request depth. A loaded floor needs the
 800-impulse runs, which this point did not get: 3 is measured, not
 accepted, and the service is left on 3 pending the next point.
 
+**MEASURED 2026-09-05 00:12-00:17 UTC: `p_hs_bint=c_hs_bint=1` (125 us
+packets) with `req_number=4` reads 1337, 15 samples under the accepted
+point, clean at 512/64/32/16 on the noise probes, with one CoreAudio
+discontinuity pair in the 32-frame impulse probe.** The user stopped the
+service at the end of the req 3 session (SUMMARY at 00:10:54 UTC: zero
+restarts, `tx_queue_floor` 159, `rx_queue_floor` 107, `rx_pull_max` 85,
+zero RECOVERs, detector 0 runs), repointed the same drop-in at
+`~/usb-16x16-work/gadget-bint1/setup-usb-16x16-bint1 start 4` (hash
+`21b8a687`: `b11fd358` with lines 80 and 85 writing 1 instead of 0 to
+`p_hs_bint` and `c_hs_bint`, nothing else changed, staged from the Mac,
+syntax-checked on both), restarted the gadget (bound 00:11:14 UTC,
+`req_number=4`, `p_hs_bint=1`, `c_hs_bint=1`, high-speed, the Mac
+enumerated it) and started the service at 00:12:07 UTC on
+`servo-aligned-both-240-rx120-sd144` (ALIGN ok attempt 1, TX
+`align_dropped=50`). RTL Utility, read by the user first: **errors at 32
+frames**, and **32.354 ms at 64**. Then the six-probe pass, harness alone,
+RTL Utility idle, 100 impulses each, `bint1-*` in
+`outputs/latency/usb-holes-20260904/`:
+
+| probe | frames | result |
+|---|---:|---|
+| noise ch2 | 512 | 0.0% zeros, no run of 4 or more in 1.24 M samples |
+| noise ch2 | 64 | 0.0%, no run |
+| noise ch2 | 32 | 0.0%, no run |
+| noise ch2 | 16 | 0.0%, no run |
+| impulse ch1 | 64 | **1337** on all 100, score 1.000, no discontinuities |
+| impulse ch1 | 32 | **1337** on all 100, score 1.000, **1 input and 1 output discontinuity** |
+
+Pi over the pass: zero RECOVERs, restarts, drops or clips, `tx_qfloor`
+158, `rx_qfloor` 109, `tx_pullmax` 48, `rx_pullmax` 49, gaps 1.08/1.74 ms,
+pitch 1000014, detector 0 runs at every tap; nothing in the journal at the
+time of the discontinuity. The daemon logged its usual "configured PTP
+grand master clock doesn't match the PTP clock in SDP" warning at start.
+
+Reading. Halving the packet interval took 15 samples (0.31 ms) off the
+round trip: 1337 against 1352 (bint 0, req 4) and 1350 (bint 0, req 3) on
+the same profile and the same day. RTL at 64 reads 32.354 against the
+32.75 that 32.083 at 32 implies at 64, 0.4 ms, the same direction. The
+noise probes see every sample at every IO size, so the loop is not
+dropping audio the way req 2 did; but four 125 us requests are 500 us of
+queued time, the same as req 2's two 250 us requests, and at 32 frames
+the Mac reported one glitch in 26 s and RTL Utility would not complete a
+measurement, where bint 0 at req 3 and req 4 gave zero discontinuities
+and RTL completed at 32 and 16. So the host's tolerance looks like queued
+time rather than request count, and this point is short of it at 32
+frames. The next single-variable point is `req_number=8` at bint 1: the
+same 1 ms of queued time as the accepted point, in 125 us packets, one
+edit to the drop-in (`start 8`). Given that 3 to 4 cost 2 samples, 8
+should keep most of the 15. If 32 comes back clean there with RTL
+completing, that is the candidate for the four loaded runs and the soak;
+if not, bint 1 is not worth 0.3 ms and the accepted point stands. The
+service is left on bint 1 / req 4, measured, not accepted; rollback is
+removing the drop-in, `daemon-reload`, gadget restart.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
