@@ -156,6 +156,15 @@ struct Options {
     std::size_t rx_depth_frames{0};
     double level_gain_ppm_per_frame{0.05};
     double level_clamp_ppm{2.0};
+    // Phase 5 Stage B2. The estimator needs 60 observations before it
+    // steers, and pitch sits at nominal for those 60 s while the clocks
+    // differ by about 15 ppm, so 46 frames per direction move from TX to
+    // RX in every session and the level loop then holds that split
+    // (handoff "Phase 5 Stage A"). A non-zero seed writes nominal minus
+    // seed to both pitch controls before the prime and starts the estimator
+    // there, so the first minute runs at the rate the last session
+    // converged to. Off at 0. Needs --usb-pitch-servo.
+    double pitch_seed_ppm{0.0};
     // Aligned start. The RAVENNA driver fixes its capture reader's phase at
     // snd_pcm_prepare (capture_buffer_pos = SAC mod L) anywhere inside one
     // 1 ms tick, so a packet's arrival lead over its read slot is a
@@ -310,6 +319,8 @@ private:
         << "                         (default 0 = capture the depth at engagement)\n"
         << "  --rx-depth FRAMES      mode 2 setpoint for ravenna-to-usb depth (default 0)\n"
         << "  --level-gain PPM       mode 2 level gain in ppm per frame (default 0.05)\n"
+        << "  --pitch-seed PPM       start both pitch controls at nominal minus PPM and the\n"
+        << "                         estimator at PPM, before the prime (default 0 = nominal)\n"
         << "  --level-clamp PPM      mode 2 level bias clamp in ppm (default 2)\n"
         << "  --align-start 0|1      re-prepare RAVENNA capture a fixed offset after one of its\n"
         << "                         period wakeups, so the driver's reader phase is constant\n"
@@ -408,6 +419,11 @@ Options parse_options(const int argc, char** argv) {
             options.level_gain_ppm_per_frame = parse_double(value, "level-gain");
         } else if (argument == "--level-clamp") {
             options.level_clamp_ppm = parse_double(value, "level-clamp");
+        } else if (argument == "--pitch-seed") {
+            options.pitch_seed_ppm = parse_double(value, "pitch-seed");
+            if (!(options.pitch_seed_ppm >= -250.0 && options.pitch_seed_ppm <= 250.0)) {
+                throw std::runtime_error("pitch-seed must be within -250..250 ppm");
+            }
         } else if (argument == "--align-start") {
             const unsigned long parsed = parse_unsigned(value, "align-start");
             if (parsed > 1) {
@@ -1891,7 +1907,33 @@ int run(const Options& options) {
                   << " level_clamp_ppm="
                   << (options.split_pitch_servo ? options.level_clamp_ppm : kLevelBiasMaximumPpm)
                   << " tx_depth=" << options.tx_depth_frames
-                  << " rx_depth=" << options.rx_depth_frames << '\n';
+                  << " rx_depth=" << options.rx_depth_frames
+                  << " seed_ppm=" << options.pitch_seed_ppm << '\n';
+        if (options.pitch_seed_ppm != 0.0) {
+            // Seed before any capture starts: the controls carry nominal
+            // minus seed from the first frame, the telemetry thread sees the
+            // value as already applied (so it does not rewrite it and the
+            // regression's applied-ratio correction integrates the seed from
+            // t=0), and the estimator starts at the seed so its first rate
+            // observation, which measures the required ratio rather than
+            // the residual, lands on it without a slew.
+            const int seeded = static_cast<int>(std::clamp(
+                std::lrint(static_cast<double>(kNominalPitch) - options.pitch_seed_ppm),
+                long{kNominalPitch - 250}, long{kNominalPitch + 250}));
+            const int written = pitch_control->write(seeded);
+            if (written < 0) {
+                throw std::runtime_error(std::string("pitch seed: ") + snd_strerror(written));
+            }
+            telemetry.wanted_pitch.store(seeded, std::memory_order_relaxed);
+            telemetry.applied_pitch.store(seeded, std::memory_order_relaxed);
+            telemetry.wanted_playback_pitch.store(seeded, std::memory_order_relaxed);
+            telemetry.applied_playback_pitch.store(seeded, std::memory_order_relaxed);
+            estimator.reset(options.pitch_seed_ppm);
+            std::cout << "PITCHSERVO seeded ppm=" << options.pitch_seed_ppm
+                      << " pitch=" << seeded << '\n';
+        }
+    } else if (options.pitch_seed_ppm != 0.0) {
+        throw std::runtime_error("pitch-seed needs --usb-pitch-servo");
     }
     bool have_rate_estimate = false;
     bool have_level_setpoint = false;
@@ -2200,6 +2242,7 @@ int run(const Options& options) {
               << ",\"pitch\":" << telemetry.applied_pitch.load()
               << ",\"level_bias_ppm\":" << level_bias_ppm
               << ",\"level_setpoint_frames\":" << level_setpoint_frames
+              << ",\"pitch_seed_ppm\":" << options.pitch_seed_ppm
               << ",\"pitch_write_errors\":" << telemetry.pitch_write_errors.load()
               << ",\"playback_pitch\":" << telemetry.applied_playback_pitch.load()
               << ",\"tx_bias_ppm\":" << tx_level.bias()

@@ -175,6 +175,11 @@ align_tx_prime() { local value; value=$(p ALIGN_TX_PRIME); printf '%s' "${value:
 # instrument that logs ZERORUN lines for runs of exact zeros per stage; absent
 # means off.
 zero_run() { local value; value=$(p ZERO_RUN_DETECT); printf '%s' "${value:-0}"; }
+# PITCH_SEED_PPM is the optional pitch seed (Phase 5 Stage B2): the bridge
+# starts both pitch controls at nominal minus this many ppm and the
+# estimator there, before the prime, instead of running the first minute at
+# nominal. Absent means 0, the measured behaviour of every earlier profile.
+seed() { local value; value=$(p PITCH_SEED_PPM); printf '%s' "${value:-0}"; }
 
 profile_names() {
   local key
@@ -249,6 +254,13 @@ validate_profile() {
     0|1) ;;
     *) say "profile $profile_name: ZERO_RUN_DETECT must be 0 or 1" >&2; return 1 ;;
   esac
+  case "$(seed)" in
+    -[0-9]*|[0-9]*) ;;
+    *) say "profile $profile_name: PITCH_SEED_PPM must be a number" >&2; return 1 ;;
+  esac
+  if [ "$(seed)" != 0 ] && [ "$(servo)" -eq 0 ]; then
+    say "profile $profile_name: PITCH_SEED_PPM needs USB_PITCH_SERVO" >&2; return 1
+  fi
   if [ "$(depth TX)" -ne 0 ] && [ "$(depth TX)" -lt $(( $(p TARGET) + 144 + $(p PERIOD) )) ]; then
     say "profile $profile_name: TX_DEPTH is below TARGET + 144 + PERIOD" >&2; return 1
   fi
@@ -317,6 +329,7 @@ bridge_arguments() {
     --align-tx-offset-us "$(align_tx_offset)" \
     --align-tx-prime "$(align_tx_prime)" \
     --zero-run-detect "$(zero_run)" \
+    --pitch-seed "$(seed)" \
     --priority 90 \
     --seconds 0
 }
@@ -790,7 +803,7 @@ cmd_profiles() {
     [ "$name" = "$selected" ] && mark='*'
     say "$mark $name: $(p STATUS), cover: $(p COVER), measured: $(p MEASURED)"
     say "    $(p DESCRIPTION)"
-    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) zero-run $(zero_run)"
+    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) zero-run $(zero_run) seed $(seed) ppm"
   done
 }
 

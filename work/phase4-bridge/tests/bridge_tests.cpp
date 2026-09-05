@@ -177,6 +177,22 @@ void test_shared_rate_estimator() {
           "rate estimate remains reciprocal");
 }
 
+void test_estimator_seed() {
+    // Phase 5 Stage B2: a seeded estimator starts at the seed, and a first
+    // rate observation equal to the seed leaves it there with no slew, so a
+    // session seeded with the previous session's converged ppm runs its
+    // first minute at that rate instead of at nominal.
+    usb16x16::SharedDriftEstimator estimator;
+    estimator.reset(-15.0);
+    check(std::abs(estimator.ppm() + 15.0) < 1.0e-12, "seed sets the initial ppm");
+    estimator.update_rate_observation(-15.0);
+    check(std::abs(estimator.ppm() + 15.0) < 1.0e-12, "observation at the seed does not move it");
+    estimator.update_rate_observation(-17.0);
+    check(estimator.ppm() < -15.0 && estimator.ppm() >= -17.0, "a different observation slews from the seed");
+    estimator.reset(-300.0);
+    check(estimator.ppm() >= -250.0, "seed is clamped to the estimator bound");
+}
+
 void test_level_servo() {
     usb16x16::LevelServo servo;
     check(!servo.have_setpoint(), "level servo starts without a setpoint");
@@ -408,6 +424,7 @@ int main() {
     test_shared_estimator_sign_and_reciprocal();
     test_estimator_bounds();
     test_shared_rate_estimator();
+    test_estimator_seed();
     test_level_servo();
     test_median_wake_interval();
     test_next_aligned_time();

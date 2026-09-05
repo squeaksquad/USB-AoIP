@@ -5284,6 +5284,36 @@ mode and owner kept (root 644). Live conf now `b60ea8e6`,
 shows the block as accepted, a second dry run reports nothing to change,
 no restart: the service session of 02:27:01 UTC continues, zero RECOVERs.
 
+**IMPLEMENTED 2026-09-05 03:40 UTC, not yet built: Phase 5 Stage B2, the
+pitch seed.** Bridge `--pitch-seed PPM` (double, -250..250, default 0,
+needs `--usb-pitch-servo`): with the servo enabled and before any capture
+starts, both pitch controls are written nominal minus PPM, the telemetry
+thread's wanted and applied values are set to that pitch so it neither
+rewrites it nor reads it as new, the estimator is reset to PPM, and a
+`PITCHSERVO seeded ppm= pitch=` line is printed; the enabled line carries
+`seed_ppm=` and SUMMARY `pitch_seed_ppm`. The regression's applied-ratio
+correction integrates `nominal - applied_pitch` from t=0, so the seed is
+accounted for from the first observation, and because that regression
+measures the required ratio rather than the residual, a seed equal to the
+converged value is confirmed by the first observation without a slew (unit
+test `test_estimator_seed`). Sign: every session since 2026-09-03 has
+converged to pitch 1000014-1000017, which is estimator ppm -14..-17, so
+the seed is **-15**. Supervisor: optional profile key `PITCH_SEED_PPM`
+(absent means 0; must be a number; non-zero needs `USB_PITCH_SERVO`),
+passed as `--pitch-seed`, shown by `profiles` as `seed N ppm`
+(`ca2fffb2`). Conf `196786be` adds profile
+`servo-aligned-both-240-rx120-sd144-tx192-target64-seed15` (target64 with
+`PITCH_SEED_PPM=-15`, experimental); the new supervisor validates the
+repo conf and the live conf (`b60ea8e6`) on the Pi, exit 0, target64
+listed `seed 0 ppm` and seed15 `seed -15 ppm`. All three sources
+syntax-check clean on the Mac (clang, `-Wall -Wextra -Wpedantic -Werror`,
+the Pi's ALSA headers as system headers, the endian/clock stubs). Not
+built: the Pi build waits for a service stop (three for three stalls on
+builds under the live service). Expected effect: `tx_dmean` flat through
+the first minute instead of falling 46, TX floor about 150 loaded, no
+settle overshoot, level unchanged at 1127; the 1 ms is cashed by a TX
+prime 144 block afterwards (B3).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
