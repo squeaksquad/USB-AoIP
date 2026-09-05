@@ -5890,6 +5890,19 @@ a mapping probe, one 200-impulse read is its deliverable) is staged
 (`pw850-block.conf` in `~/usb-16x16-work/aes67-phase-install/`, validated
 against the live conf plus the block, exit 0).
 
+**CORRECTION 2026-09-05 14:50 UTC: the pw850 block's window value must be
+quoted.** The conf grammar takes bare values from `[A-Za-z0-9_.:/+-]`
+only, so `RX_PRIME_PHASE_WINDOW=850,950` is a "bad line" and
+`switch-profile` refused it at 14:28 UTC (the user's switch left
+`PROFILE=` on target64 and the session running); my `profiles` check
+before staging had read the exit code and not the missing listing. Fixed
+as `RX_PRIME_PHASE_WINDOW="850,950"` in the repo conf (`b74b9330`,
+installer `f1f2b9ec`, `e8ae5e69` joins the unedited-shipped list) and in
+the staged block; a copy of the live conf with the line quoted validates
+with zero bad lines and lists the block. The live conf gets the same
+one-line edit in place. Rule for the record: a window value in a block is
+always `"LOW,HIGH"`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
