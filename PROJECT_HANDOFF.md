@@ -6109,6 +6109,18 @@ on target64). Conf `9428db88` (installer `e50e0307`, `5a2de43b` joins the
 unedited-shipped list) carries phase760-tx240's MEASURED and COVER,
 `STATUS=experimental`.
 
+**STAGED 2026-09-05 17:25 UTC: profile `...-target64-phase450`** (target64
+with `RX_PRIME_PHASE_WINDOW="380,550"`, the band the plain restarts land
+in and the accepted 1127 came from; experimental). The user switched the
+service back to target64 for the night at about 17:20 UTC. Expected about
+1134 on every session at TX floor about 105 and RX 77: target64 with the
+lottery removed and its cover kept, for about 7 samples against its best
+draw. Conf `dc3fa097` (installer `7305020a`, `9428db88` joins
+the unedited-shipped list); block `phase450-block.conf` in
+`~/usb-16x16-work/aes67-hold-install/`, validated against the live conf
+plus the block. Acceptance as for phase760-tx240: the full set on two
+sessions, one level.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
