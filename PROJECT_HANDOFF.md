@@ -5966,6 +5966,18 @@ pw850 session's last line: `tx_qfloor` 65 late in that session, on the
 binary whose hold left the RX ring one bin high; not seen on `2a158386`
 (151 at the read); watch it.
 
+**MEASURED 2026-09-05 15:00 UTC: pw700 reads 1094 at phase 765.** `PRIME
+window ... status=hit ring=192 phase_us=765 window_us=700,800
+waited_ms=40474`, `PRIMED ring_at_prime=192 overshoot=5`, TX
+`front_age_frames=336`, floors 150/77 unloaded, zero RECOVERs. Harness,
+200 impulses at 64 (`pw700-roundtrip-64f-...`): **1094** (22.79 ms),
+spread 0. The map so far: 382 -> 1132, 544 -> 1134, 548 -> 1137, 765 ->
+1094, 944 -> 1107. Not a straight 48-per-millisecond ramp: 43 samples
+fall between 548 and 765 and 13 rise between 765 and 944, so the level
+steps down somewhere between 550 and 765 and climbs slowly after; the
+minimum is at or just past that step. pw100 (50-150) is next for the
+wrap side; a 600-700 probe may then bracket the step.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
