@@ -5871,6 +5871,25 @@ conf), `switch-profile ...-target64` (PROFILE only while inactive), then
 `systemctl start`. First use: target64 for several sessions, reading
 `grid_phase_us` on the RX PRIMED line and the harness level of each.
 
+**MEASURED 2026-09-05 14:10-14:40 UTC: the grid phase is recorded and
+slides as predicted, three target64 sessions drew a 160 us band and the
+window is how the rest of the cycle gets sampled.** Bridge `abab6732`
+installed by the user, target64. Session 1 (14:10 UTC): RX PRIMED
+`grid_phase_us=548`; `phase_us` in telemetry 638, 623, 509, 479, 506, 334
+over the first 15 s, about 20 us per second, one cycle in under a minute,
+the slide the record predicted from the crystal offset. Harness, 200
+impulses at 64 frames: 1137 (`phase1-roundtrip-64f-20260905T141709Z`).
+Session 2 (restart): phase 382, level 1132 (`phase2-...T142...Z`).
+Session 3 (restart): phase 544, level 1134 (`phase3-...`). All spread 0,
+zero RECOVERs. Three draws inside 380-550 us and levels within 5: the
+restart sequence takes about the same time every round, so the phase it
+lands on clusters, which is why sessions have looked like shelves rather
+than a uniform lottery. The rest of the cycle is sampled by choosing it:
+profile `...-target64-pw850` (target64 with `RX_PRIME_PHASE_WINDOW=850,950`,
+a mapping probe, one 200-impulse read is its deliverable) is staged
+(`pw850-block.conf` in `~/usb-16x16-work/aes67-phase-install/`, validated
+against the live conf plus the block, exit 0).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
