@@ -6018,6 +6018,45 @@ unedited-shipped list) puts every session on the floor with about 35 us
 of margin each side; expected about 1094, RTL at 32 about 26.7 ms. Its
 acceptance is the full set plus a second session on the same level.
 
+**MEASURED 2026-09-05 15:30-15:58 UTC: `...-target64-phase760` passes
+every run at 1083 (22.562 ms), and its TX floor is 60: the level's
+sawtooth and the TX cover's are the same sawtooth.** Switch at about
+15:30 UTC: `PRIME window ... status=hit ring=192 phase_us=735
+window_us=730,800 waited_ms=33412`, `PRIMED ring_at_prime=192
+overshoot=5`, TX `align_dropped=65 front_age_frames=336`. Gate
+(`phase760agate-noise-ch2-64f-100imp`) 0.0% zeros. Four 800-impulse runs
+(`phase760a-roundtrip-64f-20260905T153328Z`, `153704Z`, `154039Z`,
+`154414Z`) and the soak (`phase760asoak-...T154749Z`, 600 s loaded): all
+5600 on **1083**, spread 0, zero RECOVERs, restarts, clips, drops,
+`tx_qlow` and `rx_qlow` 0 on all 1565 lines, detector 0 runs, gaps
+1.15/1.27 ms. Log
+`outputs/latency/phase5-20260905/bridge-phase760a-session-20260905T153030Z.log`.
+44 under target64's accepted 1127 and the lowest level in the record.
+
+*Floors:* RX 77, as target64. TX 156 unloaded, then 108 at the first run
+(78 s), 71, 65 and 60 from 175 s: 48 under target64's loaded 108. The
+probes said the same in their unloaded TX floors: about 200 at phases
+67-550 (the high shelf) and about 150 at 695-944 (the low shelf). The
+phase that puts the level on the floor of its sawtooth puts the TX queue
+on the floor of its own, and the two move together by one period: the
+session lottery the record has been chasing since the shelves appeared
+was a TX-cover lottery all along, and target64's good draws (1127, floor
+108) and bad draws (1161, floor about 156) were the same trade. No
+underrun in 26 loaded minutes at 60, but 60 is under the bar of one
+period plus the worst wakeup gap (about 96-101) and the record does not
+accept a point there.
+
+*The operating block that follows:* `...-target64-phase760-tx240`
+(phase760 with `TX_PLAYBACK_PRIME=240`, one variable; conf `5a2de43b`,
+installer `52257cc5`, `d6f463a6` joins the unedited-shipped list).
+48 more TX prime at this phase restores the cover, so the expected level
+is about 1131 at floors about 108/77: target64's best draw made
+repeatable on every session instead of drawn. If that measures as
+expected, the phase window's value is determinism, worth up to 34
+samples against the bad draws, and not a lower floor; the lower floor
+is only there with less TX cover, which is the same trade every lever
+today has run into.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
