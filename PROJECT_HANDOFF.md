@@ -5420,6 +5420,28 @@ without giving anything back. Conf `ed23c829` carries the seed15 block
 with its MEASURED and COVER strings (installer `71513f2b`, `196786be`
 joins the unedited-shipped list), `STATUS=experimental`.
 
+**STAGED 2026-09-05 04:35 UTC: Phase 5 Stage B3, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target64-seed15-primes144`**
+(seed15 with `TX_PLAYBACK_PRIME=144` and `RX_PLAYBACK_PRIME=144`, the two
+primes moved as one step because they trade against each other;
+experimental). The user's direction: the lowest latency that is still
+stable. seed15 holds the level (1102) but leaves RX at floor 50; this block
+hands 48 of the seed's TX surplus to RX through the primes, so the level
+should stay at 1102 with both floors over their bars: TX about 112 loaded
+(160 minus 48), RX 125 at prime (the RX prime lands `target + prime + 3 =
+211` in the 240 bin) and about 98 after the loaded dips. The alternative,
+a mode-1 level-setpoint flag, would give about 130/80 at the same level
+but needs a build and leaves RX where target64 ran; this one is conf-only
+and more even. Repo conf `1099fbe1` (installer `289e543e`, `ed23c829`
+joins the unedited-shipped list); block staged as
+`~/usb-16x16-work/aes67-seed15-install/primes144-block.conf` (`00ec9db8`)
+and validated with `profiles` against the live conf plus the block and
+against the repo conf on the Pi, exit 0, listed `prime 96/tx 144/rx 144
+... seed -15 ppm`. Goes in by hand and `switch-profile` restarts the
+stack. Rollback is `switch-profile
+servo-aligned-both-240-rx120-sd144-tx192-target64` (accepted, floors
+108/77) or `...-target64-seed15` (160/50).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
