@@ -6121,6 +6121,53 @@ the unedited-shipped list); block `phase450-block.conf` in
 plus the block. Acceptance as for phase760-tx240: the full set on two
 sessions, one level.
 
+**MEASURED 2026-09-05 22:37-23:34 UTC: `...-target64-phase450` session 1
+reads 1089 at TX floor 108, which breaks the one-sawtooth reading; its
+soak carries the USB drop signature; a PTP master reset opened the
+session.** The user switched at about 22:37 UTC; the kernel logged
+`ResetPTPMaster` on both ports at 22:37:08-09 as the stack came up.
+`PRIME window direction=ravenna-to-usb status=hit ring=192 phase_us=401
+window_us=380,550 waited_ms=0` (the plain draw was already inside the
+band), `PRIMED ring_at_prime=192 overshoot=5`, TX `align_dropped=67
+front_age_frames=336`. My wait loop keyed on the stage file reading
+`running`, which the supervisor replaces after 120 s, so the gate ran at
+23:08, 31 minutes into the session; a rule for the loop, not the record.
+Gate (`phase450agate-noise-ch2-64f-100imp`) 0.0% zeros. Runs
+(`phase450a-roundtrip-64f-20260905T230908Z`, `231244Z`, `231620Z`,
+`231956Z`): all 3200 on **1089** (22.688 ms), spread 0, zero RECOVERs.
+Soak (`phase450asoak-...T232332Z`, 600 s loaded): median 1089, minimum
+1081, spread 8, score 0.980, zero RECOVERs: about 2% of impulses 8
+samples early, the dropped-impulse signature of the 2026-09-04 USB
+campaign, on no other soak today. Pi side clean throughout: `tx_qfloor`
+108 loaded from 189 s, `rx_qfloor` 77, `tx_qlow`/`rx_qlow` 0, no drops,
+no clips, gaps 1.12/1.63 ms. Log
+`outputs/latency/phase5-20260905/bridge-phase450a-session-20260905T223751Z.log`.
+
+*Two things this session says.* (1) 1089 at floors 108/77 is the lowest
+level ever measured at target64's full cover, 38 under the accepted
+1127, at a phase (401) the afternoon map placed at 1132. So the level
+is not one sawtooth in the USB-grid phase with the TX cover riding on
+it: there is a third term, about 43-48, that moved between the
+afternoon and now with the floors unchanged. The PTP master reset at
+this session's start is the candidate: the packet-arrival lead against
+the RAVENNA read slot on the Ferrofish side of the bridge (the
+"arrival lead" of the 2026-09-02 record), which the aligned start
+fixes relative to the tick but which the PTP side can move by a slot
+when it re-locks. It is not controlled by anything in the profile yet
+and it decides whether a session gets 1089 or 1132 at the same phase
+and cover. (2) The Mac side: the zero-run detector logged 844 runs of
+8-12 zeros on channel 1 alone at `usb-capture` between 22:39:20 and
+22:56 UTC, none since; something was sent to the device on channel 1
+in that window with holes in it. The soak's 8-sample-early impulses
+under the sixteen-channel load are a second Mac-side symptom of the
+kind cleared on 2026-09-05 11:02 UTC by the coreaudiod kill and gadget
+re-bind. The profile is not the cause (the Pi side is clean and every
+earlier soak today was spread 0) and it is not accepted on this soak.
+Conf `0ae3617b` (installer `28860f82`, `dc3fa097` joins the
+unedited-shipped list) carries session 1 in the block. Next: a
+Mac-side reset, then the soak again and a second session, watching
+whether the third term holds across a restart without a PTP reset.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
