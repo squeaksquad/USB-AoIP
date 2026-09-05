@@ -6057,6 +6057,58 @@ samples against the bad draws, and not a lower floor; the lower floor
 is only there with less TX cover, which is the same trade every lever
 today has run into.
 
+**MEASURED 2026-09-05 16:08-17:15 UTC, two sessions:
+`...-target64-phase760-tx240` repeats its level within 4 samples (1122 and
+1118) and its TX floor lands at 68-70 on both.** Session 1 (16:08 UTC):
+`PRIME window ... status=hit ring=192 phase_us=775 waited_ms=36539`, TX
+PRIMED `queue_prime=240 align_dropped=68 front_age_frames=384`. Session 2
+(`systemctl restart`, 16:47 UTC): hit at 799 after 25 s, TX
+`front_age_frames=384`. Gates (`tx240agate-`, `tx240bgate-`) 0.0% zeros.
+
+| session | phase | runs 1-4 | soak | level | ms | tx_qfloor | rx_qfloor | RECOVERs |
+|---|---:|---|---|---:|---:|---:|---:|---:|
+| 1 | 775 | `tx240a-roundtrip-64f-20260905T161100Z`, `161436Z`, `161811Z`, `162146Z` | `tx240asoak-...T162522Z` | 1122 | 23.375 | 68 | 77 | 0 |
+| 2 | 799 | `tx240b-roundtrip-64f-20260905T164947Z`, `165322Z`, `165658Z`, `170033Z` | `tx240bsoak-...T170408Z` | 1118 | 23.292 | 69 | 77 | 0 |
+
+11200 impulses, spread 0 within each session, zero RECOVERs, restarts,
+clips, drops, `tx_qlow` and `rx_qlow` 0 on all 1537 + 1531 lines,
+detector 0 runs, `tx_pullmax` 48, gaps 1.10/1.72 ms. Logs
+`outputs/latency/phase5-20260905/bridge-tx240a-session-20260905T160830Z.log`
+and `bridge-tx240b-session-20260905T164700Z.log`.
+
+*Level:* 1122 and 1118, 4 apart at phases 775 and 799 (the slow climb
+of the sawtooth's floor runs the other way over that span, so the
+residue is the two-microframe grain seen on rxalign). Both under
+target64's accepted 1127 and 39-43 under its bad draw. The window does
+what it was built for: one level, every session.
+
+*Floors:* RX 77. TX 201-202 unloaded, 105-106 through the first loaded
+minutes (target64's number exactly, the 48 of prime restoring the
+unloaded cover), then one dip on each session (314 s and 411 s) to 68
+and 70, held as the running minimum after. target64's accepted session
+took the same loaded dips and its floor stopped at 105; here they reach
+37 lower. So the TX prime restored the level's 48 but not the dips'
+depth: at this phase the loaded TX minimum is about 37 under target64's
+for about the same level. Read together with phase760 (1083 at TX 60)
+and the probes' unloaded TX floors (about 200 at phases 67-550, about
+150 at 695-944), the picture is one sawtooth, not two: the level and
+the TX cover move together with the phase, and every point measured
+today lies on the line level = TX cover + constant. The window chooses
+where on that line a session lands; it cannot move the line.
+
+*Standing:* three ways to run the service, all measured on `2a158386`:
+target64 (accepted; by the draw 1127 at TX 105 or 1161 at TX about 156,
+RX 77); phase760-tx240 (1118-1122 every session, TX 68-70, RX 77);
+phase760 (1083 every session, TX 60, RX 77, not accepted). The
+deterministic point with target64's full cover would be a window on the
+high shelf with TX prime 192 (about 1134 at TX about 105, every
+session): the plain draws already land there most of the time, so it
+is target64 with the lottery removed at the cost of 7 samples against
+its best day; unmeasured, one block away (`RX_PRIME_PHASE_WINDOW="380,550"`
+on target64). Conf `9428db88` (installer `e50e0307`, `5a2de43b` joins the
+unedited-shipped list) carries phase760-tx240's MEASURED and COVER,
+`STATUS=experimental`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
