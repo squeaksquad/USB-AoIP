@@ -5069,6 +5069,29 @@ the late packets are made (0.79 ms); and, with the TX floor now at 105
 over a bar near 96, no further TX prime step without a lower bar, which
 would need the worst wakeup gap measured over days, not sessions.
 
+**DONE 2026-09-05 02:03 UTC by the user: the accepted labels are in the
+live conf.** `copy-tx192-labels.py` (staged in
+`~/usb-16x16-work/aes67-tx192-install/` beside the shipped conf
+`ec4b587b`, installer `d3b49785`, and the unchanged supervisor `5c3c4004`
+and unit `77837e60`) replaced the tx192 block's STATUS, COVER and MEASURED
+lines with the shipped ones by an atomic replace, DESCRIPTION already
+identical, three lines changed, mode and owner kept (root 644). Live conf
+now `50fe5b49`, `PROFILE=servo-aligned-both-240-rx120-sd144-tx192`,
+`profiles` shows the block as accepted, no restart: the service session
+of 01:20:23 UTC continues, zero RECOVERs.
+
+**And the RX floor question answers part of itself: `rx_qfloor` read 96
+at 02:05 UTC on this same session**, after reading 109 on every line
+through the acceptance and the soak (01:21-01:47). So 109 is not a
+per-session value either; the RX floor is a running minimum that takes
+somewhere between 26 and 44 minutes of service time to reach 96, and the
+acceptance windows were too short to see it. Both earlier readings are
+withdrawn: not the gadget (the sweep entries), not per session (the
+ACCEPTED entry above). What remains is why it takes that long, which a
+timestamped log of `rx_qfloor` changes would show; unloaded and loaded
+alike, RX cover stays 96 over the 48-frame push, as every accepted profile
+has read.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
