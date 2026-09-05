@@ -5338,6 +5338,20 @@ before. Install order, service stopped: `install-candidate.sh`, then
 `b65b84ee` is in git history and `switch-profile` to any block without
 `PITCH_SEED_PPM` runs the new binary at seed 0.
 
+**CORRECTION 2026-09-05 03:55 UTC: the B2 install failed on the
+supervisor's own bridge pin.** The user ran both installers and appended
+the seed15 block (live conf `d9843c95`, `PROFILE=...-target64-seed15`);
+the service then failed five times in 300 s with exit 27, `FAIL Phase 4
+bridge hash or ownership mismatch`: the supervisor pins the bridge hash
+itself (`expected_bridge_sha256`, line 43) and the staged supervisor
+`ca2fffb2` still carried `b65b84ee`. Missed when the two installers were
+repinned. Fixed: supervisor `45651a81` (pin `e6bc98ac`, nothing else
+changed), service installer `1912e86e`, both restaged in
+`~/usb-16x16-work/aes67-seed15-install/`, `profiles` against the live conf
+exit 0. The user re-runs `install-aes67-service.sh` and restarts the
+service. Add to the repin list for any new binary: the supervisor's pin as
+well as both installers.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
