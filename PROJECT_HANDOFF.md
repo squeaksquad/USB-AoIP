@@ -4935,6 +4935,60 @@ if not, bint 1 is not worth 0.3 ms and the accepted point stands. The
 service is left on bint 1 / req 4, measured, not accepted; rollback is
 removing the drop-in, `daemon-reload`, gadget restart.
 
+**MEASURED 2026-09-05 01:04-01:09 UTC: `req_number=8` at bint 1 reads
+1368, 16 over the accepted point, clean everywhere; the sweep closes with
+the accepted point standing.** A first attempt at 00:37 UTC restarted the
+AES67 service without the gadget (the drop-in said `start 8`, the unit
+had last run `start 4`), so RTL's error at 32 then was bint 1 / req 4
+again; redone at 01:03:08 UTC (`gadget bound with req_number=8`, bint
+1/1, high-speed), service running at 01:04:15 UTC (ALIGN ok, TX
+`align_dropped=49`). RTL Utility, read by the user: **errors at 32
+frames**, **about 33 ms at 64**. The six-probe pass, harness alone,
+`bint1req8-*` in `outputs/latency/usb-holes-20260904/`:
+
+| probe | frames | result |
+|---|---:|---|
+| noise ch2 | 512 / 64 / 32 / 16 | 0.0% zeros, no run of 4 or more, all four |
+| impulse ch1 | 64 | **1368** on all 100, score 1.000, no discontinuities |
+| impulse ch1 | 32 | **1368** on all 100, score 1.000, no discontinuities |
+
+Pi over the pass: zero RECOVERs, restarts, drops or clips, `tx_qfloor`
+159, `rx_qfloor` 109, `tx_pullmax` 48, `rx_pullmax` 49, gaps 1.12/1.72 ms,
+pitch 1000015, detector 0 runs.
+
+The sweep in one table, all on `servo-aligned-both-240-rx120-sd144`,
+bridge `b65b84ee`, 2026-09-04/05:
+
+| gadget | 64-frame level | noise 512/64/32/16 | 32-frame impulse probe | RTL Utility |
+|---|---:|---|---|---|
+| bint 0, req 4 (accepted) | 1352 | clean | clean | 32.083 at 32 |
+| bint 0, req 3 | 1350 | clean | clean | 32.042 at 32 |
+| bint 1, req 4 | 1337 | clean | 1 in + 1 out discontinuity | errors at 32, 32.354 at 64 |
+| bint 1, req 8 | 1368 | clean | clean | errors at 32, about 33 at 64 |
+
+Reading. Request count above 2 costs nothing at 250 us (3 to 4: 2
+samples) but 31 samples from 4 to 8 at 125 us, so the queued requests do
+sit on the path once there are enough of them. The packet interval at
+125 us is worth 15 samples only at four requests, where the Mac glitches
+at 32 frames; at eight requests, where it is clean, it is 16 samples
+worse than the accepted point. And at both bint 1 points RTL Utility
+cannot complete a measurement at 32 frames even though the harness at
+the same IO size sees every sample and, at req 8, no discontinuity; the
+standard figure is unreadable there, which disqualifies bint 1 on its
+own. The three levers the sweep existed for are spent: `req_number=3` is
+equivalent to 4, `req_number=8` has nothing to fix, and bint 1 is not a
+net gain. The 150-sample step between req 2 and req 4 remains
+unexplained and is most likely not a clean-loop number at all (the req 2
+level was measured while the loop dropped every second impulse). The
+accepted point stays `req_number=4`, bint 0, script `b11fd358`. Also on
+the record from the three sessions: `rx_qfloor` 107-109 at every point
+that was not bint 0 / req 4, against 96 on every bint 0 / req 4 session,
+unloaded in all three; the RX floor moves with the gadget's endpoint
+configuration and is worth a loaded look when the RX side is next
+instrumented. The service was left on bint 1 / req 8 at the end of the
+pass; rollback to the accepted gadget is removing the drop-in, a
+`daemon-reload`, and a gadget restart with the service stopped.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
