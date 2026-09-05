@@ -5276,6 +5276,14 @@ then the RX prime bin and TX prime retrim (B3); target 48 is a further
 block if wanted, bounded by `target >= period`, at RX floor 93 by the same
 arithmetic unless the RX prime moves bins.
 
+**DONE 2026-09-05 03:10 UTC by the user: the accepted labels are in the
+live conf.** `copy-target64-labels.py --apply` replaced the target64
+block's STATUS, COVER and MEASURED lines with the shipped ones, three lines,
+mode and owner kept (root 644). Live conf now `b60ea8e6`,
+`PROFILE=servo-aligned-both-240-rx120-sd144-tx192-target64`, `profiles`
+shows the block as accepted, a second dry run reports nothing to change,
+no restart: the service session of 02:27:01 UTC continues, zero RECOVERs.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
