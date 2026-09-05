@@ -5194,6 +5194,70 @@ is operator-edited, so the block goes in by hand (`cat` append) and
 `switch-profile` restarts the stack. Rollback is `switch-profile
 servo-aligned-both-240-rx120-sd144-tx192`.
 
+**MEASURED 2026-09-05 02:27-03:06 UTC: `servo-aligned-both-240-rx120-sd144-tx192-target64`
+passes every acceptance run at 1127 samples (23.479 ms), 191 under tx192;
+the RX floor is 77 and is arithmetic.** The user appended the block to the
+live conf (`73ef23f0`) and ran `switch-profile` at 02:26 UTC; STAGE running
+02:27:01, ALIGN ok attempt 1, TX PRIMED `queue_prime=192 align_dropped=65
+overshoot=12 front_age_frames=336` (400 on tx192: exactly the 64), RX
+PRIMED `intended=187 ring_at_prime=192 overshoot=5` (251/288/37 on tx192).
+RTL Utility at 32 frames, read by the user right after the switch: **27.396
+ms**, 3.979 ms (191 samples) under tx192's 31.375. Gate first: channel-2
+noise probe at 64 (`target64gate-noise-ch2-64f-100imp` in
+`usb-holes-20260904/`) 0.0% zeros, no run of 4 or more in 1.24 M samples.
+Then `measure-under-service.sh 64 800 target64` four times in one chain
+and the soak, harness alone:
+
+| run | file | frames | samples | ms | levels | score | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | `target64-roundtrip-64f-20260905T024053Z` | 64 | 1127 | 23.479 | 1127 x800 | 1.000 | 109 | 77 | 48 | 0 |
+| 2 | `target64-roundtrip-64f-20260905T024428Z` | 64 | 1127 | 23.479 | 1127 x800 | 1.000 | 109 | 77 | 48 | 0 |
+| 3 | `target64-roundtrip-64f-20260905T024804Z` | 64 | 1127 | 23.479 | 1127 x800 | 1.000 | 108 | 77 | 48 | 0 |
+| 4 | `target64-roundtrip-64f-20260905T025140Z` | 64 | 1127 | 23.479 | 1127 x800 | 1.000 | 108 | 77 | 48 | 0 |
+| soak | `target64soak-roundtrip-64f-20260905T025516Z`, `USB16X16_OTHER_LOAD=0.1`, 600 s | 64 | 1127 | 23.479 | 1127 x2400 | 1.000 | 108 | 77 | 48 | 0 |
+
+5600 impulses on one sample, spread 0, zero discontinuities, zero
+RECOVERs (`/run/usb16x16/recovers` empty, no RECOVER line in the full-rate
+log), zero restarts, `tx_clip`/`rx_clip` 0, `tx_dropped`/`rx_dropped` 0,
+`tx_qlow` and `rx_qlow` 0 on all 2341 BRIDGE lines of the 39-minute
+session, zero-run detector 0 runs, gaps 1.12/1.64 ms, pitch 1000012-1000020
+after settle, `tx_pullmax` 48 with the histogram empty above the second
+bin. Full-rate log saved as
+`outputs/latency/phase5-20260905/bridge-target64-session-20260905T022701Z.log`.
+
+*Where the 191 came from.* TX depth fell exactly the 64 of the target
+(`front_age_frames` 400 to 336; the aligned prime sets the drop from the
+grid, so the TX floor did not follow: 156 unloaded after warm-up against
+tx192's 149, 108-109 loaded against 105). RX depth fell 96, not 64: the RX
+prime is unaligned and the RX ring fills to the next multiple of 48 above
+`target + queue_prime + 3`, so the threshold 187 is crossed at 192 where
+251 was crossed at 288. Together 160 samples, and the residue to 191 is
+the session-start band (1287-1318 on rx120, 31 wide). The RX floor follows
+the same arithmetic: `ring_at_prime - target - 51`, which gives 109 for
+288/128 (every tx192 and sd144 session), 109 for 288/128 with prime 144
+(the 2026-09-04 candidates) and 77 for 192/64 here. It is not a draw. It
+also means the RX prime value matters only through which 48-frame bin
+`target + prime + 3` lands in: at target 64, any RX prime from 126 to 173
+fills the ring to 240 and gives RX floor 125 at +48 frames (1 ms) of
+depth, and 120 gives 77 at the depth measured here. That is Stage B3's
+RX-side table, and the `front_age_frames -1` fix (an aligned RX prime)
+would make RX depth continuous instead of quantised.
+
+*The RX floor question.* The staged block's comment asked for `rx_qfloor`
+96 or better. The session read 77 from second 1 and never lower through
+25 minutes loaded, 1433 RX pulls of 49-95 frames (the same 0.6/s both
+sessions show; tx192's histogram carried 1912) and one 96-frame pull at
+1632 s (02:54 UTC) that did not move it, with `rx_qlow` 0 throughout. The
+96 quoted for RX elsewhere in the record is a floor reading that already
+includes the 48-frame push, so the comparison is 77 against 96 of cover
+after the push, 19 frames (0.4 ms) less than any accepted point has run
+with. The block stays `experimental` with its MEASURED and COVER strings
+filled (conf `bc674a29`, installer `598829ea`, `d2648790` joins the
+unedited-shipped list); accepting it, or moving the RX prime to the 240
+bin for RX floor 125 at 1 ms back, is the user's call. The live conf
+carries the block as pasted (`STATUS=experimental`) either way. Rollback is
+`switch-profile servo-aligned-both-240-rx120-sd144-tx192`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
