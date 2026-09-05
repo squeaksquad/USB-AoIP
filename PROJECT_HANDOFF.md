@@ -5599,6 +5599,81 @@ order, service stopped: `install-candidate.sh`, `install-aes67-service.sh`
 (keeps the operator-edited live conf), append the block, `switch-profile`
 (writes PROFILE only while inactive), `systemctl start`.
 
+**HARD STOP 2026-09-05 12:13:20 UTC, unexplained; then MEASURED
+12:19-12:51 UTC: `...-target64-seed15-shift30` is stable at 1154, and the
+seed binary's level sits on two shelves 52 apart with identical primed
+depths.** The user ran the B3 installs (bridge `006fc65e`, supervisor
+`d46202b0`, wrapper `6282b108`, all verified on the Pi afterwards),
+appended the block (live conf `d23ed9ed`), selected shift30 and started
+the service at about 12:13:05 UTC. The journal of that boot ends
+mid-line at 12:13:20, the daemon answering its API poll normally, no
+kernel message, no shutdown: about ten seconds after the stack started
+and within a second of when the bridge would have launched. The Pi came
+back at 12:18:02 on its own (the user did not power-cycle it), so a
+hang-plus-watchdog or a power event; nothing in either boot's kernel log
+says which. First hard stop in the record, coincident with the first
+start of `006fc65e`; the same binary and profile then started cleanly on
+the new boot and ran the whole measurement below, so it is not
+deterministic. wlan0 failed at boot (`no-secrets` race in
+NetworkManager) and reconnected on its own retry at about 12:22 UTC; the
+Pi was reached over `eth0` `169.254.92.97` meanwhile. Watch for a repeat
+before trusting the binary in service.
+
+The 12:19:54 UTC session on shift30: seeded, RX PRIMED `ring_at_prime=192
+overshoot=5 queue_prime=120`, TX PRIMED `align_dropped=65
+front_age_frames=336` (both identical to the seed15 session of 03:49),
+`PITCHSERVO engaged setpoint_frames=117 captured_frames=177
+level_shift=30`; the level loop walked at its clamp and then hunted
+between -2.3 and +3.0 ppm under load. RTL Utility at 32, read by the user
+at about 12:24 UTC: **27.958 ms**. Gate probe
+(`shift30gate-noise-ch2-64f-100imp`) 0.0% zeros (RTL Utility had been
+open moments before; no harm this time). Chain:
+
+| run | file | frames | samples | ms | levels | score | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | `shift30-roundtrip-64f-20260905T122549Z` | 64 | 1154 | 24.042 | 1154 x800 | 1.000 | 156 | 66 | 48 | 0 |
+| 2 | `shift30-roundtrip-64f-20260905T122924Z` | 64 | 1154 | 24.042 | 1154 x800 | 1.000 | 156 | 66 | 48 | 0 |
+| 3 | `shift30-roundtrip-64f-20260905T123259Z` | 64 | 1154 | 24.042 | 1154 x800 | 1.000 | 156 | 66 | 48 | 0 |
+| 4 | `shift30-roundtrip-64f-20260905T123634Z` | 64 | 1154 | 24.042 | 1154 x800 | 1.000 | 156 | 66 | 48 | 0 |
+| soak | `shift30soak-roundtrip-64f-20260905T124009Z`, `USB16X16_OTHER_LOAD=0.1`, 600 s | 64 | 1154 | 24.042 | 1154 x2400 | 1.000 | 119 | 66 | 48 | 0 |
+
+5600 impulses on one sample, spread 0, zero RECOVERs, restarts, clips,
+drops, `tx_qlow` and `rx_qlow` 0 on all 1867 lines, detector 0 runs, gaps
+1.14/1.63 ms, pitch 1000010-1000020, one 96 RX pull. Log
+`outputs/latency/phase5-20260905/bridge-shift30-session-20260905T121954Z.log`.
+RTL 27.958 against target64's 27.396 is 27 samples, the harness
+difference (1154 against 1127) to the sample.
+
+*Floors:* TX 156 unloaded, 119 in the soak; RX 66 from 16 s and never
+lower under any load (seed15 went to 50): the shift bought RX 16 and
+cost TX 41 and did not reach its 30, because the loaded dips kept the
+level loop at its clamp. Stable by every gate, and no better than
+target64 (108/77) on RX.
+
+*Level, the finding:* 1154 with primed depths identical to the seed15
+session that measured 1102 (same RX ring fill 192, same TX
+`front_age_frames` 336, same `align_dropped`). Either the servo-held
+shift moved the round trip, against the 2026-09-03 depth sweep, or the
+seeded binary's sessions land on two shelves: 1092-1102 (seed15 03:49,
+primes144 10:52 by its RTL 26.667) and 1154-1156 (primes144 11:06,
+shift30 12:19), 52-64 apart, one period plus a few. The 2026-09-03 sweep
+moved servo depth by 48 inside one session and the level did not move,
+so the shelves reading is the one the record supports, and their size
+points at the one start phase the bridge does not align: the RX prime
+(`front_age_frames -1`, the open item since 2026-09-04). A session that
+draws the low shelf is 1.1 ms better than one that draws the high one,
+which is more than any lever measured today. Aligning the RX prime is
+therefore the next build: it makes the RX side's start phase a constant
+like TX's, and if the shelves are that phase, every session lands on the
+low one.
+
+*Standing:* target64 (1127, RTL 27.396, floors 108/77, accepted) remains
+the point of record. seed15 (1102, 160/50), primes144 (1156, 110/96) and
+shift30 (1154, 119/66) are measured and stay experimental. Conf
+`3f087d41` (installer `323becec`, `705c7906` joins the unedited-shipped
+list). Rollback for service is `switch-profile
+servo-aligned-both-240-rx120-sd144-tx192-target64`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
