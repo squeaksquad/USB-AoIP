@@ -54,8 +54,11 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`21c0e9f21d15dfd6c2f07779c9f15de2b2871241d4924312d5a6c66830af0d9e`
-(2026-09-06: the impulse trace, `--impulse-trace 1` with `--impulse-channel`,
+`c1ca48c544b9c6fe0fccf03a438bf73ac7e9f616dd44127a11718a8bba529323`
+(2026-09-06: the impulse trace's playback stages query the ALSA delay on the
+blocks that carry a hit, `depth_src=delay`, so the queue terms are exact;
+otherwise `21c0e9f2`).
+Previous binary `21c0e9f2` (2026-09-06: the impulse trace, `--impulse-trace 1` with `--impulse-channel`,
 `--impulse-threshold` and `--impulse-holdoff`: every block entering and
 leaving the bridge is scanned on one channel for a sample over the
 threshold and each hit is an `IMPULSE` line with its stage, stream

@@ -1,0 +1,21 @@
+--- a/driver/manager.c	2026-09-05 22:13:05
++++ b/driver/manager.c	2026-09-05 22:13:05
+@@ -1423,6 +1423,18 @@
+     #else
+         uint32_t offset = self->m_alsa_driver_frontend->get_playback_buffer_offset(self->m_pALSAChip);
+         const uint32_t sacOffset = (uint32_t)(get_global_SAC(self) - get_frame_size(self) - ui64CurrentSAC);
++        /* usb16x16 2026-09-06: the playback interrupt has already copied
++         * this TIC's frame into the live-out ring at playback_buffer_pos and
++         * advanced it by one frame before frame_process_end sends, so the
++         * position as it stands is the slot written one whole ring ago
++         * (buffer minus one period behind: 336 frames, 7 ms, at 384). The
++         * caller asks for the previous TIC's slot; return it. */
++        {
++            const uint32_t length = get_live_out_jitter_buffer_length(self);
++            const uint32_t frame = (uint32_t)get_frame_size(self);
++            if (length > 0 && frame <= length)
++                offset = (offset + length - frame) % length;
++        }
+ 
+         if(ui64CurrentSAC > get_global_SAC(self))
+         {

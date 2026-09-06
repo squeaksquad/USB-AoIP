@@ -6613,6 +6613,45 @@ fix is one expression: read at `playback_buffer_pos - frame_size` modulo
 `L`, or send before the playback interrupt. Not built: a separately
 named RAVENNA module on the rollback path, the user's call.
 
+**BUILT and STAGED 2026-09-06 02:14-02:35 UTC: bridge `c1ca48c5` (exact
+queue terms) and the RAVENNA transmit-slot fix, module `cc6852f0`, as two
+install steps.** Service stopped by the user at about 02:10 UTC (the
+01:54:51 stream stop is explained: Pro Tools crashed at that moment,
+releasing the device; every harness close now costs a RECOVER pair while
+nothing on the Mac holds the device open). Step A, the bridge: built on
+the Pi from `phase4-trace-src` (`main.cpp` `6d3586fd`, `bridge_core.hpp`
+`0b9ea983`), zero warnings, ctest 1/1, SHA-256
+`c1ca48c544b9c6fe0fccf03a438bf73ac7e9f616dd44127a11718a8bba529323`, in
+`artifacts/pi-aarch64/` (README updated, `21c0e9f2` previous); behaviour
+identical to `21c0e9f2` on the audio path. Pins: supervisor
+`expected_bridge_sha256` `c1ca48c5`, supervisor `7c7c9132`;
+`install-candidate.sh` `af5ccfc2`; `install-aes67-service.sh` `436f717f`
+(supervisor `7c7c9132`, conf `3fb76a98`, bridge `c1ca48c5`). Staged in
+`phase4-trace-install/` and `aes67-trace-install/`, the supervisor
+validating the live conf, exit 0. Step B, the module: `work/ravenna-tx-fix/`
+holds the patch (`0001-send-the-slot-just-written.patch`: in
+`get_live_out_jitter_buffer_offset` return the slot the playback
+interrupt just wrote, `(pos + length - frame) % length`), the README with
+the mechanism, build, install and rollback, and the built module in
+`artifacts/`. Built on the Pi in a separate tree
+`~/usb-16x16-work/ravenna-tx-fix-src` (copy of `ravenna-alsa-lkm-v2.1`,
+whose `manager.c`, `audio_driver.c`, `RTP_streams_manager.c` and
+`RTP_audio_stream.c` hash identically to the vendored checkout; patched
+`manager.c` `9cbbc5a8`), `make modules` against the running kernel's
+headers, zero warnings, vermagic `6.18.34+rpt-rpi-2712` like the installed
+module, SHA-256
+`cc6852f0721343732c80d770a2f5a32d019dbfe20f1d361629c8fce2ff98bf55`, copied
+to `~/usb-16x16-work/ravenna-tx-fix-install/MergingRavennaALSA.ko`. The
+step-B supervisor (`892dd189`, in the repo now) points `module_binary` at
+that path with `expected_module_sha256` `cc6852f0`; the original module
+stays at its path (`f65a4955`) for rollback; service installer
+`59fc9d1c`, staged in
+`~/usb-16x16-work/aes67-txfix-install/`. Order: A installed and one exact
+read on `target64-trace`; then `rp288-trace` for the 1:1 check; then B
+with the full acceptance on `target64-trace`, expected about 336 samples
+(7 ms) under 1127, and `rp288-trace` again, which should then read the
+same as 384.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
