@@ -6763,6 +6763,26 @@ and it matches neither rp288's expected 25.9 (1057 + 188) nor this
 session's expected 21.0; which session and IO size it was read on is
 asked, and it is recorded here unassigned.
 
+**MEASURED 2026-09-06 03:05 UTC: the wire term on the fixed module is 6.0 ms
+from the bridge's write to the packet, against 12.1 on the old one; the
+acceptance chain's first three runs all read 819.** Capture by the user
+(`/tmp/txfix-rtp.pcap`, 75 s, 74880 packets each way, 290 impulses seen
+both ways, taken during run 2 of the chain), `rtp-impulses.py` against
+the live log: ravenna-playback write to the packet out **6.037 ms**
+(min 4.009, max 6.348; the ALSA queue of about 188 frames plus a tick
+or two, where the old module read 12.141), packet out to the Ferrofish's
+packet back 1.839 ms (min 1.730, max 2.831), packet back to the
+ravenna-capture frame 2.576 ms. The Ferrofish's stamp sits 89-137
+samples over the Pi's for the same impulse as before. So the transmit
+path now costs what its queue costs. Chain
+(`txfix-roundtrip-64f-...`, four times `measure-under-service.sh 64 800
+txfix` then the soak): runs 1-3 (02:54, 02:58, 03:01 UTC) **819** on all
+800 each, spread 0, score 1.000, zero discontinuities, zero RECOVERs
+during the runs, `tx_qfloor` 112/109/108, `rx_qfloor` 77, `tx_pullmax`
+48; the RECOVER pairs the device closes cause between runs (five lines
+in the session log so far) re-primed onto the same level each time.
+Run 4 and the soak in progress.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
