@@ -7887,6 +7887,28 @@ point than txoff950: 12 lower, TX unchanged, RX cover 16 higher.
 Acceptance set launched 20:47 UTC on this session, detached, the same
 five loaded runs; results below.
 
+**SOAKED 2026-09-06 20:45-21:10 UTC: the target48 acceptance set, all on
+the 20:41 fresh-anchor session: four loaded 800-impulse runs 785 x800
+each and the 600 s sixteen-channel soak 785 x2400, spread 0 on all
+5,300, zero RECOVERs, TX floor 94 loaded, RX 93.** Chain launched
+detached at 20:45:13 UTC (`USB16X16_OTHER_LOAD=0.1` on every run):
+`target48-roundtrip-64f-20260906T{204513,204851,205228,205606}Z` **785
+x800** each, `target48soak-roundtrip-64f-20260906T205944Z` **785 x2400**,
+score 1.000, discontinuities 0, `recovers during run` 0 on all five,
+`nrestarts` 0. Floors after each run and at the end
+(`bridge-target48-session-20260906T2041Z.log`, 25,477 lines, 23,776
+IMPULSE lines, no RECOVER): `tx_qfloor` 94 (88 on txoff950's set: the TX
+total is unchanged by the ring target, the 6 is scatter), `rx_qfloor` 93
+(77 on every profile since rx120: the RX ring's 16 now in the queue),
+`tx_qlow` 0, `rx_qlow` 0, `tx_pullmax` 48, `tx_gapmax_us` 1146,
+`rx_gapmax_us` 1169, pitch 1000011-1000015; `tx_occ` 51 on every 1 Hz
+sample, `rx_occ` 51 on 1533 of about 1580 and 86-87 on the rest (the RX
+ring rising as the sink for RX-side wander, as it did to 192 at target
+128). Split over the session (5,943 impulses): `pos_pi` 581 on every
+impulse, `pi_total` median 741.4 (724-757), `usb_time` 43.6, `tx_depth`
+median 144 (94-192), `rx_depth` 138 (105-180). RTL at 32 by the user is
+the last item; predicted 785 + 188 = 973 = 20.271 ms.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
