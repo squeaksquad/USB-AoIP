@@ -7845,6 +7845,48 @@ the fresh anchor; gate, read, split, the acceptance set if it holds.
 Rollback is `switch-profile ...-target64-trace-txoff950`. Service on the
 19:25 session, zero RECOVERs.
 
+**MEASURED 2026-09-06 20:41-20:46 UTC, lever 2 (ring target 48) on a
+fresh anchor: 785 x100 at 64 frames (16.354 ms), spread 0, zero
+RECOVERs; 12 under txoff950, not the 32 predicted, because the RX prime
+still lands at ring 192 and its 16 moved from ring to queue (RX floor 77
+-> 93) instead of leaving.** The user appended the block, ran
+`switch-profile` and the gadget re-bind; usbaudiod logged fresh
+`setStartingUSBFrame IN/OUT` at 20:41:54 UTC; `STAGE running` on a clean
+prime. Session start (`bridge-target48-session-20260906T2041Z.log`):
+ALIGN ok attempt 1, RX PRIMED `intended=171 ring_at_prime=192
+overshoot=21` (the RX prime is checked at capture wakes and the ring
+reaches 192 whatever the threshold, so the overshoot is permanent depth
+in the RX total), TX PRIMED `intended=243 ring_at_prime=286 overshoot=43
+align_dropped=50 first_tick_wait_us=332 front_age_frames=301` (317 on
+txoff950: the TX side gave its 16), ALIGN trigger `wake_to_start_us=952
+target=prime slack_us=181` (target 282 us out, prime path 101 us, inside
+150). `tx_occ` / `rx_occ` 51. Gate `target48-noise-ch2-64f-100imp.*` 0.0%
+zeros, no run. Read `target48-roundtrip-64f-20260906T204323Z` **785
+x100**, spread 0, zero RECOVERs, discontinuities 0. Split (224 impulses):
+AES67 chain 633, `pos_tx` -51 (-39 on txoff950), `pos_pi` 581 (593),
+`pi_total` 740.0 (753.0), `usb_time` 45.0, `tx_depth` median 143,
+`rx_depth` 129 (120 on txoff950: the 16 that moved into the RX queue,
+less scatter). Floors after the read: TX 99 (running, loaded set to
+come), RX **93** (77 on every profile since rx120), `tx_qlow` / `rx_qlow`
+0, `tx_pullmax` 48, `tx_gapmax_us` 1073, pitch 1000011.
+
+*Why the RX half did not pay, and what would make it.* The RX prime holds
+until the ring reaches `intended` (171) and is only checked at the USB
+capture's wakes, where the ring grows by 96 per wake on this session
+(ring_at_prime 192 with intended 187 and now 171 alike); the aligned TX
+prime drops its own overshoot from the front to hit its age, the RX prime
+has no such drop, so the RX overshoot becomes permanent queue. The
+existing `PRIME_TRIM` would discard it, but it is one flag for both
+directions and on TX it would trim again after the aligned drop, so it
+is not a clean lever here (and the record's "do not turn it on" of
+Phase 4 stands for the prime-96 regime it was written in). The clean
+form is an RX-side trim in the bridge, or an aligned RX prime that drops
+to `intended` the way TX does: a build, about 16 more samples, for
+another service-stop window. As it stands target48 is a strictly better
+point than txoff950: 12 lower, TX unchanged, RX cover 16 higher.
+Acceptance set launched 20:47 UTC on this session, detached, the same
+five loaded runs; results below.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
