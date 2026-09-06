@@ -72,13 +72,17 @@ constexpr std::int64_t kAlignOffsetMaximumUs = 10000;
 constexpr std::int64_t kAlignReferenceMaximumAgeNs = 100000000;
 // The aligned TX prime computes its trigger target at the prime wake and
 // then renders the prime before sleeping to it, so the target is placed
-// this far ahead rather than kAlignRecoveryMarginNs. 200 us until
-// 2026-09-06, 50 us since: the longest aligned wait the prime allows for,
-// margin + 2 ticks - offset, is age the front frame carries into the
-// first tick, so the margin is a latency term. The ALIGN trigger line's
-// target= and slack_us= say whether the render finished inside it; a
-// missed target moves the start to the next tick, one period later.
-constexpr std::int64_t kAlignPrimeMarginNs = 50000;
+// this far ahead rather than kAlignRecoveryMarginNs. The longest aligned
+// wait the prime allows for, margin + 2 ticks - offset, is age the front
+// frame carries into the first tick, so the margin is a latency term.
+// 200 us until 2026-09-06; 50 us for one session, which measured the
+// prime path from placing the target to entering the trigger (the drop,
+// the PRIMED line, the 192-frame render, the commit) at about 104 us, so
+// one prime in twenty would have missed; 150 us since, 46 us of slack
+// over that. The ALIGN trigger line's target= and slack_us= say whether
+// the render finished inside it; a missed target moves the start to the
+// next tick, one period later.
+constexpr std::int64_t kAlignPrimeMarginNs = 150000;
 // Aligned RX prime: how long the prime may wait for the first fresh wake of
 // its reference grid (the USB capture) before priming unaligned. 5 ms is
 // five USB frames; the ring has room for it (target + prime + 240 < 768).

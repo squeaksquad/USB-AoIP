@@ -7672,6 +7672,30 @@ the acceptance set on it, taking 20 of the 25 and watching the loaded TX
 floor at about 88; (c) accept the 5% draw and run the acceptance set on
 `0c7e0b0c` as is. Levers 2 and 3 untouched.
 
+**RTL Utility at 32 frames on the txoff950 session (margin 50 us build),
+read by the user at about 19:25 UTC: 20.438 ms = 981 samples = 793 + 188,
+to the sample.** Against 21.062 on rebind4 (target64-trace, fresh
+anchor): 0.62 ms.
+
+**IMPLEMENTED and STAGED 2026-09-06 19:30 UTC, not yet built: the margin
+150 us rebuild, `main.cpp` `9db24804` (`kAlignPrimeMarginNs` 150000; no
+other change from `caac4e1d`).** The user chose option (b). Arithmetic
+at 950/150: waits 200-1200 us, 9-58 frames, TX front age 317 (312 at 50
+us, 336 at 600/200), ring hold level 308 unchanged; expected level about
+798 on this anchor's terms (793 + 5), 799-809 on fresh anchors; TX floor
+about 88; 46 us of slack over the 104 us prime path. Syntax-checked
+clean on the Mac. Conf `66f92ed0`: the txoff950 block's comment, DESCRIPTION,
+COVER and MEASURED rewritten for margin 150 with the 50 us session as
+history (keys unchanged, so the live block is functionally identical and
+is replaced at acceptance with the labels); installer conf pin moved,
+`07b213f1` joins the unedited-shipped list. Staged on the Pi:
+`~/usb-16x16-work/phase4-txoff950m150-src/` (source, `build.sh` with the
+zero-warning count fixed). Build waits on the service stop; then the
+three pins, the README, the install set in
+`~/usb-16x16-work/aes67-txoff950m150-install/`, the user's install, the
+re-bind, gate, read, and the acceptance set on the same session if it
+holds.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
