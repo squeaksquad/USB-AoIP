@@ -6797,6 +6797,23 @@ copied, while a measurement runs; copy captures and logs between runs.**
 The soak started 03:08:57 UTC before the discard was known; it stands or
 falls on its own RECOVER count.
 
+**SOAKED 2026-09-06 03:08-03:19 UTC on the fixed module: 811 on all 2400
+impulses, sixteen channels loaded, zero RECOVERs during the soak; the
+session's floors are unreadable after the run 4 stall, so the acceptance
+set is repeated on a fresh session.** `USB16X16_OTHER_LOAD=0.1
+measure-under-service.sh 64 2400 txfixsoak`
+(`txfixsoak-roundtrip-64f-...`, 600 s): **811** (16.896 ms) on all 2400,
+spread 0, score 1.000, zero discontinuities, zero RECOVERs during the
+run; 811 is the level the loop re-primed onto during the spoiled run 4
+(819 before it). The wrapper's `tx_qfloor` 22 and `tx_pullmax` 192 are
+the session's running minima from the stall and say nothing about the
+soak. Standing on the fixed module at target64: three clean 800-impulse
+runs at 819 (floors 108-112, RX 77), one clean 2400-impulse soak at 811,
+one 100-impulse read at 819, the wire term at 6.0 ms; measured, not yet
+accepted. Next: RTL Utility at 32 by the user on this session (expected
+about 20.8 ms), then a stack restart and the four runs plus soak again
+with nothing else touching the Pi.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
