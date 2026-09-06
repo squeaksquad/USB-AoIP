@@ -6652,6 +6652,47 @@ with the full acceptance on `target64-trace`, expected about 336 samples
 (7 ms) under 1127, and `rp288-trace` again, which should then read the
 same as 384.
 
+**MEASURED 2026-09-06 02:19-02:24 UTC: session 3 on bridge `c1ca48c5`, the
+exact queue terms close the Pi-side accounting to within a period.**
+Installs by the user (bridge `c1ca48c5`, supervisor `7c7c9132`), start
+02:19:13 UTC on `target64-trace`: RX PRIMED `grid_phase_us=407`, TX
+`align_dropped=67 overshoot=10 front_age_frames=336`, ALIGN ok attempt
+2. `measure-under-service.sh 64 100 trace3`
+(`trace3-roundtrip-64f-20260906T022008Z`): **1160** on all 100, spread 0,
+score 1.000, zero discontinuities, zero RECOVERs during the run,
+`tx_qfloor` 117, `rx_qfloor` 77. Every playback-stage IMPULSE line carries
+`depth_src=delay`. Log
+`outputs/latency/stage-trace-20260906/bridge-trace3-session-20260906T021900Z.log`,
+138 impulses:
+
+| term | median | min | max |
+|---|---:|---:|---:|
+| `bridge_tx` | 99 | 73 | 111 |
+| `tx_queue` (exact) | 175 | 159 | 242 |
+| `aes67` | 611 | 594 | 620 |
+| `bridge_rx` | 104 | 69 | 106 |
+| `rx_queue` (exact) | 134 | 102 | 166 |
+| `pi_total` | 1121 | 1113 | 1126 |
+| `write_to_read` | 786 | 767 | 853 |
+| `cap_to_write` | 988 | 948 | 1022 |
+
+Samples. `pi_total` 1121 against the harness 1160 leaves 39 samples
+(0.81 ms) for the two USB legs, against 22 from the USB-only loop plus
+the capture-grain modelling; the Pi-side sum now tracks the level to
+within 13 across the run. Three sessions at the same profile now read
+1126 (phase 520), 1156 (556) and 1160 (407) with identical PRIMED
+numbers, the session term as before. A caution on reading the stage
+terms across sessions: they are time-domain dwells, and the harness
+impulses sit at one fixed offset inside the 48-frame blocks in a given
+session (12000 is a multiple of 48), so `bridge_tx` and `bridge_rx` carry
+a per-session offset-dependent component of up to a period that is not
+latency on the device timeline (the frame-index maps `pos_tx` and
+`pos_rx` are constant); only their sum with the queues, `pi_total`, is
+the level's counterpart. Placing the session term by stage therefore
+wants the index domain (the RTP stamps in a capture against the bridge's
+positions), a later step. The lever the record now holds is the
+transmit slot; next the `rp288` 1:1 check, then step B.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
