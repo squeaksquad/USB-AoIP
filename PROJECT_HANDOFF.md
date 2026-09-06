@@ -6693,6 +6693,28 @@ wants the index domain (the RTP stamps in a capture against the bridge's
 positions), a later step. The lever the record now holds is the
 transmit slot; next the `rp288` 1:1 check, then step B.
 
+**MEASURED 2026-09-06 02:33-02:36 UTC: `...-target64-trace-rp288` reads 1057,
+99 under session 2's 1156 at the same RX phase, for 96 frames of buffer:
+the transmit-slot term is 1:1.** The user appended the rp288 and rp240
+blocks to the live conf and switched at about 02:32 UTC; NEGOTIATED
+`ravenna_playback=48/288`, RX PRIMED `grid_phase_us=557`, TX
+`align_dropped=74 overshoot=3 front_age_frames=336`, ALIGN ok.
+`measure-under-service.sh 64 100 rp288`
+(`rp288-roundtrip-64f-20260906T023413Z`): **1057** (22.021 ms) on all
+100, spread 0, score 1.000, zero discontinuities, zero RECOVERs during
+the run, `tx_qfloor` 147 (unloaded, under the 192 ceiling), `rx_qfloor`
+77. Trace (124 impulses, exact queues): `bridge_tx` 84, `tx_queue` 177,
+`aes67` 527 (against 611 on session 3 at 384: -84), `bridge_rx` 102,
+`rx_queue` 125, `pi_total` 1017 (against 1121: -104), `write_to_read`
+709 (against 786), `cap_to_write` 893. Log
+`outputs/latency/stage-trace-20260906/bridge-rp288-session-20260906T023335Z.log`.
+So the RAVENNA playback buffer is a transmit-latency term at 1:1, as the
+driver reading said, and the 2026-09-02 "1.67 ms for 384 over 288" was
+it. RTL at 32 owed by the user; the acceptance set not run: step B
+supersedes this block if the fix holds. Conf `3cda845d` (installer
+`62e0e764`, `3fb76a98` joins the unedited-shipped list) carries the
+block's MEASURED and COVER.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
