@@ -7909,6 +7909,31 @@ impulse, `pi_total` median 741.4 (724-757), `usb_time` 43.6, `tx_depth`
 median 144 (94-192), `rx_depth` 138 (105-180). RTL at 32 by the user is
 the last item; predicted 785 + 188 = 973 = 20.271 ms.
 
+**ACCEPTED 2026-09-06 21:15 UTC: lever 2, the ring target 48, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950` on
+bridge `0d8cccfa` and module `cc6852f0`: 785 at 64 frames on a fresh
+anchor, RTL Utility at 32 frames 20.271 ms = 973 = 785 + 188 to the
+sample, read by the user at about 21:13 UTC.** The point of record moves
+from txoff950 (797 / 20.521) to target48: 0.25 ms at RTL 32, 12 samples
+at 64, TX cover unchanged (floor 94 against 88), RX cover up 16 (93
+against 77). Acceptance set: the entry above. Conf `1647df1a`: STATUS
+accepted, COVER and MEASURED filled; installer `952f9e91` (conf pin
+`1647df1a`, `0cfff8ac` joins the unedited-shipped list). Live conf: the
+block is live as appended; the four label lines are copied by
+`copy-target48-labels.py` (staged in `aes67-target48-install/` beside
+the shipped conf; dry run without `--apply`).
+
+*The day, 2026-09-06, in RTL at 32 on fresh anchors:* target64-trace
+21.062 (the record's 19.688 was the same loop on an aged anchor), lever
+1 txoff950 20.521, lever 2 target48 20.271; 0.79 ms in two conf blocks
+and one bridge constant, both accepted on full sets with zero RECOVERs.
+DVS 11.312. Left on the table, priced: the RX prime overshoot (about 16,
+an RX-side trim or an aligned RX drop in the bridge, a build), the prime
+margin's 5 frames (a render-before-target restructure, a build), sink
+delay 144 -> 120 (24, after the arrival-lead export, a module rebuild).
+Service ends the day on target48, the 20:41 anchor, zero RECOVERs;
+nothing pending on the Pi but the label copy.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
