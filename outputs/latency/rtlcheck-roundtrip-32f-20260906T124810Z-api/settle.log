@@ -1,0 +1,15 @@
+probe 1 PASS consecutive=1
+probe 2 PASS consecutive=2
+probe 3 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.24999902 captur
+probe 4 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 5 PASS consecutive=1
+probe 6 PASS consecutive=2
+probe 7 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 8 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 9 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 10 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 11 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 12 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 13 PASS consecutive=1
+probe 14 PASS consecutive=2
+probe 15 PASS consecutive=3

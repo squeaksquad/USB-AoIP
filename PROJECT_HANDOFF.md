@@ -6891,6 +6891,18 @@ levers remain the aligned wait allowance and the ring target, as the
 BUDGET entry ordered them, and the gap count over days is what earns a
 prime step.
 
+*CORRECTION 2026-09-06 13:10 UTC: the co-open reading below is withdrawn.
+The three runs with RTL Utility closed failed the same way, the noise
+probes then showed the Mac's USB output zeroing 88 samples in every 96 at
+32 frames, and the "zero runs of 28-59 between RTL Utility's peaks" in
+the trace at 12:17:35 were those same holes: the Mac output was already
+in that state when RTL Utility opened the device, so RTL Utility's
+scatter is the holes, not its method, and the co-open changed nothing.
+Bracket for the onset: after the clean gate and chain (06:03 UTC),
+before 12:17:35. The measurements below stand; see the next entry. The
+rule that the harness and RTL Utility never share the device is kept as
+hygiene, not as a finding.*
+
 **FOUND 2026-09-06 12:17-12:57 UTC: RTL Utility's readings at 32 frames
 scatter 67 samples below the model within one bridge session while the
 loop itself does not move; and a harness run at 32 frames with RTL
@@ -6946,6 +6958,68 @@ alone, RTL Utility idle"; this is the first co-open at 32. **Rule: the
 harness runs with RTL Utility closed, and RTL Utility reads with the
 harness idle; neither figure is valid with the other client on the
 device.** The clean 32-frame re-run with RTL Utility closed follows.
+
+**FOUND 2026-09-06 12:54-13:06 UTC: the Mac's USB output is zeroing 88
+samples in every 96 at 32 frames and about 1 in 100 at 64, on every
+channel it sends, since some time between 06:03 and 12:17 UTC; the Pi
+side is clean and carries the holes round unchanged; RTL Utility's
+scatter and the failed 32-frame runs are this.** With RTL Utility quit,
+`measure-under-service.sh 32 100 rtlcheck2` three times: run 1 (12:54:44
+UTC) passed readiness after 8 probes and then saw nothing for the whole
+main run (`rawInputPeak` 0.0, `outputFrames` = `copiedFrames` = 1245600:
+output rendered and input captured continuously, exit 2, no JSON); runs
+2 (12:55:48) and 3 (12:58:49) never passed three consecutive probes in
+40. The Pi in that window: 44 usb-capture impulse hits, in pairs 1000
+ms apart out of probes sent every 250 ms, all at 0.25, zero RECOVERs,
+zero DEPTHSTEPs, gadget `configured`, `req_number` 4, bint 0. The
+64-frame control alone (`rtlcheck64-roundtrip-64f-20260906T130231Z`,
+13:02:31 UTC): ready after 3 probes, **757 x92, 749 x8** (the 749s at
+indices 42, 44, ..., 56: every second impulse over four seconds, then
+clean), score 0.959, zero discontinuities; the accepted chain read 757
+x5600 at score 1.000 this morning. Then the record's noise probes
+(`--output-channel 1 --input-channel 2 --other-channel-load-amplitude
+0.1`, 100 impulses, `zeros.py` on the channel-2 dump,
+`rtlcheck-noise-ch2-{32,64}f-100imp.*` in `usb-holes-20260904/`):
+
+| probe | zeros in the returned noise | zero runs >= 4 | run lengths | run starts |
+|---|---:|---:|---|---|
+| 32 frames, 13:04:10 UTC | **88.9%** | 25936 | 28-31 and 56-59 (pairs summing to 88) | 23990 of them at offset 17 mod 32 |
+| 64 frames, 13:04:40 UTC | 1.1% | 1069 | 4 (902) and 5 (167) | all at offset 49 mod 64 |
+| reference `txfixgate` 64, 02:50 UTC | 0.0% | 0 | | |
+
+The Pi's zero-run detector in the 32-frame probe's window (13:04-13:06
+UTC, 7724 lines): **1932 runs at `usb-capture`**, the Mac-to-Pi leg,
+`channels=0xfffe nchan=15` (every loaded channel at once), lengths
+30/58/29/57/48/49, starts at `start_mod48` 37 and 21, and the same
+1930 runs at `ravenna-playback`, `ravenna-capture` and `usb-playback`:
+the loop passes what it receives, the bridge's counters (`tx_dropped`,
+`rx_dropped`, queues, pitch, floors) untouched, the frame rate right and
+the zeros inside the frames the Mac sends, as on 2026-09-05. At 32
+frames the Mac delivers 8 valid samples in every 96 (two USB frames);
+on 2026-09-05 it zeroed 8 in every 96. The harness impulses (one
+sample, 12000 apart) survive one in four at 32 and, in episodes, one in
+two at 64, which is what the failed runs and the 749/757 splits were;
+RTL Utility's readings of 879-946 on a burst with nine samples in ten
+zeroed are its correlator landing on the wrong peak, and the trace's
+"zero runs between RTL's peaks" at 12:17:35 were these holes, so the
+state was there before RTL Utility opened the device. What is known of
+the onset: the gate and the whole chain were clean to 06:03 UTC; the
+device was not opened by anything known between 06:03 and 12:17:26;
+the Mac did not sleep (`pmset -g log`); the Pi's 06:06:04 gap is on
+both bridge directions (`tx_gapmax_us` 3344, `rx_gapmax_us` 3447) and
+so a Pi wakeup gap, not tied to this. The unified log carries nothing
+from `coreaudiod` or AppleUSBAudio. The 2026-09-05 clear was `sudo
+killall coreaudiod` on the Mac and `sudo systemctl restart usb-16x16`
+on the Pi in succession, which one did it unknown; this time the Mac
+kill goes first alone, then the 64-frame noise probe, and the gadget
+re-bind only if the holes remain, so the record learns which side holds
+the state. Either ends the accepted 757 session (the host stream stop
+restarts the stack), and the next session is a new draw. **Rule: a
+noise probe at the gate's buffer size precedes every RTL Utility read
+and every harness figure, and a level split 8 apart or an RTL scatter
+means holes, not latency.** Files: the rtlcheck and rtlcheck2 readiness
+sidecars, `rtlcheck-roundtrip-32f-20260906T12{4642,4823}Z.json`, the
+64-frame control, the two noise probes.
 
 ## Next-session checklist
 
