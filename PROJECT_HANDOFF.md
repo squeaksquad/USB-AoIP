@@ -8005,6 +8005,37 @@ one 100-impulse read at 64 with the split, then the acceptance set if it
 holds. The service ran target48 on the 20:41 anchor throughout, zero
 RECOVERs; nothing installed.
 
+**BUILT and STAGED 2026-09-06 21:48 UTC: bridge `913d623b`
+(`--rx-prime-trim`), the rxtrim install sets, all three pins moved.**
+Service stopped by the user at about 21:45 UTC (playback off); build on
+the Pi from `~/usb-16x16-work/phase4-rxtrim-src` (`main.cpp` `77450aaa`,
+Release, the same cmake configuration, zero warnings), ctest 1/1, binary
+SHA-256
+`913d623b0b58b5c60e00fcb7424627dedf8601406cbd958b8a3de5f6da8bb620`, in
+`work/phase4-bridge/artifacts/pi-aarch64/` (README updated, `0d8cccfa`
+previous). Smoke on the Pi without devices: `--help` lists the flag,
+`--rx-prime-trim 2` and `--rx-prime-trim 1` with `--align-rx-prime 1` are
+refused with the intended messages. Behaviour is `0d8cccfa`'s with the
+flag off. Pins: supervisor `expected_bridge_sha256` `913d623b`, supervisor
+`431cf0c5`; `install-candidate.sh` `d85b6da7` (wrapper `6282b108`
+unchanged); `install-aes67-service.sh` `eb12bced` (supervisor `431cf0c5`,
+unit `77837e60`, conf `a2db5efb`, bridge `913d623b`). Staged:
+`~/usb-16x16-work/phase4-rxtrim-install/` (binary, wrapper, installer) and
+`~/usb-16x16-work/aes67-rxtrim-install/` (supervisor, unit, shipped conf,
+installer, `rxtrim-block.conf` `b077097f`), hashes verified there; the
+staged supervisor validates the rxtrim profile and lists the live conf,
+exit 0. Rollback of the bridge: `phase4-txoff950m150-install/`
+(`0d8cccfa`) with `aes67-txoff950m150-install/` (supervisor `731fe129`),
+or `switch-profile ...-target48-trace-txoff950` alone for the conf side
+(the new bridge and supervisor run the accepted profile unchanged, flag
+0). Install order, service stopped: `install-candidate.sh`,
+`install-aes67-service.sh` (keeps the operator-edited live conf), append
+the block, `switch-profile ...-rxtrim` (PROFILE only while inactive),
+`systemctl start`, the gadget re-bind for the fresh anchor; then gate,
+read, split, and the acceptance set on that session if the numbers hold
+(expected about 764 at 64, RX PRIMED `trimmed=21`, RX floor about 72, TX
+front age 301).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

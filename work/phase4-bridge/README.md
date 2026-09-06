@@ -54,8 +54,14 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`0d8cccfaac5926fbb18ac847b95e271515d7bbe36ae8556895a64e1aec30bf60`
-(2026-09-06: `kAlignPrimeMarginNs` 150 us instead of 200, the aligned wait
+`913d623b0b58b5c60e00fcb7424627dedf8601406cbd958b8a3de5f6da8bb620`
+(2026-09-06: `--rx-prime-trim 0|1`, the RX prime overshoot lever: the
+ravenna-to-usb prime alone discards `ring_at_prime - intended` from the
+ring's front at prime time, the trim `--prime-trim` runs for both
+directions gated to RX; usb-to-ravenna keeps its aligned drop and is not
+trimmed; refused with `--align-rx-prime 1`; the summary JSON carries
+`rx_prime_trim`; behaviour identical to `0d8cccfa` with the flag off).
+Previous binary `0d8cccfa` (2026-09-06: `kAlignPrimeMarginNs` 150 us instead of 200, the aligned wait
 allowance lever paired with `--align-tx-offset-us 950`; the ALIGN trigger
 line carries `target=prime|prime-missed|next` and `slack_us=`; otherwise
 `c1ca48c5`. Its predecessor `0c7e0b0c`, one session, had the margin at
