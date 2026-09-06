@@ -7941,7 +7941,7 @@ overshoot build first, then the render-before-target margin, then sink
 delay after the arrival-lead export).** Service on the 20:41 anchor,
 zero RECOVERs, nothing pending on the Pi.
 
-**IMPLEMENTED and STAGED 2026-09-06 22:05 UTC, not yet built: the RX
+**IMPLEMENTED and STAGED 2026-09-06 21:37 UTC, not yet built: the RX
 prime overshoot lever, `--rx-prime-trim` in the bridge (`main.cpp`
 `77450aaa`), the conf key `RX_PRIME_TRIM`, and profile
 `servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim`
