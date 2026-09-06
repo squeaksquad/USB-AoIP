@@ -8092,6 +8092,41 @@ whole source tree as one tar stream over ssh. Not proven causal, one
 event; noted so the next staging while the service runs is done file by
 file or in the service-stop window.
 
+**SOAKED 2026-09-06 23:15-23:40 UTC: the rxtrim acceptance set, all on
+the 23:10 fresh-anchor session: four loaded 800-impulse runs 770 x800
+each and the 600 s sixteen-channel soak 770 x2400, spread 0 on all
+5,300, zero RECOVERs, TX floor 87 loaded, RX 72.** Chain launched
+detached at 23:15:03 UTC (`USB16X16_OTHER_LOAD=0.1` on every run):
+`rxtrim-roundtrip-64f-20260906T{231503,231842,232220,232558}Z` **770
+x800** each, `rxtrimsoak-roundtrip-64f-20260906T232937Z` **770 x2400**,
+score 1.000, discontinuities 0, `recovers during run` 0 on all five,
+`nrestarts` 0. Floors after each run and at the end
+(`bridge-rxtrim-session-20260906T2311Z.log`, 25,544 lines, 23,780
+IMPULSE lines, 2 PRIMED, no RECOVER): `tx_qfloor` 92 / 91 / 90 / 90 / 87
+(94 on target48's set, 88 on txoff950's: the TX total is not touched by
+this lever, the scatter is the session's), `rx_qfloor` **72** on every
+sample from the read onward (93 on target48, 77 on every profile since
+rx120: the 21 trimmed, and no further creep), `tx_qlow` / `rx_qlow` 0,
+`tx_pullmax` 48, `tx_gapmax_us` 1143, `rx_gapmax_us` 1178 (the worst
+refill gap the set drew: 57 frames against the floor of 72), pitch
+1000000-1000022 settling at 1000014; `tx_occ` 51 on every 1 Hz sample,
+`rx_occ` 51 on 1629 of about 1680 and 65-75 on the rest (the RX ring as
+the sink for RX-side wander, as on target48). Split over the session
+(`impulse-index.py --level 770`, 5,941 impulses): `pos_pi` 554 on every
+impulse, `pi_total` median 725.8 (710.6-740.3; 741.4 on target48),
+`usb_time` 44.2, `rx_depth` median 132 (108-173; 138 on target48),
+`tx_depth` 138 (90-181; 144). The lever paid 15 at the level and 21 in
+the RX index chain, exactly the trim; the TX side (front age 301, floor
+87-96, `pos_tx` -57) is the target48 point. RX cover is the open item
+for acceptance: 72 loaded, 15 over the worst refill gap the set drew
+(57 frames in 1.178 ms) and under the 77 the record has carried since
+rx120 by the 5 that intended 187's overshoot always added; the RX bar
+was never derived from a measured gap the way TX's was, so the number to
+weigh is 72 against `rx_gapmax_us` over the sets (1146 / 1169 / 1178
+today). RTL at 32 by the user is the last item; predicted 770 + 188 =
+958 = 19.958 ms. Service ends the set on the 23:10 session, zero
+RECOVERs, the rxtrim profile on bridge `913d623b`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
