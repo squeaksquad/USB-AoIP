@@ -6595,6 +6595,24 @@ against the repo conf on the Pi, exit 0, zero bad lines. Order: the
 exact-queue bridge build first (instrument only), then rp288 with the
 full gate and runs, then rp240 if rp288 holds its floor.
 
+**CONFIRMED 2026-09-06 02:25 UTC in the driver source: the transmit lag is
+one playback buffer minus one period, by call order.** `manager.c`
+`AudioFrameTIC` (lines 1578-1586 in the vendored checkout):
+`frame_process_begin`, then `pcm_interrupt(capture)`, then
+`pcm_interrupt(playback)`, which copies the frame at the ALSA hw pointer
+into the live-out ring at `playback_buffer_pos` and advances that by a
+period (`audio_driver.c:731-754`), then `frame_process_end`, which calls
+`SendRTPAudioPackets` (`RTP_streams_manager.c:1014`); the sender's read
+offset is `get_live_out_jitter_buffer_offset`, which returns
+`playback_buffer_pos` as it stands after the advance (`manager.c:1417`,
+the SAC argument is not used: "in reality this var is always equal to
+zero"). So every packet carries the ring slot written `L - 48` frames
+earlier, `L` being the ALSA playback buffer in frames: 336 frames, 7 ms,
+at 384, and the stamp `SAC - 48` describes it as last tick's audio. A
+fix is one expression: read at `playback_buffer_pos - frame_size` modulo
+`L`, or send before the playback interrupt. Not built: a separately
+named RAVENNA module on the rollback path, the user's call.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
