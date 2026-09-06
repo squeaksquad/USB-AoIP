@@ -6715,6 +6715,54 @@ supersedes this block if the fix holds. Conf `3cda845d` (installer
 `62e0e764`, `3fb76a98` joins the unedited-shipped list) carries the
 block's MEASURED and COVER.
 
+**MEASURED 2026-09-06 02:49-02:56 UTC: step B, the transmit-slot fix, module
+`cc6852f0`: `target64-trace` reads 819 samples (17.06 ms) at 64 frames,
+308 under the accepted 1127, the AES67 term 333 shorter; floors
+unchanged.** Installs by the user (supervisor `892dd189` loading
+`~/usb-16x16-work/ravenna-tx-fix-install/MergingRavennaALSA.ko`, pin
+`cc6852f0`; `/sys/module/MergingRavennaALSA/srcversion`
+`30FAF28C0EFD06CC8591C2B`, the patched build), profile switched back to
+`target64-trace` (buffer 384, so the module is the one variable), start
+02:48:52 UTC: `STAGE insmod` clean, NEGOTIATED `ravenna_playback=48/384`,
+RX PRIMED `grid_phase_us=516` (session 1's 520), TX `align_dropped=72
+overshoot=5 front_age_frames=336`, ALIGN ok. Gate
+(`txfixgate-noise-ch2-64f-100imp` in `usb-holes-20260904/`) 0.0% zeros,
+no runs, no discontinuities. `measure-under-service.sh 64 100 txfix1`
+(`txfix1-roundtrip-64f-20260906T025359Z`): **819** on all 100, spread 0,
+score 1.000, zero discontinuities, zero RECOVERs during the run,
+`tx_qfloor` 112, `rx_qfloor` 77, `tx_pullmax` 48, gaps 1.07/1.63 ms.
+Trace (224 impulses, exact queues), against session 3 at 384 on the old
+module:
+
+| term | old module (s3, 1160) | fixed module (819) | change |
+|---|---:|---:|---:|
+| `bridge_tx` | 99 | 77 | |
+| `tx_queue` | 175 | 188 | |
+| `aes67` | 611 | 278 | **-333** |
+| `bridge_rx` | 104 | 91 | |
+| `rx_queue` | 134 | 144 | |
+| `pi_total` | 1121 | 779 | -342 |
+| `write_to_read` | 786 | 468 | -318 |
+| level minus `pi_total` (USB legs) | 39 | 40 | |
+
+The whole change is in the AES67 term, 333 against the 336 the driver
+reading predicted; the bridge's dwells and queues and the USB legs are
+what they were. The AES67 segment from the RAVENNA playback consuming a
+frame to the bridge reading it back is now 278 samples, 5.8 ms: the
+Ferrofish with both wires (2.7), the RAVENNA capture side (2.2), the
+tick and stamp. Log
+`outputs/latency/stage-trace-20260906/bridge-txfix1-session-20260906T024934Z.log`.
+Expected RTL Utility at 32: about 819 + 188 = 1007 samples, 21.0 ms.
+Acceptance chain (four loaded 800-impulse runs and the 600 s soak)
+launched next; the packet capture during it re-reads the write-to-wire
+term, expected about 5 ms (the queue alone) against 12.1.
+
+*RTL reading owed a home:* the user read RTL Utility 23.479 ms (1127
+samples) after the rp288 session; no RECOVER was journaled at the read,
+and it matches neither rp288's expected 25.9 (1057 + 188) nor this
+session's expected 21.0; which session and IO size it was read on is
+asked, and it is recorded here unassigned.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
