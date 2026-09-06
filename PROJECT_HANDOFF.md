@@ -6871,6 +6871,82 @@ audio path and a stack restart. Rollback of the module is the previous
 service installer in `~/usb-16x16-work/aes67-trace-install/` (supervisor
 `7c7c9132`, module `f65a4955` at its original path), service stopped.
 
+**MEASURED 2026-09-06 06:06:04 UTC, read from the live log at 12:22 UTC: the
+accepted session's worst wakeup gap so far is 3.3 ms, and TX prime 192
+covered it with 10 frames to spare.** Three minutes after the acceptance
+chain ended, the bridge logged `DEPTHSTEP direction=usb-to-ravenna
+t_us=1814938376 depth_floor=125 ring=67 queue=58 avail=326
+capture_backlog=0 pull=144 gap_us=3344` (journal 06:06:04 UTC). The
+session's running minima went from `tx_qfloor` 107 / `rx_qfloor` 77 at
+the end of the chain to **`tx_qfloor` 10, `rx_qfloor` 29, `tx_pullmax`
+144, `tx_gapmax_us` 3344** on that one event and had not moved by 12:22
+UTC; no RECOVER, no direction restart, nothing else in the Pi journal at
+that second. The nearest activity was two short ssh logins from the Mac
+at 06:05:29-30 UTC (the post-acceptance hash checks), 35 s earlier, and
+the copy of the session log at 06:03:38 UTC; neither is close enough to
+call causal. This is the first Phase 6 datum on the accepted point: one
+3.3 ms gap (160 frames) in seven idle hours, the TX queue at 10 frames
+under it. The TX prime cannot come down on this evidence; the next
+levers remain the aligned wait allowance and the ring target, as the
+BUDGET entry ordered them, and the gap count over days is what earns a
+prime step.
+
+**FOUND 2026-09-06 12:17-12:57 UTC: RTL Utility's readings at 32 frames
+scatter 67 samples below the model within one bridge session while the
+loop itself does not move; and a harness run at 32 frames with RTL
+Utility holding the device open loses three impulses in four, at a
+strict one-second period.** The user read RTL Utility at 32 frames six
+times on the accepted session (RTL Utility launched 08:17:26 EDT =
+12:17:26 UTC; bursts at 12:17:35-43, 12:17:59-12:18:04, 12:33:14-12:34:43
+and 12:42:55-59): 19.688, 18.979, 19.646, 18.312, 19.708, 19.438 ms =
+945, 911, 943, 879, 946, 933 samples. The top of the band is the model
+to the sample, harness 757 + two 32-frame buffers 64 + safety offsets
+124 = 945, as on the two earlier sessions (811 + 188 = 999 = 20.812);
+the other four sit 2-66 under it, which a CoreAudio client cannot see
+if the driver's timestamps hold. Evidence that the loop did not move:
+(1) the impulse trace stamped 62 of RTL Utility's own burst peaks (0.50
+full scale, zero runs of 28-59 between them) at all four stages across
+the first three sittings, `pos_tx` -70 and `pos_rx` -1 on every one,
+`pi_total` 799-820, zero re-primes and zero RECOVERs; (2) the harness
+across separate opens on one session reads one sample: five opens at 64
+in the acceptance chain (757 x5600), and at 32 the two service runs of
+2026-09-02 16:24 and 16:32 UTC (1423 both, min 1415 max 1425 both). RTL
+Utility auto-correlates one short burst and its documentation names no
+time base; its scatter is its own. *Standard-figure rule from this:*
+quote RTL Utility at 32 as the reading that matches harness + 188, or
+quote harness-at-32 + 188 directly, which is deterministic; a single RTL
+run is not the figure.
+
+*The co-open runs.* To confirm the loop at 32 on this session the
+harness was run three times with RTL Utility left open (its process
+holding the device since 12:17:26 UTC, so no re-prime at the closes),
+playback off, `measure-under-service.sh 32 100 rtlcheck`: run 1
+(12:43:39 UTC) **never passed three consecutive readiness probes in 40**
+(probes alternating `rawInputPeak` 0.25 and 0.0, exit 6); run 2
+(12:46:42, ready after 16 probes; `rtlcheck-roundtrip-32f-20260906T124642Z`)
+**749 x90, 757 x10, score 0.316**, the 757s at impulse indices 60, 64,
+..., 96; run 3 (12:48:23, ready after 12 probes;
+`rtlcheck-roundtrip-32f-20260906T124823Z`) **749 x98, 757 x2, score
+0.141**; zero CoreAudio discontinuities either way, zero RECOVERs, gadget
+live at `req_number` 4, bint 0, nothing in the Pi kernel log or the Mac
+unified log. Reading: the harness's per-impulse search radius is 8, so
+749 is the centre of a flat window (no return) and 757 the true level at
+its edge; only one impulse in four came back, and the bridge agrees: it
+stamped 90 complete four-stage impulses in the window, every one at
+0.25 on channel 1 with the same `pos_tx` -70 / `pos_rx` -1, the
+usb-capture hits **1000 ms apart** where the harness sends every 250 ms.
+So three impulses in four never reached the bridge's USB capture from
+the Mac, the survivor periodic at 1 s, with RTL Utility as a second
+client on the device at 32 frames; the loop carried what it received on
+the accepted index maps. A 64-frame control run started at 12:53:28 UTC
+with RTL Utility still open sat at readiness probe 12 (three suffice on
+a clean session) when the user quit RTL Utility mid-run, and was stopped
+as confounded. Every standard read in this record was taken "harness
+alone, RTL Utility idle"; this is the first co-open at 32. **Rule: the
+harness runs with RTL Utility closed, and RTL Utility reads with the
+harness idle; neither figure is valid with the other client on the
+device.** The clean 32-frame re-run with RTL Utility closed follows.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
