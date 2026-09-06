@@ -57,7 +57,7 @@ Findings and pickups:
 
 - `work/dante-mode/PLAN.md` — planned Inferno-based Dante mode: native bidirectional Controller routing, persistent endpoint lifecycle, isolated USB integration, latency comparison and rollback. Documentation only; no candidate installed.
 - `work/SAP_DISCOVERY_FINDING.md` — resolved 2026-09-01: the discovery delay was switch IGMP snooping.
-- `work/NEXT_SESSION_PROMPT.md` — pickup prompt rewritten 2026-09-02. Stale on state; the handoff tail is current.
+- `work/NEXT_SESSION_PROMPT.md` — pickup prompt rewritten 2026-09-06 after the Phase 5 day; the handoff tail is still authoritative where they differ.
 
 Vendored and archived:
 
