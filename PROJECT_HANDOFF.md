@@ -7781,6 +7781,39 @@ predicted figure is 797 + 188 = 985 = 20.521 ms. The conf block's
 strings and STATUS follow the RTL read. Service ends the set on the
 19:25 session, zero RECOVERs, the txoff950 profile on bridge `0d8cccfa`.
 
+**ACCEPTED 2026-09-06 20:00 UTC: lever 1, the aligned wait allowance,
+profile `servo-aligned-both-240-rx120-sd144-tx192-target64-trace-txoff950`
+on bridge `0d8cccfa` (aligned prime margin 150 us) and module `cc6852f0`:
+797 at 64 frames on a fresh anchor, RTL Utility at 32 frames 20.521 ms =
+985 = 797 + 188 to the sample, read by the user at about 19:58 UTC.** The
+point of record moves from target64-trace (fresh anchor 818-828, RTL
+21.062) to txoff950: 0.54 ms at RTL 32, 21-31 samples at 64, for 19
+frames of TX cover (floor 107 -> 88, the 1:1 rule). Acceptance set:
+the entry above (4 x 800 loaded and the 600 s soak all 797, zero
+RECOVERs, TX floor 88, RX 77). Conf `cb6151e4`: the block's STATUS
+accepted, COVER and MEASURED filled; installer `2b583011` (conf pin
+`cb6151e4`, `66f92ed0` joins the unedited-shipped list). Live conf: the
+block's keys are already live; the four label lines are copied by
+`copy-txoff950-labels.py` (staged in `aes67-txoff950m150-install/` beside
+the shipped conf; dry run without `--apply`). Yardsticks: DVS 11.312 ms
+at 32; the day started at 21.062 (target64-trace, fresh anchor) and the
+record's 19.688 was that loop on an aged anchor.
+
+*What the session gained and what it settled.* (1) 0.54 ms at RTL 32 on
+a fresh anchor, deterministic (5,300 impulses on one level), with the
+cover accounted: the wait allowance was TX cover, and the 19 frames came
+off the TX floor. (2) The prime margin is a real term: the prime path
+takes 83-104 us, the 50 us build would have missed one prime in twenty,
+and 150 us covers it for 5 frames; the ALIGN trigger line now shows it
+(`target=`, `slack_us=`). (3) The level follows the TX front age 1:1 on
+fresh anchors (336 / 312 / 317 -> 823 / 793 / 797), which is the budget's
+"level = TX cover + constant" with the allowance inside the cover. Next
+levers by the budget: ring target 64 -> 48 (about 16, conf only, the
+bridge's bound) and sink delay 144 -> 120 after the arrival-lead export;
+both spend cover elsewhere and take the same set. Service ends the
+session on txoff950, the 19:25 anchor, zero RECOVERs, nothing pending on
+the Pi but the label copy.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
