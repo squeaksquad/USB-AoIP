@@ -1124,7 +1124,8 @@ void report_impulses(Direction& direction,
                      const std::uint64_t block_first_frame,
                      const std::size_t block_frames,
                      const std::int64_t block_ns,
-                     const std::int64_t depth) noexcept {
+                     const std::int64_t depth,
+                     const char* depth_source) noexcept {
     usb16x16::ImpulseTraceDetector::Event event{};
     while (detector.pop_event(event)) {
         if (direction.impulse_lines >= kImpulseLineCap) {
@@ -1140,6 +1141,7 @@ void report_impulses(Direction& direction,
                   << " block_frames=" << block_frames
                   << " offset=" << event.position - block_first_frame
                   << " depth=" << depth
+                  << " depth_src=" << depth_source
                   << " block_ns=" << block_ns
                   << " now_ns=" << monotonic_now_ns()
                   << " events=" << detector.events()
@@ -1239,7 +1241,7 @@ IoResult capture_into_ring(Direction& direction, const std::int64_t iteration_ns
     if (direction.impulse_trace) {
         direction.capture_impulse.observe(direction.capture_scratch.data(), frames, direction.input_frames);
         report_impulses(direction, direction.capture_impulse, direction.capture_stage,
-                        direction.input_frames, frames, iteration_ns, available);
+                        direction.input_frames, frames, iteration_ns, available, "avail");
     }
     direction.input_frames += frames;
     return IoResult::progressed;
@@ -1595,8 +1597,21 @@ IoResult render_to_playback(Direction& direction,
     }
     if (direction.impulse_trace) {
         direction.playback_impulse.observe(direction.playback_scratch.data(), frames, direction.output_frames);
+        // The queue this block lands behind: exact, from the device, on the
+        // blocks that carry a hit (about four a second under the harness);
+        // the 1 Hz telemetry sample otherwise, which the first session
+        // showed is up to a period off at the write instant.
+        std::int64_t depth = direction.playback_delay;
+        const char* depth_source = "sampled";
+        if (direction.playback_impulse.pending() > 0) {
+            snd_pcm_sframes_t exact = 0;
+            if (direction.playback.delay(exact) == 0 && exact >= 0) {
+                depth = exact;
+                depth_source = "delay";
+            }
+        }
         report_impulses(direction, direction.playback_impulse, direction.playback_stage,
-                        direction.output_frames, frames, monotonic_now_ns(), direction.playback_delay);
+                        direction.output_frames, frames, monotonic_now_ns(), depth, depth_source);
     }
     const snd_pcm_sframes_t committed = snd_pcm_mmap_commit(direction.playback.handle(), offset, frames);
     if (committed < 0 || static_cast<snd_pcm_uframes_t>(committed) != frames) {

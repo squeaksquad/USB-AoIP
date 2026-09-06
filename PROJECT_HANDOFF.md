@@ -6433,6 +6433,66 @@ inactive), `systemctl start`. First use: one target64-trace session,
 gate probe, one 200-impulse harness run at 64, the analyser on the
 full-rate log; then the acceptance-length runs if the numbers hold.
 
+**MEASURED 2026-09-06 01:00-01:05 UTC: the first impulse-trace session
+splits the device timeline by stage; the AES67 loop from the RAVENNA
+playback write to the RAVENNA capture read is about 12 ms, and the
+bridge's four holdings sum to its start depth.** Installs by the user
+(bridge `21c0e9f2`, supervisor `5bff36a6`, wrapper `6282b108` verified;
+live conf `8fa62e25` with the trace block appended,
+`PROFILE=...-target64-trace`), start at 01:00:31 UTC. Session: `IMPULSE
+enabled channel=1 threshold=0.15 holdoff_frames=2400`, ALIGN ok attempt
+2, RX PRIMED `grid_phase_us=520 ring_at_prime=192 overshoot=5` (a plain
+draw in the 380-550 band), TX PRIMED `align_dropped=72 overshoot=5
+front_age_frames=336`, trigger ok 602 us. Gate
+(`tracegate-noise-ch2-64f-100imp` in `usb-holes-20260904/`) 0.0% zeros,
+no runs, no discontinuities. `measure-under-service.sh 64 200 trace1`
+(`trace1-roundtrip-64f-20260906T010143Z`): **1126** on all 200, spread
+0, score 1.000, `tx_qfloor` 112, `rx_qfloor` 77, `tx_pullmax` 48, gaps
+1.07/1.63 ms, zero RECOVERs; target64's accepted 1127 to a sample. The
+trace stamped every impulse at all four stages (1296 lines, 324 complete
+impulses including the gate's and the readiness probes'); no line
+suppressed, no event dropped. Full-rate log
+`outputs/latency/stage-trace-20260906/bridge-trace1-session-20260906T010040Z.log`,
+analyser `impulse-stages.py --after-us 60000000 --level 1126` on the
+harness window (229 impulses):
+
+| term | median | min | max | how |
+|---|---:|---:|---:|---|
+| `bridge_tx`, usb-capture frame to ravenna-playback write | 74 | 67 | 114 | measured both ends |
+| `tx_queue`, ravenna-playback write to its play | 220 | 197 | 245 | 1 Hz depth sample |
+| `aes67`, that play to the ravenna-capture frame | 576 | 561 | 627 | inherits the `tx_queue` estimate |
+| `bridge_rx`, ravenna-capture frame to usb-playback write | 82 | 74 | 106 | measured both ends |
+| `rx_queue`, usb-playback write to its play | 161 | 147 | 189 | 1 Hz depth sample |
+| `write_to_read`, ravenna-playback write to ravenna-capture frame | 814 | 771 | 826 | measured both ends |
+| `cap_to_write`, usb-capture frame to usb-playback write | 971 | 953 | 992 | measured both ends |
+
+Samples at 48 kHz; frame times take the last frame of a capture block as
+fresh at its wake, and the play times add the queue to the write.
+`pos_tx` -73 and `pos_rx` -1 on every impulse: the frame-index mapping
+through each direction is a constant. Readings: (1) the bridge's two
+ring dwells and two queues sum to about 537 against its 528 of start
+depth, so the bridge's share of the device timeline is what the PRIMED
+arithmetic says, not more. (2) The level minus `cap_to_write` is 155,
+which is the RX queue at the write (about 144-161) plus the two Pi USB
+legs (about 22 from the USB-only run); the accounting closes. (3) The
+AES67 loop, from the RAVENNA playback consuming the frame to the bridge
+reading it back, is about 576 samples (12.0 ms), and even its
+in-session minimum of 561 is far above the 360 the record's pieces make
+(sink delay 144, the Ferrofish's 3.5 ms from Dante Controller, the
+`SAC - 48` stamp). The Phase 1 RAVENNA-only platform loop read 5-6 ms,
+so the Ferrofish's AES67 in-to-out costs about 6-8 ms here, not 3.5: that
+is where the plan's floor was short. (4) The queue terms from the 1 Hz
+sample are up to a period off at the write instant (the sum overshoots
+the harness by 12 and `aes67` spreads 66); fixed in the source, not
+built: on a block that carries a hit the bridge now queries the
+playback delay itself (`depth_src=delay` on the line, `sampled`
+otherwise), `main.cpp` `6d3586fd`, `bridge_core.hpp` `0b9ea9837`
+(`pending()` accessor), syntax-checked clean, core tests pass; the
+analyser gains `write_to_read` and `cap_to_write`. Next: the exact-queue
+build (a service stop), then two trace sessions to place the second
+session term by stage, and a packet capture on `eth0` to split the 12
+ms between the Pi's RAVENNA driver and the Ferrofish.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

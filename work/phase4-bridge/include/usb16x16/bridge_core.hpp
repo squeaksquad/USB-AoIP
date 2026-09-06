@@ -291,6 +291,9 @@ public:
     [[nodiscard]] const Config& config() const noexcept { return config_; }
     [[nodiscard]] std::uint64_t events() const noexcept { return events_; }
     [[nodiscard]] std::uint64_t dropped_events() const noexcept { return dropped_events_; }
+    // Events waiting to be popped: lets the caller pay for an exact depth
+    // query only on the blocks that carry a hit.
+    [[nodiscard]] std::size_t pending() const noexcept { return queue_count_; }
 
 private:
     Config config_{};

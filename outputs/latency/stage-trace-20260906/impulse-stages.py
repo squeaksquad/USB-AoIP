@@ -128,6 +128,9 @@ def main():
             "bridge_rx": t4 - t3,
             "rx_queue": t4p - t4,
             "pi_total": t4p - t1,
+            # model-free: both ends are measured instants, no queue estimate
+            "write_to_read": t3 - t2,
+            "cap_to_write": t4 - t1,
             "pos_tx": g["ravenna-playback"]["position"] - g["usb-capture"]["position"],
             "pos_rx": g["usb-playback"]["position"] - g["ravenna-capture"]["position"],
             "tx_depth": g["ravenna-playback"]["depth"],
@@ -137,15 +140,20 @@ def main():
         })
 
     print("times (ms; 48 samples = 1 ms):")
-    for key in ["bridge_tx", "tx_queue", "aes67", "bridge_rx", "rx_queue", "pi_total"]:
+    keys = ["bridge_tx", "tx_queue", "aes67", "bridge_rx", "rx_queue", "pi_total", "write_to_read", "cap_to_write"]
+    for key in keys:
         summarise(key, [r[key] for r in rows], 1e-6, "ms")
-    print("same, in samples:")
-    for key in ["bridge_tx", "tx_queue", "aes67", "bridge_rx", "rx_queue", "pi_total"]:
+    print("same, in samples (write_to_read = ravenna-playback write to ravenna-capture frame, exact;"
+          " cap_to_write = usb-capture frame to usb-playback write, exact):")
+    for key in keys:
         summarise(key, [r[key] for r in rows], 48000e-9, "smp")
     print("positions and depths (frames):")
     for key in ["pos_tx", "pos_rx", "tx_depth", "rx_depth", "usbcap_backlog", "ravcap_backlog"]:
         summarise(key, [r[key] for r in rows], 1.0, "fr")
     if args.level is not None:
+        cap_to_write = statistics.median(r["cap_to_write"] for r in rows) * 48000e-9
+        print(f"harness level {args.level} - cap_to_write {cap_to_write:.1f} = RX queue at write + USB legs "
+              f"{args.level - cap_to_write:.1f} samples (exact ends)")
         pi_total = statistics.median(r["pi_total"] for r in rows) * 48000e-9
         print(f"harness level {args.level} - pi_total {pi_total:.1f} = USB legs together {args.level - pi_total:.1f} samples "
               f"({(args.level - pi_total) / 48:.2f} ms), queue terms from 1 Hz depth samples")
