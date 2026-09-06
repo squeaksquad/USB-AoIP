@@ -77,7 +77,11 @@ NEXT WORK, IN ORDER
    14:42-15:19 and MEASURED 15:27-15:31 UTC, 2026-09-06): the level the
    Mac reports = Pi path (772-787 at 64 frames on every draw) + 47 -
    usbaudiod's ioDriftNS (one-sample steps, 6-8 ppm of elapsed time) at
-   the last gadget PCM restart, held until the next one. The accepted
+   the last gadget PCM restart, held until the next one -- WITHDRAWN as a
+   predictor at 17:45 UTC: creep1 on the 15:28 anchor at drift 25 read
+   the term 55, draw1 at the same count read 21. What stands: fresh
+   anchor = term 45-47 (3/3); aged anchor = 15-55 or -30, unpredictable
+   so far; the level is set at each gadget PCM restart and held. The accepted
    757 / 19.688 carried 71 samples of drift; the fresh-anchor figure of
    the same loop is 821-828 at 64, RTL at 32 about 21.0-21.2 ms. Reset:
    `sudo systemctl restart usb-16x16.service` re-creates the device on

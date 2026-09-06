@@ -7397,6 +7397,47 @@ the RAVENNA side, which Phase 5 removed) would make it zero, and that is a
 design change, not a lever for tonight. Service ends the entry on the
 re-bound session, all three services active, no installs.
 
+*CORRECTION 2026-09-06 17:45 UTC to the two entries above: "level = Pi path
++ 47 - drift at the last Pi restart" is withdrawn as a predictor. It fitted
+nine points on the 13:09 and 14:35 anchors and failed on the 15:28 one.
+What stands: a fresh anchor reads the USB-side term 45-47 (three for
+three); an aged anchor reads something else, 15-55 today and -30 last
+night, and the ioDriftNS count does not predict which.*
+
+**MEASURED 2026-09-06 17:36-17:40 UTC, the creep test: a plain stack
+restart on the 15:28 anchor at drift 25 read 835, USB-side term 55, where
+the model predicted 21.** `sudo systemctl restart usb16x16-aes67.service`
+at 17:36:51 UTC (RX PRIMED grid 513, TX ring 264), gate
+`creep1-noise-ch2-64f-100imp.*` 0.0%, `creep1-roundtrip-64f-20260906T173807Z`
+**835 x100**, spread 0, zero RECOVERs; split
+(`bridge-creep1-session-20260906T173651Z.log`): AES67 chain 681, Pi path
+780, term 55.2. Bridge pitch on this session 1000017 (observed -18.0
+ppm), the same band as every session today (1000012-1000019). The
+usbaudiod drift series on this anchor (EDT): steps 1-3 at 11:29-11:41,
+nothing for 35 minutes, steps 4-25 at 12:16-13:18 at one per 1.5-3
+minutes, nothing until the restart at 13:36; the tracker is bursty, its
+sign is not in the log, and a stream start (`inputResync`) at 11:36:11
+with no further starts until the restart says something streamed for
+that stretch. Draw1 on the 13:09 anchor at the same count, 25, read the
+term 21. So the count is not the variable, or not the only one.
+
+*What the day proves, kept narrow.* (1) The loop is deterministic: Pi
+path 772-787 and the AES67 chain 681 on every draw. (2) The reported
+level is set on the Mac at each gadget PCM restart and held until the
+next one (826 at three reads over drift 1-11 with no restart; 757 across
+five opens; 757 after seven idle hours). (3) A fresh usbaudiod anchor,
+by coreaudiod kill or by gadget re-bind, reads the term 45-47 and the
+level 821-828 (three of three). (4) On an aged anchor the term at a
+restart is not reproducible from anything logged so far (15, 21, 21, 16,
+19, 29, 55, -30). (5) Therefore the only restart that reads a known
+figure is the one that goes through the gadget re-bind, and a RECOVER
+re-prime in service lands on an unknown term until the next re-bind.
+Open question that one more restart answers: whether the aged-anchor
+term is stable for a given anchor state (a second plain restart now
+reads about 55 again) or is drawn afresh at every PCM restart (it reads
+something else). The first would mean a Pi-side variable exists to find;
+the second would mean only the re-bind pins it.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
