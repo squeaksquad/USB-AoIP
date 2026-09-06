@@ -282,6 +282,21 @@ wakeup gap (Phase 6).
 Mac at 64 frames both ways (5.25 ms measured), the Ferrofish, and the
 RAVENNA device's own buffering total 12-13 ms before the bridge holds a
 frame. With all three tiers done, this loop bottoms out around 16-17 ms.
+
+**Corrected 2026-09-06 (handoff "BUDGET", "MEASURED ... the packet
+capture", "CONFIRMED ... in the driver source").** The 12-13 ms above was
+not measured and was wrong by the largest term in the loop. The impulse
+trace and an `eth0` capture split the device timeline: the bridge's own
+holdings equal its start depth (about 528 samples at target64), the two
+Pi USB legs are about 22-40 samples, the Ferrofish with both wires is
+2.7 ms, the RAVENNA capture side 2.2 ms, and the RAVENNA *playback* side
+was 12.1 ms from the bridge's write to the packet, because the Merging
+module sent each packet from the live-out slot one playback buffer minus
+one period old (336 frames, 7 ms, at 384). `work/ravenna-tx-fix/` fixes
+that in one expression; on the fixed module target64 reads 819 samples
+(17.1 ms) at 64 frames against 1127 before, and the RAVENNA playback
+buffer stops being a latency term. Tier two above is superseded by that
+fix; its "3-4 ms" was this term seen from the other side.
 Below that is a 32-frame CoreAudio buffer (1.33 ms, measured), a
 different receiver than the Ferrofish, or hardware
 timestamping in the driver; none of it is Pi-side work, and the profile
