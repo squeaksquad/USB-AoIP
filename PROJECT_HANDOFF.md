@@ -6168,6 +6168,17 @@ unedited-shipped list) carries session 1 in the block. Next: a
 Mac-side reset, then the soak again and a second session, watching
 whether the third term holds across a restart without a PTP reset.
 
+**CORRECTION 2026-09-05 23:45 UTC: the 22:39-22:56 UTC channel-1 zero runs
+were RTL Utility's own signal.** The user was running RTL Utility briefly
+in that window (comparing against Dante Virtual Soundcard on the laptop),
+with no music playing; its test signal is a click train on channel 1
+whose gaps between clicks fall inside the detector's 8-480 window. So
+those 844 runs are the instrument reading a legitimate signal, not holes,
+and the detector needs to be read with that in mind whenever RTL Utility
+is up. What remains Mac-side and open is only the soak's 96 impulses 8
+samples early under the sixteen-channel load. The 1089 at full cover and
+the PTP-side third term stand as written.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
