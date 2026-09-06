@@ -7814,6 +7814,37 @@ both spend cover elsewhere and take the same set. Service ends the
 session on txoff950, the 19:25 anchor, zero RECOVERs, nothing pending on
 the Pi but the label copy.
 
+**STAGED 2026-09-06 20:10 UTC: lever 2, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950`
+(txoff950 with `TARGET=48` instead of 64, one variable, conf only).**
+Labels copied into the live conf by the user at about 20:05 UTC
+(`copy-txoff950-labels.py --apply`, 4 lines). Premise from the record:
+the elastic ring is held at target + 3 in each direction and everything
+over it is rendered at each capture wake, so it is a fixed depth term on
+both sides; 192 -> 128 -> 64 moved the level 1:1 with the target per
+direction (target64 read 191 under tx192 for 64 per direction, 2026-09-05),
+and `tx_occ` / `rx_occ` have sat at target + 3 in every session (67 at
+64, 131 at 128). Expected: TX front age 301 (192 + 51 + 58), RX 171 (120 +
+51), about 32 under txoff950, **about 765 at 64 frames on a fresh anchor,
+RTL at 32 about 19.85 ms**; floors unchanged (TX 88 loaded, RX 77),
+because the queue depth is the front age less the ring and both fall by
+16. Bounds: target at least one period (48 exactly, `target_frames <
+requested_period` is the refusal), ring at least target + 8, prime
+threshold target + queue prime + 3 (TX 243, RX 171), the Farrow needs
+three frames of ring and looks eight ahead of the 51 held. Watch `tx_occ`
+/ `rx_occ` 51, the PRIMED `intended` / `ring_at_prime`, the floors, and
+`tx_pullmax` 48. Conf `0cfff8ac` (installer `b2999941`, conf pin moved,
+`cb6151e4` joins the unedited-shipped list); block alone
+`target48-block.conf` `8f92f83d`. Staged in
+`~/usb-16x16-work/aes67-target48-install/` (shipped conf, block); the
+installed supervisor `731fe129` lists the block from the repo conf and
+from the live conf plus the block, exit 0. No bridge or supervisor
+change, so no installer run: the user appends the block to the live
+conf, `switch-profile` (restarts the stack), then the gadget re-bind for
+the fresh anchor; gate, read, split, the acceptance set if it holds.
+Rollback is `switch-profile ...-target64-trace-txoff950`. Service on the
+19:25 session, zero RECOVERs.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
