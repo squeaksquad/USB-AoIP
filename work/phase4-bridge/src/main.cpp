@@ -156,6 +156,18 @@ struct Options {
     // capture period, and that excess becomes permanent pipeline depth because
     // depth is conserved after priming. Off by default: historical behaviour.
     bool prime_trim{false};
+    // RX-only prime trim (2026-09-06, the RX prime overshoot lever). The RX
+    // prime is checked at the USB capture's wakes, where the ring grows by a
+    // capture period at a time, so it lands at ring 192 whatever the intended
+    // level is (187 at target 64, 171 at target 48) and the overshoot is
+    // permanent RX depth: at target 48 the RX queue started 21 frames over its
+    // prime and the RX floor read 93 against 77. With this on, ravenna-to-usb
+    // alone discards ring_at_prime - intended from the ring's front at prime
+    // time (the same code --prime-trim runs for both directions), so the RX
+    // queue starts at exactly its prime. usb-to-ravenna is never trimmed
+    // here: its aligned drop already sets the front frame's age at the first
+    // tick, and a second cut would move the start. Off by default.
+    bool rx_prime_trim{false};
     // Per-direction overrides of playback_prime_frames; zero inherits it. The
     // two directions do not carry the same slack -- measured at prime 192, RX's
     // queue floor sat at 285 while TX's was 113 -- so one shared prime tunes
@@ -383,6 +395,8 @@ private:
         << "  --rx-playback-prime N  ravenna-to-usb override (0 = use --playback-prime)\n"
         << "  --prime-trim 0|1       discard the ring overshoot at prime time\n"
         << "                         (default 0 = keep it, historical behaviour)\n"
+        << "  --rx-prime-trim 0|1    discard the ravenna-to-usb ring overshoot at prime time\n"
+        << "                         alone; usb-to-ravenna keeps its aligned drop (default 0)\n"
         << "  --usb-pitch-servo 0|1|2\n"
         << "                         1: steer both USB gadget pitch controls together to the PTP\n"
         << "                         rate and run both converters at exactly 1.0; 2: the same,\n"
@@ -499,6 +513,12 @@ Options parse_options(const int argc, char** argv) {
                 throw std::runtime_error("prime-trim must be 0 or 1");
             }
             options.prime_trim = parsed != 0;
+        } else if (argument == "--rx-prime-trim") {
+            const unsigned long parsed = parse_unsigned(value, "rx-prime-trim");
+            if (parsed > 1) {
+                throw std::runtime_error("rx-prime-trim must be 0 or 1");
+            }
+            options.rx_prime_trim = parsed != 0;
         } else if (argument == "--usb-pitch-servo") {
             const unsigned long parsed = parse_unsigned(value, "usb-pitch-servo");
             if (parsed > 2) {
@@ -652,6 +672,9 @@ Options parse_options(const int argc, char** argv) {
     }
     if (options.align_rx_prime && !options.align_rx_trigger) {
         throw std::runtime_error("--align-rx-prime needs --align-rx-trigger 1");
+    }
+    if (options.rx_prime_trim && options.align_rx_prime) {
+        throw std::runtime_error("--rx-prime-trim and --align-rx-prime both cut the RX ring at prime time; use one");
     }
     if (options.rx_prime_phase_window && !options.align_start) {
         throw std::runtime_error("--rx-prime-phase-window needs --align-start 1");
@@ -2189,7 +2212,7 @@ int run(const Options& options) {
     tx.playback_prime_frames = tx_prime;
     rx.playback_prime_frames = rx_prime;
     tx.prime_trim = options.prime_trim;
-    rx.prime_trim = options.prime_trim;
+    rx.prime_trim = options.prime_trim || options.rx_prime_trim;
     // Stage names in signal order round the loop: USB capture is the Mac's
     // output arriving, RAVENNA playback the wire out, RAVENNA capture the
     // wire back, USB playback the Mac's input leaving.
@@ -2649,6 +2672,7 @@ int run(const Options& options) {
               << ",\"align_rx_prime_phase_us\":" << rx.last_prime_phase_us
               << ",\"align_rx_first_tick_wait_us\":" << rx.last_first_tick_wait_us
               << ",\"align_rx_front_age_frames\":" << rx.last_front_age_frames
+              << ",\"rx_prime_trim\":" << (options.rx_prime_trim ? 1 : 0)
               << ",\"rx_prime_grid_phase_us\":" << rx.last_prime_grid_phase_us
               << ",\"rx_prime_phase_window\":" << (options.rx_prime_phase_window ? 1 : 0)
               << ",\"rx_prime_phase_discarded\":" << rx.phase_wait_discarded

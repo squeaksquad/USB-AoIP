@@ -7941,6 +7941,70 @@ overshoot build first, then the render-before-target margin, then sink
 delay after the arrival-lead export).** Service on the 20:41 anchor,
 zero RECOVERs, nothing pending on the Pi.
 
+**IMPLEMENTED and STAGED 2026-09-06 22:05 UTC, not yet built: the RX
+prime overshoot lever, `--rx-prime-trim` in the bridge (`main.cpp`
+`77450aaa`), the conf key `RX_PRIME_TRIM`, and profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim`
+(target48 with `RX_PRIME_TRIM=1`, one variable).** Mechanism, from the
+prime in `render_to_playback`: the RX prime is checked at the USB
+capture's wakes, where the ring grows 96 per wake, so it lands at ring 192
+whatever `intended` is (187 at target 64, 171 at 48) and the overshoot is
+permanent RX depth; on target48 the RX queue started 21 over its 120
+prime (ring 192 less the 51 held, rendered at the prime) and the RX floor
+read 93 against 77. The aligned TX prime drops its own overshoot from the
+front; the RX prime had no cut. The lever is the trim code already there
+(`direction.prime_trim`, one pop from the ring's front before the render,
+which the aligned TX drop proved safe at the same point), gated for RX
+alone: a new option `rx_prime_trim`, `--rx-prime-trim 0|1`, sets
+`rx.prime_trim = prime_trim || rx_prime_trim`; TX keeps `prime_trim`
+alone (0: its overshoot after the aligned drop is the wait allowance and
+must stay). `--rx-prime-trim 1` with `--align-rx-prime 1` is refused
+(both cut the RX ring at prime time). No new state: `restart_direction`
+resets `primed` and clears the ring, so a RECOVER re-prime runs the same
+trim. The summary JSON gains `rx_prime_trim`. Expected on a fresh anchor:
+RX PRIMED `ring_at_prime=192 trimmed=21`, the RX queue starting at 120
+exactly, level about 764 at 64 frames (785 less 21), RTL at 32 about 19.83
+ms; TX front age 301 and the TX floor (94 loaded) unchanged; RX floor
+about 72, not the 77 the pickup prompt expected, because the 77 of every
+rx120 profile carried the 5-frame overshoot of intended 187 and the trim
+to intended takes that 5 as well (if 77 is to be kept, `RX_PLAYBACK_PRIME`
+125 is the conf way, outside this lever). Syntax-checked clean on the Mac
+(clang `-std=c++20 -Wall -Wextra -Wpedantic -Werror`, the Pi's ALSA
+headers, the endian / clock_nanosleep / ESTRPIPE shims); core tests pass
+on the Mac (`bridge_core` unchanged, `9c24251a`). Supervisor `48e3fd19`:
+`rx_prime_trim()` (absent means 0), validation (0 or 1; refused with
+`ALIGN_RX_PRIME=1`), `--rx-prime-trim` after `--prime-trim` in
+`bridge_arguments`, `rx trim` in the profiles listing. Conf `a2db5efb`
+adds the block after target48's (experimental, the expected figures and
+the watch list in its comment; the tag `rxtrim` prefixes no field key);
+installer `0347c537` (conf pin `a2db5efb`, supervisor pin `48e3fd19`,
+`1647df1a` joins the unedited-shipped list; the bridge pin `0d8cccfa`
+moves after the build, and until it does the staged installer must not be
+run: the new supervisor passes `--rx-prime-trim` to whatever bridge is
+installed and `0d8cccfa` rejects the flag). Staged on the Pi:
+`~/usb-16x16-work/phase4-rxtrim-src/` (`main.cpp` `77450aaa`,
+`bridge_core.cpp` `9c24251a`, `bridge_core.hpp` `0b9ea983`, tests
+`46f03dcf`, no AppleDouble files; `build.sh` pinned to `77450aaa`,
+refuses while the service is active) and
+`~/usb-16x16-work/aes67-rxtrim-install/` (supervisor, unit, shipped conf,
+installer, `rxtrim-block.conf` `b077097f`). Validated on the Pi: the
+installed supervisor `731fe129` and the staged one list the block from the
+repo conf and from the live conf plus the block, exit 0; the staged
+supervisor's `validate_profile` on the rxtrim profile passes and its
+`bridge_arguments` carry `--prime-trim 0 --rx-prime-trim 1` (the accepted
+target48 profile gets `--rx-prime-trim 0`); `RX_PRIME_TRIM=2` and
+`RX_PRIME_TRIM=1` with `ALIGN_RX_PRIME=1` are refused. Next, in one
+service-stop window: `sudo systemctl stop usb16x16-aes67` by the user
+(playback off), `build.sh`, the three pins (`install-candidate.sh`,
+`install-aes67-service.sh`, the supervisor's `expected_bridge_sha256`) and
+the bridge README, the install sets, then by the user `install-candidate.sh`,
+`install-aes67-service.sh` (keeps the operator-edited live conf), append
+the block, `switch-profile ...-rxtrim` (PROFILE only while inactive),
+`sudo systemctl restart usb-16x16.service` for the fresh anchor; gate,
+one 100-impulse read at 64 with the split, then the acceptance set if it
+holds. The service ran target48 on the 20:41 anchor throughout, zero
+RECOVERs; nothing installed.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
