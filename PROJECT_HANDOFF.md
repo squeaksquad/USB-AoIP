@@ -7574,6 +7574,33 @@ wake_to_start_us about 951, target=prime, slack_us), then the acceptance
 set if it holds. The service ran the accepted profile throughout;
 nothing installed.
 
+**BUILT and STAGED 2026-09-06 19:12 UTC: bridge `0c7e0b0c` (aligned
+prime margin 50 us, `target=`/`slack_us=`), the txoff950 install set,
+all three pins moved.** Service stopped by the user at about 19:08 UTC
+(playback off); build on the Pi from `~/usb-16x16-work/phase4-txoff950-src`
+(`main.cpp` `caac4e1d`, Release, the trace build's cmake configuration,
+zero warnings), ctest 1/1, binary SHA-256
+`0c7e0b0c72c1d1b9e83b50013cd24cd97f95676c8ee57c38d44ce00773c48da1`, in
+`work/phase4-bridge/artifacts/pi-aarch64/` (README updated, `c1ca48c5`
+previous). Behaviour is `c1ca48c5`'s except the margin and the two log
+fields. Pins: supervisor `expected_bridge_sha256` `0c7e0b0c`, supervisor
+`4550cd00`; `install-candidate.sh` `289d502a` (wrapper `6282b108`
+unchanged); `install-aes67-service.sh` `65ee37b3` (supervisor `4550cd00`,
+unit `77837e60`, conf `07b213f1`, bridge `0c7e0b0c`). Staged:
+`~/usb-16x16-work/phase4-txoff950-install/` (binary, wrapper, installer)
+and `~/usb-16x16-work/aes67-txoff950-install/` (supervisor, unit, conf,
+installer, `txoff950-block.conf` `5b6f8ff9`), hashes verified there; the
+staged supervisor validates the live conf plus the block, exit 0.
+Rollback of the bridge: `~/usb-16x16-work/phase4-trace-install/`
+(`c1ca48c5`) and `~/usb-16x16-work/aes67-trace-install/` (supervisor
+`892dd189`), or `switch-profile ...-target64-trace` alone for the conf
+side. (`build.sh` in the source tree aborts after the link on a
+zero-warning count, a `grep -c` under `set -e`; ctest and the hash were
+run by hand.) Install order, service stopped: `install-candidate.sh`,
+`install-aes67-service.sh` (keeps the operator-edited live conf), append
+the block, `switch-profile ...-txoff950`, then the gadget re-bind for the
+fresh anchor.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

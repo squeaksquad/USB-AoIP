@@ -54,8 +54,12 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`c1ca48c544b9c6fe0fccf03a438bf73ac7e9f616dd44127a11718a8bba529323`
-(2026-09-06: the impulse trace's playback stages query the ALSA delay on the
+`0c7e0b0c72c1d1b9e83b50013cd24cd97f95676c8ee57c38d44ce00773c48da1`
+(2026-09-06: `kAlignPrimeMarginNs` 50 us instead of 200, the aligned wait
+allowance lever paired with `--align-tx-offset-us 950`; the ALIGN trigger
+line carries `target=prime|prime-missed|next` and `slack_us=`; otherwise
+`c1ca48c5`).
+Previous binary `c1ca48c5` (2026-09-06: the impulse trace's playback stages query the ALSA delay on the
 blocks that carry a hit, `depth_src=delay`, so the queue terms are exact;
 otherwise `21c0e9f2`).
 Previous binary `21c0e9f2` (2026-09-06: the impulse trace, `--impulse-trace 1` with `--impulse-channel`,
