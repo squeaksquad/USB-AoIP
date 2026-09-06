@@ -6382,6 +6382,31 @@ on the Pi, exit 0, zero bad lines. Build waits for a service stop; the
 USB-only run (BUDGET entry, order item 1) goes in the same stop window
 first, then the build, then the three pins and the installs.
 
+**MEASURED 2026-09-06 00:55 UTC: the USB-only loop on the req 4 gadget reads
+262 samples at the 240-frame `alsaloop` target; the Pi USB legs cost about
+22 frames and the req 2 to req 4 step is retired.** Service stopped by the
+user at about 00:53 UTC (module unloaded, gadget `configured/high-speed`,
+`req_number=4`, bint 0), playback idle. `measure-usb-only.sh 5000 64 100
+200` (the harness refuses `--maximum-lag-ms` at or above 250, so 200, its
+default; the 2026-08-31 point used the same wrapper): `alsaloop` on
+`hw:UAC2Gadget` both ways, `Latency 240 frames`, pitch 1.0;
+`usb-only-5000us-64f-20260906T005507Z.json`: **262 samples (5.458 ms)** on
+all 100 impulses, spread 0, zero input or output discontinuities,
+`rawInputPeak` 0.25. The 2026-08-31 run on the req 2 gadget read 264. So
+the gadget's request queue does not sit on the path at four requests,
+the ~150-sample step between req 2 and req 4 in the 2026-09-04 record was
+the dropping loop's artefact as suspected, and the two Pi USB legs
+together are about 22 frames (0.46 ms) beyond whatever ALSA buffer the
+process on the Pi holds. The 599 samples outside the bridge in the BUDGET
+entry are therefore the bridge's USB capture read grain (up to 48), about
+22 of gadget, and about 530-550 (11-11.5 ms) between the RAVENNA playback
+write and the RAVENNA capture read: the RAVENNA device, the wire, the
+Ferrofish and the wire back. The known pieces of that (sink delay 144 =
+3 ms, the Ferrofish about 3.5 ms, the `SAC - 48` stamp 1 ms) leave about
+3.5-4 ms on the AES67 side that the record has never placed, and the
+impulse trace's `aes67` term measures exactly that segment. Order item 1
+done; the build follows in the same stop window.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
