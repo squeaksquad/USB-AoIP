@@ -6783,6 +6783,20 @@ during the runs, `tx_qfloor` 112/109/108, `rx_qfloor` 77, `tx_pullmax`
 in the session log so far) re-primed onto the same level each time.
 Run 4 and the soak in progress.
 
+**RUN 4 OF THE CHAIN SPOILED BY MY OWN TRANSFER, 2026-09-06 03:05-03:09 UTC,
+and a rule.** Run 4 (`txfix-roundtrip-64f-...`, 03:05:21 UTC) read
+16.896 ms (811) min=807 max=819 spread=12 score=0.843 count=800, levels 811x568 807x216 819x16, with five RECOVERs during the run: two all-four-PCM
+XRUN pairs at uptime 53261 s and 53327 s and one RX `playback-avail`,
+`tx_gapmax_us` 4951, `tx_pullmax` 192, `tx_qfloor` 22. At 03:05:30-03:06:30
+UTC I was copying the 183 MB capture and the bridge log off the Pi over
+`wlan0` with `scp`, which is the CPU and IRQ load the record already
+knows stalls the bridge (the 2026-09-04 build rule). Run 4 is discarded
+and will be repeated after the soak with nothing else touching the Pi.
+**Rule: no large transfers from the Pi, no builds, no captures being
+copied, while a measurement runs; copy captures and logs between runs.**
+The soak started 03:08:57 UTC before the discard was known; it stands or
+falls on its own RECOVER count.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
