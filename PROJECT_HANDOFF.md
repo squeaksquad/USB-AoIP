@@ -6581,6 +6581,20 @@ about 7 ms, the largest single lever in the record; it is a RAVENNA
 module change on the rollback path, the same class as the `sink_min_time`
 plumbing. Blocks for (1) are staged below; (2) is a proposal.
 
+**STAGED 2026-09-06 02:20 UTC: profiles `...-target64-trace-rp288` and
+`...-target64-trace-rp240`** (target64-trace with `RAVENNA_PLAYBACK_BUFFER`
+288 and 240 instead of 384, one variable each, the trace kept on so the
+write-to-wire term can be read again; experimental). Expected about 1031
+(21.5 ms) and 983 (20.5 ms) at 64 frames if the transmit term is the
+buffer 1:1, TX floor ceilings 192 and 144 over the loaded floor of about
+105. Conf `3fb76a98` (installer `86e37bb6`, `98b467ea` joins the
+unedited-shipped list); blocks `rp288-block.conf` `0fcfdeca` and
+`rp240-block.conf` `ad146fb2` in `~/usb-16x16-work/aes67-trace-install/`,
+validated with `profiles` against the live conf plus both blocks and
+against the repo conf on the Pi, exit 0, zero bad lines. Order: the
+exact-queue bridge build first (instrument only), then rp288 with the
+full gate and runs, then rp240 if rp288 holds its floor.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
