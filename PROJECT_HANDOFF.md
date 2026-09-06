@@ -7601,6 +7601,77 @@ run by hand.) Install order, service stopped: `install-candidate.sh`,
 the block, `switch-profile ...-txoff950`, then the gadget re-bind for the
 fresh anchor.
 
+**MEASURED 2026-09-06 19:13-19:18 UTC, lever 1 on a fresh anchor: 793 x100
+at 64 frames (16.521 ms), spread 0, zero RECOVERs; Pi path 746 against
+776-784, the 24-30 the budget priced. The TX floor moves with it 1:1
+(83 against 104-107), so the lever spends TX cover, and the prime render
+is about 104 us against the 50 us margin, so about one prime in twenty
+would miss its target and read 48 higher.** Installs by the user at
+about 19:10 UTC (bridge `0c7e0b0c`, supervisor `4550cd00`, wrapper
+`6282b108`; live conf with the txoff950 block appended,
+`PROFILE=...-target64-trace-txoff950`), then `systemctl start` and the
+gadget re-bind; usbaudiod logged `Found an audio device` and fresh
+`setStartingUSBFrame IN/OUT` at 19:13:16 UTC (fresh anchor), `STAGE
+running` on a clean prime. Session start
+(`bridge-txoff950-session-20260906T1913Z.log`): ALIGN ok attempt 2, RX
+PRIMED grid 390 ring 192 overshoot 5, TX PRIMED `ring_at_prime=294
+overshoot=35 align_dropped=42 prime_phase_us=609 first_tick_wait_us=390
+front_age_frames=312` (336 on every target64-trace session: the 24 the
+lever removes), ALIGN trigger `wake_to_start_us=952 target=prime
+slack_us=236`. Gate `txoff950-noise-ch2-64f-100imp.*` 0.0% zeros, no
+run. Read `txoff950-roundtrip-64f-20260906T191536Z` **793 x100**, spread
+0, zero RECOVERs, in/out discontinuities 0. Split (`impulse-index.py
+--level 793`, 257 impulses): AES67 index chain 633 (681 on every earlier
+session: the TX PCM's start moved one period in the driver's index
+domain, `pos_tx` -43 against -73, the sum `pos_pi` 589 against 607),
+`pi_total` 746.2 (779.8 on rebind4 at 823), `usb_time` 46.8 (43.2 on
+rebind4; the fresh-anchor term 34-47 again), `tx_depth` median 137 (151.5
+on rebind4), `rx_depth` 127 (113). Level 793 against the six fresh-anchor
+reads 818-828 (median 823.5): 25-35 lower, 1 under the 794-804
+predicted. RTL at 32 would read about 981 = 20.44 ms by the +188 rule,
+not yet read.
+
+*Two findings that decide what to do with it.* (1) The TX floor: 90 at
+the end of the read, 83 two minutes later and still the running minimum
+(`tx_qlow` 0, `rx_qlow` 0, `tx_pullmax` 48, `tx_gapmax_us` 1047, RX
+floor 77, pitch 1000018), against 104-107 loaded through the whole
+target64-trace acceptance. The TX queue's steady level is the front age
+less the ring, so 24 frames off the front age is 24 frames off the queue
+(151 -> 137 median at the impulse writes) and off its floor (107 -> 83):
+the aligned wait allowance was TX cover, and this lever spends it. The
+3.7 ms gap that TX prime 192 held with about 54 spare on 2026-09-06 would
+be held with about 30. The BUDGET entry's line, "every lever today landed
+on the line level = TX cover + constant", holds for this one too; what
+the budget missed is that the allowance is part of the cover, not a term
+beside it. Whether 30 spare over the worst gap seen is enough cover is
+the user's call under the stability-first rule; the acceptance set
+(four loaded 800-impulse runs and the soak) would give the loaded floor
+and the RECOVER count but not a worse gap than the day produced. (2) The
+margin: at the prime the target was 340 us ahead (`first_tick_wait_us`
+390 less the 50 us between the target and the first tick) and the
+trigger entered with 236 us of slack, so the prime path from placing the
+target to entering the trigger (the ring drop, the PRIMED line, the
+192-frame render, the commit) takes about 104 us, twice the margin. A
+prime whose grid point falls 50-104 us ahead misses it and takes the next
+grid point one tick later: `target=prime-missed`, a negative `slack_us`,
+and that session 48 higher (and its TX queue 48 deeper). About 5% of
+primes, and every in-service RECOVER re-prime draws again. Margin 150 us
+covers it with 46 spare at a cost of 5 frames (longest wait 58 instead of
+53); margin 200 us at offset 950 costs 7 (60) with 96 spare. A
+restructure that renders before placing the target would keep 50 us of
+real slack, but that is a change to the prime's order, not a constant.
+
+*Standing.* Service running txoff950 on the 19:13 anchor, zero RECOVERs,
+floors 83/77; the trace and the new log fields live. Not accepted: no
+acceptance set run, RTL at 32 not read. Options in order of the
+priority list: (a) return to target64-trace (`switch-profile`, the
+installed bridge is behaviour-identical there with 200 us of margin
+replaced by 50, which target64-trace's own offset 600 covers with 550 us
+of wait: no rebuild needed to go back); (b) rebuild at margin 150 and run
+the acceptance set on it, taking 20 of the 25 and watching the loaded TX
+floor at about 88; (c) accept the 5% draw and run the acceptance set on
+`0c7e0b0c` as is. Levers 2 and 3 untouched.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
