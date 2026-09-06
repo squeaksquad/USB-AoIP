@@ -73,29 +73,24 @@ capture side 2.2 ms with sink delay 144, the tick and stamp). USB legs
 about 40. Session draw 0-71 on top.
 
 NEXT WORK, IN ORDER
-1. The session draw is explained and has a Pi-owned reset (FOUND
-   14:42-15:19 and MEASURED 15:27-15:31 UTC, 2026-09-06): the level the
-   Mac reports = Pi path (772-787 at 64 frames on every draw) + 47 -
-   usbaudiod's ioDriftNS (one-sample steps, 6-8 ppm of elapsed time) at
-   the last gadget PCM restart, held until the next one -- WITHDRAWN as a
-   predictor at 17:45 UTC: creep1 on the 15:28 anchor at drift 25 read
-   the term 55, draw1 at the same count read 21. What stands: fresh
-   anchor = term 45-47 (3/3); aged anchor = 15-55 or -30, unpredictable
-   so far, drawn afresh at each restart (55 then 44 on one anchor); a
-   re-prime at start can also land the Pi path at 805 instead of 773-787
-   (the RX split, the bridge's to fix). The accepted
-   757 / 19.688 carried 71 samples of drift; the fresh-anchor figure of
-   the same loop is 821-828 at 64, RTL at 32 about 21.0-21.2 ms. Reset:
-   `sudo systemctl restart usb-16x16.service` re-creates the device on
-   the Mac (fresh setStartingUSBFrame) and the AES67 service restarts
-   itself behind it (bridge exit 1 -> on-failure restart, ~1 min); read
-   after it 821 at term 45. Rule: restart the stack through the re-bind;
-   quote every level with the drift at the last Pi restart (/usr/bin/log,
-   process usbaudiod, AUAAudioDevice_updateTimeStamp; the bare word log
-   is a zsh builtin). Open: the creep beyond drift 81 from RECOVER
-   re-primes on an old anchor (map it with bridge-only restarts over one
-   evening); the RX prime 120 was the casualty of a 3.7 ms wakeup gap at
-   14:24:56 UTC (TX 192 held with 54 spare), the binding cover.
+1. The session draw is closed as a procedure (2026-09-06, handoff from
+   "FOUND 14:42-15:19 UTC" to "MEASURED 18:33-18:41 UTC"): the level the
+   Mac reports is set on its usbaudiod device timeline at each gadget PCM
+   restart and held until the next one. Fresh anchor (coreaudiod kill, or
+   `sudo systemctl restart usb-16x16.service`, after which the AES67
+   service restarts itself in ~60 s): 818-828 at 64 frames, six of six,
+   RTL at 32 about 21.1 ms. Aged anchor (plain stack restart or RECOVER
+   re-prime): 757-849, drawn afresh each time, not predictable from the
+   drift count (ioDriftNS) or any Pi log. The loop itself never moved: Pi
+   path 773-787 on every clean prime (805 once after a re-prime at
+   start), AES67 chain 681. Rule: restart the stack through the re-bind;
+   state the anchor state with any figure; compare Pi levers on fresh
+   anchors. The accepted 757 / 19.688 was this loop on an aged anchor.
+   Open: how often service re-primes over days (Phase 6; the RX prime 120
+   was the casualty of a 3.7 ms gap at 14:24:56 UTC, TX 192 held with 54
+   spare), and a supervisor rule to re-bind after a re-prime storm if it
+   is often. Analyser: outputs/latency/stage-trace-20260906/
+   impulse-index.py --level N on a copied bridge log.
 2. Priced conf levers, one at a time, each with the full gate: aligned
    wait allowance 77 -> about 50 (about 25 samples, conf plus one
    constant); ring target 64 -> 48 (about 16); sink delay 144 -> 120

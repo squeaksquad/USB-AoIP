@@ -7471,6 +7471,44 @@ re-prime in service lands on an unknown term and possibly the deeper
 Pi split; how often that happens over days is the Phase 6 count. Service
 ends on the creep2 session, all three services active, no installs.
 
+**MEASURED 2026-09-06 18:33-18:41 UTC, the re-bind series: six restarts
+through the gadget re-bind read 828, 826, 821, 818, 824, 823 at 64 frames,
+a band of 10 samples, against 757-849 (a band of 92) for the nine plain
+restarts of the last day. The restart procedure that gives a known
+figure is settled.** Three more `sudo systemctl restart usb-16x16.service`
+by the user (18:33:10, 18:36:44, 18:39:11 UTC); each time usbaudiod found
+a new device and logged fresh `setStartingUSBFrame` lines, the bridge
+exited 1 on the disconnected capture, the supervisor stopped the stack
+and systemd's on-failure restart brought it back to `STAGE running` in
+60-62 s, on a clean prime each time (RX grid 372/495/500, TX ring
+271/265/264, no RECOVER). Gates `rebind{2,3,4}-noise-ch2-64f-100imp.*`
+0.0%; reads `rebind{2,3,4}-roundtrip-64f-...` **818, 824, 823** x100,
+spread 0, zero RECOVERs; splits (`bridge-rebind{2,3,4}-session-*.log`):
+AES67 chain 681 every time, Pi path 784/780/780, USB-side term 34/44/43.
+With the two coreaudiod kills (828, 826) and the first re-bind (821), the
+fresh-anchor set is six reads, 818-828, median 823.5, RTL at 32 about
+21.0-21.2 ms. The USB-side term on fresh anchors is 34-47, so it is not
+a constant either, but it and the Pi path (776-784) sum to within 10.
+
+*Standing at the end of 2026-09-06.* The loop is deterministic (AES67
+chain 681, Pi path 773-787 on every clean prime, 805 once after a
+re-prime at start). The figure the Mac reports depends on the state of
+usbaudiod's device timeline at the moment the gadget's PCMs restart: a
+fresh anchor gives 818-828 (six of six); an aged anchor gives anything in
+757-849 and the value is drawn afresh at each restart, not predictable
+from the drift count or from anything the Pi logs. Procedure: restart the
+stack through the gadget re-bind (the AES67 service restarts itself
+behind it, about a minute to audio), then the gate probe and a read.
+Open: a RECOVER re-prime during service lands on an unknown term, and a
+re-prime at start can land the Pi path 25 deeper (creep2); the count of
+such re-primes over days on the running service (Phase 6, with the RX
+prime as the binding cover) says how often the figure moves in use, and
+a supervisor rule to re-bind after a re-prime storm is the remedy if it
+is often. The accepted 757 / 19.688 stays in the record as what it was:
+the same loop read on an aged anchor. Service ends the day on the
+rebind4 session, all three services active, no installs, nothing pending
+on the Pi.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
