@@ -1,0 +1,2 @@
+   nonzero span 1049..1245631 (1244583 samples), zeros inside span 0.0%, zero runs>=4: 1, mean run 276.0, run-length histogram (top 8): [(276, 1)]
+   zero-run start offsets mod 64 (top 6): [(19, 1)]

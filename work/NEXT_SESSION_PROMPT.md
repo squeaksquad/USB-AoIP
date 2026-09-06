@@ -73,11 +73,20 @@ capture side 2.2 ms with sink delay 144, the tick and stamp). USB legs
 about 40. Session draw 0-71 on top.
 
 NEXT WORK, IN ORDER
-1. Place the session draw in the index domain: on two or three sessions,
-   the trace plus an eth0 capture (user runs tcpdump, sudo), RTP stamps
-   against the bridge's positions (outputs/latency/stage-trace-20260906/
-   rtp-impulses.py and impulse-stages.py). No root change, no build.
-   Goal: a conf or bridge rule that pins the draw at its low end.
+1. The session draw is explained (FOUND 2026-09-06 14:42-15:19 UTC): it
+   is usbaudiod's timeline drift (ioDriftNS, one-sample steps, 6-8 ppm of
+   elapsed time), applied when the gadget's PCMs restart and held until
+   the next restart. Level = Pi path (772-787) + 47 - drift at the last
+   Pi restart; prediction test draw6 read 29 for 27-30 predicted. The
+   accepted 757 / 19.688 was the loop read with 71 samples of drift baked
+   in; on a fresh anchor (right after a coreaudiod restart) the same loop
+   reads 826-828 at 64, RTL at 32 about 21.2 ms. The draw is not a Pi
+   lever and is withdrawn from the budget. Rule: quote every level with
+   the drift at the last Pi restart (unified log, process usbaudiod,
+   AUAAudioDevice_updateTimeStamp, /usr/bin/log, not the zsh builtin), or
+   read on a fresh anchor; compare Pi levers at equal drift. The RX prime
+   120 was the casualty of a 3.7 ms wakeup gap at 14:24:56 UTC (TX 192
+   held with 54 spare): the RX prime is the binding cover.
 2. Priced conf levers, one at a time, each with the full gate: aligned
    wait allowance 77 -> about 50 (about 25 samples, conf plus one
    constant); ring target 64 -> 48 (about 16); sink delay 144 -> 120

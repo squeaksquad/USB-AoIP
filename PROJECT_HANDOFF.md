@@ -7067,6 +7067,299 @@ morning's scatter (18.312-19.708 on the 757 draw) was the hole state,
 now cleared. Standing: accepted point 757 / 19.688 (05:35 UTC session,
 ended by the 13:09 coreaudiod kill); current draw 828 / 21.167.
 
+**FOUND 2026-09-06 13:20-13:45 UTC, from the saved logs and the two eth0
+captures still on the Pi, no measurement and no root change: the session
+draw is not on the Pi's audio path and not in the AES67 segment; it sits
+between the gadget's PCM instants and the Mac's device timeline, and the
+accepted 757 is the outlier there, 61-77 samples under every other draw
+on the fixed module.** Method: a new analyser,
+`outputs/latency/stage-trace-20260906/impulse-index.py`, reads the IMPULSE
+lines per prime epoch (a new epoch at each PRIMED line after impulses; the
+bridge's `position` counters are the directions' cumulative input/output
+counts and do not reset together at a RECOVER, so index differences are
+only comparable within an epoch or between fresh starts) and, with a pcap
+and the boot's monotonic offset (`CLOCK_REALTIME - CLOCK_MONOTONIC` =
+1788610677.9746 s, one boot since 2026-09-05 12:16 UTC, so it covers both
+captures and the running service), fits the Pi's RTP stamps to its
+realtime clock over every outgoing packet (+0.5 to +1.1 ppm, send-time
+residual under 0.16 ms) and splits the AES67 segment in the stamp domain.
+The Ferrofish's stream carries `a=mediaclk:direct=531217786` (the API
+sidecars), the Pi's 0, which makes the stamp difference absolute. The two
+captures were copied off the Pi rate-limited between runs with the service
+idle (`/tmp/trace1-rtp.pcap` 01:55:52-01:56:30 UTC, session trace2;
+`/tmp/txfix-rtp.pcap` 03:05:31-03:06:46 UTC, session txfix1 across its
+run-4 re-primes; both are in the Pi's tmpfs and go at the next reboot);
+the live log of the post-kill session was copied as
+`bridge-postkill-session-20260906T130927Z.log`. Run 4's per-impulse
+sequence in time order is 819 x16, 811 x49, 807 x216, 811 x519, which
+matches the epochs' impulse counts exactly, so txfix1's four epochs read
+819, 811, 807, 811.
+
+*Index chain on fresh starts (exact per impulse, spread 0 within every
+epoch):*
+
+| session (level) | module | `pos_tx` | `pos_aes67` | `pos_rx` | `pos_pi` | level - `pos_pi` |
+|---|---|---:|---:|---:|---:|---:|
+| trace1 (1126) | f65a4955 | -73 | 1017 | -1 | 943 | 183 |
+| trace2 (1156) | f65a4955 | -75 | 1017 | -1 | 941 | 215 |
+| trace3 (1160) | f65a4955 | -68 | 1017 | -1 | 948 | 212 |
+| rp288 (1057) | f65a4955, buffer 288 | -75 | 921 | -1 | 845 | 212 |
+| txfix1 (819) | cc6852f0 | -73 | 681 | -1 | 607 | 212 |
+| txfix2 (757) | cc6852f0 | -70 | 681 | -1 | 610 | 147 |
+
+`pos_aes67` (ravenna-capture position minus ravenna-playback position for
+the same impulse) is the same to the frame on every fresh start of a
+given module and buffer: 1017 on the original module, 921 at buffer 288
+(96 less, the transmit-slot term 1:1), 681 on the fixed module for the
+819 and the 757 draws alike. `pos_rx` is -1 everywhere; `pos_tx` is the
+TX ring occupancy, 68-75. The 62 between 819 and 757 is entirely in the
+remainder, which is the two USB legs plus where the two gadget PCMs'
+starts fall on the Mac's timeline.
+
+*Time domain, every epoch, all sessions with the exact queue at the write
+(bridge `c1ca48c5` reads `snd_pcm_delay` on the blocks that carry a hit,
+`depth_src=delay`; trace1 is on `21c0e9f2` with the 1 Hz sample and is
+listed for shape only):*
+
+| epoch (level) | RX `grid_phase_us` | `write_to_read` | `cap_to_write` | `pi_total` | level - `pi_total` |
+|---|---:|---:|---:|---:|---:|
+| trace1 (1126) | 520 | 809 | 970 | 1140 (sampled) | -14 (sampled) |
+| trace2 (1156) | 556 | 813 | 998 | 1119 | 37 |
+| trace3 (1160) | 407 | 786 | 988 | 1121 | 39 |
+| rp288 (1057) | 557 | 709 | 893 | 1017 | 40 |
+| txfix1 e0 (819) | 516 | 450 | 650 | 781 | 38 |
+| txfix1 e1 (811) | 290 | 509 | 662 | 775 | 36 |
+| txfix1 e2 (807) | 89 | 501 | 658 | 772 | 35 |
+| txfix1 e3 (811) | 815 | 502 | 671 | 780 | 31 |
+| txfix2 (757, accepted) | 457 | 441 | 629 | **787** | **-30** |
+| postkill (828, running) | 166 | 455 | 649 | 781 | 47 |
+
+`pi_total` is the Pi's whole path, from the usb-capture frame instant to
+the usb-playback play instant (write plus the exact queue plus the hit's
+offset). On the fixed module it spans 772-787 across six draws whose
+levels span 757-828; the accepted 757 draw has the longest Pi path of the
+six. The remainder, the two USB legs on the device timeline, is 31-47 on
+five draws and -30 on the accepted one. So `level = pi_total + usb`,
+with `pi_total` moving by at most 15 and `usb` by 77, and the good draw
+is the USB-side term 61-77 under the cluster, not a shorter Pi path.
+Nothing logged at the prime tracks it: RX grid phase 457 for the -30
+against 407/516/556 for the cluster, TX `prime_phase_us` 552 against
+491/596/442, `ring_at_prime`/`overshoot`/`align_dropped` 267/8/69 against
+264/5/72 and 262/3/74. Where the term moved: at the Pi-only re-primes of
+run 4 (both directions at 03:05:39 and 03:06:45, RX alone at 03:05:51)
+it moved 38 -> 36 -> 35 -> 31; the two large steps, 38 -> -30 (the 05:35
+stack restart, after RTL Utility's open and quit on the previous session)
+and -30 -> 47 (the coreaudiod kill, which also restarted the bridge), are
+both boundaries at which the Mac's audio engine had started afresh. The
+gadget cannot supply a step of this size: `p_hs_bint`/`c_hs_bint` are 0
+(auto) and at high speed sixteen channels of 24-bit at 48 kHz exceed a
+1024-byte packet per millisecond, so the endpoints run at microframe
+intervals (6 or 12 frames a packet; the usb-capture blocks of 39 and 47
+frames confirm sub-period delivery), and the bridge's own wake-versus-
+arrival phase is bounded by one period. The step is 64 plus the Pi's
+usual scatter, and RTL Utility at 32 frames carried it too (19.688 on the
+757 draw), so it is not the harness's IO size. Hypothesis, not yet
+proven: the term is AppleUSBAudio's anchoring of the input stream against
+the output stream on the device timeline, set when the Mac's engine
+starts, two states 64 apart; the Pi-only re-primes reshuffle only the
+bridge's part (a few samples).
+
+*Stamp domain (the two captures; `tx_lead + loop + rx_lag = write_to_read`
+to the sample on every impulse):*
+
+| epoch (level) | `tx_lead` (write to its stamp) | `loop` (Ferrofish in-to-out, its own stamps) | `rx_lag` (stamp to the bridge's read) | packet out -> back |
+|---|---:|---:|---:|---:|
+| trace2 (1156), f65a4955 | 613 | **105** | 96 | 2.73 ms |
+| txfix1 e0 (819) | 241 | **105** | 96 | 1.84 ms |
+| txfix1 e1 (811) | 307 | **105** | 96 | 1.84 ms |
+| txfix1 e2 (807) | 299 | **105** | 99 | 1.84 ms |
+
+The Ferrofish's in-to-out is exactly 105 samples (2.19 ms) on all 381
+matched impulses of both captures, both modules, every epoch; the 2.7 ms
+against 1.8 ms "wire loop" in the time domain is the Pi's packet leaving
+at a different phase against a stamp-timed playout, not a latency change.
+The RAVENNA capture placement is 96-99 (sink delay 144 less an arrival
+lead of 45-48). The transmit side is the queue at the write plus the
+driver's slot: 613 on the original module (336 of it the slot), 241 on
+the fixed one, and the re-prime at 03:05:39 moved it to 307 while the RX
+queue fell by 37, so the Pi total held within 6: the aligned start
+conserves the total and re-splits it. Between the fixed module's 819 and
+757 sessions the AES67 segment differs by 9 in the time domain and by 0
+in the index domain. Nothing on the AES67 side draws.
+
+*What this closes and opens.* The "second session term of 18-48" of the
+2026-09-05 standing is this USB-side term; on the fixed module it is
+61-77 wide with the good state on the accepted draw. It is not reachable
+by a bridge or conf rule from the evidence so far, because nothing the
+Pi logs moves with it; the next data is a run of stack restarts with the
+Mac idle, each followed by the gate probe and a 100-impulse read at 64
+(no RTL needed, the model holds), to learn the term's value set over
+6-8 draws and whether a Pi-only restart ever reaches the low state
+without a Mac engine start; the bridge log of each (copied between runs)
+goes through `impulse-index.py --level N` so each draw is split into
+`pi_total` and `usb` on the spot. If the low state never appears
+Pi-only, the lever is on the Mac and the operating rule is a level read
+after any coreaudiod start; if it appears, the value set and the log
+fields of the low draws are the rule. The pcaps are in the Pi's `/tmp`
+(tmpfs) and in the Mac session's scratch; nothing else was written to
+the Pi. Bridge and service untouched: the post-kill draw (828) was
+running through all of this, zero RECOVERs after its prime pair,
+`tx_gapmax_us` 2479 from that pair.
+
+**MEASURED 2026-09-06 14:16-14:38 UTC, five stack restarts by the user with
+the Mac idle, then one coreaudiod kill: the session draw is set on the Mac
+at its audio engine's start; the Pi's restarts move the level by a few
+samples inside a band, and the kill moved the band by 30 with the Pi path
+unchanged.** Each draw: the user's `sudo systemctl restart
+usb16x16-aes67.service` with playback off, `STAGE running`, the channel-2
+gate probe at 64 frames with the 0.1 load (`draw<k>-noise-ch2-64f-100imp.*`
+in `usb-holes-20260904/`, 0.0% zeros and no run on all five, except the
+Pi-side event under draw 3), `measure-under-service.sh 64 100 draw<k>`, the
+bridge log copied between runs
+(`stage-trace-20260906/bridge-draw<k>-session-<UTC>.log`) and split with
+`impulse-index.py --level N`. Every read 100 impulses on one sample, spread
+0, score 1.000, zero discontinuities. Then the user killed coreaudiod at
+about 14:35:20 UTC (`STAGE host absent`, the supervisor restarted the bridge
+alone at 14:36:22, running 14:36:26, daemon and module untouched); the
+`kill2` gate probe and read (files `kill2-noise-ch2-64f-100imp.*`,
+`kill2-roundtrip-64f-20260906T143721Z`, log
+`bridge-kill2-session-20260906T143622Z.log`) followed on that session.
+
+| draw | bridge start UTC | RX grid / TX prime phase | level | `pi_total` | USB-side term | RECOVERs |
+|---|---|---:|---:|---:|---:|---:|
+| draw1 | 14:16:09 | 370 / 635 | 793 | 772 | 21 | 0 |
+| draw2 | 14:19:55 | 442 / 565 | 801 | 780 | 21 | pair at 14:21:19 in the run's last 6 s, re-primed onto 801 (784 / 17) |
+| draw3 | 14:24:30 | 494 / 511 | 773 (after the RX re-prime) | 757 | 16 | RX alone at 14:24:56, see below |
+| draw4 | 14:29:41 | 485 / 521 | 797 | 779 | 19 | 0 |
+| draw5 | 14:32:37 | 344 / 659 | 790 | 775 | 15 | 0 |
+| kill2 (after the coreaudiod kill) | 14:36:26 | 454 / 548 | **826** | 779 | **47** | the host-loss storm only |
+| for reference: post-kill 13:09 | 13:09:27 | 341 then 166 / 659 then 840 | 828 | 781 | 47 | prime pair |
+
+The AES67 index chain read 681 on all six, the TX ring dwell 65-72, the RX
+dwell -1. Five Pi-only restarts: levels 790-801 on the clean fresh starts,
+the USB-side term 15-21 on all five, the Pi path 772-780; the accepted
+draw's -30 did not appear once. The kill: the Pi path 779, inside the
+same 772-787 every fixed-module draw has read, and the USB-side term 47,
+to the sample what the 13:09 kill produced. So the term is the Mac's,
+fixed at its audio engine's start and held across Pi restarts and across
+the harness's own opens; the Pi's restart re-draws only its own path
+(15 wide) and the ring split. What has started the Mac's engine on this
+record and where the term landed: the two coreaudiod kills, 47 and 47;
+the stretch after RTL Utility's open and quit at 13:16 UTC (the only Mac
+client between the 13:09 kill and draw1), 15-21; the stretch after RTL
+Utility's read before the 05:35 restart, -30 (the accepted draw); the
+02:49 stretch, 31-38; the original-module stretches 37-40. The prime
+schedule is rigid (TX trigger 4565-4579 us after the RX prime on every
+fresh start) and no PRIMED field tracks the term, as expected now.
+Consequence for the record's numbers: the accepted 757 is target64 on
+the fixed module plus a Mac state that read 66 under today's, and 77
+under the post-kill state; the Pi's contribution to the round trip is
+772-787 at 64 frames on every draw. Consequence for the lever: it is a
+Mac-side procedure at the engine's start, not a conf or bridge rule; the
+next test is Mac-only and free: with the Pi session untouched, open and
+quit RTL Utility (the client that preceded both low stretches), then the
+gate and a 100-impulse read, repeated a few times, to learn whether that
+open re-draws the term, what values it takes, and whether -30 is
+reachable on demand.
+
+*Phase 6, RX side, 14:24:56 UTC (draw 3, one minute into the session,
+during the gate probe):* a 3.7 ms Pi wakeup gap (`tx_gapmax_us` 3717,
+`tx_pullmax` 144). The TX direction under prime 192 covered it with the
+queue at 54. The RX direction under prime 120 did not: `RECOVER
+direction=ravenna-to-usb stage=playback-avail` (usb-playback XRUN, ring
+192, `last_queue` 125), re-primed at grid phase 970, a 276-sample hole
+in the probe's return, nothing at usb-capture. Two gaps over 3.3 ms in
+one day (06:06:04 and 14:24:56), and this one was a casualty on the RX
+prime, which the record has not been watching; the TX prime was not the
+binding one. The RX prime is the smaller of the two by design (rx120)
+and its cover against the worst gap is now measured at less than 3.7 ms.
+
+**FOUND 2026-09-06 14:42-15:19 UTC: the session draw is the Mac's USB audio
+timeline drift, applied at the gadget's PCM restart. The level the Mac
+reports = the fresh-anchor level (Pi path + 47) minus the drift usbaudiod
+had accumulated at the moment of the last Pi restart; the physical loop
+never moved, and the accepted 757 is this loop read on a timeline 71
+samples adrift.** Sequence and evidence, all on the same conf, bridge
+`c1ca48c5` and module `cc6852f0`:
+
+1. *RTL Utility's open is not the trigger.* With the post-kill session
+   untouched, the user opened and quit RTL Utility (14:42 UTC); gate
+   0.0%, `rtl1-roundtrip-64f-20260906T144326Z` **826 x100**, USB-side
+   term 47.2, Pi path 778 (`rtl1-*` sidecars; the session log re-copied as
+   `bridge-kill2-session-20260906T143622Z.log`).
+2. *The Mac's USB audio is `usbaudiod`* (`/System/Library/Audio/Plug-Ins/
+   usbaudio.bundle`, the user-space USB audio daemon), not a kernel engine;
+   both streaming interfaces read `Inactive` whenever no client is open, so
+   the host stream stops at every close. The unified log shows one
+   `usbaudiod`/`coreaudiod` lifetime from the 13:09 kill to the 14:35 kill
+   (pids 130/110), so the 47 -> 21 change of 13:12-14:16 UTC was inside
+   one lifetime; the 14:35 kill did not re-enumerate the gadget (the
+   supervisor waited 60 s without an enumeration) yet landed on 47 like
+   the 13:09 kill, which did. Neither respawn nor enumeration is the
+   mechanism.
+3. *What usbaudiod logs.* Once per device creation: `setStartingUSBFrame
+   IN/OUT @ F` (the timeline anchor; 13:09:25 and 14:35:34 UTC). At every
+   stream start: `AUAInputTransferManager_inputResync
+   startingSampleNumber N`, on a sample counter that runs across idle. And
+   `AUAAudioDevice_updateTimeStamp ioDriftNS D at sampleTime S`: D grows in
+   steps of exactly 20833 ns, one sample, about one step every 2-3 minutes
+   (about 6-8 ppm, the host's frame clock against the gadget's servoed
+   clock), streaming or idle. Read as samples, the drift on each lifetime
+   at the time of each level in the record:
+
+| level read | drift then | 47 - drift | USB-side term measured | Pi restart since the previous read? |
+|---|---:|---:|---:|---|
+| post-kill 13:10-13:12 (828) | 1 | 46 | 47 | yes (host loss) |
+| draw1 14:17 (793) | 25 | 22 | 21 | yes |
+| draws 2-5 (801, 773, 797, 790) | 27-30 | 20-17 | 21, 16, 19, 15 | yes, each |
+| kill2 14:38 (826) | 1 | 46 | 47 | yes (host loss) |
+| rtl1 14:43, drift1 14:53, drift2 15:03 (826, 826, 826) | 2, 5, 11 | 45, 42, 36 | 47, 47, 47 | **no**: held |
+| draw6 15:18 (803) | 17-20 (last step logged 15:08) | 30-27 | **29** | yes |
+| the accepted chain 05:37-06:03 (757 x5 opens) | 71-79 | -24..-32 | -30, held across five opens | restart at 05:35, none inside |
+| rtlcheck64 13:02 (757, after 7 h idle) | large | | held | no |
+
+   The drift is not applied live (826 at drift 1, 5 and 11 with no Pi
+   restart; 757 across five opens at drift 71-79) and not at a stream
+   start; it is applied when the gadget's PCMs restart, and the level then
+   holds until the next one. Draw 6 was the prediction test: 47 - 18 = 29
+   predicted, 29.3 read (`draw6-roundtrip-64f-20260906T151814Z`, log
+   `bridge-draw6-session-20260906T151744Z.log`, gate `draw6-noise-*` 0.0%).
+   Reading: the gadget's sample stream re-registers against the host's
+   USB frames at its PCM start, and the host's timeline, anchored once per
+   device and stepped by the drift tracker, then places the input against
+   the output with the accumulated drift baked in; the physical round trip
+   (the Pi path 772-787 plus the USB legs) is untouched.
+
+*Consequences for the record.* (1) The "session draw" of 18-77 since the
+Phase 5 day is this: not the Pi's prime, not the AES67 segment, not the
+bridge; a host timestamp offset that grows at 6-8 ppm of elapsed time
+and is captured by every Pi restart or RECOVER re-prime. (2) The accepted
+757 at 64 frames / 19.688 ms RTL at 32 was target64 on the fixed module
+read with 71 samples of drift baked in at the 05:35 restart. The
+fresh-anchor reading of the same loop is 826-828 at 64 frames, RTL at 32
+about 21.2 ms (826 + 188 = 1014 = 21.125; 828 + 188 = 21.167 as read
+by the user at 13:16). The Pi's own figure, the audio path from the USB
+capture frame to the USB playback play instant, is 772-787 on every
+draw. (3) The record's standard figure needs its drift stated: quote the
+level with usbaudiod's `ioDriftNS` (in samples) at the last Pi restart,
+or read it on a fresh anchor (right after a coreaudiod restart, which
+storms the bridge and re-primes it at drift 0). (4) For a DAW this is an
+alignment error that grows with the Mac's uptime on the device and is
+frozen in at each bridge restart; reading it low is not a shorter loop.
+(5) The lever named in the budget, "the session draw, 0-71, the largest
+deterministic gain left", is withdrawn: nothing on the Pi can pin what
+the Mac's timeline drift sets, and the drifted low readings are not
+latency. The Pi levers stand as priced (aligned wait allowance, ring
+target, sink delay after the arrival-lead export) and are now measurable
+without the draw confounding them: compare draws at equal drift, or on
+fresh anchors.
+
+*Also this afternoon.* The RX prime 120 was the casualty of the 3.7 ms
+wakeup gap at 14:24:56 UTC (draw 3) while TX prime 192 held with 54
+spare; the RX prime is the binding cover, see the previous entry. The
+Pi side ended the afternoon as it started: services active, no
+installs, the draw6 session running.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
