@@ -5,8 +5,8 @@ Reads a pcap (tcpdump -w, Ethernet link type, no scapy needed), keeps UDP
 packets to the Pi's own source multicast (the impulse leaving, channel 1 of
 the first 8-channel L24 stream) and to the Ferrofish's return multicast
 (the impulse coming back on the returned channel), and for each packet
-whose channel-1 slot holds the impulse sample (0.25 full scale = 0x200000
-in L24, other channel slots of that frame zero) prints the capture time,
+whose channel-1 slot holds the impulse sample (0.25 full scale, 0x1FFFFC in
+L24 after the Mac's quantisation; other channel slots of that frame zero) prints the capture time,
 RTP timestamp, sequence number and frame offset in the packet. Then pairs
 each outgoing impulse with the next returning one and prints the wire
 loop: outgoing packet handed to the driver -> returning packet received,
@@ -28,7 +28,10 @@ import statistics
 import struct
 import sys
 
-IMPULSE = b"\x20\x00\x00"
+# The harness impulse is 0.25 full scale after the Mac's 24-bit quantisation,
+# 0x1FFFFC on the wire; anything over 0x100000 (0.125) on the impulse channel
+# with the other channel slots of that frame zero is the impulse.
+IMPULSE_MINIMUM = 0x100000
 
 
 def read_pcap(path):
@@ -79,7 +82,8 @@ def find_impulse(payload, channels):
     frames = len(body) // frame_bytes
     for frame in range(frames):
         base = frame * frame_bytes
-        if body[base:base + 3] == IMPULSE and body[base + 3:base + frame_bytes] == b"\x00" * (frame_bytes - 3):
+        value = int.from_bytes(body[base:base + 3], "big", signed=True)
+        if abs(value) >= IMPULSE_MINIMUM and body[base + 3:base + frame_bytes] == b"\x00" * (frame_bytes - 3):
             return seq, rtp_ts, frame, frames
     return None
 

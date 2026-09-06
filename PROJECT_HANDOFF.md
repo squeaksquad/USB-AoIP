@@ -6493,6 +6493,94 @@ build (a service stop), then two trace sessions to place the second
 session term by stage, and a packet capture on `eth0` to split the 12
 ms between the Pi's RAVENNA driver and the Ferrofish.
 
+**MEASURED 2026-09-06 01:55-01:57 UTC: the second trace session and the
+packet capture. The AES67 segment is 12.1 ms from the RAVENNA playback
+write to the packet leaving `eth0`, 2.7 ms round the Ferrofish with both
+wires, 2.2 ms from the packet back to the bridge's read; the missing 7 ms
+is the RAVENNA driver's transmit path on the Pi, one playback buffer
+behind.** What happened first: at 01:54:51 UTC the trace session of
+01:00:40 took a RECOVER storm of the host-stream-stop shape (TX
+`playback-avail` XRUN with `last_queue=5`, then twelve RX
+`capture-ring-full ring=768`: the Mac stopped sending and pulling), the
+supervisor failed the stack at 13 restarts in 60 s (exit 35) and restarted
+it; bridge up 01:55:52 (RX PRIMED `grid_phase_us=556`, TX `align_dropped=74
+front_age_frames=336`), `STAGE running` 01:55:56. The user's `sudo timeout
+75 tcpdump -i eth0 -s 1500 -B 65536 -w /tmp/trace1-rtp.pcap 'udp and dst
+port 5004 and (dst host 239.69.16.1 or dst host 239.69.121.9)'` ran
+01:55:15-01:56:30 (`eth0 entered promiscuous mode` at 01:55:15, before
+the bridge started; no effect on the stack). My first harness attempt
+(01:55:39) found no signal because the bridge was not yet up. The second,
+`measure-under-service.sh 64 100 trace1cap`
+(`trace1cap-roundtrip-64f-20260906T015559Z`): **1156** on all 100,
+spread 0, score 1.000, zero discontinuities, on the fresh session before
+any RECOVER (its impulses sit at bridge seconds 8-45). Then two RECOVER
+pairs of the all-four-PCMs-XRUN shape: at 01:56:38 (bridge second 46,
+when the harness closed the device) and at 01:57:40 (second 107, nothing
+running on the Mac); each re-primed cleanly (RX phase 58 then 73, TX
+front age 336), `STAGE stable` at 01:57:56. Full-rate log
+`outputs/latency/stage-trace-20260906/bridge-trace2-session-20260906T015510Z.log`
+(the 01:00:40 session's log is `bridge-trace1-...`, restored from the
+01:05 copy after this one overwrote it).
+
+*Stage split, session 2 (124 impulses, `impulse-stages.py --level 1156`),
+against session 1 (229 impulses at 1126):*
+
+| term | session 1 (1126) | session 2 (1156) | how |
+|---|---:|---:|---|
+| `bridge_tx` | 74 | 85 | exact ends |
+| `write_to_read` | 814 | 813 | exact ends |
+| `bridge_rx` | 82 | 103 | exact ends |
+| `cap_to_write` | 971 | 998 | exact ends |
+| level minus `cap_to_write` | 155 | 158 | RX queue at write plus USB legs |
+
+Samples. The 30 between the sessions is not in the AES67 segment
+(`write_to_read` equal to a sample, and it contains the TX queue) and not
+in the RX queue plus USB legs (155 against 158); it sits in the two ring
+dwells, +11 TX and +21 RX. Where within the bridge's timing it comes from
+needs the exact queues (the build below), because the sampled queue terms
+here (`tx_queue` 220 then 272, `rx_queue` 161 then 112) are 1 Hz samples
+and cannot be trusted at that resolution.
+
+*The capture (`rtp-impulses.py`, impulse 0x1FFFFC on the wire, the
+harness's 0.25 after the Mac's 24-bit quantisation; 93 impulses seen both
+ways, the Pi's stream starting at sequence 0 at the bridge start):*
+
+| segment | median | min | max |
+|---|---:|---:|---:|
+| ravenna-playback write to the packet out on `eth0` | 12.141 ms | 11.937 | 13.344 |
+| packet out to the Ferrofish's packet back (both wires and the Ferrofish) | 2.732 ms | 1.708 | 2.857 |
+| packet back to the ravenna-capture frame at the bridge | 2.160 ms | 2.016 | 2.850 |
+
+Sum 17.03 ms against `write_to_read` 16.95 ms (813 samples): the
+segment is accounted for. The Ferrofish's stamp for the impulse is its
+media-clock offset plus 89-137 samples over the Pi's, 1.9-2.9 ms, the
+same loop seen in the SAC domain. So: the Ferrofish and both wires are
+2.7 ms, what Dante Controller said. The RAVENNA capture side is 2.2 ms
+(sink delay 144 less the arrival lead of about 40 frames). And the RAVENNA
+*playback* side is 12.1 ms from the bridge's write to the wire, of which
+the TX queue is about 4-5.5 ms; the other 7-8 ms, about 336-360 frames,
+is inside the Merging driver's transmit path. Driver reading, from the
+vendored source: the TIC interrupt copies the frame at the ALSA hw
+pointer into the live-out ring at `playback_buffer_pos` and advances it
+(`audio_driver.c:731-754`); the source's packet builder asks for the
+slot of "the previous TIC" but gets `playback_buffer_pos` itself
+(`manager.c:1417`, `get_playback_buffer_offset`; `RTP_audio_stream.c:845`),
+whose length is the ALSA playback buffer in frames (`manager.c:1390`).
+If the writer has advanced when the sender reads, the packet carries the
+slot one ring behind: buffer minus one period, 336 frames at 384, 7 ms,
+which is the number measured. It is also the mechanism behind two old
+findings the record left open: "RAVENNA playback at 384 alone costs
+1.67 ms" over 288 (96 frames of buffer, 80 measured) and the 5.33 ms the
+2026-09-01 buffer change removed "from no buffer this process owns".
+Consequences: (1) the RAVENNA playback buffer is a 1:1 transmit-latency
+term, conf-only: 288 should read about 96 lower (2 ms) with the TX floor
+ceiling at 192 over the loaded floor of about 105; 240 about 144 lower
+(3 ms) with the ceiling at 144. (2) A driver fix that sends the slot just
+written instead of the next would remove the whole 336 at any buffer,
+about 7 ms, the largest single lever in the record; it is a RAVENNA
+module change on the rollback path, the same class as the `sink_min_time`
+plumbing. Blocks for (1) are staged below; (2) is a proposal.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
