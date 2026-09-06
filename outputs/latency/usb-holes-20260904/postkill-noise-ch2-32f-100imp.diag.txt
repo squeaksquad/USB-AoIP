@@ -1,0 +1,1 @@
+diag: callbacks=1 inputWithData=38925 inputSkipped=0 copiedFrames=1245600 placementMisses=0 rawInputPeak=0.099999465 capturePeak=0.099999465 firstOut=2177164.0 firstIn=2176976.0 lastIn=3422544.0 firstInBytes=2048 outputFrames=1245600 inDisc=0 outDisc=0 peakIndex=337351 captureCount=1255200 markers=[24188, 36188, 48188, 60188] nonZeroSpan=1016..1245599 (1244583 nonzero)

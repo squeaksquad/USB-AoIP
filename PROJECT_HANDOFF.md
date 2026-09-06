@@ -7021,6 +7021,41 @@ means holes, not latency.** Files: the rtlcheck and rtlcheck2 readiness
 sidecars, `rtlcheck-roundtrip-32f-20260906T12{4642,4823}Z.json`, the
 64-frame control, the two noise probes.
 
+**CLEARED 2026-09-06 13:09 UTC by `sudo killall coreaudiod` on the Mac
+alone: the hole state was the Mac's; both noise probes read 0.0% after it,
+and three 32-frame opens on the new draw read 828 on every impulse.** The
+kill at about 13:09:07 UTC stopped the host streams; the bridge took the
+host-stream-stop storm (TX `playback-avail` XRUN, then RX
+`capture-ring-full` in a loop, 152 RECOVER lines in 30 s), the supervisor
+called it at 13:09:10 (`STAGE host absent: 49 recoveries in one second,
+storm 3s, USB input frozen 0s (episode 1); stopping the bridge and
+waiting`), the Mac re-enumerated and the supervisor started the bridge
+alone at 13:09:27 (`host enumerated after 15s`), `STAGE running`
+13:09:31; the daemon (PID 931541) and the module were not touched, the
+service instance is still 01:35 EDT's. New draw: ALIGN ok attempt 1, RX
+PRIMED `grid_phase_us=166`, TX `ring_at_prime=281 overshoot=22
+align_dropped=55 front_age_frames=336`, floors 109/77 unloaded,
+`tx_pullmax` 96. Then, with nothing else on the device: noise probes
+(`postkill-noise-ch2-{64,32}f-100imp.*` in `usb-holes-20260904/`) at
+13:09:43 and 13:10:10 UTC, **0.0% zeros, no run at all, at both 64 and
+32**, and the Pi's zero-run detector logged nothing in the new bridge log
+through the probes and the runs. Then `measure-under-service.sh 32 100
+postkill` three times, 13:10:54, 13:11:35, 13:12:18 UTC
+(`postkill-roundtrip-32f-20260906T13{1054,1135,1218}Z`): **828 x100,
+828 x100, 828 x100**, spread 0, score 1.000, ready after 3 probes each,
+zero discontinuities, zero RECOVERs after the prime pair; the bridge
+stamped 572 channel-1 impulses at usb-capture, every one the probes and
+runs sent (300 + 72 + 200). So the gadget re-bind was not needed and
+the state lived in coreaudiod / AppleUSBAudio; the record now knows
+which side. The answer to the morning's question stands as measured:
+across separate opens at 32 frames the loop reads one sample, and RTL
+Utility on this draw should read 828 + 188 = 1016 samples, 21.167 ms,
+every time, once it is the only client. 828 against the accepted 757 is
+the session draw again, 71 wide this time, on a bridge restart after a
+host loss (no PTP reset, no stack restart). The accepted point is
+unchanged; this draw is not a new acceptance. Files as named, plus the
+sidecars.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
