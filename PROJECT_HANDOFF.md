@@ -6407,6 +6407,32 @@ Ferrofish and the wire back. The known pieces of that (sink delay 144 =
 impulse trace's `aes67` term measures exactly that segment. Order item 1
 done; the build follows in the same stop window.
 
+**BUILT and STAGED 2026-09-06 00:57 UTC: bridge `21c0e9f2` (impulse
+trace), the trace install set, all three pins moved.** Service stopped by
+the user at about 00:53 UTC; the USB-only run above came first in the
+window, then the build on the Pi from `~/usb-16x16-work/phase4-trace-src`
+(`main.cpp` `99133ae5`, Release, the same cmake configuration as the
+previous builds, zero warnings), ctest 1/1 including
+`test_impulse_trace_detector`, binary SHA-256
+`21c0e9f21d15dfd6c2f07779c9f15de2b2871241d4924312d5a6c66830af0d9e`, in
+`work/phase4-bridge/artifacts/pi-aarch64/` (README updated, `2a158386`
+previous). With `--impulse-trace 0`, the supervisor default for every
+block without `IMPULSE_TRACE`, behaviour is `2a158386`'s. Pins: supervisor
+`expected_bridge_sha256` `21c0e9f2`, supervisor `5bff36a6`;
+`install-candidate.sh` `a627ad87` (bridge `21c0e9f2`, wrapper `6282b108`
+unchanged); `install-aes67-service.sh` `82cf0631` (supervisor `5bff36a6`,
+unit `77837e60`, conf `98b467ea`, bridge `21c0e9f2`; `101c41ec` joins the
+unedited-shipped list). Staged: `~/usb-16x16-work/phase4-trace-install/`
+(binary, wrapper, installer) and `~/usb-16x16-work/aes67-trace-install/`
+(supervisor, unit, conf, installer, `trace-block.conf`); the repinned
+supervisor validates the live conf plus the block, exit 0, zero bad
+lines. Install order, service stopped: `install-candidate.sh`,
+`install-aes67-service.sh` (keeps the operator-edited live conf), append
+the block, `switch-profile ...-target64-trace` (PROFILE only while
+inactive), `systemctl start`. First use: one target64-trace session,
+gate probe, one 200-impulse harness run at 64, the analyser on the
+full-rate log; then the acceptance-length runs if the numbers hold.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

@@ -54,8 +54,14 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`2a1583866f57aeaa7ae986e1ac27705b826347fe86e1f3225dd893107088fcd7`
-(2026-09-05: the RX prime phase window's hold drains the ring to a whole
+`21c0e9f21d15dfd6c2f07779c9f15de2b2871241d4924312d5a6c66830af0d9e`
+(2026-09-06: the impulse trace, `--impulse-trace 1` with `--impulse-channel`,
+`--impulse-threshold` and `--impulse-holdoff`: every block entering and
+leaving the bridge is scanned on one channel for a sample over the
+threshold and each hit is an `IMPULSE` line with its stage, stream
+position, block and monotonic time; off by default, behaviour identical to
+`2a158386` when off).
+Previous binary `2a158386` (2026-09-05: the RX prime phase window's hold drains the ring to a whole
 number of capture periods below the prime level, so a held prime lands
 the ring where an unheld start does; `PRIME window` reports `ring=`;
 otherwise `abab6732`).
