@@ -7056,6 +7056,17 @@ host loss (no PTP reset, no stack restart). The accepted point is
 unchanged; this draw is not a new acceptance. Files as named, plus the
 sidecars.
 
+**RTL Utility at 32 frames on the post-kill draw, read by the user with
+the harness idle: 21.167 ms = 1016 samples = 828 + 188, to the sample.**
+The third session in a row on which RTL at 32 equals the harness level
+plus the Mac's fixed 188 (two 32-frame buffers 64 plus safety offsets
+74 + 50) exactly: 811 + 188 = 20.812, 757 + 188 = 19.688, 828 + 188 =
+21.167. With the device clean and RTL Utility the only client, the RTL
+figure is deterministic and is the harness figure in another form; the
+morning's scatter (18.312-19.708 on the 757 draw) was the hole state,
+now cleared. Standing: accepted point 757 / 19.688 (05:35 UTC session,
+ended by the 13:09 coreaudiod kill); current draw 828 / 21.167.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
