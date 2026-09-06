@@ -7752,6 +7752,35 @@ Acceptance set launched 19:30 UTC on this session, detached: four
 its four unloaded and only the soak loaded; this set loads all five), then
 the 600 s soak (`txoff950m150soak`, 2400 impulses); results below.
 
+**SOAKED 2026-09-06 19:28-19:53 UTC: the txoff950 acceptance set on the
+margin-150 build, all on the 19:25 fresh-anchor session: four loaded
+800-impulse runs 797 x800 each and the 600 s sixteen-channel soak 797
+x2400, spread 0 on all 5,300, zero RECOVERs, TX floor 88 loaded
+throughout, RX 77.** Chain launched detached at 19:28:11 UTC
+(`USB16X16_OTHER_LOAD=0.1` on every run, the four 800s included):
+`txoff950m150-roundtrip-64f-20260906T{192811,193149,193526,193905}Z`
+**797 x800** each, `txoff950m150soak-roundtrip-64f-20260906T194242Z`
+**797 x2400**, score 1.000, in/out discontinuities 0, `recovers during
+run` 0 on all five, `nrestarts` 0. Floors after each run and at the end
+(`bridge-txoff950m150-session-20260906T1925Z.log`, 25,436 lines, 23,775
+IMPULSE lines, no RECOVER): `tx_qfloor` 88, `rx_qfloor` 77, `tx_qlow` 0,
+`rx_qlow` 0, `tx_pullmax` 48, `tx_gapmax_us` 1117, `rx_gapmax_us` 1146,
+pitch 1000012-1000014, TX queue 189-193 at the 1 Hz samples. Split over
+the whole session (`impulse-index.py --level 797`, 5,941 impulses):
+`pos_pi` 593 on every impulse, `pi_total` median 753.0 (736-767),
+`usb_time` 44.0, `tx_depth` median 140 (90-192), `rx_depth` 120
+(89-156). The TX floor landed on the 88 the block predicted from the 1:1
+rule (107 - 19), so the cover accounting stands: this point holds about
+35 spare over the 3.7 ms worst gap of 2026-09-06 against target64-trace's
+54, and one period plus the 1.1 ms gaps the set produced with 40 to
+spare. Against target64-trace's acceptance on the same instrument: 757
+x5 opens on an aged anchor then; fresh-anchor 818-828 for that loop, 797
+for this one, 21-31 lower, the 19 the front age gives plus the
+fresh-anchor scatter. RTL at 32 by the user is the last item; the
+predicted figure is 797 + 188 = 985 = 20.521 ms. The conf block's
+strings and STATUS follow the RTL read. Service ends the set on the
+19:25 session, zero RECOVERs, the txoff950 profile on bridge `0d8cccfa`.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
