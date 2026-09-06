@@ -7509,6 +7509,10 @@ the same loop read on an aged anchor. Service ends the day on the
 rebind4 session, all three services active, no installs, nothing pending
 on the Pi.
 
+**RTL Utility at 32 frames on the rebind4 session, read by the user at
+about 18:45 UTC: 21.062 ms = 1011 samples = 823 + 188, to the sample.**
+The fresh-anchor figure of the loop in the standard instrument.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
