@@ -6235,6 +6235,109 @@ unexplained term of about 18-48 between sessions, and the TX cover by
 up to 47. DVS on the laptop reads 11.312 ms at 32 frames; this loop
 reads 26.6-27.0 at its best today, 15.7 ms away.
 
+**BUDGET 2026-09-06 00:40 UTC, from the record: where the 15.7 ms to DVS
+sits, and what the bridge can reach.** Read-only pass over the Phase 5
+day, the driver source and the saved session logs; no measurement, no
+change on the Pi. Samples at 48 kHz on target64's good draw (RTL Utility
+at 32 frames 27.396 ms = 1315 samples; harness 1127 on the device
+timeline):
+
+| term | samples | ms | basis |
+|---|---:|---:|---|
+| Mac IO buffers, 2 x 32 | 64 | 1.33 | 32-vs-64 table, 2026-09-02 |
+| Mac constant | 124 | 2.58 | same table; equals the CoreAudio safety offsets 74 + 50 exactly |
+| bridge TX start depth (front age) | 336 | 7.00 | prime 192 + ring 67 + longest aligned wait 77; 1:1 with the level |
+| bridge RX start depth | 192 | 4.00 | queue 120 + ring 72, the 192 bin; 1:1 with the level |
+| outside the bridge, device timeline | 599 | 12.48 | 1127 - 528; never split by measurement |
+| total | 1315 | 27.40 | |
+
+*The 599 is where the plan's floor is wrong.* `DEPLOYMENT_PLAN.md` put
+the Mac, the Ferrofish and the RAVENNA device together at 12-13 ms; the
+measured remainder outside the bridge is 12.5 ms before the Mac's 3.9 ms
+is added. Its known pieces: sink delay 144 (3 ms, exact on the line), the
+Ferrofish about 3.5 ms (Dante Controller), the RAVENNA playback stamp of
+one packet (`SAC - 48`), up to one period of bridge read grain. That
+leaves about 4-5 ms for the two Pi USB legs together. The only direct
+measurement of those legs is the 2026-08-31 USB-only loop, 264 samples
+at a 240-frame `alsaloop` target (0.5 ms), on the req 2 gadget. The
+~150-sample step between req 2 and req 4 that the 2026-09-05 sweep set
+aside (the req 2 loop was dropping impulses) is therefore probably
+real, and it is the largest unpriced number in the budget. One
+USB-only run on the req 4 gadget prices it: expect about 264 at the
+5 ms target if the legs are cheap, about 410 if the step is real.
+
+*Against DVS (11.312 ms at 32 = 543 samples).* The Ferrofish is common
+to both loops (about 168), so DVS's own driver and receive buffering is
+about 311 samples (6.5 ms) for the job this design does in 1083. The
+gap decomposes as Mac constant 124 + bridge start depth 528 + Pi USB and
+RAVENNA driver legs about 431 - DVS's 311 = 772 on this draw.
+
+*Reachable without the USB module.* Not reachable: the Mac constant,
+the gadget's share of the 599 whatever it is (req 3 = req 4; bint 1
+unreadable on RTL at 32; sweep closed), the buffers. Reachable and
+priced: the aligned wait allowance 77 -> about 50 frames (offset 950 us,
+margin 50 us; about 25 samples, conf plus one constant); ring target 64
+-> 48, the bridge's bound (about 16); sink delay 144 -> 120 (24, a
+per-session gamble against a 192 lap until the arrival lead is known);
+the second session term (18-48) once instrumented. Not reachable by
+profile: the TX prime, because every lever today landed on the line
+`level = TX cover + constant` and the TX floor of 105-108 sits over a
+bar of one period plus the Pi's worst wakeup gap; only a days-long gap
+measurement (Phase 6) can lower that bar, and it is the one place
+another 1-2 ms exists on the Pi side. Realistic floor of this design at
+RTL 32: about 25 ms; about 23 with a proven smaller worst gap. DVS's
+11.3 is not reachable on this architecture.
+
+*The second term: the bridge's start numbers are identical.* Pulled the
+`ALIGN`, `PRIMED` and trigger lines from the saved logs of target64,
+phase450, phase760, tx240a/b, rxalign1/2, seed15, shift30, primes144:
+TX front age 336 (384 on tx240, 288 on primes144), ring 192, overshoot 5,
+trigger `wake_to_start_us` 601-603, `wake_to_prepare_us` 614-622 on
+every one. The term is outside the bridge's accounting, as the record
+says.
+
+*Three findings from the driver source that change what to build.*
+(1) The arrival lead is already computed in the kernel:
+`RTP_audio_stream.c` `ProcessRTPAudioPacket` (line ~787 in the vendored
+checkout) computes each packet's time ahead of its use and keeps a
+running minimum `m_ui32MinSinkAheadTime`, compiled in because
+`DEBUG_CHECK` is 1 (`RTP_stream.h:39`, `RTP_audio_stream.h:49`). It never
+leaves the module: the only exporter, `GetMinSinkAheadTime`
+(`RTP_streams_manager.c:751`), has no message case in `manager.c` and
+the daemon never asks; `set_sink_min_time` has no caller, so the API's
+`sink_min_time` is the constructor's zero. One line in the status
+update (`RTP_audio_stream.c` ~1123, set `m_StreamStatus.sink_min_time`
+from the minimum / 10 and reset it) would carry it through the existing
+`memcpy` to the daemon and `GET /api/sink/status/N` with no daemon or
+bridge change. That is a RAVENNA module rebuild on the rollback path
+(separately named `.ko`, the supervisor's `module_binary` path, restore
+commands); the Pi builds from `~/usb-16x16-work/aes67-source/
+ravenna-alsa-lkm-v2.1`, to be compared to the vendored checkout first,
+and the unit conversion mixes microseconds and 100 ns and needs
+checking on the Pi. (2) A bridge-side arrival lead cannot exist: the
+driver copies the jitter slot into the ALSA buffer at every tick whether
+or not the packet has landed (`audio_driver.c:668`), so ALSA always
+shows exactly one period and a late packet is only visible as a
+192-frame lap. (3) The arrival lead cannot explain an 18-48 term anyway;
+it explains laps. The instrument that splits the second term is a stage
+timestamp logger in the bridge on the zero-run detector's hook: log the
+monotonic time and frame index when the harness impulse (channel 1,
+0.25 full scale) passes `usb-capture`, `ravenna-playback`,
+`ravenna-capture` and `usb-playback`. That gives per session the bridge
+TX dwell, the AES67 loop from write to read, the bridge RX dwell, and by
+subtraction from the harness level the two USB legs together. If the
+term moves in the AES67 segment it is Ferrofish or driver side; if in
+the USB remainder, the Mac or gadget side, which the record already
+favours (the term re-drew at the 00:05:57 UTC host stream stop; the
+rxalign residue was two microframes). Flag off by default,
+behaviour-free, the usual three pins.
+
+*Order:* (1) the USB-only loop on the req 4 gadget
+(`work/latency-harness/measure-usb-only.sh`, service stopped, playback
+idle, no build, no root change); (2) the stage logger build; (3) the
+`sink_min_time` plumbing only if (2) points at the AES67 segment, which
+is also what makes sink delay 120 deterministic.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
