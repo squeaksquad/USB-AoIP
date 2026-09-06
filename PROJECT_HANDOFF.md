@@ -6179,6 +6179,62 @@ is up. What remains Mac-side and open is only the soak's 96 impulses 8
 samples early under the sixteen-channel load. The 1089 at full cover and
 the PTP-side third term stand as written.
 
+**2026-09-06 00:05-00:20 UTC: a host-side stream stop restarted the stack,
+the second phase450 session reads 1107 at TX floor 61, and the PTP-reset
+reading is withdrawn.** RTL Utility at 32 on the first phase450 session,
+read by the user at about 23:45 UTC: 26.979 ms, which is 1107 on the
+harness scale (every pair today is 3.917 ms apart) and not the 1089 of
+the runs. A 200-impulse read at 23:51 confirmed **1107**
+(`phase450check-roundtrip-64f-...`), and the Pi explained it: at
+00:05:57 UTC the bridge logged `RECOVER usb-to-ravenna playback-avail
+Broken pipe` then repeated `RECOVER ravenna-to-usb capture-ring-full
+ring=768`: the host stopped pulling the IN stream, the RX ring filled,
+TX underran, 13 RECOVERs in 60 s, and the supervisor restarted the
+stack (`FAIL more than 5 direction restarts in 60 s (13)`), up again
+00:07:02 UTC. The user was comparing RTL Utility against Dante Virtual
+Soundcard on a laptop around then; a Mac-side device change is the
+likely stop. The new session: `PRIME window ... status=hit ring=192
+phase_us=501 window_us=380,550 waited_ms=48878`, TX `align_dropped=64
+front_age_frames=336`, and its TX floor went 157, 109, 72, 63, **61** by
+199 s with RX 77; level 1107. The PTP grandmaster (`gmid`
+00-1D-C1-FF-FE-1D-27-DC) did not change at either session start; the
+kernel's `ResetPTPMaster` lines are the driver re-locking at every
+stack start, so the PTP-reset explanation for the third term in the
+entry above is withdrawn. `sink_min_time` reads 0 on both sinks, as
+it always has.
+
+*What the two phase450 sessions say together:* same profile, same
+window, same primed depths (ring 192, TX front age 336):
+
+| session | phase | level | TX floor loaded | RX floor |
+|---|---:|---:|---:|---:|
+| 1 (22:37 UTC) | 401 | 1089 | 108 | 77 |
+| 2 (00:07 UTC) | 501 | 1107 | 61 | 77 |
+
+18 apart in level and 47 apart in TX cover, in the same window and
+with the bridge's own numbers identical. The term that moves between
+sessions is neither the USB-grid phase (held) nor anything the PRIMED
+lines carry, and it moves the level and the TX cover independently
+(session 1 had the lower level and the higher cover). It is not PTP.
+Candidates left, all outside the bridge's accounting: where the
+Ferrofish's packets land against the RAVENNA read slot at the aligned
+start (fixed relative to the tick but not to the packets), and the Mac
+side's own phase after a device change. The instrument for the first
+is the driver's arrival lead, which `sink_min_time` does not report;
+the next build is a bridge-side measure of it (the RAVENNA capture's
+backlog at its fresh wake against the tick, which the driver's
+`capture_buffer_pos` fixes at prepare). Conf `101c41ec` (installer
+`6a915eae`, `fb6739aa` joins the unedited-shipped list) carries
+both sessions in the block, `STATUS=experimental`.
+
+*Standing at the end of 2026-09-05:* target64 is the accepted point
+(1127 at TX 105 on its good draw). The phase window removes one of the
+session terms and is proven (rxalign, phase760, tx240 and phase450 all
+repeat their USB-grid phase); the level still moves by a second,
+unexplained term of about 18-48 between sessions, and the TX cover by
+up to 47. DVS on the laptop reads 11.312 ms at 32 frames; this loop
+reads 26.6-27.0 at its best today, 15.7 ms away.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
