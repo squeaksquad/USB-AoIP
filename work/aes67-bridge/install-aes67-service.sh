@@ -20,10 +20,10 @@ unit_destination=/etc/systemd/system/usb16x16-aes67.service
 conf_destination=/etc/usb16x16/aes67.conf
 sudoers_destination=/etc/sudoers.d/usb16x16-aes67
 bridge_binary=/usr/local/libexec/usb16x16-rt-bridge
-expected_supervisor_sha256=4550cd0027376db01bea90d1024ebb11bb37ba4311d6baf79560fb60bac7d7a2
+expected_supervisor_sha256=731fe1299624927f0df8ab47dc4a470f4f78095639b58d936599d46cf63126c0
 expected_unit_sha256=77837e60e7a0660ce9d0c31c8077363805c118df6bdcdba9619417669eccd702
 expected_conf_sha256=66f92ed005a0f3bf208edcbfedeb29871614ea78c314adb917b82ecfb4cb9c3d
-expected_bridge_sha256=0c7e0b0c72c1d1b9e83b50013cd24cd97f95676c8ee57c38d44ce00773c48da1
+expected_bridge_sha256=0d8cccfaac5926fbb18ac847b95e271515d7bbe36ae8556895a64e1aec30bf60
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
 

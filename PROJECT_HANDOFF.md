@@ -7696,6 +7696,32 @@ three pins, the README, the install set in
 re-bind, gate, read, and the acceptance set on the same session if it
 holds.
 
+**BUILT and STAGED 2026-09-06 19:36 UTC: bridge `0d8cccfa` (aligned
+prime margin 150 us), the txoff950m150 install set, all three pins
+moved.** Service stopped by the user at about 19:33 UTC (playback off);
+build on the Pi from `~/usb-16x16-work/phase4-txoff950m150-src`
+(`main.cpp` `9db24804`, Release, the same cmake configuration, zero
+warnings), ctest 1/1, binary SHA-256
+`0d8cccfaac5926fbb18ac847b95e271515d7bbe36ae8556895a64e1aec30bf60`, in
+`work/phase4-bridge/artifacts/pi-aarch64/` (README updated, `0c7e0b0c`
+previous, one session). Pins: supervisor `expected_bridge_sha256`
+`0d8cccfa`, supervisor `731fe129`; `install-candidate.sh` `0e6d4e80`
+(wrapper `6282b108` unchanged); `install-aes67-service.sh` `ffd99517`
+(supervisor `731fe129`, unit `77837e60`, conf `66f92ed0`, bridge
+`0d8cccfa`). Staged: `~/usb-16x16-work/phase4-txoff950m150-install/`
+(binary, wrapper, installer) and
+`~/usb-16x16-work/aes67-txoff950m150-install/` (supervisor, unit, conf,
+installer, the rewritten `txoff950-block.conf`); the staged supervisor
+validates the live conf, whose txoff950 block is key-identical, exit 0.
+Rollback of the bridge: `phase4-txoff950-install/` (`0c7e0b0c`, margin
+50) or `phase4-trace-install/` (`c1ca48c5`) with their service
+installers. Install order, service stopped: `install-candidate.sh`,
+`install-aes67-service.sh` (keeps the operator-edited live conf; no block
+append, the live block's keys are unchanged), `systemctl start`, the
+gadget re-bind; then gate, read, split, and the acceptance set on that
+session if the numbers hold (expected about 798 on this anchor's terms,
+front age 317, TX floor about 88).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
