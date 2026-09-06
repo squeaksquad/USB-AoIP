@@ -81,7 +81,9 @@ NEXT WORK, IN ORDER
    predictor at 17:45 UTC: creep1 on the 15:28 anchor at drift 25 read
    the term 55, draw1 at the same count read 21. What stands: fresh
    anchor = term 45-47 (3/3); aged anchor = 15-55 or -30, unpredictable
-   so far; the level is set at each gadget PCM restart and held. The accepted
+   so far, drawn afresh at each restart (55 then 44 on one anchor); a
+   re-prime at start can also land the Pi path at 805 instead of 773-787
+   (the RX split, the bridge's to fix). The accepted
    757 / 19.688 carried 71 samples of drift; the fresh-anchor figure of
    the same loop is 821-828 at 64, RTL at 32 about 21.0-21.2 ms. Reset:
    `sudo systemctl restart usb-16x16.service` re-creates the device on

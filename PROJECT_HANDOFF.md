@@ -7438,6 +7438,39 @@ reads about 55 again) or is drawn afresh at every PCM restart (it reads
 something else). The first would mean a Pi-side variable exists to find;
 the second would mean only the re-bind pins it.
 
+**MEASURED 2026-09-06 18:17-18:21 UTC, the second plain restart on the
+15:28 anchor: 849, USB-side term 44, Pi path 805; the aged-anchor term is
+not stable for a given anchor state (55 then 44), and the Pi's re-prime
+split is its own variable of about 25.** `sudo systemctl restart
+usb16x16-aes67.service` at 18:17:32 UTC; the bridge took an RX
+`capture-avail` RECOVER at its prime and re-primed (RX grid 41, TX ring
+270), gate `creep2-noise-ch2-64f-100imp.*` 0.0%,
+`creep2-roundtrip-64f-20260906T181848Z` **849 x100**, spread 0, zero
+RECOVERs after the prime; split (`bridge-creep2-session-20260906T1819Z.log`): AES67 chain 489
+(counters shifted by the re-prime), Pi path **805** (773-787 on every
+fresh-primed session today), term 43.6. Two conclusions. (1) The term on
+an aged anchor is drawn at each gadget PCM restart, not held per anchor
+state: 55 and 44 an hour apart on one anchor; the day's aged-anchor
+terms are 15, 21, 21, 16, 19, 29, 55, 44 and last night's -30, against
+45-47 on the three fresh anchors. No Pi-side variable exists to find for
+it in the logs; only the re-bind (fresh anchor) has read a repeatable
+term, and that on three samples. (2) The Pi's own path has a second
+mode: a re-prime at start (an RX RECOVER before the first PRIMED pair)
+lands the RX split deeper and the Pi path at 805 instead of 773-787; the
+aligned start conserves the total only within a prime, not across a
+re-prime. That 25 is the Pi's contribution to the session scatter and is
+the bridge's to fix (a re-prime that restores the fresh-start split), not
+the Mac's.
+
+*Standing procedure for a known figure:* restart the stack through the
+gadget re-bind (`sudo systemctl restart usb-16x16.service`; the AES67
+service restarts itself), then a gate probe and a read; expected 821-828
+at 64 frames on a clean prime. Three more re-bind reads would make the
+fresh-anchor claim a statistic rather than three samples. A RECOVER
+re-prime in service lands on an unknown term and possibly the deeper
+Pi split; how often that happens over days is the Phase 6 count. Service
+ends on the creep2 session, all three services active, no installs.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
