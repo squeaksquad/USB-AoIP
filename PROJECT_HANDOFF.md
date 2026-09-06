@@ -8127,6 +8127,40 @@ today). RTL at 32 by the user is the last item; predicted 770 + 188 =
 958 = 19.958 ms. Service ends the set on the 23:10 session, zero
 RECOVERs, the rxtrim profile on bridge `913d623b`.
 
+**ACCEPTED 2026-09-06 23:50 UTC: the RX prime trim, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim`
+on bridge `913d623b` (`--rx-prime-trim`), supervisor `431cf0c5` and
+module `cc6852f0`: 770 at 64 frames on a fresh anchor, RTL Utility at 32
+frames 19.958 ms = 958 = 770 + 188 to the sample, read by the user at
+about 23:47 UTC.** The point of record moves from target48 (785 /
+20.271) to rxtrim: 0.31 ms at RTL 32, 15 samples at 64, TX cover
+unchanged (floor 87-96 loaded against 94), RX cover 72 against 93 (77
+before lever 2), which is the 21 the RX prime no longer carries.
+Acceptance set: the entry above (4 x 800 loaded and the 600 s soak all
+770, zero RECOVERs). Conf `c8515d93`: STATUS accepted, COVER and MEASURED
+filled, the measured line added to the block's comment; installer
+`3f4b6320` (conf pin `c8515d93`, `a2db5efb` joins the unedited-shipped
+list; the supervisor and bridge pins are the installed `431cf0c5` and
+`913d623b`, so the installer is not re-run). Live conf: the block is live
+as appended; the three label lines are copied by `copy-rxtrim-labels.py`
+(staged in `aes67-rxtrim-install/` beside the shipped conf `c8515d93`;
+dry run shows 3 lines, applied with `--apply` by the user). The RX cover
+call: 72 loaded stands as accepted with the record's number for it, the
+worst RX refill gap of the day's three sets at 57 frames (1.178 ms); if
+77 is wanted back, `RX_PLAYBACK_PRIME` 125 restores it for 5 samples as
+a conf-only block on this one.
+
+*The day, 2026-09-06, in RTL at 32 on fresh anchors:* target64-trace
+21.062, txoff950 20.521, target48 20.271, rxtrim 19.958; 1.10 ms in two
+conf blocks and two bridge constants-plus-a-flag, each on a full set with
+zero RECOVERs; the level followed the bridge's start depth 1:1 every
+time (TX front age 336 / 312 / 317 / 301, then the RX prime 192 -> 171).
+DVS 11.312. Left on the table, priced: the prime margin's 5 frames (a
+render-before-target restructure, a build), sink delay 144 -> 120 (24,
+after the arrival-lead export, a module rebuild). Service ends the day
+on rxtrim, the 23:10 anchor, zero RECOVERs; nothing pending on the Pi but
+the label copy.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
