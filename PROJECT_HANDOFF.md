@@ -7360,6 +7360,43 @@ spare; the RX prime is the binding cover, see the previous entry. The
 Pi side ended the afternoon as it started: services active, no
 installs, the draw6 session running.
 
+**MEASURED 2026-09-06 15:27-15:31 UTC: a gadget re-bind resets the Mac's
+anchor from the Pi side; the reported level returns to the fresh-anchor
+figure (821, term 45) with no Mac-side action.** The user ran `sudo
+systemctl restart usb-16x16.service` at 15:27:55 UTC (the accepted setup
+script, dwc2 "new address 4"). Mac side: `usbaudiod` (same pid 40206, no
+respawn) logged `Found an audio device` and fresh `setStartingUSBFrame
+IN/OUT` at 15:27:56-57 UTC. Pi side: the bridge saw its USB capture
+DISCONNECTED and exited with status 1; the supervisor took that as a
+failure (`STAGE failed: Phase 4 bridge exited with status 1`, daemon
+stopped, `stopped (cleanup)`), not the host-absent wait, and systemd's
+`Restart=on-failure` (10 s) brought the whole stack back: PTP locked
+15:28:21, `STAGE running` 15:28:55, RX PRIMED grid 558, TX ring 262. So a
+re-bind costs a full stack restart, about a minute to audio, and the
+service comes back by itself. Gate `rebind1-noise-ch2-64f-100imp.*`
+0.0%; `rebind1-roundtrip-64f-20260906T152926Z` **821 x100**, spread 0,
+zero RECOVERs; drift 1 at the read; split (`bridge-rebind1-session-
+20260906T152855Z.log`): AES67 chain 681, Pi path 776, USB-side term
+45.2 against 47 and 47 after the two coreaudiod kills. Fresh-anchor
+readings of this loop now: 828, 826, 821 at 64 frames, the Pi's own
+spread; RTL at 32 about 21.0-21.2 ms.
+
+*Procedure that makes the reported latency fixed, as far as today's
+evidence goes:* any stack restart goes through the gadget re-bind (the
+AES67 service restarts itself behind it), so every session starts at
+drift 0 and reads 821-828. What it does not cover: a RECOVER re-prime
+during service re-applies the drift current at that moment (draw2's
+re-prime at drift 27 held the term within 4), so a long-running session
+that re-primes after hours on one Mac anchor reads low by that drift
+(the 757 case, 71). The size of that creep beyond drift 81 is unmeasured;
+bridge-only restarts spaced over one Mac anchor's evening would map it
+(about 0.4 samples a minute at today's 6-8 ppm). The drift itself is the
+Mac's frame clock against the gadget's PTP-servoed clock; only steering
+the gadget to the host's clock instead (re-introducing rate conversion on
+the RAVENNA side, which Phase 5 removed) would make it zero, and that is a
+design change, not a lever for tonight. Service ends the entry on the
+re-bound session, all three services active, no installs.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
