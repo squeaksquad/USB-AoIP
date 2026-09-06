@@ -7513,6 +7513,67 @@ on the Pi.
 about 18:45 UTC: 21.062 ms = 1011 samples = 823 + 188, to the sample.**
 The fresh-anchor figure of the loop in the standard instrument.
 
+**IMPLEMENTED and STAGED 2026-09-06 19:05 UTC, not yet built: lever 1 of
+the BUDGET entry, the aligned wait allowance 77 -> 53 frames. Profile
+`servo-aligned-both-240-rx120-sd144-tx192-target64-trace-txoff950`
+(`ALIGN_TX_OFFSET_US=950`, everything else target64-trace's) and bridge
+`main.cpp` `caac4e1d` (`kAlignPrimeMarginNs` 200000 -> 50000, plus
+`target=` and `slack_us=` on the ALIGN trigger line).** Mechanism, from
+the aligned TX prime in `main.cpp`: the prime's shortest and longest waits
+from its decision to the first tick are margin + tick - offset and one
+tick more; the ring is held until it can absorb the longest wait (age
+minus the shortest, 308 frames, unchanged by this lever) and dropped from
+the front so the front frame's age at the first tick is intended (259)
+plus the longest wait: 77 frames at 600/200 (waits 600-1600 us), 53 at
+950/50 (100-1100 us). TX front age 336 -> 312, so the level should read
+24 lower, about 794-804 at 64 frames on a fresh anchor against 818-828
+for target64-trace; the Pi path by the same 24. The trigger itself is
+`next_aligned_time(wake + offset, tick, now + margin)`: the playback start
+lands 50 us before the driver's next tick instead of 400. Two risks, both
+priced in the budget, both now observable: (1) the prime renders 192
+frames between placing its target and sleeping to it; a render longer
+than the margin misses the target, and `align_playback_trigger` then
+takes the next grid point at now + 50 us, one tick later, so that
+session's front age is 48 higher. The saved logs show the trigger landing
+1-3 us after its target (`wake_to_start_us` 601-603 on every session)
+but never the render time, so the ALIGN trigger line now carries
+`target=prime|prime-missed|next` and `slack_us` (the prime's target minus
+the trigger's entry time, negative on a miss); the render time is
+`first_tick_wait_us - 50 - slack_us`. (2) The TX floor's phase term:
+whether a USB write lands between the start and the driver's first
+consumption, a 400 us window before and 50 us now; watch `tx_qfloor` and
+`tx_pullmax` across the chain against the bar of one period plus the
+3.7 ms worst gap. TX prime 192 and RX prime 120 untouched. Behaviour
+identical to `c1ca48c5` except the margin and the two log fields.
+Syntax-checked clean on the Mac (clang `-std=c++20 -Wall -Wextra
+-Wpedantic -Werror`, the Pi's ALSA headers, the endian / clock_nanosleep
+/ ESTRPIPE shims); core tests pass on the Mac (`bridge_core` unchanged).
+Conf `07b213f1` adds the block (experimental, expected 794-804, the
+watch list in its comment); installer `94bcf496` (conf pin `07b213f1`,
+`302d1a1f` joins the unedited-shipped list; the supervisor and bridge
+pins move after the build). The tag `txoff950` prefixes no field key
+(the 2026-09-05 naming rule: a name must not be another's plus `tx` or
+`rx`). Staged on the Pi: `~/usb-16x16-work/phase4-txoff950-src/` (source,
+hashes verified there: `main.cpp` `caac4e1d`, `bridge_core.cpp`
+`9c24251a`, `bridge_core.hpp` `0b9ea983`, tests `46f03dcf`; its
+`build.sh` is the trace build's cmake configuration, Release, `-j4`, and
+refuses while the service is active) and
+`~/usb-16x16-work/aes67-txoff950-install/` (shipped conf, unit,
+`txoff950-block.conf` `5b6f8ff9`); the installed supervisor `892dd189`
+lists the block from the repo conf and from the live conf plus the block,
+exit 0. Next, in one service-stop window: `sudo systemctl stop
+usb16x16-aes67` by the user, `build.sh`, the three pins
+(`install-candidate.sh`, `install-aes67-service.sh`, the supervisor's
+`expected_bridge_sha256`) and the bridge README, then by the user
+`install-candidate.sh`, `install-aes67-service.sh` (keeps the
+operator-edited live conf), append the block, `switch-profile
+...-txoff950` (PROFILE only while inactive), `sudo systemctl restart
+usb-16x16.service` for the fresh anchor; gate probe, one 100-impulse read
+at 64 with the split (level, pi_total, front_age_frames 312,
+wake_to_start_us about 951, target=prime, slack_us), then the acceptance
+set if it holds. The service ran the accepted profile throughout;
+nothing installed.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

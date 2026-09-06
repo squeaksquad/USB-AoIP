@@ -72,8 +72,13 @@ constexpr std::int64_t kAlignOffsetMaximumUs = 10000;
 constexpr std::int64_t kAlignReferenceMaximumAgeNs = 100000000;
 // The aligned TX prime computes its trigger target at the prime wake and
 // then renders the prime before sleeping to it, so the target is placed
-// this far ahead rather than kAlignRecoveryMarginNs.
-constexpr std::int64_t kAlignPrimeMarginNs = 200000;
+// this far ahead rather than kAlignRecoveryMarginNs. 200 us until
+// 2026-09-06, 50 us since: the longest aligned wait the prime allows for,
+// margin + 2 ticks - offset, is age the front frame carries into the
+// first tick, so the margin is a latency term. The ALIGN trigger line's
+// target= and slack_us= say whether the render finished inside it; a
+// missed target moves the start to the next tick, one period later.
+constexpr std::int64_t kAlignPrimeMarginNs = 50000;
 // Aligned RX prime: how long the prime may wait for the first fresh wake of
 // its reference grid (the USB capture) before priming unaligned. 5 ms is
 // five USB frames; the ring has room for it (target + prime + 240 < 768).
@@ -1272,10 +1277,15 @@ std::int64_t align_playback_trigger(Direction& direction, int& sleep_result) noe
         return 0;
     }
     const std::int64_t reference_ns = wake_ns + direction.align_trigger_offset_ns;
-    const std::int64_t target_ns = direction.pending_trigger_target_ns > now_ns
-        ? direction.pending_trigger_target_ns
+    // The prime's target when it is still ahead; otherwise the next grid
+    // point, which for a prime target the render overran is one tick later.
+    const std::int64_t pending_ns = direction.pending_trigger_target_ns;
+    const bool pending_hit = pending_ns > now_ns;
+    const std::int64_t target_ns = pending_hit
+        ? pending_ns
         : usb16x16::next_aligned_time(
               reference_ns, direction.align_trigger_tick_ns, now_ns + kAlignRecoveryMarginNs);
+    const std::int64_t slack_us = (pending_ns > 0 ? pending_ns - now_ns : target_ns - now_ns) / 1000;
     direction.pending_trigger_target_ns = 0;
     timespec target{};
     target.tv_sec = static_cast<time_t>(target_ns / 1000000000LL);
@@ -1291,6 +1301,8 @@ std::int64_t align_playback_trigger(Direction& direction, int& sleep_result) noe
               << " status=ok source=" << source
               << " wake_age_us=" << (before_start_ns - wake_ns) / 1000
               << " wake_to_start_us=" << direction.last_trigger_wake_to_start_us
+              << " target=" << (pending_ns > 0 ? (pending_hit ? "prime" : "prime-missed") : "next")
+              << " slack_us=" << slack_us
               << " sleep_result=" << sleep_result
               << " t_us=" << elapsed_us() << '\n';
     return wake_ns;
