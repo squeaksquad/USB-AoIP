@@ -7722,6 +7722,36 @@ gadget re-bind; then gate, read, split, and the acceptance set on that
 session if the numbers hold (expected about 798 on this anchor's terms,
 front age 317, TX floor about 88).
 
+**MEASURED 2026-09-06 19:25-19:29 UTC, margin 150 on a fresh anchor: 797
+x100 at 64 frames (16.604 ms), spread 0, zero RECOVERs, one under the 798
+predicted; Pi path 754; TX floor 98 after the read.** Installs by the user
+at about 19:23 UTC (bridge `0d8cccfa`, supervisor `731fe129`, wrapper
+`6282b108`; live conf untouched, `PROFILE=...-txoff950`), `systemctl
+start`, then the gadget re-bind at 19:25:20 UTC; usbaudiod logged `Found
+an audio device` and fresh `setStartingUSBFrame IN/OUT` at 19:25:21
+(fresh anchor); `STAGE running` 19:26:02 on a clean prime. Session start
+(`bridge-txoff950m150-session-20260906T1925Z.log`): ALIGN ok attempt 2,
+RX PRIMED grid 399 ring 192 overshoot 5, TX PRIMED `ring_at_prime=298
+overshoot=39 align_dropped=38 prime_phase_us=603 first_tick_wait_us=396
+front_age_frames=317`, ALIGN trigger `wake_to_start_us=951 target=prime
+slack_us=263` (the target was 346 us out, so the prime path took 83 us
+this time, 104 at 19:13; both inside 150). Gate
+`txoff950m150-noise-ch2-64f-100imp.*` 0.0% zeros, no run. Read
+`txoff950m150-roundtrip-64f-20260906T192650Z` **797 x100**, spread 0,
+zero RECOVERs, discontinuities 0. Split (`impulse-index.py --level 797`,
+224 impulses): AES67 index chain 633, `pos_tx` -39, `pos_pi` 593,
+`pi_total` 754.1 (746.2 at margin 50, 779.8 on rebind4), `usb_time` 42.9,
+`tx_depth` median 137, `rx_depth` 115. The chain of three fresh-anchor
+sessions, front age 336 / 312 / 317, reads 823 / 793 / 797 and Pi path
+780 / 746 / 754: the level follows the front age to within the
+fresh-anchor scatter. Floors at the end of the read: TX 98 (83 at margin
+50 two minutes after its read; 104-107 on target64-trace), RX 77,
+`tx_qlow` 0, `tx_pullmax` 48, `tx_gapmax_us` 1062, pitch 1000012.
+Acceptance set launched 19:30 UTC on this session, detached: four
+800-impulse runs at 64 with `USB16X16_OTHER_LOAD=0.1` (the txfix2 set ran
+its four unloaded and only the soak loaded; this set loads all five), then
+the 600 s soak (`txoff950m150soak`, 2400 impulses); results below.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
