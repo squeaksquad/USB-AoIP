@@ -6338,6 +6338,50 @@ idle, no build, no root change); (2) the stage logger build; (3) the
 `sink_min_time` plumbing only if (2) points at the AES67 segment, which
 is also what makes sink delay 120 deterministic.
 
+**IMPLEMENTED 2026-09-06 00:48 UTC, not yet built: the impulse trace,
+bridge `--impulse-trace 0|1`, and profile `...-target64-trace`.** The
+stage instrument from the BUDGET entry above. Core: `ImpulseTraceDetector`
+in `bridge_core.hpp`/`.cpp` (one channel, magnitude threshold, hold-off
+in frames, fixed 8-event queue, real-time safe, unit test
+`test_impulse_trace_detector`). Bridge: `--impulse-trace 0|1` (default 0),
+`--impulse-channel N` (1..16, default 1), `--impulse-threshold F` (default
+0.15: above the 0.1 noise load, below the 0.25 harness impulse),
+`--impulse-holdoff N` (default 2400 frames, 50 ms); the three sub-options
+need the flag, as the zero-run pair does. On the same two blocks the
+zero-run detector scans, each hit is an `IMPULSE` line: `stage=`
+(`usb-capture`, `ravenna-playback`, `ravenna-capture`, `usb-playback`),
+`direction=`, `position=` (the direction's stream count), `value=`,
+`block_first=`, `block_frames=`, `offset=`, `depth=` (the capture backlog
+the wake found, or the playback queue as last sampled at 1 Hz),
+`block_ns=` (the capture wake, or the write, monotonic), `now_ns=`,
+`events=`, `t_us=`. Per-direction line cap 200000; a direction restart
+re-arms the hold-off. `IMPULSE enabled` line at start, SUMMARY carries
+`impulse_trace`, the three settings, per-stage event counts,
+`impulse_lines`, `impulse_lines_suppressed`, `impulse_dropped_events`.
+Audio path untouched with the flag off or on. `main.cpp` `99133ae5`,
+`bridge_core.cpp` `9c24251a`, `bridge_core.hpp` `226fe0ee`,
+`bridge_tests.cpp` `46f03dcf`; syntax-checked clean on the Mac (clang,
+`-Wall -Wextra -Wpedantic -Werror`, the Pi's ALSA headers, the endian /
+clock_nanosleep / ESTRPIPE stubs), core tests pass on the Mac. Supervisor:
+optional key `IMPULSE_TRACE` (0/1, absent 0), passed as `--impulse-trace`,
+shown by `profiles` as `impulse-trace N` (`bddc97fd`). Conf `98b467ea`
+adds `servo-aligned-both-240-rx120-sd144-tx192-target64-trace` (target64
+with `IMPULSE_TRACE=1`, experimental). Analyser
+`outputs/latency/stage-trace-20260906/impulse-stages.py`: groups the four
+stages per impulse and reports `bridge_tx` (usb-capture frame time to
+ravenna-playback write), `tx_queue` (write to estimated play), `aes67`
+(estimated play to ravenna-capture frame time), `bridge_rx`, `rx_queue`,
+`pi_total`, in ms and samples, with `--level N` giving the two USB legs
+together as level minus `pi_total`; the queue terms come from the 1 Hz
+depth samples and carry up to a period of error. Staged on the Pi:
+`~/usb-16x16-work/phase4-trace-src` (source, hashes verified) and
+`~/usb-16x16-work/aes67-trace-install/` (supervisor, unit, conf,
+`trace-block.conf` `6a589802`); the new supervisor validates the repo
+conf and the live conf (`d55fe0b3`, `PROFILE=...-target64`) plus the block
+on the Pi, exit 0, zero bad lines. Build waits for a service stop; the
+USB-only run (BUDGET entry, order item 1) goes in the same stop window
+first, then the build, then the three pins and the installs.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

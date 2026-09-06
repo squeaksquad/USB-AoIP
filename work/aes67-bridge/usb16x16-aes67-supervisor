@@ -188,6 +188,11 @@ phase_window_shown() { local value; value=$(phase_window); printf '%s' "${value:
 # instrument that logs ZERORUN lines for runs of exact zeros per stage; absent
 # means off.
 zero_run() { local value; value=$(p ZERO_RUN_DETECT); printf '%s' "${value:-0}"; }
+# IMPULSE_TRACE (0 or 1) is the optional impulse trace (2026-09-06), a
+# behaviour-free instrument that logs an IMPULSE line at each of the four
+# stages for every sample over 0.15 full scale on channel 1, the harness
+# impulse; absent means off.
+impulse_trace() { local value; value=$(p IMPULSE_TRACE); printf '%s' "${value:-0}"; }
 # PITCH_SEED_PPM is the optional pitch seed (Phase 5 Stage B2): the bridge
 # starts both pitch controls at nominal minus this many ppm and the
 # estimator there, before the prime, instead of running the first minute at
@@ -300,6 +305,10 @@ validate_profile() {
     0|1) ;;
     *) say "profile $profile_name: ZERO_RUN_DETECT must be 0 or 1" >&2; return 1 ;;
   esac
+  case "$(impulse_trace)" in
+    0|1) ;;
+    *) say "profile $profile_name: IMPULSE_TRACE must be 0 or 1" >&2; return 1 ;;
+  esac
   case "$(seed)" in
     -[0-9]*|[0-9]*) ;;
     *) say "profile $profile_name: PITCH_SEED_PPM must be a number" >&2; return 1 ;;
@@ -390,6 +399,7 @@ bridge_arguments() {
     --align-rx-prime "$(align_rx_prime)" \
     ${phase_window_args[@]+"${phase_window_args[@]}"} \
     --zero-run-detect "$(zero_run)" \
+    --impulse-trace "$(impulse_trace)" \
     --pitch-seed "$(seed)" \
     --level-shift "$(shift_frames)" \
     --priority 90 \
@@ -865,7 +875,7 @@ cmd_profiles() {
     [ "$name" = "$selected" ] && mark='*'
     say "$mark $name: $(p STATUS), cover: $(p COVER), measured: $(p MEASURED)"
     say "    $(p DESCRIPTION)"
-    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) rx trigger $(align_rx)/$(align_rx_offset) us prime $(align_rx_prime) phase window $(phase_window_shown)/$(phase_timeout) s zero-run $(zero_run) seed $(seed) ppm shift $(shift_frames)"
+    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) rx trigger $(align_rx)/$(align_rx_offset) us prime $(align_rx_prime) phase window $(phase_window_shown)/$(phase_timeout) s zero-run $(zero_run) impulse-trace $(impulse_trace) seed $(seed) ppm shift $(shift_frames)"
   done
 }
 

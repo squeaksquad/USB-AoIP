@@ -257,6 +257,52 @@ private:
     std::uint64_t dropped_events_{};
 };
 
+// Impulse trace (2026-09-06): on one channel, report the stream position
+// of the first sample whose magnitude exceeds a threshold, then hold off
+// for a fixed number of frames so one impulse (and anything it rings into)
+// is one event. Placed at the four points where audio enters or leaves the
+// bridge, it stamps the harness impulse at each stage, which splits the
+// device-timeline round trip into the bridge's two dwells, the AES67 loop
+// between them, and by subtraction the two USB legs. Real-time safe: fixed
+// storage, no allocation after construction, one compare per frame.
+class ImpulseTraceDetector {
+public:
+    struct Config {
+        std::size_t channel{0};
+        float threshold{0.1F};
+        std::uint64_t holdoff_frames{2400};
+    };
+    struct Event {
+        std::uint64_t position{};
+        float value{};
+    };
+    static constexpr std::size_t kEventCapacity = 8;
+
+    ImpulseTraceDetector() = default;
+    explicit ImpulseTraceDetector(Config config) : config_(config) {}
+
+    // Forget the hold-off: a direction restart.
+    void reset() noexcept;
+    // first_frame_position is the stream position of frame 0 of this block,
+    // monotonic across calls.
+    void observe(const float* interleaved, std::size_t frames, std::uint64_t first_frame_position) noexcept;
+    bool pop_event(Event& event) noexcept;
+
+    [[nodiscard]] const Config& config() const noexcept { return config_; }
+    [[nodiscard]] std::uint64_t events() const noexcept { return events_; }
+    [[nodiscard]] std::uint64_t dropped_events() const noexcept { return dropped_events_; }
+
+private:
+    Config config_{};
+    // Position from which detection is armed again; 0 means armed.
+    std::uint64_t armed_at_{0};
+    std::array<Event, kEventCapacity> events_queue_{};
+    std::size_t queue_head_{};
+    std::size_t queue_count_{};
+    std::uint64_t events_{};
+    std::uint64_t dropped_events_{};
+};
+
 [[nodiscard]] std::int32_t unpack_s24le(const std::uint8_t* source) noexcept;
 void pack_s24le(std::int32_t sample, std::uint8_t* destination) noexcept;
 [[nodiscard]] float s24_to_float(const std::uint8_t* source) noexcept;

@@ -307,6 +307,46 @@ bool ZeroRunDetector::pop_event(Event& event) noexcept {
     return true;
 }
 
+void ImpulseTraceDetector::reset() noexcept {
+    armed_at_ = 0;
+}
+
+void ImpulseTraceDetector::observe(const float* interleaved,
+                                   const std::size_t frames,
+                                   const std::uint64_t first_frame_position) noexcept {
+    if (config_.channel >= kChannels) {
+        return;
+    }
+    const float* sample = interleaved + config_.channel;
+    for (std::size_t frame = 0; frame < frames; ++frame, sample += kChannels) {
+        const std::uint64_t position = first_frame_position + frame;
+        if (position < armed_at_) {
+            continue;
+        }
+        const float value = *sample;
+        if (value > config_.threshold || value < -config_.threshold) {
+            armed_at_ = position + config_.holdoff_frames;
+            ++events_;
+            if (queue_count_ == kEventCapacity) {
+                ++dropped_events_;
+                continue;
+            }
+            events_queue_[(queue_head_ + queue_count_) % kEventCapacity] = Event{position, value};
+            ++queue_count_;
+        }
+    }
+}
+
+bool ImpulseTraceDetector::pop_event(Event& event) noexcept {
+    if (queue_count_ == 0) {
+        return false;
+    }
+    event = events_queue_[queue_head_];
+    queue_head_ = (queue_head_ + 1) % kEventCapacity;
+    --queue_count_;
+    return true;
+}
+
 std::int32_t unpack_s24le(const std::uint8_t* source) noexcept {
     std::uint32_t value = static_cast<std::uint32_t>(source[0]) |
                           (static_cast<std::uint32_t>(source[1]) << 8U) |

@@ -318,6 +318,43 @@ std::vector<float> zero_run_stream(const std::size_t frames,
     return stream;
 }
 
+void test_impulse_trace_detector() {
+    using usb16x16::ImpulseTraceDetector;
+    ImpulseTraceDetector::Event event{};
+    // The harness impulse: 0.25 full scale on channel 1 (index 0), one
+    // sample, 12000 frames apart, with 0.1 noise on the other channels.
+    std::vector<float> stream(static_cast<std::size_t>(300) * usb16x16::kChannels, 0.0F);
+    for (std::size_t frame = 0; frame < 300; ++frame) {
+        for (std::size_t channel = 1; channel < usb16x16::kChannels; ++channel) {
+            stream[frame * usb16x16::kChannels + channel] = (frame % 2 == 0) ? 0.1F : -0.1F;
+        }
+    }
+    stream[static_cast<std::size_t>(50) * usb16x16::kChannels] = 0.25F;
+    stream[static_cast<std::size_t>(51) * usb16x16::kChannels] = -0.15F; // ringing inside the hold-off
+    stream[static_cast<std::size_t>(200) * usb16x16::kChannels] = -0.25F;
+    {
+        ImpulseTraceDetector detector(ImpulseTraceDetector::Config{0, 0.1F, 100});
+        detector.observe(stream.data(), 120, 7000);
+        check(detector.pop_event(event), "the impulse is reported");
+        check(event.position == 7050 && event.value == 0.25F, "position is the stream index of the first sample over threshold");
+        check(!detector.pop_event(event), "the sample inside the hold-off is not a second event");
+        detector.observe(stream.data() + 120 * usb16x16::kChannels, 180, 7120);
+        check(detector.pop_event(event) && event.position == 7200 && event.value == -0.25F,
+              "a negative impulse after the hold-off is reported across a block boundary");
+        check(detector.events() == 2 && detector.dropped_events() == 0, "two events counted");
+        // Noise on channel 2 never fires a detector on channel 1.
+        ImpulseTraceDetector quiet(ImpulseTraceDetector::Config{2, 0.2F, 100});
+        quiet.observe(stream.data(), 300, 0);
+        check(!quiet.pop_event(event) && quiet.events() == 0, "0.1 noise on another channel is under the threshold");
+        // The hold-off is a position, so a restart re-arms it.
+        detector.observe(stream.data(), 60, 7240);
+        check(!detector.pop_event(event), "an impulse 90 frames after the last is inside the 100-frame hold-off");
+        detector.reset();
+        detector.observe(stream.data(), 60, 7240);
+        check(detector.pop_event(event) && event.position == 7290, "reset re-arms the detector");
+    }
+}
+
 void test_zero_run_detector() {
     using usb16x16::ZeroRunDetector;
     ZeroRunDetector::Event event{};
@@ -444,6 +481,7 @@ int main() {
     test_windowed_regression();
     test_applied_ratio_correction();
     test_zero_run_detector();
+    test_impulse_trace_detector();
     if (failures != 0) {
         std::cerr << failures << " test(s) failed\n";
         return EXIT_FAILURE;

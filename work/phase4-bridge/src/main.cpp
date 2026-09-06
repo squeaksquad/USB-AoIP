@@ -91,6 +91,16 @@ constexpr std::size_t kZeroRunMaximumLimit = 48000;
 // ZERORUN lines per direction per process; the counters keep going after.
 // One hole every three minutes is 480 a day, so this is pathology cover.
 constexpr std::uint64_t kZeroRunLineCap = 4096;
+// Impulse trace defaults: the harness impulse is 0.25 full scale on channel
+// 1, one sample, 12000 frames apart; the other channels carry noise at up
+// to 0.1. Threshold 0.15 sits between them; the hold-off of 2400 frames
+// (50 ms) makes one impulse one event at every stage. IMPULSE lines per
+// direction per process: 800 impulses x 2 stages is 1600 per run, a 600 s
+// soak 4800, so this is many sessions of cover.
+constexpr std::size_t kImpulseChannelDefault = 1;
+constexpr double kImpulseThresholdDefault = 0.15;
+constexpr std::uint64_t kImpulseHoldoffDefault = 2400;
+constexpr std::uint64_t kImpulseLineCap = 200000;
 std::chrono::steady_clock::time_point process_started{};
 
 std::uint64_t elapsed_us() noexcept {
@@ -256,6 +266,15 @@ struct Options {
     bool zero_run_detect{false};
     std::size_t zero_run_minimum_frames{kZeroRunMinimumDefault};
     std::size_t zero_run_maximum_frames{kZeroRunMaximumDefault};
+    // Impulse trace (2026-09-06): every block entering and leaving the
+    // bridge is scanned on one channel for a sample over the threshold, and
+    // each hit is logged as an IMPULSE line with its stage, stream position
+    // and monotonic time, so one harness impulse is stamped four times round
+    // the loop. Off by default; behaviour-free like the zero-run detector.
+    bool impulse_trace{false};
+    std::size_t impulse_trace_channel{kImpulseChannelDefault};
+    double impulse_trace_threshold{kImpulseThresholdDefault};
+    std::uint64_t impulse_trace_holdoff{kImpulseHoldoffDefault};
     int priority{90};
     unsigned int seconds{0};
 };
@@ -402,6 +421,13 @@ private:
         << "                         --zero-run-detect 1)\n"
         << "  --zero-run-max N       longest run reported, frames; longer is silence, counted\n"
         << "                         not reported (default 480, at most 48000)\n"
+        << "  --impulse-trace 0|1    stamp every sample over a threshold on one channel at each\n"
+        << "                         of the four stages as an IMPULSE line with its stream\n"
+        << "                         position and monotonic time (default 0; behaviour-free)\n"
+        << "  --impulse-channel N    channel the trace watches, 1..16 (default 1, the harness\n"
+        << "                         impulse channel; needs --impulse-trace 1)\n"
+        << "  --impulse-threshold F  magnitude a sample must exceed, 0..1 (default 0.15)\n"
+        << "  --impulse-holdoff N    frames ignored after a hit (default 2400)\n"
         << "  --priority N           SCHED_FIFO priority (default 90)\n"
         << "  --seconds N            stop after N seconds; zero runs until signalled\n";
     std::exit(error.empty() ? EXIT_SUCCESS : EXIT_FAILURE);
@@ -552,6 +578,18 @@ Options parse_options(const int argc, char** argv) {
             options.zero_run_minimum_frames = parse_unsigned(value, "zero-run-min");
         } else if (argument == "--zero-run-max") {
             options.zero_run_maximum_frames = parse_unsigned(value, "zero-run-max");
+        } else if (argument == "--impulse-trace") {
+            const unsigned long parsed = parse_unsigned(value, "impulse-trace");
+            if (parsed > 1) {
+                throw std::runtime_error("impulse-trace must be 0 or 1");
+            }
+            options.impulse_trace = parsed != 0;
+        } else if (argument == "--impulse-channel") {
+            options.impulse_trace_channel = parse_unsigned(value, "impulse-channel");
+        } else if (argument == "--impulse-threshold") {
+            options.impulse_trace_threshold = parse_double(value, "impulse-threshold");
+        } else if (argument == "--impulse-holdoff") {
+            options.impulse_trace_holdoff = parse_unsigned(value, "impulse-holdoff");
         } else if (argument == "--priority") {
             options.priority = static_cast<int>(parse_unsigned(value, "priority"));
         } else if (argument == "--seconds") {
@@ -618,6 +656,21 @@ Options parse_options(const int argc, char** argv) {
         (options.zero_run_minimum_frames != kZeroRunMinimumDefault ||
          options.zero_run_maximum_frames != kZeroRunMaximumDefault)) {
         throw std::runtime_error("--zero-run-min and --zero-run-max need --zero-run-detect 1");
+    }
+    if (options.impulse_trace_channel < 1 || options.impulse_trace_channel > kChannels) {
+        throw std::runtime_error("impulse-channel must be 1..16");
+    }
+    if (!(options.impulse_trace_threshold > 0.0) || options.impulse_trace_threshold > 1.0) {
+        throw std::runtime_error("impulse-threshold must be in (0, 1]");
+    }
+    if (options.impulse_trace_holdoff < 1) {
+        throw std::runtime_error("impulse-holdoff must be at least 1");
+    }
+    if (!options.impulse_trace &&
+        (options.impulse_trace_channel != kImpulseChannelDefault ||
+         options.impulse_trace_threshold != kImpulseThresholdDefault ||
+         options.impulse_trace_holdoff != kImpulseHoldoffDefault)) {
+        throw std::runtime_error("--impulse-channel, --impulse-threshold and --impulse-holdoff need --impulse-trace 1");
     }
     if (options.tx_depth_frames != 0 || options.rx_depth_frames != 0 ||
         options.level_gain_ppm_per_frame != 0.05 || options.level_clamp_ppm != 2.0) {
@@ -986,6 +1039,12 @@ struct Direction {
     usb16x16::ZeroRunDetector playback_zero;
     std::uint64_t zero_run_lines{0};
     std::uint64_t zero_run_lines_suppressed{0};
+    // Impulse trace on the same two blocks. Off unless --impulse-trace 1.
+    bool impulse_trace{false};
+    usb16x16::ImpulseTraceDetector capture_impulse;
+    usb16x16::ImpulseTraceDetector playback_impulse;
+    std::uint64_t impulse_lines{0};
+    std::uint64_t impulse_lines_suppressed{0};
 
     Direction(const std::string_view direction_name,
               Pcm& capture_pcm,
@@ -1051,6 +1110,40 @@ void report_zero_runs(Direction& direction,
                   << " events=" << detector.events()
                   << " t_us=" << elapsed_us()
                   << " utc=" << utc << '\n';
+    }
+}
+
+// Drains an impulse detector's events as IMPULSE lines, on the audio thread
+// like ZERORUN. block_ns is the monotonic instant the block belongs to: the
+// capture wake that found it, or the write of it to the playback; offset
+// is the hit's frame inside that block. depth is the capture backlog the
+// wake found, or the playback queue as last sampled, in frames.
+void report_impulses(Direction& direction,
+                     usb16x16::ImpulseTraceDetector& detector,
+                     const std::string_view stage,
+                     const std::uint64_t block_first_frame,
+                     const std::size_t block_frames,
+                     const std::int64_t block_ns,
+                     const std::int64_t depth) noexcept {
+    usb16x16::ImpulseTraceDetector::Event event{};
+    while (detector.pop_event(event)) {
+        if (direction.impulse_lines >= kImpulseLineCap) {
+            ++direction.impulse_lines_suppressed;
+            continue;
+        }
+        ++direction.impulse_lines;
+        std::cerr << "IMPULSE stage=" << stage
+                  << " direction=" << direction.name
+                  << " position=" << event.position
+                  << " value=" << event.value
+                  << " block_first=" << block_first_frame
+                  << " block_frames=" << block_frames
+                  << " offset=" << event.position - block_first_frame
+                  << " depth=" << depth
+                  << " block_ns=" << block_ns
+                  << " now_ns=" << monotonic_now_ns()
+                  << " events=" << detector.events()
+                  << " t_us=" << elapsed_us() << '\n';
     }
 }
 
@@ -1142,6 +1235,11 @@ IoResult capture_into_ring(Direction& direction, const std::int64_t iteration_ns
         // direction's cumulative input count.
         direction.capture_zero.observe(direction.capture_scratch.data(), frames, direction.input_frames);
         report_zero_runs(direction, direction.capture_zero, direction.capture_stage);
+    }
+    if (direction.impulse_trace) {
+        direction.capture_impulse.observe(direction.capture_scratch.data(), frames, direction.input_frames);
+        report_impulses(direction, direction.capture_impulse, direction.capture_stage,
+                        direction.input_frames, frames, iteration_ns, available);
     }
     direction.input_frames += frames;
     return IoResult::progressed;
@@ -1495,6 +1593,11 @@ IoResult render_to_playback(Direction& direction,
         direction.playback_zero.observe(direction.playback_scratch.data(), frames, direction.output_frames);
         report_zero_runs(direction, direction.playback_zero, direction.playback_stage);
     }
+    if (direction.impulse_trace) {
+        direction.playback_impulse.observe(direction.playback_scratch.data(), frames, direction.output_frames);
+        report_impulses(direction, direction.playback_impulse, direction.playback_stage,
+                        direction.output_frames, frames, monotonic_now_ns(), direction.playback_delay);
+    }
     const snd_pcm_sframes_t committed = snd_pcm_mmap_commit(direction.playback.handle(), offset, frames);
     if (committed < 0 || static_cast<snd_pcm_uframes_t>(committed) != frames) {
         return request_recovery(direction, "playback-mmap-commit", committed);
@@ -1546,6 +1649,8 @@ void restart_direction(Direction& direction) {
     // A run open across the restart is the cleared ring, not a hole.
     direction.capture_zero.reset();
     direction.playback_zero.reset();
+    direction.capture_impulse.reset();
+    direction.playback_impulse.reset();
     direction.primed = false;
     direction.playback_started = false;
     ++direction.restarts;
@@ -2075,6 +2180,22 @@ int run(const Options& options) {
                   << " stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback"
                   << " line_cap=" << kZeroRunLineCap << '\n';
     }
+    if (options.impulse_trace) {
+        usb16x16::ImpulseTraceDetector::Config impulse_config;
+        impulse_config.channel = options.impulse_trace_channel - 1;
+        impulse_config.threshold = static_cast<float>(options.impulse_trace_threshold);
+        impulse_config.holdoff_frames = options.impulse_trace_holdoff;
+        for (Direction* direction : {&tx, &rx}) {
+            direction->impulse_trace = true;
+            direction->capture_impulse = usb16x16::ImpulseTraceDetector(impulse_config);
+            direction->playback_impulse = usb16x16::ImpulseTraceDetector(impulse_config);
+        }
+        std::cout << "IMPULSE enabled channel=" << options.impulse_trace_channel
+                  << " threshold=" << options.impulse_trace_threshold
+                  << " holdoff_frames=" << options.impulse_trace_holdoff
+                  << " stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback"
+                  << " line_cap=" << kImpulseLineCap << '\n';
+    }
     usb16x16::SharedDriftEstimator estimator;
     Telemetry telemetry;
 
@@ -2507,6 +2628,19 @@ int run(const Options& options) {
               << ",\"zero_ravenna_playback\":\"" << format_zero_counters(telemetry.ravenna_playback_zero) << '"'
               << ",\"zero_ravenna_capture\":\"" << format_zero_counters(telemetry.ravenna_capture_zero) << '"'
               << ",\"zero_usb_playback\":\"" << format_zero_counters(telemetry.usb_playback_zero) << '"'
+              << ",\"impulse_trace\":" << (options.impulse_trace ? 1 : 0)
+              << ",\"impulse_channel\":" << options.impulse_trace_channel
+              << ",\"impulse_threshold\":" << options.impulse_trace_threshold
+              << ",\"impulse_holdoff\":" << options.impulse_trace_holdoff
+              << ",\"impulse_usb_capture\":" << tx.capture_impulse.events()
+              << ",\"impulse_ravenna_playback\":" << tx.playback_impulse.events()
+              << ",\"impulse_ravenna_capture\":" << rx.capture_impulse.events()
+              << ",\"impulse_usb_playback\":" << rx.playback_impulse.events()
+              << ",\"impulse_lines\":" << tx.impulse_lines + rx.impulse_lines
+              << ",\"impulse_lines_suppressed\":" << tx.impulse_lines_suppressed + rx.impulse_lines_suppressed
+              << ",\"impulse_dropped_events\":"
+              << tx.capture_impulse.dropped_events() + tx.playback_impulse.dropped_events() +
+                 rx.capture_impulse.dropped_events() + rx.playback_impulse.dropped_events()
               << ",\"zero_run_lines\":" << tx.zero_run_lines + rx.zero_run_lines
               << ",\"zero_run_lines_suppressed\":" << tx.zero_run_lines_suppressed + rx.zero_run_lines_suppressed
               << ",\"zero_run_dropped_events\":"
