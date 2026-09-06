@@ -6814,6 +6814,19 @@ accepted. Next: RTL Utility at 32 by the user on this session (expected
 about 20.8 ms), then a stack restart and the four runs plus soak again
 with nothing else touching the Pi.
 
+**RTL Utility at 32 frames on the fixed module, read by the user: 20.812 ms
+on the soaked session (level 811), and 19.688 ms on the fresh session
+after the restart.** 20.812 ms is 999 samples, 811 plus the Mac's 188, to
+the sample: the standard figure for the fixed module at the point of
+record's profile, 6.584 ms under target64's accepted 27.396. The fresh
+session (restart at about 05:35 UTC, RX PRIMED `grid_phase_us=457`, TX
+`align_dropped=69 overshoot=8 front_age_frames=336`, floors 115/77
+before load) read 19.688 ms, 945 samples, which puts its device timeline
+at about 757, 62 under the previous session's 819: the session draw,
+now on a loop 4 ms shorter. The clean acceptance chain (four loaded
+800-impulse runs, then the soak) was launched on it at 05:37:59 UTC with
+nothing else touching the Pi.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
