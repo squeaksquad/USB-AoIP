@@ -7934,6 +7934,13 @@ delay 144 -> 120 (24, after the arrival-lead export, a module rebuild).
 Service ends the day on target48, the 20:41 anchor, zero RECOVERs;
 nothing pending on the Pi but the label copy.
 
+**DONE 2026-09-06 21:20 UTC: target48 labels copied into the live conf by
+the user (`copy-target48-labels.py --apply`, 3 lines), playback back on;
+`work/NEXT_SESSION_PROMPT.md` rewritten for the pickup (the RX prime
+overshoot build first, then the render-before-target margin, then sink
+delay after the arrival-lead export).** Service on the 20:41 anchor,
+zero RECOVERs, nothing pending on the Pi.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
