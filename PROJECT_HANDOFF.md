@@ -8005,10 +8005,10 @@ one 100-impulse read at 64 with the split, then the acceptance set if it
 holds. The service ran target48 on the 20:41 anchor throughout, zero
 RECOVERs; nothing installed.
 
-**BUILT and STAGED 2026-09-06 21:48 UTC: bridge `913d623b`
+**BUILT and STAGED 2026-09-06 23:06 UTC: bridge `913d623b`
 (`--rx-prime-trim`), the rxtrim install sets, all three pins moved.**
-Service stopped by the user at about 21:45 UTC (playback off); build on
-the Pi from `~/usb-16x16-work/phase4-rxtrim-src` (`main.cpp` `77450aaa`,
+Service stopped by the user at 23:04 UTC (playback off; the journal's
+`STAGE stopped (cleanup)`); build on the Pi from `~/usb-16x16-work/phase4-rxtrim-src` (`main.cpp` `77450aaa`,
 Release, the same cmake configuration, zero warnings), ctest 1/1, binary
 SHA-256
 `913d623b0b58b5c60e00fcb7424627dedf8601406cbd958b8a3de5f6da8bb620`, in
@@ -8035,6 +8035,62 @@ the block, `switch-profile ...-rxtrim` (PROFILE only while inactive),
 read, split, and the acceptance set on that session if the numbers hold
 (expected about 764 at 64, RX PRIMED `trimmed=21`, RX floor about 72, TX
 front age 301).
+
+**MEASURED 2026-09-06 23:10-23:15 UTC, the RX prime trim on a fresh
+anchor: 770 x100 at 64 frames (16.042 ms), spread 0, zero RECOVERs; 15
+under target48's 785; the RX prime landed at 171 (`trimmed=21`), the RX
+floor 72, the TX side unchanged.** Installs by the user at about 23:08
+UTC (bridge `913d623b`, supervisor `431cf0c5`, wrapper `6282b108`; the
+rxtrim block appended to the live conf, `switch-profile ...-rxtrim`),
+`systemctl start`, then the gadget re-bind; usbaudiod logged `Found an
+audio device` and fresh `setStartingUSBFrame IN/OUT` at 23:10:46 UTC
+(fresh anchor); `STAGE running` 23:11:23 on a clean prime, the bridge
+started with `--prime-trim 0 --rx-prime-trim 1`. Session start
+(`bridge-rxtrim-session-20260906T2311Z.log`): RX PRIMED `intended=171
+ring_at_prime=192 overshoot=21 trimmed=21` (the lever, on the first
+prime), TX PRIMED `intended=243 ring_at_prime=280 overshoot=37
+trimmed=0 align_dropped=56 first_tick_wait_us=447 front_age_frames=301`
+(301 on target48: TX untouched), ALIGN trigger `wake_to_start_us=951
+target=prime slack_us=315`; `tx_occ` / `rx_occ` 51. Gate
+`rxtrim-noise-ch2-64f-100imp.*` 0.0% zeros, no run, discontinuities 0.
+Read `rxtrim-roundtrip-64f-20260906T231336Z` **770 x100**, spread 0,
+zero RECOVERs, discontinuities 0. Split (`impulse-index.py --level 770`,
+224 impulses): AES67 chain 633, `pos_tx` -57 (-51 on target48), `pos_rx`
+-22 (-1: the 21 trimmed, to the frame), `pos_pi` 554 (581), `pi_total`
+726.9 (741.4 on target48's session, 740.0 at its read), `usb_time` 43.1
+(43.6), `rx_depth` median 121 (138 / 129 on target48), `tx_depth` 139
+(144). Floors after the read: TX 96 (94 loaded on target48), RX **72**
+(93 on target48, 77 on every profile since rx120: the 21 came out of the
+RX queue as the arithmetic in the staged entry said, the 16 lever 2
+moved there and the 5 of intended 187's overshoot that the rx120 floor
+always carried), `tx_qlow` / `rx_qlow` 0, `tx_pullmax` 48,
+`tx_gapmax_us` 1050, `rx_gapmax_us` 1068, pitch 1000015. Level against
+the prediction: 764 expected (785 - 21), 770 read; the index chain moved
+the full 27 in `pos_pi` (21 RX, 6 TX ring scatter) but the device-timeline
+terms moved 15 (`pi_total` 14.5, level 15), so the `usb` remainder read
+216 against 204, inside the fresh-anchor scatter the six target64-trace
+re-binds showed (818-828). The chain of fresh anchors on target48's TX
+side: 785 -> 770. RTL at 32 predicted 770 + 188 = 958 = 19.958 ms.
+Acceptance set launched 23:15 UTC on this session, detached
+(`USB16X16_OTHER_LOAD=0.1` on every run): four 800-impulse runs at 64,
+then the 600 s soak (`rxtrimsoak`, 2400 impulses); results below. What
+the set decides is the RX cover: 72 loaded against the 77 the record
+accepted since rx120 (the RX bar was never derived; 72 covers a 1.5 ms
+refill gap at 48 frames per ms, and the soak's `rx_gapmax_us` says what
+the session drew). If 77 is required, `RX_PLAYBACK_PRIME` 125 restores
+it for 5 samples, a conf change outside this lever.
+
+*Aside, from the old session's log before the stop.* The 20:41 target48
+session, which ended its acceptance set with zero RECOVERs, carried two
+RECOVERs at 21:35:54 UTC (both directions, `capture-avail` Broken pipe,
+both PCMs in XRUN, then a clean re-prime), 53.5 min in, during the tar
+and scp of the rxtrim staging to the Pi (21:30-21:37 UTC). The
+2026-09-04 rule ("no transfers during measurement", an scp off the Pi
+stalled the bridge) held only for measurements; earlier stagings today
+(19:05, 20:10) were single scps and drew no RECOVER, this one sent the
+whole source tree as one tar stream over ssh. Not proven causal, one
+event; noted so the next staging while the service runs is done file by
+file or in the service-stop window.
 
 ## Next-session checklist
 
