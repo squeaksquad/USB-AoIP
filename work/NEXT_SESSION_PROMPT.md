@@ -4,10 +4,10 @@ Paste the block below into a fresh Codex or Claude Code session to resume work.
 It points at `PROJECT_HANDOFF.md`, which is authoritative where it conflicts
 with this summary.
 
-Rewritten 2026-09-06 after the Phase 5 day: the pitch seed, the aligned RX
-prime, the grid-phase instrument and the RX prime phase window were built and
-measured, the session lottery was split into a controlled term and an
-unexplained one, and Dante Virtual Soundcard gave the loop its yardstick.
+Rewritten 2026-09-06 after the budget day: the impulse trace and an eth0
+capture split the round trip by stage, found 7 ms inside the Merging RAVENNA
+driver's transmit path, and a one-expression module fix took the accepted
+point from 1127 to 757 samples at 64 frames.
 
 ---
 
@@ -16,90 +16,93 @@ Raspberry Pi 5 USB 16x16 / AES67 bridge. Repo: ~/Development/USB 16x16
 (github.com/squeaksquad/usb-16x16-aes67, main, pushed and clean).
 
 Read the Rollback rules at the end of PROJECT_HANDOFF.md, then everything
-from the entry "Phase 5 Stage A, 2026-09-05" to the end (about 1000 lines,
-chronological, bold lead-ins; corrections are later paragraphs, trust the
-note and keep the measurement). Then the conf block for PROFILE= in
-work/aes67-bridge/aes67.conf.
+from the entry "BUDGET 2026-09-06 00:40 UTC" to the end (chronological,
+bold lead-ins; corrections are later paragraphs, trust the note and keep
+the measurement). Then work/ravenna-tx-fix/README.md and the conf block
+for PROFILE= in work/aes67-bridge/aes67.conf.
 
 NOTHING IS BROKEN. The service runs the accepted point.
 
-THE POINT OF RECORD (accepted 2026-09-05 03:15 UTC)
-Profile servo-aligned-both-240-rx120-sd144-tx192-target64: 1127 samples at
-64 CoreAudio frames (23.5 ms), RTL Utility at 32 frames 27.396 ms, TX floor
-105-108 loaded, RX floor 77, on bridge 2a158386 (the installed binary; every
-new flag is off in this block so it behaves as the accepted b65b84ee did).
-Its level is a per-session draw: 27.4 on a good day, 28.1 on a bad one.
+THE POINT OF RECORD (accepted 2026-09-06 06:03 UTC)
+Profile servo-aligned-both-240-rx120-sd144-tx192-target64-trace on the
+fixed RAVENNA module cc6852f0 (supervisor 892dd189 loads it from
+~/usb-16x16-work/ravenna-tx-fix-install/; the original module f65a4955
+stays at its old path for rollback), bridge c1ca48c5: 757 samples at 64
+CoreAudio frames (15.77 ms), RTL Utility at 32 frames 19.688 ms, TX floor
+107 loaded, RX floor 77, four loaded 800-impulse runs and the 600 s soak
+all on 757, zero RECOVERs. The audio path is target64's; the trace is an
+instrument (IMPULSE lines on channel-1 hits, line cap 200000). Sessions
+on the fixed module have read 819, 811 and 757: the session draw is
+still there and is up to about 62 wide.
 
 THE YARDSTICK
-Dante Virtual Soundcard on the user's laptop: 11.312 ms at 32 frames. This
-loop at its best today: 26.6-27.0. The plan's budget puts 12-13 ms of the
-gap in the Mac's USB path, the Ferrofish and the RAVENNA device before the
-bridge holds a frame; every lever measured today lives in the remaining
-few milliseconds.
+Dante Virtual Soundcard on the laptop: 11.312 ms at 32 frames. This loop:
+19.7-20.8 ms at 32 now, 8.4-9.5 ms away, from 15.7 yesterday.
 
-WHAT 2026-09-05 ESTABLISHED (all measured, all in the handoff)
-1. The pitch servo already runs both converters at 1.0; the kernel-side
-   PTP feedback step is closed (quantisation band about 10 frames).
-2. --pitch-seed (-15 ppm) removes the 46-frame warm-up drift; it moves the
-   TX/RX split, it does not create margin.
-3. The ring target 128 -> 64 (target64) took 191 samples off the level and
-   is the accepted point.
-4. RX depth and RX floor are quantised by the unaligned RX prime in 48-frame
-   bins: ring fill = next multiple of 48 above target + prime + 3.
-5. --align-rx-trigger/--align-rx-prime hold the RX front age constant
-   (sessions 13 apart instead of 34-64) at the worst-case wait's cost.
-6. phase_us telemetry: the RAVENNA tick against the host's USB frame grid
-   slides about 20 us/s (the crystal offset the servo corrects in rate).
-   --rx-prime-phase-window "LOW,HIGH" (quoted in a conf block) holds the RX
-   prime until that phase is inside the window, discarding ring excess to
-   whole periods below the prime level. The level against that phase is a
-   sawtooth (1157 at 67 us, 1132-1137 at 382-548, 1094-1107 at 695-944).
-   Plain restarts cluster at 380-550.
-7. The window holds its phase every session (proven on rxalign, phase760,
-   phase760-tx240, phase450), but a SECOND term of 18-48 samples of level
-   and up to 47 of TX cover moves between sessions with identical primed
-   depths and the same window (phase450: 1089 at TX 108, then 1107 at TX
-   61). Not PTP (grandmaster unchanged; kernel ResetPTPMaster lines are
-   normal at every stack start). Candidates: where the Ferrofish's packets
-   land against the RAVENNA read slot at the aligned start, or the Mac
-   side after a device change. sink_min_time reads 0 and does not report
-   it. This is the open item.
-
-MEASURED, NOT ACCEPTED, ALL BLOCKS IN THE LIVE CONF
-seed15 1102 (TX 160 / RX 50); primes144 1156 (110/96); shift30 1154
-(119/66); rxalign 1215/1202 (109/96, two sessions); phase760 1083 (60/77);
-phase760-tx240 1122/1118 (68-70/77, two sessions); phase450 1089 then 1107
-(108 then 61). Rollback for anything is
-  sudo usb16x16-aes67-supervisor switch-profile servo-aligned-both-240-rx120-sd144-tx192-target64
+WHAT 2026-09-06 ESTABLISHED (all measured, all in the handoff)
+1. Budget on the device timeline at target64 (1127): Mac buffers 64 and
+   safety offsets 124 outside it; inside it the bridge's start depth 528
+   (TX front age 336 + RX 192) and 599 outside the bridge.
+2. The USB-only loop on the req 4 gadget reads 262 at a 240-frame target:
+   the Pi USB legs are about 22-40 samples; the req 2 to req 4 step was an
+   artefact.
+3. The impulse trace (bridge --impulse-trace, profile key IMPULSE_TRACE,
+   analyser outputs/latency/stage-trace-20260906/impulse-stages.py)
+   stamps the harness impulse at usb-capture, ravenna-playback,
+   ravenna-capture, usb-playback; the playback stages query the ALSA delay
+   on hit blocks so the queue terms are exact; pi_total tracks the level
+   within a period. The time-domain dwells carry a per-session
+   block-offset component (12000 is a multiple of 48); trust the sums.
+4. rtp-impulses.py on a tcpdump of eth0 (user runs it, sudo) finds the
+   impulse both ways (0x1FFFFC on the wire) and, with the bridge log and
+   the Pi's realtime-minus-monotonic offset, splits write-to-wire, the
+   Ferrofish loop and wire-to-read. Old module: 12.1 / 2.7 / 2.2 ms.
+   Fixed module: 6.0 / 1.8 / 2.6 ms.
+5. The defect: in the TIC the playback interrupt copies at
+   playback_buffer_pos and advances it, then frame_process_end sends from
+   that advanced position, so every packet carried the slot one playback
+   buffer minus one period old (336 frames at 384). Confirmed by rp288
+   reading 99 under at the same RX phase, and by the fix reading 333 off
+   the AES67 term. The RAVENNA playback buffer is no longer a latency
+   term; rp288/rp240 blocks exist but are moot on the fixed module.
+6. The sink_min_time API field is never set (the driver computes the
+   arrival lead under DEBUG_CHECK but nothing exports it); a one-line
+   plumbing change would surface it. Not built.
+7. The session term (18-62 between sessions with identical PRIMED numbers)
+   remains; the index domain (RTP stamps against bridge positions) is the
+   way to place it. Candidates narrowed: not the AES67 segment beyond the
+   TX queue, not the USB legs.
 
 RULES LEARNED THE HARD WAY (also in the handoff)
-- No harness probe or measurement while the user plays audio through the
-  device: a probe on top of live playback put the Mac's USB output into a
-  state that sent 8 zeros every 96 frames until coreaudiod was killed and
-  the gadget re-bound. Ask "playback off?" first. RTL Utility's click
-  train shows up in the zero-run detector as 8-12 sample runs on channel
-  1; that is the signal, not holes.
-- A new bridge binary needs THREE pins moved: install-candidate.sh,
-  install-aes67-service.sh, and the supervisor's own expected_bridge_sha256
-  (missed once; exit 27 "hash or ownership mismatch").
-- Conf values with a comma must be double-quoted ("380,550"); a bare comma
-  is a "bad line" and switch-profile refuses silently to the terminal.
-- The stage file says "running" for 120 s and "stable for ..." after; key
-  wait loops on the bridge log, not the stage.
-- No builds on the Pi while the service runs (three stalls for three
-  builds); syntax-check on the Mac first with the Pi's ALSA headers as
-  system includes and stubs for endian.h / clock_nanosleep / TIMER_ABSTIME
-  / ESTRPIPE.
-- The Pi hard-stopped once (2026-09-05 12:13:20 UTC, no kernel message,
-  came back by itself in 5 min, wlan0 needed a retry) at the first start
-  of bridge 006fc65e; not reproduced; unexplained.
-- Pi root changes are the user's: state the exact sudo command and wait.
+- No probe or measurement while the user plays audio; ask "playback off?".
+  Since Pro Tools crashed (01:54:51 UTC) nothing on the Mac holds the
+  device open, so each harness or RTL open/close can re-prime the bridge
+  (a RECOVER pair); measure only when the user says, run chains back to
+  back, count RECOVERs inside runs only.
+- No large transfers from the Pi (scp of a capture or log), no builds, no
+  captures copied while a measurement runs: an scp mid-run gave a 4.95 ms
+  gap and five RECOVERs. Copy between runs.
+- A new bridge binary needs THREE pins moved (install-candidate.sh,
+  install-aes67-service.sh, the supervisor's expected_bridge_sha256); a
+  new module needs the supervisor's module_binary path and
+  expected_module_sha256 and the service installer's supervisor pin.
+- Conf values with a comma must be double-quoted. The harness refuses
+  --maximum-lag-ms at or above 250; use 200.
+- Mac syntax check of the bridge: clang -std=c++20 with the Pi's ALSA
+  headers as system includes and stubs for endian.h, clock_nanosleep /
+  TIMER_ABSTIME and ESTRPIPE (86).
+- Pi root changes are the user's: state the exact sudo command and wait;
+  sudo prompts have swallowed two stops, check is-active before acting.
 
-THE QUESTION TO START WITH
-Where does the remaining 15.7 ms between this loop and DVS actually sit,
-term by term, and which of it is reachable without touching the protected
-USB module? Answer that from the record before proposing another lever.
-If a lever is proposed, the second session term (item 7) is the one whose
-instrument is missing: a bridge-side measure of the RAVENNA capture's
-arrival lead at its fresh wake against the tick, logged at start.
+WHERE THE REMAINING 8.4-9.5 ms SITS (RTL at 32, 945 samples on the best
+session, DVS 543): Mac buffers 64 and safety offsets 124 (not reachable);
+bridge start depth about 528 (TX prime 192 is cover against the Pi's
+worst wakeup gap, the Phase 6 question; the aligned wait allowance is
+worth about 25, ring target 48 about 16); AES67 segment about 278 (the
+Ferrofish 2.7 ms with wires, RAVENNA capture 2.2 ms with sink delay 144,
+the tick and stamp); USB legs about 40. The next lever candidates, in
+order: the RX ring/queue split now that the RAVENNA side is 4 ms shorter
+(re-measure the sd144 lead: sink delay 120 with the arrival lead
+exported), the aligned wait allowance, and the Phase 6 gap measurement
+over days to earn a TX prime step.
 ```

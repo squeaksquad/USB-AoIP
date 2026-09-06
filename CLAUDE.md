@@ -57,7 +57,8 @@ Findings and pickups:
 
 - `work/dante-mode/PLAN.md` — planned Inferno-based Dante mode: native bidirectional Controller routing, persistent endpoint lifecycle, isolated USB integration, latency comparison and rollback. Documentation only; no candidate installed.
 - `work/SAP_DISCOVERY_FINDING.md` — resolved 2026-09-01: the discovery delay was switch IGMP snooping.
-- `work/NEXT_SESSION_PROMPT.md` — pickup prompt rewritten 2026-09-06 after the Phase 5 day; the handoff tail is still authoritative where they differ.
+- `work/NEXT_SESSION_PROMPT.md` — pickup prompt rewritten 2026-09-06 after the budget day (the transmit-slot fix); the handoff tail is still authoritative where they differ.
+- `work/ravenna-tx-fix/` — the RAVENNA module's transmit-slot fix: the patch, README (mechanism, build, install, rollback), the built module in `artifacts/`. Installed 2026-09-06; the supervisor loads it from `~/usb-16x16-work/ravenna-tx-fix-install/`.
 
 Vendored and archived:
 
@@ -108,6 +109,7 @@ the profile in `PROFILE=`.
 - `<label>-roundtrip-<N>f-<UTC>.json` — one harness run of N CoreAudio frames. Label is the profile or experiment (`service`, `both240`, `both240rx120`, `rx120req4`, `rx120req4soak`). Sidecars `-api/` hold daemon API snapshots, `readiness-probe-*`, `settle.log`, `sap-timeline.log`.
 - `phase4-candidate-<UTC>/` — one wrapper session of the bridge: `bridge.log`, `daemon.log`, `metadata.txt`, PTP and sink API snapshots. The harness JSON for that session is a top-level `*-roundtrip-*.json`.
 - `phase4-sink-sweep-<UTC>/` — one sink-delay sweep: `delay-<N>.{json,log}`, `probe-d<N>-<k>.*`, and the nested candidate directory it ran in. `aes67-candidate-<UTC>/`, `ravenna-latency-<UTC>/`, `ferrofish-channel-scan-<UTC>/` are older wrappers.
+- `stage-trace-20260906/` — the impulse-trace day: `bridge-<label>-session-<UTC>.log` full-rate logs with IMPULSE lines, `impulse-stages.py` (stage split from a log) and `rtp-impulses.py` (the impulse in an eth0 capture, both ways).
 - `usb-holes-20260904/` — the USB drop and 41-sample-hole campaign: `<label>-noise-ch2-<N>f-100imp.{json,diag.txt,zeros.txt}`, analysers `zeros.py` and `gaps2.py` alongside.
 - `usb-only-*`, `coreaudio-usb16x16-baseline*.json` — Phase 1.
 - `2026-08-31-latency-results.md` — the only prose in here; Phase 1 summary.

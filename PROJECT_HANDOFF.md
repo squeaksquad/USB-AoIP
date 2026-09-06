@@ -6827,6 +6827,50 @@ now on a loop 4 ms shorter. The clean acceptance chain (four loaded
 800-impulse runs, then the soak) was launched on it at 05:37:59 UTC with
 nothing else touching the Pi.
 
+**ACCEPTED 2026-09-06 06:03 UTC: target64 on the fixed RAVENNA module,
+profile `servo-aligned-both-240-rx120-sd144-tx192-target64-trace`, module
+`cc6852f0`, bridge `c1ca48c5`: 757 samples at 64 frames (15.771 ms), RTL
+Utility at 32 frames 19.688 ms, TX floor 107 loaded, RX floor 77.** The
+clean chain on the fresh session of 05:35 UTC (RX PRIMED
+`grid_phase_us=457`, TX `align_dropped=69 overshoot=8 front_age_frames=336`,
+ALIGN ok attempt 1), nothing else touching the Pi:
+
+| run | file | samples | ms | levels | score | tx_qfloor | rx_qfloor | tx_pullmax | RECOVERs |
+|---|---|---:|---:|---|---:|---:|---:|---:|---:|
+| 1 | `txfix2-roundtrip-64f-20260906T053759Z` | 757 | 15.771 | 757 x800 | 1.000 | 109 | 77 | 48 | 0 |
+| 2 | `txfix2-roundtrip-64f-20260906T054135Z` | 757 | 15.771 | 757 x800 | 1.000 | 109 | 77 | 48 | 0 |
+| 3 | `txfix2-roundtrip-64f-20260906T054511Z` | 757 | 15.771 | 757 x800 | 1.000 | 109 | 77 | 48 | 0 |
+| 4 | `txfix2-roundtrip-64f-20260906T054847Z` | 757 | 15.771 | 757 x800 | 1.000 | 107 | 77 | 48 | 0 |
+| soak | `txfix2soak-roundtrip-64f-20260906T055223Z`, `USB16X16_OTHER_LOAD=0.1`, 600 s | 757 | 15.771 | 757 x2400 | 1.000 | 107 | 77 | 48 | 0 |
+
+5600 impulses on one sample, spread 0, zero discontinuities, zero
+RECOVERs in the whole 28-minute session (none at the device closes
+between runs this time), `tx_qlow` and `rx_qlow` 0 on all 1668 BRIDGE
+lines, gaps 1.13/1.63 ms, `tx_clip`/`rx_clip` 0. RTL at 32 read by the
+user at session start 19.688 ms, 945 samples, 757 plus 188 to the
+sample; 7.708 ms under target64's accepted 27.396 on the original
+module. Full-rate log
+`outputs/latency/stage-trace-20260906/bridge-txfix2-session-20260906T053530Z.log`;
+trace over 5750 impulses: `aes67` 258, `write_to_read` 441,
+`cap_to_write` 629, `pi_total` 787 (30 over the level, where the two
+earlier sessions ran 39-40 under it: the time-domain sum closes to
+within a period, not better, the block-offset component again).
+Checklist item 9 is met. Conf `302d1a1f` carries the block as accepted
+with a header note that every MEASURED string written before 2026-09-06
+was read on the original module (installer `e26081ea`, `3cda845d` joins
+the unedited-shipped list); `copy-trace-labels.py` (the target64 copier
+with the trace prefix, shipped conf in `aes67-txfix-install/`) applies
+the four label lines to the live conf (`85414b06`) atomically, dry run
+without `--apply`. The point of record is now this: the audio path of
+target64 on the fixed module, 757 at 64 frames. The session draw stands
+(819, 811, 757 across the fixed module's sessions). For service the
+trace can stay on (behaviour-free; music on channel 1 fills the
+200000-line cap in about 40 minutes per direction and then only a
+counter moves) or plain `target64` can be selected, which is the same
+audio path and a stack restart. Rollback of the module is the previous
+service installer in `~/usb-16x16-work/aes67-trace-install/` (supervisor
+`7c7c9132`, module `f65a4955` at its original path), service stopped.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
