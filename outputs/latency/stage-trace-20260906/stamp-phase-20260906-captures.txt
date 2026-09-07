@@ -1,0 +1,73 @@
+# Ferrofish stamp phase from the 2026-09-06 eth0 captures, read 2026-09-07 21:30 UTC
+# Source: /tmp/trace1-rtp.pcap (01:55:15-01:56:30 UTC, module f65a4955) and /tmp/txfix-rtp.pcap
+# (03:05:31-03:06:46 UTC, module cc6852f0) in the Pi's tmpfs, both world-readable; the first 1.5 MB
+# of each and 2 MB chunks at 25/50/75/99 % were copied to the Mac (the captures themselves are
+# gitignored and go at the Pi's next reboot). Tool: stamp-phase.py beside this file.
+# Arithmetic: grid phase = (Ferrofish wire phase - Pi wire phase) mod 48; the Pi's source is stamped
+# with the TIC SAC minus one frame (RTP_audio_stream.c SendRTPAudioPackets, line 845), a multiple of 48,
+# so its wire phase 16 is the 2^32 mod 48 shift of the SAC high word alone. Lowest free sink delay = 144 - phase.
+
+## trace1-head.pcap
+no reference stream with a single wire phase in the capture: grid phases below are wire phases, unshifted (add --reference or capture the Pi's own source)
+239.69.121.9 (stream, offset 531217786): 1227 packets 2026-09-06T01:55:15Z..2026-09-06T01:55:16Z, wire phase {9: 1227}, seq gaps 0, stamp steps {48: 1226}
+    grid phase 9: deadline frame index 3 at delay 144; the same frame for delays 135..182; lowest free delay 135 (9 samples under 144); 134 crosses (one frame earlier, the 41-sample holes of 96)
+
+## trace1-p25.pcapchunk
+no reference stream with a single wire phase in the capture: grid phases below are wire phases, unshifted (add --reference or capture the Pi's own source)
+239.69.121.9 (stream, offset 531217786): 1715 packets 2026-09-06T01:55:43Z..2026-09-06T01:55:44Z, wire phase {9: 1715}, seq gaps 0, stamp steps {48: 1714}
+    grid phase 9: deadline frame index 3 at delay 144; the same frame for delays 135..182; lowest free delay 135 (9 samples under 144); 134 crosses (one frame earlier, the 41-sample holes of 96)
+
+## trace1-p50.pcapchunk
+reference 239.69.16.1: wire phase 16 on 857 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 858 packets 2026-09-06T01:56:02Z..2026-09-06T01:56:02Z, wire phase {9: 858}, seq gaps 0, stamp steps {48: 857}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 857 packets 2026-09-06T01:56:02Z..2026-09-06T01:56:02Z, wire phase {16: 857}, seq gaps 0, stamp steps {48: 856}
+
+## trace1-p75.pcapchunk
+reference 239.69.16.1: wire phase 16 on 858 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 858 packets 2026-09-06T01:56:16Z..2026-09-06T01:56:17Z, wire phase {9: 858}, seq gaps 0, stamp steps {48: 857}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 858 packets 2026-09-06T01:56:16Z..2026-09-06T01:56:17Z, wire phase {16: 858}, seq gaps 0, stamp steps {48: 857}
+
+## trace1-p99.pcapchunk
+reference 239.69.16.1: wire phase 16 on 642 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 641 packets 2026-09-06T01:56:29Z..2026-09-06T01:56:30Z, wire phase {9: 641}, seq gaps 0, stamp steps {48: 640}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 642 packets 2026-09-06T01:56:29Z..2026-09-06T01:56:30Z, wire phase {16: 642}, seq gaps 0, stamp steps {48: 641}
+
+## txfix-head.pcap
+reference 239.69.16.1: wire phase 16 on 613 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 614 packets 2026-09-06T03:05:31Z..2026-09-06T03:05:31Z, wire phase {9: 614}, seq gaps 0, stamp steps {48: 613}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 613 packets 2026-09-06T03:05:31Z..2026-09-06T03:05:31Z, wire phase {16: 613}, seq gaps 0, stamp steps {48: 612}
+
+## txfix-p25.pcapchunk
+reference 239.69.16.1: wire phase 16 on 857 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 858 packets 2026-09-06T03:05:49Z..2026-09-06T03:05:50Z, wire phase {9: 858}, seq gaps 0, stamp steps {48: 857}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 857 packets 2026-09-06T03:05:49Z..2026-09-06T03:05:50Z, wire phase {16: 857}, seq gaps 0, stamp steps {48: 856}
+
+## txfix-p50.pcapchunk
+reference 239.69.16.1: wire phase 16 on 857 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 858 packets 2026-09-06T03:06:08Z..2026-09-06T03:06:09Z, wire phase {9: 858}, seq gaps 0, stamp steps {48: 857}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 857 packets 2026-09-06T03:06:08Z..2026-09-06T03:06:09Z, wire phase {16: 857}, seq gaps 0, stamp steps {48: 856}
+
+## txfix-p75.pcapchunk
+reference 239.69.16.1: wire phase 16 on 858 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 857 packets 2026-09-06T03:06:27Z..2026-09-06T03:06:27Z, wire phase {9: 857}, seq gaps 0, stamp steps {48: 856}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 858 packets 2026-09-06T03:06:27Z..2026-09-06T03:06:27Z, wire phase {16: 858}, seq gaps 0, stamp steps {48: 857}
+
+## txfix-p99.pcapchunk
+reference 239.69.16.1: wire phase 16 on 857 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 858 packets 2026-09-06T03:06:45Z..2026-09-06T03:06:45Z, wire phase {9: 858}, seq gaps 0, stamp steps {48: 857}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 857 packets 2026-09-06T03:06:45Z..2026-09-06T03:06:45Z, wire phase {16: 857}, seq gaps 0, stamp steps {48: 855, 144: 1}
+    stamp jump at 2026-09-06T03:06:45Z: seq 48064->48065 stamp 3781034752->3781034896
+
+## Ferrofish arrival against the Pi's own packets (stamp-lag.py in the session scratchpad): (t_ff - t_pi) - (sac_ff - sac_pi)/48000
+# txfix p25 median -0.113 ms (min -0.162 max -0.012); p50 0.003 (-0.043..0.027); p75 0.019 (-0.085..0.024); trace1 p50 -0.044 (-0.090..-0.025); p75 -0.033 (-0.053..0.036).
+# The Pi sends a packet stamped S at the TIC of S + 48 (about 1.0 ms after t(S) plus the send path), so the Ferrofish's
+# packets arrive about 1.0-1.1 ms after the PTP time of their first sample, not 2 ms: consistent with the lead at 144
+# reading about 1.0 ms only for phase 41 ((144 - 41) / 48 ms = 2.146 ms to the deadline, less about 1.15 ms of lateness).

@@ -77,6 +77,16 @@ minus the stamp phase; 120 reads either 144's lead or 96's, nothing in
 between. Read the lead after any delay change: unchanged means free, a
 value near zero or negative means the boundary was crossed.
 
+The phase itself is readable from an `eth0` capture with
+`outputs/latency/stage-trace-20260906/stamp-phase.py`: the stream's RTP
+timestamp minus its mediaclk offset, mod 48, against the same figure for
+the Pi's own source (stamped with the TIC SAC minus one frame, a multiple
+of 48), the difference being the grid phase and the Pi's own value the
+2^32 mod 48 shift of the SAC high word (2^32 is 16 mod 48, so every wire
+phase moves 16 each 24.855 h; the difference does not). Read 2026-09-07
+from the 2026-09-06 captures: phase 41 on sink 0, so the free range is 103
+to 150 and 103 is the lowest free delay (sd103 block).
+
 ## Build (Pi, service stopped, no root)
 
 `build.sh` is the transmit-slot recipe with both patches and the hash

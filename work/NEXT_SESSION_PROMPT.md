@@ -4,10 +4,10 @@ Paste the block below into a fresh Codex or Claude Code session to resume work.
 It points at `PROJECT_HANDOFF.md`, which is authoritative where it conflicts
 with this summary.
 
-Rewritten 2026-09-07 18:05 UTC after the day's three acceptances (age50, the
-RAVENNA arrival-lead export, sink delay 132: RTL at 32 from 19.958 to 19.479
-ms on fresh anchors). Where this summary and the handoff tail differ, the
-handoff wins.
+Rewritten 2026-09-07 21:50 UTC after the phase reading: the Ferrofish stamp
+phase is 41, the free sink-delay range runs to 103, and the sd103 block is
+staged behind a capture gate. Where this summary and the handoff tail
+differ, the handoff wins.
 
 ---
 
@@ -15,14 +15,18 @@ Raspberry Pi 5 USB 16x16 / AES67 bridge. Repo: ~/Development/USB 16x16
 (github.com/squeaksquad/usb-16x16-aes67, main, pushed and clean).
 
 Read the Rollback rules at the end of PROJECT_HANDOFF.md, then everything
-from "IMPLEMENTED and STAGED 2026-09-07 13:10 UTC" to the end
+from "MEASURED 2026-09-07 17:19-17:23 UTC" to the end (the FOUND and
+STAGED entries of 21:30 and 21:45 UTC are the current work)
 (chronological, bold lead-ins; a CORRECTION paragraph wins over the entry
 it amends), then the BUDGET entry "BUDGET 2026-09-06 00:40 UTC" for the
 lever pricing (its sink-delay pricing is corrected in the 17:23 UTC
 MEASURED entry of 2026-09-07), then work/aes67-bridge/aes67.conf's blocks
-for ...-target48-trace-txoff950-rxtrim-age50 and ...-rxtrim-age50-sd132,
+for ...-rxtrim-age50-sd132 and ...-rxtrim-age50-sd103 (the staged one),
 work/ravenna-lead-export/README.md (the export: units, what sink_min_time
-means, the frame step), and work/phase4-bridge/src/main.cpp: the aligned
+means, the frame step, how the phase is read),
+outputs/latency/stage-trace-20260906/stamp-phase.py (its docstring is the
+phase arithmetic) and stamp-phase-20260906-captures.txt beside it, and
+work/phase4-bridge/src/main.cpp: the aligned
 TX prime (the hold, the front drop, the target, kAlignPrimeMarginNs and
 kAlignPrimeAgeMarginDefaultUs near line 85-100, the prime itself from
 about 1400), the PRIMED overshoot/trim code just after it, and
@@ -31,9 +35,13 @@ align_playback_trigger (about 1325, target= and slack_us=).
 NOTHING IS BROKEN. The service runs the accepted profile (sd132 on
 bridge 05f37bd9, supervisor 631e88e1, module bc694c24) on the 17:19 UTC
 anchor of 2026-09-07 with zero RECOVERs at the end of the session; the
-sd132 labels are copied, nothing pending on the Pi. Every read starts with
-a fresh anchor as always.
-Playback is on.
+sd132 labels are copied. Pending on the Pi: the sd103 block, staged in
+~/usb-16x16-work/aes67-sd103-install/ (shipped conf e3c3e83b, sd103-block.conf
+49fa061e, installer fca4ddcf whose conf pin moved; supervisor, unit,
+bridge and module unchanged, so the installer is not run), validated with
+the installed supervisor against the staged conf and the live conf plus
+the block. Not installed: it waits on the phase gate (below). Every read
+starts with a fresh anchor as always. Playback is on.
 
 THE POINT OF RECORD (accepted 2026-09-07 17:55 UTC)
 Profile servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd132
@@ -44,7 +52,8 @@ behaviour), supervisor 631e88e1 (module_binary ravenna-lead-install/,
 expected_module_sha256 bc694c24), module bc694c24 (the transmit-slot fix
 0001 plus the arrival-lead export 0002; rollbacks cc6852f0 in
 ravenna-tx-fix-install/ and the original f65a4955 in the v2.1 tree), conf
-ff05b089, installer a5c69f7c. Fresh anchor: 747 at 64 frames, RTL
+ff05b089 (e3c3e83b with the staged sd103 block), installer a5c69f7c
+(fca4ddcf staged). Fresh anchor: 747 at 64 frames, RTL
 Utility at 32 frames 19.479 ms = 747 + 188 to the sample; 4 x 800 loaded
 and the 600 s soak all on 747, zero RECOVERs; TX floor 75 loaded, RX 72,
 tx_pullmax 48, tx_occ / rx_occ 51; TX PRIMED front_age_frames 296
@@ -97,6 +106,26 @@ WHAT THE RECORD SETTLED (do not re-derive)
   exists.
 - Sink delay changes no audio at any value; its only failure is a late
   packet, copied as a stale slot.
+- The Ferrofish stamp phase is 41 (handoff FOUND 2026-09-07 21:30 UTC):
+  read from the two 2026-09-06 eth0 captures still in the Pi's tmpfs as
+  the sink 0 stream's wire phase ((RTP timestamp - mediaclk offset) mod
+  2^32, mod 48) minus the Pi's own source's, mod 48. The Pi's source is
+  stamped with the TIC SAC minus one frame, a multiple of 48, so its wire
+  phase (16) is the 2^32 mod 48 = 16 shift of the SAC high word, which
+  moves every 24.855 h and cancels in the difference; a bare "timestamp
+  mod 48" is wrong by that shift and by the 32-bit wrap. The same 41 on
+  every packet of both captures, 70 minutes apart across a module
+  reload; consistent with 132 reading 144's lead (needs 12 or more) and
+  with the Ferrofish's packets arriving about 1.0-1.15 ms after the PTP
+  time of their first sample (measured against the Pi's own packets in
+  the same captures; the earlier "about 2 ms" is corrected). For phase
+  p the free delays are 144 - p .. 191 - p: at 41, 103..150, so 103 is
+  the lowest free value (29 under 132, 0.604 ms) and 102 crosses. Sink 1
+  was not in the captures; its lead within 5-25 us of sink 0's on every
+  interval puts its phase within a sample of 41. Any delay under 144 is
+  exposed to a Ferrofish flow restart re-drawing the phase (132 to 12 of
+  48 draws, 103 to 41); the lead export shows it in one read, the
+  rollback is switch-profile to 144.
 - Nothing compiles the RAVENNA module on the Mac; the Pi build in a
   service-stop window is the syntax gate (build.sh in ravenna-lead-src/
   refuses while the service is active).
@@ -133,19 +162,35 @@ THE PROCEDURE (every measurement session starts with it)
    run without --apply).
 
 THE LEVERS, IN ORDER, ONE AT A TIME
-1. The rest of the free sink-delay range: 144 less the Ferrofish stamp
-   phase, between 0 and 35 more samples beyond 132, conf only. Price it
-   first by reading the phase: an eth0 capture on the Pi (root, the
-   user; rtp-impulses.py in outputs/latency/stage-trace-20260906/ parses
-   RTP) and the RTP timestamps mod 48 of either Ferrofish stream (both
-   share mediaclk:direct=531217786 and read the same lead), the phase
-   being how the driver's frame grid (SAC multiples of 48) sits against
-   the stamps; or empirically, one conf-only step to 120 judged by the
-   lead (unchanged: the phase is at least 24 and 120 is free; near zero
-   or negative: crossed, roll back by switch-profile). Then one block at
-   the largest free value with the usual set. Expect the level to move
-   1:1 with the samples and the lead not at all.
-2. After that, nothing priced remains on the Pi side by profile: the TX
+1. Sink delay 132 -> 103 (the sd103 block, staged), in this order:
+   a. The phase gate, service running, by the user (root; the 2026-09-06
+      captures were taken during runs without effect):
+      sudo timeout 4 tcpdump -i eth0 -s 1500 -B 65536 -c 8000 -w /tmp/phase-$(date -u +%Y%m%dT%H%M%SZ).pcap 'udp and dst port 5004'
+      Then from the Mac: ssh bdimaio@192.168.1.201 'head -c 1500000
+      /tmp/phase-*.pcap' > FILE; python3 outputs/latency/stage-trace-20260906/stamp-phase.py FILE.
+      Both Ferrofish streams (239.69.121.9 sink 0, 239.69.193.115 sink 1)
+      must read grid phase 41 with the Pi's 239.69.16.1/.2 as reference.
+      41 on both: install as staged. Another phase on either: the value
+      becomes 144 minus the smaller phase, re-staged conf only (under 12:
+      the flow restarted since sd132 was accepted, 132 is crossed, roll
+      back to 144 first). Do not read the phase without the Pi's streams
+      in the capture.
+   b. Playback off, sudo systemctl stop usb16x16-aes67, sudo tee -a
+      /etc/usb16x16/aes67.conf < ~/usb-16x16-work/aes67-sd103-install/sd103-block.conf,
+      sudo usb16x16-aes67-supervisor switch-profile servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd103,
+      sudo systemctl start usb16x16-aes67, sudo systemctl restart
+      usb-16x16.service (the fresh anchor); journal "sinks applied,
+      delay 103", both sinks reading back "delay": 103.
+   c. The procedure: first lead pair, gate, one 100-impulse read at 64
+      with the split, then the acceptance set with a lead pair around
+      every run, RTL at 32 by the user; then MEASURED/COVER/STATUS, the
+      conf pin, copy-sd103-labels.py. Expected on an anchor whose PRIMED
+      lines match sd132's 17:19 anchor: about 718 at 64 (747 - 29), RTL
+      at 32 about 18.875 ms, pos_aes67 544, the lead unchanged (0.93-1.06
+      ms, never negative), PRIMED and floors unchanged. Rollback:
+      switch-profile ...-rxtrim-age50-sd132 or ...-rxtrim-age50, conf only.
+2. After that, nothing priced remains on the Pi side by profile (the
+   sink delay is at its floor for this phase; 102 and below cross): the TX
    prime (192) sits over a bar of one period plus the Pi's worst wakeup
    gap and needs the days-long gap measurement (Phase 6); the Mac
    constant and the gadget's share of the USB legs are not reachable.

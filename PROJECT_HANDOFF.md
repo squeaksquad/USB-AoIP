@@ -8867,6 +8867,127 @@ anchor, zero RECOVERs, nothing pending on the Pi.
 record; the next lever is the rest of the free sink-delay range, priced
 by the Ferrofish stamp phase.
 
+**FOUND 2026-09-07 21:30 UTC, from the 2026-09-06 captures: the Ferrofish
+stamp phase is 41 against the RAVENNA driver's frame grid, so the free
+sink-delay range runs from 144 down to 103 and 103 is the lowest free
+value (41 samples under 144, 29 under 132, the same frame deadline).**
+Read-only on the Pi throughout; the service ran sd132 on the 17:19 anchor,
+zero RECOVERs before and after. *The captures.* `/tmp/trace1-rtp.pcap`
+(01:55:15-01:56:30 UTC, module `f65a4955`) and `/tmp/txfix-rtp.pcap`
+(03:05:31-03:06:46 UTC, module `cc6852f0`) are still in the Pi's tmpfs,
+world-readable; the first 1.5 MB of each and 2 MB chunks at 25/50/75/99 %
+were copied to the Mac (a few MB, the service idle, no measurement). *The
+arithmetic, from the driver source.* The receive path takes the 32-bit RTP
+timestamp, subtracts the stream's `mediaclk:direct` offset in 32-bit
+arithmetic, widens the result with the high 32 bits of the global 64-bit SAC
+(`ProcessRTPAudioPacket`, the wrap correction either side of 2^32), adds the
+playout delay and writes the samples at that SAC into the live-in ring; the
+TIC copies whole 48-sample frames at the global SAC, which is the TIC count
+times 48 (`PTP.c` 955-961), so the grid is the absolute multiples of 48 and a
+packet's deadline is the frame holding first-sample SAC plus delay. 2^32 is
+16 mod 48, so a stream's wire phase, ((timestamp - offset) mod 2^32) mod 48,
+is its grid phase shifted by 16 times the SAC high word, and that shift moves
+16 every 2^32 / 48000 s = 24.855 h. The Pi's own source is stamped with the
+global SAC minus one frame (`SendRTPAudioPackets`, line 845), a multiple of
+48, so its wire phase is the shift alone, and the grid phase of the Ferrofish
+stream is its wire phase minus the Pi's, mod 48: no epoch, no PTP time, no
+root. *The reading* (`outputs/latency/stage-trace-20260906/stamp-phase.py`,
+new; evidence `stamp-phase-20260906-captures.txt` beside it): sink 0's
+stream `239.69.121.9` (offset 531217786) wire phase 9 on every packet of
+every chunk of both captures, stamps stepping 48, no sequence gap; the Pi's
+`239.69.16.1` (offset 0) wire phase 16 on every packet; grid phase (9 - 16)
+mod 48 = **41**, the same across 70 minutes, a bridge restart and the module
+reload between the captures. A first pass that took (timestamp - offset)
+mod 48 in signed arithmetic read 9 on trace1 and 41 on txfix and looked like
+a phase change; it was the 32-bit wrap (the txfix stamps sit below the
+offset), corrected before anything was concluded. *Two independent checks
+agree with 41.* (1) 132 measured 144's lead today, which needs a phase of
+12 or more; 41 satisfies it, the alternatives the same captures would allow
+without the Pi reference (9, 25) do not (9) or need a lateness the
+capture rules out (25). (2) Against the Pi's own packets in the same
+captures, the Ferrofish's packets arrive within -0.16..+0.04 ms of where
+the Pi's arrive for the same SAC difference; the Pi sends a packet stamped
+S at the TIC of S + 48, so the Ferrofish's packets arrive about 1.0-1.1 ms
+after the PTP time of their first sample, not the 2 ms the lead export's
+first reading was taken to mean. With phase 41 the deadline at 144 is
+(144 - 41) / 48 = 2.146 ms after the first sample and the lead about 1.0
+ms says the worst packet is about 1.15 ms late, consistent; with phase 9 the
+deadline would be 2.81 ms out and the lead would have read 1.7-1.8 ms. So
+the "packets arrive about 2 ms after their stamp" in the 14:49 UTC entry
+and the export README is corrected to about 1.0-1.15 ms, and the frame
+step stands. *Sink 1* (`239.69.193.115`) was not in either capture (the
+filter took sink 0's group and the Pi's). Its lead has read 5-25 us above
+sink 0's on every one of the 17 interval pairs at 144 and at 132, and one
+sample of phase difference would show as 20.8 us with the sign set by the
+direction, so its phase is 41 within a sample; the fresh capture below
+settles it exactly. *What it prices.* For phase p the delays 144 - p ..
+191 - p share 144's deadline frame; at 41 that is 103..150, so 132 was
+free by 29 samples of slack and **103 is the lowest free delay**: 29 more
+samples (0.604 ms) with the deadline of 144 and 132 exactly (103 + 41 =
+144); 102 crosses to the frame before (the 41-sample holes of 96). Below
+the crossing nothing between exists, as the 17:23 UTC CORRECTION said. *The
+one risk any delay under 144 carries* is the Ferrofish flow re-drawing its
+phase (a flow restart; the phase was constant across everything the Pi did
+between the captures and, by the lead, since): 132 is crossed by 12 of the
+48 possible draws, 103 by 41 of them; the lead export shows a crossing in
+one read (near zero or negative on both sinks), the detector shows the
+holes, and the rollback is `switch-profile` to 144, conf only. The 24.855 h
+wire-phase shift is not a risk: the driver's widening cancels it, which is
+why the difference against the Pi's stream is the right reading and a bare
+"timestamp mod 48" is not.
+
+**STAGED 2026-09-07 21:45 UTC, conf only: sink delay 132 -> 103, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd103`
+(sd132 with `SINK_DELAY=103`, one variable), gated on a fresh capture
+reading phase 41 on both Ferrofish streams.** Conf `e3c3e83b` (the block
+after sd132's: the mechanism, the reading, the sink 1 inference, the gate,
+the expected numbers, the watch list and the restart risk in its comment;
+STATUS experimental, COVER as sd132 until measured; the tag `sd103`
+prefixes no field key; the block differs from sd132's in SINK_DELAY and
+the four labels alone); `sd103-block.conf` `49fa061e`; installer
+`fca4ddcf` (conf pin `e3c3e83b`, `ff05b089` joins the unedited-shipped
+list; supervisor `631e88e1`, unit `77837e60`, bridge `05f37bd9` unchanged,
+so the installer is not run for this lever). `work/ravenna-lead-export/README.md`
+gains the phase-reading paragraph, `CLAUDE.md`'s map the tool. Staged on
+the Pi with the service running (five scps, RECOVER count 0 before and
+after): `~/usb-16x16-work/aes67-sd103-install/` (shipped conf, the block,
+installer, supervisor, unit). Validated on the Pi with the installed
+supervisor `631e88e1`: the staged conf lists the sd103 profile (`sink delay
+103`, everything else sd132's), exit 0; the live conf plus the block
+likewise, `PROFILE` still sd132. Expected on a fresh anchor whose PRIMED
+lines match the 17:19 anchor's (269 / 19 / 577 / 445): level 29 under
+sd132 (about **718 at 64 frames**), RTL at 32 about **18.875 ms** = 718 +
+188, `pos_aes67` 573 -> 544, `pi_total` about 673, `usb_time` and the USB
+remainder unchanged, `sink_min_time` the same 0.93-1.06 ms per interval on
+both sinks and never negative, the bridge's PRIMED lines and floors
+unchanged. *Next, by the user, in this order.* (1) The phase gate, service
+running, playback on or off (a 4 s root capture of the four streams, as the
+2026-09-06 captures were taken during runs without effect):
+
+```bash
+sudo timeout 4 tcpdump -i eth0 -s 1500 -B 65536 -c 8000 -w /tmp/phase-$(date -u +%Y%m%dT%H%M%SZ).pcap 'udp and dst port 5004'
+```
+
+then from the Mac the first 1.5 MB of it through `stamp-phase.py` (as
+`ssh bdimaio@192.168.1.201 'head -c 1500000 /tmp/phase-*.pcap' > FILE;
+python3 outputs/latency/stage-trace-20260906/stamp-phase.py FILE`): both
+Ferrofish streams must read grid phase 41 with the Pi's streams as the
+reference. 41 on both: install as staged. A different phase on either sink:
+the value becomes 144 minus the smaller phase, re-staged conf only (a phase
+under 12 means the flow has restarted since sd132's acceptance and 132
+itself is crossed: roll back to 144 first). (2) Playback off, `sudo
+systemctl stop usb16x16-aes67`, append the block (`sudo tee -a
+/etc/usb16x16/aes67.conf < ~/usb-16x16-work/aes67-sd103-install/sd103-block.conf`),
+`sudo usb16x16-aes67-supervisor switch-profile
+servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd103`
+(PROFILE only while inactive), `sudo systemctl start usb16x16-aes67`, `sudo
+systemctl restart usb-16x16.service` for the fresh anchor; journal `sinks
+applied, delay 103`, both sinks reading back `"delay": 103`. (3) The first
+lead pair, gate, read, split, the acceptance set with a lead pair around
+every run, RTL at 32. Rollback: `switch-profile ...-rxtrim-age50-sd132`
+(132) or `...-rxtrim-age50` (144), conf only. Service unchanged
+throughout: sd132 on the 17:19 anchor, zero RECOVERs; playback on.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
