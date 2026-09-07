@@ -8486,6 +8486,77 @@ the 13:29 anchor, zero RECOVERs, nothing pending on the Pi.
 `work/NEXT_SESSION_PROMPT.md` points at the handoff tail; the next lever
 is sink delay 144 -> 120 after the arrival-lead export.
 
+**IMPLEMENTED and STAGED 2026-09-07 14:25 UTC, not yet built: the
+arrival-lead export, RAVENNA module patch 0002 in `work/ravenna-lead-export/`
+on top of the transmit-slot fix; the prerequisite the BUDGET entry set for
+sink delay 144 -> 120.** Read-only on the Pi throughout; the service ran
+age50 on the 13:29 anchor, zero RECOVERs before and after. *Two findings
+that correct the BUDGET entry's "one line".* (1) The driver's arrival-lead
+arithmetic mixed units by a thousand, not by ten: `MTAL_LK_GetCounterTime()`
+counts 100 ns and `MTAL_LK_GetCounterFreq()` returns 1e9, so the
+`* 1000000 / freq` conversions put the TIC's counter time and now in 100 us
+units against the SAC term's 100 ns; the reported minimum was the packet's
+first-frame SAC minus the TIC's SAC in microseconds (whole milliseconds),
+with the phase inside the TIC (up to 1 ms) lost, and a late packet wrapped
+the unsigned difference and never reached the minimum. (2) The running
+minimum was never seeded: the seed branch runs when the two reset counters
+differ, both are zero after `Init`'s memset, and the only bumper
+(`GetStats_SinkAheadTime`) has no caller, so the minimum sat at zero for the
+life of the stream and the "one line" alone would have exported 0. *The
+patch* (`0002-export-arrival-lead.patch` `e45b16b6`, `RTP_audio_stream.c`
+`5d479dda` and `.h` `d4e9fbc8` after it; `manager.c` `9cbbc5a8` from 0001;
+the daemon untouched: `get_RTPStream_status`'s memcpy already copies the
+whole `TRTP_stream_status` and `session_manager.cpp` / `json.cpp` carry
+`sink_min_time` to `GET /api/sink/status/N`): the packet path computes the
+lead in 100 ns, signed (the TIC's counter time plus the SAC difference,
+minus now; negative when the packet arrived after the TIC that copies its
+first sample into the ALSA capture buffer), the minimum is `int32_t`;
+`Create` arms the seed and sets `sink_min_time` -1; `PrepareBufferLives`
+closes an interval when the daemon has fetched the status (sets -1, bumps
+the reset counter so the next packet re-seeds) and otherwise publishes the
+minimum in microseconds once seeded. So the API field is, per sink, the
+least lead over the packets since the previous GET of that sink; -1 with no
+packet since; every GET starts the next interval, so it is read in pairs
+around a run (`read-lead.sh [label]` on the Mac prints both sinks with a
+UTC stamp; tested against the live daemon, 0 / 0 on module `cc6852f0` as
+expected). Nothing in the audio path, the stamp, the send instant or the
+netlink structures changes. *Staged on the Pi*, three scps with the
+service running (RECOVER count 0 before and after):
+`~/usb-16x16-work/ravenna-lead-src/` holds 0001 (`a7e9bc28`), 0002
+(`e45b16b6`) and `build.sh` (`72543be6`: refuses while the service is
+active, copies the pristine v2.1 `common` and `driver`, cleans, applies
+both patches, checks the three patched files by hash, `make modules`,
+prints the warning count, the vermagic against the running kernel and the
+module hash, copies the module to `~/usb-16x16-work/ravenna-lead-install/`).
+Both patches dry-run clean on the Pi's pristine v2.1 tree and on a copy of
+the vendored tree with 0001 applied; the six driver files compared are
+byte-identical between the two. Nothing compiles on the Mac: the Pi build
+is the syntax gate. *What sink delay 120 needs from it:* at 144 the lead
+should read about 3 ms less the packet's lateness against its stamp less
+one frame of ring grain; 120 takes 500 us off. The minimum over a loaded
+800-impulse run and the 600 s soak at 144 decides it: over 1 ms, 120 keeps
+0.5 ms; 0.5-1 ms, 120 is the edge the 41-sample holes at 96 showed; under
+0.5 ms, the lever is closed. *Aside:* at 14:12 UTC the live API read
+`rtp_seq_id_error` and `rtp_sac_error` true on both sinks and `all_muted`
+true on sink 1, flags accumulated since whatever GET came before (the
+status resets on fetch); the reads made here reset them, so a later GET
+says whether they recur. Not gated on, per the rule. *Next, in one
+service-stop window by the user:* `sudo systemctl stop usb16x16-aes67`
+(playback off), `~/usb-16x16-work/ravenna-lead-src/build.sh`; then the pins
+(supervisor `module_binary` to `ravenna-lead-install/` and
+`expected_module_sha256` to the built hash, `install-aes67-service.sh`'s
+supervisor pin, the module into `work/ravenna-lead-export/artifacts/` and
+the README), `aes67-lead-install/` staged (supervisor, unit, shipped conf,
+installer; profile, bridge and conf untouched), the user's
+`install-aes67-service.sh`, `systemctl start`, `sudo systemctl restart
+usb-16x16.service` for the fresh anchor; gate, one 100-impulse read at 64
+(766 expected, the PRIMED lines as accepted), `read-lead.sh` before and
+after it and around every run of the acceptance set (4 x 800 loaded, the
+600 s soak), RTL at 32 by the user; then the sink delay 120 block, or not,
+from the lead. Rollback: the previous supervisor (`7a5d2362`, module
+`cc6852f0` from `ravenna-tx-fix-install/`) through `aes67-age50-install/`,
+service stopped. `CLAUDE.md`'s map carries the new directory.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

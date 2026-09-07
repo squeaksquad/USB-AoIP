@@ -58,6 +58,7 @@ Findings and pickups:
 - `work/dante-mode/PLAN.md` — planned Inferno-based Dante mode: native bidirectional Controller routing, persistent endpoint lifecycle, isolated USB integration, latency comparison and rollback. Documentation only; no candidate installed.
 - `work/SAP_DISCOVERY_FINDING.md` — resolved 2026-09-01: the discovery delay was switch IGMP snooping.
 - `work/NEXT_SESSION_PROMPT.md` — pickup prompt rewritten 2026-09-06 after the budget day (the transmit-slot fix); the handoff tail is still authoritative where they differ.
+- `work/ravenna-lead-export/` — the RAVENNA module's arrival-lead export (patch 0002 on top of the transmit-slot fix): the patch, README (mechanism, units, how to read `sink_min_time`, build, install, rollback), `build.sh` for the Pi, `read-lead.sh` for the Mac. Staged 2026-09-07, not built.
 - `work/ravenna-tx-fix/` — the RAVENNA module's transmit-slot fix: the patch, README (mechanism, build, install, rollback), the built module in `artifacts/`. Installed 2026-09-06; the supervisor loads it from `~/usb-16x16-work/ravenna-tx-fix-install/`.
 
 Vendored and archived:

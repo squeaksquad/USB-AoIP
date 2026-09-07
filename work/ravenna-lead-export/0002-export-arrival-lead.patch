@@ -1,0 +1,148 @@
+--- a/driver/RTP_audio_stream.h	2026-09-07 10:17:38
++++ b/driver/RTP_audio_stream.h	2026-09-07 10:19:21
+@@ -65,7 +65,12 @@
+ 
+ 	uint32_t m_ui32SinkAheadTimeResetCounter;
+ 	uint32_t m_ui32LastSinkAheadTimeResetCounter;
+-	uint32_t m_ui32MinSinkAheadTime;
++	/* usb16x16 2026-09-07: signed (was uint32_t m_ui32MinSinkAheadTime). The
++	 * least time a packet arrived ahead of the TIC that consumes its first
++	 * sample, [100 ns], since the packet path last re-seeded it; negative
++	 * when a packet arrived after that TIC. Exported through
++	 * m_StreamStatus.sink_min_time by PrepareBufferLives. */
++	int32_t m_i32MinSinkAheadTime;
+ 
+ 	// Messages Counter
+ 	unsigned short m_usWrongSSRCMessageCounter;
+--- a/driver/RTP_audio_stream.c	2026-09-07 10:17:38
++++ b/driver/RTP_audio_stream.c	2026-09-07 10:19:21
+@@ -56,6 +56,12 @@
+ 
+ 	self->m_pManager = pManager;
+ 
++	/* usb16x16 2026-09-07: arm the arrival-lead minimum so the first packet
++	 * seeds it (with both counters at zero after Init's memset the minimum
++	 * stayed at its zero forever), and report no packet seen yet. */
++	self->m_ui32SinkAheadTimeResetCounter = self->m_ui32LastSinkAheadTimeResetCounter + 1;
++	self->m_StreamStatus.sink_min_time = -1;
++
+ 	if (self->m_bLivesInitialized)
+ 	{
+ 		MTAL_DP("Live already initialized\n");
+@@ -479,7 +485,7 @@
+ {
+ 	memset(pSinkAheadTime, 0, sizeof(TSinkAheadTime));
+ 
+-	pSinkAheadTime->ui32MinSinkAheadTime = self->m_ui32MinSinkAheadTime / 10; // [us]
++	pSinkAheadTime->ui32MinSinkAheadTime = self->m_i32MinSinkAheadTime > 0 ? (uint32_t)(self->m_i32MinSinkAheadTime / 10) : 0; // [us]
+ 	self->m_ui32SinkAheadTimeResetCounter++;
+ }
+ 
+@@ -757,47 +763,44 @@
+ #ifdef DEBUG_CHECK
+ 	{
+ 		// stats: compute the amount of data (in time) we have in advance
+-		uint64_t ui64GlobalSAC, ui64GlobalTime, ui64GlobalPerformanceCounter, ui64Now, ui64UsedSAC, ui64UsedTime;
+-		int64_t i64DeltaSAC;
+-		uint32_t ui32MinSinkAheadTime;
+-		pManager->get_global_times(pManager->user, &ui64GlobalSAC, &ui64GlobalTime, &ui64GlobalPerformanceCounter);
+-		//MTAL_DP("GlobalSAC = %llu  GlobalTime= %llu  GlobalPerfmon = %llu\n", ui64GlobalSAC, ui64GlobalTime, ui64GlobalPerformanceCounter);
+-
+-		ui64GlobalPerformanceCounter = ui64GlobalPerformanceCounter * 1000000 / MTAL_LK_GetCounterFreq(); // convert to time
+-
+-		ui64Now = MTAL_LK_GetCounterTime() * 1000000 / MTAL_LK_GetCounterFreq();//MTAL_GetSystemTime();
++		/* usb16x16 2026-09-07: MTAL_LK_GetCounterTime() counts 100 ns and
++		 * MTAL_LK_GetCounterFreq() returns 1e9, so the original
++		 * "* 1000000 / freq" put the two counters in 100 us units against
++		 * the SAC term's 100 ns: the phase inside the TIC (up to one TIC)
++		 * was lost, and a late packet wrapped the unsigned difference and
++		 * never reached the minimum. Everything in 100 ns, signed. */
++		uint64_t ui64GlobalSAC, ui64GlobalTime, ui64GlobalPerformanceCounter, ui64Now, ui64UsedSAC;
++		int64_t i64DeltaSAC, i64UsedTime, i64SinkAheadTime;
++		int32_t i32SinkAheadTime;
++		pManager->get_global_times(pManager->user, &ui64GlobalSAC, &ui64GlobalTime, &ui64GlobalPerformanceCounter); // the TIC's counter time [100 ns] and SAC
+ 
++		ui64Now = MTAL_LK_GetCounterTime(); // [100 ns]
+ 
+-		//MTAL_DP("ui32RTPSAC %u  perfcounter %llu\n", ui32RTPSAC, MTAL_LK_GetCounterTime());
+-		// ui32UsedSAC is the first frame SAC when this packet will be used
++		// ui64UsedSAC is the first frame SAC when this packet will be used
+ 		ui64UsedSAC = (ui64RTPSAC - (CW_ll_modulo(ui64RTPSAC, pManager->get_frame_size(pManager->user))));
+ 
+-		i64DeltaSAC =  ui64UsedSAC - ui64GlobalSAC;
+-		//MTAL_DP("i64DeltaSAC %llu playout delay %u, frame size: %u\n", i64DeltaSAC, pRTP_stream_info->m_ui32PlayOutDelay, pManager->get_frame_size(pManager->user));
+-		if(i64DeltaSAC < 0)
+-		{
+-			i64DeltaSAC += 0x7FFFFFFFFFFFFFFF;
+-		}
++		i64DeltaSAC = (int64_t)(ui64UsedSAC - ui64GlobalSAC); // [smpl]; negative once that frame is past
+ 
+-		//MTAL_DP("2.i64DeltaSAC %llu\n", i64DeltaSAC);
+-
+-		// ui64UsedTime is the time when the data will be used
+-		ui64UsedTime = ui64GlobalPerformanceCounter + i64DeltaSAC * 10000000 / pRTP_stream_info->m_ui32SamplingRate;
++		// i64UsedTime is the time when the data will be used
++		i64UsedTime = (int64_t)ui64GlobalPerformanceCounter + i64DeltaSAC * 10000000 / (int64_t)pRTP_stream_info->m_ui32SamplingRate; // [100 ns]
+ 
+-		ui32MinSinkAheadTime = (uint32_t)(ui64UsedTime - ui64Now);
++		i64SinkAheadTime = i64UsedTime - (int64_t)ui64Now; // [100 ns]; negative when the packet is late
++		if (i64SinkAheadTime > 0x7FFFFFFFLL)
++			i32SinkAheadTime = 0x7FFFFFFF;
++		else if (i64SinkAheadTime < -0x7FFFFFFFLL)
++			i32SinkAheadTime = -0x7FFFFFFF;
++		else
++			i32SinkAheadTime = (int32_t)i64SinkAheadTime;
+ 
+-		//MTAL_DP("ui64Now %llu, ui64UsedTime %llu\n", ui64Now, ui64UsedTime);
+-		//MTAL_DP("ui32MinSinkAheadTime %u\n", ui32MinSinkAheadTime);
+-
+ 		// Reset min/max delta arrival time
+ 		if(self->m_ui32SinkAheadTimeResetCounter != self->m_ui32LastSinkAheadTimeResetCounter)
+ 		{
+ 			self->m_ui32LastSinkAheadTimeResetCounter = self->m_ui32SinkAheadTimeResetCounter;
+-			self->m_ui32MinSinkAheadTime = ui32MinSinkAheadTime;
++			self->m_i32MinSinkAheadTime = i32SinkAheadTime;
+ 		}
+-		else if(ui32MinSinkAheadTime < self->m_ui32MinSinkAheadTime)
++		else if(i32SinkAheadTime < self->m_i32MinSinkAheadTime)
+ 		{
+-			self->m_ui32MinSinkAheadTime = ui32MinSinkAheadTime;
++			self->m_i32MinSinkAheadTime = i32SinkAheadTime;
+ 		}
+ 	}
+ #endif //DEBUG_CHECK
+@@ -1128,6 +1131,12 @@
+ 			self->m_StreamStatus.u.bit_fields.sink_RTP_PayloadType_error = bWrongRTPPayloadType ? 1 : 0;
+ 			self->m_StreamStatus.u.bit_fields.sink_RTP_SAC_error = bWrongRTPSAC ? 1 : 0;
+ 			self->m_StreamStatus.u.bit_fields.sink_all_muted = bGlobalLivesInMuted ? 1 : 0;
++			/* usb16x16 2026-09-07: the status the daemon just fetched carried the
++			 * arrival lead's minimum over the interval since the fetch before it.
++			 * Start the next interval: no packet seen yet, and the packet path
++			 * re-seeds the minimum at its next packet. */
++			self->m_StreamStatus.sink_min_time = -1;
++			self->m_ui32SinkAheadTimeResetCounter++;
+ 		}
+ 		else
+ 		{ // update error only
+@@ -1146,6 +1155,21 @@
+ 			if (bWrongRTPSAC)
+ 				self->m_StreamStatus.u.bit_fields.sink_RTP_SAC_error = 1;
+ 		}
++#ifdef DEBUG_CHECK
++		/* usb16x16 2026-09-07: export the arrival lead. sink_min_time is the
++		 * least time, in microseconds, that a packet of this sink arrived ahead
++		 * of the TIC that consumes its first sample, over the packets since the
++		 * daemon last fetched the status (GET /api/sink/status/N); negative
++		 * when a packet arrived after that TIC (a hole), -1 while no packet has
++		 * arrived in the interval. It was always 0: the minimum never left the
++		 * module (GetMinSinkAheadTime has no message case) and set_sink_min_time
++		 * had no caller. The memcpy in get_RTPStream_status already copies the
++		 * whole TRTP_stream_status; the daemon is unchanged. */
++		if (self->m_ui32SinkAheadTimeResetCounter == self->m_ui32LastSinkAheadTimeResetCounter)
++		{
++			self->m_StreamStatus.sink_min_time = self->m_i32MinSinkAheadTime / 10;
++		}
++#endif //DEBUG_CHECK
+ 	}
+ }
+ 
