@@ -8479,6 +8479,13 @@ age50 19.875; DVS 11.312. Left on the table, priced: sink delay 144 ->
 the set on age50, the 13:29 anchor, zero RECOVERs; nothing pending on the
 Pi but the label copy.
 
+**DONE 2026-09-07 14:15 UTC: age50 labels copied into the live conf by
+the user (`copy-age50-labels.py --apply`, 3 lines; the live block reads
+STATUS accepted, the dry run now shows 0), playback back on.** Service on
+the 13:29 anchor, zero RECOVERs, nothing pending on the Pi.
+`work/NEXT_SESSION_PROMPT.md` points at the handoff tail; the next lever
+is sink delay 144 -> 120 after the arrival-lead export.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
