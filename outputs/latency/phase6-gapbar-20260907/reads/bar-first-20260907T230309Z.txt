@@ -1,0 +1,22 @@
+# read 2026-09-07T23:03:10Z pi:  19:03:10 up 2 days, 10:45,  2 users,  load average: 0.09, 0.06, 0.01
+# service: NRestarts=0 ActiveEnterTimestamp=Mon 2026-09-07 17:45:32 EDT 
+# stage: 1788817699 stable for 120s, failure history cleared
+# recovers file: 0 lines
+# /run/usb16x16/bridge.log:  28416 10243963 lines bytes, modified 2026-09-07T23:03:09Z
+NEGOTIATED usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+ZERORUN enabled min_frames=8 max_frames=480 stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback line_cap=4096
+ALIGN status=ok offset_us=600 attempts=1 wakeups=8 tick_period_us=1000 wake_to_prepare_us=616 prepare_us=13 intervals_us=982/998/1003/995/1000/999/999
+PRIMED direction=ravenna-to-usb grid_phase_us=556 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=32 t_us=1563
+DEPTHSTEP direction=ravenna-to-usb t_us=1611 depth_floor=171 ring=51 queue=120 avail=72 capture_backlog=0 pull=0 gap_us=0
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=270 overshoot=27 trimmed=0 queue_prime=192 align_dropped=18 prime_phase_us=453 first_tick_wait_us=546 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=3998
+ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=951 wake_to_start_us=951 target=prime slack_us=417 sleep_result=0 t_us=4488
+DEPTHSTEP direction=ravenna-to-usb t_us=4527 depth_floor=123 ring=51 queue=72 avail=120 capture_backlog=0 pull=48 gap_us=976
+DEPTHSTEP direction=usb-to-ravenna t_us=4537 depth_floor=270 ring=51 queue=219 avail=165 capture_backlog=0 pull=0 gap_us=0
+DEPTHSTEP direction=usb-to-ravenna t_us=4554 depth_floor=222 ring=51 queue=171 avail=213 capture_backlog=0 pull=48 gap_us=17
+DEPTHSTEP direction=usb-to-ravenna t_us=32676445 depth_floor=174 ring=51 queue=123 avail=261 capture_backlog=0 pull=48 gap_us=963
+DEPTHSTEP direction=usb-to-ravenna t_us=351463037 depth_floor=135 ring=51 queue=84 avail=300 capture_backlog=0 pull=48 gap_us=887
+ZERORUN stage=usb-capture direction=usb-to-ravenna start=65603400 length=128 channels=0xfffe nchan=15 start_mod48=24 events=1 t_us=1366740412 utc=2026-09-07T22:09:02.397Z
+ZERORUN stage=ravenna-playback direction=usb-to-ravenna start=65603381 length=128 channels=0xfffe nchan=15 start_mod48=5 events=1 t_us=1366741394 utc=2026-09-07T22:09:02.398Z
+ZERORUN stage=ravenna-capture direction=ravenna-to-usb start=65603925 length=128 channels=0xfffe nchan=15 start_mod48=21 events=1 t_us=1366749444 utc=2026-09-07T22:09:02.406Z
+ZERORUN stage=usb-playback direction=ravenna-to-usb start=65603903 length=128 channels=0xfffe nchan=15 start_mod48=47 events=1 t_us=1366750457 utc=2026-09-07T22:09:02.407Z
+BRIDGE ppm=-14.990 observed_ppm=-14.990 phase_error=0.000 tx_occ=51 rx_occ=51 tx_queue=178 rx_queue=163 tx_restarts=0 rx_restarts=0 tx_input=221452087 rx_input=221452128 tx_consumed=221452018 rx_consumed=221452056 tx_dropped=0 rx_dropped=0 tx_short=18675727 rx_short=16699623 tx_qfloor=78 rx_qfloor=72 tx_dfloor=129 rx_dfloor=123 tx_qlow=0 rx_qlow=0 tx_qn=20592293 rx_qn=17994093 tx_cappeak=96 rx_cappeak=96 tx_capmean=11.056 rx_capmean=10.754 tx_frames=221452018 rx_frames=221452056 tx_dmean=206.416 rx_dmean=222.159 tx_qmean=143.325 rx_qmean=155.848 tx_pullmax=48 rx_pullmax=85 tx_pullmax_gap_us=17 rx_pullmax_gap_us=916 tx_gapmax_us=1120 rx_gapmax_us=1167 tx_pullhist=15978712/4613580/0/0/0/0 rx_pullhist=13067749/4923399/2944/0/0/0 tx_caphist=14939242/5649870/3199/0/0 rx_caphist=15978726/4613584/1/0/0 tx_clip=0 rx_clip=0 pitch=1000016 phase_us=972 bias_ppm=-0.700 pitch_errors=0 pitch_p=1000016 tx_bias=0.000 rx_bias=0.000 tx_set=-1 rx_set=-1 zr_usbcap=1/128/128/6036 zr_ravplay=1/128/128/6036 zr_ravcap=1/128/128/6036 zr_usbplay=1/128/128/6036

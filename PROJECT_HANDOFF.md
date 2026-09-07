@@ -9157,6 +9157,93 @@ the lead pair after any Ferrofish, switch or Dante change; a re-drawn phase
 means `switch-profile` to 144 and `stamp-phase.py` over a fresh capture) is
 in the ACCEPTED entry and the prompt.
 
+**STARTED 2026-09-07 23:05 UTC: Phase 6, the pull-gap bar under the TX
+prime, as a days-long passive read of what the bridge already logs; the
+rule for a prime cut stated before the data; the first read and the 30
+saved session logs priced: on the worst clean floor of the current lineage
+(75) the TX prime 192 could drop 24 to 168, and 144 would need a floor of
+96 that no session has drawn.** Read-only on the Pi throughout (a few KB
+over ssh, no transfer); the service on sd103, the 21:45 anchor, zero
+RECOVERs, playback on. *What the bar is.* The RAVENNA playback queue is
+primed to the TX prime (192; the queue starts at 219 with the untrimmed
+overshoot), the TIC pulls 48 frames per millisecond whatever the bridge
+does, and the bridge refills it on each USB capture wake, so the queue's
+running floor is the prime less the worst drawdown the process has drawn,
+and the queue is what underruns (0 is a RECOVER: audible, and a re-drawn
+level). The pitch servo conserves total depth, so a prime cut of X lowers
+the floor by X and nothing else: the lever is priced on the floor
+directly, not on a gap model. RX is read but is not a lever (the B2 seed
+experiment moved the RX floor and not the level; its floor 72 is 120 less
+one pull on every session since rxtrim). *The instrument is already in
+the bridge.* The once-per-second `BRIDGE` line carries, since process
+start, `tx_qfloor` / `rx_qfloor` (the running queue floors), `tx_dfloor`
+/ `rx_dfloor`, `tx_gapmax_us` / `rx_gapmax_us` (the longest interval
+between queue observations), `tx_pullmax` / `rx_pullmax` with the gap each
+came in, the pull histograms (0, 1-48, 49-96, 97-144, 145-192, 193+),
+`tx_qlow` / `rx_qlow` (observations under one period: cover breached) and
+the restart counters; `DEPTHSTEP` lines mark each step of the depth floor
+by 24 or more with the gap that drew it; `PRIMED` counts re-primes and
+`RECOVER` the underruns. The supervisor writes one log per bridge process
+(`/run/usb16x16/bridge.log`, rotated once at 64 MB to `.1`, about two to
+four days at the idle rate) and keeps the latest line in
+`/run/usb16x16/last-bridge`, so the bar is readable at any moment without
+a build, a root change or a service stop. A RECOVER contaminates the
+running floor (the floor after an underrun is the underrun's), so a
+session with one is priced on its `DEPTHSTEP` trail before it and flagged.
+*Tools* (`outputs/latency/phase6-gapbar-20260907/`, new): `gap-bar.py`
+(reads full session logs or the subset the wrapper saves; per log the
+primes and the PRIMED draw, runtime, floors, gaps, largest pulls, the pull
+histograms, restarts, RECOVER and ZERORUN counts, the floor trails, and
+the priced prime; over several logs the worst clean floor, the longest
+gap and the priced prime), `read-bar.sh [label]` (the marker lines and
+the latest `BRIDGE` line from the Pi into `reads/bar-<label>-<UTC>.txt`,
+then `gap-bar.py` on it; run between measurement runs, never during one),
+`historical-sessions.txt` (the analyser over the 30 saved session logs).
+*The rule, stated now.* A conf-only TX prime block only when the worst
+floor over three or more days of real use plus the loaded acceptance set
+leaves at least one period (48) at the new prime, cuts in steps of 24:
+new prime = 192 - floor((worst floor - 48) / 24) x 24. A profile tag for it
+must not be `tx168` (the tag would prefix the `TX_` field keys); `prime168`.
+*First read, 23:03 UTC* (`reads/bar-first-20260907T230309Z.txt`, the
+21:45 anchor, 1.28 h): TX floor **78**, RX 72, `tx_qlow` / `rx_qlow` 0,
+gaps 1120 / 1167 us, largest pull TX 48, RX **85** at a 916 us gap (49
+through the whole acceptance set; the 85 arrived during the hour of
+playback after it, with the RX floor unmoved: the first tail event of the
+read), TX pulls 15,978,712 of 0 and 4,613,580 of 1-48, none larger; TX
+floor trail queue 219 at start, 171 at +0.0 s, 123 at +32.7 s (gap 963
+us), 84 at +5.9 min (gap 887 us), so the floor was drawn by ordinary
+one-millisecond gaps inside six minutes and has held since; zero
+re-primes, zero RECOVERs, the soak's one 128-frame ZERORUN. Priced: 168
+on this draw (30 over one period). *The saved sessions*
+(`historical-sessions.txt`: 30 logs, 5.3 h, 24 clean). On the current
+prime path (front age 296-317, target 48: rxtrim, target48, txoff950,
+txoff950m150, age50, age50b, lead, sd132, sd103) the TX floors are 75,
+76, 78, 81, 83, 84, 87, 88 and 94 over nine sessions, worst sd132's 75;
+the 2026-09-06 target64 lineage (front age 336, the queue starting at
+depth 214-224) read 107-155 and is not comparable. The longest gap in a
+clean session is **1629 us** (age50 13:19 UTC, the stalled-first-second
+anchor that was re-drawn: a 96 pull on both directions in the first
+second, RX floor 24 and `rx_qlow` 1, TX floor 84 because the queue was
+still at its start depth). So a 1.6 ms gap exists on this Pi; had it
+fallen at the steady floor it would have drawn about 30 more, to about
+48, which is exactly the cover 168 keeps and 144 does not. The gaps over
+2 ms in the record (2479, 3717, 4951 us) all sit in sessions with
+RECOVERs from the 2026-09-06 kill and rebind experiments, and each first
+appears on the `BRIDGE` line at its session's RECOVER (+2.0 s against
+the RECOVER at +1.8 s, +25.0 against +24.6, +978 inside txfix1's five
+RECOVERs from +965), so they are the recovery path's, not the running
+bar's. Priced on the
+worst clean floor 75: **168** (24 samples, 0.5 ms at RTL 32); 144 needs
+96. *Protocol.* `read-bar.sh` once a day between runs (the floors are per
+process: a service restart starts a new draw, and each is counted on its
+own), the reads committed as evidence; the re-prime count over days (the
+open Phase 6 stability item) comes from the same read. After three or
+more days on one process with the floor still at or above 72, the
+`prime168` block (sd103 with `TX_PLAYBACK_PRIME=168`, one variable, conf
+only, expected 24 under 719 on a matching anchor, TX floor about 54) goes
+through the usual acceptance; a floor under 72 in the days closes the
+lever at 192 and the record says so.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

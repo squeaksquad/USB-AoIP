@@ -1,0 +1,464 @@
+== bridge-age50-session-20260907T1319Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 243, ring_at_prime 270, overshoot 27, align_dropped 18, first_tick_wait_us 542, front_age_frames 296, under_prime 0); re-primes 0
+   RX prime 120 (intended 171, ring_at_prime 192, trimmed 21); re-primes 0
+   ALIGN trigger target=prime slack_us=412 wake_to_start_us=951
+   runtime 0.05 h (178 BRIDGE lines in the log), pitch 1000011, tx_occ/rx_occ 51/51
+   floors: TX queue 84 (depth 137), RX queue 24 (depth 123); under one period: tx_qlow 0 rx_qlow 1
+   gaps: tx_gapmax_us 1629 rx_gapmax_us 1648; largest pull TX 96 (gap 1629 us), RX 96 (gap 1648 us)
+   TX pulls by size: 0: 625323, 1-48: 178009, 49-96: 1
+   RX pulls by size: 0: 535690, 1-48: 195843, 49-96: 60
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 171 (pull 0, gap 0 us); +36.1s queue 123 (pull 48, gap 886 us); +2.9m queue 86 (pull 48, gap 889 us)
+   RX floor trail: +0.0s queue 120 (pull 0, gap 0 us); +0.0s queue 72 (pull 48, gap 1005 us)
+   priced: TX floor 84 leaves 36 over one period: the prime could drop 24 to 168 on this draw
+
+== bridge-age50b-session-20260907T1330Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 243, ring_at_prime 276, overshoot 33, align_dropped 12, first_tick_wait_us 433, front_age_frames 296, under_prime 0); re-primes 0
+   RX prime 120 (intended 171, ring_at_prime 192, trimmed 21); re-primes 0
+   ALIGN trigger target=prime slack_us=302 wake_to_start_us=951
+   runtime 0.46 h (1659 BRIDGE lines in the log), pitch 1000016, tx_occ/rx_occ 51/51
+   floors: TX queue 81 (depth 137), RX queue 72 (depth 147); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1214 rx_gapmax_us 1283; largest pull TX 48 (gap 399 us), RX 49 (gap 732 us)
+   TX pulls by size: 0: 5718832, 1-48: 1659184
+   RX pulls by size: 0: 3986204, 1-48: 1827199, 49-96: 985
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/6039 ravplay 0/0/0/6039 ravcap 0/0/0/6039 usbplay 0/0/0/6039)
+   TX floor trail: +0.0s queue 177 (pull 0, gap 0 us); +24.2s queue 129 (pull 48, gap 882 us); +3.1m queue 88 (pull 48, gap 886 us)
+   RX floor trail: +0.0s queue 120 (pull 0, gap 0 us); +0.0s queue 96 (pull 24, gap 5 us)
+   priced: TX floor 81 leaves 33 over one period: the prime could drop 24 to 168 on this draw
+
+== bridge-creep1-session-20260906T173651Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 264, overshoot 5, align_dropped 72, first_tick_wait_us 1511, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.03 h (98 BRIDGE lines in the log), pitch 1000017, tx_occ/rx_occ 67/67
+   floors: TX queue 112 (depth 216), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1162 rx_gapmax_us 1638; largest pull TX 48 (gap 282 us), RX 49 (gap 581 us)
+   TX pulls by size: 0: 333711, 1-48: 97998
+   RX pulls by size: 0: 316401, 1-48: 107922, 49-96: 25
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 197 (pull 0, gap 0 us); +0.0s queue 197 (pull 48, gap 282 us); +35.1s queue 149 (pull 48, gap 885 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1638 us)
+   priced: TX floor 112 leaves 64 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-creep2-session-20260906T1819Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 270, overshoot 11, align_dropped 66, first_tick_wait_us 1393, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.02 h (76 BRIDGE lines in the log), pitch 1000002, tx_occ/rx_occ 67/67
+   floors: TX queue 155 (depth 222), RX queue 125 (depth 192); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1083 rx_gapmax_us 1110; largest pull TX 48 (gap 265 us), RX 49 (gap 620 us)
+   TX pulls by size: 0: 244580, 1-48: 75998
+   RX pulls by size: 0: 199598, 1-48: 77640, 49-96: 1
+   restarts tx/rx 0/1, RECOVER lines 1, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 203 (pull 0, gap 0 us); +0.0s queue 203 (pull 48, gap 265 us); +28.1s queue 155 (pull 48, gap 962 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us)
+   RECOVER: first at +0.0s; ravenna-to-usb/capture-avail x1
+   priced: TX floor 155 leaves 107 over one period: the prime could drop 96 to 96 on this draw (floor contaminated by a RECOVER, see the trail)
+
+== bridge-draw1-session-20260906T141609Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 271, overshoot 12, align_dropped 65, first_tick_wait_us 1362, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=601
+   runtime 0.04 h (128 BRIDGE lines in the log), pitch 1000012, tx_occ/rx_occ 67/67
+   floors: TX queue 119 (depth 223), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1049 rx_gapmax_us 1616; largest pull TX 48 (gap 303 us), RX 96 (gap 1015 us)
+   TX pulls by size: 0: 443651, 1-48: 127999
+   RX pulls by size: 0: 412983, 1-48: 140877, 49-96: 38
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 204 (pull 0, gap 0 us); +0.0s queue 204 (pull 48, gap 303 us); +20.7s queue 156 (pull 48, gap 962 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1616 us)
+   priced: TX floor 119 leaves 71 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-draw2-session-20260906T141955Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 268, overshoot 9, align_dropped 68, first_tick_wait_us 1434, front_age_frames 336, under_prime None); re-primes 1
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 1
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.03 h (92 BRIDGE lines in the log), pitch 1000014, tx_occ/rx_occ 67/67
+   floors: TX queue 116 (depth 220), RX queue 72 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1047 rx_gapmax_us 1628; largest pull TX 48 (gap 294 us), RX 96 (gap 1628 us)
+   TX pulls by size: 0: 313612, 1-48: 91984
+   RX pulls by size: 0: 284336, 1-48: 101360, 49-96: 22
+   restarts tx/rx 1/1, RECOVER lines 2, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 201 (pull 0, gap 0 us); +0.0s queue 201 (pull 48, gap 294 us); +26.9s queue 153 (pull 48, gap 966 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 96, gap 1628 us)
+   RECOVER: first at +1.4m; usb-to-ravenna/capture-avail x1, ravenna-to-usb/capture-avail x1
+   TX queue at the last step before the first RECOVER: 153 (the running floor 116 includes the underrun)
+   priced: TX floor 116 leaves 68 over one period: the prime could drop 48 to 144 on this draw (floor contaminated by a RECOVER, see the trail)
+
+== bridge-draw3-session-20260906T142430Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 265, overshoot 6, align_dropped 71, first_tick_wait_us 1488, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 1
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.03 h (116 BRIDGE lines in the log), pitch 1000010, tx_occ/rx_occ 67/67
+   floors: TX queue 54 (depth 171), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 3717 rx_gapmax_us 1627; largest pull TX 144 (gap 3717 us), RX 85 (gap 882 us)
+   TX pulls by size: 0: 390328, 1-48: 115997, 97-144: 1
+   RX pulls by size: 0: 372058, 1-48: 123529, 49-96: 15
+   restarts tx/rx 0/1, RECOVER lines 1, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/238 usbplay 0/0/0/238)
+   TX floor trail: +0.0s queue 198 (pull 0, gap 0 us); +0.0s queue 198 (pull 48, gap 293 us); +23.6s queue 150 (pull 48, gap 883 us); +1.5m queue 105 (pull 48, gap 964 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1627 us)
+   RECOVER: first at +24.6s; ravenna-to-usb/playback-avail x1
+   TX queue at the last step before the first RECOVER: 150 (the running floor 54 includes the underrun)
+   priced: TX floor 54 leaves 6 over one period: the prime could drop 0 to 192 on this draw (floor contaminated by a RECOVER, see the trail)
+
+== bridge-draw4-session-20260906T142941Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 266, overshoot 7, align_dropped 70, first_tick_wait_us 1478, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.02 h (83 BRIDGE lines in the log), pitch 1000017, tx_occ/rx_occ 67/67
+   floors: TX queue 115 (depth 218), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1110 rx_gapmax_us 1631; largest pull TX 48 (gap 292 us), RX 49 (gap 520 us)
+   TX pulls by size: 0: 276822, 1-48: 82997
+   RX pulls by size: 0: 253254, 1-48: 91453, 49-96: 15
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 199 (pull 0, gap 0 us); +0.0s queue 199 (pull 48, gap 292 us); +21.6s queue 151 (pull 48, gap 968 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1631 us)
+   priced: TX floor 115 leaves 67 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-draw5-session-20260906T143237Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 272, overshoot 13, align_dropped 64, first_tick_wait_us 1338, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.02 h (83 BRIDGE lines in the log), pitch 1000013, tx_occ/rx_occ 67/67
+   floors: TX queue 120 (depth 224), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1053 rx_gapmax_us 1620; largest pull TX 48 (gap 300 us), RX 49 (gap 279 us)
+   TX pulls by size: 0: 277601, 1-48: 82997
+   RX pulls by size: 0: 257985, 1-48: 91450, 49-96: 11
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 205 (pull 0, gap 0 us); +0.0s queue 205 (pull 48, gap 300 us); +18.8s queue 157 (pull 48, gap 965 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1620 us)
+   priced: TX floor 120 leaves 72 over one period: the prime could drop 72 to 120 on this draw
+
+== bridge-draw6-session-20260906T151744Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 272, overshoot 13, align_dropped 64, first_tick_wait_us 1347, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=601
+   runtime 0.03 h (101 BRIDGE lines in the log), pitch 1000013, tx_occ/rx_occ 67/67
+   floors: TX queue 118 (depth 186), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1072 rx_gapmax_us 1629; largest pull TX 48 (gap 289 us), RX 49 (gap 246 us)
+   TX pulls by size: 0: 336445, 1-48: 100998
+   RX pulls by size: 0: 297620, 1-48: 111236, 49-96: 21
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 205 (pull 0, gap 0 us); +0.0s queue 205 (pull 48, gap 289 us); +13.7s queue 157 (pull 48, gap 968 us); +1.3m queue 120 (pull 48, gap 889 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1629 us)
+   priced: TX floor 118 leaves 70 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-kill2-session-20260906T143622Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 267, overshoot 8, align_dropped 69, first_tick_wait_us 1449, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.13 h (465 BRIDGE lines in the log), pitch 1000015, tx_occ/rx_occ 67/67
+   floors: TX queue 108 (depth 176), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1133 rx_gapmax_us 1628; largest pull TX 48 (gap 292 us), RX 96 (gap 1628 us)
+   TX pulls by size: 0: 1622681, 1-48: 465039
+   RX pulls by size: 0: 1194272, 1-48: 511701, 49-96: 240
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/478 ravplay 0/0/0/478 ravcap 0/0/0/478 usbplay 0/0/0/478)
+   TX floor trail: +0.0s queue 200 (pull 0, gap 0 us); +0.0s queue 200 (pull 48, gap 292 us); +25.3s queue 152 (pull 48, gap 803 us); +4.2m queue 113 (pull 48, gap 888 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 96, gap 1628 us)
+   priced: TX floor 108 leaves 60 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-kill2-session-20260906T143626Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 267, overshoot 8, align_dropped 69, first_tick_wait_us 1449, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.03 h (100 BRIDGE lines in the log), pitch 1000016, tx_occ/rx_occ 67/67
+   floors: TX queue 115 (depth 219), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1133 rx_gapmax_us 1628; largest pull TX 48 (gap 292 us), RX 96 (gap 1628 us)
+   TX pulls by size: 0: 336489, 1-48: 99998
+   RX pulls by size: 0: 304543, 1-48: 110150, 49-96: 24
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 200 (pull 0, gap 0 us); +0.0s queue 200 (pull 48, gap 292 us); +25.3s queue 152 (pull 48, gap 803 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 96, gap 1628 us)
+   priced: TX floor 115 leaves 67 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-lead-session-20260907T1449Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 243, ring_at_prime 269, overshoot 26, align_dropped 19, first_tick_wait_us 576, front_age_frames 296, under_prime 0); re-primes 0
+   RX prime 120 (intended 171, ring_at_prime 192, trimmed 21); re-primes 0
+   ALIGN trigger target=prime slack_us=445 wake_to_start_us=951
+   runtime 0.49 h (1754 BRIDGE lines in the log), pitch 1000014, tx_occ/rx_occ 51/51
+   floors: TX queue 76 (depth 130), RX queue 72 (depth 123); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1124 rx_gapmax_us 1165; largest pull TX 48 (gap 547 us), RX 49 (gap 640 us)
+   TX pulls by size: 0: 6037329, 1-48: 1755188
+   RX pulls by size: 0: 4196544, 1-48: 1934941, 49-96: 1039
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/6034 ravplay 0/0/0/6034 ravcap 0/0/0/6034 usbplay 0/0/0/6034)
+   TX floor trail: +0.0s queue 170 (pull 0, gap 0 us); +31.1s queue 122 (pull 48, gap 960 us); +3.5m queue 85 (pull 48, gap 885 us)
+   RX floor trail: +0.0s queue 120 (pull 0, gap 0 us); +0.0s queue 72 (pull 48, gap 1003 us)
+   priced: TX floor 76 leaves 28 over one period: the prime could drop 24 to 168 on this draw
+
+== bridge-postkill-session-20260906T130927Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 272, overshoot 13, align_dropped 64, first_tick_wait_us 1340, front_age_frames 336, under_prime None); re-primes 1
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 1
+   ALIGN trigger target=None slack_us=None wake_to_start_us=601
+   runtime 0.32 h (1163 BRIDGE lines in the log), pitch 1000014, tx_occ/rx_occ 67/67
+   floors: TX queue 109 (depth 187), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 2479 rx_gapmax_us 1629; largest pull TX 96 (gap 2479 us), RX 96 (gap 1622 us)
+   TX pulls by size: 0: 3965837, 1-48: 1163128, 49-96: 1
+   RX pulls by size: 0: 2587464, 1-48: 1279145, 49-96: 682
+   restarts tx/rx 1/1, RECOVER lines 2, ZERORUN lines 0 (zr usbcap 0/0/0/618 ravplay 0/0/0/618 ravcap 0/0/0/618 usbplay 0/0/0/618)
+   TX floor trail: +0.0s queue 205 (pull 0, gap 0 us); +0.0s queue 205 (pull 48, gap 292 us); +5.9s queue 166 (pull 48, gap 884 us); +1.2m queue 121 (pull 48, gap 966 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1629 us)
+   RECOVER: first at +1.8s; ravenna-to-usb/playback-avail x1, usb-to-ravenna/capture-avail x1
+   TX queue at the last step before the first RECOVER: 205 (the running floor 109 includes the underrun)
+   priced: TX floor 109 leaves 61 over one period: the prime could drop 48 to 144 on this draw (floor contaminated by a RECOVER, see the trail)
+
+== bridge-rebind1-session-20260906T152855Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 262, overshoot 3, align_dropped 74, first_tick_wait_us 1560, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.02 h (83 BRIDGE lines in the log), pitch 1000019, tx_occ/rx_occ 67/67
+   floors: TX queue 110 (depth 214), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1040 rx_gapmax_us 1639; largest pull TX 48 (gap 284 us), RX 49 (gap 690 us)
+   TX pulls by size: 0: 281915, 1-48: 82997
+   RX pulls by size: 0: 273481, 1-48: 91431, 49-96: 15
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 195 (pull 0, gap 0 us); +0.0s queue 195 (pull 48, gap 284 us); +41.7s queue 147 (pull 48, gap 879 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1639 us)
+   priced: TX floor 110 leaves 62 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-rebind2-session-20260906T1835Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 271, overshoot 12, align_dropped 65, first_tick_wait_us 1372, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=603
+   runtime 0.02 h (75 BRIDGE lines in the log), pitch 1000016, tx_occ/rx_occ 67/67
+   floors: TX queue 115 (depth 223), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1109 rx_gapmax_us 1655; largest pull TX 48 (gap 240 us), RX 96 (gap 1655 us)
+   TX pulls by size: 0: 250063, 1-48: 74996
+   RX pulls by size: 0: 223117, 1-48: 82664, 49-96: 9
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 204 (pull 0, gap 0 us); +0.0s queue 204 (pull 48, gap 240 us); +17.7s queue 156 (pull 48, gap 888 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 96, gap 1655 us)
+   priced: TX floor 115 leaves 67 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-rebind3-session-20260906T1838Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 265, overshoot 6, align_dropped 71, first_tick_wait_us 1495, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.02 h (75 BRIDGE lines in the log), pitch 1000020, tx_occ/rx_occ 67/67
+   floors: TX queue 150 (depth 217), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1231 rx_gapmax_us 1653; largest pull TX 48 (gap 257 us), RX 49 (gap 561 us)
+   TX pulls by size: 0: 247242, 1-48: 74996
+   RX pulls by size: 0: 235993, 1-48: 82636, 49-96: 10
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 198 (pull 0, gap 0 us); +0.0s queue 198 (pull 48, gap 257 us); +26.3s queue 150 (pull 48, gap 624 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1653 us)
+   priced: TX floor 150 leaves 102 over one period: the prime could drop 96 to 96 on this draw
+
+== bridge-rebind4-session-20260906T1841Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 264, overshoot 5, align_dropped 72, first_tick_wait_us 1497, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=601
+   runtime 0.02 h (75 BRIDGE lines in the log), pitch 1000020, tx_occ/rx_occ 67/67
+   floors: TX queue 149 (depth 216), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1036 rx_gapmax_us 1621; largest pull TX 48 (gap 304 us), RX 49 (gap 578 us)
+   TX pulls by size: 0: 251235, 1-48: 74996
+   RX pulls by size: 0: 236589, 1-48: 82631, 49-96: 9
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/239 ravplay 0/0/0/239 ravcap 0/0/0/239 usbplay 0/0/0/239)
+   TX floor trail: +0.0s queue 197 (pull 0, gap 0 us); +0.0s queue 197 (pull 48, gap 304 us); +31.1s queue 149 (pull 48, gap 968 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1621 us)
+   priced: TX floor 149 leaves 101 over one period: the prime could drop 96 to 96 on this draw
+
+== bridge-rp288-session-20260906T023335Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/288
+   TX prime 192 (intended 259, ring_at_prime 262, overshoot 3, align_dropped 74, first_tick_wait_us 1551, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.02 h (64 BRIDGE lines in the log), pitch 1000010, tx_occ/rx_occ 67/67
+   floors: TX queue 147 (depth 214), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1080 rx_gapmax_us 1622; largest pull TX 48 (gap 277 us), RX 48 (gap 556 us)
+   TX pulls by size: 0: 208750, 1-48: 63996
+   RX pulls by size: 0: 202252, 1-48: 70509
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/124 ravplay 0/0/0/124 ravcap 0/0/0/124 usbplay 0/0/0/124)
+   TX floor trail: +0.0s queue 195 (pull 0, gap 0 us); +0.0s queue 195 (pull 48, gap 277 us); +37.5s queue 147 (pull 48, gap 881 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1622 us)
+   priced: TX floor 147 leaves 99 over one period: the prime could drop 96 to 96 on this draw
+
+== bridge-rxtrim-session-20260906T2311Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 243, ring_at_prime 280, overshoot 37, align_dropped 56, first_tick_wait_us 447, front_age_frames 301, under_prime None); re-primes 0
+   RX prime 120 (intended 171, ring_at_prime 192, trimmed 21); re-primes 0
+   ALIGN trigger target=prime slack_us=315 wake_to_start_us=951
+   runtime 0.48 h (1745 BRIDGE lines in the log), pitch 1000014, tx_occ/rx_occ 51/51
+   floors: TX queue 87 (depth 141), RX queue 72 (depth 147); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1143 rx_gapmax_us 1178; largest pull TX 48 (gap 23 us), RX 49 (gap 562 us)
+   TX pulls by size: 0: 6095366, 1-48: 1745198
+   RX pulls by size: 0: 4292152, 1-48: 1923903, 49-96: 1030
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/6036 ravplay 0/0/0/6036 ravcap 0/0/0/6036 usbplay 0/0/0/6036)
+   TX floor trail: +0.0s queue 229 (pull 0, gap 0 us); +0.0s queue 181 (pull 48, gap 23 us); +29.8s queue 133 (pull 48, gap 962 us); +6.2m queue 96 (pull 48, gap 964 us)
+   RX floor trail: +0.0s queue 120 (pull 0, gap 0 us); +0.0s queue 96 (pull 24, gap 5 us)
+   priced: TX floor 87 leaves 39 over one period: the prime could drop 24 to 168 on this draw
+
+== bridge-sd103-session-20260907T2146Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 243, ring_at_prime 270, overshoot 27, align_dropped 18, first_tick_wait_us 546, front_age_frames 296, under_prime 0); re-primes 0
+   RX prime 120 (intended 171, ring_at_prime 192, trimmed 21); re-primes 0
+   ALIGN trigger target=prime slack_us=417 wake_to_start_us=951
+   runtime 0.50 h (1783 BRIDGE lines in the log), pitch 1000017, tx_occ/rx_occ 51/51
+   floors: TX queue 78 (depth 129), RX queue 72 (depth 123); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1120 rx_gapmax_us 1167; largest pull TX 48 (gap 17 us), RX 49 (gap 513 us)
+   TX pulls by size: 0: 6278801, 1-48: 1783203
+   RX pulls by size: 0: 4449673, 1-48: 1961756, 49-96: 1059
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 4 (zr usbcap 1/128/128/6034 ravplay 1/128/128/6034 ravcap 1/128/128/6034 usbplay 1/128/128/6034)
+   TX floor trail: +0.0s queue 219 (pull 0, gap 0 us); +0.0s queue 171 (pull 48, gap 17 us); +32.7s queue 123 (pull 48, gap 963 us); +5.9m queue 84 (pull 48, gap 887 us)
+   RX floor trail: +0.0s queue 120 (pull 0, gap 0 us); +0.0s queue 72 (pull 48, gap 976 us)
+   priced: TX floor 78 leaves 30 over one period: the prime could drop 24 to 168 on this draw
+
+== bridge-sd132-session-20260907T1719Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 243, ring_at_prime 269, overshoot 26, align_dropped 19, first_tick_wait_us 577, front_age_frames 296, under_prime 0); re-primes 0
+   RX prime 120 (intended 171, ring_at_prime 192, trimmed 21); re-primes 0
+   ALIGN trigger target=prime slack_us=445 wake_to_start_us=952
+   runtime 0.48 h (1743 BRIDGE lines in the log), pitch 1000015, tx_occ/rx_occ 51/51
+   floors: TX queue 75 (depth 131), RX queue 72 (depth 123); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1152 rx_gapmax_us 1182; largest pull TX 48 (gap 546 us), RX 49 (gap 570 us)
+   TX pulls by size: 0: 5995454, 1-48: 1743187
+   RX pulls by size: 0: 4223738, 1-48: 1921643, 49-96: 1036
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/6034 ravplay 0/0/0/6034 ravcap 0/0/0/6034 usbplay 0/0/0/6034)
+   TX floor trail: +0.0s queue 170 (pull 0, gap 0 us); +31.1s queue 122 (pull 48, gap 963 us); +4.1m queue 85 (pull 48, gap 864 us)
+   RX floor trail: +0.0s queue 120 (pull 0, gap 0 us); +0.0s queue 72 (pull 48, gap 1003 us)
+   priced: TX floor 75 leaves 27 over one period: the prime could drop 24 to 168 on this draw
+
+== bridge-target48-session-20260906T2041Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 243, ring_at_prime 286, overshoot 43, align_dropped 50, first_tick_wait_us 332, front_age_frames 301, under_prime None); re-primes 0
+   RX prime 120 (intended 171, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=prime slack_us=181 wake_to_start_us=952
+   runtime 0.47 h (1685 BRIDGE lines in the log), pitch 1000015, tx_occ/rx_occ 51/51
+   floors: TX queue 94 (depth 146), RX queue 93 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1146 rx_gapmax_us 1169; largest pull TX 48 (gap 16 us), RX 96 (gap 1112 us)
+   TX pulls by size: 0: 5776925, 1-48: 1686176
+   RX pulls by size: 0: 4061061, 1-48: 1857911, 49-96: 1002
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/6034 ravplay 0/0/0/6034 ravcap 0/0/0/6034 usbplay 0/0/0/6034)
+   TX floor trail: +0.0s queue 235 (pull 0, gap 0 us); +0.0s queue 187 (pull 48, gap 16 us); +17.8s queue 139 (pull 48, gap 886 us); +1.2m queue 99 (pull 48, gap 900 us)
+   RX floor trail: +0.0s queue 141 (pull 0, gap 0 us); +0.0s queue 93 (pull 48, gap 975 us)
+   priced: TX floor 94 leaves 46 over one period: the prime could drop 24 to 168 on this draw
+
+== bridge-trace1-session-20260906T010040Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 264, overshoot 5, align_dropped 72, first_tick_wait_us 1513, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.04 h (139 BRIDGE lines in the log), pitch 1000019, tx_occ/rx_occ 67/67
+   floors: TX queue 112 (depth 216), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1066 rx_gapmax_us 1627; largest pull TX 48 (gap 294 us), RX 49 (gap 675 us)
+   TX pulls by size: 0: 484245, 1-48: 139001
+   RX pulls by size: 0: 470358, 1-48: 152846, 49-96: 57
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/339 ravplay 0/0/0/339 ravcap 0/0/0/339 usbplay 0/0/0/339)
+   TX floor trail: +0.0s queue 197 (pull 0, gap 0 us); +0.0s queue 197 (pull 48, gap 294 us); +42.4s queue 149 (pull 48, gap 899 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1627 us)
+   priced: TX floor 112 leaves 64 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-trace2-session-20260906T015510Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 262, overshoot 3, align_dropped 74, first_tick_wait_us 1555, front_age_frames 336, under_prime None); re-primes 1
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 1
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.02 h (90 BRIDGE lines in the log), pitch 1000000, tx_occ/rx_occ 67/67
+   floors: TX queue 147 (depth 214), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1127 rx_gapmax_us 1631; largest pull TX 48 (gap 294 us), RX 48 (gap 565 us)
+   TX pulls by size: 0: 294282, 1-48: 89982
+   RX pulls by size: 0: 289701, 1-48: 94589
+   restarts tx/rx 1/1, RECOVER lines 2, ZERORUN lines 0 (zr usbcap 0/0/0/124 ravplay 0/0/0/124 ravcap 0/0/0/124 usbplay 0/0/0/124)
+   TX floor trail: +0.0s queue 195 (pull 0, gap 0 us); +0.0s queue 195 (pull 48, gap 294 us); +34.5s queue 147 (pull 48, gap 962 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1631 us)
+   RECOVER: first at +46.0s; usb-to-ravenna/capture-avail x1, ravenna-to-usb/capture-avail x1
+   TX queue at the last step before the first RECOVER: 147 (the running floor 147 includes the underrun)
+   priced: TX floor 147 leaves 99 over one period: the prime could drop 96 to 96 on this draw (floor contaminated by a RECOVER, see the trail)
+
+== bridge-trace3-session-20260906T021900Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 269, overshoot 10, align_dropped 67, first_tick_wait_us 1403, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.03 h (95 BRIDGE lines in the log), pitch 1000018, tx_occ/rx_occ 67/67
+   floors: TX queue 117 (depth 221), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1068 rx_gapmax_us 1626; largest pull TX 48 (gap 287 us), RX 96 (gap 1626 us)
+   TX pulls by size: 0: 324186, 1-48: 94998
+   RX pulls by size: 0: 307369, 1-48: 104514, 49-96: 22
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/138 ravplay 0/0/0/138 ravcap 0/0/0/138 usbplay 0/0/0/138)
+   TX floor trail: +0.0s queue 202 (pull 0, gap 0 us); +0.0s queue 202 (pull 48, gap 287 us); +34.9s queue 154 (pull 48, gap 883 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 96, gap 1626 us)
+   priced: TX floor 117 leaves 69 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-txfix1-session-20260906T024934Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 264, overshoot 5, align_dropped 72, first_tick_wait_us 1508, front_age_frames 336, under_prime None); re-primes 2
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 3
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.51 h (1832 BRIDGE lines in the log), pitch 1000015, tx_occ/rx_occ 67/67
+   floors: TX queue 22 (depth 175), RX queue 68 (depth 139); under one period: tx_qlow 1 rx_qlow 0
+   gaps: tx_gapmax_us 4951 rx_gapmax_us 1625; largest pull TX 192 (gap 4951 us), RX 96 (gap 1013 us)
+   TX pulls by size: 0: 6536078, 1-48: 1832181, 145-192: 1
+   RX pulls by size: 0: 5766926, 1-48: 2015383, 49-96: 1079
+   restarts tx/rx 2/3, RECOVER lines 5, ZERORUN lines 2 (zr usbcap 0/0/0/5974 ravplay 0/0/0/5974 ravcap 1/258/258/5973 usbplay 1/257/257/5973)
+   TX floor trail: +0.0s queue 197 (pull 0, gap 0 us); +0.0s queue 197 (pull 48, gap 295 us); +32.7s queue 149 (pull 48, gap 883 us); +11.8m queue 112 (pull 48, gap 890 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 1625 us)
+   RECOVER: first at +16.1m; usb-to-ravenna/capture-avail x2, ravenna-to-usb/capture-avail x2, ravenna-to-usb/playback-avail x1
+   TX queue at the last step before the first RECOVER: 112 (the running floor 22 includes the underrun)
+   priced: TX floor 22 leaves -26 over one period: the prime could drop 0 to 192 on this draw (floor contaminated by a RECOVER, see the trail)
+
+== bridge-txfix2-session-20260906T053530Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 267, overshoot 8, align_dropped 69, first_tick_wait_us 1447, front_age_frames 336, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=None slack_us=None wake_to_start_us=602
+   runtime 0.46 h (1668 BRIDGE lines in the log), pitch 1000015, tx_occ/rx_occ 67/67
+   floors: TX queue 107 (depth 176), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1128 rx_gapmax_us 1626; largest pull TX 48 (gap 298 us), RX 96 (gap 1626 us)
+   TX pulls by size: 0: 5837138, 1-48: 1668172
+   RX pulls by size: 0: 3981446, 1-48: 1839312, 49-96: 965
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/5747 ravplay 0/0/0/5747 ravcap 0/0/0/5748 usbplay 0/0/0/5748)
+   TX floor trail: +0.0s queue 200 (pull 0, gap 0 us); +0.0s queue 200 (pull 48, gap 298 us); +23.3s queue 152 (pull 48, gap 966 us); +2.8m queue 115 (pull 48, gap 955 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 96, gap 1626 us)
+   priced: TX floor 107 leaves 59 over one period: the prime could drop 48 to 144 on this draw
+
+== bridge-txoff950-session-20260906T1913Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 294, overshoot 35, align_dropped 42, first_tick_wait_us 390, front_age_frames 312, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=prime slack_us=236 wake_to_start_us=952
+   runtime 0.05 h (166 BRIDGE lines in the log), pitch 1000018, tx_occ/rx_occ 67/67
+   floors: TX queue 83 (depth 156), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1047 rx_gapmax_us 1100; largest pull TX 48 (gap 380 us), RX 85 (gap 949 us)
+   TX pulls by size: 0: 567507, 1-48: 166011
+   RX pulls by size: 0: 462923, 1-48: 182418, 49-96: 59
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/249 ravplay 0/0/0/249 ravcap 0/0/0/250 usbplay 0/0/0/250)
+   TX floor trail: +0.0s queue 179 (pull 0, gap 0 us); +19.5s queue 131 (pull 48, gap 967 us); +2.0m queue 94 (pull 48, gap 964 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 986 us)
+   priced: TX floor 83 leaves 35 over one period: the prime could drop 24 to 168 on this draw
+
+== bridge-txoff950m150-session-20260906T1925Z.log
+   negotiated usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+   TX prime 192 (intended 259, ring_at_prime 298, overshoot 39, align_dropped 38, first_tick_wait_us 396, front_age_frames 317, under_prime None); re-primes 0
+   RX prime 120 (intended 187, ring_at_prime 192, trimmed 0); re-primes 0
+   ALIGN trigger target=prime slack_us=263 wake_to_start_us=951
+   runtime 0.46 h (1645 BRIDGE lines in the log), pitch 1000014, tx_occ/rx_occ 67/67
+   floors: TX queue 88 (depth 158), RX queue 77 (depth 144); under one period: tx_qlow 0 rx_qlow 0
+   gaps: tx_gapmax_us 1117 rx_gapmax_us 1146; largest pull TX 48 (gap 374 us), RX 96 (gap 1042 us)
+   TX pulls by size: 0: 5633855, 1-48: 1646181
+   RX pulls by size: 0: 4150546, 1-48: 1812265, 49-96: 985
+   restarts tx/rx 0/0, RECOVER lines 0, ZERORUN lines 0 (zr usbcap 0/0/0/6034 ravplay 0/0/0/6034 ravcap 0/0/0/6034 usbplay 0/0/0/6034)
+   TX floor trail: +0.0s queue 183 (pull 0, gap 0 us); +18.1s queue 135 (pull 48, gap 961 us); +2.2m queue 94 (pull 48, gap 890 us)
+   RX floor trail: +0.0s queue 125 (pull 0, gap 0 us); +0.0s queue 77 (pull 48, gap 992 us)
+   priced: TX floor 88 leaves 40 over one period: the prime could drop 24 to 168 on this draw
+
+== summary over 30 logs, 5.3 h: RECOVERs 13, re-primes 12, ZERORUN lines 6, tx_qlow total 1
+   clean sessions 24 (4.4 h) on TX prime [192]: TX floors 75..150 (worst bridge-sd132-session-20260907T1719Z.log), RX floors 24..93, longest gap 1629 us TX (bridge-age50-session-20260907T1319Z.log), 1655 us RX, largest pull TX 96 RX 96
+   priced on the worst clean floor 75: the TX prime 192 could drop 24 to 168 with 48 frames of cover; a cut of 48 would need a floor of at least 96

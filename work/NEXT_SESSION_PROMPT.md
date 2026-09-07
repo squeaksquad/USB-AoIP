@@ -4,7 +4,9 @@ Paste the block below into a fresh Codex or Claude Code session to resume work.
 It points at `PROJECT_HANDOFF.md`, which is authoritative where it conflicts
 with this summary.
 
-Rewritten 2026-09-07 22:30 UTC after the sd103 acceptance (RTL at 32 18.896
+Updated 2026-09-07 23:10 UTC: Phase 6 (the pull-gap bar under the TX
+prime) is running as a daily read-only read; see the LEVERS. Rewritten
+2026-09-07 22:30 UTC after the sd103 acceptance (RTL at 32 18.896
 ms on a fresh anchor; the sink delay is at its floor for the Ferrofish stamp
 phase 41). Where this summary and the handoff tail differ, the handoff
 wins.
@@ -157,10 +159,26 @@ THE PROCEDURE (every measurement session starts with it)
    run without --apply).
 
 THE LEVERS, IN ORDER, ONE AT A TIME
-1. Nothing priced remains on the Pi side by profile. The sink delay is
-   at its floor for the Ferrofish stamp phase 41 (103; 102 crosses). The
-   TX prime (192) sits over a bar of one period plus the Pi's worst
-   wakeup gap and needs the days-long gap measurement (Phase 6); the Mac
+1. Phase 6 is running (handoff STARTED 2026-09-07 23:05 UTC): the TX
+   prime (192) sits over a bar of one period plus the Pi's worst pull
+   gap, and the RAVENNA playback queue's running floor (tx_qfloor on the
+   bridge's once-per-second line, since process start) prices it
+   directly: a prime cut of X lowers the floor by X. Daily, between
+   runs, never during one: outputs/latency/phase6-gapbar-20260907/read-bar.sh
+   [label] (read-only, a few KB over ssh; saves reads/bar-<label>-<UTC>.txt
+   and prices it with gap-bar.py; commit the read). The rule, stated
+   before the data: a conf-only block only when the worst floor over
+   three or more days of real use plus the loaded set leaves one period
+   (48) at the new prime, in steps of 24. The record so far: floors
+   75-94 over nine sessions of the current lineage, 78 on the live
+   process after 1.3 h, longest clean-session gap 1629 us (a
+   stalled-first-second anchor), so 168 is the candidate (24 samples,
+   0.5 ms at RTL 32) and 144 is out unless the days say otherwise. A
+   floor under 72 closes the lever at 192. The block when the days
+   allow: sd103 with TX_PLAYBACK_PRIME=168, one variable, tag prime168
+   (not tx168: a tag must prefix no field key), the usual acceptance,
+   expected 24 under 719 on a matching anchor. The sink delay is at its
+   floor for the Ferrofish stamp phase 41 (103; 102 crosses); the Mac
    constant (188 over the harness level at RTL 32) and the gadget's
    share of the USB legs are not reachable by profile.
 2. Standing rule for the sink delay: after any Ferrofish, switch or Dante
@@ -220,8 +238,8 @@ BUILD AND INSTALL RULES
   gitignored).
 
 OPEN, NOT THIS SESSION'S WORK
-The count of in-service re-primes over days (Phase 6) and a supervisor
-rule to re-bind after a re-prime storm; the Pi's re-prime split (805
+A supervisor rule to re-bind after a re-prime storm (the re-prime count
+over days now comes from the Phase 6 daily read); the Pi's re-prime split (805
 once after an RX RECOVER at start); the Mac constant and the gadget's
 share of the USB legs (not reachable by profile); the sink status flags
 (rtp_seq_id_error, rtp_sac_error, all_muted on sink 1) that read true

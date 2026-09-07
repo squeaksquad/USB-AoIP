@@ -111,6 +111,7 @@ the profile in `PROFILE=`.
 - `phase4-candidate-<UTC>/` — one wrapper session of the bridge: `bridge.log`, `daemon.log`, `metadata.txt`, PTP and sink API snapshots. The harness JSON for that session is a top-level `*-roundtrip-*.json`.
 - `phase4-sink-sweep-<UTC>/` — one sink-delay sweep: `delay-<N>.{json,log}`, `probe-d<N>-<k>.*`, and the nested candidate directory it ran in. `aes67-candidate-<UTC>/`, `ravenna-latency-<UTC>/`, `ferrofish-channel-scan-<UTC>/` are older wrappers.
 - `stage-trace-20260906/` — the impulse-trace day: `bridge-<label>-session-<UTC>.log` full-rate logs with IMPULSE lines, `impulse-stages.py` (stage split from a log), `rtp-impulses.py` (the impulse in an eth0 capture, both ways), `stamp-phase.py` (each stream's stamp phase against the driver's frame grid from a capture, and the free sink-delay range; `stamp-phase-20260906-captures.txt` is its evidence).
+- `phase6-gapbar-20260907/` — Phase 6, the pull-gap bar under the TX prime: `gap-bar.py` (floors, gaps, pulls, re-primes and the priced TX prime from a bridge log or the wrapper's subset), `read-bar.sh` (the daily read-only read from the Pi into `reads/`), `historical-sessions.txt` (the analyser over the saved session logs).
 - `usb-holes-20260904/` — the USB drop and 41-sample-hole campaign: `<label>-noise-ch2-<N>f-100imp.{json,diag.txt,zeros.txt}`, analysers `zeros.py` and `gaps2.py` alongside.
 - `usb-only-*`, `coreaudio-usb16x16-baseline*.json` — Phase 1.
 - `2026-08-31-latency-results.md` — the only prose in here; Phase 1 summary.
