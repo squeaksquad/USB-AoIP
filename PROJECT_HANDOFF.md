@@ -8797,6 +8797,34 @@ Acceptance chain launched detached at 17:23:38 UTC on this session
 each): four 800-impulse runs at 64 (`sd132`), then the 600 s soak
 (`sd132soak`); results below.
 
+**SOAKED 2026-09-07 17:23-17:48 UTC: the sd132 acceptance set, all on the
+17:19 fresh-anchor session: four loaded 800-impulse runs 747 x800 each and
+the 600 s sixteen-channel soak 747 x2400, spread 0 on all 5,600, zero
+RECOVERs, TX floor 75 loaded, RX 72; the lead's minimum over the set 959
+us (the soak, sink 0), every interval within the 144 set's range.** Chain
+launched detached at 17:23:38 UTC (`USB16X16_OTHER_LOAD=0.1` on every
+run, a `read-lead.sh` pair around each):
+`sd132-roundtrip-64f-20260907T{172338,172718,173058,173439}Z` **747 x800**
+each, `sd132soak-roundtrip-64f-20260907T173819Z` **747 x2400**, score
+1.000, discontinuities 0, `recovers during run` 0 on all five. *The lead
+per run* (sinks 0 / 1, microseconds): before run 1 1003 / 1009, run 1 977
+/ 991, run 2 961 / 966, run 3 974 / 993, run 4 986 / 997, the soak **959 /
+968**; at 144 the same set read 930-1014, so the deadline is the same
+frame and nothing was spent. Floors after each run and at the end
+(`bridge-sd132-session-20260907T1719Z.log`, 25,533 lines, 23,777 IMPULSE
+lines, 2 PRIMED, no RECOVER, no ZERORUN event): `tx_qfloor` 75 from run
+1 onward (76 on the 144 set of the same day, 81 on age50's: the session's
+draw, the bridge does not see the sink delay), `rx_qfloor` 72 on every
+sample, `tx_qlow` / `rx_qlow` 0, `tx_pullmax` 48, `rx_pullmax` 49,
+`tx_gapmax_us` 1152, `rx_gapmax_us` 1182, `tx_occ` 51 on every 1 Hz
+sample, `rx_occ` 51 on 1608 of about 1680 and 64-75 on the rest, pitch
+1000015. Split over the session (`impulse-index.py --level 747`, 5,944
+impulses): `pos_tx` -20, `pos_aes67` 573, `pos_rx` -22, `pos_pi` 531 on
+every impulse (543 at 144), `pi_total` median 702.1 (685.9-719.1; 715.6 at
+144), `usb_time` 44.9 (43.4), `rx_depth` median 133, `tx_depth` 127. The
+lever's 12 sits in the AES67 chain on every one of 5,944 impulses. RTL at
+32 by the user is the last item; predicted 747 + 188 = 935 = 19.479 ms.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
