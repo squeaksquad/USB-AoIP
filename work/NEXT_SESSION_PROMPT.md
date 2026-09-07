@@ -32,9 +32,9 @@ NOTHING IS BROKEN. The service runs the accepted profile (rxtrim, bridge
 The 23:10 anchor is aged: three RECOVERs overnight (08:19 UTC a Pi-side
 stall, both captures XRUN; 12:48 UTC a TX drain of about 190 frames in
 under 10 s, a USB capture shortfall, not a refill gap; see the OBSERVED
-entry), so the next read starts with a fresh anchor as always. BUILT, NOT
-INSTALLED: the age50 lever (see below), bridge 05f37bd9 staged with its
-install sets.
+entry), so the next read starts with a fresh anchor as always. ACCEPTED 2026-09-07
+14:05 UTC: age50 (see the handoff tail), bridge 05f37bd9, supervisor
+7a5d2362, 766 at 64 / RTL 32 19.875 ms; the label copy is pending.
 
 THE POINT OF RECORD (accepted 2026-09-06 23:50 UTC)
 Profile servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim

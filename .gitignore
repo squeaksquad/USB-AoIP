@@ -40,3 +40,4 @@ work/aes67-linux-daemon/
 # Editor and temporary files
 *~
 *.swp
+__pycache__/

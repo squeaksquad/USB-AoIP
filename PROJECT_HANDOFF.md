@@ -8405,6 +8405,80 @@ the TX front age 1:1 only when the rest of the draw holds, and the first
 anchor's 17 was the rest of the draw; the fresh-anchor procedure reads
 one anchor, and an anchor whose first second stalls is re-drawn.
 
+**RTL Utility at 32 frames on the age50 session, read by the user at
+about 13:34 UTC: 19.875 ms = 954 = 766 + 188, to the sample.** Read while
+the acceptance chain's run 1 held the device; run 1 finished on 766 x800
+with zero discontinuities, so the overlap cost nothing, but the rule
+stands: the harness and RTL Utility do not share the device.
+
+**SOAKED 2026-09-07 13:32-13:58 UTC: the age50 acceptance set, all on
+the 13:29 fresh-anchor session: four loaded 800-impulse runs 766 x800
+each and the 600 s sixteen-channel soak 766 x2400, spread 0 on all 5,600,
+zero RECOVERs, TX floor 81 loaded, RX 72.** Chain launched detached at
+13:32:46 UTC (`USB16X16_OTHER_LOAD=0.1` on every run):
+`age50b-roundtrip-64f-20260907T{133247,133626,134005,134344}Z` **766
+x800** each, `age50bsoak-roundtrip-64f-20260907T134723Z` **766 x2400**,
+score 1.000, discontinuities 0, `recovers during run` 0 on all five,
+`tx_restarts` / `rx_restarts` 0. Floors after each run and at the end
+(`bridge-age50b-session-20260907T1330Z.log`, 25,465 lines, 23,793
+IMPULSE lines, 2 PRIMED, no RECOVER, no ZERORUN event): `tx_qfloor` 81 from
+run 1 onward (87 on rxtrim's set: the 5 the lever spends came off the TX
+floor as priced, plus one of scatter), `rx_qfloor` **72** on every sample
+(RX untouched), `tx_qlow` / `rx_qlow` 0, `tx_pullmax` 48, `rx_pullmax` 49,
+`tx_gapmax_us` 1214, `rx_gapmax_us` 1283, `tx_occ` 51 on every 1 Hz
+sample, `rx_occ` 51 on 1542 of about 1600 and 65-75 on the rest (as on
+rxtrim), pitch 1000014-1000016. Split over the session
+(`impulse-index.py --level 766`, 5,948 impulses): `pos_tx` -13, `pos_aes67`
+585, `pos_rx` -22, `pos_pi` 550 on every impulse (554 on rxtrim), `pi_total`
+median 726.2 (706.2-743.1; 725.8 on rxtrim), `usb_time` 39.8 (44.2),
+`tx_depth` median 134 (86-144; 138 on rxtrim), `rx_depth` 138 (108-172;
+132). The position chain moved 4 and the level 4; the time-domain median
+over the whole set is rxtrim's within a sample, with the lever's 5 in
+`tx_depth` and the floor.
+
+**ACCEPTED 2026-09-07 14:05 UTC: the prime age margin, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50`
+on bridge `05f37bd9` (`--align-prime-age-margin-us 50`), supervisor
+`7a5d2362` and module `cc6852f0`: 766 at 64 frames on a fresh anchor, RTL
+Utility at 32 frames 19.875 ms = 954 = 766 + 188 to the sample.** The
+point of record moves from rxtrim (770 / 19.958) to age50: 0.083 ms at RTL
+32, 4 samples at 64, for 5-6 frames of TX cover (floor 87 -> 81); RX
+cover unchanged (72). Acceptance set: the entry above (4 x 800 loaded
+and the 600 s soak all 766, zero RECOVERs). Conf `5c12cb6f`: STATUS
+accepted, COVER and MEASURED filled, the measured line and the first
+anchor's 748 added to the block's comment; installer `0b14329d` (conf pin
+`5c12cb6f`, `e083c0e9` joins the unedited-shipped list; the supervisor
+and bridge pins are the installed `7a5d2362` and `05f37bd9`, so the
+installer is not re-run). Live conf: the block is live as appended; the
+label lines are copied by `copy-age50-labels.py` (staged in
+`aes67-age50-install/` beside the shipped conf `5c12cb6f`; the dry run
+shows 3 lines, the DESCRIPTION being unchanged; applied with `--apply` by
+the user). The cover call: TX 81 loaded stands as accepted, 23 over the
+worst TX refill gap of the day's sets (1214 us, 58 frames) and about 25
+over the 3.7 ms bar the record carries for the prime; the 2026-09-07
+overnight events (a thread stall and a 190-frame drain) were not refill
+gaps and no floor under 190 would have held the drain. Rollbacks by
+`switch-profile`: `...-rxtrim` (770; the installed bridge runs it
+unchanged, flag 150) or `...-target48-trace-txoff950` (785); bridge sets
+`phase4-age50-install/` (current), `phase4-rxtrim-install/` (`913d623b`)
+with `aes67-rxtrim-install/` (supervisor `431cf0c5`).
+
+*What the lever settled.* (1) The prime margin's cost was in the front
+age's arithmetic, not in the prime's order: pricing the age at 50 us
+while the target keeps its 150 us placement took the 5 frames, and
+`under_prime` read 0 on all three primes of the day (waits 433-542 us,
+under the 1104 us where the long-wait sessions begin), so the under-prime
+case is still unobserved. (2) Two fresh anchors twelve minutes apart
+read 748 and 766 with identical bridge start numbers: the level follows
+the TX front age 1:1 only when the rest of the draw holds, and the first
+anchor's stalled first second (both devices pulling 96 in one gap) was
+the tell to re-draw. (3) The chain on fresh anchors in RTL at 32:
+target64-trace 21.062, txoff950 20.521, target48 20.271, rxtrim 19.958,
+age50 19.875; DVS 11.312. Left on the table, priced: sink delay 144 ->
+120 (24, after the arrival-lead export, a module rebuild). Service ends
+the set on age50, the 13:29 anchor, zero RECOVERs; nothing pending on the
+Pi but the label copy.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
