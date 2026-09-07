@@ -8707,6 +8707,40 @@ the user's call; the export reads it live and a late packet shows as a
 negative `sink_min_time`. Service ends the set on the 14:48 anchor, zero
 RECOVERs; nothing pending on the Pi. Playback may go back on.
 
+**STAGED 2026-09-07 15:45 UTC, conf only: sink delay 144 -> 132, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd132`
+(age50 with `SINK_DELAY=132`, one variable), chosen by the user over 120
+for the margin the lead export priced (about 680 us at the set's worst
+packet against about 430).** Sink delay changes no audio: it is the
+driver's playout hold, and its only failure is a packet arriving after
+its TIC, which the TIC copies as a stale slot (the 41-sample holes at 96);
+at 144 the worst packet of 35 loaded minutes kept 930 us. Conf `d853a5d3`
+(the block after age50's: mechanism, the lead figures, the expected
+numbers and the watch list in its comment; STATUS experimental, COVER as
+age50 until measured, MEASURED not yet; the tag `sd132` prefixes no field
+key); `sd132-block.conf` `e3cd8431`; installer `0a4ce3ba` (conf pin
+`d853a5d3`, `5c12cb6f` joins the unedited-shipped list; supervisor
+`631e88e1`, unit `77837e60`, bridge `05f37bd9` unchanged, so the installer
+is not run for this lever). Staged on the Pi with the service running
+(five scps, RECOVER count 0 before and after):
+`~/usb-16x16-work/aes67-sd132-install/` (shipped conf, the block,
+installer, supervisor, unit). Validated on the Pi with the installed
+supervisor `631e88e1`: the staged conf lists 93 lines with the sd132
+profile (`sink delay 132`, everything else age50's), exit 0; the live
+conf plus the block likewise, `PROFILE` still age50. Expected on a fresh
+anchor: level 12 under age50's (about 754; 747 against the 14:48 anchor's
+759), RTL at 32 about 0.25 ms under, `pos_aes67` 585 -> 573,
+`sink_min_time` about 0.68-0.81 ms per interval and never negative, the
+bridge's PRIMED lines and floors unchanged. Next, by the user, playback
+off: `sudo systemctl stop usb16x16-aes67`, append the block (`sudo tee
+-a /etc/usb16x16/aes67.conf < ~/usb-16x16-work/aes67-sd132-install/sd132-block.conf`),
+`sudo usb16x16-aes67-supervisor switch-profile ...-age50-sd132` (PROFILE
+only while inactive), `sudo systemctl start usb16x16-aes67`, `sudo
+systemctl restart usb-16x16.service` for the fresh anchor; then gate,
+read, split, a lead pair around everything, the acceptance set, RTL at
+32; then a day of lead reads before the label moves. Rollback:
+`switch-profile ...-rxtrim-age50` (conf only).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
