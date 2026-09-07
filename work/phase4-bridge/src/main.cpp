@@ -83,6 +83,21 @@ constexpr std::int64_t kAlignReferenceMaximumAgeNs = 100000000;
 // the render finished inside it; a missed target moves the start to the
 // next tick, one period later.
 constexpr std::int64_t kAlignPrimeMarginNs = 150000;
+// How much of that margin the front age prices. The age the aligned prime
+// makes constant is the prime depth plus the longest wait it allows for,
+// and that wait bound is this margin plus two ticks less the offset, not
+// the placement margin above (2026-09-07). The difference between the two
+// (100 us, 5 frames at 950/1000) is the render path's own time: it sits
+// inside the placement margin as real slack and is no longer aged. In the
+// sessions whose placed target falls inside that difference (about one in
+// ten at 950/1000) the drop cuts the ring under the prime level by those
+// frames and the render hands the queue that much under its prime; the USB
+// capture wake that falls inside the trigger sleep in exactly those
+// sessions (the wait is over a tick there) refills it at the start.
+// --align-prime-age-margin-us: 150 by default, the placement margin, the
+// 2026-09-06 behaviour (front age 301 at 950/1000, prime 243); 50 for the
+// age50 profile (296).
+constexpr std::int64_t kAlignPrimeAgeMarginDefaultUs = kAlignPrimeMarginNs / 1000;
 // Aligned RX prime: how long the prime may wait for the first fresh wake of
 // its reference grid (the USB capture) before priming unaligned. 5 ms is
 // five USB frames; the ring has room for it (target + prime + 240 < 768).
@@ -245,6 +260,10 @@ struct Options {
     // frames that make the front frame's age at the first tick a constant
     // (prime depth plus the longest possible wait). Off by default.
     bool align_tx_prime{false};
+    // The margin the aligned prime's front age prices, in microseconds
+    // (kAlignPrimeAgeMarginDefaultUs); at most the placement margin. Any
+    // other value needs an aligned prime.
+    std::int64_t align_prime_age_margin_us{kAlignPrimeAgeMarginDefaultUs};
     // Aligned RX trigger and prime (2026-09-05, Phase 5), need --align-start
     // 1. RX plays out into the USB playback queue that the host drains on
     // its own 1 ms frame grid, so the phase between the RAVENNA tick grid
@@ -437,6 +456,11 @@ private:
         << "  --align-tx-prime 0|1   drop ring front frames at the TX prime so the front\n"
         << "                         frame's age at the first tick is constant (default 0;\n"
         << "                         needs --align-tx-trigger 1)\n"
+        << "  --align-prime-age-margin-us N\n"
+        << "                         the margin the aligned prime's front age prices: the\n"
+        << "                         longest wait it allows for is N + 2 ticks - offset, while\n"
+        << "                         the trigger target is placed 150 us ahead whatever N\n"
+        << "                         (default 150, at most 150; needs an aligned prime)\n"
         << "  --zero-run-detect 0|1  scan every block entering and leaving the bridge for runs\n"
         << "                         of exact zeros per channel and log each as ZERORUN with its\n"
         << "                         stage (default 0; behaviour-free instrument)\n"
@@ -597,6 +621,11 @@ Options parse_options(const int argc, char** argv) {
                 throw std::runtime_error("align-rx-prime must be 0 or 1");
             }
             options.align_rx_prime = parsed != 0;
+        } else if (argument == "--align-prime-age-margin-us") {
+            options.align_prime_age_margin_us = static_cast<std::int64_t>(parse_unsigned(value, "align-prime-age-margin-us"));
+            if (options.align_prime_age_margin_us > kAlignPrimeAgeMarginDefaultUs) {
+                throw std::runtime_error("align-prime-age-margin-us must be 0..150, the placement margin");
+            }
         } else if (argument == "--zero-run-detect") {
             const unsigned long parsed = parse_unsigned(value, "zero-run-detect");
             if (parsed > 1) {
@@ -672,6 +701,10 @@ Options parse_options(const int argc, char** argv) {
     }
     if (options.align_rx_prime && !options.align_rx_trigger) {
         throw std::runtime_error("--align-rx-prime needs --align-rx-trigger 1");
+    }
+    if (options.align_prime_age_margin_us != kAlignPrimeAgeMarginDefaultUs &&
+        !options.align_tx_prime && !options.align_rx_prime) {
+        throw std::runtime_error("--align-prime-age-margin-us needs --align-tx-prime 1 or --align-rx-prime 1");
     }
     if (options.rx_prime_trim && options.align_rx_prime) {
         throw std::runtime_error("--rx-prime-trim and --align-rx-prime both cut the RX ring at prime time; use one");
@@ -979,6 +1012,8 @@ struct Direction {
     std::int64_t align_trigger_tick_ns{0};
     std::int64_t align_trigger_offset_ns{0};
     std::int64_t align_trigger_seed_ns{0};
+    // The margin the front age prices (kAlignPrimeAgeMarginDefaultUs).
+    std::int64_t align_prime_age_margin_ns{kAlignPrimeMarginNs};
     std::uint64_t aligned_triggers{0};
     std::uint64_t unaligned_triggers{0};
     std::int64_t last_trigger_wake_to_start_us{-1};
@@ -1413,11 +1448,20 @@ IoResult render_to_playback(Direction& direction,
             // period: 48 at a 1000 us tick whatever period was negotiated.
             const std::int64_t frames_per_tick = (48000LL * tick_ns + 500000000LL) / 1000000000LL;
             // Waits in frames: the shortest rounded down, the longest up.
+            // The target is placed kAlignPrimeMarginNs ahead, so the wait
+            // to the first tick lies in (min_wait, max_wait]; the age is
+            // priced on the shorter bound the age margin gives, and the
+            // difference is how far under the prime level the drop may
+            // leave the ring in the sessions whose wait exceeds it (see
+            // kAlignPrimeAgeMarginDefaultUs; zero at the default).
             const std::int64_t min_wait_ns = kAlignPrimeMarginNs + tick_ns - direction.align_trigger_offset_ns;
             const std::int64_t max_wait_ns = min_wait_ns + tick_ns;
+            const std::int64_t aged_wait_ns = direction.align_prime_age_margin_ns + 2 * tick_ns - direction.align_trigger_offset_ns;
             const std::int64_t min_wait_frames = min_wait_ns * frames_per_tick / tick_ns;
             const std::int64_t max_wait_frames = (max_wait_ns * frames_per_tick + tick_ns - 1) / tick_ns;
-            const std::int64_t age_frames = static_cast<std::int64_t>(prime_frames) + max_wait_frames;
+            const std::int64_t aged_wait_frames = (aged_wait_ns * frames_per_tick + tick_ns - 1) / tick_ns;
+            const std::int64_t under_prime_allowed = std::max<std::int64_t>(max_wait_frames - aged_wait_frames, 0);
+            const std::int64_t age_frames = static_cast<std::int64_t>(prime_frames) + aged_wait_frames;
             if (wake_ns <= 0 && direction.align_trigger_seed_ns == 0) {
                 // No seed and no fresh wake yet (RX, whose grid is the USB
                 // capture): hold the prime briefly for the first one.
@@ -1442,8 +1486,8 @@ IoResult render_to_playback(Direction& direction,
                 const std::int64_t wait_ns = first_tick_ns - now_ns;
                 const std::int64_t wait_frames = wait_ns * frames_per_tick / tick_ns;
                 const std::int64_t drop = static_cast<std::int64_t>(direction.ring.size()) + wait_frames - age_frames;
-                align_drop = static_cast<std::size_t>(std::clamp<std::int64_t>(
-                    drop, 0, static_cast<std::int64_t>(direction.ring.size() - prime_frames)));
+                const std::int64_t drop_limit = static_cast<std::int64_t>(direction.ring.size() - prime_frames) + under_prime_allowed;
+                align_drop = static_cast<std::size_t>(std::clamp<std::int64_t>(drop, 0, drop_limit));
                 direction.pending_trigger_target_ns = target_ns;
                 direction.last_prime_ns = now_ns;
                 direction.last_prime_phase_us = ((now_ns - wake_ns) % tick_ns) / 1000;
@@ -1462,7 +1506,10 @@ IoResult render_to_playback(Direction& direction,
         // here and then conserved, because there is no restoring force on the
         // common mode. Report it rather than infer it from occupancy later.
         const std::size_t ring_at_prime = direction.ring.size();
-        const std::size_t overshoot = ring_at_prime - prime_frames;
+        // The aligned drop may leave the ring under the prime level by what
+        // the age margin no longer prices; report it as under_prime.
+        const std::size_t overshoot = ring_at_prime > prime_frames ? ring_at_prime - prime_frames : 0;
+        const std::size_t under_prime = prime_frames > ring_at_prime ? prime_frames - ring_at_prime : 0;
         std::size_t trimmed = 0;
         if (direction.prime_trim && overshoot > 0) {
             // Discard the oldest frames so the pipeline starts at exactly the
@@ -1485,6 +1532,7 @@ IoResult render_to_playback(Direction& direction,
                   << " prime_phase_us=" << direction.last_prime_phase_us
                   << " first_tick_wait_us=" << direction.last_first_tick_wait_us
                   << " front_age_frames=" << direction.last_front_age_frames
+                  << " under_prime=" << under_prime
                   << " capture_wake_age_us=" << (direction.last_capture_wake_ns > 0 ? (monotonic_now_ns() - direction.last_capture_wake_ns) / 1000 : -1)
                   << " t_us=" << elapsed_us() << '\n';
         direction.primed = true;
@@ -2213,6 +2261,8 @@ int run(const Options& options) {
     rx.playback_prime_frames = rx_prime;
     tx.prime_trim = options.prime_trim;
     rx.prime_trim = options.prime_trim || options.rx_prime_trim;
+    tx.align_prime_age_margin_ns = options.align_prime_age_margin_us * 1000;
+    rx.align_prime_age_margin_ns = options.align_prime_age_margin_us * 1000;
     // Stage names in signal order round the loop: USB capture is the Mac's
     // output arriving, RAVENNA playback the wire out, RAVENNA capture the
     // wire back, USB playback the Mac's input leaving.
@@ -2663,6 +2713,7 @@ int run(const Options& options) {
               << ",\"align_tx_prime_phase_us\":" << tx.last_prime_phase_us
               << ",\"align_tx_first_tick_wait_us\":" << tx.last_first_tick_wait_us
               << ",\"align_tx_front_age_frames\":" << tx.last_front_age_frames
+              << ",\"align_prime_age_margin_us\":" << options.align_prime_age_margin_us
               << ",\"align_rx_trigger\":" << (options.align_rx_trigger ? 1 : 0)
               << ",\"align_rx_triggers\":" << rx.aligned_triggers
               << ",\"align_rx_unaligned_triggers\":" << rx.unaligned_triggers

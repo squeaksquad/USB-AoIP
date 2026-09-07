@@ -6,8 +6,9 @@ with this summary.
 
 Rewritten 2026-09-06 late: three levers accepted on the day (RTL at 32 from
 21.062 to 19.958 ms on fresh anchors), the fresh-anchor procedure holds to
-the sample, and the next lever is the prime margin's 5 frames, a bridge
-build that reorders the aligned TX prime.
+the sample. Amended 2026-09-07 13:10 UTC: the prime margin's 5 frames is
+implemented and staged as a flag (age50), not built; the mechanism is the
+age arithmetic, not a reorder; the service took three RECOVERs overnight.
 
 ---
 
@@ -26,8 +27,14 @@ kAlignPrimeMarginNs at ~85), the PRIMED overshoot/trim code just after
 it (rx_prime_trim gates it for RX), and align_playback_trigger
 (~1275-1325, target= and slack_us=).
 
-NOTHING IS BROKEN. The service runs the accepted profile on a fresh
-anchor with the labels copied. No installs pending. Playback is on.
+NOTHING IS BROKEN. The service runs the accepted profile (rxtrim, bridge
+913d623b, supervisor 431cf0c5) with the labels copied; playback is on.
+The 23:10 anchor is aged: three RECOVERs overnight (08:19 UTC a Pi-side
+stall, both captures XRUN; 12:48 UTC a TX drain of about 190 frames in
+under 10 s, a USB capture shortfall, not a refill gap; see the OBSERVED
+entry), so the next read starts with a fresh anchor as always. STAGED,
+NOT BUILT, NOT INSTALLED: the age50 lever (see below); the staged
+installer must not be run before the bridge is built and its pin moved.
 
 THE POINT OF RECORD (accepted 2026-09-06 23:50 UTC)
 Profile servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim
@@ -113,17 +120,31 @@ THE PROCEDURE (every measurement session starts with it)
    for the live conf (labels only, dry run without --apply).
 
 THE LEVERS, IN ORDER, ONE AT A TIME (all builds; pricing from BUDGET)
-1. The prime margin's 5 frames: render the TX prime before placing the
-   trigger target (compute the drop from the grid phase at the prime
-   wake, render the 192 frames, then place the target with the margin as
-   real slack, 50 us), so the longest wait is 53 frames instead of 58 and
-   the TX front age 296. Expect about 765 at 64 on a fresh anchor and the
-   TX floor 5 lower (about 82-91 loaded); the TX cover is the thing to
-   watch, 3.7 ms was the worst gap of 2026-09-06 and TX prime 192 holds
-   about 30 spare over it now. The measured prime path is 83-104 us, so
-   the render must be inside the wait between the drop and the target; the
-   ALIGN trigger's target= and slack_us= are the check. Done RX prime
-   trim: main.cpp 77450aaa is the base.
+1. The prime margin's 5 frames, STAGED 2026-09-07 (handoff "IMPLEMENTED
+   and STAGED 2026-09-07 13:10 UTC"): bridge flag
+   --align-prime-age-margin-us N (main.cpp daaa3eb7; default 150 = the
+   accepted behaviour, at most 150, needs an aligned prime), conf key
+   ALIGN_PRIME_AGE_MARGIN_US, profile ...-target48-trace-txoff950-rxtrim-
+   age50 (rxtrim with the key at 50). Mechanism: the front age the aligned
+   prime makes constant is prime 243 plus the longest wait it allows for,
+   and that allowance came from the placement margin (150 + 2 ticks - 950
+   = 1200 us, 58 frames, front age 301); the render's 100 us must sit
+   inside the placement margin, which stays 150 us, but the age need not
+   carry it, so the age is priced at 50 (1100 us, 53 frames, front age
+   296) and the drop may leave the ring up to 5 under the prime level in
+   the one-in-ten sessions whose wait exceeds 1104 us (PRIMED under_prime=
+   1-5; the USB wake inside the trigger sleep refills the queue at the
+   start). A reorder that renders before placing the target picks the
+   same tick in every session and gains nothing by itself. Expect TX
+   PRIMED front_age_frames 296, about 765 at 64 on a fresh anchor, RTL at
+   32 about 19.85 ms, TX floor about 82 loaded; the TX cover is what it
+   spends (3.7 ms worst gap of 2026-09-06, about 25 spare after). Staged:
+   ~/usb-16x16-work/phase4-age50-src/ (build.sh 13b18037) and
+   aes67-age50-install/ (supervisor ad7dcb72, conf e083c0e9, installer
+   fc6be5d4 with the bridge pin still 913d623b, age50-block.conf). Next:
+   the service-stop window (build, three pins, README, artifact, install
+   sets, the user's installs, append the block, switch-profile, start,
+   fresh anchor), gate, read, split, the acceptance set.
 2. Sink delay 144 -> 120, 24 samples, only after the arrival lead is
    exported (the one-line sink_min_time plumbing in RTP_audio_stream.c, a
    module rebuild on the rollback path); at 96 the 41-sample holes came

@@ -202,6 +202,13 @@ impulse_trace() { local value; value=$(p IMPULSE_TRACE); printf '%s' "${value:-0
 # queue starts at exactly RX_PLAYBACK_PRIME; usb-to-ravenna keeps its aligned
 # drop and is not trimmed. Absent means 0.
 rx_prime_trim() { local value; value=$(p RX_PRIME_TRIM); printf '%s' "${value:-0}"; }
+# ALIGN_PRIME_AGE_MARGIN_US is the optional margin the aligned prime's front
+# age prices (2026-09-07): the longest wait the age allows for is this plus
+# two ticks less the TX offset, while the trigger target keeps its 150 us
+# placement; the difference is render time no longer aged. Absent means 150,
+# the placement margin, the behaviour of every earlier profile. Needs an
+# aligned prime.
+align_prime_age_margin() { local value; value=$(p ALIGN_PRIME_AGE_MARGIN_US); printf '%s' "${value:-150}"; }
 # PITCH_SEED_PPM is the optional pitch seed (Phase 5 Stage B2): the bridge
 # starts both pitch controls at nominal minus this many ppm and the
 # estimator there, before the prime, instead of running the first minute at
@@ -307,6 +314,11 @@ validate_profile() {
   esac
   if [ "$(rx_prime_trim)" -eq 1 ] && [ "$(align_rx_prime)" -eq 1 ]; then
     say "profile $profile_name: RX_PRIME_TRIM and ALIGN_RX_PRIME both cut the RX ring at prime time; use one" >&2; return 1
+  fi
+  [[ $(align_prime_age_margin) =~ ^[0-9]+$ ]] && [ "$(align_prime_age_margin)" -le 150 ] ||
+    { say "profile $profile_name: ALIGN_PRIME_AGE_MARGIN_US must be an unsigned integer up to 150" >&2; return 1; }
+  if [ "$(align_prime_age_margin)" -ne 150 ] && [ "$(align_tx_prime)" -ne 1 ] && [ "$(align_rx_prime)" -ne 1 ]; then
+    say "profile $profile_name: ALIGN_PRIME_AGE_MARGIN_US needs ALIGN_TX_PRIME=1 or ALIGN_RX_PRIME=1" >&2; return 1
   fi
   if [ -n "$(phase_window)" ]; then
     [[ $(phase_window) =~ ^[0-9]{1,3},[0-9]{1,3}$ ]] ||
@@ -414,6 +426,7 @@ bridge_arguments() {
     --align-rx-trigger "$(align_rx)" \
     --align-rx-offset-us "$(align_rx_offset)" \
     --align-rx-prime "$(align_rx_prime)" \
+    --align-prime-age-margin-us "$(align_prime_age_margin)" \
     ${phase_window_args[@]+"${phase_window_args[@]}"} \
     --zero-run-detect "$(zero_run)" \
     --impulse-trace "$(impulse_trace)" \
@@ -892,7 +905,7 @@ cmd_profiles() {
     [ "$name" = "$selected" ] && mark='*'
     say "$mark $name: $(p STATUS), cover: $(p COVER), measured: $(p MEASURED)"
     say "    $(p DESCRIPTION)"
-    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) rx trigger $(align_rx)/$(align_rx_offset) us prime $(align_rx_prime) rx trim $(rx_prime_trim) phase window $(phase_window_shown)/$(phase_timeout) s zero-run $(zero_run) impulse-trace $(impulse_trace) seed $(seed) ppm shift $(shift_frames)"
+    say "    target $(p TARGET) buffer $(p BUFFER) ravenna-playback $(p RAVENNA_PLAYBACK_BUFFER) prime $(p PLAYBACK_PRIME)/tx $(p TX_PLAYBACK_PRIME)/rx $(p RX_PLAYBACK_PRIME) sink delay $(p SINK_DELAY) pitch servo $(servo) depth tx $(depth TX)/rx $(depth RX) gain $(gain) align $(align)/$(align_offset) us tx trigger $(align_tx)/$(align_tx_offset) us prime $(align_tx_prime) rx trigger $(align_rx)/$(align_rx_offset) us prime $(align_rx_prime) rx trim $(rx_prime_trim) age margin $(align_prime_age_margin) us phase window $(phase_window_shown)/$(phase_timeout) s zero-run $(zero_run) impulse-trace $(impulse_trace) seed $(seed) ppm shift $(shift_frames)"
   done
 }
 

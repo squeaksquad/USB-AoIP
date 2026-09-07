@@ -8168,6 +8168,150 @@ pickup (the prime margin's 5 frames first, a render-before-target build,
 then sink delay after the arrival-lead export).** Service on the 23:10
 anchor, zero RECOVERs, nothing pending on the Pi.
 
+**OBSERVED 2026-09-07 13:00 UTC, from the running service's log: the
+rxtrim session that ended 2026-09-06 with zero RECOVERs took three
+overnight, playback on, no measurement; the 23:10 anchor is aged.** From
+`/run/usb16x16/bridge.log` and the journal (Pi clock UTC-4): (1) 08:19:52
+UTC, 9 h 8.5 min in (`t_us` 32913496960): both directions `capture-avail`
+Broken pipe, both PCMs in XRUN, ring 51, `last_queue` 143 / 144,
+`last_gap_us` 105 / 126, then a clean re-prime (RX PRIMED `ring_at_prime=192
+trimmed=21`, TX PRIMED `front_age_frames=301 align_dropped=63`, ALIGN
+trigger `target=prime slack_us=457`). Two captures in XRUN at once with the
+last observation gaps at about 100 us means the audio thread did not run
+for longer than a capture buffer (192 frames, 4 ms): a Pi-side stall, like
+2026-09-04's; the journal around it holds only the daemon's SAP
+announcements and the recovery's own PCM stop / prepare lines. (2)
+12:48:56 UTC, 13 h 37.5 min in (`t_us` 49057204993): usb-to-ravenna alone,
+`playback-avail` Broken pipe, capture RUNNING, playback XRUN, ring 51,
+`last_queue` 31, `last_gap_us` 4; the DEPTHSTEP line 1 ms before it:
+`depth_floor=82 ring=51 queue=31 avail=353 capture_backlog=0 pull=48
+gap_us=985`; the 1 Hz line 10 s before: `tx_queue=222 tx_qfloor=87
+tx_pullmax=48`. The TX queue fell from about 222 to 31 inside 10 s with the
+device still pulling 48 per observation and no long observation gap
+(`tx_gapmax_us` 1384 for the session), so the writer's input fell short by
+about 190 frames, 4 ms: a USB capture shortfall on the Mac or gadget side,
+not a refill gap, and no queue floor under 190 would have held it. The
+re-prime: TX PRIMED `ring_at_prime=249 overshoot=6 align_dropped=87
+front_age_frames=301`, ALIGN trigger `target=prime slack_us=937`. Since
+then `tx_restarts=2 rx_restarts=1`, `tx_qfloor` 31 (set by the drain),
+`rx_qfloor` 63 (the session the first re-prime drew; 72 before it, the RX
+side's own per-session draw), `tx_qlow` 3, `tx_pullmax` 48, pitch about
+1000015. Nothing to act on: the profile, bridge and supervisor are the
+accepted ones; but every RECOVER restarts the gadget PCMs, so the level
+this session would read is a new draw and the next read starts with the
+procedure's fresh anchor as always. Both events bear on the cover call
+below only negatively: neither was a refill gap that 5 frames of TX floor
+would decide.
+
+**IMPLEMENTED and STAGED 2026-09-07 13:10 UTC, not yet built: the prime
+margin's 5 frames as `--align-prime-age-margin-us` in the bridge
+(`main.cpp` `daaa3eb7`), the conf key `ALIGN_PRIME_AGE_MARGIN_US`, and
+profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50`
+(rxtrim with the key at 50, one variable).** *The mechanism, corrected
+from the pickup prompt.* The prompt's lever was a reorder: render the TX
+prime before placing the trigger target, so the 150 us placement margin
+becomes 50 us of real slack and the longest wait 53 frames instead of 58.
+Read against the code, the reorder changes nothing about which tick starts
+a session: the target is the first grid point at least the margin ahead of
+the prime instant, and a render done before the target is placed only
+moves the placement to the same grid point when the render finished in
+time or to the next one when it did not, which is exactly what placing
+the target 150 us ahead already picks (the sessions whose grid point falls
+50-150 us after the prime instant are the ones the reorder would miss).
+What the margin actually costs is in the front age's arithmetic alone:
+the aligned prime makes the front frame's age at the first tick a constant
+equal to the prime depth (243) plus the longest wait it allows for, and
+that allowance is computed from the placement margin (150 + 2 ticks - 950
+= 1200 us, 58 frames, front age 301) because the drop is clamped so the
+ring after it never sits under the prime level. The 100 us between 150
+and 50 is the render path's own time (83-104 us measured 2026-09-06): it
+must lie inside the placement margin, but nothing requires the age to
+carry it. So the lever is: price the age at a 50 us margin (50 + 2000 -
+950 = 1100 us, 53 frames, front age 296) while the target keeps its 150 us
+placement, and let the drop leave the ring under the prime level by the
+difference (5 frames) in the sessions whose wait exceeds 1104 us, about
+one in ten. In those sessions the render hands the RAVENNA playback queue
+188-192 frames instead of 193-241, and the USB capture wake that falls
+inside the trigger sleep in exactly those sessions (the wait is over a
+tick there; the sleep runs from about 100 us after the wake to the target)
+refills it at the start, within tens of microseconds of the first pull
+either way; the queue's momentary minimum at the first pull is 188 against
+193 today, over the 87 floor by a hundred. Every other session is the
+2026-09-06 prime with 5 more frames dropped. The expected level moves 5
+(the level follows the TX front age 1:1 on fresh anchors), the TX queue
+sits 5 shallower everywhere, and the TX floor gives 5, which is the TX
+cover this lever spends. *The code.* `--align-prime-age-margin-us N`
+(default 150, the placement margin, so the flag absent is `913d623b`'s
+behaviour to the frame; at most 150; any other value needs
+`--align-tx-prime 1` or `--align-rx-prime 1`), `Direction::
+align_prime_age_margin_ns` set for both directions; in the aligned prime
+the wait bounds split into the placed pair (`min_wait`, `max_wait`, from
+`kAlignPrimeMarginNs`, unchanged: the hold level and the wait draw) and the
+aged bound (`aged_wait` from the age margin), `age_frames = prime +
+aged_wait_frames`, the drop limit `ring - prime + (max_wait_frames -
+aged_wait_frames)`; the overshoot no longer underflows when the ring sits
+under the prime level, and the PRIMED line gains `under_prime=` (0, or
+1-5 in a long-wait session, after `front_age_frames=`); the summary JSON
+gains `align_prime_age_margin_us`. At 950/1000/150/50: hold level 287
+(292 before), so the ring at prime lands at 288 or 336 (336 before), the
+drop absorbs either; waits 200-1200 us as before, `slack_us` unchanged.
+Core untouched (`bridge_core.cpp` `9c24251a`, `.hpp` `0b9ea983`, tests
+`46f03dcf`). Syntax-checked clean on the Mac (clang `-std=c++20 -Wall
+-Wextra -Wpedantic -Werror`, the Pi's ALSA headers, the endian /
+clock_nanosleep / ESTRPIPE shims); core tests pass on the Mac.
+*Supervisor `ad7dcb72`:* `align_prime_age_margin()` (absent means 150),
+validation (unsigned integer up to 150; not 150 needs `ALIGN_TX_PRIME=1`
+or `ALIGN_RX_PRIME=1`), `--align-prime-age-margin-us` after
+`--align-rx-prime` in `bridge_arguments`, `age margin N us` in the
+profiles listing. *Conf `e083c0e9`:* the age50 block after rxtrim's
+(experimental; the mechanism, the expected figures and the watch list in
+its comment; the tag `age50` prefixes no field key). *Installer
+`fc6be5d4`:* conf pin `e083c0e9`, supervisor pin `ad7dcb72`, `c8515d93`
+joins the unedited-shipped list; the bridge pin `913d623b` moves after the
+build, and until it does the staged installer must not be run: the new
+supervisor passes `--align-prime-age-margin-us` to whatever bridge is
+installed and `913d623b` rejects the flag. *Staged on the Pi*, file by
+file with the service running (eight scps, the RECOVER count 3 before and
+after): `~/usb-16x16-work/phase4-age50-src/` (`main.cpp` `daaa3eb7`,
+`bridge_core.cpp` `9c24251a`, `bridge_core.hpp` `0b9ea983`, tests
+`46f03dcf`, CMakeLists, README, no AppleDouble files; `build.sh`
+`13b18037` pinned to `daaa3eb7`, refuses while the service is active) and
+`~/usb-16x16-work/aes67-age50-install/` (supervisor `ad7dcb72`, unit
+`77837e60`, shipped conf `e083c0e9`, installer `fc6be5d4`,
+`age50-block.conf` `3c581d6f`). *Validated on the Pi:* the staged
+supervisor lists the staged conf (59 profiles, exit 0) and the live conf
+plus the block (exit 0, `PROFILE` still rxtrim); the installed supervisor
+`431cf0c5` lists the live conf plus the block, exit 0 (it ignores the
+key); the staged supervisor's `validate_profile` passes the age50 profile
+on the staged conf and on the live conf plus the block, its
+`bridge_arguments` carry `--align-prime-age-margin-us 50` for age50 and
+`150` for rxtrim (the accepted profile runs unchanged); `200`, `5x`, and
+`50` with `ALIGN_TX_PRIME=0` are refused with the intended messages.
+*Expected on a fresh anchor:* TX PRIMED `front_age_frames=296`
+(`ring_at_prime` 288 or 336, `under_prime=0`, or 1-5 when
+`first_tick_wait_us` exceeds 1104), ALIGN trigger `target=prime` with
+`slack_us` as before; **about 765 at 64 frames** (770 - 5), RTL at 32
+about 19.85 ms (953 = 765 + 188); TX floor about 82 loaded (87-96 on
+rxtrim), RX untouched (72, PRIMED `trimmed=21`). The cover call is the
+user's: 3.7 ms was the worst TX refill gap of 2026-09-06 and TX prime 192
+holds about 30 spare over it now, about 25 after; the overnight events
+above were not refill gaps. Next, in one service-stop window: `sudo
+systemctl stop usb16x16-aes67` by the user (playback off), `build.sh`,
+the three pins (`install-candidate.sh`, `install-aes67-service.sh`, the
+supervisor's `expected_bridge_sha256`), the bridge README and the
+artifact, the install sets (`phase4-age50-install/` with the wrapper
+`6282b108`), then by the user `install-candidate.sh`,
+`install-aes67-service.sh` (keeps the operator-edited live conf), append
+`age50-block.conf` to the live conf, `switch-profile ...-rxtrim-age50`
+(PROFILE only while inactive), `systemctl start`, `sudo systemctl restart
+usb-16x16.service` for the fresh anchor; gate, one 100-impulse read at 64
+with the split, then the acceptance set if it holds. Rollback: `switch-
+profile ...-rxtrim` alone (the new bridge and supervisor run it unchanged,
+flag 150), or `phase4-rxtrim-install/` with `aes67-rxtrim-install/` for
+the binaries. Service unchanged throughout: rxtrim on `913d623b`, the
+aged 23:10 anchor.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
