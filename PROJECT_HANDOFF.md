@@ -8161,6 +8161,13 @@ after the arrival-lead export, a module rebuild). Service ends the day
 on rxtrim, the 23:10 anchor, zero RECOVERs; nothing pending on the Pi but
 the label copy.
 
+**DONE 2026-09-07 00:00 UTC: rxtrim labels copied into the live conf by
+the user (`copy-rxtrim-labels.py --apply`, 3 lines; the live block reads
+STATUS accepted); `work/NEXT_SESSION_PROMPT.md` already rewritten for the
+pickup (the prime margin's 5 frames first, a render-before-target build,
+then sink delay after the arrival-lead export).** Service on the 23:10
+anchor, zero RECOVERs, nothing pending on the Pi.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
