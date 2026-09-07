@@ -8557,6 +8557,39 @@ from the lead. Rollback: the previous supervisor (`7a5d2362`, module
 `cc6852f0` from `ravenna-tx-fix-install/`) through `aes67-age50-install/`,
 service stopped. `CLAUDE.md`'s map carries the new directory.
 
+**BUILT and STAGED 2026-09-07 14:35 UTC: RAVENNA module `bc694c24` (the
+transmit-slot fix plus the arrival-lead export), the lead install set, the
+supervisor's module pins moved.** Service stopped by the user at about
+14:28 UTC (playback off); `build.sh` on the Pi from
+`~/usb-16x16-work/ravenna-lead-src` (both patches applied to a fresh copy
+of the pristine v2.1 tree; patched `manager.c` `9cbbc5a8`,
+`RTP_audio_stream.c` `5d479dda`, `.h` `d4e9fbc8` checked by the script),
+`make modules` against `6.18.34+rpt-rpi-2712`, zero warnings, vermagic
+`6.18.34+rpt-rpi-2712 SMP preempt mod_unload modversions aarch64` (the
+running kernel), SHA-256
+`bc694c24c77893836dd3a3cfa0c9105e68b556d19dd51a84bf9ee5ca3f1b98ff`, in
+`~/usb-16x16-work/ravenna-lead-install/` and, gitignored like every
+module, `work/ravenna-lead-export/artifacts/`. (`build.sh` ran as
+`72543be6` and could not find `modinfo` on the user's PATH, cosmetic; it
+now calls `/usr/sbin/modinfo`, `a4ca94d2`, re-staged.) Pins: supervisor
+`module_binary` at `ravenna-lead-install/`, `expected_module_sha256`
+`bc694c24`, comment naming both rollbacks; supervisor `631e88e1`;
+`install-aes67-service.sh` `12a6972d` (supervisor pin `631e88e1`; unit
+`77837e60`, conf `5c12cb6f`, bridge `05f37bd9` unchanged). Staged
+`~/usb-16x16-work/aes67-lead-install/` (supervisor, unit, shipped conf,
+installer), hashes verified there; the staged supervisor lists the repo
+conf and the live conf (90 lines, `PROFILE` still age50), exit 0; the
+installed bridge is `05f37bd9`, the installed supervisor `7a5d2362`. The
+profile, bridge and conf are untouched: the live conf is not rewritten by
+the installer (operator-edited, kept). Install order, service stopped, by
+the user: `install-aes67-service.sh` from `aes67-lead-install/`,
+`systemctl start usb16x16-aes67`, `sudo systemctl restart
+usb-16x16.service` for the fresh anchor; the supervisor's own hash check
+gates the `insmod`. Then gate, one 100-impulse read at 64 (766 expected,
+PRIMED as accepted), `read-lead.sh` before and after, and the acceptance
+set with a lead pair around every run. Rollback: `aes67-age50-install/`'s
+installer (supervisor `7a5d2362`, module `cc6852f0`), service stopped.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

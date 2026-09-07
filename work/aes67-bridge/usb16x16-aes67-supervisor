@@ -32,18 +32,19 @@ unit_name=usb16x16-aes67
 work_root=/home/bdimaio/usb-16x16-work
 source_root="$work_root/aes67-daemon-src"
 daemon_binary="$source_root/build-daemon/aes67-daemon"
-# 2026-09-06: the transmit-slot fix (work/ravenna-tx-fix): the same driver
-# tree with one expression changed in manager.c, built separately; the
-# original module stays at aes67-source/ravenna-alsa-lkm-v2.1/driver/ for
-# rollback (hash f65a4955).
-module_binary="$work_root/ravenna-tx-fix-install/MergingRavennaALSA.ko"
+# 2026-09-07: the arrival-lead export (work/ravenna-lead-export, patch 0002)
+# on top of the transmit-slot fix (work/ravenna-tx-fix, patch 0001): the
+# same driver tree, built separately; only the sink statistics path
+# changes. Rollbacks: ravenna-tx-fix-install/ (hash cc6852f0), and the
+# original module at aes67-source/ravenna-alsa-lkm-v2.1/driver/ (f65a4955).
+module_binary="$work_root/ravenna-lead-install/MergingRavennaALSA.ko"
 bridge_binary=/usr/local/libexec/usb16x16-rt-bridge
 original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 candidate_wrapper=/usr/local/sbin/run-phase4-candidate-safe.sh
 candidate_ready_file=/tmp/usb16x16-phase4-candidate.ready
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
-expected_module_sha256=cc6852f0721343732c80d770a2f5a32d019dbfe20f1d361629c8fce2ff98bf55
+expected_module_sha256=bc694c24c77893836dd3a3cfa0c9105e68b556d19dd51a84bf9ee5ca3f1b98ff
 expected_bridge_sha256=05f37bd911c4f9960eb6f2150accc8603dc4ac92e26622a397706619eea7a233
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 api=http://127.0.0.1:8080

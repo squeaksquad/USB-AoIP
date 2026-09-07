@@ -24,7 +24,7 @@ rm -rf build/driver/.tmp_versions
 [ "$(short build/driver/RTP_audio_stream.h)" = d4e9fbc8 ] || { echo "patched RTP_audio_stream.h is not d4e9fbc8" >&2; exit 1; }
 (cd build/driver && make modules > ../../build.log 2>&1) || { tail -30 build.log >&2; exit 1; }
 echo "warnings in build.log: $(grep -ci warning build.log || true)"
-echo "vermagic: $(modinfo -F vermagic build/driver/MergingRavennaALSA.ko) (running $(uname -r))"
+echo "vermagic: $(/usr/sbin/modinfo -F vermagic build/driver/MergingRavennaALSA.ko) (running $(uname -r))"
 mkdir -p "$install_dir"
 cp build/driver/MergingRavennaALSA.ko "$install_dir/"
 sha256sum "$install_dir/MergingRavennaALSA.ko"

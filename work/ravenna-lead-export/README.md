@@ -88,6 +88,12 @@ running kernel and the module's SHA-256, and copies the module to
 `~/usb-16x16-work/ravenna-lead-install/`. The build is the module's
 acceptance gate for the syntax: nothing here compiles on the Mac.
 
+Built 2026-09-07 14:30 UTC on the Pi against `6.18.34+rpt-rpi-2712`
+(vermagic matches the running kernel), zero warnings, SHA-256
+`bc694c24c77893836dd3a3cfa0c9105e68b556d19dd51a84bf9ee5ca3f1b98ff`,
+copy in `artifacts/`. (`build.sh` as run was `72543be6`; it now calls
+`/usr/sbin/modinfo` by path, which the first run could not find.)
+
 ## Install and rollback
 
 As for the transmit-slot fix: the supervisor loads the module by `insmod`
