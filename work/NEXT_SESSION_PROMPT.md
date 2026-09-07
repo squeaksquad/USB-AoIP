@@ -4,10 +4,10 @@ Paste the block below into a fresh Codex or Claude Code session to resume work.
 It points at `PROJECT_HANDOFF.md`, which is authoritative where it conflicts
 with this summary.
 
-Rewritten 2026-09-07 21:50 UTC after the phase reading: the Ferrofish stamp
-phase is 41, the free sink-delay range runs to 103, and the sd103 block is
-staged behind a capture gate. Where this summary and the handoff tail
-differ, the handoff wins.
+Rewritten 2026-09-07 22:30 UTC after the sd103 acceptance (RTL at 32 18.896
+ms on a fresh anchor; the sink delay is at its floor for the Ferrofish stamp
+phase 41). Where this summary and the handoff tail differ, the handoff
+wins.
 
 ---
 
@@ -15,13 +15,13 @@ Raspberry Pi 5 USB 16x16 / AES67 bridge. Repo: ~/Development/USB 16x16
 (github.com/squeaksquad/usb-16x16-aes67, main, pushed and clean).
 
 Read the Rollback rules at the end of PROJECT_HANDOFF.md, then everything
-from "MEASURED 2026-09-07 17:19-17:23 UTC" to the end (the FOUND and
-STAGED entries of 21:30 and 21:45 UTC are the current work)
+from "FOUND 2026-09-07 21:30 UTC" to the end (the phase arithmetic, the
+gate, the sd103 set and its acceptance)
 (chronological, bold lead-ins; a CORRECTION paragraph wins over the entry
 it amends), then the BUDGET entry "BUDGET 2026-09-06 00:40 UTC" for the
 lever pricing (its sink-delay pricing is corrected in the 17:23 UTC
 MEASURED entry of 2026-09-07), then work/aes67-bridge/aes67.conf's blocks
-for ...-rxtrim-age50-sd132 and ...-rxtrim-age50-sd103 (the staged one),
+for ...-rxtrim-age50-sd132 and ...-rxtrim-age50-sd103 (the point of record),
 work/ravenna-lead-export/README.md (the export: units, what sink_min_time
 means, the frame step, how the phase is read),
 outputs/latency/stage-trace-20260906/stamp-phase.py (its docstring is the
@@ -32,43 +32,40 @@ kAlignPrimeAgeMarginDefaultUs near line 85-100, the prime itself from
 about 1400), the PRIMED overshoot/trim code just after it, and
 align_playback_trigger (about 1325, target= and slack_us=).
 
-NOTHING IS BROKEN. The service runs the accepted profile (sd132 on
-bridge 05f37bd9, supervisor 631e88e1, module bc694c24) on the 17:19 UTC
-anchor of 2026-09-07 with zero RECOVERs at the end of the session; the
-sd132 labels are copied. Pending on the Pi: the sd103 block, staged in
-~/usb-16x16-work/aes67-sd103-install/ (shipped conf e3c3e83b, sd103-block.conf
-49fa061e, installer fca4ddcf whose conf pin moved; supervisor, unit,
-bridge and module unchanged, so the installer is not run), validated with
-the installed supervisor against the staged conf and the live conf plus
-the block. Not installed; the phase gate PASSED at 21:44 UTC (both Ferrofish streams grid phase 41 on the user's fresh capture, handoff GATE PASSED entry), so step 1a below is done and the install (1b) is next. Every read
+NOTHING IS BROKEN. The service runs the accepted profile (sd103 on
+bridge 05f37bd9, supervisor 631e88e1, module bc694c24) on the 21:45 UTC
+anchor of 2026-09-07 with zero RECOVERs at the end of the session. Pending
+on the Pi: the sd103 label copy alone (copy-sd103-labels.py --apply in
+~/usb-16x16-work/aes67-sd103-install/, 3 lines, his sudo), unless the
+handoff's DONE entry after the ACCEPTED one says it is done. Every read
 starts with a fresh anchor as always. Playback is on.
 
-THE POINT OF RECORD (accepted 2026-09-07 17:55 UTC)
-Profile servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd132
+THE POINT OF RECORD (accepted 2026-09-07 22:25 UTC)
+Profile servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd103
 (TARGET 48, ALIGN_TX_OFFSET_US 950, RX_PRIME_TRIM 1, ALIGN_PRIME_AGE_MARGIN_US
-50, SINK_DELAY 132; the "sd144" in the name is historical) on bridge
+50, SINK_DELAY 103; the "sd144" in the name is historical) on bridge
 05f37bd9 (--align-prime-age-margin-us, default 150 = the older
 behaviour), supervisor 631e88e1 (module_binary ravenna-lead-install/,
 expected_module_sha256 bc694c24), module bc694c24 (the transmit-slot fix
 0001 plus the arrival-lead export 0002; rollbacks cc6852f0 in
 ravenna-tx-fix-install/ and the original f65a4955 in the v2.1 tree), conf
-ff05b089 (e3c3e83b with the staged sd103 block), installer a5c69f7c
-(fca4ddcf staged). Fresh anchor: 747 at 64 frames, RTL
-Utility at 32 frames 19.479 ms = 747 + 188 to the sample; 4 x 800 loaded
-and the 600 s soak all on 747, zero RECOVERs; TX floor 75 loaded, RX 72,
+556cc2b6, installer 21448108. Fresh anchor: 719 at 64 frames, RTL
+Utility at 32 frames 18.896 ms = 719 + 188 to the sample; 4 x 800 loaded
+and the 600 s soak all on 719, zero RECOVERs; TX floor 78 loaded, RX 72,
 tx_pullmax 48, tx_occ / rx_occ 51; TX PRIMED front_age_frames 296
 under_prime 0, RX PRIMED ring_at_prime 192 trimmed 21, ALIGN trigger
-target=prime; split pos_tx -20 / pos_aes67 573 / pos_rx -22 / pos_pi 531,
-pi_total about 702, usb_time about 45. The day's chain on fresh anchors,
-RTL at 32: age50 19.875 (766), the 14:48 anchor at 144 on the new module
-19.729 (759, the same bridge start: fresh-anchor draw), sd132 19.479
-(747). Yardstick: Dante Virtual Soundcard 11.312 ms at 32. Rollbacks by
-switch-profile, conf only: ...-rxtrim-age50 (144), ...-rxtrim (age margin
-150), ...-target48-trace-txoff950 (no RX trim). Bridge and supervisor
-sets: phase4-age50-install/ (current bridge), aes67-sd132-install/
-(current conf, installer, labels script), aes67-age50-install/
-(supervisor 7a5d2362 with module cc6852f0: the module rollback, service
-stopped).
+target=prime; split pos_tx -19 / pos_aes67 544 / pos_rx -22 / pos_pi 503,
+pi_total about 678, usb_time about 41-46; the arrival lead 947-1032 us per
+interval on both sinks. The day's chain on fresh anchors, RTL at 32:
+age50 19.875 (766), the 14:48 anchor at 144 on the new module 19.729
+(759), sd132 19.479 (747), sd103 18.896 (719). Yardstick: Dante Virtual
+Soundcard 11.312 ms at 32. Rollbacks by switch-profile, conf only:
+...-rxtrim-age50-sd132 (132), ...-rxtrim-age50 (144), ...-rxtrim (age
+margin 150), ...-target48-trace-txoff950 (no RX trim). Bridge and
+supervisor sets: phase4-age50-install/ (current bridge),
+aes67-sd103-install/ (current conf, installer, labels script),
+aes67-age50-install/ (supervisor 7a5d2362 with module cc6852f0: the module
+rollback, service stopped).
 
 WHAT THE RECORD SETTLED (do not re-derive)
 - The Mac reports a level set on usbaudiod's timeline at each gadget PCM
@@ -162,38 +159,25 @@ THE PROCEDURE (every measurement session starts with it)
    run without --apply).
 
 THE LEVERS, IN ORDER, ONE AT A TIME
-1. Sink delay 132 -> 103 (the sd103 block, staged), in this order:
-   a. The phase gate, service running, by the user (root; the 2026-09-06
-      captures were taken during runs without effect):
-      sudo timeout 4 tcpdump -i eth0 -s 1500 -B 65536 -c 8000 -w /tmp/phase-$(date -u +%Y%m%dT%H%M%SZ).pcap 'udp and dst port 5004'
-      Then from the Mac: ssh bdimaio@192.168.1.201 'head -c 1500000
-      /tmp/phase-*.pcap' > FILE; python3 outputs/latency/stage-trace-20260906/stamp-phase.py FILE.
-      Both Ferrofish streams (239.69.121.9 sink 0, 239.69.193.115 sink 1)
-      must read grid phase 41 with the Pi's 239.69.16.1/.2 as reference.
-      41 on both: install as staged. Another phase on either: the value
-      becomes 144 minus the smaller phase, re-staged conf only (under 12:
-      the flow restarted since sd132 was accepted, 132 is crossed, roll
-      back to 144 first). Do not read the phase without the Pi's streams
-      in the capture.
-   b. Playback off, sudo systemctl stop usb16x16-aes67, sudo tee -a
-      /etc/usb16x16/aes67.conf < ~/usb-16x16-work/aes67-sd103-install/sd103-block.conf,
-      sudo usb16x16-aes67-supervisor switch-profile servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd103,
-      sudo systemctl start usb16x16-aes67, sudo systemctl restart
-      usb-16x16.service (the fresh anchor); journal "sinks applied,
-      delay 103", both sinks reading back "delay": 103.
-   c. The procedure: first lead pair, gate, one 100-impulse read at 64
-      with the split, then the acceptance set with a lead pair around
-      every run, RTL at 32 by the user; then MEASURED/COVER/STATUS, the
-      conf pin, copy-sd103-labels.py. Expected on an anchor whose PRIMED
-      lines match sd132's 17:19 anchor: about 718 at 64 (747 - 29), RTL
-      at 32 about 18.875 ms, pos_aes67 544, the lead unchanged (0.93-1.06
-      ms, never negative), PRIMED and floors unchanged. Rollback:
-      switch-profile ...-rxtrim-age50-sd132 or ...-rxtrim-age50, conf only.
-2. After that, nothing priced remains on the Pi side by profile (the
-   sink delay is at its floor for this phase; 102 and below cross): the TX
-   prime (192) sits over a bar of one period plus the Pi's worst wakeup
-   gap and needs the days-long gap measurement (Phase 6); the Mac
-   constant and the gadget's share of the USB legs are not reachable.
+1. Nothing priced remains on the Pi side by profile. The sink delay is
+   at its floor for the Ferrofish stamp phase 41 (103; 102 crosses). The
+   TX prime (192) sits over a bar of one period plus the Pi's worst
+   wakeup gap and needs the days-long gap measurement (Phase 6); the Mac
+   constant (188 over the harness level at RTL 32) and the gadget's
+   share of the USB legs are not reachable by profile.
+2. Standing rule for the sink delay: after any Ferrofish, switch or Dante
+   Controller change, and after unexplained ravenna-capture zero runs,
+   read the lead pair first (work/ravenna-lead-export/read-lead.sh). Near
+   zero or negative on both sinks means the flow re-drew its phase:
+   switch-profile ...-rxtrim-age50 (144), then a fresh 4 s root capture
+   (sudo timeout 4 tcpdump -i eth0 -s 1500 -B 65536 -c 8000 -w
+   /tmp/phase-$(date -u +%Y%m%dT%H%M%SZ).pcap 'udp and dst port 5004')
+   read with stamp-phase.py (the Pi's own streams must be in it) gives
+   the new floor, 144 minus the phase, as one conf-only block.
+3. If a measurement session is wanted for its own sake: the procedure
+   above on the sd103 profile; expect 719-class levels on anchors whose
+   PRIMED lines match (the fresh-anchor draw of the USB remainder is
+   about +-10).
 
 BUILD AND INSTALL RULES
 - Syntax-check bridge changes on the Mac first: clang++ -std=c++20

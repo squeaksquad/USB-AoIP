@@ -9093,6 +9093,60 @@ every impulse (531 at 132), `pi_total` median 677.8 (649.1-692.8; 702.1 at
 one of 5,944 impulses. RTL at 32 by the user is the last item; predicted
 719 + 188 = 907 = 18.896 ms.
 
+**ACCEPTED 2026-09-07 22:25 UTC: sink delay 103, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd103`
+on bridge `05f37bd9`, supervisor `631e88e1` and module `bc694c24`: 719 at
+64 frames on a fresh anchor, RTL Utility at 32 frames 18.896 ms = 907 = 719
++ 188 to the sample, read by the user at about 22:20 UTC.** The point of
+record moves from sd132 (747 / 19.479 on its own anchor, the same day) to
+sd103: 0.583 ms at RTL 32, 28 samples at 64, for no cover at all (the
+lead's frame deadline unchanged: 947-1032 us per interval against 959-1039
+at 132 and 930-1014 at 144; TX floor 78 loaded against 75 on sd132's set,
+RX 72). Acceptance set: the SOAKED entry above (4 x 800 loaded and the 600
+s soak all 719, zero RECOVERs; the soak's one Mac-side 128-frame gap
+reported there, not the lever's). Conf `556cc2b6`: STATUS accepted, COVER
+and MEASURED filled, the block's comment carries the gate, the measured
+line and "102 crosses"; installer `21448108` (conf pin `556cc2b6`,
+`e3c3e83b` joins the unedited-shipped list; the supervisor, unit and bridge
+pins are the installed `631e88e1`, `77837e60` and `05f37bd9`, so the
+installer is not re-run). Live conf: the block is live as appended (1233
+lines, `PROFILE` sd103); the label lines are copied by
+`copy-sd103-labels.py` (`88fc0a99`, staged in `aes67-sd103-install/` beside
+the shipped conf `556cc2b6` and the installer; the dry run shows 3 lines,
+the DESCRIPTION being unchanged; applied with `--apply` by the user). Staged
+on the Pi with the service running (three scps, RECOVER count 0 before and
+after); the installed supervisor lists the shipped conf, exit 0. Rollbacks
+by `switch-profile`, conf only: `...-rxtrim-age50-sd132` (132),
+`...-rxtrim-age50` (144); the same bridge, supervisor and module run all
+three unchanged.
+
+*What the lever settled.* (1) The Ferrofish stamp phase is a reading, not
+an inference: 41 against the driver's frame grid on both streams, from the
+Sep 6 captures and the user's fresh one, constant across a module reload,
+several bridge restarts and 43 hours (the FOUND entry of 21:30 UTC has the
+arithmetic; `stamp-phase.py` reads it from any `eth0` capture that holds
+the Pi's own stream). (2) With the phase known the sink delay is priced
+exactly: 103..150 share 144's deadline frame, 103 is the floor of the free
+range, 102 crosses; the lever is closed on the Pi side unless the phase
+changes. (3) The chain on fresh anchors in RTL at 32: target64-trace
+21.062, txoff950 20.521, target48 20.271, rxtrim 19.958, age50 19.875, the
+144 anchor of the day 19.729, sd132 19.479, **sd103 18.896**; DVS 11.312.
+The day took 1.06 ms off RTL at 32 (19.958 to 18.896) and 51 samples at 64
+(770 to 719). (4) The standing exposure: any delay under 144 is crossed if
+the Ferrofish flow restarts with a phase under 144 minus the delay (103:
+41 of 48 draws; 132: 12 of 48). After any Ferrofish, switch or Dante
+Controller change, and after any unexplained ravenna-capture zero runs,
+read the lead pair first: near zero or negative on both sinks means the
+phase moved, `switch-profile ...-rxtrim-age50` (144) is the rollback, and
+`stamp-phase.py` over a fresh capture prices the new floor. (5) Left on
+the table, priced: nothing by profile on the Pi side. The TX prime (192)
+sits over a bar of one period plus the Pi's worst wakeup gap (Phase 6, a
+days-long gap measurement); the Mac constant (188 at RTL 32 over the
+harness level, 124 plus the buffers) and the gadget's share of the USB
+legs are not reachable by profile. Service ends the set on sd103, the
+21:45 anchor, zero RECOVERs; nothing pending on the Pi but the label copy.
+Playback may go back on.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
