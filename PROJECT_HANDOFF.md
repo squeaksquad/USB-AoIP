@@ -9244,6 +9244,74 @@ only, expected 24 under 719 on a matching anchor, TX floor about 54) goes
 through the usual acceptance; a floor under 72 in the days closes the
 lever at 192 and the record says so.
 
+**RELOCATED 2026-09-07 23:20 UTC: the unit moved on a clean shutdown and
+a cold boot; the service came back on sd103 with the accepted start, the
+lead pair 989 / 996 us (the Ferrofish phase survived the move); then at
+17.5 s into the process both gadget PCMs went XRUN with no host stream
+stop in the Mac's log and no bridge stall, the bridge re-primed both, and
+the user's RTL at 32 read 20.104 ms: a plain-restart draw on the right
+profile, not a profile fault.** By the user: `shutdown -h now`, USB then
+PoE unplugged, the move, power. The Mac's usbaudiod logged the
+enumeration's `performStartIO` / `performStopIO` / `performStartIO` at
+23:21:44-46 UTC with `setStartingUSBFrame IN/OUT @ 613066629` at 23:21:46
+(a fresh anchor) and nothing after. The Pi (up at about 23:20 UTC) brought
+the service up on `PROFILE` sd103: `STAGE ptp locked in 10s` (23:22:09),
+`session_manager:: media 0 playout delay 103`, `STAGE sinks applied,
+delay 103`, both sinks reading back 103, the bridge's arguments the
+sd103 set, `ALIGN status=ok attempts=1` (no cold-boot XRUN retry this
+time), `STAGE running` 23:22:45 (ActiveEnter 23:21:58 UTC, `NRestarts`
+1: the re-bind mechanism), the service restart counter otherwise 0. The
+start draw: RX PRIMED `intended=171 ring_at_prime=192 trimmed=21` (the
+accepted line), TX PRIMED `ring_at_prime=279 overshoot=36
+align_dropped=9 first_tick_wait_us=357 front_age_frames=296
+under_prime=0`, ALIGN trigger `target=prime slack_us=203` (the tightest
+slack on record, still hit; the front age 296 as designed). Lead pair
+after the move (`read-lead.sh relocate`, 23:23:58 UTC, since stream
+start): 989 / 996 us, the standing rule's first check passed, sd103 stands.
+*The pair.* At `t_us=17533598` (23:22:58.5 UTC) `RECOVER
+direction=ravenna-to-usb stage=playback-avail code=-32 ... ring=99
+last_queue=168 last_gap_us=14` and 1.1 ms later `RECOVER
+direction=usb-to-ravenna stage=capture-avail code=-32 ... ring=51
+last_queue=132 last_gap_us=1055`, both PCMs `XRUN`; the bridge re-primed
+both (RX 171 / 192 / 21 again; TX `ring_at_prime=280 overshoot=37
+align_dropped=8 first_tick_wait_us=343 front_age_frames=296`, trigger
+`target=prime slack_us=88`), and the RX re-align's own 144-frame zero
+run on channel 2 (`channels=0x0002`, the only channel carrying signal)
+entered at `ravenna-capture` and left at `usb-playback` 5 ms after the
+RECOVER: the re-prepare of the RAVENNA capture, not a late packet (the
+lead's minimum since stream start stayed at 989 / 996). `tx_gapmax_us`
+1097, `rx_gapmax_us` 1120, no stall; usbaudiod logged no `stopIO` or
+`startIO` at that time, so the host did not stop the stream. The cause is
+not established; it is the both-PCM XRUN signature the record calls the
+device open/close pair, and its consequence is the record's: a gadget PCM
+restart re-draws the level on the aged anchor. The user's RTL Utility at
+32 frames then read **20.104 ms** = 965 = **777 + 188**, inside the
+plain-restart band (757-849), on the right profile with the right sink
+delay. The fix is the fresh anchor (playback off, `sudo systemctl restart
+usb-16x16.service`, STAGE running, the bridge log holding exactly two
+PRIMED lines and no RECOVER) before any RTL read. *Watch:* if the pair
+recurs about 17 s after a start with no host event, the USB path after
+the move (cable, port) is the suspect. *Phase 6 consequence.* The day-0
+read of the new process (`reads/bar-day0-20260907T232401Z.txt`, 0.02 h):
+TX floor 132, RX 72, `tx_qlow` / `rx_qlow` 0, gaps 1097 / 1120 us, the
+floors not drawn by the pair; the count runs from whichever process the
+fresh anchor leaves (a re-bind restarts the bridge process and the
+floors). `gap-bar.py` refined on this: every PRIMED line and every ALIGN
+trigger are printed (the re-prime draw is the Phase 6 stability count);
+the pair signature (TX `capture-avail` with RX `playback-avail` inside
+one second) is counted and named without asserting its cause; the floor
+is contaminated only by an observation under one period (`tx_qlow` /
+`rx_qlow`) or by a TX floor step inside the two seconds before a RECOVER
+(start steps excluded), since a pair re-primes without draining a queue;
+the summary's longest gap is quoted from RECOVER-free sessions. The
+historical run regenerated: 28 of 30 uncontaminated (draw3 by its 3717
+us stall step at +23.6 s, txfix1 by `tx_qlow` 1), one pair session
+(postkill, the 2026-09-06 coreaudiod kill), worst floor 75 and the priced
+168 unchanged, longest RECOVER-free gap 1629 us. `DAILY_READ_PROMPT.md`
+carries the pair-versus-drain rule: a pair keeps the count and re-draws
+the level (a fresh anchor before any RTL read); any other RECOVER, any
+`qlow` above 0, or a step before a RECOVER counts against the lever.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

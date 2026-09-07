@@ -45,6 +45,7 @@ import sys
 TX = "usb-to-ravenna"
 RX = "ravenna-to-usb"
 RATE = 48000
+DEFAULT_TX_PRIME = 192
 HIST_BINS = ("0", "1-48", "49-96", "97-144", "145-192", "193+")
 
 
@@ -127,23 +128,30 @@ def report(session, args):
     tx_primed = session["primed"].get(TX, [])
     rx_primed = session["primed"].get(RX, [])
     tx_prime = args.prime or (num(tx_primed[0].get("queue_prime")) if tx_primed else None)
+    if tx_prime is None:
+        # The PRIMED lines can have rotated out of the tmpfs log on a long
+        # process (64 MB, one rotation kept); the day-0 read of the process
+        # holds them, and the prime is the profile's, 192 since tx192.
+        tx_prime = DEFAULT_TX_PRIME
+        print(f"   (no PRIMED line in this file: TX prime taken as {tx_prime}, the profile's; --prime overrides)")
     rx_prime = num(rx_primed[0].get("queue_prime")) if rx_primed else None
     print(f"== {name}")
     if session["negotiated"]:
         print(f"   negotiated {session['negotiated']}")
-    if tx_primed:
-        p = tx_primed[0]
-        print(f"   TX prime {tx_prime} (intended {p.get('intended')}, ring_at_prime {p.get('ring_at_prime')}, "
+    for index, p in enumerate(tx_primed):
+        label = "TX prime" if index == 0 else f"TX re-prime {index} at {fmt_t(p.get('t_us'))}"
+        print(f"   {label} {p.get('queue_prime')} (intended {p.get('intended')}, ring_at_prime {p.get('ring_at_prime')}, "
               f"overshoot {p.get('overshoot')}, align_dropped {p.get('align_dropped')}, "
               f"first_tick_wait_us {p.get('first_tick_wait_us')}, front_age_frames {p.get('front_age_frames')}, "
-              f"under_prime {p.get('under_prime')}); re-primes {len(tx_primed) - 1}")
-    if rx_primed:
-        p = rx_primed[0]
-        print(f"   RX prime {rx_prime} (intended {p.get('intended')}, ring_at_prime {p.get('ring_at_prime')}, "
-              f"trimmed {p.get('trimmed')}); re-primes {len(rx_primed) - 1}")
-    if session["trigger"]:
-        t = session["trigger"][0]
-        print(f"   ALIGN trigger target={t.get('target')} slack_us={t.get('slack_us')} wake_to_start_us={t.get('wake_to_start_us')}")
+              f"under_prime {p.get('under_prime')})")
+    for index, p in enumerate(rx_primed):
+        label = "RX prime" if index == 0 else f"RX re-prime {index} at {fmt_t(p.get('t_us'))}"
+        print(f"   {label} {p.get('queue_prime')} (intended {p.get('intended')}, ring_at_prime {p.get('ring_at_prime')}, "
+              f"trimmed {p.get('trimmed')})")
+    for index, t in enumerate(session["trigger"]):
+        when = "" if index == 0 else f" at {fmt_t(t.get('t_us'))}"
+        print(f"   ALIGN trigger{when}: status={t.get('status')} target={t.get('target')} slack_us={t.get('slack_us')} "
+              f"wake_to_start_us={t.get('wake_to_start_us')}")
     if last is None:
         print("   no BRIDGE line: nothing to price")
         return None
@@ -171,30 +179,70 @@ def report(session, args):
             trail = "; ".join(f"{fmt_t(s.get('t_us'))} queue {s.get('queue')} (pull {s.get('pull')}, gap {s.get('gap_us')} us)"
                               for s in steps)
             print(f"   {label} floor trail: {trail}")
-    first_recover = None
+    # RECOVERs. Both gadget PCMs erroring within the same second
+    # (usb-to-ravenna capture-avail with ravenna-to-usb playback-avail) is
+    # the record's device open/close pair: a gadget PCM restart that
+    # re-primes both directions without draining a queue, so the running
+    # floor is not drawn by it (the level is re-drawn: a fresh anchor is
+    # needed before any RTL read). A real drain shows as an observation under one
+    # period (tx_qlow / rx_qlow) or as a floor step in the seconds before the
+    # RECOVER (draw3's 54 at a 3717 us stall), and that contaminates the
+    # floor: the session is then priced on its trail before the first such
+    # RECOVER and flagged. The count of RECOVERs is reported either way.
+    contaminated = False
+    pairs = 0
     if session["recover"]:
-        first_recover = num(session["recover"][0].get("t_us"), 0)
+        times = [num(r.get("t_us"), 0) for r in session["recover"]]
         reasons = {}
         for r in session["recover"]:
-            key = f"{r.get('direction')}/{r.get('reason', r.get('stage', '?'))}"
+            key = f"{r.get('direction')}/{r.get('stage', '?')}"
             reasons[key] = reasons.get(key, 0) + 1
-        print(f"   RECOVER: first at {fmt_t(first_recover)}; " + ", ".join(f"{k} x{v}" for k, v in reasons.items()))
-        before = [s for s in session["depthstep"].get(TX, []) if num(s.get("t_us"), 0) < first_recover]
-        if before:
-            print(f"   TX queue at the last step before the first RECOVER: {before[-1].get('queue')} "
-                  f"(the running floor {tx_floor} includes the underrun)")
+        used = set()
+        for i, a in enumerate(session["recover"]):
+            for j, b in enumerate(session["recover"]):
+                if j <= i or j in used or i in used:
+                    continue
+                # The pair is the USB capture (TX side) with the USB playback (RX
+                # side) in the same second; a RAVENNA capture error on the RX
+                # side is a different event (the 2026-09-06 stack restarts).
+                first, second = (a, b) if a.get("direction") == TX else (b, a)
+                if abs(times[i] - times[j]) <= 1000000 and {a.get("direction"), b.get("direction")} == {TX, RX} \
+                        and first.get("stage") == "capture-avail" and second.get("stage") == "playback-avail":
+                    pairs += 1
+                    used.update((i, j))
+        print(f"   RECOVER x{len(session['recover'])}: " + ", ".join(f"{k} x{v}" for k, v in reasons.items())
+              + f"; at " + ", ".join(fmt_t(t) for t in times[:8]) + (" ..." if len(times) > 8 else "")
+              + f"; both-PCM XRUN pairs {pairs} (the record's device open/close signature: a gadget PCM restart, the level re-drawn)")
+        drawn = []
+        for s_ in session["depthstep"].get(TX, []):
+            t = num(s_.get("t_us"), 0)
+            if t < 5000000:
+                continue  # the start's own steps (prime, first pull), not a drain
+            if any(0 <= rt - t <= 2000000 for rt in times):
+                drawn.append(s_)
+        if (num(last.get("tx_qlow"), 0) or 0) > 0 or (num(last.get("rx_qlow"), 0) or 0) > 0 or drawn:
+            contaminated = True
+            why = "an observation under one period" if not drawn else \
+                f"a floor step at {fmt_t(drawn[0].get('t_us'))} (queue {drawn[0].get('queue')}) in the seconds before a RECOVER"
+            first = min(times)
+            before = [s_ for s_ in session["depthstep"].get(TX, []) if num(s_.get("t_us"), 0) < first - 2000000]
+            print(f"   floor contaminated by {why}; TX queue at the last step before it: "
+                  f"{before[-1].get('queue') if before else 'none'} (the running floor {tx_floor} includes the drain)")
+        else:
+            print("   the floors were not drawn by the RECOVERs (no observation under a period, no step at one)")
     allowed, priced = price(tx_prime, tx_floor, args.cover, args.step)
     if priced is not None:
         verdict = (f"TX floor {tx_floor} leaves {tx_floor - args.cover} over one period: "
                    f"the prime could drop {allowed} to {priced} on this draw")
-        if first_recover is not None:
-            verdict += " (floor contaminated by a RECOVER, see the trail)"
+        if contaminated:
+            verdict += " (floor contaminated, see above)"
         print(f"   priced: {verdict}")
     return {
         "name": name, "runtime_s": runtime_s, "tx_prime": tx_prime, "tx_floor": tx_floor, "rx_floor": rx_floor,
         "tx_gap": num(last.get("tx_gapmax_us")), "rx_gap": num(last.get("rx_gapmax_us")),
         "tx_pullmax": num(last.get("tx_pullmax")), "rx_pullmax": num(last.get("rx_pullmax")),
-        "recovers": len(session["recover"]), "re_primes": max(len(tx_primed) - 1, 0) + max(len(rx_primed) - 1, 0),
+        "recovers": len(session["recover"]), "pairs": pairs, "contaminated": contaminated,
+        "re_primes": max(len(tx_primed) - 1, 0) + max(len(rx_primed) - 1, 0),
         "zeroruns": len(session["zerorun"]), "tx_qlow": num(last.get("tx_qlow")),
     }
 
@@ -217,20 +265,22 @@ def main():
         if row is not None:
             rows.append(row)
         print()
-    clean = [r for r in rows if r["recovers"] == 0 and r["tx_floor"] is not None]
+    clean = [r for r in rows if not r["contaminated"] and r["tx_floor"] is not None]
     if len(rows) > 1 or (rows and rows[0]["recovers"]):
         total_h = sum(r["runtime_s"] for r in rows) / 3600
-        print(f"== summary over {len(rows)} logs, {total_h:.1f} h: RECOVERs {sum(r['recovers'] for r in rows)}, "
+        print(f"== summary over {len(rows)} logs, {total_h:.1f} h: RECOVERs {sum(r['recovers'] for r in rows)} "
+              f"(device open/close pairs {sum(r['pairs'] for r in rows)}), "
               f"re-primes {sum(r['re_primes'] for r in rows)}, ZERORUN lines {sum(r['zeroruns'] for r in rows)}, "
-              f"tx_qlow total {sum(r['tx_qlow'] or 0 for r in rows)}")
+              f"tx_qlow total {sum(r['tx_qlow'] or 0 for r in rows)}, floors contaminated in {sum(1 for r in rows if r['contaminated'])}")
         if clean:
             worst = min(clean, key=lambda r: r["tx_floor"])
-            gap = max(clean, key=lambda r: r["tx_gap"] or 0)
+            quiet = [r for r in clean if r["recovers"] == 0] or clean
+            gap = max(quiet, key=lambda r: r["tx_gap"] or 0)
             primes = sorted({r["tx_prime"] for r in clean if r["tx_prime"] is not None})
-            print(f"   clean sessions {len(clean)} ({sum(r['runtime_s'] for r in clean) / 3600:.1f} h) on TX prime {primes}: "
+            print(f"   uncontaminated sessions {len(clean)} ({sum(r['runtime_s'] for r in clean) / 3600:.1f} h) on TX prime {primes}: "
                   f"TX floors {min(r['tx_floor'] for r in clean)}..{max(r['tx_floor'] for r in clean)} (worst {worst['name']}), "
                   f"RX floors {min(r['rx_floor'] for r in clean)}..{max(r['rx_floor'] for r in clean)}, "
-                  f"longest gap {gap['tx_gap']} us TX ({gap['name']}), {max(r['rx_gap'] or 0 for r in clean)} us RX, "
+                  f"longest gap in RECOVER-free sessions {gap['tx_gap']} us TX ({gap['name']}), {max(r['rx_gap'] or 0 for r in quiet)} us RX, "
                   f"largest pull TX {max(r['tx_pullmax'] or 0 for r in clean)} RX {max(r['rx_pullmax'] or 0 for r in clean)}")
             if len(primes) == 1:
                 allowed, priced = price(primes[0], worst["tx_floor"], args.cover, args.step)
@@ -238,7 +288,7 @@ def main():
                       f"with {args.cover} frames of cover; a cut of {allowed + args.step} would need a floor of at least "
                       f"{args.cover + allowed + args.step}")
         else:
-            print("   no clean session (every log has a RECOVER): nothing priced")
+            print("   no uncontaminated session: nothing priced")
 
 
 if __name__ == "__main__":

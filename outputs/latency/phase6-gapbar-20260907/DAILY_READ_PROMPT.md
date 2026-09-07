@@ -45,10 +45,18 @@ and outputs/latency/phase6-gapbar-20260907/gap-bar.py's docstring, then:
    one process, plus the loaded acceptance set already in the record,
    leaves 48 frames at the new prime, in steps of 24 (168 is the
    candidate; 144 needs a floor of 96). A floor under 72 on any read
-   closes the lever at 192 and the record says so. Tell me plainly which
-   of these three states the day count is in: not enough days yet (and
-   how many remain), the block may be staged (do not stage it until I
-   say), or the lever is closed.
+   closes the lever at 192 and the record says so. RECOVERs: a pair
+   with both gadget PCMs erroring in the same second (usb-to-ravenna
+   capture-avail with ravenna-to-usb playback-avail) is the record's
+   device open/close signature; it re-primes both directions without
+   draining a queue, the floors stand, and the count continues, but the
+   level is re-drawn (say so: any RTL read after it needs a fresh anchor
+   first). Any other RECOVER, any tx_qlow or rx_qlow above 0, or a
+   floor step in the seconds before a RECOVER is a drain: the floor is
+   contaminated, gap-bar.py flags it, and the read counts against the
+   lever, not for it. Tell me plainly which of these three states the
+   day count is in: not enough days yet (and how many remain), the block
+   may be staged (do not stage it until I say), or the lever is closed.
 5. If the block may be staged: it is sd103 with TX_PLAYBACK_PRIME=168,
    one variable, tag prime168 (not tx168: a tag must prefix no field
    key), conf only, the usual acceptance (fresh anchor, gate, read,

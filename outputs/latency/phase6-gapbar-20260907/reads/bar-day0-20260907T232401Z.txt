@@ -1,0 +1,23 @@
+# read 2026-09-07T23:24:01Z pi:  19:24:01 up 4 min,  2 users,  load average: 0.16, 0.13, 0.06
+# service: NRestarts=1 ActiveEnterTimestamp=Mon 2026-09-07 19:21:58 EDT 
+# stage: 1788823365 running
+# recovers file: 2 lines
+# /run/usb16x16/bridge.log:  6488 1510077 lines bytes, modified 2026-09-07T23:24:01Z
+NEGOTIATED usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+ZERORUN enabled min_frames=8 max_frames=480 stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback line_cap=4096
+ALIGN status=ok offset_us=600 attempts=1 wakeups=8 tick_period_us=1000 wake_to_prepare_us=617 prepare_us=12 intervals_us=994/998/999/1000/999/1000/999
+PRIMED direction=ravenna-to-usb grid_phase_us=361 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=25 t_us=1487
+DEPTHSTEP direction=ravenna-to-usb t_us=1535 depth_floor=171 ring=51 queue=120 avail=72 capture_backlog=0 pull=0 gap_us=0
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=279 overshoot=36 trimmed=0 queue_prime=192 align_dropped=9 prime_phase_us=642 first_tick_wait_us=357 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=4124
+ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=952 wake_to_start_us=952 target=prime slack_us=203 sleep_result=0 t_us=4424
+DEPTHSTEP direction=ravenna-to-usb t_us=4484 depth_floor=123 ring=51 queue=72 avail=120 capture_backlog=0 pull=48 gap_us=997
+DEPTHSTEP direction=usb-to-ravenna t_us=4504 depth_floor=231 ring=51 queue=180 avail=204 capture_backlog=0 pull=0 gap_us=0
+RECOVER direction=ravenna-to-usb stage=playback-avail code=-32 error=Broken pipe capture_state=XRUN playback_state=XRUN ring=99 last_queue=168 last_gap_us=14 t_us=17533598
+ALIGN recovery direction=ravenna-to-usb wake_age_us=7640 wake_to_prepare_us=640 prepare_us=92 sleep_result=0 t_us=17534663
+RECOVER direction=usb-to-ravenna stage=capture-avail code=-32 error=Broken pipe capture_state=XRUN playback_state=XRUN ring=51 last_queue=132 last_gap_us=1055 t_us=17534712
+PRIMED direction=ravenna-to-usb grid_phase_us=327 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=76 t_us=17538004
+ZERORUN stage=ravenna-capture direction=ravenna-to-usb start=841456 length=144 channels=0x0002 nchan=1 start_mod48=16 events=1 t_us=17539252 utc=2026-09-07T23:22:58.796Z
+ZERORUN stage=usb-playback direction=ravenna-to-usb start=841314 length=144 channels=0x0002 nchan=1 start_mod48=18 events=1 t_us=17540054 utc=2026-09-07T23:22:58.797Z
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=280 overshoot=37 trimmed=0 queue_prime=192 align_dropped=8 prime_phase_us=656 first_tick_wait_us=343 front_age_frames=296 under_prime=0 capture_wake_age_us=51 t_us=17540658
+ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=970 wake_to_start_us=970 target=prime slack_us=88 sleep_result=0 t_us=17540958
+BRIDGE ppm=-6.000 observed_ppm=-18.474 phase_error=0.000 tx_occ=51 rx_occ=51 tx_queue=229 rx_queue=144 tx_restarts=1 rx_restarts=1 tx_input=3839712 rx_input=3839808 tx_consumed=3839593 rx_consumed=3839616 tx_dropped=0 rx_dropped=0 tx_short=367736 rx_short=436320 tx_qfloor=132 rx_qfloor=72 tx_dfloor=231 rx_dfloor=123 tx_qlow=0 rx_qlow=0 tx_qn=344275 rx_qn=336399 tx_cappeak=48 rx_cappeak=96 tx_capmean=11.152 rx_capmean=11.152 tx_frames=3839593 rx_frames=3839616 tx_dmean=256.315 rx_dmean=232.927 tx_qmean=192.770 rx_qmean=159.905 tx_pullmax=48 rx_pullmax=48 tx_pullmax_gap_us=332 rx_pullmax_gap_us=361 tx_gapmax_us=1097 rx_gapmax_us=1120 tx_pullhist=264291/79982/0/0/0/0 rx_pullhist=247380/89017/0/0/0/0 tx_caphist=264325/79994/0/0/0 rx_caphist=264325/79994/1/0/0 tx_clip=0 rx_clip=0 pitch=1000006 phase_us=409 bias_ppm=0.000 pitch_errors=0 pitch_p=1000006 tx_bias=0.000 rx_bias=0.000 tx_set=-1 rx_set=-1 zr_usbcap=0/0/0/2 zr_ravplay=0/0/0/2 zr_ravcap=1/144/144/5 zr_usbplay=1/144/144/5
