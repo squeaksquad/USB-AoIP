@@ -9007,6 +9007,47 @@ streams at the same TIC, a packet missing from the capture, not a
 Ferrofish event; the bridge log has no RECOVER.) Next: the install steps of
 the STAGED entry above, by the user, playback off.
 
+**MEASURED 2026-09-07 21:45-21:50 UTC, sink delay 103 on a fresh anchor:
+719 x100 at 64 frames (14.979 ms), 28 under sd132's 747, spread 0, zero
+RECOVERs; `pos_aes67` 544 (573 at 132: the lever's 29, to the frame); the
+arrival lead unchanged (1079 / 1081 us since stream start, 971 / 978 over
+the read, against 959-1039 at 132), so the frame deadline is 144's as the
+phase said.** By the user: service stopped (playback off), the block
+appended to the live conf (1233 lines), `switch-profile ...-age50-sd103`,
+`systemctl start` (ActiveEnter 21:45:32 UTC), then `sudo systemctl restart
+usb-16x16.service` at 21:45:36; usbaudiod logged fresh `setStartingUSBFrame
+IN/OUT @ 607298717` at 21:45:38 UTC (fresh anchor). The re-bind fell inside
+the daemon's PTP-lock window (`STAGE ptp locked in 11s` at 21:45:43), before
+the bridge had opened the gadget PCMs, so the service did not need to
+restart itself (systemd's restart counter 0) and the PCMs first opened on
+the fresh enumeration: `session_manager:: media 0 playout delay 103`,
+`STAGE sinks applied, delay 103`, both sinks reading back `"delay": 103`,
+`STAGE running` 21:46:19. Session start
+(`bridge-sd103-session-20260907T2146Z.log`): RX PRIMED `intended=171
+ring_at_prime=192 overshoot=21 trimmed=21`, TX PRIMED `ring_at_prime=270
+overshoot=27 align_dropped=18 first_tick_wait_us=546 front_age_frames=296
+under_prime=0`, ALIGN trigger `target=prime slack_us=417` (the 17:19 anchor
+read 269 / 19 / 577 / 445, the 13:19 anchor 270 / 18 / 542 / 412: one frame
+of drop apart); first second clean (pulls 48, `rx_qfloor` 72, `tx_qfloor`
+171). First lead pair 1079 / 1081 us (sinks 0 / 1, since stream start). Gate
+`sd103-noise-ch2-64f-100imp.*` 0.0% zeros, no run, discontinuities 0,
+`placementMisses` 0, no ZERORUN event. Read
+`sd103-roundtrip-64f-20260907T214902Z` **719 x100**, spread 0, zero
+RECOVERs, discontinuities 0; lead after it 971 / 978; floors after it TX 86,
+RX 72, `tx_pullmax` 48, `rx_pullmax` 49, `tx_gapmax_us` 1049, `rx_gapmax_us`
+1069, `tx_occ` / `rx_occ` 51, pitch 1000014. Split (`impulse-index.py
+--level 719`, 224 impulses): `pos_tx` -19 (-20 at 132: the drop 18 against
+19), `pos_aes67` **544** (573), `pos_rx` -22, `pos_pi` 503 (531), `pi_total`
+673.3 (701.8: -28.5), `usb_time` 45.7 (45.2), `rx_depth` median 120,
+`tx_depth` 130. So the lever's 29 sits in the AES67 chain to the frame, the
+level moved 28 (the drop's one frame the other way), and the USB remainder
+read as sd132's: the anchor compares directly. RTL at 32 predicted 719 +
+188 = 907 = 18.896 ms, to be read by the user after the chain. Acceptance
+chain launched detached at about 21:51 UTC on this session
+(`USB16X16_OTHER_LOAD=0.1` on every run, a `read-lead.sh` pair around
+each): four 800-impulse runs at 64 (`sd103`), then the 600 s soak
+(`sd103soak`); results below.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
