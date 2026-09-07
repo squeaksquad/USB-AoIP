@@ -9048,6 +9048,51 @@ chain launched detached at about 21:51 UTC on this session
 each): four 800-impulse runs at 64 (`sd103`), then the 600 s soak
 (`sd103soak`); results below.
 
+**SOAKED 2026-09-07 21:50-22:15 UTC: the sd103 acceptance set, all on the
+21:45 fresh-anchor session: four loaded 800-impulse runs 719 x800 each and
+the 600 s sixteen-channel soak 719 x2400, spread 0 on all 5,600, zero
+RECOVERs, TX floor 78 loaded, RX 72; the arrival lead's minimum over the
+set 947 us (run 2, sink 0), every interval inside the 144 and 132 sets'
+range, so the deadline is the same frame and nothing was spent.** Chain
+launched detached at 21:50:16 UTC (`USB16X16_OTHER_LOAD=0.1` on every run,
+a `read-lead.sh` pair around each):
+`sd103-roundtrip-64f-20260907T{215016,215357,215739,220121}Z` **719 x800**
+each, `sd103soak-roundtrip-64f-20260907T220502Z` **719 x2400**, score 1.000,
+`recovers during run` 0 on all five, `nrestarts` 0. *The lead per run*
+(sinks 0 / 1, microseconds): before run 1 1022 / 1032, run 1 985 / 989,
+run 2 **947 / 958**, run 3 967 / 974, run 4 953 / 971, the soak 951 / 964;
+at 144 the same set read 930-1014, at 132 959-1009. *One Mac-side event in
+the soak, reported, not the lever's.* The soak's harness JSON carries one
+input and one output discontinuity (every other run of the day 0), and the
+bridge log has one ZERORUN event, at 22:09:02.397 UTC: a 128-frame zero run
+on the 15 loaded channels (`channels=0xfffe`) that entered at `usb-capture`
+first (`start_mod48=24`), then `ravenna-playback`, `ravenna-capture` and
+`usb-playback` within 10 ms, the same 128 frames at every stage. A hole
+that enters at the Pi's USB capture is the Mac's output going silent for
+two 64-frame IO cycles, which is what the harness's discontinuity pair says
+from its side; a late RAVENNA packet would have entered at
+`ravenna-capture` alone and shown as a negative `sink_min_time`, and the
+lead over the soak was 951 / 964. The level held 719 on all 2400 impulses
+around it (score 1.000) and the bridge took no RECOVER. The sd132 soak of
+the same afternoon read 0 discontinuities and no ZERORUN event; the record
+carries Mac hole states as the Mac's (`no-probes-during-live-playback`).
+Floors after each run and at the end
+(`bridge-sd103-session-20260907T2146Z.log`, 25,578 lines, 23,777 IMPULSE
+lines, 2 PRIMED, no RECOVER): `tx_qfloor` 86 after the read, 78 from about
+run 3 onward by an ordinary 963 us pull (DEPTHSTEP at 32.7 s and later; 75
+on sd132's set, 76 on the 144 set, 81 on age50's: the session's draw, the
+bridge does not see the sink delay), `rx_qfloor` **72** on every sample,
+`tx_qlow` / `rx_qlow` 0, `tx_pullmax` 48, `rx_pullmax` 49, `tx_gapmax_us`
+1120, `rx_gapmax_us` 1167, `tx_occ` 51 on every 1 Hz sample (1782), `rx_occ`
+51 on 1704 of about 1740 and 66-75 on the rest (as on every set), pitch
+1000017. Split over the session (`impulse-index.py --level 719`, 5,944
+impulses): `pos_tx` -19, `pos_aes67` **544**, `pos_rx` -22, `pos_pi` 503 on
+every impulse (531 at 132), `pi_total` median 677.8 (649.1-692.8; 702.1 at
+132: -24.3), `usb_time` 41.2 (44.9), `rx_depth` median 132 (108-172),
+`tx_depth` 129 (79-171). The lever's 29 sits in the AES67 chain on every
+one of 5,944 impulses. RTL at 32 by the user is the last item; predicted
+719 + 188 = 907 = 18.896 ms.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
