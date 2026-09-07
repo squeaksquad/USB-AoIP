@@ -8859,6 +8859,14 @@ phase is read (an `eth0` capture's RTP timestamps mod 48, or a step to
 ends the set on sd132, the 17:19 anchor, zero RECOVERs; nothing pending
 on the Pi but the label copy. Playback may go back on.
 
+**DONE 2026-09-07 18:10 UTC: sd132 labels copied into the live conf by the
+user (`copy-sd132-labels.py --apply`, 3 lines; the live block reads STATUS
+accepted, the dry run now shows 0); playback on.** Service on the 17:19
+anchor, zero RECOVERs, nothing pending on the Pi.
+`work/NEXT_SESSION_PROMPT.md` rewritten 18:05 UTC for the sd132 point of
+record; the next lever is the rest of the free sink-delay range, priced
+by the Ferrofish stamp phase.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

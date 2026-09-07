@@ -31,8 +31,8 @@ align_playback_trigger (about 1325, target= and slack_us=).
 NOTHING IS BROKEN. The service runs the accepted profile (sd132 on
 bridge 05f37bd9, supervisor 631e88e1, module bc694c24) on the 17:19 UTC
 anchor of 2026-09-07 with zero RECOVERs at the end of the session; the
-sd132 labels copy (copy-sd132-labels.py --apply) may or may not have been
-run, the dry run says. Every read starts with a fresh anchor as always.
+sd132 labels are copied, nothing pending on the Pi. Every read starts with
+a fresh anchor as always.
 Playback is on.
 
 THE POINT OF RECORD (accepted 2026-09-07 17:55 UTC)
