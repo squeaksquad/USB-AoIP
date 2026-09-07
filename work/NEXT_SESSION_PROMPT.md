@@ -9,6 +9,12 @@ Rewritten 2026-09-06 late: three levers accepted on the day (RTL at 32 from
 the sample. Amended 2026-09-07 13:10 UTC: the prime margin's 5 frames is
 implemented and staged as a flag (age50), not built; the mechanism is the
 age arithmetic, not a reorder; the service took three RECOVERs overnight.
+Amended 2026-09-07 15:25 UTC: age50 accepted (766 / 19.875); RAVENNA
+module bc694c24 accepted (the arrival-lead export, work/ravenna-lead-export/,
+759 / 19.729 on its anchor): sink_min_time on the sink status API is now
+the measured lead, about 0.93-1.06 ms at sink delay 144. Next: the sink
+delay call (120 or 132) from the handoff's ACCEPTED entry; the handoff tail
+wins over every paragraph below.
 
 ---
 
