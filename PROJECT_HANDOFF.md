@@ -8825,6 +8825,40 @@ every impulse (543 at 144), `pi_total` median 702.1 (685.9-719.1; 715.6 at
 lever's 12 sits in the AES67 chain on every one of 5,944 impulses. RTL at
 32 by the user is the last item; predicted 747 + 188 = 935 = 19.479 ms.
 
+**ACCEPTED 2026-09-07 17:55 UTC: sink delay 132, profile
+`servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd132`
+on bridge `05f37bd9`, supervisor `631e88e1` and module `bc694c24`: 747 at
+64 frames on a fresh anchor, RTL Utility at 32 frames 19.479 ms = 935 =
+747 + 188 to the sample, read by the user at about 17:52 UTC.** The point
+of record moves from age50 (766 / 19.875 on its own anchor; 759 / 19.729
+on the 14:48 anchor the sd132 session matched) to sd132: 0.25 ms at RTL
+32, 12 samples at 64, for no cover at all (the lead's frame deadline
+unchanged: 959-1009 us per interval against 930-1014 at 144; TX floor 75
+against 76 on the same day's 144 set, RX 72). Acceptance set: the entry
+above (4 x 800 loaded and the 600 s soak all 747, zero RECOVERs, no
+ZERORUN event). Conf: STATUS accepted, COVER and MEASURED filled, the
+block's comment carries the CORRECTION (the deadline moves in whole TIC
+frames; the pricing the block was chosen on was wrong) and the measured
+line; installer pin moved (`d853a5d3` joins the unedited-shipped list);
+`copy-sd132-labels.py` for the live conf (labels only, dry run without
+`--apply`; the live block is otherwise the appended one). Rollbacks by
+`switch-profile`: `...-rxtrim-age50` (144; the same bridge, supervisor
+and module run it unchanged), conf only.
+
+*What the lever settled.* (1) Sink delay's cost is a step of one TIC
+frame, taken when the Ferrofish stamp phase plus the delay crosses a
+48-sample boundary, and zero otherwise; the lead export shows which side
+of the step a delay sits (unchanged lead: free; near zero or negative:
+crossed). (2) The chain on fresh anchors in RTL at 32: target64-trace
+21.062, txoff950 20.521, target48 20.271, rxtrim 19.958, age50 19.875,
+the 144 anchor of the day 19.729, sd132 19.479; DVS 11.312. (3) Left on
+the table, priced: the rest of the free sink-delay range, 144 less the
+stamp phase, between 0 and 35 more samples, one conf-only block once the
+phase is read (an `eth0` capture's RTP timestamps mod 48, or a step to
+120 read by the lead: unchanged means the phase is at least 24). Service
+ends the set on sd132, the 17:19 anchor, zero RECOVERs; nothing pending
+on the Pi but the label copy. Playback may go back on.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

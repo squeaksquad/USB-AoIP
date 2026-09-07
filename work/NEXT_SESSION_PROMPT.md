@@ -15,6 +15,11 @@ module bc694c24 accepted (the arrival-lead export, work/ravenna-lead-export/,
 the measured lead, about 0.93-1.06 ms at sink delay 144. Next: the sink
 delay call (120 or 132) from the handoff's ACCEPTED entry; the handoff tail
 wins over every paragraph below.
+Amended 2026-09-07 17:55 UTC: sink delay 132 ACCEPTED (profile ...-age50-sd132,
+747 / 19.479 on its anchor, the lead unchanged: the sink delay's cost is a
+whole-frame step, and 132 sat on the free side). Point of record is sd132.
+Next: the rest of the free range (144 less the Ferrofish stamp phase), from
+the handoff's ACCEPTED entry of 17:55 UTC.
 
 ---
 
