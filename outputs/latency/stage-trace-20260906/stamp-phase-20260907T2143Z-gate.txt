@@ -1,0 +1,12 @@
+# Phase gate for sd103: the user's capture /tmp/phase-20260907T214350Z.pcap (4 s, 9.8 MB, service running sd132, RECOVER count 0 before and after), first 1.5 MB read on the Mac
+reference 239.69.16.1: wire phase 32 on 307 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 307 packets 2026-09-07T21:43:53Z..2026-09-07T21:43:53Z, wire phase {25: 307}, seq gaps 0, stamp steps {48: 306}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 307 packets 2026-09-07T21:43:53Z..2026-09-07T21:43:53Z, wire phase {32: 307}, seq gaps 1, stamp steps {48: 305, 96: 1}
+    stamp jump at 2026-09-07T21:43:53Z: seq 40228->40230 stamp 2555612528->2555612624
+239.69.16.2 (reference, offset 0): 306 packets 2026-09-07T21:43:53Z..2026-09-07T21:43:53Z, wire phase {32: 306}, seq gaps 1, stamp steps {48: 304, 96: 1}
+    stamp jump at 2026-09-07T21:43:53Z: seq 40228->40230 stamp 2555612528->2555612624
+239.69.193.115 (stream, offset 531217786): 307 packets 2026-09-07T21:43:53Z..2026-09-07T21:43:53Z, wire phase {25: 307}, seq gaps 0, stamp steps {48: 306}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+
+# Against 2026-09-06: every wire phase moved 16 (Pi 16 -> 32, Ferrofish 9 -> 25), one SAC high-word increment (24.855 h), the grid phase 41 unchanged on both streams. The Pi streams' one 96 step at seq 40228->40230 is a packet missing from the capture on both Pi streams at the same TIC, not a Ferrofish event.

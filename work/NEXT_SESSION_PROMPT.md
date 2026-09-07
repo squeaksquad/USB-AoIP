@@ -40,7 +40,7 @@ sd132 labels are copied. Pending on the Pi: the sd103 block, staged in
 49fa061e, installer fca4ddcf whose conf pin moved; supervisor, unit,
 bridge and module unchanged, so the installer is not run), validated with
 the installed supervisor against the staged conf and the live conf plus
-the block. Not installed: it waits on the phase gate (below). Every read
+the block. Not installed; the phase gate PASSED at 21:44 UTC (both Ferrofish streams grid phase 41 on the user's fresh capture, handoff GATE PASSED entry), so step 1a below is done and the install (1b) is next. Every read
 starts with a fresh anchor as always. Playback is on.
 
 THE POINT OF RECORD (accepted 2026-09-07 17:55 UTC)

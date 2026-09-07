@@ -8988,6 +8988,25 @@ every run, RTL at 32. Rollback: `switch-profile ...-rxtrim-age50-sd132`
 (132) or `...-rxtrim-age50` (144), conf only. Service unchanged
 throughout: sd132 on the 17:19 anchor, zero RECOVERs; playback on.
 
+**GATE PASSED 2026-09-07 21:44 UTC: the fresh capture reads grid phase 41 on
+both Ferrofish streams; sd103 may be installed as staged.** The user's
+`/tmp/phase-20260907T214350Z.pcap` (4 s, 9.8 MB, `udp and dst port 5004`,
+service running sd132, RECOVER count 0 before and after); the first 1.5 MB
+read on the Mac with `stamp-phase.py` (evidence
+`stamp-phase-20260907T2143Z-gate.txt`): sink 0 `239.69.121.9` and sink 1
+`239.69.193.115` both wire phase 25 on every packet, the Pi's `239.69.16.1`
+and `.2` wire phase 32 on every packet, grid phase **41 on both sinks**;
+stamps stepping 48, no sequence gap on either Ferrofish stream. The
+capture also confirms the arithmetic outright: since the 2026-09-06
+captures every wire phase moved by exactly 16 (Pi 16 -> 32, Ferrofish 9 ->
+25), one SAC high-word increment in the 43 hours between, and the grid
+phase did not move. So the sink 1 inference is now a reading, the free
+range 103..150 holds for both sinks, and 103 is the value. (The Pi's own
+streams show one 96-sample stamp step at sequence 40228 -> 40230 on both
+streams at the same TIC, a packet missing from the capture, not a
+Ferrofish event; the bridge log has no RECOVER.) Next: the install steps of
+the STAGED entry above, by the user, playback off.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
