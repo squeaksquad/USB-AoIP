@@ -117,3 +117,9 @@ sixteen-channel soak, zero RECOVERs, floors as before, RTL at 32 by the
 user. `read-lead.sh` before and after every run gives the lead over each,
 which is the measurement this module exists for; the sink delay 120 block
 is written only after those numbers.
+
+Accepted 2026-09-07 15:25 UTC on the age50 profile: 759 at 64 on a fresh
+anchor, RTL at 32 19.729 ms = 759 + 188, 4 x 800 loaded and the 600 s
+soak all 759 with zero RECOVERs; the lead over the set 930-1014 us per
+run at sink delay 144 (the handoff's MEASURED / SOAKED / ACCEPTED entries
+of 2026-09-07 14:49-15:25 UTC).

@@ -8683,6 +8683,30 @@ reaches 0.5 ms, and each such packet costs one lap of the sink's jitter
 slot. An intermediate 132 (12 samples, 0.25 ms) would keep about 0.68 ms
 at the same worst packet.
 
+**ACCEPTED 2026-09-07 15:25 UTC: RAVENNA module `bc694c24` (the
+transmit-slot fix plus the arrival-lead export) as the point of record's
+module, profile `...-target48-trace-txoff950-rxtrim-age50` unchanged on
+bridge `05f37bd9` and supervisor `631e88e1`: 759 at 64 frames on a fresh
+anchor, RTL Utility at 32 frames 19.729 ms = 947 = 759 + 188 to the
+sample, read by the user at about 15:22 UTC.** The point of record's
+figures stay age50's (766 / 19.875 on the 13:29 anchor; this anchor drew
+759 / 19.729 with the bridge's start identical, the fresh-anchor draw the
+record carries): the module changes no audio path and the set (the entry
+above: 4 x 800 loaded and the 600 s soak all 759, zero RECOVERs, TX floor
+76, RX 72) is its stability acceptance, and `GET /api/sink/status/N`
+`sink_min_time` is now a measured number, the least arrival lead per
+sink since the previous fetch. Pins as installed: supervisor `631e88e1`
+(`module_binary` `ravenna-lead-install/`, `expected_module_sha256`
+`bc694c24`), installer `12a6972d`; conf `5c12cb6f` and the live conf
+untouched. Rollbacks: `aes67-age50-install/` (supervisor `7a5d2362`,
+module `cc6852f0`), service stopped; the original module `f65a4955`
+stays in the v2.1 tree. *Open, priced by the lead:* sink delay 144 -> 120
+(24 samples; about 430 us of lead left at the set's worst packet, 500
+typical) or 132 (12 samples; about 680 us), a conf-only block either way,
+the user's call; the export reads it live and a late packet shows as a
+negative `sink_min_time`. Service ends the set on the 14:48 anchor, zero
+RECOVERs; nothing pending on the Pi. Playback may go back on.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
