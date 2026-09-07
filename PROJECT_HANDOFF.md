@@ -8344,6 +8344,67 @@ acceptance set on that session if the numbers hold (expected about 765 at
 64, TX PRIMED `front_age_frames=296`, `under_prime` 0 or 1-5, TX floor
 about 82).
 
+**MEASURED 2026-09-07 13:19-13:32 UTC, the prime age margin on two fresh
+anchors: 748 x100 on the first (an anchor whose draw and start stall made
+it unusable), 766 x100 on the second (the lever's number, one over the
+prediction), spread 0 and zero RECOVERs on both; TX PRIMED
+`front_age_frames=296 under_prime=0` on both.** Installs by the user at
+about 13:17 UTC (bridge `05f37bd9`, supervisor `7a5d2362`, wrapper
+`6282b108`; the age50 block appended to the live conf, `switch-profile
+...-rxtrim-age50`), `systemctl start`, then the gadget re-bind; usbaudiod
+logged fresh `setStartingUSBFrame IN/OUT` at 13:18:53 UTC; `STAGE running`
+13:19:36, the bridge started with `--align-prime-age-margin-us 50`.
+*First session* (`bridge-age50-session-20260907T1319Z.log`): RX PRIMED
+`intended=171 ring_at_prime=192 trimmed=21`, TX PRIMED `ring_at_prime=270
+overshoot=27 align_dropped=18 first_tick_wait_us=542 front_age_frames=296
+under_prime=0` (the ring crossed the new hold level 287 at 288, one wake
+earlier than before; 270 + 26 = 296), ALIGN trigger `target=prime
+slack_us=412`. Gate `age50-noise-ch2-64f-100imp.*` 0.0% zeros, no run,
+discontinuities 0. Read `age50-roundtrip-64f-20260907T132056Z` **748
+x100**, spread 0, zero RECOVERs: 22 under rxtrim's 770 against the 5 the
+lever prices. Split (`--level 748`, 224 impulses): `pos_tx` -19 (-57 on
+rxtrim: the drop difference, 56 - 18 = 38, to the frame), `pos_aes67`
+585 (633: a whole period shorter), `pos_rx` -22 (unchanged), `pos_pi` 544
+(554), `pi_total` 714.4 (725.8), `usb_time` 33.6 (44.2), `tx_depth` 127,
+`rx_depth` 120. The bridge's start was as designed and 5 of the 22 is the
+lever; the other 17 sat in the terms the bridge does not set (the AES67
+chain's period and the USB legs), the largest fresh-anchor draw the record
+has. The session was also unusable for cover: in its first second, before
+any Mac activity, both devices pulled 96 in one gap (`tx_pullmax` 96,
+`rx_pullmax` 96 in 1648 us), an audio-thread stall at start that set
+`rx_qfloor` 24 and `tx_qfloor` 123 immediately (the TX floor later 86 by
+an ordinary 889 us pull at 176 s; the RX floor stayed masked at 24). Not
+the lever's doing (it changes the drop arithmetic alone), but the first
+start of the day that stalled; rxtrim's first second had pulls of 48.
+*Second session*, the user's re-draw (`sudo systemctl restart
+usb-16x16.service` at about 13:29 UTC, `setStartingUSBFrame` 13:29:35,
+`STAGE running` 13:30:51; `bridge-age50b-session-20260907T1330Z.log`): RX
+PRIMED `ring_at_prime=192 trimmed=21`, TX PRIMED `ring_at_prime=276
+overshoot=33 align_dropped=12 first_tick_wait_us=433 front_age_frames=296
+under_prime=0` (276 + 20 = 296), ALIGN trigger `target=prime
+slack_us=302`; first second clean (pulls 48, `rx_qfloor` 72, `tx_qfloor`
+129). Gate `age50b-noise-ch2-64f-100imp.*` 0.0% zeros, no run,
+discontinuities 0. Read `age50b-roundtrip-64f-20260907T133142Z` **766
+x100** (15.958 ms), spread 0, zero RECOVERs: 4 under rxtrim's 770, one
+over the 765 predicted. Split (`--level 766`): `pos_tx` -13 (the drop 12
+plus one), `pos_aes67` 585, `pos_rx` -22, `pos_pi` 550 (554: -4),
+`pi_total` 720.1 (725.8: -5.7), `usb_time` 45.9 (44.2), `tx_depth` median
+130 (138), `rx_depth` 120. So on this anchor the lever paid its 5 on the
+Pi path and the USB remainder read as rxtrim's; the AES67 chain reads 585
+on both age50 sessions against 633 on every 2026-09-06 session, with
+`pos_tx` taking the difference (the position chain's split moved with
+the drop, its sum did not: 550 against 554). Floors after the read: TX
+92 (87-96 on rxtrim; the 5 the lever spends shows in `tx_depth`, not yet
+in a floor drawn from a 90-impulse minute), RX 72, `tx_pullmax` 48,
+`tx_occ` / `rx_occ` 51, pitch 1000013. Acceptance set launched 13:32:46
+UTC on this session, detached (`USB16X16_OTHER_LOAD=0.1` on every run):
+four 800-impulse runs at 64, then the 600 s soak (`age50bsoak`, 2400
+impulses); results below. RTL at 32 predicted 766 + 188 = 954 = 19.875
+ms. The two-anchor lesson stands beside yesterday's: the level follows
+the TX front age 1:1 only when the rest of the draw holds, and the first
+anchor's 17 was the rest of the draw; the fresh-anchor procedure reads
+one anchor, and an anchor whose first second stalls is re-drawn.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
