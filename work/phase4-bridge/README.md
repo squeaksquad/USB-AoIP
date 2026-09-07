@@ -54,8 +54,16 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`913d623b0b58b5c60e00fcb7424627dedf8601406cbd958b8a3de5f6da8bb620`
-(2026-09-06: `--rx-prime-trim 0|1`, the RX prime overshoot lever: the
+`05f37bd911c4f9960eb6f2150accc8603dc4ac92e26622a397706619eea7a233`
+(2026-09-07: `--align-prime-age-margin-us N`, the prime margin's 5 frames:
+the aligned prime's front age is priced at N + 2 ticks - offset instead of
+the 150 us placement margin's 1200 us, so at 50 the TX front age is 296
+instead of 301 and the drop may leave the ring up to 5 under the prime
+level in the sessions whose wait exceeds 1104 us (PRIMED `under_prime=`);
+default 150, at most 150, needs an aligned prime; the summary JSON carries
+`align_prime_age_margin_us`; behaviour identical to `913d623b` with the
+flag absent).
+Previous binary `913d623b` (2026-09-06: `--rx-prime-trim 0|1`, the RX prime overshoot lever: the
 ravenna-to-usb prime alone discards `ring_at_prime - intended` from the
 ring's front at prime time, the trim `--prime-trim` runs for both
 directions gated to RX; usb-to-ravenna keeps its aligned drop and is not

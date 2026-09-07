@@ -8312,6 +8312,38 @@ flag 150), or `phase4-rxtrim-install/` with `aes67-rxtrim-install/` for
 the binaries. Service unchanged throughout: rxtrim on `913d623b`, the
 aged 23:10 anchor.
 
+**BUILT and STAGED 2026-09-07 13:15 UTC: bridge `05f37bd9`
+(`--align-prime-age-margin-us`), the age50 install sets, all three pins
+moved.** Service stopped by the user at about 13:11 UTC (playback off);
+build on the Pi from `~/usb-16x16-work/phase4-age50-src` (`main.cpp`
+`daaa3eb7`, Release, the same cmake configuration, zero warnings), ctest
+1/1, binary SHA-256
+`05f37bd911c4f9960eb6f2150accc8603dc4ac92e26622a397706619eea7a233`, in
+`work/phase4-bridge/artifacts/pi-aarch64/` (README updated, `913d623b`
+previous). Smoke on the Pi without devices: `--help` lists the flag, `200`
+is refused (0..150), `50` without an aligned prime is refused with the
+intended message, and with `--align-tx-prime 1` the run proceeds to the
+device open. Behaviour is `913d623b`'s with the flag absent. Pins:
+supervisor `expected_bridge_sha256` `05f37bd9`, supervisor `7a5d2362`;
+`install-candidate.sh` `a324aeb7` (wrapper `6282b108` unchanged);
+`install-aes67-service.sh` `bdb5319f` (supervisor `7a5d2362`, unit
+`77837e60`, conf `e083c0e9`, bridge `05f37bd9`). Staged:
+`~/usb-16x16-work/phase4-age50-install/` (binary, wrapper, installer) and
+`~/usb-16x16-work/aes67-age50-install/` (supervisor, unit, shipped conf,
+installer, `age50-block.conf` `3c581d6f`), hashes verified there; the
+staged supervisor lists the staged conf and the live conf plus the block,
+exit 0. Rollback of the bridge: `phase4-rxtrim-install/` (`913d623b`)
+with `aes67-rxtrim-install/` (supervisor `431cf0c5`), or `switch-profile
+...-rxtrim` alone for the conf side (the new bridge and supervisor run
+the accepted profile unchanged, flag 150). Install order, service
+stopped: `install-candidate.sh`, `install-aes67-service.sh` (keeps the
+operator-edited live conf), append the block, `switch-profile
+...-rxtrim-age50` (PROFILE only while inactive), `systemctl start`, the
+gadget re-bind for the fresh anchor; then gate, read, split, and the
+acceptance set on that session if the numbers hold (expected about 765 at
+64, TX PRIMED `front_age_frames=296`, `under_prime` 0 or 1-5, TX floor
+about 82).
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

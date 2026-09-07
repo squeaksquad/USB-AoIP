@@ -32,9 +32,9 @@ NOTHING IS BROKEN. The service runs the accepted profile (rxtrim, bridge
 The 23:10 anchor is aged: three RECOVERs overnight (08:19 UTC a Pi-side
 stall, both captures XRUN; 12:48 UTC a TX drain of about 190 frames in
 under 10 s, a USB capture shortfall, not a refill gap; see the OBSERVED
-entry), so the next read starts with a fresh anchor as always. STAGED,
-NOT BUILT, NOT INSTALLED: the age50 lever (see below); the staged
-installer must not be run before the bridge is built and its pin moved.
+entry), so the next read starts with a fresh anchor as always. BUILT, NOT
+INSTALLED: the age50 lever (see below), bridge 05f37bd9 staged with its
+install sets.
 
 THE POINT OF RECORD (accepted 2026-09-06 23:50 UTC)
 Profile servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim
@@ -138,13 +138,13 @@ THE LEVERS, IN ORDER, ONE AT A TIME (all builds; pricing from BUDGET)
    same tick in every session and gains nothing by itself. Expect TX
    PRIMED front_age_frames 296, about 765 at 64 on a fresh anchor, RTL at
    32 about 19.85 ms, TX floor about 82 loaded; the TX cover is what it
-   spends (3.7 ms worst gap of 2026-09-06, about 25 spare after). Staged:
-   ~/usb-16x16-work/phase4-age50-src/ (build.sh 13b18037) and
-   aes67-age50-install/ (supervisor ad7dcb72, conf e083c0e9, installer
-   fc6be5d4 with the bridge pin still 913d623b, age50-block.conf). Next:
-   the service-stop window (build, three pins, README, artifact, install
-   sets, the user's installs, append the block, switch-profile, start,
-   fresh anchor), gate, read, split, the acceptance set.
+   spends (3.7 ms worst gap of 2026-09-06, about 25 spare after). BUILT 2026-09-07 13:15 UTC: bridge 05f37bd9, all three pins moved
+   (supervisor 7a5d2362, install-candidate.sh a324aeb7,
+   install-aes67-service.sh bdb5319f, conf e083c0e9); install sets
+   ~/usb-16x16-work/phase4-age50-install/ and aes67-age50-install/
+   (age50-block.conf). Next: the user's installs, append the block,
+   switch-profile, start, fresh anchor; gate, read, split, the
+   acceptance set.
 2. Sink delay 144 -> 120, 24 samples, only after the arrival lead is
    exported (the one-line sink_min_time plumbing in RTP_audio_stream.c, a
    module rebuild on the rollback path); at 96 the 41-sample holes came
