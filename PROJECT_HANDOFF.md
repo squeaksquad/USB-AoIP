@@ -9147,6 +9147,16 @@ legs are not reachable by profile. Service ends the set on sd103, the
 21:45 anchor, zero RECOVERs; nothing pending on the Pi but the label copy.
 Playback may go back on.
 
+**DONE 2026-09-07 22:40 UTC: sd103 labels copied into the live conf by the
+user (`copy-sd103-labels.py --apply`, 3 lines; the live block reads STATUS
+accepted, the dry run now shows 0; 1233 lines).** Service on the 21:45
+anchor, zero RECOVERs, nothing pending on the Pi. `work/NEXT_SESSION_PROMPT.md`
+rewritten 22:30 UTC for the sd103 point of record; no priced lever remains
+on the Pi side by profile, and the standing rule for the sink delay (read
+the lead pair after any Ferrofish, switch or Dante change; a re-drawn phase
+means `switch-profile` to 144 and `stamp-phase.py` over a fresh capture) is
+in the ACCEPTED entry and the prompt.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.

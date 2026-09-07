@@ -34,10 +34,8 @@ align_playback_trigger (about 1325, target= and slack_us=).
 
 NOTHING IS BROKEN. The service runs the accepted profile (sd103 on
 bridge 05f37bd9, supervisor 631e88e1, module bc694c24) on the 21:45 UTC
-anchor of 2026-09-07 with zero RECOVERs at the end of the session. Pending
-on the Pi: the sd103 label copy alone (copy-sd103-labels.py --apply in
-~/usb-16x16-work/aes67-sd103-install/, 3 lines, his sudo), unless the
-handoff's DONE entry after the ACCEPTED one says it is done. Every read
+anchor of 2026-09-07 with zero RECOVERs at the end of the session. The sd103
+labels are copied (22:40 UTC); nothing pending on the Pi. Every read
 starts with a fresh anchor as always. Playback is on.
 
 THE POINT OF RECORD (accepted 2026-09-07 22:25 UTC)
