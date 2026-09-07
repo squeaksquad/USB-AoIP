@@ -8637,6 +8637,52 @@ Acceptance chain launched detached at 14:53:08 UTC on this session
 (`lead`), then the 600 s soak (`leadsoak`, 2400 impulses), with a
 `read-lead.sh` pair around every run; results below.
 
+**SOAKED 2026-09-07 14:53-15:18 UTC: the module `bc694c24` acceptance set,
+all on the 14:48 fresh-anchor session: four loaded 800-impulse runs 759
+x800 each and the 600 s sixteen-channel soak 759 x2400, spread 0 on all
+5,600, zero RECOVERs, TX floor 76 loaded, RX 72; the arrival lead's
+minimum over the set 930 us (run 4, sink 0), the soak 984 / 988.** Chain
+launched detached at 14:53:08 UTC (`USB16X16_OTHER_LOAD=0.1` on every
+run, a `read-lead.sh` pair around each):
+`lead-roundtrip-64f-20260907T{145308,145647,150027,150407}Z` **759 x800**
+each, `leadsoak-roundtrip-64f-20260907T150747Z` **759 x2400**, score
+1.000, discontinuities 0, `recovers during run` 0 on all five,
+`nrestarts` 0. *The lead per run* (the minimum over the run's packets,
+sinks 0 / 1, microseconds): before run 1 1009 / 1034 (idle since the
+read), run 1 1014 / 1022, run 2 994 / 1001, run 3 988 / 995, run 4 **930
+/ 943**, the soak 984 / 988. The two Ferrofish streams read within 7-25
+us of each other on every interval; the worst packet of 35 loaded
+minutes arrived 2.07 ms after its stamp, the typical worst of a 3 min run
+about 2.0 ms. Floors after each run and at the end
+(`bridge-lead-session-20260907T1449Z.log`, 25,545 lines, 23,772 IMPULSE
+lines, 2 PRIMED, no RECOVER, no ZERORUN event): `tx_qfloor` 76 from run
+1 onward (85 after the read; 81 on age50's set, 87 on rxtrim's: the TX
+total is not touched by the module, the session drew its floor by an
+ordinary 885-960 us pull, DEPTHSTEP at 31 s and 207 s), `rx_qfloor` 72 on
+every sample, `tx_qlow` / `rx_qlow` 0, `tx_pullmax` 48, `rx_pullmax` 49,
+`tx_gapmax_us` 1124, `rx_gapmax_us` 1165, `tx_occ` 51 on every 1 Hz
+sample, `rx_occ` 51 on 1626 of about 1680 and 64-67 on the rest, pitch
+1000014. Split over the session (`impulse-index.py --level 759`, 5,938
+impulses): `pos_tx` -20, `pos_aes67` 585, `pos_rx` -22, `pos_pi` 543 on
+every impulse (550 on age50b), `pi_total` median 715.6 (696.8-731.0;
+726.2 on age50b), `usb_time` 43.4 (39.8), `rx_depth` median 136
+(108-168), `tx_depth` 126 (79-170). The audio path is age50's to the
+frame; the level is this anchor's draw, 7 under. RTL at 32 by the user is
+the last item; predicted 759 + 188 = 947 = 19.729 ms. *What the lead says
+about sink delay 120:* at 144 the worst lead over the set was 930 us; 120
+takes 500 us off, leaving about 430 us (21 samples) at the set's worst
+packet and about 500 us on a typical run, against a per-interval minimum
+that fell run by run (1014, 994, 988, 930) as the sample grew. At 96 the
+same packets would have read about -70 us, which is the 41-sample holes
+of 2026-09-04 to the number, so the instrument and the record agree. The
+call is the user's: 120 is a conf-only block, one variable, reversible by
+`switch-profile`, and with the export in place a late packet shows as a
+negative `sink_min_time` and in the zero-run detector rather than as a
+mystery hole; the risk is that the lateness tail beyond 35 minutes
+reaches 0.5 ms, and each such packet costs one lap of the sink's jitter
+slot. An intermediate 132 (12 samples, 0.25 ms) would keep about 0.68 ms
+at the same worst packet.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
