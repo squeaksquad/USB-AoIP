@@ -9312,6 +9312,57 @@ carries the pair-versus-drain rule: a pair keeps the count and re-draws
 the level (a fresh anchor before any RTL read); any other RECOVER, any
 `qlow` above 0, or a step before a RECOVER counts against the lever.
 
+**FOUND 2026-09-07 23:28-23:33 UTC: the AES67 link (`eth0`, the PoE cable
+at the new location) flapped 12 times in five minutes after the
+relocation; the daemon lost its address and PTP, the bridge's TX ring
+filled, and the supervisor read the RECOVER storm as a USB host absence
+and cycled the bridge through three episodes; the user reseated the
+cable and restarted the gadget, and the stack came back on sd103 with a
+fresh anchor at 23:33:57 UTC.** Read-only throughout; the reading came
+from the user's Dante Controller (the Ferrofish's subscriptions to the
+Pi's two transmit flows unresolved, the Pi's transmitters flapping) and
+the question whether this session had touched the device (it had not:
+greps, `systemctl show`, GETs of the daemon API). *The link.* `macb
+1f00100000.ethernet eth0: Link is Down` at 23:28:37 UTC, then down/up
+ten times to 23:31:35 with up periods of 1-15 s, one renegotiation at
+100 Mbps (23:32:00) among the 1 Gbps ones, two more drops after the
+first reseat (23:31:47, 23:33:02), up at 1 Gbps since 23:33:07;
+`carrier_down_count` 12. The Pi is powered over the same cable and
+never lost power, so the data pairs or the port were marginal, not the
+supply. *What the stack did.* The daemon logged `Cannot retrieve IP
+address for interface eth0` every second from 23:28:44 (26 lines), PTP
+read `unlocked`; the bridge, with no RAVENNA consumer, hit
+`capture-ring-full` RECOVERs at 40-41 per second (`ring=768`), and the
+supervisor's host-absent rule stopped it and waited: episode 1 at
+23:28:41, a retry after 60 s (running 23:29:47), episode 2 at 23:30:15,
+"host enumerated after 35s" and running 23:30:56, episode 3 at 23:30:59
+(246 RECOVERs in that process, the RECOVER-storm line cap engaged). The
+rule cannot tell a dead AoIP link from a missing USB host: a link-state
+check (`/sys/class/net/eth0/carrier`) before the host-absent verdict,
+and a wait on the link rather than on an enumeration, is an open
+supervisor item; the record's "SSH working says nothing about AoIP
+health" is the same lesson. *Recovery, by the user.* Cable reseated
+(link up 23:33:07), `systemctl restart usb-16x16.service` at about
+23:33:56: usbaudiod `setStartingUSBFrame IN/OUT @ 613798129` at 23:33:57
+UTC (a fresh anchor), the AES67 service restarted itself (`NRestarts`
+3, ActiveEnter 23:34:11), `STAGE ptp locked in 10s`, `sinks applied,
+delay 103`, both sinks 103, `STAGE running` 23:34:57 on the sd103
+arguments. Start lines (`reads/bar-day0b-20260907T233537Z.txt`): RX
+PRIMED 171 / 192 / trimmed 21 (the accepted line), TX PRIMED
+`ring_at_prime=274 overshoot=31 align_dropped=14 first_tick_wait_us=473
+front_age_frames=296 under_prime=0`, ALIGN trigger `target=prime
+slack_us=341`; 2 PRIMED, 0 RECOVER, 0 ZERORUN; PTP locked, jitter 6.
+Lead pair 23:35:35 UTC (since stream start): **1045 / 1050 us**, sd103's
+frame deadline intact through the flapping (the Ferrofish flow did not
+re-draw its phase). Day-0 read on this process at 0.01 h: TX floor 127,
+RX 72, gaps 1096 / 1116 us. The Phase 6 count runs from this process
+(ActiveEnter 23:34:11 UTC) if the link holds; the earlier day-0 read of
+the 23:21:58 process (floors 132 / 72, the both-PCM XRUN pair at +17.5
+s) stands as a session in the record. RTL at 32 by the user is the next
+read; a 719-class figure (about 18.9 ms) is expected on this anchor.
+*Watch:* `carrier_down_count` above 12 means the cable or port is still
+marginal; the 100 Mbps negotiation at 23:32:00 is the cable-quality sign.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
