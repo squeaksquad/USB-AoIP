@@ -64,13 +64,18 @@ interval and starts the next, so the number is read in pairs: once before a
 run, once after it, and the second read is the minimum over the run.
 `read-lead.sh [label]` on the Mac prints both sinks with a UTC stamp.
 
-At sink delay 144 the lead should read about 3 ms less the packet's
-lateness against its stamp less the ring's one-frame grain. Sink delay 120
-takes 24 samples (500 us) off it. The number that decides the lever is the
-minimum over a loaded 800-impulse run and the 600 s soak at 144: if it
-stays over 1 ms, 120 keeps 0.5 ms; between 0.5 and 1 ms, 120 is the edge
-the 41-sample holes at 96 already showed; under 0.5 ms, 120 is not safe and
-the lever is closed.
+At sink delay 144 the lead reads about 0.93-1.06 ms per interval on both
+Ferrofish sinks (2026-09-07): the packets arrive about 2 ms after their
+stamp, 1 ms of it inherent to 1 ms packets. The lead moves in whole TIC
+frames, not with the delay: the packet's first sample is placed at stamp
+plus delay and rounded down to the 48-sample frame whose TIC copies it,
+so the deadline changes only when the stamp phase plus the delay crosses
+a frame boundary. Measured 2026-09-07: 132 read the same lead as 144 and
+12 samples less latency (free); 96 crossed the boundary and read about 40
+us, the 41-sample holes of 2026-09-04. The free range is 144 down to 144
+minus the stamp phase; 120 reads either 144's lead or 96's, nothing in
+between. Read the lead after any delay change: unchanged means free, a
+value near zero or negative means the boundary was crossed.
 
 ## Build (Pi, service stopped, no root)
 

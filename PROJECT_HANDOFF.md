@@ -8741,6 +8741,62 @@ read, split, a lead pair around everything, the acceptance set, RTL at
 32; then a day of lead reads before the label moves. Rollback:
 `switch-profile ...-rxtrim-age50` (conf only).
 
+**MEASURED 2026-09-07 17:19-17:23 UTC, sink delay 132 on a fresh anchor:
+747 x100 at 64 frames (15.562 ms), 12 under the 14:48 anchor's 759 to the
+sample, spread 0, zero RECOVERs; and the arrival lead did not move (1037 /
+1039 us over the gate, 1006 / 1016 over the read, against 1034 / 1043 and
+1017 / 1027 at 144), so the 12 samples cost no cover at all.** By the
+user: service stopped 17:17:55 UTC (playback off), the block appended to
+the live conf (1165 lines), `switch-profile ...-age50-sd132`, `systemctl
+start` (`STAGE running` 17:18:59), then the gadget re-bind at 17:19:01;
+usbaudiod logged fresh `setStartingUSBFrame IN/OUT @ 591304021` at
+17:19:03 UTC (fresh anchor); the service restarted itself after the
+re-bind (systemd's restart counter 1, which is that mechanism), `STAGE
+sinks applied, delay 132`, both sinks reading back `"delay": 132`,
+`STAGE running` 17:20:02. Session start
+(`bridge-sd132-session-20260907T1719Z.log`): RX PRIMED `ring_at_prime=192
+trimmed=21`, TX PRIMED `ring_at_prime=269 overshoot=26 align_dropped=19
+first_tick_wait_us=577 front_age_frames=296 under_prime=0`, ALIGN trigger
+`target=prime slack_us=445`: the same draw as the 14:48 anchor to the
+microsecond (269 / 19 / 576 / 445), so the two sessions compare directly.
+Gate `sd132-noise-ch2-64f-100imp.*` 0.0% zeros, no run, discontinuities
+0, no ZERORUN event. Read `sd132-roundtrip-64f-20260907T172213Z` **747
+x100**, spread 0, zero RECOVERs, discontinuities 0; floors after it TX
+85, RX 72 (85 / 72 at the same point of the 14:48 session), `tx_pullmax`
+48. Split (`impulse-index.py --level 747`, 224 impulses): `pos_tx` -20,
+`pos_aes67` **573** (585 at 144: the lever's 12, to the frame), `pos_rx`
+-22, `pos_pi` 531 (543), `pi_total` 701.8 (711.3), `usb_time` 45.2
+(47.7), `rx_depth` 121.5, `tx_depth` 128. RTL at 32 predicted 747 + 188
+= 935 = 19.479 ms.
+
+*CORRECTION to the sink-delay pricing in the BUDGET entry, the
+`ravenna-lead-export` README and the sd132 block's comment ("at 120 about
+430 us would be left, at 132 about 680").* The lead is measured, and the
+packet is consumed, at TIC-frame granularity: the driver places the
+packet's first sample at stamp plus delay and rounds that down to the
+48-sample frame whose TIC copies it (`ProcessRTPAudioPacket`,
+`ui64UsedSAC`; the capture interrupt reads the ring at the global SAC), so
+the deadline moves only when the stamp's phase within the frame plus the
+delay crosses a 48-sample boundary. Lowering 144 to 132 moved the data 12
+samples earlier inside the same frame and left the deadline where it was:
+12 samples of latency for zero lead, as measured. The cost is a step, not
+a slope: at some delay between 132 and 96 the boundary is crossed and the
+deadline jumps a whole frame earlier (lead about 40 us, which is the
+41-sample holes at 96), and every delay above that crossing is free. The
+crossing is at 144 less the Ferrofish stamp phase (the lead at 132 says
+the phase is at least 12 samples); below it nothing between 96's lead and
+144's exists. 120 would therefore read either 144's lead (phase at least
+24) or 96's, never "430 us left". The stamp phase is readable from an
+`eth0` capture (RTP timestamp mod 48, `rtp-impulses.py` territory) or by
+one more conf-only step; both sinks share `mediaclk:direct=531217786` and
+read within 10 us of each other, so one phase covers both. Priced
+correctly: the remaining free sink-delay samples are the phase minus 12,
+at most 35, and worth one conf block once the phase is known.
+Acceptance chain launched detached at 17:23:38 UTC on this session
+(`USB16X16_OTHER_LOAD=0.1` on every run, a `read-lead.sh` pair around
+each): four 800-impulse runs at 64 (`sd132`), then the 600 s soak
+(`sd132soak`); results below.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
