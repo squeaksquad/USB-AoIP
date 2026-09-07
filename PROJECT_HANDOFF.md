@@ -8590,6 +8590,53 @@ PRIMED as accepted), `read-lead.sh` before and after, and the acceptance
 set with a lead pair around every run. Rollback: `aes67-age50-install/`'s
 installer (supervisor `7a5d2362`, module `cc6852f0`), service stopped.
 
+**MEASURED 2026-09-07 14:49-14:53 UTC, module `bc694c24` on a fresh
+anchor: the arrival lead reads, per sink, about 1.02-1.06 ms at sink delay
+144, steady and identical on both sinks; 759 x100 at 64 frames (15.812
+ms), spread 0, zero RECOVERs, the bridge's start numbers the accepted
+ones.** Installs by the user at about 14:45 UTC
+(`aes67-lead-install/install-aes67-service.sh`: supervisor `631e88e1`,
+module `bc694c24` loaded through the supervisor's own hash check; bridge
+`05f37bd9` and the live conf untouched, `PROFILE` age50), `systemctl
+start`, then the gadget re-bind; usbaudiod logged fresh
+`setStartingUSBFrame IN/OUT @ 582299529` at 14:48:58 UTC (fresh anchor);
+journal `STAGE ptp locked in 10s`, `sinks applied, delay 144`, `STAGE
+running` 14:49:26, the bridge started with the age50 arguments. Session
+start (`bridge-lead-session-20260907T1449Z.log`): RX PRIMED `intended=171
+ring_at_prime=192 overshoot=21 trimmed=21`, TX PRIMED `ring_at_prime=269
+overshoot=26 align_dropped=19 first_tick_wait_us=576 front_age_frames=296
+under_prime=0`, ALIGN trigger `target=prime slack_us=445`; first second
+clean (pulls 48, `rx_qfloor` 72, `tx_qfloor` 170). *The lead, the number
+this module exists for* (`read-lead.sh`, each line the minimum since the
+previous GET of that sink): since stream start 1023 / 1029 us (sinks 0 /
+1), the next 24 s idle 1056 / 1059, over the gate probe 1034 / 1043, over
+the 100-impulse read 1017 / 1027. So at sink delay 144 (3.0 ms) the
+packets of both Ferrofish streams arrive about 1.95-2.0 ms after their
+stamp at the worst over an interval (1 ms of it inherent: a 1 ms packet
+cannot leave before its last sample), which puts the lead at sink delay
+96 at about 0 and explains the 41-sample holes there to the number; at
+120 the lead would be about 0.52-0.56 ms, the edge the BUDGET entry
+priced, with one refill gap's worth of margin at most. The number over
+the loaded set decides it (below). Gate `lead-noise-ch2-64f-100imp.*`
+0.0% zeros, no run, discontinuities 0, `placementMisses` 0. Read
+`lead-roundtrip-64f-20260907T145129Z` **759 x100**, spread 0, zero
+RECOVERs, discontinuities 0; floors after it TX 85, RX 72, `tx_pullmax`
+48, `tx_gapmax_us` 1073, `rx_gapmax_us` 1095. Split (`impulse-index.py
+--level 759`, 224 impulses): `pos_tx` -20 (-13 on age50b: the drop 19
+against 12, to the frame), `pos_aes67` 585, `pos_rx` -22, `pos_pi` 543
+(550), `pi_total` 711.3 (726.2), `usb_time` 47.7 (39.8), `rx_depth`
+median 120, `tx_depth` 128.5. Seven under age50's 766 on a clean first
+second: the module touches no audio path and the bridge's start is the
+accepted one to the frame, so the 7 is the anchor's draw of the terms the
+bridge does not set (the Pi path read 15 under, the USB remainder 8 over),
+inside the scatter the record carries for fresh anchors (748 / 766 on
+2026-09-07, 818-828 on the 2026-09-06 re-binds). RTL at 32 predicted 759
++ 188 = 947 = 19.729 ms, to be read by the user after the chain.
+Acceptance chain launched detached at 14:53:08 UTC on this session
+(`USB16X16_OTHER_LOAD=0.1` on every run): four 800-impulse runs at 64
+(`lead`), then the 600 s soak (`leadsoak`, 2400 impulses), with a
+`read-lead.sh` pair around every run; results below.
+
 ## Next-session checklist
 
 1. Verify `usb-16x16.service` is active and the UDC is `configured/high-speed`.
