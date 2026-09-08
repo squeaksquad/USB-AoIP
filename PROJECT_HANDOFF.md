@@ -9414,3 +9414,52 @@ After SSH disconnects and activity stops, unplug the USB data cable first and th
 - Change only one clock, descriptor, buffer, scheduler, or IRQ variable at a time.
 - Record hashes, commands, logs, and latency results for every accepted configuration.
 - DSP-mode services/configurations must remain separately disableable and must not replace the low-latency rollback path.
+
+**STAGED 2026-09-08 22:10 UTC, supervisor and conf, not installed: the AoIP
+link watched every second of the run, and a settle restart of the bridge
+alone.** Two findings of the day drove it (day-1 read, commits f070732 and
+dbb1935, notes in `outputs/latency/phase6-gapbar-20260907/reads/day1-notes-20260908.md`):
+the day-0b process died at 06:43 EDT on a 32-flap `eth0` storm that the
+supervisor read as four host absences (the open item from the relocation
+day); its successor ran 10 h on a 100 Mbit link (the fallback at 06:51:57
+EDT, after the start gate had passed during a 1 Gbps window) and died at
+17:03 EDT with no link or PTP event (cause open); the restart then sat at
+the start gate on `speed=100` until the cable was reseated. The process
+started after the cable swap (17:34:56 EDT, sd103, PTP lock in 10 s, sink 0
+added only after four minutes, lead 988-1119 once settled) took two RX
+underruns at +4.5 s and +7.9 s and a drained open/close pair at +79 s (TX
+gap 7671 us, queue to 39, `tx_qlow` 1): its floors are contaminated from
+minute two and the Phase 6 count cannot start on it.
+
+The change: `work/aes67-bridge/usb16x16-aes67-supervisor` `427982dc` (from
+`631e88e1`), `aes67.conf` `4d423b2b` (from `556cc2b6`), installer pins
+updated, unit unchanged.
+
+1. `link_ok` (carrier 1 and speed 1000, the start gate's own test) runs on
+   every tick of the supervise loop before any RECOVER is read, and on every
+   probe of the host-absent wait. A miss is `fail 38`: the stack stops,
+   systemd restarts the unit after 10 s, the start gate waits for the link.
+   A link storm can no longer be read as a host absence, and a fall to 100
+   Mbit is a restart within a second, not a 10 h session and a stuck gate.
+   The three-in-five-minutes backoff applies as to any failure.
+2. Settle: a RECOVER inside `BRIDGE_SETTLE_SECONDS` (90) of a bridge start
+   restarts the bridge alone, at most `BRIDGE_SETTLE_RESTARTS` (2) times per
+   bridge start, never while a storm is pending. The daemon, module and
+   sinks stay, so the sink dead time is not paid twice. The floors start
+   clean for the Phase 6 count. The level is re-drawn as by any gadget PCM
+   restart, which the RECOVER had already done. 0 seconds disables it. A
+   harness run that starts inside the first 90 s of a bridge start can now
+   see a bridge restart instead of a counted RECOVER: start measurements
+   after the "stable for 120s" stage line, as the wrappers already wait.
+
+Tested: `bash -n` on the Mac; `load_conf` on the Pi's bash 5 with the new
+keys (parsed, a non-integer refused, 0 accepted, the profile validates,
+`link_ok` true on the live link), no RECOVER during the test. The loop
+branches themselves are untested until installed. The installed conf
+(`306cfa85`) is operator-edited (sd103 selected by `switch-profile`), so the
+installer keeps it and writes the shipped conf as `aes67.conf.new`; the
+profile cannot flip, and the two keys take the supervisor's defaults until
+copied in. Install needs his sudo and a stack restart; acceptance is a
+fresh anchor and a day-0 read showing either no RECOVER in the first two
+minutes or one settle restart followed by none. Rollback: reinstall
+`631e88e1` with the installer at commit dbb1935.

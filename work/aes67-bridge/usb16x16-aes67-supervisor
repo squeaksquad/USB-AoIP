@@ -64,6 +64,11 @@ backoff_failures=3             # failures inside backoff_window_s before sleepin
 backoff_window_s=300
 backoff_sleep_s=60
 stable_after_s=120             # bridge uptime that clears the failure history
+settle_s=90                    # a RECOVER inside this many seconds of a bridge start restarts the
+                               # bridge alone (the floors start clean; 2026-09-08: two RX underruns
+                               # at +4.5 s and +7.9 s and a drained open/close pair at +79 s left
+                               # a 15 h process contaminated from minute two). 0 disables.
+settle_restarts=2              # settle restarts per bridge start before the RECOVER counts as real
 
 declare -A conf
 profile_name=
@@ -74,6 +79,7 @@ foreground_pid=
 stopping=0
 stack_stopped=0
 host_absences=0
+bridge_started_s=0
 
 # ---------------------------------------------------------------- helpers
 
@@ -117,6 +123,7 @@ udc_speed() { cat /sys/class/udc/*/current_speed 2>/dev/null | head -1; }
 eth0_carrier() { cat /sys/class/net/eth0/carrier 2>/dev/null || echo 0; }
 eth0_speed() { cat /sys/class/net/eth0/speed 2>/dev/null || echo 0; }
 
+link_ok() { [ "$(eth0_carrier)" = 1 ] && [ "$(eth0_speed)" = 1000 ]; }
 module_loaded() { lsmod | grep -q '^MergingRavennaALSA '; }
 bridge_running() { pgrep -f "$bridge_pattern" >/dev/null; }
 wrapper_running() { pgrep -f "$wrapper_pattern" >/dev/null; }
@@ -144,9 +151,14 @@ load_conf() {
   recover_limit_per_minute=${conf[RECOVER_LIMIT_PER_MINUTE]:-$recover_limit_per_minute}
   host_storm_per_second=${conf[HOST_STORM_RECOVERS_PER_SECOND]:-$host_storm_per_second}
   host_retry_s=${conf[HOST_RETRY_SECONDS]:-$host_retry_s}
+  settle_s=${conf[BRIDGE_SETTLE_SECONDS]:-$settle_s}
+  settle_restarts=${conf[BRIDGE_SETTLE_RESTARTS]:-$settle_restarts}
   for value in "$journal_bridge_every" "$bridge_log_cap_mb" "$recover_limit_per_minute" \
                "$host_storm_per_second" "$host_retry_s"; do
     [[ $value =~ ^[1-9][0-9]*$ ]] || { say "service settings must be positive integers" >&2; return 1; }
+  done
+  for value in "$settle_s" "$settle_restarts"; do
+    [[ $value =~ ^[0-9]+$ ]] || { say "BRIDGE_SETTLE_SECONDS and BRIDGE_SETTLE_RESTARTS must be integers" >&2; return 1; }
   done
 }
 
@@ -658,6 +670,7 @@ cmd_run() {
   local -a recover_window
   local tick=0 recovers_now recovers_then cleared=0 started=$SECONDS
   local recovers_prev=0 tx_input_prev= tx_input_now tx_qn_prev= tx_qn_now frozen=0 storm_pending=0 storm_size=0 storm_seconds=0
+  local settle_used=0
   for _ in $(seq 0 60); do recover_window+=(0); done
   while true; do
     pause 1
@@ -667,6 +680,13 @@ cmd_run() {
       fail 34 "Phase 4 bridge exited with status $bridge_status"
     }
     kill -0 "$daemon_pid" 2>/dev/null || { daemon_pid=; fail 33 "AES67 daemon exited"; }
+    # The AoIP link, every second, before any RECOVER is read: a link storm
+    # (2026-09-07 and 2026-09-08, 12 and 32 flaps on the PoE cable) looks like
+    # a host absence from the RECOVER side, and a fall to 100 Mbit
+    # (2026-09-08 06:51:57 EDT) ran unnoticed for 10 h and then held the
+    # restart at the start gate. Fail the run: systemd starts it again and
+    # the gate waits for carrier at 1000.
+    link_ok || fail 38 "AoIP link lost or degraded: eth0 carrier=$(eth0_carrier) speed=$(eth0_speed)"
     recovers_now=$(wc -l < "$recovers_file")
     # USB input frozen: the 1 Hz BRIDGE line advanced (tx_qn, the queue sample
     # counter, moves every second the bridge loop runs) but tx_input, the USB
@@ -696,11 +716,30 @@ cmd_run() {
     if [ "$storm_pending" -gt 0 ]; then
       if [ "$frozen" -ge 1 ] || [ "$storm_seconds" -ge 3 ]; then
         host_absent "$storm_size" "$storm_seconds" "$frozen"
+        settle_used=0
         recover_window=(); for _ in $(seq 0 60); do recover_window+=(0); done
         tick=0; recovers_prev=0; tx_input_prev=; tx_qn_prev=; frozen=0; storm_pending=0; storm_seconds=0
         continue
       fi
       storm_pending=$((storm_pending - 1))
+    fi
+    # Settle: a RECOVER in the first settle_s seconds of a bridge start is a
+    # start-condition drain (the Ferrofish stream still settling, the host
+    # opening the device on a fresh prime) and would leave the running floors
+    # contaminated for the life of the process. Restart the bridge alone, up
+    # to settle_restarts times per bridge start; the daemon, the module and
+    # the sinks stay, so the sink dead time is not paid again. The level is
+    # re-drawn as by any gadget PCM restart. Never during a storm.
+    if [ "$settle_s" -gt 0 ] && [ "$storm_pending" -eq 0 ] && [ "$recovers_now" -gt 0 ] &&
+       [ $((SECONDS - bridge_started_s)) -lt "$settle_s" ] && [ "$settle_used" -lt "$settle_restarts" ]; then
+      settle_used=$((settle_used + 1))
+      stage "settle: $recovers_now RECOVER at +$((SECONDS - bridge_started_s))s of the bridge; restarting the bridge alone ($settle_used of $settle_restarts)"
+      stop_bridge
+      start_bridge
+      stage "running"
+      recover_window=(); for _ in $(seq 0 60); do recover_window+=(0); done
+      tick=0; recovers_prev=0; tx_input_prev=; tx_qn_prev=; frozen=0; storm_pending=0; storm_seconds=0
+      continue
     fi
     recovers_then=${recover_window[$((tick % 61))]}
     recover_window[$((tick % 61))]=$recovers_now
@@ -761,6 +800,7 @@ start_bridge() {
       { if (storm > 20) { print "RECOVER storm ended after " storm " recoveries"; fflush() }; storm = 0; print; fflush() }
     ') 2>&1 &
   bridge_pid=$!
+  bridge_started_s=$SECONDS
 
   pause 4
   kill -0 "$bridge_pid" 2>/dev/null || fail 31 "Phase 4 bridge exited during startup"
@@ -802,6 +842,7 @@ host_absent() {
     pause "$host_probe_s"
     waited=$((waited + host_probe_s))
     kill -0 "$daemon_pid" 2>/dev/null || { daemon_pid=; fail 33 "AES67 daemon exited while waiting for the host"; }
+    link_ok || fail 38 "AoIP link lost or degraded while waiting for the host: eth0 carrier=$(eth0_carrier) speed=$(eth0_speed)"
     if journalctl -k --since "@$since" --no-pager -q 2>/dev/null | grep -qE 'dwc2 .*new (device|address)'; then
       reason="host enumerated after ${waited}s"
       break
