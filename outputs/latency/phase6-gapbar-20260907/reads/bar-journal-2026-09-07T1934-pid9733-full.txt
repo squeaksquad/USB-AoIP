@@ -1,0 +1,341 @@
+# reconstructed from journalctl -b -1 (pid 9733, bridge lines 2026-09-07T19:34:53-04:00 .. 2026-09-08T06:43:46-04:00, variant full)
+# BRIDGE lines 4013, RECOVER 110 (first at 2026-09-08T01:35:14-04:00)
+NEGOTIATED usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384
+ZERORUN enabled min_frames=8 max_frames=480 stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback line_cap=4096
+ALIGN status=ok offset_us=600 attempts=1 wakeups=8 tick_period_us=999 wake_to_prepare_us=617 prepare_us=12 intervals_us=978/997/1000/1001/997/999/1000
+PRIMED direction=ravenna-to-usb grid_phase_us=474 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=34 t_us=1548
+DEPTHSTEP direction=ravenna-to-usb t_us=1598 depth_floor=171 ring=51 queue=120 avail=72 capture_backlog=0 pull=0 gap_us=0
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=274 overshoot=31 trimmed=0 queue_prime=192 align_dropped=14 prime_phase_us=525 first_tick_wait_us=473 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=4061
+ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=951 wake_to_start_us=951 target=prime slack_us=341 sleep_result=0 t_us=4478
+DEPTHSTEP direction=ravenna-to-usb t_us=4544 depth_floor=123 ring=51 queue=72 avail=120 capture_backlog=0 pull=48 gap_us=1002
+DEPTHSTEP direction=usb-to-ravenna t_us=4565 depth_floor=226 ring=51 queue=175 avail=209 capture_backlog=0 pull=0 gap_us=0
+DEPTHSTEP direction=usb-to-ravenna t_us=23520631 depth_floor=178 ring=51 queue=127 avail=257 capture_backlog=0 pull=48 gap_us=964
+DEPTHSTEP direction=usb-to-ravenna t_us=154097926 depth_floor=139 ring=51 queue=88 avail=296 capture_backlog=0 pull=48 gap_us=956
+RECOVER direction=usb-to-ravenna stage=capture-avail code=-32 error=Broken pipe capture_state=XRUN playback_state=XRUN ring=51 last_queue=186 last_gap_us=22 t_us=21620764504
+RECOVER direction=ravenna-to-usb stage=capture-avail code=-32 error=Broken pipe capture_state=XRUN playback_state=XRUN ring=51 last_queue=165 last_gap_us=7 t_us=21620764594
+ALIGN recovery direction=ravenna-to-usb wake_age_us=7602 wake_to_prepare_us=609 prepare_us=14 sleep_result=0 t_us=21620764786
+RECOVER direction=usb-to-ravenna stage=capture-avail code=-32 error=Broken pipe capture_state=XRUN playback_state=PREPARED ring=0 last_queue=186 last_gap_us=22 t_us=21620770080
+RECOVER direction=ravenna-to-usb stage=capture-avail code=-32 error=Broken pipe capture_state=XRUN playback_state=PREPARED ring=0 last_queue=165 last_gap_us=7 t_us=21620770145
+PRIMED direction=ravenna-to-usb grid_phase_us=130 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=30 t_us=21620774146
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=243 overshoot=0 trimmed=0 queue_prime=192 align_dropped=45 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=26 t_us=21620776010
+ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=1950 wake_to_start_us=951 target=prime slack_us=999 sleep_result=0 t_us=21620777076
+DEPTHSTEP direction=ravenna-to-usb t_us=21620777112 depth_floor=75 ring=51 queue=24 avail=168 capture_backlog=0 pull=96 gap_us=1974
+RECOVER direction=ravenna-to-usb stage=playback-avail code=-32 error=Broken pipe capture_state=RUNNING playback_state=XRUN ring=51 last_queue=22 last_gap_us=1 t_us=40129369909
+ALIGN recovery direction=ravenna-to-usb wake_age_us=4599 wake_to_prepare_us=603 prepare_us=15 sleep_result=0 t_us=40129370452
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=338 last_gap_us=411 t_us=40129385880
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40129391887
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129394438 t_us=40129391955
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40129410881
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40129416887
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129419439 t_us=40129416957
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129435877
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129441887
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129444437 t_us=40129441955
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129460876
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129466888
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129469438 t_us=40129466956
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40129485877
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129491888
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129494438 t_us=40129491956
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40129510879
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129516888
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129519440 t_us=40129516956
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129535879
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129541888
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129544438 t_us=40129541955
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129560879
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129566889
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129569439 t_us=40129566956
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40129585878
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129591889
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129594440 t_us=40129591957
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40129610880
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129616889
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129619440 t_us=40129616957
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129635879
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40129641889
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129644439 t_us=40129641957
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129660879
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129666889
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129669440 t_us=40129666958
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129685880
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129691890
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129694441 t_us=40129691958
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129710880
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40129716891
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129719442 t_us=40129716959
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129735881
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129741891
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129744441 t_us=40129741958
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129760881
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129766891
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129769442 t_us=40129766959
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40129785881
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129791892
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129794442 t_us=40129791959
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129810883
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40129816893
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129819443 t_us=40129816960
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129835882
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40129841892
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129844443 t_us=40129841959
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129860882
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40129866893
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129869443 t_us=40129866961
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129885883
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129891893
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129894443 t_us=40129891960
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40129910884
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40129916894
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129919444 t_us=40129916962
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129935883
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40129941895
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129944446 t_us=40129941963
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40129960883
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40129966895
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129969446 t_us=40129966962
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40129985967
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=32 t_us=40129992154
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40129994711 t_us=40129992229
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40130011138
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40130017147
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130019698 t_us=40130017215
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130036136
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130042147
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130044698 t_us=40130042215
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130061136
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130067147
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130069698 t_us=40130067215
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40130086136
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40130092147
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130094697 t_us=40130092214
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130111137
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130117148
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130119698 t_us=40130117216
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130136138
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130142149
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130144699 t_us=40130142216
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130161139
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130167149
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130169699 t_us=40130167216
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130186139
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40130192149
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130194698 t_us=40130192215
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40130211138
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40130217151
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130219701 t_us=40130217219
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130236141
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130242149
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130244699 t_us=40130242216
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130261139
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40130267150
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130269701 t_us=40130267219
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40130286140
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130292150
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130294700 t_us=40130292218
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130311140
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130317151
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130319701 t_us=40130317218
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130336141
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130342151
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130344701 t_us=40130342219
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130361140
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130367151
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130369702 t_us=40130367219
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40130386141
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40130392151
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130394702 t_us=40130392219
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130411143
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130417151
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130419702 t_us=40130417219
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130436143
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40130442152
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130444703 t_us=40130442220
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130461142
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130467153
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130469703 t_us=40130467221
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40130486143
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40130492153
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130494703 t_us=40130492220
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130511143
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130517153
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130519703 t_us=40130517221
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130536144
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40130542155
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130544705 t_us=40130542223
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130560150
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130566154
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130568704 t_us=40130566221
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130585146
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40130591156
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130593707 t_us=40130591224
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40130610146
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40130616154
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130618706 t_us=40130616222
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40130635147
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130641156
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130643707 t_us=40130641224
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130660146
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40130666155
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130668706 t_us=40130666223
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130685147
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40130691159
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130693709 t_us=40130691227
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40130710147
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130716158
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130718708 t_us=40130716226
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130735148
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130741157
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130743707 t_us=40130741225
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130760148
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40130766159
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130768709 t_us=40130766226
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130785149
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40130791158
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130793709 t_us=40130791226
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130810148
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40130816159
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130818710 t_us=40130816226
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40130835150
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130841159
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130843709 t_us=40130841226
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130860149
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130866159
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130868710 t_us=40130866227
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130885150
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130891160
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130893711 t_us=40130891228
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40130910149
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130916160
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130918711 t_us=40130916228
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40130935150
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130941161
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130943712 t_us=40130941229
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130960151
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40130966161
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130968711 t_us=40130966228
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40130985151
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=42 t_us=40130991204
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40130993782 t_us=40130991307
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131010159
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=26 t_us=40131016164
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131018715 t_us=40131016233
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40131035152
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40131041162
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131043712 t_us=40131041229
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131060151
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131066162
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131068713 t_us=40131066230
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131085152
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131091164
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131093714 t_us=40131091231
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40131110152
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40131116164
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131118714 t_us=40131116231
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40131135152
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131141163
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131143714 t_us=40131141231
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131160154
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40131166163
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131168714 t_us=40131166232
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131185154
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40131191166
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131193716 t_us=40131191233
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40131210154
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131216165
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131218715 t_us=40131216233
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40131235155
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131241165
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131243715 t_us=40131241232
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131260156
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40131266165
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131268715 t_us=40131266233
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131285156
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131291166
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131293716 t_us=40131291233
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40131310155
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131316166
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131318717 t_us=40131316234
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131335157
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131341166
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131343717 t_us=40131341234
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131360156
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131366166
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131368717 t_us=40131366234
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131385156
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131391167
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131393718 t_us=40131391235
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40131410158
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131416168
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131418718 t_us=40131416236
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40131435157
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131441169
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131443719 t_us=40131441236
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131460158
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131466169
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131468719 t_us=40131466236
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131485159
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131491170
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131493719 t_us=40131491237
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40131510159
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131516170
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131518720 t_us=40131516237
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40131535160
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40131541169
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131543719 t_us=40131541236
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131560160
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131566170
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131568720 t_us=40131566237
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131585159
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131591171
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131593721 t_us=40131591239
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40131610160
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40131616171
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131618721 t_us=40131616238
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40131635162
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40131641172
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131643722 t_us=40131641239
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131660162
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40131666172
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131668723 t_us=40131666240
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131685162
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=25 t_us=40131691174
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131693724 t_us=40131691241
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40131710161
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131716172
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131718722 t_us=40131716240
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40131735163
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131741174
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131743724 t_us=40131741242
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131760162
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131766174
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131768724 t_us=40131766241
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131785162
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131791173
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131793724 t_us=40131791241
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40131810164
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40131816173
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131818723 t_us=40131816240
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=382 last_gap_us=985 t_us=40131834171
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131840174
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131842725 t_us=40131840243
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131859165
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40131865174
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131867724 t_us=40131865241
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131884165
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40131890174
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131892725 t_us=40131890242
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131909165
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131915176
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131917726 t_us=40131915243
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=987 t_us=40131934165
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131940176
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131942726 t_us=40131940244
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=985 t_us=40131959166
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=40131965176
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131967726 t_us=40131965243
+RECOVER direction=usb-to-ravenna stage=capture-ring-full code=768 error=none capture_state=RUNNING playback_state=RUNNING ring=768 last_queue=381 last_gap_us=986 t_us=40131984166
+PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=288 overshoot=45 trimmed=0 queue_prime=192 align_dropped=0 prime_phase_us=875 first_tick_wait_us=1122 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=40131990176
+ALIGN trigger direction=usb-to-ravenna status=unaligned reason=stale-reference wake_age_us=40131992726 t_us=40131990243
+SUMMARY {"ppm":-15.772,"tx_restarts":107,"rx_restarts":3,"tx_input_frames":1926330968,"rx_input_frames":1926209136,"tx_consumed_frames":1926249450,"rx_consumed_frames":1926208992,"tx_dropped_frames":0,"rx_dropped_frames":0,"tx_frames":1926249450,"rx_frames":1926208992,"tx_queue_floor":59,"rx_queue_floor":22,"tx_depth_floor":136,"rx_depth_floor":73,"tx_queue_below_period":0,"rx_queue_below_period":5,"tx_queue_samples":172874551,"rx_queue_samples":147290814,"tx_capture_peak":85,"rx_capture_peak":96,"tx_capture_mean":11.452,"rx_capture_mean":11.142,"tx_capture_samples":172878931,"rx_capture_samples":172878931,"tx_queue_floor_before_recovery":81,"rx_queue_floor_before_recovery":72,"tx_depth_floor_before_recovery":136,"rx_depth_floor_before_recovery":123,"tx_depth_mean":212.808,"rx_depth_mean":216.828,"tx_queue_mean":150.027,"rx_queue_mean":148.755,"tx_pull_max":48,"rx_pull_max":96,"tx_pull_max_gap_us":443,"rx_pull_max_gap_us":1088,"tx_gap_max_us":1128,"rx_gap_max_us":1974,"tx_pull_histogram":"132745101/40129343/0/0/0/0","rx_pull_histogram":"104269688/42994832/26292/0/0/0","tx_capture_histogram":"123573614/49277495/27822/0/0","rx_capture_histogram":"132749576/40129353/2/0/0","tx_clipped_samples":0,"rx_clipped_samples":0,"usb_pitch_servo":1,"pitch":1000017,"level_bias_ppm":-1.450,"level_setpoint_frames":31.000,"pitch_seed_ppm":0.000,"level_shift_frames":0.000,"pitch_write_errors":0,"playback_pitch":1000017,"tx_bias_ppm":0.000,"rx_bias_ppm":0.000,"tx_depth_setpoint":-1,"rx_depth_setpoint":-1,"align_start":1,"align_ok":1,"align_attempts":1,"align_recoveries":2,"align_tick_period_us":999,"align_wake_to_prepare_us":617,"align_prepare_us":12,"align_tx_trigger":1,"align_tx_triggers":2,"align_tx_unaligned_triggers":105,"align_tx_wake_to_start_us":951,"align_tx_prime":1,"align_tx_prime_dropped":45,"align_tx_prime_phase_us":875,"align_tx_first_tick_wait_us":1122,"align_tx_front_age_frames":296,"align_prime_age_margin_us":50,"align_rx_trigger":0,"align_rx_triggers":0,"align_rx_unaligned_triggers":0,"align_rx_wake_to_start_us":-1,"align_rx_prime":0,"align_rx_prime_dropped":0,"align_rx_prime_phase_us":-1,"align_rx_first_tick_wait_us":-1,"align_rx_front_age_frames":-1,"rx_prime_trim":1,"rx_prime_grid_phase_us":130,"rx_prime_phase_window":0,"rx_prime_phase_discarded":0,"zero_run_detect":1,"zero_run_min":8,"zero_run_max":480,"zero_usb_capture":"0/0/0/3","zero_ravenna_playback":"0/0/0/3","zero_ravenna_capture":"0/0/0/3","zero_usb_playback":"0/0/0/3","impulse_trace":1,"impulse_channel":1,"impulse_threshold":0.150,"impulse_holdoff":2400,"impulse_usb_capture":3,"impulse_ravenna_playback":3,"impulse_ravenna_capture":3,"impulse_usb_playback":3,"impulse_lines":12,"impulse_lines_suppressed":0,"impulse_dropped_events":0,"zero_run_lines":0,"zero_run_lines_suppressed":0,"zero_run_dropped_events":0}
+BRIDGE ppm=-15.654 observed_ppm=-15.654 phase_error=0.000 tx_occ=51 rx_occ=51 tx_queue=155 rx_queue=133 tx_restarts=2 rx_restarts=2 tx_input=1926031030 rx_input=1926031104 tx_consumed=1926030869 rx_consumed=1926030960 tx_dropped=0 rx_dropped=0 tx_short=110499458 rx_short=151377626 tx_qfloor=59 rx_qfloor=24 tx_dfloor=136 rx_dfloor=75 tx_qlow=0 rx_qlow=2 tx_qn=172857034 rx_qn=147274140 tx_cappeak=85 rx_cappeak=96 tx_capmean=11.451 rx_capmean=11.142 tx_frames=1926030869 rx_frames=1926030960 tx_dmean=181.677 rx_dmean=207.774 tx_qmean=120.012 rx_qmean=145.099 tx_pullmax=48 rx_pullmax=96 tx_pullmax_gap_us=443 rx_pullmax_gap_us=1088 tx_gapmax_us=1128 rx_gapmax_us=1974 tx_pullhist=132731398/40125634/0/0/0/0 rx_pullhist=104257098/42990750/26290/0/0/0 tx_caphist=123558731/49270526/27817/0/0 rx_caphist=132731428/40125644/2/0/0 tx_clip=0 rx_clip=0 pitch=1000016 phase_us=857 bias_ppm=-0.550 pitch_errors=0 pitch_p=1000016 tx_bias=0.000 rx_bias=0.000 tx_set=-1 rx_set=-1 zr_usbcap=0/0/0/3 zr_ravplay=0/0/0/3 zr_ravcap=0/0/0/3 zr_usbplay=0/0/0/3
