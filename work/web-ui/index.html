@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>USB 16x16 · Studio processor</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237edac4'/%3E%3Cpath d='M9 10v12m7-16v20m7-16v12' stroke='%2310191a' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#outputs"><span class="brand-icon">≋</span><span>USB <strong>16x16</strong><small>BRYAN DIMAIO</small></span></a>
+    <nav aria-label="Processor pages">
+      <button data-tab="outputs" class="active">Outputs</button><button data-tab="bass">Bass management</button><button data-tab="settings">System & presets</button>
+    </nav>
+    <span class="preview-pill"><i></i> DESIGN PREVIEW</span>
+  </header>
+  <main>
+    <div class="connection-status"><span>48 kHz · 16 × 16</span><span>Not connected · Local draft · Simulated meters</span></div>
+    <section class="signalbar" aria-label="Signal path">
+      <div><span class="overline">MODE</span><div class="segmented"><button data-mode="direct">Direct bridge</button><button data-mode="dsp">DSP processor</button></div></div>
+      <span class="flow-arrow">→</span>
+      <div><span class="overline">DSP SOURCE</span><div class="segmented" id="source-switch"><button data-source="usb">USB</button><button data-source="aoip">AoIP</button></div></div>
+      <span class="flow-arrow">→</span><div class="flow-node"><strong id="flow-middle">Bass management + output DSP</strong><small id="flow-detail">16-band PEQ · alignment · level</small></div>
+      <span class="flow-arrow">→</span><div class="flow-node"><strong id="flow-output">16 AoIP outputs</strong><small>Speakers + subwoofers</small></div>
+    </section>
+    <p class="mode-note" id="mode-note"></p>
+    <section id="outputs-page" class="page">
+      <details class="input-meters" id="input-meters" open><summary>Input meters · selected source · simulated</summary><div id="input-bank" class="channel-bank"></div></details>
+      <div id="layout-controls"></div>
+      <div class="section-heading"><div><h2>Output bank <span>01—16</span></h2><p>Select a channel to edit its processing.</p></div><button id="meter-toggle" class="quiet">Pause demo meters</button></div>
+      <div id="channel-bank" class="channel-bank"></div>
+      <section class="panel inspector" id="inspector"></section>
+    </section>
+    <section id="bass-page" class="page" hidden></section>
+    <section id="settings-page" class="page" hidden></section>
+    <footer><span>USB 16x16 <span class="muted">/ Local design prototype</span></span><span id="draft-status">Draft · unsaved</span></footer>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="rew-dialog" aria-labelledby="rew-title">
+    <div class="section-heading"><h2 id="rew-title">Import REW EQ</h2><button data-action="rew-close" aria-label="Close REW import">Close</button></div>
+    <p id="rew-target"></p>
+    <p>In REW, choose Generic or CamillaDSP, then Export filter settings as text. Import the .txt file or paste its contents below.</p>
+    <label class="import-label">Choose REW file<input type="file" id="rew-file" accept=".txt,text/plain" aria-label="Choose REW file"></label>
+    <label class="field"><span>REW filter text</span><textarea id="rew-text" rows="9" spellcheck="false" placeholder="Filter 1: ON PK Fc 80.0 Hz Gain -3.0 dB Q 2.0"></textarea></label>
+    <p class="muted">Up to 16 enabled filters. PK/PEQ and shelves with explicit Q (LSQ/HSQ/LS/HS). Off/None rows are skipped. Replaces EQ only; gain and alignment stay unchanged.</p>
+    <p id="rew-result" role="status"></p><button class="primary" data-action="rew-apply" id="rew-apply" disabled>Import EQ</button>
+  </dialog>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>
