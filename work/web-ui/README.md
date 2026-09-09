@@ -1,13 +1,33 @@
 # USB 16x16 web control / DSP design prototype
 
-This is an interactive, local design prototype for the Raspberry Pi appliance UI.
-It does not connect to the Pi, process audio, invoke services, or generate deployable
-CamillaDSP YAML. Meters are synthetic display activity; device health and measured
-latency remain explicitly unavailable. The existing bridge is unchanged.
+The Raspberry Pi appliance UI. It runs two ways from the same files.
+
+**Connected**, served by `work/web-control/usb16x16-web` on the Pi: live device
+health, live journal reads and presets stored on the Pi. Everything it shows is
+read; the service has no endpoint that can change device state, so mode
+switching, service restarts and DSP application remain manual work on the Pi.
+
+**Standalone**, served by any static file server: an interactive design
+prototype. Every live panel falls back to "Not connected" rather than showing a
+stale or invented value, and presets go to browser storage.
+
+Either way it does not process audio, invoke services, or generate deployable
+CamillaDSP YAML. Meters are synthetic display activity in both modes; measured
+latency and added DSP cost remain explicitly unavailable. The existing bridge is
+unchanged.
 
 ## Run and check
 
-From the repository root:
+Connected, on the Pi — see `work/web-control/README.md` for the install:
+
+```sh
+sudo systemctl enable --now usb16x16-web.service
+```
+
+Then open <http://192.168.1.201:8088>. The header pill reads LIVE · READ-ONLY
+when the control service answered.
+
+Standalone, from the repository root:
 
 ```sh
 python3 -m http.server 8765 --bind 127.0.0.1 --directory work/web-ui
@@ -19,8 +39,39 @@ be opened with a `file:` URL. The Python server is a local preview server only.
 
 ```sh
 node --test work/web-ui/*.test.mjs
-node --check work/web-ui/app.mjs
+node --check work/web-ui/app.mjs work/web-ui/backend.mjs
 ```
+
+## What the backend supplies
+
+`backend.mjs` probes `/api/health` once on load, then polls it every 2 s and
+stops while the tab is hidden. The service publishes one cached snapshot, so the
+Pi pays the same whether one browser or ten are open. When the probe fails the
+page returns to its standalone behaviour, including moving presets back to
+browser storage; the transition is announced rather than silent.
+
+- **System overview** replaces its placeholders with service states, USB gadget
+  link, PTP lock and grandmaster, AoIP link speed, bridge telemetry (servo ppm
+  and phase, queue depths and floors, PCM restarts, dropped and clipped frames),
+  session recovery count, supervisor stage, stream counts and sink delay, CPU
+  temperature, throttling and load. A reading the service could not take says so;
+  none of them defaults to zero or to healthy. An unanswered daemon API reads as
+  an unknown clock, not as an unlocked one. A 100 Mbit fallback on the AoIP link
+  is called out against its expected 1000.
+- **Logs** reads the journal for the same unit allowlist the copyable commands
+  use, up to 200 lines. Pasted snapshots still work and the count line always
+  says which of the two is on screen.
+- **Presets** move to the Pi, so any browser on the appliance sees the same set,
+  with a Delete control. They are still UI configuration; saving one applies
+  nothing.
+- **Mode and DSP** report what is actually running. The Pi runs the direct
+  USB ↔ AoIP bridge; DSP processor mode stays a draft, and the panel names what
+  is still missing before it could run.
+
+Not supplied, on purpose: live meters (the bridge has no tap, and opening a
+second ALSA stream to read levels would compete with the audio path) and any
+control action (Run on Pi stays disabled, and the service answers 501 to the
+control routes so the boundary is visible from the API).
 
 ## Agreed scope
 
@@ -348,16 +399,16 @@ The current `/api/sink/status/N` arrival-lead minimum resets when read. Give it 
 collector owner and expose interval boundaries/sequence IDs to dashboards and the
 measurement harness; independent readers would invalidate interval comparisons.
 
-Proposed application contract, not implemented endpoints:
+Application contract. `work/web-control/usb16x16-web` implements the read half:
 
-| Operation | Behavior |
-| --- | --- |
-| Read state | Actual mode/source, connection, PTP, USB, streams, engine health and applied revision; unavailable is not zero/healthy |
-| Subscribe meters | Timestamped input/output peaks and RMS with clipping counters, tap location, mode and revision |
-| Read/write preset | Versioned configuration, separate from applied device state |
-| Validate draft | Schema + output budgets + installed engine compatibility; return restart requirement and proposed changes |
-| Apply revision | Serialized operation with expected revision and operation ID; never launch two owners of a PCM device |
-| Read operation | Validating / fading / stopping / starting / verifying / running / rollback / failed |
+| Operation | Behavior | State |
+| --- | --- | --- |
+| Read state | Actual mode/source, connection, PTP, USB, streams, engine health and applied revision; unavailable is not zero/healthy | `GET /api/health` |
+| Subscribe meters | Timestamped input/output peaks and RMS with clipping counters, tap location, mode and revision | Not implemented; needs the bridge tap |
+| Read/write preset | Versioned configuration, separate from applied device state | `GET/PUT/DELETE /api/presets` |
+| Validate draft | Schema + output budgets + installed engine compatibility; return restart requirement and proposed changes | Not implemented |
+| Apply revision | Serialized operation with expected revision and operation ID; never launch two owners of a PCM device | Not implemented; answers 501 |
+| Read operation | Validating / fading / stopping / starting / verifying / running / rollback / failed | Not implemented |
 
 Keep live status, editable draft and last applied preset distinct. Reject stale
 edits rather than silently overwriting another client's applied revision. Persist
@@ -394,6 +445,11 @@ release; never expose unauthenticated CamillaDSP control to arbitrary clients.
 2. **Read-only backend:** live health and metering behind bounded collection; compare
    UI disconnected, one active client, multiple clients and reconnect storms with
    the accepted bridge, keeping its operating profile fixed.
+   *Health, logs and presets are implemented in `work/web-control`. Metering is
+   not: it needs the separately benchmarked bridge tap this document asks for.
+   The multi-client and reconnect-storm comparison is still outstanding — the
+   single cached snapshot makes client count cheap by construction, but that has
+   not been measured against the bridge.*
 3. **DSP configuration compiler and offline verification:** generate CamillaDSP YAML;
    use known multichannel files to verify channel isolation, bass matrices, LFE gain,
    band response, polarity and 0/480-sample delays. Check coherent worst-case sums and
@@ -425,6 +481,29 @@ is established by this browser prototype.
   and `PROJECT_HANDOFF.md` rollback rules. Consult the latest live state before deployment.
 
 ## Verification of this prototype
+
+- Read-only backend: 69 Node tests pass (was 49), with 20 new covering the
+  client — probe rejecting a non-`ok`, non-JSON, array or failed response;
+  log requests carrying the right service and surfacing service errors; the
+  offline facts reading unavailable with nothing marked healthy; a healthy stack
+  grading ok; a 100 Mbit link, a dead link, a failed unit, a lost PTP lock,
+  stale telemetry and dropped frames each grading bad or warn; an unanswered
+  daemon API reading as an unknown clock rather than an unlocked one; missing
+  readings being omitted rather than defaulted; both preset stores round-tripping,
+  the browser one keeping a `__proto__` name as an own key, and the Pi one
+  reporting a rejected write and skipping one unreadable preset instead of
+  losing the list.
+- The service was exercised on a workstation (every Pi-specific read reporting
+  unavailable), then against the running Pi: the header pill read
+  LIVE · READ-ONLY, the overview showed the three services running, PTP locked to
+  `00-1D-C1-FF-FE-1D-27-DC`, eth0 at 1000 Mbit/s, telemetry 0 s old, queue floors
+  28/66, 0 dropped and 0 clipped, sink delay 103, 46.6 °C and no throttling.
+  Refresh live logs returned 200 journal lines, and a preset saved from the
+  browser appeared under `~/usb-16x16-work/web-presets`.
+- Path traversal (`/../../etc/hosts`, percent-encoded), an unknown log service,
+  an invalid preset name and `POST /api/service/restart` were each refused.
+  Staging the files and running the service left the bridge unchanged: recoveries
+  3 before and after, PCM restarts 2/1, queue floors 28/66.
 
 - Channel navigation in the EQ editor: previous / next, the output selector and
   Alt + arrow all move the editor between outputs with the dialog open, and the

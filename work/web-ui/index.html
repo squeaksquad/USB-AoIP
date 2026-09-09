@@ -13,10 +13,10 @@
     <nav aria-label="Processor pages">
       <button data-tab="outputs" class="active">Channels</button><button data-tab="settings">System &amp; presets</button>
     </nav>
-    <span class="preview-pill"><i></i> DESIGN PREVIEW</span>
+    <span class="preview-pill" id="preview-pill"><i></i> DESIGN PREVIEW</span>
   </header>
   <main>
-    <div class="connection-status"><span>48 kHz · 16 × 16</span><div id="profile-slots" class="profile-slots"></div><span>Not connected · Local draft · Simulated meters</span></div>
+    <div class="connection-status"><span id="format-line">48 kHz · 16 × 16</span><div id="profile-slots" class="profile-slots"></div><span id="connection-line">Not connected · Local draft · Simulated meters</span></div>
     <section class="signalbar" aria-label="Signal path">
       <div><span class="overline">MODE</span><div class="segmented"><button data-mode="direct">Direct bridge</button><button data-mode="dsp">DSP processor</button></div></div>
       <span class="flow-arrow">→</span>

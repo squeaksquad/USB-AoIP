@@ -1,0 +1,45 @@
+[Unit]
+Description=USB 16x16 read-only web control service
+Documentation=file:///home/bdimaio/usb-16x16-work/web-control/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bdimaio
+Group=bdimaio
+SupplementaryGroups=adm
+ExecStart=/usr/local/bin/usb16x16-web \
+  --static /home/bdimaio/usb-16x16-work/web-ui \
+  --presets /home/bdimaio/usb-16x16-work/web-presets \
+  --management-interface wlan0 \
+  --port 8088
+Restart=on-failure
+RestartSec=5
+
+# The audio stack owns this machine. This service is background work: it must
+# never win a CPU or IO contest against the bridge, and it must not be able to
+# change anything outside its own preset directory.
+Nice=15
+IOSchedulingClass=idle
+CPUWeight=20
+MemoryMax=192M
+TasksMax=64
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/bdimaio/usb-16x16-work/web-presets
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

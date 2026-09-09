@@ -4,6 +4,7 @@ import { resetBand } from './reset-band.mjs';
 import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, createSpeakerBus, removeBus, setBusEqLink, setBusOutputs, outputRoleLabel } from './buses.mjs';
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS } from './backend.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
 let channelClipboard = null, pasteScope = 'processing', layoutUndo = null, rewParsed = null;
@@ -11,6 +12,9 @@ let crossoverScope = 'all', crossoverHz = '80', busUndo = null, bassBoxOpen = fa
 const crossoverSelection = new Set();
 let selectedBand = 0, eqDrag = null, eqObserver;
 let logService = 'all', logQuery = '';
+// Live state from the Pi control service; null whenever no backend answers.
+let health = null, logBusy = false;
+const logLive = {all:'',aes67:'',usb:''};
 let profileState = null;
 // Each slot remembers whether its draft was saved, so recalling one does not read as edited.
 const slotDirty = { A: true, B: true };
@@ -31,9 +35,21 @@ const field = (label, content) => `<label class="field"><span>${label}</span>${c
 const inputOptions = () => config.inputs.map((v, i) => [i, `${pad(i)} · ${v.label}`]);
 let toastTimer;
 function toast(message) { $('#toast').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 4500); }
-function presets() {
-  try { const stored = JSON.parse(localStorage.getItem(storageKey) || '{}'); return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {}; }
-  catch { return {}; }
+// Presets come from the Pi when its control service answers and from browser
+// storage otherwise. The store keeps a synchronous cache so render stays sync.
+let presetStore = browserStore(storageKey);
+function presets() { return presetStore.cache; }
+async function savePreset() {
+  try {
+    validateConfig(config);
+    await presetStore.save(config.name, structuredClone(config));
+    dirty = false; render();
+    toast(`Preset "${config.name}" saved on ${presetStore.label}.`);
+  } catch (e) { toast(`Could not save: ${e.message}`); }
+}
+async function deletePreset(name) {
+  try { await presetStore.remove(name); render(); toast(`Deleted "${name}" from ${presetStore.label}.`); }
+  catch (e) { toast(`Could not delete: ${e.message}`); }
 }
 function markDraft() { dirty = true; $('#draft-status').textContent = 'Draft · unsaved'; }
 
@@ -46,9 +62,31 @@ function render() {
   $('#flow-middle').textContent = isDirect ? 'USB ↔ AoIP transport' : 'Bass management + output DSP';
   $('#flow-detail').textContent = isDirect ? 'Existing duplex bridge · DSP bypassed' : '16-band PEQ · alignment · level';
   $('#flow-output').textContent = isDirect ? '16 × 16 duplex' : '16 AoIP outputs';
-  $('#mode-note').textContent = isDirect ? 'Previewing direct mode. DSP edits are disabled; the DSP draft is retained. No device has been switched.' : 'Previewing DSP mode. Switching source or mode on hardware will require a controlled audio interruption.';
-  $('#draft-status').textContent = dirty ? 'Draft · unsaved' : 'Preset saved locally';
+  $('#mode-note').textContent = modeNote(isDirect);
+  renderConnection();
+  $('#draft-status').textContent = dirty ? 'Draft · unsaved' : `Saved on ${presetStore.label}`;
   renderSlots(); renderBuses(); renderLayout(); renderBank(); renderOverview(); renderInspector(); renderBass(); renderSettings(); updateMeters();
+}
+
+/** What the mode buttons mean, given what the Pi is actually running. */
+function modeNote(isDirect) {
+  const draft = isDirect
+    ? 'Previewing direct mode. DSP edits are disabled; the DSP draft is retained.'
+    : 'Previewing DSP mode.';
+  if (!health) return `${draft} No device has been switched.`;
+  const running = health.mode?.running ? 'The Pi is running the direct USB ↔ AoIP bridge.' : `The Pi stack is not running: ${health.mode?.detail || 'state unknown'}.`;
+  const dsp = isDirect ? '' : ` ${dspNote(health)}`;
+  return `${draft} ${running} This UI is read-only; no mode has been switched.${dsp}`;
+}
+
+function renderConnection() {
+  $('#connection-line').textContent = connectionLine(health);
+  const pill = $('#preview-pill');
+  pill.lastChild.textContent = health ? ' LIVE · READ-ONLY' : ' DESIGN PREVIEW';
+  pill.classList.toggle('live', Boolean(health));
+  pill.title = health ? 'Connected to the Pi control service. Status and logs are live; no control endpoint exists.' : 'No Pi control service is answering.';
+  const rate = health?.audio?.sampleRate;
+  $('#format-line').textContent = `${(rate ?? 48000) / 1000} kHz · ${health?.audio?.inputs ?? 16} × ${health?.audio?.outputs ?? 16}`;
 }
 
 function renderSlots() {
@@ -263,7 +301,7 @@ function drawEq() {
 function endEqDrag(cancel=false) {
   if(!eqDrag) return;
   const drag=eqDrag;eqDrag=null;
-  if(cancel) {config.outputs[drag.output].bands[drag.band]=drag.original;dirty=drag.dirty;$('#draft-status').textContent=dirty?'Draft · unsaved':'Preset saved locally';}
+  if(cancel) {config.outputs[drag.output].bands[drag.band]=drag.original;dirty=drag.dirty;$('#draft-status').textContent=dirty?'Draft · unsaved':`Saved on ${presetStore.label}`;}
   drag.node.classList.remove('dragging');
   if(drag.node.hasPointerCapture(drag.pointerId)) drag.node.releasePointerCapture(drag.pointerId);
   if(!cancel) syncLinkedEq(drag.output);
@@ -395,33 +433,54 @@ function renderBassMatrix() {
 
 function renderSettings() {
   const saved = presets(), names = Object.keys(saved), count = role => config.outputs.filter(o=>o.role===role).length;
-  $('#settings-page').innerHTML = `<div class="settings-grid"><section class="panel"><h2>Presets</h2><p>Save complete layouts, source selection, crossovers, sub sends and all 256 EQ bands in this browser. Export a JSON copy to keep or share the design.</p>
+  $('#settings-page').innerHTML = `<div class="settings-grid"><section class="panel"><h2>Presets</h2><p>Save complete layouts, source selection, crossovers, sub sends and all 256 EQ bands on <strong>${esc(presetStore.label)}</strong>. Export a JSON copy to keep or share the design.</p>
     ${field('Draft name',`<input id="preset-name" value="${esc(config.name)}" maxlength="64" required>`)}
     <div class="toolbar"><button class="primary" data-action="save">Save preset locally</button><button data-action="export">Export JSON</button><label class="import-label">Import JSON<input type="file" id="import-preset" accept=".json,application/json" aria-label="Import preset JSON"></label></div>
     ${field('Saved presets',`<select id="saved-preset" ${disabled(!names.length)}>${names.length?options(names.map(n=>[n,n]),config.name):'<option>No saved presets</option>'}</select>`)}
-    <div class="toolbar"><button data-action="load" ${disabled(!names.length)}>Load selected preset</button><button class="quiet" data-action="reset">Reset to example layout</button></div>
-    <div class="note-box">Local design only. Saving or importing a preset does not process audio or configure a device.</div>
-    </section><section class="panel"><h2>System overview</h2><p>The hardware connection will appear here when a control backend is implemented.</p><dl class="fact-list">
-      <div><dt>Connection</dt><dd>Not connected</dd></div><div><dt>Audio format</dt><dd>48 kHz · 16 input / 16 output</dd></div><div><dt>Output allocation</dt><dd>${count('speaker')} speakers · ${count('sub')} subs · ${count('unused')} spare</dd></div><div><dt>DSP source draft</dt><dd>${config.source==='usb'?'USB':'AoIP / AES67'}</dd></div><div><dt>DSP destination</dt><dd>AoIP / AES67</dd></div><div><dt>Alignment range</dt><dd>0–10 ms per output</dd></div><div><dt>Added DSP latency / CPU load</dt><dd>Not measured</dd></div><div><dt>PTP / USB / queue health</dt><dd>Unavailable offline</dd></div></dl></section>
-    <section class="panel maintenance-panel"><div class="section-heading"><h2>Logs</h2><span class="offline-badge">Not connected</span></div>
-    <p>Live service logs require the Pi connection. Copy a journal command to run on the Pi, then paste its output to inspect a snapshot here.</p>
-    <div class="log-controls">${field('Service',`<select id="log-service">${options([['all','AES67 + USB'],['aes67','AES67'],['usb','USB']],logService)}</select>`)}${field('Filter snapshot',`<input id="log-filter" type="search" placeholder="Search log text…" value="${esc(logQuery)}">`)}<button disabled title="Requires a Pi control backend">Refresh live logs</button></div>
+    <div class="toolbar"><button data-action="load" ${disabled(!names.length)}>Load selected preset</button><button class="quiet" data-action="delete-preset" ${disabled(!names.length)}>Delete selected</button><button class="quiet" data-action="reset">Reset to example layout</button></div>
+    <div class="note-box">${esc(presetStore.note)}</div>
+    </section><section class="panel" id="system-panel"><div class="section-heading"><h2>System overview</h2><span class="offline-badge ${health?'live-badge':''}">${health?'Live · '+esc(health.generated):'Not connected'}</span></div>
+    <p>${health?'Read live from the Pi control service. Values the service cannot read say so; none is defaulted to zero.':'No control service answered on this origin. Serve the UI from the Pi to see live state.'}</p>
+    <dl class="fact-list">${systemFacts(health).map(row=>`<div><dt>${esc(row.label)}</dt><dd class="fact-${row.state||'plain'}"${row.title?` title="${esc(row.title)}"`:''}>${esc(row.value)}</dd></div>`).join('')}
+      <div><dt>Output allocation</dt><dd class="fact-plain">${count('speaker')} speakers · ${count('sub')} subs · ${count('unused')} spare</dd></div><div><dt>DSP source draft</dt><dd class="fact-plain">${config.source==='usb'?'USB':'AoIP / AES67'}</dd></div><div><dt>Alignment range</dt><dd class="fact-plain">0–10 ms per output</dd></div></dl>
+    <div class="note-box">${esc(dspNote(health))}</div></section>
+    <section class="panel maintenance-panel"><div class="section-heading"><h2>Logs</h2><span class="offline-badge ${health?'live-badge':''}">${health?'Live journal':'Not connected'}</span></div>
+    <p>${health?'Read the journal through the Pi control service, or paste a snapshot below. Reading logs does not touch the audio path.':'Live service logs require the Pi connection. Copy a journal command to run on the Pi, then paste its output to inspect a snapshot here.'}</p>
+    <div class="log-controls">${field('Service',`<select id="log-service">${options([['all','AES67 + USB'],['aes67','AES67'],['usb','USB']],logService)}</select>`)}${field('Filter snapshot',`<input id="log-filter" type="search" placeholder="Search log text…" value="${esc(logQuery)}">`)}<button data-action="refresh-logs" ${disabled(!health||logBusy)} title="${health?'Read the last 200 journal lines from the Pi':'Requires a Pi control backend'}">${logBusy?'Reading…':'Refresh live logs'}</button></div>
     <div class="command-line"><code id="journal-command">${esc(journalCommand(logService))}</code><button data-action="copy-journal">Copy command</button></div>
     <details class="log-paste"><summary>Paste a log snapshot</summary><label class="field"><span>Journal output · local to this page</span><textarea id="log-paste" rows="4" maxlength="200000" spellcheck="false" placeholder="Paste command output from the Pi here">${esc(logSnapshots[logService])}</textarea></label></details>
     <div class="log-view" tabindex="0" role="region" aria-label="Service log snapshot"><pre id="log-output"></pre></div><p id="log-count" role="status"></p></section>
     <section class="panel maintenance-panel"><div class="section-heading"><h2>Common commands</h2><span class="offline-badge">Run on the Pi</span></div>
-    <p>Copy a command for a Pi terminal. Run buttons become available when device control is connected. Restart commands interrupt audio.</p>
-    <div class="service-commands">${SERVICE_COMMANDS.map(c=>`<article class="service-command"><h3>${esc(c.label)}</h3><p>${esc(c.detail)}</p><code>${esc(c.command)}</code><div class="toolbar"><button data-copy-command="${c.id}" aria-label="Copy ${esc(c.label)} command">Copy command</button><button disabled title="Requires a Pi control backend" aria-label="Run ${esc(c.label)} on Pi">Run on Pi</button></div></article>`).join('')}</div></section>
+    <p>Copy a command for a Pi terminal. ${health?'The control service is deliberately read-only: it cannot restart a service, switch a profile or apply DSP, because owning a PCM device and interrupting audio belongs to a privileged supervisor that is not built yet.':'Run buttons become available when device control is connected.'} Restart commands interrupt audio.</p>
+    <div class="service-commands">${SERVICE_COMMANDS.map(c=>`<article class="service-command"><h3>${esc(c.label)}</h3><p>${esc(c.detail)}</p><code>${esc(c.command)}</code><div class="toolbar"><button data-copy-command="${c.id}" aria-label="Copy ${esc(c.label)} command">Copy command</button><button disabled title="${health?'The control service is read-only; run this in a Pi terminal':'Requires a Pi control backend'}" aria-label="Run ${esc(c.label)} on Pi">Run on Pi</button></div></article>`).join('')}</div></section>
     <section class="panel"><h2>Input labels</h2><p>Labels belong to this preset. Computer-facing USB channel names remain 1–16.</p><div class="table-scroll"><table><thead><tr><th>Input</th><th>Label</th></tr></thead><tbody>${config.inputs.map((v,i)=>`<tr><td>${pad(i)}</td><td><input data-input="${i}" data-param="label" aria-label="Input ${i+1} label" maxlength="64" value="${esc(v.label)}" required></td></tr>`).join('')}</tbody></table></div></section>
     <section class="panel"><h2>Operating modes</h2><p><strong>Direct bridge</strong> retains the existing bidirectional USB ↔ AoIP path. Its timing profile stays independent of DSP presets.</p><p><strong>DSP processor</strong> takes one 16-channel source bank, redirects bass, applies output correction, and sends 16 channels to AoIP.</p><p>In AoIP source mode, USB is not part of the signal path. The eventual processor must be able to run without a connected USB host.</p><p>Network stream subscriptions and device settings require the future backend. Native Dante control is outside this UI; the current transport uses AES67 interoperability.</p></section></div>`;
   renderLogView();
 }
 
 function renderLogView() {
-  const snapshot=logSnapshots[logService],lines=snapshot?snapshot.split(/\r?\n/):[];
+  // A live read wins over a pasted snapshot; the count line always says which.
+  const live=logLive[logService], pasted=logSnapshots[logService], snapshot=live||pasted;
+  const lines=snapshot?snapshot.split(/\r?\n/).filter(line=>line.length):[];
   const visible=lines.filter(line=>line.toLowerCase().includes(logQuery.toLowerCase()));
-  $('#log-output').textContent=!snapshot?'No live logs available.\nConnect the Pi backend or paste a journal snapshot above.':visible.length?visible.join('\n'):'No lines match this filter.';
-  $('#log-count').textContent=snapshot?`Pasted snapshot · ${visible.length} of ${lines.length} lines · Not live`:'No snapshot loaded';
+  $('#log-output').textContent=!snapshot
+    ?(health?'No log read yet.\nUse Refresh live logs, or paste a journal snapshot above.':'No live logs available.\nConnect the Pi backend or paste a journal snapshot above.')
+    :visible.length?visible.join('\n'):'No lines match this filter.';
+  $('#log-count').textContent=snapshot
+    ?`${live?'Live journal read':'Pasted snapshot'} · ${visible.length} of ${lines.length} lines`
+    :'No snapshot loaded';
+  const view=$('.log-view'); if(view&&live) view.scrollTop=view.scrollHeight;
+}
+
+async function loadLiveLogs() {
+  if (!health || logBusy) return;
+  logBusy = true; renderSettings();
+  const service = logService;
+  try {
+    logLive[service] = await fetchLogs(service, 200);
+    toast(`Read the last 200 journal lines for ${service === 'all' ? 'AES67 + USB' : service.toUpperCase()}.`);
+  } catch (e) { toast(`Could not read logs: ${e.message}`); }
+  finally { logBusy = false; renderSettings(); }
 }
 
 async function copyCommand(command) {
@@ -536,10 +595,14 @@ document.addEventListener('click', event => {
     $('#rew-dialog').close();toast(`Imported ${rewParsed.count} REW filters into ${config.outputs[selected].label}.`);
   } else if (action === 'polarity') { const i = b.dataset.outIndex !== undefined ? Number(b.dataset.outIndex) : selected; config.outputs[i].invert = !config.outputs[i].invert; }
   else if (action === 'eq-toggle') { config.outputs[selected].eqEnabled = !config.outputs[selected].eqEnabled; syncLinkedEq(); }
-  else if (action === 'save') {
-    try { validateConfig(config); const saved = presets(); Object.defineProperty(saved,config.name,{value:structuredClone(config),enumerable:true,configurable:true,writable:true}); localStorage.setItem(storageKey,JSON.stringify(saved)); dirty = false; render(); toast('Preset saved in this browser.'); } catch(e) { toast(`Could not save: ${e.message}`); } return;
-  } else if (action === 'load') {
-    try { config = parsePreset(JSON.stringify(presets()[$('#saved-preset').value])); layoutUndo=null; busUndo=null; dirty = false; render(); toast('Local preset loaded. No device changes.'); } catch(e) { toast(`Could not load: ${e.message}`); } return;
+  else if (action === 'save') { savePreset(); return; }
+  else if (action === 'delete-preset') {
+    const name = $('#saved-preset').value;
+    if (name && confirm(`Delete preset "${name}" from ${presetStore.label}? The current draft is unaffected.`)) deletePreset(name);
+    return;
+  }
+  else if (action === 'refresh-logs') { loadLiveLogs(); return; } else if (action === 'load') {
+    try { config = parsePreset(JSON.stringify(presets()[$('#saved-preset').value])); layoutUndo=null; busUndo=null; dirty = false; render(); toast(`Preset loaded from ${presetStore.label}. No device changes.`); } catch(e) { toast(`Could not load: ${e.message}`); } return;
   } else if (action === 'reset') { config = createConfig(); selected = 0; layoutUndo=null; busUndo=null; }
   else if (action === 'export') {
     const url = URL.createObjectURL(new Blob([JSON.stringify(config,null,2)],{type:'application/json'}));
@@ -722,3 +785,45 @@ document.addEventListener('toggle', event => {
 profileState = createSlots(config);
 render();
 setInterval(updateMeters,100);
+
+// ------------------------------------------------------- Pi control service
+//
+// The page is fully usable with no backend. One probe decides which world we
+// are in; after that a single slow poll keeps the status panel current. The
+// service publishes a cached snapshot, so this poll costs the Pi the same
+// whether one browser or ten are open. Nothing here can change device state:
+// the service has no control endpoint to call.
+
+let pollTimer = null;
+
+async function pollHealth() {
+  const next = await probeHealth();
+  const wasConnected = Boolean(health);
+  health = next;
+  if (!wasConnected && next) {
+    toast(`Connected to ${next.host || 'the Pi'}. Status and logs are live; this UI is read-only.`);
+    await adoptStore(piStore());
+  } else if (wasConnected && !next) {
+    toast('Lost the Pi control service. Showing the local draft; presets are back in this browser.');
+    await adoptStore(browserStore(storageKey));
+  }
+  if (tab === 'settings') renderSettings();
+  renderConnection();
+  $('#mode-note').textContent = modeNote(config.mode === 'direct');
+}
+
+/** Swap the preset store, keeping the page usable if the new one cannot be read. */
+async function adoptStore(store) {
+  try { await store.refresh(); presetStore = store; }
+  catch (e) { toast(`Could not read presets from ${store.label}: ${e.message}`); return; }
+  render();
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  pollHealth();
+  // Pause while the tab is hidden: an idle client should not keep the Pi busy.
+  pollTimer = setInterval(() => { if (!document.hidden) pollHealth(); }, POLL_MS);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pollHealth(); });
+startPolling();

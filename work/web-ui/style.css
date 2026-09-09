@@ -615,3 +615,19 @@ input[type=checkbox],input[type=radio]{background:none;border:0;box-shadow:none;
 .eq-dialog .inspector-head .channel-nav select{background:#fff}
 .channel-tools .field:has(#out-destination){max-width:230px}
 @media(max-width:700px){.channel-nav{flex:1 1 auto;min-width:0}.channel-nav select{flex:1;min-width:0}.eq-dialog .inspector-head>button{flex:0 0 auto}}
+
+/* --- Live backend state (work/web-control/usb16x16-web) --------------------
+   Severity is carried by a leading dot plus the word itself, never by colour
+   alone, so the panel stays readable without colour perception. Values sit on
+   the Luna light panel; the dark instrument surfaces do not use these. */
+.fact-list dd{display:flex;align-items:baseline;justify-content:flex-end;gap:7px}
+.fact-list dd::before{content:"";flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:transparent}
+.fact-ok::before{background:#3f8f4f;box-shadow:0 0 0 1px #2f6b3b}
+.fact-warn::before{background:#c98a12;box-shadow:0 0 0 1px #96660b}
+.fact-bad::before{background:#c33b2c;box-shadow:0 0 0 1px #93281c}
+.fact-ok{color:#255c30}
+.fact-warn{color:#7a5406}
+.fact-bad{color:#93281c;font-weight:600}
+.offline-badge.live-badge{background:#eaf5ea;border-color:#a6ccab;color:#255c30}
+.preview-pill.live{color:#1f5c2c;border-color:#7fb389;background:linear-gradient(180deg,#f0f9f0,#dcefdd)}
+.preview-pill.live i{background:#3f8f4f;box-shadow:0 0 0 1px #ffffff80}
