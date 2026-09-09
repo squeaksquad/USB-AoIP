@@ -29,7 +29,7 @@ Hosts and paths that every script assumes:
 |---|---|---|
 | `PROJECT_HANDOFF.md` | Authoritative, append-only chronological log, ~4,500 lines and growing. | Always, but by section (see below). Never whole. |
 | `README.md` | Four-line pointer to the handoff. Its "next priority" sentence is stale. | Never needed. |
-| `work/` | Everything that runs: bridge source, service, wrappers, harness, tuning. | Doing anything. |
+| `work/` | Everything that runs: bridge source, service, web UI and its backend, wrappers, harness, tuning. | Doing anything. |
 | `outputs/latency/` | Measurement evidence, ~500 top-level entries, ~4,400 files. Cited by the handoff by run timestamp. | Verifying a number or re-analysing a run. |
 | `outputs/architecture.md`, `outputs/pi-baseline.md` | 2026-08-30 snapshots (CamillaDSP-era design, first Pi inspection). Superseded. | Historical context only. |
 | `outputs/screenshots/` | Two 2026-08-31 Audio MIDI Setup label screenshots. | Channel-name evidence. |
@@ -45,6 +45,11 @@ Bridge and service (what runs on the Pi):
 - `work/pi-tuning/` — Phase 5/6 levers: `setup-usb-16x16-req` (gadget script parameterised on `req_number`, installed 2026-09-04), `stall-tuning.sh` (runtime governor and IRQ pinning), `usb16x16-governor.service` and its installer.
 - `work/protected-baseline-2026-08-31/` — the immutable USB rollback set: known-good `usb_f_uac2.ko`, `setup-usb-16x16`, `SHA256SUMS`. Never edit.
 - `work/uac2-discrete-channels/` — the kernel patch that gives macOS channel labels `1`..`16`. Complete and installed 2026-09-01.
+
+Web control (the appliance UI and its backend, one subsystem in two halves):
+
+- `work/web-control/` — the read-only control service `usb16x16-web` (Python stdlib, unprivileged): serves the UI plus `/api/health`, `/api/logs` and a preset store under `~/usb-16x16-work/web-presets`. One collector thread owns every Pi read and publishes a cached snapshot; it never reads `/api/sink/status/N`, whose arrival-lead minimum resets on read. `usb16x16-web.service` and the hash-guarded `install-web-control.sh` install it; README has the API, the load tiers, rollback, and what the service deliberately cannot do. Staged 2026-09-09 at `~/usb-16x16-work/web-control/`; installing it is a separate sudo step.
+- `work/web-ui/` — the browser UI (ES modules, no build). `app.mjs` renders and owns events; `model.mjs`, `workflows.mjs`, `buses.mjs`, `eq-tools.mjs`, `profiles.mjs`, `reset-band.mjs` hold the testable logic, each with a `*.test.mjs` beside it (`node --test work/web-ui/*.test.mjs`). `backend.mjs` is the client for `work/web-control`: it probes once, polls health, and falls back to a standalone prototype with browser-storage presets when nothing answers. README is the scope, the interaction notes and the verification log; it is long, read it by section. Meters are synthetic in both modes and DSP mode is a draft — no CamillaDSP compiler or engine service exists.
 
 Measurement (what runs on the Mac, or drives the Pi from the Mac):
 
@@ -64,7 +69,7 @@ Findings and pickups:
 Vendored and archived:
 
 - `work/aes67-linux-daemon/` — upstream checkout, gitignored, pinned revisions in the handoff. Driver source under `3rdparty/`; read `audio_driver.c` and `manager.c` for RAVENNA stream start and timing.
-- `work/camilladsp/` — one config from the CamillaDSP-era design. Not used by the bridge.
+- `work/camilladsp/` — one config from the CamillaDSP-era design. Not used by the bridge. The 4.1.3 binary is staged on the Pi but nothing runs it; see `work/web-ui/README.md` for what DSP mode still needs.
 - `work/generate-channel-id.py` — made the channel-identity wav.
 
 ## How to read `PROJECT_HANDOFF.md`
