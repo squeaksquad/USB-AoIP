@@ -1,0 +1,8 @@
+# capture /tmp/phase-20260909T001643Z.pcap on the Pi (4 s, 9.8 MB, 'udp and dst port 5004', sudo tcpdump by the user), first 1.5 MB read on the Mac; service running sd103 (supervisor 427982dc, process of 2026-09-08 22:11:14 UTC), RECOVER count 0 before and after; new PoE cable since 21:30 UTC
+reference 239.69.16.1: wire phase 16 on 307 packets (the SAC high word's 16-per-wrap shift; grid phase 0 by construction)
+239.69.121.9 (stream, offset 531217786): 306 packets 2026-09-09T00:16:48Z..2026-09-09T00:16:48Z, wire phase {9: 306}, seq gaps 0, stamp steps {48: 305}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)
+239.69.16.1 (reference, offset 0): 307 packets 2026-09-09T00:16:48Z..2026-09-09T00:16:48Z, wire phase {16: 307}, seq gaps 0, stamp steps {48: 306}
+239.69.16.2 (reference, offset 0): 307 packets 2026-09-09T00:16:48Z..2026-09-09T00:16:48Z, wire phase {16: 307}, seq gaps 0, stamp steps {48: 306}
+239.69.193.115 (stream, offset 531217786): 307 packets 2026-09-09T00:16:48Z..2026-09-09T00:16:48Z, wire phase {9: 307}, seq gaps 0, stamp steps {48: 306}
+    grid phase 41: deadline frame index 3 at delay 144; the same frame for delays 103..150; lowest free delay 103 (41 samples under 144); 102 crosses (one frame earlier, the 41-sample holes of 96)

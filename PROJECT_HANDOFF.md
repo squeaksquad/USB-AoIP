@@ -9463,3 +9463,19 @@ copied in. Install needs his sudo and a stack restart; acceptance is a
 fresh anchor and a day-0 read showing either no RECOVER in the first two
 minutes or one settle restart followed by none. Rollback: reinstall
 `631e88e1` with the installer at commit dbb1935.
+
+**READ 2026-09-09 00:16 UTC: stamp phase 41 on both Ferrofish streams after
+the cable swap and the supervisor install; sd103 stays at its floor.** The
+user's `/tmp/phase-20260909T001643Z.pcap` (4 s, 9.8 MB, the gate's tcpdump
+line), first 1.5 MB read with `stamp-phase.py` (evidence
+`stamp-phase-20260909T0016Z-postswap.txt`): sink 0 `239.69.121.9` and sink
+1 `239.69.193.115` wire phase 9 on every packet, the Pi's `239.69.16.1` and
+`.2` wire phase 16, grid phase **41 on both**, stamps stepping 48, no
+sequence gap on any stream, RECOVER count 0 before and after. The wire
+phases are the 2026-09-06 values again (Pi 16, Ferrofish 9) rather than
+yesterday's 32 and 25: the driver's SAC high word restarted with today's
+reboots, which moves every wire phase alike and the grid phase not at all,
+as the arithmetic says. Lead pair on the same process 1079/1080. The
+standing rule (lead pair, then phase, after any Ferrofish, switch or cable
+change) is satisfied for the new cable; an RTL figure may be quoted against
+sd103 on this anchor.
