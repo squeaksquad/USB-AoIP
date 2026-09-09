@@ -9499,3 +9499,29 @@ depth" rule (this start: TX prime overshoot 35, align_dropped 10,
 first_tick_wait 394 us; the 719 start: overshoot 37, align_dropped 8,
 first_tick_wait 341 us), not a new accepted level. A repeat on a fresh
 anchor is the way to make it one.
+
+**READ 2026-09-09 11:00 UTC: noise probe clean, so both overnight RTL draws
+stand; Phase 6 day 1 on the 22:11 UTC process, floors TX 83 / RX 66, one
+open/close pair at +7.65 h, uncontaminated.** (1) The user read RTL Utility
+at 32 a second time about 00:30 UTC: **17.875 ms = 670 + 188**, 27 under
+the 18.438 of an hour earlier on the same process; the record's rule reads
+two figures in one session as Mac holes, so the probe was run first thing:
+`day0d-noise-ch2-64f-100imp.*` in `usb-holes-20260904/` (gate settings,
+RTL Utility quit, Pro Tools open but not holding the device): 0.0 % zeros,
+no run in 1,244,628 returned samples, discontinuities 0, `placementMisses`
+0, RECOVER count unchanged across it. The Mac is clean, so the two figures
+are two draws, not holes; the second was itself re-drawn at 05:50 UTC
+(below) and neither is a fresh-anchor figure. (2) Day 1 read
+(`bar-day1-20260909T110047Z.txt`, 12.83 h): TX floor 83, RX 66, `tx_qlow`
+/ `rx_qlow` 0, gaps 1137 / 1179 us, largest pull TX 48, RX 96 (gap 1039
+us); TX trail unchanged since +2.3 m (93 -> the 83 floor drawn later
+without a 24-step). Two RECOVERs at +7.65 h (05:50:28 UTC): both PCMs
+`capture-avail` Broken pipe in the same 68 us, queues 142 and 161, no
+drain; a device open/close variant (both directions on capture-avail,
+where the record's signature names capture-avail with playback-avail;
+`gap-bar.py` counts it as no pair but finds no drain either), the floors
+stand, the count continues, the level re-drawn. No link event, speed
+1000, no settle restart (the pair was hours past the 90 s window). Lead
+pair on that interval 817 / 829 (it spans the re-prime; the next read is
+the clean one). Priced: 83 leaves 35 over one period, 168 possible on this
+draw. Day count: day 1 of three on this process.
