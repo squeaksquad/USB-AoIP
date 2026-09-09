@@ -9479,3 +9479,23 @@ as the arithmetic says. Lead pair on the same process 1079/1080. The
 standing rule (lead pair, then phase, after any Ferrofish, switch or cable
 change) is satisfied for the new cable; an RTL figure may be quoted against
 sd103 on this anchor.
+
+**MEASURED 2026-09-09 ~00:20 UTC, RTL Utility at 32 frames on the new cable
+and the installed supervisor: 18.438 ms = 697 + 188, 22 under sd103's
+accepted 719 / 18.896 ms.** Read by the user on the process of 22:11:14 UTC
+(supervisor 427982dc, sd103, lead 1079/1080, phase 41 re-read at 00:16).
+The process before and after: zero RECOVERs, no re-prime (the two start
+PRIMED lines only), no ZERORUN event (the bridge saw no zero run in any
+stage during the read), floors TX 84 / RX 72, tx_qlow 0, so the RTL open
+and close did not re-draw the level and the Phase 6 count stands. Anchor
+caveat: the gadget's anchor is the 17:30 EDT cold boot (21:30 UTC); the
+AES67 service was restarted twice since (17:38 for a clean process, 18:10
+for the install), so this is a plain-restart draw against that anchor, not
+the fresh-anchor procedure that read 719. Plain restarts have read 757-849
+before; 697 is the lowest figure in the record for any draw. Whether the
+user ran the noise probe before the read is not recorded here; the figure
+is a session draw, a data point for the "level follows the bridge start
+depth" rule (this start: TX prime overshoot 35, align_dropped 10,
+first_tick_wait 394 us; the 719 start: overshoot 37, align_dropped 8,
+first_tick_wait 341 us), not a new accepted level. A repeat on a fresh
+anchor is the way to make it one.
