@@ -26,6 +26,7 @@
 // for coherent full-scale inputs.
 
 import { CHANNELS, validateConfig } from '../web-ui/model.mjs';
+import { polarityWarningText } from '../web-ui/crossover-notes.mjs';
 
 export const SAMPLE_RATE = 48000;
 
@@ -265,19 +266,10 @@ function worstCase(config, plan) {
 /** Things the compiler will not silently decide for the user. */
 function collectWarnings(config, plan, levels) {
   const warnings = [];
-  const slopes = new Set();
-  config.inputs.forEach((input, index) => {
-    if (config.bassEnabled && input.crossover) slopes.add(input.slope);
-    if (plan.bassOf.has(index)) slopes.add(input.slope);
-  });
-  if (plan.bassOf.has(config.lfe.input)) slopes.add(config.lfe.slope);
-  if (slopes.has(12)) {
-    warnings.push(
-      'A 12 dB/oct Linkwitz-Riley crossover puts its two branches 180 degrees ' +
-      'apart at the crossover frequency, so main and sub usually need opposite ' +
-      'polarity to sum. No polarity has been inverted for you: set it per output ' +
-      'and verify acoustically.');
-  }
+  // Shared with the UI so the two cannot drift, and so the LFE branch is scored
+  // on the LFE low-pass slope rather than its input's.
+  const polarity = polarityWarningText(config);
+  if (polarity) warnings.push(polarity);
   levels.forEach((level, output) => {
     if (level !== null && level > 0) {
       warnings.push(

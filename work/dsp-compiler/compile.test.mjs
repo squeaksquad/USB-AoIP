@@ -125,7 +125,9 @@ test('slope maps to Linkwitz-Riley order and 12 dB/oct is flagged', () => {
   assert.equal(result.config.filters.hp_in1.parameters.order, 2);
   const warning = result.report.warnings.find(w => w.includes('180 degrees'));
   assert.ok(warning, 'a 12 dB/oct crossover is called out');
-  assert.match(warning, /No polarity has been inverted for you/);
+  assert.match(warning, /Nothing has been inverted for you/);
+  assert.match(warning, /Affected inputs: 1 L/);
+  assert.equal(result.config.filters.gain_out1, undefined, 'and nothing was inverted');
 });
 
 test('flat and disabled bands emit no biquad', () => {
@@ -361,4 +363,15 @@ test('the two channel spaces are separated by the assign mixer', () => {
   result.config.pipeline.slice(at + 1).forEach(step => {
     if (step.type === 'Filter') assert.ok(step.channels.every(c => c < CHANNELS));
   });
+});
+
+test('the LFE branch is scored on the LFE slope, not its input\'s', () => {
+  const preset = createConfig();
+  preset.inputs.forEach(input => { input.slope = 24; });
+  preset.lfe.slope = 12;
+  const result = build(preset);
+  assert.equal(result.config.filters[`lp_in${preset.lfe.input + 1}`].parameters.order, 2);
+  const warning = result.report.warnings.find(w => w.includes('180 degrees'));
+  assert.ok(warning, 'a 12 dB/oct LFE low-pass is called out');
+  assert.match(warning, new RegExp(`Affected inputs: ${preset.lfe.input + 1} `));
 });

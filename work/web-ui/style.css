@@ -631,3 +631,21 @@ input[type=checkbox],input[type=radio]{background:none;border:0;box-shadow:none;
 .offline-badge.live-badge{background:#eaf5ea;border-color:#a6ccab;color:#255c30}
 .preview-pill.live{color:#1f5c2c;border-color:#7fb389;background:linear-gradient(180deg,#f0f9f0,#dcefdd)}
 .preview-pill.live i{background:#3f8f4f;box-shadow:0 0 0 1px #ffffff80}
+
+/* --- 12 dB/oct crossover polarity note -----------------------------------
+   Advisory, not an error: it reports a property of the chosen slope and no
+   setting has been changed. Amber like the other caution surfaces, with a
+   left rule so it reads as a note attached to the controls above it. */
+.polarity-note{background:#fdf6e0;border:1px solid #d8c38a;border-left:4px solid #c98a12;color:#5c4508;margin-top:12px}
+.polarity-note strong{color:#4a3706}
+
+/* --- Connection bar at narrow widths --------------------------------------
+   The live status line is far longer than the prototype's "Not connected"
+   placeholder, and a flex item will not shrink below its content width without
+   min-width:0. Without these the bar pushed the whole page into horizontal
+   scrolling on a phone. */
+/* In column direction with align-items:center the children are content-sized
+   on the cross axis, so min-width alone cannot rein them in; max-width can. */
+.connection-status>span{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.profile-slots{min-width:0;max-width:100%}
+.profile-slots .slot-preset select{max-width:100%}

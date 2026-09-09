@@ -4,6 +4,7 @@ import { resetBand } from './reset-band.mjs';
 import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, createSpeakerBus, removeBus, setBusEqLink, setBusOutputs, outputRoleLabel } from './buses.mjs';
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
+import { polarityNote } from './crossover-notes.mjs';
 import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS } from './backend.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
@@ -404,8 +405,42 @@ function renderBass() {
   $('#bass-page').innerHTML = `<details class="page-section" data-section="bass" ${sectionAttr('bass')}><summary class="section-summary">Bass management <small>crossovers · LFE · headroom</small></summary><fieldset ${disabled(config.mode==='direct')} style="border:0;padding:0;margin:0;min-width:0">
     <div class="bass-top"><section class="panel"><h2>Speaker bass redirection</h2><p>High-pass each main speaker and send its low frequencies to your chosen subs. Output EQ and alignment follow the split.</p><div class="field-row"><label class="checkbox-label"><input type="checkbox" id="bass-enabled" ${checked(config.bassEnabled)}>Bass redirection enabled</label>${field('Common input trim · dB',number('id="headroom"',config.headroomDb,-36,0,.1))}</div><p>Turning redirection off restores full-range mains and silences their sub sends. LFE remains independently routed. Per-channel crossovers and sub sends are in <strong>Bass routing</strong>, above the channel overview.</p></section>
     <section class="panel"><h2>LFE is its own source</h2><p>Control the effects channel separately from redirected speaker bass. LFE gain is explicit; no automatic +10 dB boost.</p><div class="field-row">${field('LFE input',`<select data-lfe="input">${options(inputOptions(),config.lfe.input)}</select>`)}${field('Low-pass · Hz',number('data-lfe="lowpassHz"',config.lfe.lowpassHz,20,250))}${field('Slope',`<select data-lfe="slope">${slopeOptions(config.lfe.slope)}</select>`)}${field('LFE trim · dB',number('data-lfe="trimDb"',config.lfe.trimDb,-24,12,.1))}</div><p class="route-note">Changing the LFE input clears all sub sends from the old and new LFE rows, so those routes must be deliberately reassigned.</p></section></div>
+    <div id="polarity-note"></div>
     </fieldset></details>`;
   renderBassMatrix();
+  refreshPolarityNote();
+}
+
+/**
+ * Update the crossover polarity note in place.
+ *
+ * It lives in its own container holding no focusable control, so it can be
+ * refreshed after any edit without re-rendering the bass panel and unmounting
+ * the select the user is still using.
+ */
+function refreshPolarityNote() {
+  const box = $('#polarity-note');
+  if (box) box.innerHTML = polarityBanner();
+}
+
+/**
+ * A 12 dB/oct Linkwitz-Riley leaves its two branches 180 degrees apart at the
+ * crossover, so main and sub usually need opposite polarity to sum. This says
+ * so and changes nothing: the right answer depends on drivers, positions and
+ * the room, and only a measurement settles it. The same text goes into the
+ * compiler's report, from the same module.
+ */
+function polarityBanner() {
+  const note = polarityNote(config);
+  if (!note) return '';
+  const names = note.labels.map((label, i) => `${pad(note.inputs[i])} ${label}`).join(', ');
+  const branches = [
+    note.highpassCount ? `${note.highpassCount} speaker high-pass${note.highpassCount === 1 ? '' : 'es'}` : null,
+    note.lowpassCount ? `${note.lowpassCount} bass low-pass${note.lowpassCount === 1 ? '' : 'es'}` : null,
+  ].filter(Boolean).join(' and ');
+  return `<p class="banner-note polarity-note" role="note"><strong>${esc(note.headline)}.</strong>
+    ${esc(note.detail)} Affects ${esc(branches)} on ${esc(names)}.
+    <span class="muted">Advisory only — no polarity has been changed.</span></p>`;
 }
 
 /** The per-channel crossover and sub-send matrix, expanded from the channel overview. */
@@ -722,6 +757,10 @@ document.addEventListener('change', async event => {
     if (focus && !focus.disabled) focus.focus({preventScroll:true});
     return;
   }
+  // Any successful edit can change which crossovers are active, and the note
+  // is refreshed in place so this stays independent of the surgical re-renders
+  // below.
+  refreshPolarityNote();
   // Keep the form being edited mounted: replacing it on blur can swallow the
   // next click or send keyboard focus back to the field the user just left.
   if (el.dataset.out) {

@@ -71,6 +71,11 @@ subs reach −2.43 dBFS, which is the −18 dB trim doing its job.
 - **12 dB/oct Linkwitz-Riley.** Its two branches sit 180° apart at the crossover
   frequency, so main and sub usually need opposite polarity to sum. The compiler
   warns and **inverts nothing**. Set polarity per output and verify acoustically.
+  The same note appears in the UI's Bass management panel, from the same module
+  (`work/web-ui/crossover-notes.mjs`), so the two cannot drift. That module also
+  decides which crossovers are *active*: a 12 dB/oct slope on an input that
+  drives nothing is not flagged, and the LFE branch is scored on the LFE
+  low-pass slope rather than its input row's.
 - **Devices.** `compile()` requires a devices section from the caller. Choosing
   capture and playback is an integration decision the compiler has no basis to
   make.
@@ -91,8 +96,13 @@ accepts eight presets: the default, one with all 256 bands shaped plus delays,
 inverts and gains, LR12, LR48, bass off, EQ bypass, a headphone downmix, and a
 deliberately clipping one.
 
-**End-to-end through the engine**, file-to-file with staggered impulses
-(`verify-run.py`), on an identity-routed preset:
+**End-to-end through the engine**, file-to-file. Two harnesses, because one
+signal cannot check both halves: `verify-run.py` uses staggered impulses for the
+per-output processing, and `verify-tone.py` uses a low-frequency tone for the sub
+path, since an 80 Hz LR4 low-pass rings far past any window short enough to keep
+one input's response out of the next.
+
+Impulses, on an identity-routed preset:
 
 | Property | Expected | Measured |
 | --- | --- | --- |
@@ -105,22 +115,42 @@ deliberately clipping one.
 | Gain −6 dB | ratio 0.501187 | 0.501187 |
 | Mute | silence | no events |
 
+Tone, on the default 7.2.4 preset with an LFE trim of −4 dB, driving one input
+per segment at 20 Hz and −12 dBFS, then several in phase:
+
+| Property | Expected | Measured |
+| --- | --- | --- |
+| Send at 0 dB (5 inputs per sub) | −18.00 dB rel drive | −18.034 |
+| Send at −6 dB (centre) | −24.00 | −24.034 |
+| LFE: −6 dB send **and** −4 dB trim | −28.00 | −28.007 |
+| Matrix isolation | inputs 1,5,7,9,11 → sub 4 only; 2,6,8,10,12 → sub 13 only | exact, no leakage |
+| Inputs 13–16 | silent everywhere | silent |
+| Main outputs at 20 Hz | −18 trim − 48.20 HP = −66.20 | −66.2 |
+| Coherent sum of 7 inputs | ≤ compiler's −2.71 dBFS ceiling | −2.751 dBFS |
+
+The residuals are not slop: −0.034 dB is exactly the analytic LR4 low-pass
+passband loss at 20 Hz for an 80 Hz corner, and −0.007 dB is the same figure for
+the LFE's 120 Hz corner. That the LFE reads −0.007 and not −0.034 is independent
+evidence the LFE branch uses its own low-pass. The coherent sum lands 0.04 dB
+*below* the reported ceiling, which is the direction a ceiling should err.
+
 ### Not yet verified end to end
 
 The unit tests pin the emitted mixer gains and filter parameters, and the engine
-run above proves the engine applies them, but these have **not** been measured
+runs above prove the engine applies them, but these have **not** been measured
 through the engine:
 
-- **Bass matrix and LFE gain.** Sub summing with crossovers active needs a
-  low-frequency tone rather than impulses, because an 80 Hz LR4 impulse rings far
-  past the 1000-sample window this harness uses.
 - **Band response.** That the emitted biquads produce the designed magnitude
-  needs a sweep or tone set compared against `bandResponse` in `model.mjs`.
-- **Coherent worst case with all channels driven**, and true output clipping.
+  needs a sweep or tone set compared against `bandResponse` in `model.mjs`. The
+  tone test above drives the crossovers, not the output PEQ.
+- **True output clipping** at the sample level. The coherent sum was measured
+  well below full scale on purpose; what the engine does at and past 0 dBFS is
+  untested.
+- **Headphone bus paths**, pair and downmix, through the engine.
 - **Anything about CPU cost, latency, or running against ALSA devices.** No
   timing claim is established by this compiler.
 
-`verify-run.py` runs on the Pi because that is where the pinned engine version
-is. It opens no audio device; it reads and writes files. Runs are kept short and
-the bridge was unchanged across every run in this pass (recoveries 3, PCM
-restarts 2/1, queue floors 28/66).
+Both harnesses run on the Pi because that is where the pinned engine version is.
+They open no audio device; they read and write files. Runs are kept short and the
+bridge was unchanged across every run (recoveries 3, PCM restarts 2/1, queue
+floors 28/66).

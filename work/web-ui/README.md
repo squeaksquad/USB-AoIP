@@ -224,6 +224,16 @@ wording is in its tooltip and accessible name.
   one-time edit: individual HP/LP values remain independently editable afterward.
   LFE settings, slopes, HP enable states and bass sends are preserved. Bulk controls
   follow the same direct-mode and bass-bypass disabling as individual controls.
+- **Crossover polarity:** choosing 12 dB/oct on any *active* crossover raises an
+  advisory note in Bass management. A 12 dB/oct Linkwitz-Riley leaves its two
+  branches 180 degrees apart at the crossover frequency, so the main and the sub
+  usually need opposite polarity to sum. The note names the affected inputs and
+  branches and **changes nothing** — the right answer depends on drivers,
+  positions and the room, and only a measurement settles it. 24 and 48 dB/oct do
+  not have this property. A 12 dB/oct slope on an input that drives nothing is
+  not flagged, and the LFE branch is judged on the LFE slope rather than its
+  input row's. `crossover-notes.mjs` decides this and is shared with
+  `work/dsp-compiler`, so the panel and the compiler's report cannot disagree.
 - **LFE:** choose its input, low-pass frequency/slope and trim independently. There
   is no implicit +10 dB gain. Changing the designated LFE input clears sends from
   both affected rows; reassign them explicitly. Speaker-source mapping can still
@@ -485,6 +495,26 @@ is established by this browser prototype.
   and `PROJECT_HANDOFF.md` rollback rules. Consult the latest live state before deployment.
 
 ## Verification of this prototype
+
+- Crossover polarity note: 10 new tests in `crossover-notes.test.mjs` cover which
+  crossovers are active (high-pass only where a main branch exists, low-pass only
+  where a bass branch does, the LFE branch on the LFE slope), bass redirection
+  off, an input with its crossover switched off, a headphone-only source, no note
+  at 24/48 dB/oct, the note naming affected inputs and branch counts, an inactive
+  12 dB/oct slope not being flagged, and that nothing in the module edits the
+  preset. Browser checks set 12 dB/oct through the LFE slope control and through
+  a per-input slope in Bass routing: the note appeared with the right branch
+  counts, disappeared on returning to 24, left every output's polarity untouched,
+  and did not unmount the select being edited. The note lives in its own
+  container refreshed in place, because the change handler is deliberately
+  surgical and does not re-render the bass panel on a slope edit.
+- Narrow-width regression found and fixed: the live connection line is far longer
+  than the "Not connected" placeholder it replaced, and an existing
+  `.connection-status > span { white-space: nowrap }` pushed the page to a
+  535 px scroll width at a 390 px viewport. With wrapping allowed the page is
+  back to 413 px, matching the pre-backend baseline measured from commit
+  d70f0b8. The residual 413 px is pre-existing, from the channel-overview
+  toolbar, and is untouched here.
 
 - Read-only backend: 69 Node tests pass (was 49), with 20 new covering the
   client — probe rejecting a non-`ok`, non-JSON, array or failed response;
