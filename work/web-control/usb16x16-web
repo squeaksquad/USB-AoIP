@@ -19,14 +19,23 @@ Design constraints this file honours:
   * No ALSA device is opened. Meters therefore report unavailable rather than
     inventing a value or competing for a PCM.
   * Runs unprivileged. Nothing here needs root and nothing here is given it.
+  * HTTP Basic auth guards every route. Verifying a password costs a real KDF,
+    so a successful credential is cached briefly and repeated failures are rate
+    limited per client: the 2 s health poll must not turn into a PBKDF2 load on
+    the machine running the audio.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
+import getpass
+import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
 
 import socket
 import subprocess
@@ -40,7 +49,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -71,6 +80,17 @@ SLOW_INTERVAL = 5.0    # systemctl, sysfs, vcgencmd
 DAEMON_INTERVAL = 10.0  # aes67-daemon HTTP API
 
 PRESET_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$")
+USER_NAME = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+REALM = "USB 16x16 control"
+# OWASP's 2023 floor for PBKDF2-HMAC-SHA256. About 90 ms on this Pi, paid once
+# per credential per AUTH_CACHE_SECONDS rather than once per request.
+KDF_ITERATIONS = 210_000
+AUTH_CACHE_SECONDS = 300.0
+AUTH_CACHE_MAX = 64
+# A wrong password is answered slowly by design; a flood of them must not be.
+FAIL_WINDOW_SECONDS = 60.0
+FAIL_LIMIT = 10
 
 MIME = {
     ".html": "text/html; charset=utf-8",
@@ -468,6 +488,194 @@ class PresetStore:
             return False
 
 
+# --------------------------------------------------------------------- auth
+
+class PasswordFile:
+    """Users and PBKDF2 hashes, one per line.
+
+        name:pbkdf2_sha256$<iterations>$<salt b64>$<hash b64>
+
+    The password itself is never stored, never passed on the command line and
+    never logged. The file is written 0600.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    @staticmethod
+    def hash_password(password: str, iterations: int = KDF_ITERATIONS,
+                      salt: bytes | None = None) -> str:
+        salt = salt or secrets.token_bytes(16)
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+        return "pbkdf2_sha256${}${}${}".format(
+            iterations,
+            base64.b64encode(salt).decode("ascii"),
+            base64.b64encode(digest).decode("ascii"))
+
+    @staticmethod
+    def verify_password(password: str, stored: str) -> bool:
+        try:
+            scheme, iterations, salt, digest = stored.split("$")
+            if scheme != "pbkdf2_sha256":
+                return False
+            candidate = hashlib.pbkdf2_hmac(
+                "sha256", password.encode("utf-8"),
+                base64.b64decode(salt), int(iterations))
+        except (ValueError, TypeError):
+            return False
+        return hmac.compare_digest(candidate, base64.b64decode(digest))
+
+    def load(self) -> dict[str, str]:
+        users: dict[str, str] = {}
+        text = read_text(self.path, 1 << 20)
+        if text is None:
+            return users
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or ":" not in line:
+                continue
+            name, _, stored = line.partition(":")
+            if USER_NAME.match(name):
+                users[name] = stored
+        return users
+
+    def set_user(self, name: str, password: str) -> None:
+        if not USER_NAME.match(name):
+            raise ValueError("User names use letters, digits, dot, dash or underscore")
+        if len(password) < 8:
+            raise ValueError("Use a password of at least 8 characters")
+        users = self.load()
+        users[name] = self.hash_password(password)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(".tmp")
+        # 0600 before any content is written, so the hashes are never briefly
+        # world-readable between creation and chmod.
+        handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            out.write("# usb16x16-web credentials. Generated; do not edit by hand.\n")
+            for user, stored in sorted(users.items()):
+                out.write(f"{user}:{stored}\n")
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(temporary, self.path)
+
+    def remove_user(self, name: str) -> bool:
+        users = self.load()
+        if name not in users:
+            return False
+        del users[name]
+        if not users:
+            raise ValueError("Refusing to remove the last user; the service would "
+                             "not start. Add another user first, or pass --no-auth.")
+        # Rewrite through set_user's path by re-hashing nothing: write directly.
+        temporary = self.path.with_suffix(".tmp")
+        handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            out.write("# usb16x16-web credentials. Generated; do not edit by hand.\n")
+            for user, stored in sorted(users.items()):
+                out.write(f"{user}:{stored}\n")
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(temporary, self.path)
+        return True
+
+
+class Authenticator:
+    """Basic auth with a bounded success cache and per-client failure limit.
+
+    The KDF is the point of a password hash, but the UI polls /api/health every
+    two seconds. Paying 90 ms of PBKDF2 per poll would put a steady load on the
+    machine running the audio, so a credential that has just verified is
+    remembered for AUTH_CACHE_SECONDS by the SHA-256 of its header. The cache
+    only ever skips work for a credential that already passed; a wrong password
+    is never cached and always pays full price.
+    """
+
+    def __init__(self, password_file: PasswordFile) -> None:
+        self.password_file = password_file
+        self._lock = threading.Lock()
+        self._verified: dict[bytes, float] = {}
+        self._failures: dict[str, list[float]] = {}
+
+    def reload(self) -> dict[str, str]:
+        users = self.password_file.load()
+        with self._lock:
+            # Credentials change meaning when the file does: drop the cache.
+            self._verified.clear()
+        return users
+
+    def throttled(self, client: str) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            recent = [t for t in self._failures.get(client, []) if now - t < FAIL_WINDOW_SECONDS]
+            self._failures[client] = recent
+            return len(recent) >= FAIL_LIMIT
+
+    def clear_failures(self, client: str) -> None:
+        """A correct password forgives earlier typos from that client."""
+        with self._lock:
+            self._failures.pop(client, None)
+
+    def note_failure(self, client: str) -> None:
+        now = time.monotonic()
+        with self._lock:
+            self._failures.setdefault(client, []).append(now)
+            if len(self._failures) > 1024:  # bounded under a spoofed-source flood
+                self._failures = {
+                    key: [t for t in times if now - t < FAIL_WINDOW_SECONDS]
+                    for key, times in self._failures.items()}
+                self._failures = {k: v for k, v in self._failures.items() if v}
+
+    @staticmethod
+    def _token(header: str) -> bytes:
+        return hashlib.sha256(header.encode("utf-8", "replace")).digest()
+
+    def cached(self, header: str | None) -> bool:
+        """Free check against credentials that already verified.
+
+        Deliberately consulted before the failure limiter, so a flood of wrong
+        passwords from one address cannot lock out someone who is already
+        signed in from it.
+        """
+        if not header or not header.startswith("Basic "):
+            return False
+        token = self._token(header)
+        now = time.monotonic()
+        with self._lock:
+            expiry = self._verified.get(token)
+            if expiry is None:
+                return False
+            if expiry > now:
+                return True
+            del self._verified[token]
+            return False
+
+    def verify(self, header: str) -> bool:
+        """Full check. Costs one KDF; only reached on a cache miss."""
+        token = self._token(header)
+        now = time.monotonic()
+        try:
+            decoded = base64.b64decode(header[6:].strip(), validate=True).decode("utf-8")  # noqa: E501
+            name, _, password = decoded.partition(":")
+        except (ValueError, UnicodeDecodeError):
+            return False
+        stored = self.password_file.load().get(name)
+        # Hash even an unknown user, so a wrong name and a wrong password take
+        # the same time and the reply does not say which was wrong.
+        if stored is None:
+            PasswordFile.hash_password(password)
+            return False
+        if not PasswordFile.verify_password(password, stored):
+            return False
+        with self._lock:
+            if len(self._verified) >= AUTH_CACHE_MAX:
+                self._verified = {k: v for k, v in self._verified.items() if v > now}
+                if len(self._verified) >= AUTH_CACHE_MAX:
+                    self._verified.clear()
+            self._verified[token] = now + AUTH_CACHE_SECONDS
+        return True
+
+
 # ------------------------------------------------------------------ handler
 
 class Handler(BaseHTTPRequestHandler):
@@ -476,6 +684,7 @@ class Handler(BaseHTTPRequestHandler):
 
     collector: Collector
     presets: PresetStore
+    auth: Authenticator | None = None
 
     # ---- plumbing
 
@@ -496,6 +705,81 @@ class Handler(BaseHTTPRequestHandler):
     def send_error_json(self, status: int, message: str) -> None:
         self.send_json({"ok": False, "error": message}, status)
 
+    def discard_body(self) -> None:
+        """Drain an unread request body before rejecting the request.
+
+        Under HTTP/1.1 keep-alive, answering a PUT without reading its body
+        leaves that body in the connection, and the server then parses it as the
+        next request line. A rejected write would poison the following request
+        on the same connection. Anything larger than the preset cap is not worth
+        draining, so close instead.
+        """
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            self.close_connection = True
+            return
+        if length <= 0:
+            return
+        if length > (1 << 20):
+            self.close_connection = True
+            return
+        try:
+            self.rfile.read(length)
+        except OSError:
+            self.close_connection = True
+
+    def send_auth_challenge(self, message: str = "Authentication required") -> None:
+        self.discard_body()
+        body = json.dumps({"ok": False, "error": message}).encode()
+        self.send_response(HTTPStatus.UNAUTHORIZED)
+        self.send_header("WWW-Authenticate", f'Basic realm="{REALM}", charset="UTF-8"')
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def authorize(self) -> bool:
+        """Gate every route. Returns False having already answered the client.
+
+        Order matters. A request with no Authorization header is the Basic auth
+        handshake, not a failed sign-in: every browser makes one per session, so
+        counting it would let normal use throttle itself. And the free cache is
+        consulted before the limiter, so someone flooding wrong passwords from
+        an address cannot lock out a user already signed in from it.
+        """
+        if self.auth is None:
+            return True
+        header = self.headers.get("Authorization")
+        if not header or not header.startswith("Basic "):
+            self.send_auth_challenge()
+            return False
+        if self.auth.cached(header):
+            return True
+        client = self.client_address[0] if self.client_address else "?"
+        if self.auth.throttled(client):
+            self.discard_body()
+            body = json.dumps({"ok": False,
+                               "error": "Too many failed sign-ins from this address; "
+                                        "wait a minute"}).encode()
+            self.send_response(HTTPStatus.TOO_MANY_REQUESTS)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Retry-After", str(int(FAIL_WINDOW_SECONDS)))
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+            return False
+        if self.auth.verify(header):
+            self.auth.clear_failures(client)
+            return True
+        self.auth.note_failure(client)
+        sys.stderr.write(f"{client} - authentication failed for {self.command} {self.path}\n")
+        self.send_auth_challenge("Wrong user name or password")
+        return False
+
     def read_body(self, limit: int = 1 << 20):
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -511,6 +795,8 @@ class Handler(BaseHTTPRequestHandler):
     # ---- routes
 
     def do_GET(self) -> None:
+        if not self.authorize():
+            return
         parsed = urlparse(self.path)
         route = unquote(parsed.path)
         query = parse_qs(parsed.query)
@@ -535,6 +821,8 @@ class Handler(BaseHTTPRequestHandler):
     do_HEAD = do_GET
 
     def do_PUT(self) -> None:
+        if not self.authorize():
+            return
         route = unquote(urlparse(self.path).path)
         if not route.startswith("/api/presets/"):
             self.unsupported(route)
@@ -542,6 +830,9 @@ class Handler(BaseHTTPRequestHandler):
         name = route[len("/api/presets/"):]
         document = self.read_body()
         if not isinstance(document, dict):
+            # read_body returns None without consuming an oversized or unparsable
+            # body, so the connection cannot be trusted for a further request.
+            self.close_connection = True
             self.send_error_json(HTTPStatus.BAD_REQUEST, "Send the preset as a JSON object")
             return
         try:
@@ -552,6 +843,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({"ok": True, "name": name, "store": "pi"})
 
     def do_DELETE(self) -> None:
+        if not self.authorize():
+            return
         route = unquote(urlparse(self.path).path)
         if not route.startswith("/api/presets/"):
             self.unsupported(route)
@@ -563,9 +856,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({"ok": True, "name": name})
 
     def do_POST(self) -> None:
+        if not self.authorize():
+            return
         self.unsupported(unquote(urlparse(self.path).path))
 
     def unsupported(self, route: str) -> None:
+        self.discard_body()
         """Every device-changing route answers the same way, on purpose.
 
         Restarting a service, switching a profile or applying DSP means owning
@@ -645,25 +941,81 @@ def main() -> int:
     parser.add_argument("--management-interface", default=os.environ.get("USB16X16_MGMT_IF", "wlan0"),
                         help="interface whose address is used when --bind is empty")
     parser.add_argument("--port", type=int, default=8088)
+    parser.add_argument("--auth-file", default=os.path.expanduser("~/usb-16x16-work/web-auth"),
+                        help="file holding user names and password hashes")
+    parser.add_argument("--no-auth", action="store_true",
+                        help="serve without authentication (do not use on a shared network)")
+    parser.add_argument("--add-user", metavar="NAME",
+                        help="prompt for a password, add or replace this user, then exit")
+    parser.add_argument("--remove-user", metavar="NAME",
+                        help="remove this user, then exit")
     arguments = parser.parse_args()
+
+    password_file = PasswordFile(Path(arguments.auth_file))
+
+    # Credential management runs and exits without starting a server, so a
+    # password never reaches argv, the shell history or the journal.
+    if arguments.add_user:
+        try:
+            password = getpass.getpass(f"Password for {arguments.add_user}: ")
+            if password != getpass.getpass("Repeat password: "):
+                print("passwords did not match", file=sys.stderr)
+                return 2
+            password_file.set_user(arguments.add_user, password)
+        except (ValueError, OSError) as error:
+            print(error, file=sys.stderr)
+            return 2
+        except (KeyboardInterrupt, EOFError):
+            print("cancelled", file=sys.stderr)
+            return 2
+        print(f"user {arguments.add_user} written to {password_file.path}")
+        print("restart the service to pick it up: sudo systemctl restart usb16x16-web.service")
+        return 0
+
+    if arguments.remove_user:
+        try:
+            if not password_file.remove_user(arguments.remove_user):
+                print(f"no such user: {arguments.remove_user}", file=sys.stderr)
+                return 2
+        except (ValueError, OSError) as error:
+            print(error, file=sys.stderr)
+            return 2
+        print(f"user {arguments.remove_user} removed from {password_file.path}")
+        return 0
 
     static_dir = Path(arguments.static).resolve()
     if not (static_dir / "index.html").is_file():
         print(f"no index.html under {static_dir}", file=sys.stderr)
         return 2
 
+    # Fail closed. Serving this open has to be a decision someone typed, not
+    # what happens when a credentials file is missing or unreadable.
+    authenticator = None
+    if arguments.no_auth:
+        print("WARNING: --no-auth, serving without authentication", file=sys.stderr, flush=True)
+    else:
+        users = password_file.load()
+        if not users:
+            print(f"no users in {password_file.path}\n"
+                  f"add one:  {sys.argv[0]} --auth-file {password_file.path} --add-user NAME\n"
+                  f"or serve open with --no-auth", file=sys.stderr)
+            return 2
+        authenticator = Authenticator(password_file)
+
     bind = arguments.bind or interface_address(arguments.management_interface) or "127.0.0.1"
 
     collector = Collector(static_dir, Path(arguments.presets))
     Handler.collector = collector
     Handler.presets = PresetStore(Path(arguments.presets))
+    Handler.auth = authenticator
 
     thread = threading.Thread(target=collector.loop, name="collector", daemon=True)
     thread.start()
 
     server = ThreadingHTTPServer((bind, arguments.port), Handler)
     server.daemon_threads = True
-    print(f"usb16x16-web {VERSION} serving {static_dir} on http://{bind}:{arguments.port}",
+    guard = f"{len(password_file.load())} user(s)" if authenticator else "NO AUTHENTICATION"
+    print(f"usb16x16-web {VERSION} serving {static_dir} on http://{bind}:{arguments.port} ({guard})",
           file=sys.stderr, flush=True)
     try:
         server.serve_forever(poll_interval=0.5)

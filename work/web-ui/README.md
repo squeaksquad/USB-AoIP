@@ -24,8 +24,10 @@ Connected, on the Pi — see `work/web-control/README.md` for the install:
 sudo systemctl enable --now usb16x16-web.service
 ```
 
-Then open <http://192.168.1.201:8088>. The header pill reads LIVE · READ-ONLY
-when the control service answered.
+Then open <http://192.168.1.201:8088> and sign in; the browser prompts once per
+session and carries the credentials into the page's own requests. The header
+pill reads LIVE · READ-ONLY when the control service answered. Basic auth here
+is a lock on a trusted LAN, not wire protection — there is no TLS.
 
 Standalone, from the repository root:
 
@@ -48,7 +50,9 @@ node --check work/web-ui/app.mjs work/web-ui/backend.mjs
 stops while the tab is hidden. The service publishes one cached snapshot, so the
 Pi pays the same whether one browser or ten are open. When the probe fails the
 page returns to its standalone behaviour, including moving presets back to
-browser storage; the transition is announced rather than silent.
+browser storage; the transition is announced rather than silent. A `401` counts
+as a failed probe, so revoked credentials drop the page to standalone rather
+than leaving stale numbers on screen.
 
 - **System overview** replaces its placeholders with service states, USB gadget
   link, PTP lock and grandmaster, AoIP link speed, bridge telemetry (servo ppm

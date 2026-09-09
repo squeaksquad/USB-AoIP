@@ -12,10 +12,15 @@ SupplementaryGroups=adm
 ExecStart=/usr/local/bin/usb16x16-web \
   --static /home/bdimaio/usb-16x16-work/web-ui \
   --presets /home/bdimaio/usb-16x16-work/web-presets \
+  --auth-file /home/bdimaio/usb-16x16-work/web-auth \
   --management-interface wlan0 \
   --port 8088
 Restart=on-failure
 RestartSec=5
+
+# The service refuses to start with no users in the auth file, so a missing or
+# unreadable credentials file fails closed rather than serving open. Add a user
+# with: usb16x16-web --auth-file /home/bdimaio/usb-16x16-work/web-auth --add-user NAME
 
 # The audio stack owns this machine. This service is background work: it must
 # never win a CPU or IO contest against the bridge, and it must not be able to
