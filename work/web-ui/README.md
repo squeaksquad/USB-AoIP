@@ -49,12 +49,62 @@ All output PEQs start flat and alignment delays start at zero.
 
 ## Prototype interaction
 
+The prototype has two pages. **Channels** merges what were separate Outputs and
+Bass management pages: output buses, the meter bank, a channel overview where
+label, role, source, gain, alignment, polarity and mute are edited in place, and
+bass management for the input side. The per-output EQ opens from that overview's
+**EQ** button into its own editor dialog, so the long EQ workspace no longer sits
+between the overview and bass management. **System & presets** is unchanged.
+The Output buses and Bass management blocks are collapsible sections, open on
+desktop and collapsed on narrow screens; toggling one is remembered until reload.
+Above 1500 px the overview and bass management sit side by side within a 1760 px
+measure, so a large display gains a second column rather than ever-wider fields;
+the settings grid goes to three columns above 1800 px. On screens at or below
+900 px the input meter bank starts collapsed.
+
+The visual style is a Windows XP "Luna" treatment on a current layout: a blue
+gradient title bar with Explorer-style page tabs, beige window chrome, white
+list surfaces, blue task-pane panel headers, beveled 3D controls with the
+period's amber hover, sunken fields, XP scrollbars and a Tahoma-first font
+stack. Instrument surfaces stay dark — the EQ graph and the channel meters read
+as a media panel inside the window. The EQ editor opens as an XP window, title
+bar and red close box included. It is defined entirely in `style.css` custom
+properties and surface rules; no markup or behavior depends on it, and spacing,
+hit targets and focus behavior are unchanged. The page declares
+`color-scheme: light` so native checkboxes, selects and scrollbars stay light
+regardless of the host's dark mode.
+
+Data tables follow list-view alignment: each header label sits directly over the
+text of the control beneath it (including the few pixels a `<select>` insets its
+own text), and numeric columns are right-aligned under right-aligned headers.
+The overview's EQ button is a fixed 92 px whatever it reads — `flat`, `3 bands`,
+`off` or `all off` — so the column never reflows as bands are added; the full
+wording is in its tooltip and accessible name.
+
+- **Channel overview:** one row per physical output with its bus, role, speaker
+  source, gain, 0–10 ms alignment, polarity, mute and EQ state. **Bass routing**
+  in its toolbar, beside the global EQ controls, expands the per-channel crossover
+  and sub-send matrix in place; Bass management below keeps redirection on/off,
+  the headroom trim and the LFE branch. Alignment is
+  user-chosen speaker delay, not a processing-latency figure. The EQ button shows
+  how many bands are non-flat, or that EQ is bypassed for that output or globally.
+- **Profile slots A/B:** two complete drafts held in the page for quick comparison.
+  Selecting the other slot stores the live draft in the current slot and makes the
+  other one live; an empty slot is seeded from the draft you were editing.
+  **Copy A → B** overwrites the other slot with the current draft. The **Preset**
+  selector beside the slots loads any preset saved in this browser into the live
+  slot, so A and B can hold two saved presets and switch between them; it lists an
+  Unsaved draft entry whenever the live draft is not a saved preset, and each slot
+  remembers whether its draft was saved. Slots themselves live for the session
+  only; named presets in System & presets remain the durable store.
 - **Outputs:** select one of 16 output strips; assign speaker/sub/unused role,
   choose the speaker source, edit output correction and all 16 PEQ bands. Input
   meters are expanded by default and can be collapsed. Mutes affect synthetic
   output meter activity only. The EQ plot calculates biquad magnitude; it excludes
   crossover response, gain, delay and acoustics and clips its display to ±12 dB.
   Compact meter strips and toolbars bring processing controls closer to the top.
+  Controls are sized to their content rather than stretched to their column, so
+  single fields no longer span a whole panel on wide displays.
   Above 1100 px, the EQ editor shows bands 1–8 and 9–16 side by side; narrower
   screens stack them in order, with tables scrolling internally as needed.
   The dark EQ graph is 420 px tall on desktop (360/320 px on smaller screens),
@@ -72,6 +122,33 @@ All output PEQs start flat and alignment delays start at zero.
   shows the combined response. Numeric controls and the tables stay synchronized.
   Drag edits round frequency to 0.1 Hz, gain to 0.01 dB and Q to 0.001; untouched
   parameters, numeric edits and imported REW precision are preserved.
+  The editor's title bar carries **channel navigation** — previous / next buttons
+  around a selector listing all 16 outputs, plus <kbd>Alt</kbd> + <kbd>←</kbd> /
+  <kbd>→</kbd> — so another output opens in place without closing the editor; the
+  output bank and the overview row follow the selection. This is navigation only.
+  The separate **Swap with output** control now sits with copy/paste and REW
+  import, where its destructive meaning is clear: it exchanges two physical
+  outputs, processing and bass routing included.
+  A **band strip** under the graph gives one numbered chip per band: click one to
+  select it without hunting for its handle, and Left/Right/Home/End move between
+  them from the keyboard. Each chip carries its band's colour, shows bold when the
+  band is away from flat and dotted when it is off, and its tooltip and accessible
+  name read the band's frequency, gain and Q. On a phone the strip wraps to two
+  rows of comfortable targets, which is the practical way to pick a band there.
+  The editor body has a 20 px gutter (12 px on phones) so the graph, toolbars and
+  band tables share one left and right edge inside the dialog window.
+  **Double-clicking a band handle** resets that band, the same edit as its row
+  Reset button. Alongside the per-output EQ enable, the editor carries global
+  controls: **Bypass all EQ** bypasses every output PEQ while retaining each
+  output's own enable and all band values, so switching it off restores the
+  response exactly; **Reset EQ** resets the 16 bands of the selected output; and
+  **Reset all** resets all 256 bands after a confirmation. None of them change
+  gain, alignment, polarity, mute, routing or saved presets. Global bypass is
+  stored in the preset and disables graph editing while it is on.
+  For a headphones bus, **Link ears** groups the two headphone outputs: band
+  edits, resets, REW imports, pastes and the EQ enable apply to both, and turning
+  the link on copies the first ear's EQ to the other. Gain, alignment, polarity
+  and mute stay independent per ear, and unlinking leaves both as they are.
   Every band row has **Reset**, also available in the selected-band editor. Reset
   restores that band's indexed default frequency, bell filter, 0 dB gain and Q 1.
   Its on/off state, other bands, other outputs and global EQ bypass are retained.
@@ -96,7 +173,10 @@ All output PEQs start flat and alignment delays start at zero.
   is no implicit +10 dB gain. Changing the designated LFE input clears sends from
   both affected rows; reassign them explicitly. Speaker-source mapping can still
   select the LFE input; in the future engine this uses the filtered/trimmed LFE branch.
-- **Roles:** converting an output to/from a sub clears that column's sub sends.
+- **Roles:** outputs in a headphones bus read as headphones everywhere they are
+  labelled — `PHONES L` / `PHONES R` on the output bank strip and Headphone in the
+  overview's Role column — rather than as speakers, though they remain speaker-role
+  outputs in the preset. Converting an output to/from a sub clears that column's sub sends.
   Newly assigned subs are silent until sends are enabled. Output correction remains
   with the physical output. Up to all 16 slots can be subs; no extra network channels
   are implied by internal mixing buses.
@@ -125,7 +205,12 @@ The default remains one Speakers bus; headphones are added explicitly. For a
 stereo headphone bus to outputs 15/16. All buses share the same 16-output limit;
 an output cannot belong to two buses. Bus gain and mute sit alongside each output's
 own gain, mute, EQ and alignment.
-New buses use free outputs; headphones prefer the last free pair. Move individual
+New buses use free outputs; headphones default to the last free pair and then
+carry **Left output** and **Right output** selectors on their bus card, listing
+all 16 physical outputs with what currently owns each one. Choosing a free
+output moves that ear onto it; choosing one held by another bus exchanges the
+two channels, with labels, EQ, gain, alignment and bass routing following each
+channel, so no output is ever owned twice. Move individual
 channels using the existing AoIP output selector. Speaker buses share input
 crossover/LFE settings and the global bass bypass; their output correction,
 allocation, levels and mutes are independent. Removing the last speaker bus clears
@@ -340,6 +425,77 @@ is established by this browser prototype.
   and `PROJECT_HANDOFF.md` rollback rules. Consult the latest live state before deployment.
 
 ## Verification of this prototype
+
+- Channel navigation in the EQ editor: previous / next, the output selector and
+  Alt + arrow all move the editor between outputs with the dialog open, and the
+  output bank strip and overview row highlight follow; the swap control, moved out
+  of the title bar and relabelled, still exchanges two outputs with their
+  processing (verified by shaping band 1 on output 1, swapping to 6, and finding
+  the edit on its new home). Checked at 390 and 1280 px.
+- EQ dialog padding and band navigation: the editor body is a padded panel rather
+  than a flush one — measured 21 px of gutter on both sides at 1280 px and 13 px at
+  390 px, with the title bar still full width — and the new band strip was checked
+  by clicking a chip (editor, graph and tables follow), by keyboard (Right and End
+  move the selection and focus together), and for its off / away-from-flat states
+  after disabling one band and shaping another.
+- Output buses rebuilt on one grid: each bus card is now a titled group box with
+  Remove at its top right, then a single label row over a single control row
+  (bus name, output format, Apply format, bus gain, mute) instead of a wrapping
+  toolbar, and the headphone controls are two XP group boxes — Headphone outputs
+  and Headphone source — sharing that same grid, so every label and control lines
+  up down the card. The downmix table now sizes its dB columns instead of
+  spreading across the panel. A scripted check confirms the label baselines and
+  control baselines match within every bus grid at 700, 1280 and 1440 px, and
+  after the rewrite bus gain, mute, rename, Apply format, Undo, adding a
+  headphones bus, moving an ear and switching source mode were all re-tested.
+- Profile bar sizing: the A, B and Copy buttons share one 27 px height so Copy no
+  longer outweighs the slots, and the preset selector sizes to its longest name
+  (capped at 340 px or 34vw) with the full name in its tooltip; checked with a
+  48-character preset name at 390, 1000 and 1280 px without clipping.
+- Preset slots, headphone labelling and bass-box update: 49 Node tests pass,
+  including new coverage that a headphones-bus output reports PHONES L / PHONES R
+  while speakers, subs and spares are unchanged, and that the label helper rejects
+  an out-of-range output. Browser checks saved two presets, loaded one into each
+  slot from the profile bar, and confirmed switching slots restores each preset's
+  alignment and its saved/unsaved status; the bass matrix opened and closed from
+  the overview toolbar at 390, 1000 and 1440 px with the page free of horizontal
+  overflow; the alignment audit was re-run and its two new findings (the headphone
+  output note and the downmix table's numeric headers) fixed.
+- Luna theme and alignment update: 48 Node tests pass, app syntax checked.
+  Browser checks at 390, 800, 1000, 1440 and 1920 px covered the retheme end to
+  end: EQ button width held at 92 px across flat / 3 bands / global-bypass
+  states, header tabs gained vertical padding and read as tabs against the title
+  bar, an automated pass compared block left and right edges, inline control
+  baselines, and every table header against the control text in its column, and
+  the fixes it found (page-level heading inset, panel headers not spanning their
+  panel, select-column header insets, the overview table clipping its EQ column
+  below 1100 px) were applied and re-measured clean. Functional smoke test after
+  the retheme: A/B slot switching, adding a headphones bus, moving an ear to
+  output 10, linking ears and double-click band reset all still behave. No
+  console errors or warnings.
+- Headphone routing, density and theme update: 48 Node tests pass. New coverage:
+  moving a bus onto chosen physical outputs carrying gain, alignment and labels,
+  swapping the two ears, exchanging with an occupied output without doubling
+  ownership, and rejecting duplicate or out-of-range choices. Browser checks at
+  390, 800, 1280, 1440 and 1920 px moved a headphone ear onto a free output and
+  onto an occupied speaker output (the displaced speaker took the freed slot),
+  and re-ran the alignment audit over every toolbar, header and inline row with
+  no remaining misalignment and no horizontal page overflow.
+- Merged-overview update: 44 Node tests pass, along with the app syntax check.
+  New coverage: per-output and all-output EQ reset (retaining band on/off states,
+  gain, alignment and routing), global bypass round-tripping the calculated
+  response exactly, headphone ear linking and unlinking, and A/B slot seeding,
+  switching, copying and argument checks.
+- Browser checks at 390, 1100, 1440, 1680 and 1920 px: the EQ dialog opened from
+  the overview, double-click band reset, global bypass and restore, per-output
+  reset, A/B slot switching with an alignment edit held per slot, adding a
+  headphones bus and linking/unlinking its ears, preset save/load with the new
+  fields, and direct mode disabling the overview and EQ entry. A scripted pass
+  over every toolbar, header and inline control row found no remaining vertical
+  or horizontal misalignment, and no page overflowed horizontally. At 390 px the
+  Channels page measured about 2,190 px tall with the collapsible sections closed,
+  against about 4,325 px when they were all expanded. No browser errors or
+  warnings were logged. Local UI behavior only; nothing was applied to the Pi.
 
 - Multi-bus/reset update: all 31 Node tests pass, along with JavaScript syntax and
   whitespace checks. Luna agents implemented the change; Astra Medium reviewed

@@ -6,7 +6,7 @@ export function createConfig() {
   const sources = [0, 1, 2, null, 4, 5, 6, 7, 8, 9, 10, 11, null, null, null, null];
   const config = {
     version: 2, name: 'Immersive · stereo subs', mode: 'dsp', source: 'usb', sampleRate: 48000,
-    headroomDb: -18, bassEnabled: true,
+    headroomDb: -18, bassEnabled: true, eqBypass: false,
     lfe: { input: 3, lowpassHz: 120, slope: 24, trimDb: 0 },
     inputs: labels.map(label => ({ label, crossover: true, highpassHz: 80, lowpassHz: 80, slope: 24 })),
     outputs: sources.map((source, i) => ({
@@ -60,6 +60,7 @@ export function validateConfig(c) {
   label(c.name);
   if (!['dsp', 'direct'].includes(c.mode) || !['usb', 'aoip'].includes(c.source)) fail('Invalid mode or source');
   num(c.headroomDb, -36, 0, 'Headroom trim'); bool(c.bassEnabled, 'Bass management');
+  if (c.eqBypass !== undefined) bool(c.eqBypass, 'Global EQ bypass');
   if (!Array.isArray(c.inputs) || c.inputs.length !== 16 || !Array.isArray(c.outputs) || c.outputs.length !== 16) fail('Exactly 16 inputs and 16 outputs required');
   if (!c.lfe) fail('Missing LFE settings');
   index(c.lfe.input, 'LFE input'); num(c.lfe.lowpassHz, 20, 250, 'LFE low-pass'); slope(c.lfe.slope); num(c.lfe.trimDb, -24, 12, 'LFE trim');
@@ -96,6 +97,7 @@ export function validateConfig(c) {
       if (!Array.isArray(bus.downmixMatrix) || bus.downmixMatrix.length !== 16 || bus.downmixMatrix.some(row => !Array.isArray(row) || row.length !== 2)) fail('Headphones downmix matrix must be 16 by 2');
       bus.downmixMatrix.flat().forEach((v, i) => { if (v !== null) num(v, -60, 12, `Headphones matrix ${i}`); });
       bool(bus.sourcePreCrossover, 'Headphones pre-crossover source');
+      if (bus.linkEq !== undefined) bool(bus.linkEq, 'Headphones EQ link');
       if (!bus.sourcePreCrossover) fail('Headphones source must be pre-crossover');
     }
   });
@@ -121,6 +123,7 @@ export function parsePreset(text) {
 export function migrateV1Preset(legacy) {
   if (!legacy || legacy.version !== 1) throw new Error('Expected a version 1 UI preset');
   const result = structuredClone(legacy); result.version = 2;
+  if (result.eqBypass === undefined) result.eqBypass = false;
   const active = result.outputs.map((output, i) => output.role === 'unused' ? null : i).filter(i => i !== null);
   result.buses = [
     { id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds: active, layoutId: 'custom', gainDb: 0, mute: false }
@@ -149,8 +152,8 @@ export function bandResponse(b, frequency) {
   return 10 * Math.log10(power(B) / power(D));
 }
 
-export function eqResponse(output, frequency) {
-  return output.eqEnabled ? output.bands.reduce((sum, b) => sum + bandResponse(b, frequency), 0) : 0;
+export function eqResponse(output, frequency, bypassAll = false) {
+  return output.eqEnabled && !bypassAll ? output.bands.reduce((sum, b) => sum + bandResponse(b, frequency), 0) : 0;
 }
 
 export function subSumBoundDb(config, destination) {

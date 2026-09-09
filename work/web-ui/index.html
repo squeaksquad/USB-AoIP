@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="light">
   <title>USB 16x16 · Studio processor</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237edac4'/%3E%3Cpath d='M9 10v12m7-16v20m7-16v12' stroke='%2310191a' stroke-width='3'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
@@ -11,12 +11,12 @@
   <header class="topbar">
     <a class="brand" href="#outputs"><span class="brand-icon">≋</span><span>USB <strong>16x16</strong><small>BRYAN DIMAIO</small></span></a>
     <nav aria-label="Processor pages">
-      <button data-tab="outputs" class="active">Outputs</button><button data-tab="bass">Bass management</button><button data-tab="settings">System & presets</button>
+      <button data-tab="outputs" class="active">Channels</button><button data-tab="settings">System &amp; presets</button>
     </nav>
     <span class="preview-pill"><i></i> DESIGN PREVIEW</span>
   </header>
   <main>
-    <div class="connection-status"><span>48 kHz · 16 × 16</span><span>Not connected · Local draft · Simulated meters</span></div>
+    <div class="connection-status"><span>48 kHz · 16 × 16</span><div id="profile-slots" class="profile-slots"></div><span>Not connected · Local draft · Simulated meters</span></div>
     <section class="signalbar" aria-label="Signal path">
       <div><span class="overline">MODE</span><div class="segmented"><button data-mode="direct">Direct bridge</button><button data-mode="dsp">DSP processor</button></div></div>
       <span class="flow-arrow">→</span>
@@ -29,15 +29,18 @@
       <details class="input-meters" id="input-meters" open><summary>Input meters · selected source · simulated</summary><div id="input-bank" class="channel-bank"></div></details>
       <div id="bus-controls"></div>
       <div id="layout-controls"></div>
-      <div class="section-heading"><div><h2>Output bank <span>01—16</span></h2><p>Select a channel to edit its processing.</p></div><button id="meter-toggle" class="quiet">Pause demo meters</button></div>
+      <div class="section-heading"><div><h2>Output bank <span>01—16</span></h2><p>Select a channel; edit it in the overview below or open its EQ.</p></div><button id="meter-toggle" class="quiet">Pause demo meters</button></div>
       <div id="channel-bank" class="channel-bank"></div>
-      <section class="panel inspector" id="inspector"></section>
+      <div class="overview-layout">
+        <section class="panel" id="channel-overview"></section>
+        <div id="bass-page"></div>
+      </div>
     </section>
-    <section id="bass-page" class="page" hidden></section>
     <section id="settings-page" class="page" hidden></section>
     <footer><span>USB 16x16 <span class="muted">/ Local design prototype</span></span><span id="draft-status">Draft · unsaved</span></footer>
   </main>
   <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="eq-dialog" class="eq-dialog" aria-labelledby="eq-dialog-title"><section class="inspector" id="inspector"></section></dialog>
   <dialog id="rew-dialog" aria-labelledby="rew-title">
     <div class="section-heading"><h2 id="rew-title">Import REW EQ</h2><button data-action="rew-close" aria-label="Close REW import">Close</button></div>
     <p id="rew-target"></p>

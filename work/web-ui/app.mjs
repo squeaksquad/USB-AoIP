@@ -1,14 +1,22 @@
-import { createConfig, validateConfig, parsePreset, setOutputRole, bandResponse, eqResponse, subSumBoundDb } from './model.mjs';
+import { CHANNELS, createConfig, validateConfig, parsePreset, setOutputRole, bandResponse, eqResponse, subSumBoundDb } from './model.mjs';
 import { LAYOUTS, currentLayout, applyLayout, swapOutputs, applyCrossover, copyChannel, pasteChannel, parseRew, dragEqBand, EQ_RANGE_DB, SERVICE_COMMANDS, journalCommand } from './workflows.mjs';
 import { resetBand } from './reset-band.mjs';
-import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, createSpeakerBus, removeBus } from './buses.mjs';
+import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, createSpeakerBus, removeBus, setBusEqLink, setBusOutputs, outputRoleLabel } from './buses.mjs';
+import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
+import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
 let channelClipboard = null, pasteScope = 'processing', layoutUndo = null, rewParsed = null;
-let crossoverScope = 'all', crossoverHz = '80', busUndo = null;
+let crossoverScope = 'all', crossoverHz = '80', busUndo = null, bassBoxOpen = false;
 const crossoverSelection = new Set();
 let selectedBand = 0, eqDrag = null, eqObserver;
 let logService = 'all', logQuery = '';
+let profileState = null;
+// Each slot remembers whether its draft was saved, so recalling one does not read as edited.
+const slotDirty = { A: true, B: true };
+// Collapsible page sections: open on desktop, collapsed on narrow screens, then user-controlled.
+const sectionOpen = { buses: true, bass: true };
+const sectionAttr = name => sectionOpen[name] ? 'open' : '';
 const logSnapshots = {all:'',aes67:'',usb:''};
 const bandColors = ['#f39364','#e6b35c','#d9d464','#add875','#6bdaa3','#65d5c8','#68b8eb','#849af3','#aa92ec','#cd8ee0','#e486b9','#ed8694','#c6ac83','#95b9aa','#a6add5','#b6c878'];
 const storageKey = 'usb16x16-design-presets-v1';
@@ -32,7 +40,7 @@ function markDraft() { dirty = true; $('#draft-status').textContent = 'Draft · 
 function render() {
   const isDirect = config.mode === 'direct';
   for (const button of document.querySelectorAll('[data-tab]')) { const active = button.dataset.tab === tab; button.classList.toggle('active', active); button.setAttribute('aria-current', active ? 'page' : 'false'); }
-  for (const name of ['outputs', 'bass', 'settings']) $(`#${name}-page`).hidden = name !== tab;
+  for (const name of ['outputs', 'settings']) $(`#${name}-page`).hidden = name !== tab;
   for (const button of document.querySelectorAll('[data-mode]')) { const active = button.dataset.mode === config.mode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', active); }
   for (const button of document.querySelectorAll('[data-source]')) { const active = button.dataset.source === config.source; button.classList.toggle('active', active); button.setAttribute('aria-pressed', active); button.disabled = isDirect; }
   $('#flow-middle').textContent = isDirect ? 'USB ↔ AoIP transport' : 'Bass management + output DSP';
@@ -40,28 +48,96 @@ function render() {
   $('#flow-output').textContent = isDirect ? '16 × 16 duplex' : '16 AoIP outputs';
   $('#mode-note').textContent = isDirect ? 'Previewing direct mode. DSP edits are disabled; the DSP draft is retained. No device has been switched.' : 'Previewing DSP mode. Switching source or mode on hardware will require a controlled audio interruption.';
   $('#draft-status').textContent = dirty ? 'Draft · unsaved' : 'Preset saved locally';
-  renderBuses(); renderLayout(); renderBank(); renderInspector(); renderBass(); renderSettings(); updateMeters();
+  renderSlots(); renderBuses(); renderLayout(); renderBank(); renderOverview(); renderInspector(); renderBass(); renderSettings(); updateMeters();
+}
+
+function renderSlots() {
+  const summary = slotSummary(profileState, config), other = SLOTS.find(name => name !== profileState.active);
+  const names = Object.keys(presets());
+  const saved = names.includes(config.name) && !dirty;
+  const choices = [...(saved ? [] : [['', dirty ? 'Unsaved draft' : config.name]]), ...names.map(name => [name, name])];
+  $('#profile-slots').innerHTML = `<span class="overline">PROFILE</span>${summary.map(slot => `<button class="slot ${slot.active ? 'active' : ''}" data-action="slot-switch" data-slot="${slot.name}" aria-pressed="${slot.active}" title="${slot.filled ? esc(slot.label) : 'Empty · seeded from the current draft'}">${slot.name}</button>`).join('')}<button class="quiet" data-action="slot-copy" title="Overwrite slot ${other} with the current draft">Copy ${profileState.active} → ${other}</button>
+    <label class="field slot-preset"><span>Preset</span><select id="slot-preset" title="${esc(saved ? config.name : dirty ? `Unsaved draft · ${config.name}` : config.name)}" aria-label="Preset loaded into slot ${profileState.active}" ${disabled(!names.length && saved)}>${options(choices, saved ? config.name : '')}</select></label>
+    <small>${names.length ? `Loads a saved preset into slot ${profileState.active}` : 'Save a preset to load it into a slot'}</small>`;
+}
+
+function renderOverview() {
+  const off = config.mode === 'direct';
+  const roleOptions = [['speaker','Speaker'],['sub','Subwoofer'],['unused','Unused']];
+  $('#channel-overview').innerHTML = `<div class="section-heading"><div><h2>Channel overview <span>level · alignment · bass · EQ</span></h2><p>Edit every output in place. Open <strong>Bass routing</strong> for per-channel crossovers and sub sends; EQ opens in its own editor.</p></div><div class="toolbar"><button class="quiet" data-action="bass-toggle" aria-expanded="${bassBoxOpen}" aria-controls="bass-matrix-box" ${disabled(off)}>${bassBoxOpen ? '▾' : '▸'} Bass routing</button><button class="quiet" data-action="eq-bypass-all" aria-pressed="${Boolean(config.eqBypass)}" ${disabled(off)}>${config.eqBypass ? 'All EQ bypassed' : 'Bypass all EQ'}</button><button class="quiet" data-action="eq-reset-all" ${disabled(off)}>Reset all EQ</button></div></div>
+    <div id="bass-matrix-box" class="bass-box" ${bassBoxOpen ? '' : 'hidden'}></div>
+    <fieldset ${disabled(off)} style="border:0;padding:0;margin:0;min-width:0"><div class="table-scroll"><table class="overview-table"><thead><tr><th>Out</th><th>Label</th><th>Bus</th><th>Role</th><th>Source</th><th>Gain · dB</th><th>Alignment · ms</th><th>Ø</th><th>Mute</th><th>EQ</th></tr></thead><tbody>${config.outputs.map((o, i) => {
+      const owner = config.buses?.find(bus => bus.id === o.busId), headphone = owner?.kind === 'headphones';
+      const active = o.bands.filter(b => b.enabled && b.gainDb !== 0).length;
+      const state = config.eqBypass ? 'all off' : !o.eqEnabled ? 'off' : active ? `${active} band${active === 1 ? '' : 's'}` : 'flat';
+      const stateTitle = config.eqBypass ? 'Global EQ bypass is on' : !o.eqEnabled ? 'EQ bypassed for this output' : active ? `${active} band${active === 1 ? '' : 's'} away from flat` : 'All bands flat';
+      return `<tr class="${i === selected ? 'row-selected' : ''} ${o.role === 'unused' ? 'row-unused' : ''}">
+        <td><button class="quiet row-select" data-select="${i}" aria-label="Select output ${i + 1}" aria-pressed="${i === selected}">${pad(i)}</button></td>
+        <td><input data-out="label" data-out-index="${i}" value="${esc(o.label)}" maxlength="64" aria-label="Output ${i + 1} label" required></td>
+        <td class="muted">${owner ? esc(owner.label) : '—'}</td>
+        <td>${headphone ? '<span class="muted">Headphone</span>' : `<select data-out="role" data-out-index="${i}" aria-label="Output ${i + 1} role">${options(roleOptions, o.role)}</select>`}</td>
+        <td>${headphone ? '<span class="muted">Bus tap</span>' : `<select data-out="source" data-out-index="${i}" aria-label="Output ${i + 1} source" ${disabled(o.role !== 'speaker')}>${options(inputOptions(), o.source)}</select>`}</td>
+        <td>${number(`data-out="gainDb" data-out-index="${i}" aria-label="Output ${i + 1} gain"`, o.gainDb, -60, 12, .1)}</td>
+        <td>${number(`data-out="delayMs" data-out-index="${i}" aria-label="Output ${i + 1} alignment delay"`, o.delayMs, 0, 10, .01)}</td>
+        <td><button class="quiet cell-toggle" data-action="polarity" data-out-index="${i}" aria-pressed="${o.invert}" aria-label="Invert output ${i + 1} polarity">Ø</button></td>
+        <td><button class="quiet cell-toggle" data-mute="${i}" aria-pressed="${o.mute}" aria-label="Mute output ${i + 1}" ${disabled(o.role === 'unused')}>M</button></td>
+        <td><button class="eq-open" data-eq-open="${i}" aria-label="Open EQ for output ${i + 1}: ${stateTitle}" title="${stateTitle}">EQ<small>${state}</small></button></td></tr>`;
+    }).join('')}</tbody></table></div><p class="route-note">Alignment is user-chosen speaker delay, not a processing-latency figure. Gain, alignment and mute apply to the physical output; bus level sits above them.</p></fieldset>`;
+  renderBassMatrix();
 }
 
 function renderBuses() {
   const buses = config.buses || [];
   const off = config.mode === 'direct';
   const freeCount = config.outputs.filter(o=>o.busId===null).length;
-  const busOptions = buses.map(b => [b.id, `${b.label} · ${b.outputIds.map(i => pad(i)).join(', ')}`]);
-  $('#bus-controls').innerHTML = `<section class="panel bus-panel"><div class="section-heading"><div><h2>Output buses <span>shared 16-output budget</span></h2><p>Each physical output belongs to one bus. Formats apply only to the selected bus; unrelated buses keep their routing.</p></div><div class="toolbar"><button data-action="bus-add-speakers" ${disabled(off||freeCount<2)}>Add speaker bus</button><button data-action="bus-add-headphones" ${disabled(off||freeCount<2)}>Add headphones</button></div></div><fieldset ${disabled(off)} style="border:0;padding:0;margin:0;min-width:0">
-    <div class="bus-list">${buses.map(bus => { const headphone=bus.kind==='headphones'; const layoutOptions=[['custom','Custom mapping'],...LAYOUTS.filter(l=>!headphone||l.routing.length===2).map(l=>[l.id,l.label])]; return `<article class="bus-card ${headphone?'headphone-bus':''}" data-bus-card="${esc(bus.id)}">
-      <div class="bus-card-head"><div><strong>${esc(bus.label)}</strong><small>${headphone?'Headphone stereo · raw pre-crossover tap':'Speaker bus'} · outputs ${bus.outputIds.map(i=>pad(i)).join(', ')}</small></div><div class="toolbar">${field('Bus name',`<input data-bus="${esc(bus.id)}" data-bus-param="label" value="${esc(bus.label)}" maxlength="64" aria-label="${esc(bus.label)} bus name">`)}${field('Format',`<select data-bus="${esc(bus.id)}" data-bus-param="layout">${options(layoutOptions,bus.layoutId||'custom')}</select>`)}<button data-action="bus-apply" data-bus-id="${esc(bus.id)}">Apply format</button><button class="quiet" data-action="bus-remove" data-bus-id="${esc(bus.id)}">Remove</button></div></div>
-      <div class="bus-controls">${field('Bus gain · dB',number(`data-bus="${esc(bus.id)}" data-bus-param="gainDb" aria-label="${esc(bus.label)} bus gain"`,bus.gainDb,-60,12,.1))}<label class="checkbox-label"><input type="checkbox" data-bus="${esc(bus.id)}" data-bus-param="mute" ${checked(bus.mute)} aria-label="Mute ${esc(bus.label)} bus">Mute bus</label>${headphone?`<span class="raw-tap">RAW TAP · before speaker crossovers</span>`:''}</div>
-      ${headphone ? renderHeadphoneControls(bus) : ''}</article>`; }).join('')}</div>
-    <div class="bus-budget"><strong>${config.outputs.filter(o=>o.busId!==null).length}/16 outputs allocated</strong><span>${config.outputs.filter(o=>o.busId===null).length} available · apply/undo is scoped per bus</span><button class="quiet" data-action="bus-undo" ${disabled(!busUndo)}>Undo last bus format</button></div></fieldset></section>`;
+  const allocated = config.outputs.filter(o=>o.busId!==null).length;
+  const action = (label, content) => `<div class="field"><span class="field-spacer" aria-hidden="true">${label}</span>${content}</div>`;
+  $('#bus-controls').innerHTML = `<details class="panel bus-panel page-section" data-section="buses" ${sectionAttr('buses')}><summary class="section-summary">Output buses <small>${allocated}/16 outputs allocated · ${buses.length} bus${buses.length===1?'':'es'}</small></summary>
+    <div class="section-heading"><div><p>Each physical output belongs to one bus. Formats apply only to the selected bus; unrelated buses keep their routing. Bus level sits above each output's own gain.</p></div><div class="toolbar"><button data-action="bus-add-speakers" ${disabled(off||freeCount<2)}>Add speaker bus</button><button data-action="bus-add-headphones" ${disabled(off||freeCount<2)}>Add headphones</button></div></div>
+    <fieldset ${disabled(off)} style="border:0;padding:0;margin:0;min-width:0">
+    <div class="bus-list">${buses.map(bus => {
+      const headphone = bus.kind === 'headphones';
+      const layoutOptions = [['custom','Custom mapping'],...LAYOUTS.filter(l=>!headphone||l.routing.length===2).map(l=>[l.id,l.label])];
+      return `<article class="bus-card ${headphone?'headphone-bus':''}" data-bus-card="${esc(bus.id)}">
+      <header class="bus-card-title"><div><strong>${esc(bus.label)}</strong><small>${headphone?'Headphone stereo · raw tap before speaker crossovers':'Speaker bus'} · outputs ${bus.outputIds.map(i=>pad(i)).join(', ')}</small></div><button class="quiet" data-action="bus-remove" data-bus-id="${esc(bus.id)}">Remove bus</button></header>
+      <div class="bus-grid">
+        ${field('Bus name',`<input data-bus="${esc(bus.id)}" data-bus-param="label" value="${esc(bus.label)}" maxlength="64" aria-label="${esc(bus.label)} bus name">`)}
+        ${field('Output format',`<select data-bus="${esc(bus.id)}" data-bus-param="layout" aria-label="${esc(bus.label)} output format">${options(layoutOptions,bus.layoutId||'custom')}</select>`)}
+        ${action('Apply', `<button data-action="bus-apply" data-bus-id="${esc(bus.id)}">Apply format</button>`)}
+        ${field('Bus gain · dB',number(`data-bus="${esc(bus.id)}" data-bus-param="gainDb" aria-label="${esc(bus.label)} bus gain"`,bus.gainDb,-60,12,.1))}
+        ${action('Mute', `<label class="checkbox-label"><input type="checkbox" data-bus="${esc(bus.id)}" data-bus-param="mute" ${checked(bus.mute)} aria-label="Mute ${esc(bus.label)} bus">Mute bus</label>`)}
+      </div>
+      ${headphone ? renderHeadphoneControls(bus) : ''}</article>`;
+    }).join('')}</div>
+    <div class="bus-budget"><strong>${allocated}/16 outputs allocated</strong><span>${freeCount} available · apply/undo is scoped per bus</span><button class="quiet" data-action="bus-undo" ${disabled(!busUndo)}>Undo last bus format</button></div></fieldset></details>`;
+}
+
+/** Every physical output, annotated with what currently owns it. */
+function outputSlotOptions(busId) {
+  return config.outputs.map((output, i) => {
+    const owner = config.buses?.find(bus => bus.outputIds.includes(i));
+    const note = !owner ? 'free' : owner.id === busId ? 'this bus' : `${owner.label} · swaps`;
+    return [i, `${pad(i)} · ${output.label} (${note})`];
+  });
 }
 
 function renderHeadphoneControls(bus) {
   const pairOptions = inputOptions();
   const matrix = bus.downmixMatrix || Array.from({length:16},()=>[null,null]);
-  return `<div class="headphone-controls"><div class="field-row"><span class="overline">Headphone source</span><label class="checkbox-label"><input type="radio" name="headphone-mode-${esc(bus.id)}" value="pair" data-headphone-mode="${esc(bus.id)}" ${bus.inputMode==='pair'?'checked':''}>Independent stereo pair</label><label class="checkbox-label"><input type="radio" name="headphone-mode-${esc(bus.id)}" value="downmix" data-headphone-mode="${esc(bus.id)}" ${bus.inputMode==='downmix'?'checked':''}>Surround stereo downmix</label></div>
-    <div class="field-row">${field('Left input',`<select data-headphone-pair="${esc(bus.id)}" data-ear="0" ${disabled(bus.inputMode!=='pair')}>${options(pairOptions,bus.inputPair?.[0]??0)}</select>`)}${field('Right input',`<select data-headphone-pair="${esc(bus.id)}" data-ear="1" ${disabled(bus.inputMode!=='pair')}>${options(pairOptions,bus.inputPair?.[1]??1)}</select>`)}</div>
-    <details class="downmix-editor" ${bus.inputMode==='downmix'?'open':''}><summary>Advanced downmix levels · pre-crossover input to each ear</summary><div class="table-scroll"><table><thead><tr><th>Input</th><th>Left · dB</th><th>Right · dB</th></tr></thead><tbody>${matrix.map((row,i)=>`<tr><td>${pad(i)} · ${esc(config.inputs[i].label)}${i===config.lfe.input?' · LFE':''}</td><td>${number(`data-downmix="${esc(bus.id)}" data-input-index="${i}" data-ear="0" aria-label="${esc(bus.label)} ${pad(i)} left downmix"`,row?.[0]??'',-60,12,.1)}</td><td>${number(`data-downmix="${esc(bus.id)}" data-input-index="${i}" data-ear="1" aria-label="${esc(bus.label)} ${pad(i)} right downmix"`,row?.[1]??'',-60,12,.1)}</td></tr>`).join('')}</tbody></table></div><small>Blank means this input is excluded. Levels are routing coefficients for the UI draft; no binaural processing is implied.</small></details></div>`;
+  const pairOff = bus.inputMode !== 'pair';
+  return `<fieldset class="bus-sub"><legend>Headphone outputs</legend>
+    <div class="bus-grid">
+      ${field('Left output',`<select data-bus-output="${esc(bus.id)}" data-ear="0" aria-label="${esc(bus.label)} left physical output">${options(outputSlotOptions(bus.id),bus.outputIds[0])}</select>`)}
+      ${field('Right output',`<select data-bus-output="${esc(bus.id)}" data-ear="1" aria-label="${esc(bus.label)} right physical output">${options(outputSlotOptions(bus.id),bus.outputIds[1])}</select>`)}
+    </div>
+    <p class="hint">Defaults to the last free pair. Choosing an output held by another bus exchanges the two channels, with all processing following each one.</p></fieldset>
+  <fieldset class="bus-sub"><legend>Headphone source</legend>
+    <div class="bus-grid">
+      <div class="field"><span>Source mode</span><div class="radio-row"><label class="checkbox-label"><input type="radio" name="headphone-mode-${esc(bus.id)}" value="pair" data-headphone-mode="${esc(bus.id)}" ${bus.inputMode==='pair'?'checked':''}>Stereo pair</label><label class="checkbox-label"><input type="radio" name="headphone-mode-${esc(bus.id)}" value="downmix" data-headphone-mode="${esc(bus.id)}" ${bus.inputMode==='downmix'?'checked':''}>Surround downmix</label></div></div>
+      ${field('Left input',`<select data-headphone-pair="${esc(bus.id)}" data-ear="0" ${disabled(pairOff)}>${options(pairOptions,bus.inputPair?.[0]??0)}</select>`)}
+      ${field('Right input',`<select data-headphone-pair="${esc(bus.id)}" data-ear="1" ${disabled(pairOff)}>${options(pairOptions,bus.inputPair?.[1]??1)}</select>`)}
+    </div>
+    <details class="downmix-editor" ${bus.inputMode==='downmix'?'open':''}><summary>Advanced downmix levels · pre-crossover input to each ear</summary><div class="table-scroll"><table><thead><tr><th>Input</th><th>Left · dB</th><th>Right · dB</th></tr></thead><tbody>${matrix.map((row,i)=>`<tr><td>${pad(i)} · ${esc(config.inputs[i].label)}${i===config.lfe.input?' · LFE':''}</td><td>${number(`data-downmix="${esc(bus.id)}" data-input-index="${i}" data-ear="0" aria-label="${esc(bus.label)} ${pad(i)} left downmix"`,row?.[0]??'',-60,12,.1)}</td><td>${number(`data-downmix="${esc(bus.id)}" data-input-index="${i}" data-ear="1" aria-label="${esc(bus.label)} ${pad(i)} right downmix"`,row?.[1]??'',-60,12,.1)}</td></tr>`).join('')}</tbody></table></div><small>Blank means this input is excluded. Levels are routing coefficients for the UI draft; no binaural processing is implied.</small></details></fieldset>`;
 }
 
 function renderLayout() {
@@ -71,39 +147,39 @@ function renderLayout() {
 
 function renderBank() {
   $('#input-bank').innerHTML = config.inputs.map((o,i)=>`<div class="strip"><span class="channel-number">${pad(i)}</span><strong class="channel-name">${esc(o.label)}</strong><span class="meter" aria-hidden="true" style="display:block"><i id="input-meter-${i}"></i></span><span id="input-level-${i}" class="meter-value">—</span></div>`).join('');
-  $('#channel-bank').innerHTML = config.outputs.map((o, i) => `<div class="strip ${o.role} ${i === selected ? 'selected' : ''}">
-    <button class="strip-select" data-select="${i}" aria-label="Edit output ${i + 1}: ${esc(o.label)}" aria-pressed="${i === selected}"><span class="channel-number">${pad(i)}</span><strong class="channel-name">${esc(o.label)}</strong><span class="role-label">${o.role === 'unused' ? 'SPARE' : o.role.toUpperCase()}</span><span class="meter" aria-hidden="true" style="display:block"><i id="meter-${i}"></i></span><span id="level-${i}" class="meter-value">—</span></button>
-    <button class="mute" data-mute="${i}" aria-label="Mute output ${i + 1}" aria-pressed="${o.mute}" ${disabled(config.mode === 'direct' || o.role === 'unused')}>M</button></div>`).join('');
+  $('#channel-bank').innerHTML = config.outputs.map((o, i) => { const role = outputRoleLabel(config, i); return `<div class="strip ${o.role} ${role.kind} ${i === selected ? 'selected' : ''}">
+    <button class="strip-select" data-select="${i}" aria-label="Edit output ${i + 1}: ${esc(o.label)}, ${role.long}" aria-pressed="${i === selected}"><span class="channel-number">${pad(i)}</span><strong class="channel-name">${esc(o.label)}</strong><span class="role-label">${role.short}</span><span class="meter" aria-hidden="true" style="display:block"><i id="meter-${i}"></i></span><span id="level-${i}" class="meter-value">—</span></button>
+    <button class="mute" data-mute="${i}" aria-label="Mute output ${i + 1}" aria-pressed="${o.mute}" ${disabled(config.mode === 'direct' || o.role === 'unused')}>M</button></div>`; }).join('');
 }
 
 function renderInspector() {
   endEqDrag(true);
   eqObserver?.disconnect();
   const o = config.outputs[selected], off = config.mode === 'direct', owner = config.buses?.find(b=>b.id===o.busId), headphone = owner?.kind === 'headphones', ear = owner ? owner.outputIds.indexOf(selected) : -1;
-  $('#inspector').innerHTML = `<div class="inspector-head"><div><h2><span class="badge">${pad(selected)}</span>${esc(o.label)}</h2><p>AoIP output ${selected + 1} · ${o.role === 'sub' ? 'Independent subwoofer correction' : o.role === 'unused' ? 'Assign a role to use this output' : 'Independent speaker correction'}</p></div>${field('AoIP output', `<select id="out-destination" title="Swap output assignments, including processing and bass sends" ${disabled(off)}>${options(config.outputs.map((v,i)=>[i,`${pad(i)} · ${v.label}${i===selected?'':' (swap)'}`]),selected)}</select>`)}</div>
-    <fieldset ${disabled(off)} style="border:0;padding:0;margin:0;min-width:0">
-    <div class="channel-tools"><button data-action="channel-copy">Copy channel</button><label class="field"><span>Paste scope</span><select id="paste-scope">${options([['processing','All output processing'],['eq','EQ only']],pasteScope)}</select></label><button data-action="channel-paste" ${disabled(!channelClipboard)}>Paste${channelClipboard?` from ${esc(channelClipboard.label)}`:''}</button><button data-action="rew-open">Import REW EQ</button><small>Copies EQ, gain, delay, mute and polarity. Destination label and routing stay unchanged.</small></div>
-    <div class="output-controls">
-      ${field('Output label', `<input id="out-label" data-out="label" value="${esc(o.label)}" maxlength="64" required>`)}
-      ${headphone ? field('Bus route', `<input value="${ear===0?'Left ear':ear===1?'Right ear':'Headphone'} · ${owner.inputMode==='pair'?'pair':'downmix'}" disabled aria-label="Headphone bus route">`) : field('Output role', `<select id="out-role" data-out="role">${options([['speaker','Speaker'],['sub','Subwoofer'],['unused','Unused']],o.role)}</select>`)}
-      ${headphone ? field('Speaker source', `<input value="Raw pre-crossover headphone bus" disabled aria-label="Headphone raw source">`) : field('Speaker source', `<select id="out-source" data-out="source" ${disabled(o.role !== 'speaker')}>${options(inputOptions(),o.source)}</select>`)}
-      ${field('Gain · dB', number('id="out-gain" data-out="gainDb"',o.gainDb,-60,12,.1))}
-      ${field('Alignment · ms', number('id="out-delay" data-out="delayMs"',o.delayMs,0,10,.01))}
-      <div class="toolbar"><button data-action="polarity" aria-pressed="${o.invert}" title="Invert output polarity">Ø Invert</button><button data-mute="${selected}" aria-pressed="${o.mute}">Mute</button></div>
-    </div>
-    <div class="eq-title"><div><h3>Parametric EQ <span class="muted">/ 16 bands</span></h3><p>Calculated PEQ response only · excludes crossovers, output gain and room response</p></div><button class="quiet" data-action="eq-toggle" aria-pressed="${o.eqEnabled}">${o.eqEnabled ? 'EQ enabled' : 'EQ bypassed'}</button></div>
+  const bypassed = Boolean(config.eqBypass);
+  const linked = headphone && Boolean(owner.linkEq);
+  $('#inspector').innerHTML = `<div class="inspector-head"><div><h2 id="eq-dialog-title"><span class="badge">${pad(selected)}</span>${esc(o.label)}</h2><p>AoIP output ${selected + 1} · ${headphone ? `${ear===0?'Left ear':ear===1?'Right ear':'Headphone'} · ${esc(owner.label)}` : o.role === 'sub' ? 'Independent subwoofer correction' : o.role === 'unused' ? 'Assign a role to use this output' : 'Independent speaker correction'}</p></div>
+    <div class="channel-nav" role="group" aria-label="Go to another output"><button data-action="channel-prev" aria-label="Edit the previous output" title="Previous output (Alt + ←)">◀</button><select id="channel-jump" aria-label="Edit another output" title="Open another output in this editor">${options(config.outputs.map((v,i)=>[i,`${pad(i)} · ${v.label}`]),selected)}</select><button data-action="channel-next" aria-label="Edit the next output" title="Next output (Alt + →)">▶</button></div>
+    <button class="quiet" data-action="eq-close" aria-label="Close EQ editor">Close</button></div>
+    <fieldset class="eq-body" ${disabled(off)}>
+    <div class="channel-tools"><button data-action="channel-copy">Copy channel</button><label class="field"><span>Paste scope</span><select id="paste-scope">${options([['processing','All output processing'],['eq','EQ only']],pasteScope)}</select></label><button data-action="channel-paste" ${disabled(!channelClipboard)}>Paste${channelClipboard?` from ${esc(channelClipboard.label)}`:''}</button><button data-action="rew-open">Import REW EQ</button>${field('Swap with output', `<select id="out-destination" title="Exchange this channel with another physical output, including processing and bass sends">${options(config.outputs.map((v,i)=>[i,`${pad(i)} · ${v.label}${i===selected?' (this one)':''}`]),selected)}</select>`)}<small>Copy/paste moves EQ, gain, delay, mute and polarity. Swapping exchanges two physical outputs, routing included.</small></div>
+    <div class="eq-title"><div><h3>Parametric EQ <span class="muted">/ 16 bands</span></h3><p>Calculated PEQ response only · excludes crossovers, output gain and room response</p></div>
+      <div class="toolbar eq-scope"><button class="quiet" data-action="eq-toggle" aria-pressed="${o.eqEnabled}">${o.eqEnabled ? 'EQ enabled' : 'EQ bypassed'}</button><button class="quiet" data-action="eq-bypass-all" aria-pressed="${bypassed}" title="Bypass every output PEQ; per-output enables are retained">${bypassed ? 'All EQ bypassed' : 'Bypass all EQ'}</button><button class="quiet" data-action="eq-reset-output" title="Reset all 16 bands of this output">Reset EQ</button><button class="quiet" data-action="eq-reset-all" title="Reset every band of all 16 outputs">Reset all</button>${headphone ? `<button class="quiet" data-action="eq-link" data-bus-id="${esc(owner.id)}" aria-pressed="${linked}" title="Apply headphone EQ edits to both ears">${linked ? 'Ears linked' : 'Link ears'}</button>` : ''}</div></div>
+    ${bypassed ? '<p class="banner-warn">Global EQ bypass is on. Bands stay editable and return exactly as set when it is switched off.</p>' : ''}
+    ${linked ? '<p class="banner-note">Headphone ears are linked: every band edit, reset and EQ enable applies to both outputs. Gain, alignment, mute and polarity stay independent.</p>' : ''}
     <div class="eq-workspace">
       <div class="eq-display" id="eq-display">
         <svg id="eq-chart" class="eq-chart" role="img" aria-label="Calculated output PEQ magnitude response, 20 Hz to 20 kHz"></svg>
         <div class="eq-nodes">${o.bands.map((b,i)=>`<button type="button" class="eq-node" data-eq-node="${i}" style="--band-color:${bandColors[i]}" aria-describedby="eq-help">${i+1}</button>`).join('')}</div>
         <span class="eq-plot-caption">OUTPUT PEQ <span>±${EQ_RANGE_DB} dB</span></span>
       </div>
+      <div class="band-bar-wrap"><span class="band-bar-label">Bands</span><div id="band-bar" class="band-bar" role="group" aria-label="Select an EQ band"></div></div>
       <div id="selected-eq-band" class="selected-eq-band"></div>
-      <p id="eq-help" class="eq-help">Drag a band: frequency / gain · <kbd>⌘ Cmd</kbd> + drag up/down: Q · Arrow keys: fine adjust · Esc: cancel drag</p>
+      <p id="eq-help" class="eq-help">Drag a band: frequency / gain · <kbd>⌘ Cmd</kbd> + drag up/down: Q · Double-click a band: reset · Arrow keys: fine adjust · Esc: cancel drag</p>
     </div>
     <div class="eq-bands">${[0,8].map(start=>`<div class="table-scroll"><table class="band-table" aria-label="EQ bands ${start+1}–${start+8}"><thead><tr><th>Band</th><th>On</th><th>Filter</th><th>Frequency · Hz</th><th>Gain · dB</th><th>Q</th><th>Reset</th></tr></thead><tbody>${o.bands.slice(start,start+8).map((b,n) => { const i=start+n; return `<tr class="${b.enabled ? '' : 'band-disabled'}"><td>${pad(i)}</td><td><input type="checkbox" data-band="${i}" data-param="enabled" aria-label="Band ${i+1} enabled" ${checked(b.enabled)}></td><td><select data-band="${i}" data-param="type" aria-label="Band ${i+1} filter">${options([['bell','Bell'],['lowShelf','Low shelf'],['highShelf','High shelf']],b.type)}</select></td><td>${number(`data-band="${i}" data-param="frequency" aria-label="Band ${i+1} frequency"`,b.frequency,20,20000,'any')}</td><td>${number(`data-band="${i}" data-param="gainDb" aria-label="Band ${i+1} gain"`,b.gainDb,-18,18,'any')}</td><td>${number(`data-band="${i}" data-param="q" aria-label="Band ${i+1} Q"`,b.q,.1,18,'any')}</td><td><button type="button" class="quiet band-reset" data-band-reset="${i}" aria-label="Reset band ${i+1}" title="Reset band ${i+1} to its default frequency, gain, Q and bell filter">Reset</button></td></tr>`; }).join('')}</tbody></table></div>`).join('')}</div>
     </fieldset>`;
-  renderSelectedBand(); drawEq();
+  renderBandBar(); renderSelectedBand(); drawEq();
   eqObserver = new ResizeObserver(drawEq);
   eqObserver.observe($('#eq-display'));
 }
@@ -112,6 +188,27 @@ function eqGeometry() {
   const rect = $('#eq-display').getBoundingClientRect();
   const width = rect.width || 1000, height = rect.height || 420;
   return {rect,width,height,left:42,top:30,plotWidth:width-66,plotHeight:height-60};
+}
+
+/** One chip per band: jump straight to any band without hunting for its handle. */
+function renderBandBar() {
+  const bar = $('#band-bar');
+  if (!bar) return;
+  bar.innerHTML = config.outputs[selected].bands.map((b, i) => `<button type="button" class="band-chip" data-band-select="${i}" style="--band-color:${bandColors[i]}">${i + 1}</button>`).join('');
+  refreshBandBar();
+}
+
+function refreshBandBar() {
+  const o = config.outputs[selected];
+  document.querySelectorAll('[data-band-select]').forEach(chip => {
+    const i = Number(chip.dataset.bandSelect), b = o.bands[i];
+    chip.classList.toggle('selected', i === selectedBand);
+    chip.classList.toggle('band-off', !b.enabled);
+    chip.classList.toggle('band-shaped', b.enabled && b.gainDb !== 0);
+    chip.setAttribute('aria-pressed', i === selectedBand);
+    chip.title = `Band ${i + 1} · ${b.frequency.toFixed(1)} Hz · ${b.gainDb.toFixed(1)} dB · Q ${b.q.toFixed(2)}${b.enabled ? '' : ' · off'}`;
+    chip.setAttribute('aria-label', `Band ${i + 1}, ${b.frequency.toFixed(1)} hertz, ${b.gainDb.toFixed(1)} decibels${b.enabled ? '' : ', off'}`);
+  });
 }
 
 function renderSelectedBand() {
@@ -137,18 +234,20 @@ function syncEqEditors() {
     el.closest('tr')?.classList.toggle('band-selected',Number(el.dataset.band)===selectedBand);
   });
   [...$('#eq-band-select').options].forEach((option,i)=>{option.textContent=`Band ${i+1}${config.outputs[selected].bands[i].enabled?'':' · off'}`;});
+  refreshBandBar();
 }
 
 function drawEq() {
   const o = config.outputs[selected], {width,height,left,top,plotWidth,plotHeight} = eqGeometry();
   const x = f => left + Math.log10(f/20)/3 * plotWidth, y = g => top + plotHeight/2 - Math.max(-EQ_RANGE_DB,Math.min(EQ_RANGE_DB,g))*plotHeight/(EQ_RANGE_DB*2);
-  const editable = config.mode!=='direct' && o.eqEnabled;
+  const bypassAll = Boolean(config.eqBypass);
+  const editable = config.mode!=='direct' && o.eqEnabled && !bypassAll;
   const frequencies = [20,50,100,200,500,1000,2000,5000,10000,20000];
   const grid = [-EQ_RANGE_DB,-EQ_RANGE_DB/2,0,EQ_RANGE_DB/2,EQ_RANGE_DB].map(g => `<line x1="${left}" y1="${y(g)}" x2="${x(20000)}" y2="${y(g)}" class="${g===0?'eq-zero':'eq-grid'}"/><text x="6" y="${y(g)+4}" class="eq-label">${g>0?'+':''}${g}</text>`).join('') + frequencies.filter((f,i)=>width>600||i%2===0||f===20000).map(f => `<line x1="${x(f)}" y1="${top}" x2="${x(f)}" y2="${y(-EQ_RANGE_DB)}" class="eq-grid"/><text x="${x(f)}" y="${height-9}" text-anchor="middle" class="eq-label">${f>=1000?`${f/1000}k`:f}</text>`).join('');
   const path = response => 'M'+Array.from({length:401},(_,i)=>{const f=20*1000**(i/400);return `${x(f).toFixed(2)},${y(response(f)).toFixed(2)}`;}).join(' L');
-  const curves = o.eqEnabled ? o.bands.map((b,i)=>!b.enabled?'':`<path d="${path(f=>bandResponse(b,f))} L${x(20000)},${y(0)} L${left},${y(0)} Z" fill="${bandColors[i]}" fill-opacity="${i===selectedBand?'.17':'.025'}"/><path d="${path(f=>bandResponse(b,f))}" fill="none" stroke="${bandColors[i]}" stroke-width="${i===selectedBand?2:1}" opacity="${i===selectedBand?'.95':'.4'}"/>`).join('') : '';
+  const curves = o.eqEnabled && !bypassAll ? o.bands.map((b,i)=>!b.enabled?'':`<path d="${path(f=>bandResponse(b,f))} L${x(20000)},${y(0)} L${left},${y(0)} Z" fill="${bandColors[i]}" fill-opacity="${i===selectedBand?'.17':'.025'}"/><path d="${path(f=>bandResponse(b,f))}" fill="none" stroke="${bandColors[i]}" stroke-width="${i===selectedBand?2:1}" opacity="${i===selectedBand?'.95':'.4'}"/>`).join('') : '';
   $('#eq-chart').setAttribute('viewBox',`0 0 ${width} ${height}`);
-  $('#eq-chart').innerHTML = `${grid}${curves}<path d="${path(f=>eqResponse(o,f))}" class="eq-curve"/>`;
+  $('#eq-chart').innerHTML = `${grid}${curves}<path d="${path(f=>eqResponse(o,f,bypassAll))}" class="eq-curve"/>`;
   $('#eq-display').classList.toggle('eq-bypassed',!editable);
   document.querySelectorAll('[data-eq-node]').forEach(node=>{
     const i=Number(node.dataset.eqNode),b=o.bands[i];
@@ -167,12 +266,13 @@ function endEqDrag(cancel=false) {
   if(cancel) {config.outputs[drag.output].bands[drag.band]=drag.original;dirty=drag.dirty;$('#draft-status').textContent=dirty?'Draft · unsaved':'Preset saved locally';}
   drag.node.classList.remove('dragging');
   if(drag.node.hasPointerCapture(drag.pointerId)) drag.node.releasePointerCapture(drag.pointerId);
+  if(!cancel) syncLinkedEq(drag.output);
   drawEq();
 }
 
 document.addEventListener('pointerdown',event=>{
   const node=event.target.closest('[data-eq-node]');
-  if(!node||event.button!==0||eqDrag||config.mode==='direct'||!config.outputs[selected].eqEnabled)return;
+  if(!node||event.button!==0||eqDrag||config.mode==='direct'||config.eqBypass||!config.outputs[selected].eqEnabled)return;
   event.preventDefault();selectedBand=Number(node.dataset.eqNode);node.focus({preventScroll:true});renderSelectedBand();drawEq();
   const band=config.outputs[selected].bands[selectedBand];
   if(!band.enabled)return;
@@ -194,8 +294,20 @@ document.addEventListener('lostpointercapture',event=>{if(eqDrag?.pointerId===ev
 window.addEventListener('blur',()=>endEqDrag(true));
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&eqDrag){event.preventDefault();endEqDrag(true);return;}
+  if(event.altKey&&['ArrowLeft','ArrowRight'].includes(event.key)&&$('#eq-dialog').open) {
+    event.preventDefault();gotoOutput(selected+(event.key==='ArrowRight'?1:-1));return;
+  }
+  const chip=event.target.closest('[data-band-select]');
+  if(chip&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
+    event.preventDefault();
+    const step=event.key==='ArrowRight'?1:event.key==='ArrowLeft'?-1:0;
+    selectedBand=event.key==='Home'?0:event.key==='End'?15:Math.max(0,Math.min(15,Number(chip.dataset.bandSelect)+step));
+    renderSelectedBand();drawEq();
+    document.querySelector(`[data-band-select="${selectedBand}"]`)?.focus({preventScroll:true});
+    return;
+  }
   const node=event.target.closest('[data-eq-node]');
-  if(!node||node.disabled||config.mode==='direct'||!config.outputs[selected].eqEnabled)return;
+  if(!node||node.disabled||config.mode==='direct'||config.eqBypass||!config.outputs[selected].eqEnabled)return;
   if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;
   event.preventDefault();selectedBand=Number(node.dataset.eqNode);
   const o=config.outputs[selected],b=o.bands[selectedBand];
@@ -204,6 +316,33 @@ document.addEventListener('keydown',event=>{
   const dy=event.key==='ArrowUp'?-1/480:event.key==='ArrowDown'?1/480:0;
   o.bands[selectedBand]=dragEqBand(b,dx,dy,event.metaKey||event.ctrlKey);
   renderSelectedBand();markDraft();drawEq();
+});
+
+/** Open another output in the editor. Navigation only: nothing about the draft changes. */
+function gotoOutput(index) {
+  const next = (index + CHANNELS) % CHANNELS;
+  if (next === selected) return;
+  selected = next;
+  renderBank(); renderOverview(); renderInspector();
+  document.querySelector('#channel-jump')?.focus({preventScroll:true});
+}
+
+/** Mirror this output's EQ onto a linked headphone ear, if the bus has grouping on. */
+function syncLinkedEq(index = selected) {
+  if(!linkedEqOutputs(config,index).length) return;
+  config = mirrorLinkedEq(config,index);
+  renderOverview();
+}
+
+// Double-click a graph handle to reset that band, matching the per-row Reset buttons.
+document.addEventListener('dblclick',event=>{
+  const node=event.target.closest('[data-eq-node]');
+  if(!node||node.disabled||config.mode==='direct'||config.eqBypass)return;
+  event.preventDefault();endEqDrag(true);
+  const index=Number(node.dataset.eqNode);
+  config.outputs[selected].bands[index]=resetBand(config.outputs[selected].bands[index],index);
+  selectedBand=index;syncLinkedEq();markDraft();renderSelectedBand();drawEq();
+  toast(`Band ${index+1} reset to its default frequency, 0 dB and Q 1.`);
 });
 
 function crossoverTargets() {
@@ -223,12 +362,23 @@ function refreshCrossoverControls() {
 
 function renderBass() {
   crossoverSelection.delete(config.lfe.input);
+  const slopeOptions = value => options([[12,'LR · 12 dB/oct'],[24,'LR · 24 dB/oct'],[48,'LR · 48 dB/oct']],value);
+  $('#bass-page').innerHTML = `<details class="page-section" data-section="bass" ${sectionAttr('bass')}><summary class="section-summary">Bass management <small>crossovers · LFE · headroom</small></summary><fieldset ${disabled(config.mode==='direct')} style="border:0;padding:0;margin:0;min-width:0">
+    <div class="bass-top"><section class="panel"><h2>Speaker bass redirection</h2><p>High-pass each main speaker and send its low frequencies to your chosen subs. Output EQ and alignment follow the split.</p><div class="field-row"><label class="checkbox-label"><input type="checkbox" id="bass-enabled" ${checked(config.bassEnabled)}>Bass redirection enabled</label>${field('Common input trim · dB',number('id="headroom"',config.headroomDb,-36,0,.1))}</div><p>Turning redirection off restores full-range mains and silences their sub sends. LFE remains independently routed. Per-channel crossovers and sub sends are in <strong>Bass routing</strong>, above the channel overview.</p></section>
+    <section class="panel"><h2>LFE is its own source</h2><p>Control the effects channel separately from redirected speaker bass. LFE gain is explicit; no automatic +10 dB boost.</p><div class="field-row">${field('LFE input',`<select data-lfe="input">${options(inputOptions(),config.lfe.input)}</select>`)}${field('Low-pass · Hz',number('data-lfe="lowpassHz"',config.lfe.lowpassHz,20,250))}${field('Slope',`<select data-lfe="slope">${slopeOptions(config.lfe.slope)}</select>`)}${field('LFE trim · dB',number('data-lfe="trimDb"',config.lfe.trimDb,-24,12,.1))}</div><p class="route-note">Changing the LFE input clears all sub sends from the old and new LFE rows, so those routes must be deliberately reassigned.</p></section></div>
+    </fieldset></details>`;
+  renderBassMatrix();
+}
+
+/** The per-channel crossover and sub-send matrix, expanded from the channel overview. */
+function renderBassMatrix() {
+  const box = $('#bass-matrix-box');
+  if (!box) return;
+  crossoverSelection.delete(config.lfe.input);
   const subs = config.outputs.map((o,i)=>({...o,index:i})).filter(o=>o.role==='sub');
   const slopeOptions = value => options([[12,'LR · 12 dB/oct'],[24,'LR · 24 dB/oct'],[48,'LR · 48 dB/oct']],value);
-  $('#bass-page').innerHTML = `<fieldset ${disabled(config.mode==='direct')} style="border:0;padding:0;margin:0;min-width:0">
-    <div class="bass-top"><section class="panel"><h2>Speaker bass redirection</h2><p>High-pass each main speaker and send its low frequencies to your chosen subs. Output EQ and alignment follow the split.</p><div class="field-row"><label class="checkbox-label"><input type="checkbox" id="bass-enabled" ${checked(config.bassEnabled)}>Bass redirection enabled</label>${field('Common input trim · dB',number('id="headroom"',config.headroomDb,-36,0,.1))}</div><p>Turning redirection off restores full-range mains and silences their sub sends. LFE remains independently routed.</p></section>
-    <section class="panel"><h2>LFE is its own source</h2><p>Control the effects channel separately from redirected speaker bass. LFE gain is explicit; no automatic +10 dB boost.</p><div class="field-row">${field('LFE input',`<select data-lfe="input">${options(inputOptions(),config.lfe.input)}</select>`)}${field('Low-pass · Hz',number('data-lfe="lowpassHz"',config.lfe.lowpassHz,20,250))}${field('Slope',`<select data-lfe="slope">${slopeOptions(config.lfe.slope)}</select>`)}${field('LFE trim · dB',number('data-lfe="trimDb"',config.lfe.trimDb,-24,12,.1))}</div></section></div>
-    <section class="panel"><div class="section-heading"><div><h2>Bass routing matrix</h2><p>${subs.length} subwoofer output${subs.length===1?'':'s'} within the 16-channel output bank. Enable a send, then set its gain.</p></div></div>
+  box.innerHTML = `<fieldset ${disabled(config.mode==='direct')} style="border:0;padding:0;margin:0;min-width:0">
+    <div class="bass-box-head"><h3>Bass routing matrix</h3><p>${subs.length} subwoofer output${subs.length===1?'':'s'} within the 16-channel output bank. Enable a send, then set its gain. Redirection on/off, headroom and LFE live in Bass management below.</p></div>
     ${subs.length ? `<div class="crossover-tools"><strong>Set crossover</strong>${field('Crossover · Hz',`<input type="number" id="crossover-hz" value="${esc(crossoverHz)}" min="20" max="250" step="1" required ${disabled(!config.bassEnabled)}>`)}${field('Apply to',`<select id="crossover-scope" ${disabled(!config.bassEnabled)}>${options([['all','All non-LFE channels'],['selected','Selected channels']],crossoverScope)}</select>`)}<button id="crossover-apply" data-action="crossover-apply">Apply crossover</button><span id="crossover-count" class="muted"></span><p>Sets speaker HP and bass LP together. Select rows for a group, or edit any channel individually. LFE, slopes and HP on/off stay as set.</p></div>
     <div class="table-scroll"><table class="matrix"><thead><tr><th><label class="checkbox-label"><input type="checkbox" id="crossover-select-all" aria-label="Select all non-LFE channels for crossover" ${disabled(!config.bassEnabled)}>Source</label></th><th>HP on</th><th>Speaker HP · Hz</th><th>Bass LP · Hz</th><th>Slope</th>${subs.map(o=>`<th class="matrix-head">${pad(o.index)} · ${esc(o.label)}<small class="sub-sum">Sum bound: ${Number.isFinite(subSumBoundDb(config,o.index)) ? `${subSumBoundDb(config,o.index).toFixed(1)} dBFS` : 'silent'}</small></th>`).join('')}</tr></thead><tbody>${config.inputs.map((v,i)=>{
       const lfe = i === config.lfe.input;
@@ -237,9 +387,9 @@ function renderBass() {
         const name = `${v.label} to ${o.label}`;
         return `<td><div class="send-cell"><input type="checkbox" data-send="${i},${o.index}" aria-label="Enable ${esc(name)}" ${checked(gain!==null)} ${disabled(inactive)}>${number(`data-send-gain="${i},${o.index}" aria-label="${esc(name)} gain" ${disabled(gain===null||inactive)}`,gain??0,-60,12,.1)}<small>dB</small></div></td>`;
       }).join('')}</tr>`;
-    }).join('')}</tbody></table></div>` : '<div class="empty"><h3>No subwoofer outputs assigned</h3><p>In Outputs, select any channel and change its role to Subwoofer.</p></div>'}
-    <p class="route-note">HP off keeps a main full-range while retaining its bass send. New sub outputs start with all sends off. Sum bounds assume coherent full-scale inputs and include input trim, send gain, LFE trim, and output gain; they exclude filters and EQ, and are not measured peaks.</p>
-    <p class="route-note">Changing the LFE input clears all sub sends from the old and new LFE rows, so those routes must be deliberately reassigned.</p></section></fieldset>`;
+    }).join('')}</tbody></table></div>
+    <p class="route-note">HP off keeps a main full-range while retaining its bass send. New sub outputs start with all sends off. Sum bounds assume coherent full-scale inputs and include input trim, send gain, LFE trim, and output gain; they exclude filters and EQ, and are not measured peaks.</p>` : '<div class="empty"><h3>No subwoofer outputs assigned</h3><p>Set any output\'s role to Subwoofer in the overview below.</p></div>'}
+    </fieldset>`;
   if(subs.length) refreshCrossoverControls();
 }
 
@@ -294,22 +444,61 @@ document.addEventListener('click', event => {
     const index = Number(b.dataset.bandReset);
     config.outputs[selected].bands[index] = resetBand(config.outputs[selected].bands[index], index);
     selectedBand = index;
+    syncLinkedEq();
     markDraft();
     renderSelectedBand();
     drawEq();
     return;
   }
   if (b.dataset.eqNode!==undefined) {selectedBand=Number(b.dataset.eqNode);renderSelectedBand();drawEq();return;}
+  if (b.dataset.bandSelect!==undefined) {selectedBand=Number(b.dataset.bandSelect);renderSelectedBand();drawEq();return;}
   if (b.dataset.copyCommand) {const command=SERVICE_COMMANDS.find(c=>c.id===b.dataset.copyCommand);if(command)copyCommand(command.command);return;}
   if (b.dataset.action==='copy-journal') {copyCommand(journalCommand(logService));return;}
   if (b.dataset.tab) { tab = b.dataset.tab; render(); return; }
-  if (b.dataset.select !== undefined) { selected = Number(b.dataset.select); renderBank(); renderInspector(); updateMeters(); return; }
+  if (b.dataset.select !== undefined) { selected = Number(b.dataset.select); selectedBand = 0; renderBank(); renderOverview(); renderInspector(); updateMeters(); return; }
   if (b.id === 'meter-toggle') { metersRunning = !metersRunning; b.textContent = metersRunning ? 'Pause demo meters' : 'Resume demo meters'; updateMeters(); return; }
   if (b.dataset.mode) { config.mode = b.dataset.mode; markDraft(); render(); return; }
   if (b.dataset.source) { config.source = b.dataset.source; markDraft(); render(); return; }
   if (b.dataset.mute !== undefined) { const o = config.outputs[Number(b.dataset.mute)]; o.mute = !o.mute; markDraft(); render(); return; }
+  if (b.dataset.eqOpen !== undefined) { selected = Number(b.dataset.eqOpen); renderBank(); renderOverview(); renderInspector(); $('#eq-dialog').showModal(); return; }
   const action = b.dataset.action;
-  if (action === 'bus-add-headphones') { try { const free=config.outputs.map((o,i)=>o.busId===null?i:null).filter(i=>i!==null); let n=0,id='headphones'; while(config.buses.some(v=>v.id===id)){n++;id=`headphones-${n+1}`;} config=createHeadphoneBus(config,id,free.slice(-2)); markDraft(); render(); toast('Headphones bus added on two free outputs.'); } catch(e) { toast(e.message); } return; }
+  if (action === 'eq-close') { $('#eq-dialog').close(); return; }
+  if (action === 'channel-prev' || action === 'channel-next') { gotoOutput(selected + (action === 'channel-next' ? 1 : -1)); return; }
+  if (action === 'bass-toggle') { bassBoxOpen = !bassBoxOpen; renderOverview(); if (bassBoxOpen) $('#bass-matrix-box').scrollIntoView({block:'nearest'}); document.querySelector('[data-action="bass-toggle"]')?.focus({preventScroll:true}); return; }
+  if (action === 'slot-switch') {
+    if (b.dataset.slot === profileState.active) return;
+    try {
+      const from = profileState.active;
+      const result = switchSlot(profileState, b.dataset.slot, config);
+      slotDirty[from] = dirty;
+      profileState = result.state; config = result.config;
+      dirty = result.seeded ? dirty : (slotDirty[result.state.active] ?? true);
+      selected = 0; selectedBand = 0; layoutUndo = null; busUndo = null;
+      render(); toast(`Slot ${result.state.active} is live${result.seeded ? ', seeded from the previous slot' : ''}. Slots are held in this page only.`);
+    }
+    catch(e) { toast(e.message); }
+    return;
+  }
+  if (action === 'slot-copy') {
+    try { const other = SLOTS.find(name => name !== profileState.active); profileState = copySlot(profileState, profileState.active, other, config); renderSlots(); toast(`Slot ${other} now holds a copy of slot ${profileState.active}.`); }
+    catch(e) { toast(e.message); }
+    return;
+  }
+  if (action === 'eq-bypass-all') { try { config = setEqBypass(config, !config.eqBypass); markDraft(); render(); toast(config.eqBypass ? 'All output EQ bypassed. Bands are retained.' : 'Output EQ restored exactly as set.'); } catch(e) { toast(e.message); } return; }
+  if (action === 'eq-reset-output') {
+    try { config = resetEq(config, selected); config = mirrorLinkedEq(config, selected); markDraft(); render(); toast(`Reset all 16 bands of ${config.outputs[selected].label}. Gain, alignment and routing are unchanged.`); } catch(e) { toast(e.message); }
+    return;
+  }
+  if (action === 'eq-reset-all') {
+    if (!confirm('Reset all 16 bands on all 16 outputs? Gain, alignment, routing and presets are unchanged.')) return;
+    try { config = resetEq(config, null); markDraft(); render(); toast('All 256 bands reset to defaults.'); } catch(e) { toast(e.message); }
+    return;
+  }
+  if (action === 'eq-link') {
+    try { const bus = getBus(config, b.dataset.busId); config = setBusEqLink(config, bus.id, !bus.linkEq); markDraft(); render(); toast(bus.linkEq ? 'Headphone ears unlinked; each keeps its current EQ.' : 'Headphone ears linked; the first ear\'s EQ was copied to the other.'); } catch(e) { toast(e.message); }
+    return;
+  }
+  if (action === 'bus-add-headphones') { try { const free=config.outputs.map((o,i)=>o.busId===null?i:null).filter(i=>i!==null); let n=0,id='headphones'; while(config.buses.some(v=>v.id===id)){n++;id=`headphones-${n+1}`;} config=createHeadphoneBus(config,id,free.slice(-2)); markDraft(); render(); toast('Headphones bus added on the last two free outputs. Set Left/Right output on its card to move it.'); } catch(e) { toast(e.message); } return; }
   if (action === 'bus-add-speakers') { try { const free=config.outputs.map((o,i)=>o.busId===null?i:null).filter(i=>i!==null); if(free.length<2) throw new Error('At least two free outputs are required'); let n=1,id='speakers-2'; while(config.buses.some(v=>v.id===id)){n++;id=`speakers-${n}`;} config=createSpeakerBus(config,id,free.slice(0,2),'stereo'); markDraft(); render(); toast('Speaker bus added on two free outputs.'); } catch(e) { toast(e.message); } return; }
   if (action === 'bus-remove') { try { config=removeBus(config,b.dataset.busId); busUndo=null; markDraft(); render(); toast('Bus removed; its outputs are available.'); } catch(e) { toast(e.message); } return; }
   if (action === 'bus-apply') { try { const bus=getBus(config,b.dataset.busId), layoutId=document.querySelector(`[data-bus="${CSS.escape(bus.id)}"][data-bus-param="layout"]`).value, layout=LAYOUTS.find(v=>v.id===layoutId); if(!layout) throw new Error('Choose an output format'); const free=config.outputs.map((o,i)=>o.busId===null?i:null).filter(i=>i!==null), need=Math.max(0,layout.routing.length-bus.outputIds.length), ids=[...bus.outputIds,...free.slice(0,need)], touched=[...new Set([...bus.outputIds,...ids])], snapshot={busId:bus.id,bus:structuredClone(bus),outputs:Object.fromEntries(touched.map(i=>[i,structuredClone(config.outputs[i])])),sendColumns:Object.fromEntries(touched.map(i=>[i,config.sends.map(row=>row[i])]))}, next=applyBusLayout(config,bus.id,layoutId,ids); busUndo=snapshot; config=next; markDraft(); render(); toast(`${bus.label} format applied to its bus.`); } catch(e) { toast(e.message); } return; }
@@ -336,17 +525,17 @@ document.addEventListener('click', event => {
   } else if (action === 'channel-copy') {
     channelClipboard=copyChannel(config.outputs[selected]);renderInspector();toast(`Copied ${channelClipboard.label}.`);return;
   } else if (action === 'channel-paste') {
-    try {config=pasteChannel(config,selected,channelClipboard,pasteScope);toast(`Pasted ${pasteScope==='eq'?'EQ':'output processing'} into ${config.outputs[selected].label}.`);} catch(e){toast(e.message);return;}
+    try {config=pasteChannel(config,selected,channelClipboard,pasteScope);config=mirrorLinkedEq(config,selected);toast(`Pasted ${pasteScope==='eq'?'EQ':'output processing'} into ${config.outputs[selected].label}.`);} catch(e){toast(e.message);return;}
   } else if (action === 'rew-open') {
     rewParsed=null;$('#rew-text').value='';$('#rew-file').value='';$('#rew-result').textContent='';$('#rew-apply').disabled=true;
     $('#rew-target').textContent=`Output ${selected+1} · ${config.outputs[selected].label}`;$('#rew-dialog').showModal();return;
   } else if (action === 'rew-close') {$('#rew-dialog').close();return;}
   else if (action === 'rew-apply') {
     if(!rewParsed)return;
-    config.outputs[selected].bands=structuredClone(rewParsed.bands);config.outputs[selected].eqEnabled=true;
+    config.outputs[selected].bands=structuredClone(rewParsed.bands);config.outputs[selected].eqEnabled=true;syncLinkedEq();
     $('#rew-dialog').close();toast(`Imported ${rewParsed.count} REW filters into ${config.outputs[selected].label}.`);
-  } else if (action === 'polarity') config.outputs[selected].invert = !config.outputs[selected].invert;
-  else if (action === 'eq-toggle') config.outputs[selected].eqEnabled = !config.outputs[selected].eqEnabled;
+  } else if (action === 'polarity') { const i = b.dataset.outIndex !== undefined ? Number(b.dataset.outIndex) : selected; config.outputs[i].invert = !config.outputs[i].invert; }
+  else if (action === 'eq-toggle') { config.outputs[selected].eqEnabled = !config.outputs[selected].eqEnabled; syncLinkedEq(); }
   else if (action === 'save') {
     try { validateConfig(config); const saved = presets(); Object.defineProperty(saved,config.name,{value:structuredClone(config),enumerable:true,configurable:true,writable:true}); localStorage.setItem(storageKey,JSON.stringify(saved)); dirty = false; render(); toast('Preset saved in this browser.'); } catch(e) { toast(`Could not save: ${e.message}`); } return;
   } else if (action === 'load') {
@@ -394,6 +583,7 @@ document.addEventListener('change', async event => {
   }
   if (el.disabled || el.closest('fieldset:disabled')) return;
   if(el.id==='eq-band-select'){selectedBand=Number(el.value);renderSelectedBand();$('#eq-band-select').focus({preventScroll:true});drawEq();return;}
+  if(el.id==='channel-jump'){gotoOutput(Number(el.value));return;}
   if(el.id==='out-destination') {
     try {
       const destination=Number(el.value), previous=selected;
@@ -402,7 +592,30 @@ document.addEventListener('change', async event => {
     } catch(e) {toast(e.message);renderInspector();}
     return;
   }
+  if(el.id==='slot-preset') {
+    if (!el.value) return;
+    try {
+      const stored = presets()[el.value];
+      if (!stored) throw new Error('That preset is no longer saved in this browser');
+      config = parsePreset(JSON.stringify(stored)); selected = 0; selectedBand = 0; layoutUndo = null; busUndo = null;
+      dirty = false; slotDirty[profileState.active] = false;
+      render(); toast(`Loaded “${el.value}” into slot ${profileState.active}. No device changes.`);
+    } catch(e) { toast(`Could not load: ${e.message}`); renderSlots(); }
+    return;
+  }
   if(el.id==='crossover-hz') return;
+  if (el.dataset.busOutput) {
+    const bus = getBus(config, el.dataset.busOutput), ear = Number(el.dataset.ear);
+    try {
+      const targets = [...bus.outputIds]; targets[ear] = Number(el.value);
+      const previous = bus.outputIds[ear];
+      config = setBusOutputs(config, bus.id, targets);
+      if (selected === previous) selected = Number(el.value);
+      markDraft(); render();
+      toast(`${bus.label} ${ear ? 'right' : 'left'} ear moved to output ${Number(el.value) + 1}.`);
+    } catch(e) { toast(e.message); render(); }
+    return;
+  }
   if (el.dataset.headphoneMode) { try { config=setHeadphoneMode(config,el.dataset.headphoneMode,el.value); markDraft(); render(); } catch(e) { toast(e.message); render(); } return; }
   if (el.dataset.headphonePair) { try { const bus=getBus(config,el.dataset.headphonePair), pair=[...bus.inputPair]; pair[Number(el.dataset.ear)]=Number(el.value); config=setHeadphonePair(config,bus.id,pair); markDraft(); } catch(e) { toast(e.message); } return; }
   if (el.dataset.downmix) { const bus=getBus(config,el.dataset.downmix), i=Number(el.dataset.inputIndex), ear=Number(el.dataset.ear); try { if(el.checkValidity && !el.checkValidity()) throw new Error('Enter a value within the displayed limits.'); const matrix=structuredClone(bus.downmixMatrix); matrix[i][ear]=el.value===''?null:Number(el.value); config=setHeadphoneMatrix(config,bus.id,matrix); markDraft(); } catch(e) { el.value=bus.downmixMatrix[i][ear]??''; toast(e.message); } return; }
@@ -424,9 +637,9 @@ document.addEventListener('change', async event => {
     if (el.checkValidity && !el.checkValidity()) throw new Error('Enter a value within the displayed limits.');
     const value = el.type==='checkbox' ? el.checked : el.type==='number' ? Number(el.value) : el.value;
     if (el.dataset.out) {
-      const key = el.dataset.out;
-      if (key==='role') setOutputRole(config,selected,value);
-      else { config.outputs[selected][key] = key==='source' ? Number(value) : value; if(key==='source' && config.outputs[selected].busId) { const owner=config.buses.find(b=>b.id===config.outputs[selected].busId); if(owner) owner.layoutId='custom'; } }
+      const key = el.dataset.out, index = el.dataset.outIndex !== undefined ? Number(el.dataset.outIndex) : selected;
+      if (key==='role') setOutputRole(config,index,value);
+      else { config.outputs[index][key] = key==='source' ? Number(value) : value; if(key==='source' && config.outputs[index].busId) { const owner=config.buses.find(b=>b.id===config.outputs[index].busId); if(owner) owner.layoutId='custom'; } }
     } else if (el.dataset.band !== undefined) config.outputs[selected].bands[Number(el.dataset.band)][el.dataset.param] = value;
     else if (el.dataset.input !== undefined) config.inputs[Number(el.dataset.input)][el.dataset.param] = el.dataset.param==='slope' ? Number(value) : value;
     else if (el.dataset.lfe) {
@@ -449,16 +662,20 @@ document.addEventListener('change', async event => {
   // Keep the form being edited mounted: replacing it on blur can swallow the
   // next click or send keyboard focus back to the field the user just left.
   if (el.dataset.out) {
+    const index = el.dataset.outIndex !== undefined ? Number(el.dataset.outIndex) : selected;
     renderLayout(); renderBank(); renderBass(); renderSettings();
-    if (el.dataset.out==='role') { renderInspector(); renderBuses(); }
+    if (el.dataset.out==='role') { renderOverview(); renderInspector(); renderBuses(); }
     else {
-      $('#inspector h2').innerHTML = `<span class="badge">${pad(selected)}</span>${esc(config.outputs[selected].label)}`;
-      $('#out-destination').options[selected].textContent=`${pad(selected)} · ${config.outputs[selected].label}`;
+      // Keep the edited row mounted: only the derived labels are refreshed.
+      if (index===selected) {
+        $('#inspector h2').innerHTML = `<span class="badge">${pad(selected)}</span>${esc(config.outputs[selected].label)}`;
+        $('#out-destination').options[selected].textContent=`${pad(selected)} · ${config.outputs[selected].label}`;
+      } else if (el.dataset.out==='label') $('#out-destination').options[index].textContent=`${pad(index)} · ${config.outputs[index].label}${index===selected?'':' (swap)'}`;
       if (el.dataset.out==='source') renderBuses();
     }
   } else if (el.dataset.band !== undefined) {
     if(selectedBand!==Number(el.dataset.band)){selectedBand=Number(el.dataset.band);renderSelectedBand();}
-    drawEq();
+    syncLinkedEq(); drawEq();
   } else if (el.dataset.input !== undefined) {
     if (el.dataset.param==='label') { renderBank(); renderInspector(); renderBass(); renderBuses(); }
     else if (el.dataset.param==='crossover') renderBass();
@@ -492,5 +709,16 @@ function updateMeters() {
   });
 }
 $('.brand').addEventListener('click',event=>{event.preventDefault(); tab='outputs';render();});
+$('#eq-dialog').addEventListener('close',()=>{endEqDrag(true);renderOverview();});
+// Narrow screens open with the meter bank collapsed: less scrolling before the controls.
+if (window.matchMedia('(max-width: 900px)').matches) {
+  $('#input-meters').open = false;
+  sectionOpen.buses = false; sectionOpen.bass = false;
+}
+document.addEventListener('toggle', event => {
+  const section = event.target.closest?.('[data-section]');
+  if (section) sectionOpen[section.dataset.section] = section.open;
+}, true);
+profileState = createSlots(config);
 render();
 setInterval(updateMeters,100);

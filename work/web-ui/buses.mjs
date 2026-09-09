@@ -1,5 +1,5 @@
 import { validateConfig, createConfig } from './model.mjs';
-import { LAYOUTS } from './workflows.mjs';
+import { LAYOUTS, swapOutputs } from './workflows.mjs';
 
 export function getBus(config, id) {
   const bus = config.buses?.find(value => value.id === id);
@@ -90,6 +90,52 @@ export function setHeadphoneMatrix(config, busId, matrix) {
   return validateConfig(result);
 }
 
+/** What an output is, for display: a headphones-bus member reads as a headphone, not a speaker. */
+export function outputRoleLabel(config, index) {
+  if (!Number.isInteger(index) || index < 0 || index >= 16) throw new Error('Choose an output from 1 to 16');
+  const output = config.outputs[index];
+  const bus = config.buses?.find(value => value.outputIds.includes(index));
+  if (bus?.kind === 'headphones') {
+    const ear = bus.outputIds.indexOf(index);
+    return { short: ear === 0 ? 'PHONES L' : ear === 1 ? 'PHONES R' : 'PHONES', long: 'Headphone', kind: 'headphone' };
+  }
+  if (output.role === 'unused') return { short: 'SPARE', long: 'Unused', kind: 'unused' };
+  if (output.role === 'sub') return { short: 'SUB', long: 'Subwoofer', kind: 'sub' };
+  return { short: 'SPEAKER', long: 'Speaker', kind: 'speaker' };
+}
+
+/** Move a bus onto chosen physical outputs. Processing, labels and routes travel with each channel. */
+export function setBusOutputs(config, busId, outputIds) {
+  const bus = getBus(config, busId);
+  if (!Array.isArray(outputIds) || outputIds.length !== bus.outputIds.length || new Set(outputIds).size !== outputIds.length) throw new Error(`Choose ${bus.outputIds.length} distinct physical outputs`);
+  if (outputIds.some(i => !Number.isInteger(i) || i < 0 || i >= 16)) throw new Error('Choose an output from 1 to 16');
+  let result = structuredClone(config);
+  outputIds.forEach((target, n) => {
+    const current = getBus(result, busId).outputIds[n];
+    if (current !== target) result = swapOutputs(result, current, target);
+  });
+  const moved = getBus(result, busId);
+  moved.outputIds = [...outputIds];
+  result.outputs.forEach((output, i) => { if (output.busId === busId && !outputIds.includes(i)) output.busId = null; });
+  return validateConfig(result);
+}
+
+/** Group the two headphone ears so one EQ edit applies to both. Turning it on copies the left ear. */
+export function setBusEqLink(config, busId, linked) {
+  if (typeof linked !== 'boolean') throw new Error('EQ link must be on or off');
+  const result = structuredClone(config), bus = getBus(result, busId);
+  if (bus.kind !== 'headphones') throw new Error('EQ linking applies to headphones buses');
+  bus.linkEq = linked;
+  if (linked) {
+    const [first, ...rest] = bus.outputIds;
+    for (const i of rest) {
+      result.outputs[i].bands = structuredClone(result.outputs[first].bands);
+      result.outputs[i].eqEnabled = result.outputs[first].eqEnabled;
+    }
+  }
+  return validateConfig(result);
+}
+
 export function createHeadphoneBus(config, id = 'headphones', outputIds = [14, 15]) {
   const result = structuredClone(config);
   if (!/^[a-z][a-z0-9-]{0,31}$/.test(id) || result.buses.some(bus => bus.id === id)) throw new Error('Choose a unique bus ID');
@@ -102,7 +148,7 @@ export function createHeadphoneBus(config, id = 'headphones', outputIds = [14, 1
   for (const i of [8, 10]) matrix[i] = [-6, null];
   for (const i of [9, 11]) matrix[i] = [null, -6];
   matrix[config.lfe.input] = [null, null];
-  result.buses.push({ id, kind: 'headphones', label: 'Headphones', outputIds: [...outputIds], layoutId: 'stereo', gainDb: 0, mute: false, inputMode: 'pair', inputPair: [0, 1], downmixMatrix: matrix, sourcePreCrossover: true });
+  result.buses.push({ id, kind: 'headphones', label: 'Headphones', outputIds: [...outputIds], layoutId: 'stereo', gainDb: 0, mute: false, inputMode: 'pair', inputPair: [0, 1], downmixMatrix: matrix, sourcePreCrossover: true, linkEq: false });
   outputIds.forEach((i, ear) => { result.outputs[i].busId = id; result.outputs[i].role = 'speaker'; result.outputs[i].source = ear; result.outputs[i].label = `Headphone ${ear ? 'R' : 'L'}`; });
   return validateConfig(result);
 }
