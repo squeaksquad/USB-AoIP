@@ -1,10 +1,9 @@
 # DSP mode inside the bridge — step 4 design
 
-Status: **built and instrumented, not measured under the transport, not
-installed.** The stage is wired into `usb-to-ravenna`, the bridge reports what
-it costs, and the budget below is measured rather than estimated. No audio has
-been carried through it: the pinned binary and the installed service are
-untouched, and the supervisor still pins the old hash.
+Status: **measured under the transport, not installed.** The stage is wired into `usb-to-ravenna`, the bridge reports what it costs,
+and audio has now been carried through it for 360 seconds on the accepted
+profile. The pinned binary and the installed service are untouched, and the
+supervisor still pins the old hash.
 
 See "MEASURED 2026-09-10: the budget" at the end for what the numbers turned
 out to be. Where they contradict what this note predicted, the measurement
@@ -245,3 +244,61 @@ That second question is what `dsp_us_max` in the BRIDGE line and the SUMMARY
 JSON exist for. It is the maximum, never the mean, because a mean hides exactly
 the cycle that missed. Until a candidate session has reported it under load,
 nothing here is an acceptance.
+
+
+## MEASURED 2026-09-10: 360 seconds with the stage carrying audio
+
+Run `phase4-dsp-candidate-20260910T180122Z`, candidate bridge `406699bd` with
+the `loaded` preset (308 biquads), the accepted profile's argument list taken
+verbatim from the supervisor's journal, sink delay 103. The installed binary
+and the service were not touched.
+
+| | This run | Accepted profile |
+| --- | --- | --- |
+| RECOVERs | **0** | 0 |
+| Direction restarts | 0 / 0 | 0 / 0 |
+| TX queue floor | 86 | 75–81 across the set, 78 cited |
+| RX queue floor | **72** | 72 |
+| `tx_qlow` / `rx_qlow` | 0 / 0 | 0 / 0 |
+| `tx_occ` / `rx_occ` | 51 / 51 | 51 / 51 |
+| Clipped samples | 0 / 0 | — |
+| Dropped frames | 0 / 0 | — |
+| Zero-run events | 0 | — |
+
+**The stage cost, from the bridge's own instrumentation:** `dsp_us_max`
+**105.6 µs**, mean 52.0 µs, over **473,226 calls** and 17,276,790 frames --
+47,991 frames per second, so essentially every frame went through it. The
+maximum settled by about 68,000 calls and never moved again; the mean fell from
+60 µs to 52 µs as the run settled.
+
+The bridge renders what `mmap_begin` grants, which averaged **36.5 frames per
+call**, not a full period. So each call had about 760 µs of wall time and used
+52 µs of it, 105.6 µs at worst: a **worst-case duty of 13.9%**.
+
+**The in-memory benchmark was not the underestimate I called it.** Scaled to
+36.5 frames it predicted 51.6 µs where the bridge measured 52.0, and its
+worst case of 111.5 µs was *higher* than the 105.6 µs seen on the real audio
+thread. The likely reason is that the benchmark ran at normal priority while
+the bridge runs SCHED_FIFO at 90, so the benchmark's tail was scheduling noise
+the bridge does not suffer. The caveat stands in principle -- an idle Pi is not
+a loaded one -- but it did not bite here.
+
+**The aligned start was undisturbed.** `ALIGN status=ok`, and the TX trigger
+made its target with `slack_us=412`. The TX prime read `front_age_frames=296`
+and `under_prime=0`, which is exactly the figure the age50 profile is
+documented to produce. The prime bypass works: `DSP engaged` is logged at
+t=5045 µs against the TX `PRIMED` at t=4054 µs, so the stage came in on the
+very next render after the prime, as designed.
+
+### What this run does not establish
+
+It was **unloaded**: no harness driving impulses, no measurement of the round
+trip. The TX floor of 86 is therefore not comparable with the accepted 78,
+which was taken through four 800-impulse runs and a soak -- an unloaded floor
+sits higher, and 86 is consistent with that rather than with an improvement.
+
+No latency figure was taken, and none should be inferred. Acceptance still
+needs the full battery in this note's Acceptance section: the loaded runs, the
+soak, RTL at 32 on a fresh anchor with the preset loaded and the alignment
+delay zeroed, and the same again with no preset to show direct mode still
+measures what it measures today.

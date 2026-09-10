@@ -374,21 +374,26 @@ if [ "$(grep -o "\"delay\"[[:space:]]*:[[:space:]]*$sink_delay\b" "$result_dir/s
   exit 30
 fi
 
-timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" \
-  --period 48 --buffer 192 --ring 768 --target 48 \
-  --playback-prime 96 --prime-trim 0 --rx-prime-trim 1 \
-  --tx-playback-prime 192 --rx-playback-prime 120 \
-  --ravenna-playback-buffer 384 \
-  --usb-pitch-servo 1 --tx-depth 0 --rx-depth 0 --level-gain 0.05 \
-  --align-start 1 --align-offset-us 600 \
-  --align-tx-trigger 1 --align-tx-offset-us 950 --align-tx-prime 1 \
-  --align-rx-trigger 0 --align-rx-offset-us 600 --align-rx-prime 0 \
-  --align-prime-age-margin-us 50 \
-  --zero-run-detect 1 --impulse-trace 1 \
-  --pitch-seed 0 --level-shift 0 \
-  --dsp-preset "$dsp_preset" \
-  --priority 90 \
-  --seconds "$candidate_seconds" \
+# The accepted profile's argument list, verbatim from the supervisor's journal
+# of the running service. Held in one array so what is launched and what is
+# recorded are the same thing by construction.
+bridge_arguments=(
+  --period 48 --buffer 192 --ring 768 --target 48
+  --playback-prime 96 --prime-trim 0 --rx-prime-trim 1
+  --tx-playback-prime 192 --rx-playback-prime 120
+  --ravenna-playback-buffer 384
+  --usb-pitch-servo 1 --tx-depth 0 --rx-depth 0 --level-gain 0.05
+  --align-start 1 --align-offset-us 600
+  --align-tx-trigger 1 --align-tx-offset-us 950 --align-tx-prime 1
+  --align-rx-trigger 0 --align-rx-offset-us 600 --align-rx-prime 0
+  --align-prime-age-margin-us 50
+  --zero-run-detect 1 --impulse-trace 1
+  --pitch-seed 0 --level-shift 0
+  --dsp-preset "$dsp_preset"
+  --priority 90
+  --seconds "$candidate_seconds"
+)
+timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" "${bridge_arguments[@]}" \
   > "$result_dir/bridge.log" 2>&1 &
 bridge_pid=$!
 
@@ -407,29 +412,21 @@ if grep -Eq '^BRIDGE .*tx_restarts=[1-9][0-9]*|^BRIDGE .*rx_restarts=[1-9][0-9]*
   exit 33
 fi
 
+# The arguments the bridge was actually given, not the positional variables.
+# This wrapper hardcodes the accepted profile, so echoing the positionals would
+# record an operating point that was never run -- period 96 and align_start 0
+# when the bridge ran 48 and 1. The first run of this wrapper
+# (20260910T180122Z) wrote exactly that misleading file before this was fixed;
+# read its bridge.log, which carries the real arguments, not its metadata.
 {
   echo "result_dir=$result_dir"
-  echo "period_frames=$period_frames"
-  echo "buffer_frames=$buffer_frames"
-  echo "ring_frames=$ring_frames"
-  echo "target_frames=$target_frames"
-  echo "playback_prime_frames=$playback_prime_frames"
-  echo "prime_trim=$prime_trim"
-  echo "tx_playback_prime_frames=$tx_playback_prime_frames"
-  echo "rx_playback_prime_frames=$rx_playback_prime_frames"
   echo "sink_delay=$sink_delay"
-  echo "usb_pitch_servo=$usb_pitch_servo"
-  echo "tx_depth_frames=$tx_depth_frames"
-  echo "rx_depth_frames=$rx_depth_frames"
-  echo "level_gain=$level_gain"
-  echo "align_start=$align_start"
-  echo "align_offset_us=$align_offset_us"
-  echo "align_tx_trigger=$align_tx_trigger"
-  echo "align_tx_offset_us=$align_tx_offset_us"
-  echo "align_tx_prime=$align_tx_prime"
-  echo "zero_run_detect=$zero_run_detect"
   echo "candidate_seconds=$candidate_seconds"
-  echo "bridge_sha256=$expected_bridge_sha256"
+  echo "dsp_preset=$dsp_preset"
+  echo "dsp_sha256=$(sha256sum "$dsp_preset" | awk '{print $1}')"
+  echo "bridge_binary=$bridge_binary"
+  echo "bridge_sha256=$(sha256sum "$bridge_binary" | awk '{print $1}')"
+  echo "bridge_arguments=${bridge_arguments[*]}"
 } > "$result_dir/metadata.txt"
 echo "$result_dir" > "$ready_file"
 echo "READY result_dir=$result_dir"
