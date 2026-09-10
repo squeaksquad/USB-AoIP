@@ -273,6 +273,49 @@ switched on at the inputs even though a phones bus is pre-crossover, and every
 event came back as a single unrung impulse, which is the evidence that the
 crossover never reached this path.
 
+### MEASURED 2026-09-10: what the configurations cost the Pi
+
+Run `load-20260910T165857Z`, same engine and conditions: service stopped, four
+cores at the performance governor and 2.4 GHz, otherwise idle, 47 °C at the
+start. `measure-load.py` runs two durations and reports the *marginal* cost of
+the audio between them, because a fast configuration finishes a short file in
+less time than the process takes to start and the measurement would otherwise
+be a measurement of process startup.
+
+| Configuration | Chunk | Cores needed | Realtime factor | Peak temp |
+| --- | --- | --- | --- | --- |
+| `default` — routing and 23 crossovers, every band flat | 1024 | 0.0184 | 54.4× | 50.1 °C |
+| `loaded` — 16 outputs, 256 bands, 26 crossovers | 1024 | 0.0607 | 16.5× | 49.0 °C |
+| `loaded` | 256 | 0.0640 | 15.6× | 50.1 °C |
+| `loaded` | 48 | 0.0923 | 10.8× | 51.2 °C |
+
+`loaded` is the acceptance criterion in `work/web-ui/README.md` built as a
+preset: every output active, all 256 bands shaped, crossovers and multiple sub
+sums, with the bands varied in type, Q and sign so no shortcut a uniform filter
+might allow can flatter the result.
+
+Three things follow.
+
+**The Pi is not the constraint.** The full acceptance load costs about **6% of
+one core**, and 9% even in 48-frame chunks — the quantum the bridge already
+works in. The 12.288 million biquad evaluations per second the sizing
+arithmetic in `work/web-ui/README.md` predicted are real, and they cost about
+0.042 cores between the two rows: roughly 0.16 millicores per biquad. Nothing
+about step 4 needs to be designed around processing cost.
+
+**Small chunks are affordable.** Going from 1024 to 48 frames costs 0.032
+cores, about half as much again in relative terms and almost nothing in
+absolute ones. A low-latency DSP mode does not have to trade chunk size against
+CPU on this hardware.
+
+**None of this is a latency result.** File to file has no period deadlines, no
+interrupt contention, and no bridge competing for cores or IRQs; the numbers are
+an upper bound on throughput and a necessary condition, not a demonstration that
+a deadline can be held. `coresNeeded` is the sum across CamillaDSP's threads,
+which is why it can exceed what the wall-clock factor alone would suggest.
+
+RECOVER count was 3 before and 3 after, and nothing was throttled.
+
 ### Still not verified end to end
 
 - **Anything about CPU cost, latency, or running against ALSA devices.** No

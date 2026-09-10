@@ -7,7 +7,7 @@
 //
 // Offline: this writes JSON and exits. It compiles nothing and applies nothing.
 
-import { CHANNELS, FREQUENCIES, validateConfig } from '../web-ui/model.mjs';
+import { CHANNELS, FREQUENCIES, createConfig, validateConfig } from '../web-ui/model.mjs';
 
 const flatBands = () => FREQUENCIES.map(frequency =>
   ({enabled: true, type: 'bell', frequency, gainDb: 0, q: 1}));
@@ -168,10 +168,58 @@ export function phonesPreset() {
   return validateConfig(preset);
 }
 
+/**
+ * The shipped 7.2.4 layout, exactly as the UI creates it.
+ *
+ * Every band is flat, so no PEQ biquad is emitted at all: this is the cost of
+ * the routing and the crossovers alone. It is the floor a real preset builds on
+ * rather than a realistic load.
+ */
+export function defaultPreset() {
+  return validateConfig(createConfig());
+}
+
+/**
+ * The acceptance criterion in `work/web-ui/README.md` as a preset: all 16
+ * outputs active, all 256 bands shaped, crossovers and multiple sub sums.
+ *
+ * Bands are varied in type, Q and sign rather than set to one value, so no
+ * arithmetic shortcut a uniform filter might allow can flatter the result.
+ */
+export function loadedPreset() {
+  const preset = createConfig();
+  // The shipped layout leaves 14-16 unused; the acceptance case does not.
+  const speakers = preset.buses.find(bus => bus.kind === 'speakers');
+  // Sourced from inputs 13-15, which drive nothing in the shipped layout, so
+  // each one allocates its own main branch instead of sharing an existing one.
+  for (const index of [13, 14, 15]) {
+    preset.outputs[index].role = 'speaker';
+    preset.outputs[index].source = index - 1;
+    preset.outputs[index].busId = speakers.id;
+    speakers.outputIds.push(index);
+  }
+  speakers.layoutId = 'custom';
+  const types = ['bell', 'lowShelf', 'highShelf'];
+  preset.outputs.forEach((output, index) => {
+    output.eqEnabled = true;
+    output.bands.forEach((band, position) => {
+      band.enabled = true;
+      band.type = position === 0 ? 'lowShelf'
+        : position === FREQUENCIES.length - 1 ? 'highShelf'
+        : types[(index + position) % types.length];
+      band.gainDb = ((index + position) % 2 ? 1 : -1) * (1.5 + ((index + position) % 5));
+      band.q = 0.5 + ((index * 3 + position) % 7) * 0.35;
+    });
+  });
+  return validateConfig(preset);
+}
+
 export const PRESETS = {
   crossover: crossoverPreset,
   clip: clipPreset,
   phones: phonesPreset,
+  default: defaultPreset,
+  loaded: loadedPreset,
 };
 
 function main(argv) {

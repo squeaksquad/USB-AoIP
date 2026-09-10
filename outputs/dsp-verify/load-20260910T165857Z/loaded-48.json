@@ -1,0 +1,59 @@
+{
+  "label": "loaded@48",
+  "repeat": 3,
+  "shortSeconds": 4.0,
+  "longSeconds": 16.0,
+  "before": {
+    "tempC": 49.6,
+    "governor": "performance",
+    "khz": 2400000,
+    "loadavg": "0.36 0.08 0.03 1/166 2933037"
+  },
+  "runs": {
+    "short": {
+      "seconds": 4.0,
+      "wall": [
+        0.2516,
+        0.2507,
+        0.2513
+      ],
+      "cpu": [
+        0.3797,
+        0.3779,
+        0.3788
+      ],
+      "wallMin": 0.2507,
+      "cpuMin": 0.3779
+    },
+    "long": {
+      "seconds": 16.0,
+      "wall": [
+        0.9791,
+        1.0166,
+        0.9801
+      ],
+      "cpu": [
+        1.485,
+        1.5243,
+        1.4863
+      ],
+      "wallMin": 0.9791,
+      "cpuMin": 1.485
+    }
+  },
+  "marginal": {
+    "audioSeconds": 12.0,
+    "cpuSeconds": 1.1071,
+    "wallSeconds": 0.7284,
+    "coresNeeded": 0.09226,
+    "realtimeFactorCpu": 10.84,
+    "realtimeFactorWall": 16.47
+  },
+  "fixedCostSeconds": 0.0089,
+  "after": {
+    "tempC": 51.25,
+    "governor": "performance",
+    "khz": 2400000,
+    "loadavg": "0.36 0.08 0.03 1/166 2933083"
+  }
+}
