@@ -1,0 +1,8 @@
+result_dir=/home/bdimaio/usb-16x16-work/logs/phase4-dsp-candidate-20260910T212715Z
+sink_delay=103
+candidate_seconds=480
+dsp_preset=none
+dsp_sha256=none
+bridge_binary=/home/bdimaio/usb-16x16-work/dsp-verify/bridge-build/usb16x16-rt-bridge
+bridge_sha256=406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88
+bridge_arguments=--period 48 --buffer 192 --ring 768 --target 48 --playback-prime 96 --prime-trim 0 --rx-prime-trim 1 --tx-playback-prime 192 --rx-playback-prime 120 --ravenna-playback-buffer 384 --usb-pitch-servo 1 --tx-depth 0 --rx-depth 0 --level-gain 0.05 --align-start 1 --align-offset-us 600 --align-tx-trigger 1 --align-tx-offset-us 950 --align-tx-prime 1 --align-rx-trigger 0 --align-rx-offset-us 600 --align-rx-prime 0 --align-prime-age-margin-us 50 --zero-run-detect 1 --impulse-trace 1 --pitch-seed 0 --level-shift 0 --priority 90 --seconds 480

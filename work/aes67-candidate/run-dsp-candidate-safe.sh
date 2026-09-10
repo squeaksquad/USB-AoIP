@@ -445,14 +445,41 @@ fi
 echo "$result_dir" > "$ready_file"
 echo "READY result_dir=$result_dir"
 
+# A direction restart is counted, not fatal.
+#
+# The wrapper this was copied from aborts on the first one, which is right for
+# an unattended stability run: nothing else is touching the device, so a restart
+# means the operating point is wrong. Under the measurement harness it is not
+# right. The harness opens and closes the CoreAudio device for every readiness
+# probe, every close stops the gadget PCM, and the bridge re-primes -- the
+# device-close behaviour this project has recorded since the Pro Tools crash.
+# Two harness-driven runs on 2026-09-10 died at 15 s and 21 s on exactly that,
+# in different directions, one of them with nothing at all touching the Pi.
+#
+# So this counts restarts and lets the run finish, which is what the repo's own
+# rule says ("a bridge RECOVER during a service measurement is counted, not
+# fatal") and what the service does when the accepted figures are taken against
+# it. A runaway is still fatal: more than restart_limit means something other
+# than a probe is wrong.
+restart_limit=${USB16X16_DSP_RESTART_LIMIT:-8}
+restarts_seen=0
 while kill -0 "$bridge_pid" 2>/dev/null; do
-  if grep -Eq '^BRIDGE .*tx_restarts=[1-9][0-9]*|^BRIDGE .*rx_restarts=[1-9][0-9]*' \
-      "$result_dir/bridge.log"; then
-    echo "Phase 4 bridge restarted an ALSA direction during the candidate" >&2
+  restarts_seen=$(awk '/^BRIDGE /{
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^tx_restarts=/) { split($i, a, "="); tx = a[2] }
+        if ($i ~ /^rx_restarts=/) { split($i, a, "="); rx = a[2] }
+      }
+    } END { print tx + rx + 0 }' "$result_dir/bridge.log" 2>/dev/null)
+  restarts_seen=${restarts_seen:-0}
+  if [ "$restarts_seen" -gt "$restart_limit" ]; then
+    echo "Phase 4 bridge restarted an ALSA direction $restarts_seen times, over the limit of $restart_limit" >&2
     exit 33
   fi
   sleep 1
 done
+if [ "$restarts_seen" -gt 0 ]; then
+  echo "note: $restarts_seen ALSA direction restart(s) during the candidate, counted not fatal" >&2
+fi
 
 set +e
 wait "$bridge_pid"
