@@ -9533,6 +9533,18 @@ pair on that interval 817 / 829 (it spans the re-prime; the next read is
 the clean one). Priced: 83 leaves 35 over one period, 168 possible on this
 draw. Day count: day 1 of three on this process.
 
+CORRECTION 2026-09-10 03:10: this entry's claim that "no accepted point in
+this record has been drawn twice" is **withdrawn**. Six draws were taken on
+2026-09-06 (`draw1`..`draw6-roundtrip-64f-20260906*`, levels 793, 801, 773,
+797, 790, 803) and analysed with the impulse trace in the "pi_total" table
+above, which already established with better instrumentation than tonight's
+that **nothing logged at the prime tracks the level** — naming
+`ring_at_prime`, `overshoot` and `align_dropped` specifically — and that the
+moving term is the USB side, not the Pi path. I proposed and ran tonight's
+campaign without searching for that work first. The rest of this entry
+stands: the acceptance gate is still four runs on one anchor, and the
+sd103-over-sd132 comparison is still one draw each.
+
 **FOUND 2026-09-10 00:40 UTC: the acceptance gate measures run-to-run
 stability, not draw-to-draw reproducibility, so the sd103-over-sd132
 comparison rests on one draw each and is not established.** Raised by the
@@ -9593,3 +9605,70 @@ which is why it has not been done. Until it is, re-drawing to obtain a
 lower figure and recording it as the profile's latency reports an order
 statistic as a system property, and should not be done. sd103 at 719
 stands as the accepted operating point; 722 is filed as a draw.
+
+
+**MEASURED 2026-09-10 00:30-03:02 UTC: six fresh-anchor draws on sd103 span
+716-725, nine samples; a prime-based model was proposed, predicted, and
+falsified on the first out-of-sample test; and four coreaudiod kills in
+forty-five minutes wedged the stack, recovered by a gadget restart.**
+
+(1) The draws. All on the live sd103 profile, conf, bridge and module
+unchanged, harness 64 frames / 800 impulses, noise probe before each read
+except where noted. Levels with the TX prime figures that go with them:
+
+| draw | level | overshoot | align_dropped | first_tick_wait |
+| --- | --- | --- | --- | --- |
+| 09-07 accepted | 719 | 37 | 8 | 341 |
+| 00:30:41 | 722 | 30 | 15 | 488 |
+| 01:33:56 | 720 | 28 | 17 | 522 |
+| 01:48:57 | 720 | 28 | 17 | 538 |
+| 02:05:58 | 725 | 33 | 12 | 419 |
+| 02:59:58 | 716 | 36 | 9 | 358 |
+
+Every draw read spread 0 across its 800 impulses with score 1.000, and
+`overshoot + align_dropped` is 45 in all six. Evidence:
+`{anchor,draw1,draw2b,draw3,predict}20260910-roundtrip-64f-*.json` and the
+matching `*-noise-ch2-64f-100imp.*` in `usb-holes-20260904/`.
+
+(2) The spread is **9 samples, about 190 us**, mean near 720. That is much
+tighter than the 757-828 the six 2026-09-06 draws spanned on the
+transmit-slot-fix module, but the two are not comparable: different module,
+profile and era. What it does bound is the current configuration, and 9
+samples is roughly a third of the 28 that separated sd103 from sd132.
+
+(3) A model was proposed and falsified. Four draws (720/28, 720/28, 722/30,
+725/33) fit `level = overshoot + 692` exactly, which looked like the
+"level follows the bridge start depth" rule finally parameterised
+correctly. It predicted 728 for the 02:59 session's overshoot of 36. The
+session **measured 716**, off by 12. The fit rested on three distinct
+overshoot values with one duplicated point flattering the count. This is
+the second time this hypothesis has been rejected: the 2026-09-06 trace
+analysis had already named `overshoot` and `align_dropped` as not tracking
+the level, from a decomposition of the path rather than a fit to six
+points. The prediction was recorded before the measurement, which is the
+only reason the failure is unambiguous.
+
+(4) The procedure has a cost that was not in the record. A fresh anchor by
+`killall coreaudiod` storms the bridge: about 335 recoveries in the storm,
+the supervisor's host-absent detector stopping it, and a 60 s wait before
+retry. Most attempts did not re-enumerate on the first try. The
+host-absent episode counter ran 4, 10, 18, 26, 29 across the campaign, and
+after the fourth kill the Mac's USB audio engine wedged: `udc` reported
+`configured`/`high-speed` while `tx_input_frames` stayed 0 through repeated
+60 s retries, and the harness hung waiting for input, so holding the device
+open from the Mac did not clear it. **Audio was down about fifteen
+minutes.** Recovery was `sudo systemctl restart usb-16x16.service`, after
+which the stack came back clean: 0 recoveries, 0 restarts, 0 drops, 0
+clipped, `tx_input` flowing. The 716 draw is on that post-restart session,
+which the record also counts as a fresh anchor, and it is the lowest figure
+of the night.
+
+**How to apply:** a fresh-anchor draw is not the cheap operation the earlier
+notes imply. Budget a storm, a possible 60 s dead wait, and a real chance of
+needing a gadget restart. Do not run several in succession, and do not
+script them. Take the daily gap-bar read first, as was done here: the read
+`bar-day1b-20260910T002741Z.txt` is the only reason the 26.3 h session was
+not lost.
+
+Nothing is accepted or retracted by this entry. sd103 at 719 stands. The 716
+and 725 are draws, not new operating points.

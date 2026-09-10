@@ -1,0 +1,2 @@
+diag: callbacks=1 inputWithData=19463 inputSkipped=0 copiedFrames=1245632 placementMisses=0 rawInputPeak=0.0 capturePeak=0.0 firstOut=86096.0 firstIn=85844.0 lastIn=1331412.0 firstInBytes=4096 outputFrames=1245632 inDisc=0 outDisc=0 peakIndex=0 captureCount=1255200 markers=[24252, 36252, 48252, 60252] nonZeroSpan=-1..-1 (0 nonzero)
+error: capture contains no signal at any candidate impulse lag
