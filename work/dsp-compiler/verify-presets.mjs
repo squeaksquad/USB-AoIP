@@ -214,12 +214,52 @@ export function loadedPreset() {
   return validateConfig(preset);
 }
 
+/**
+ * Full DSP cost, transparent to an impulse.
+ *
+ * Measuring transport latency through `loaded` does not work: it high-passes
+ * at 80 Hz and shapes all 256 bands, so the impulse the correlator is looking
+ * for is no longer there. The 2026-09-10 run read the peak of a smeared
+ * response 13 dB down with 7 samples of spread, against zero spread on the
+ * direct arm -- a difference in the signal, not in the transport.
+ *
+ * This preset keeps the biquads and drops the filtering: all 256 bands are
+ * emitted, so the stage pays for them, but each is 0.01 dB, which is inaudible
+ * and leaves an impulse an impulse. Crossovers are off and no output takes a
+ * delay, so nothing else can move the peak either. It is what makes "does the
+ * stage add latency" a question the harness can answer.
+ */
+export function transparentPreset() {
+  const preset = base('verify-transparent');
+  preset.inputs.forEach(input => { input.crossover = false; });
+  const speakers = [];
+  preset.outputs = Array.from({length: CHANNELS}, (_, index) => {
+    speakers.push(index);
+    return output(`Out ${index + 1}`, 'speaker', index, 'speakers', {
+      bands: FREQUENCIES.map((frequency, position) => ({
+        enabled: true,
+        type: 'bell',
+        frequency,
+        // Emitted because it is non-zero, transparent because it is 0.01 dB.
+        gainDb: position % 2 ? 0.01 : -0.01,
+        q: 1,
+      })),
+    });
+  });
+  preset.buses = [{
+    id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds: speakers,
+    layoutId: 'custom', gainDb: 0, mute: false,
+  }];
+  return validateConfig(preset);
+}
+
 export const PRESETS = {
   crossover: crossoverPreset,
   clip: clipPreset,
   phones: phonesPreset,
   default: defaultPreset,
   loaded: loadedPreset,
+  transparent: transparentPreset,
 };
 
 function main(argv) {

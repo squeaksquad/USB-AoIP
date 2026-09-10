@@ -37,9 +37,16 @@ expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9
 # The candidate build of 2026-09-10: the accepted 05f37bd9 source plus the DSP
 # stage, wired into usb-to-ravenna only.
 expected_bridge_sha256=406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88
-# The compiled preset. Pinned like every other artifact: a run that filtered
-# something other than what was recorded would be worse than no run.
-expected_dsp_sha256=2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c
+# The compiled presets this wrapper will run. Pinned like every other artifact:
+# a run that filtered something other than what was recorded would be worse
+# than no run. Two are accepted, because the battery needs both:
+#
+#   loaded       16 outputs, 256 bands, 26 crossovers -- what the stage costs
+#   transparent  the same 256 bands at 0.01 dB and no crossovers -- what the
+#                stage does to latency, which cannot be asked of `loaded` at
+#                all, since its 80 Hz high-pass means the impulse the harness
+#                correlates against is no longer in the signal
+expected_dsp_sha256_list="2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c ad69598473691bffdd0808d79d4ff37f4d46ef9f0fa2b34b5fa1f3152b9bbeb9"
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 # Only two arguments. Everything below is the accepted profile as a constant:
@@ -286,8 +293,13 @@ if [ "$dsp_preset" != none ]; then
     echo "missing DSP preset: $dsp_preset" >&2
     exit 40
   fi
-  if [ "$(sha256sum "$dsp_preset" | awk '{print $1}')" != "$expected_dsp_sha256" ]; then
-    echo "DSP preset hash mismatch" >&2
+  dsp_actual_sha256=$(sha256sum "$dsp_preset" | awk '{print $1}')
+  dsp_known=0
+  for known in $expected_dsp_sha256_list; do
+    [ "$dsp_actual_sha256" = "$known" ] && dsp_known=1
+  done
+  if [ "$dsp_known" -ne 1 ]; then
+    echo "DSP preset hash $dsp_actual_sha256 is not one this wrapper will run" >&2
     exit 41
   fi
 fi
@@ -441,6 +453,7 @@ fi
   echo "bridge_binary=$bridge_binary"
   echo "bridge_sha256=$(sha256sum "$bridge_binary" | awk '{print $1}')"
   echo "bridge_arguments=${bridge_arguments[*]}"
+  echo "direction_restarts=$restarts_seen"
 } > "$result_dir/metadata.txt"
 echo "$result_dir" > "$ready_file"
 echo "READY result_dir=$result_dir"
@@ -493,8 +506,15 @@ case "$bridge_status" in
     exit 34
     ;;
 esac
-if grep -Eqi 'fatal:|xrun|overrun|underrun|broken pipe|restart[^s]' "$result_dir/bridge.log"; then
-  echo "Phase 4 bridge log contains a failure marker" >&2
+# The same marker check, minus the RECOVER lines themselves.
+#
+# A counted RECOVER line carries "XRUN" and "Broken pipe" by construction, so
+# leaving them in would fail every run that the watcher above deliberately let
+# finish -- which is what happened on 2026-09-10: six counted restarts, a valid
+# measurement, and exit 35 anyway. Markers anywhere else still fail the run.
+if grep -v '^RECOVER ' "$result_dir/bridge.log" |
+   grep -Eqi 'fatal:|xrun|overrun|underrun|broken pipe|restart[^s]'; then
+  echo "Phase 4 bridge log contains a failure marker outside a counted RECOVER" >&2
   exit 35
 fi
 if ! grep -Eq '^SUMMARY .*"tx_restarts":0,"rx_restarts":0' "$result_dir/bridge.log"; then
