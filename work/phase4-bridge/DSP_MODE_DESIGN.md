@@ -1,9 +1,14 @@
 # DSP mode inside the bridge — step 4 design
 
-Status: **design only.** Nothing here is implemented, staged or installed. It
-is the note that has to be agreed before service code is written, in the same
-place in the sequence that `work/aes67-bridge/DEPLOYMENT_PLAN.md` occupied for
-the persistent service.
+Status: **built and instrumented, not measured under the transport, not
+installed.** The stage is wired into `usb-to-ravenna`, the bridge reports what
+it costs, and the budget below is measured rather than estimated. No audio has
+been carried through it: the pinned binary and the installed service are
+untouched, and the supervisor still pins the old hash.
+
+See "MEASURED 2026-09-10: the budget" at the end for what the numbers turned
+out to be. Where they contradict what this note predicted, the measurement
+wins and the prediction is marked.
 
 Step 4 of the delivery sequence in `work/web-ui/README.md` is the isolated DSP
 service. This note decides where the engine sits, and says what that costs, what
@@ -196,3 +201,47 @@ existing rules apply unchanged, plus what is specific to this stage:
   interacts with the queue depths the profiles are tuned around.
 - Does the filter stage belong on `tx` only, or should `rx` carry a bypassed
   instance so the two directions stay structurally identical?
+
+
+## MEASURED 2026-09-10: the budget
+
+`usb16x16-dsp-offline --bench`, 20,000 calls per block on the Pi with the
+service stopped, on the `loaded` preset -- 16 outputs, 256 PEQ bands, 26
+crossovers, 308 biquads in total. In memory, no file and no device.
+
+| Block | Audio | Median | p99 | Max | Worst-case duty |
+| --- | --- | --- | --- | --- | --- |
+| 48 frames | 1000 µs | 67.8 µs | 69.4 µs | 111.5 µs | 11.1% |
+| 96 | 2000 µs | 139.6 µs | 145.3 µs | 182.0 µs | 9.1% |
+| 192 | 4000 µs | 267.1 µs | 269.1 µs | 301.8 µs | 7.5% |
+| 512 | 10667 µs | 733.9 µs | 741.1 µs | 822.3 µs | 7.7% |
+
+**Steady state fits with room to spare.** At the bridge's own 48-frame quantum
+the stage takes 67.8 µs of a 1000 µs cycle, 111.5 µs at its worst. The
+bridge's existing render path is around 104 µs for a 192-frame prime, so a
+48-frame cycle's own work is a fraction of that: the whole cycle lands near a
+tenth of its budget.
+
+**The prime still cannot filter, and now that is measured rather than
+projected.** A 192-frame filtered render costs 267 µs median and 302 µs worst
+against 46 µs of slack. With the render path's own 104 µs the prime would take
+about 371 µs into a 150 µs margin and miss its target every time, moving the
+aligned start a period later. The bypass is a requirement, not a precaution.
+
+The bridge's own implementation is cheaper than the reference engine's per unit
+of audio -- 67.8 µs per millisecond against CamillaDSP's 92 -- which is the
+expected direction for a fixed pipeline with no format negotiation, and is not
+a claim about CamillaDSP.
+
+### What these numbers are not
+
+An idle Pi, a buffer already in cache, no SCHED_FIFO contention, no interrupts,
+and no other direction competing. Every one of those makes this an
+underestimate of what the audio thread actually pays. It answers "can the stage
+fit in a cycle at all", which was the question blocking the design, and it does
+not answer "does the cycle hold its deadline".
+
+That second question is what `dsp_us_max` in the BRIDGE line and the SUMMARY
+JSON exist for. It is the maximum, never the mean, because a mean hides exactly
+the cycle that missed. Until a candidate session has reported it under load,
+nothing here is an acceptance.

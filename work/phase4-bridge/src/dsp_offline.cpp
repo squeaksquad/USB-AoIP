@@ -18,9 +18,13 @@
 
 #include "usb16x16/bridge_core.hpp"
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <numeric>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -75,8 +79,54 @@ int usage() {
         "\n"
         "  --format s32le|f64le   sample format of both files (default s32le)\n"
         "  --block N              frames per process() call (default 48)\n"
-        "  --bypass               load the artifact but do not run it\n";
+        "  --bypass               load the artifact but do not run it\n"
+        "  --bench N              time N process() calls in memory and exit\n";
     return 2;
+}
+
+// What one process() call costs, at the block size the caller asks for.
+//
+// No file, no device, no transport: just the arithmetic, on a buffer already
+// in cache. That makes it an underestimate of what the audio thread pays and
+// the right number for the question it answers, which is whether the stage can
+// fit in a cycle at all. The maximum is the figure that decides that; a mean
+// hides exactly the cycle that would have missed.
+int benchmark(usb16x16::DspStage& stage, const std::size_t block, const std::size_t runs) {
+    std::vector<float> buffer(block * kChannels);
+    // Real signal rather than silence: an IIR fed zeros settles into denormals,
+    // and the cost measured would be the denormal handling.
+    for (std::size_t frame = 0; frame < block; ++frame) {
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            buffer[frame * kChannels + channel] = static_cast<float>(
+                0.25 * std::sin(2.0 * M_PI * (55.0 * static_cast<double>(channel + 1)) *
+                                static_cast<double>(frame) / 48000.0));
+        }
+    }
+    std::vector<double> spent;
+    spent.reserve(runs);
+    for (std::size_t run = 0; run < runs; ++run) {
+        const auto started = std::chrono::steady_clock::now();
+        stage.process(buffer.data(), block);
+        const auto finished = std::chrono::steady_clock::now();
+        spent.push_back(std::chrono::duration<double, std::micro>(finished - started).count());
+    }
+    std::sort(spent.begin(), spent.end());
+    const double total = std::accumulate(spent.begin(), spent.end(), 0.0);
+    const double audio_us = static_cast<double>(block) / 48.0 * 1000.0;
+    std::cout << "{\"block\":" << block
+              << ",\"runs\":" << runs
+              << ",\"audio_us\":" << audio_us
+              << ",\"min_us\":" << spent.front()
+              << ",\"median_us\":" << spent[spent.size() / 2]
+              << ",\"p99_us\":" << spent[static_cast<std::size_t>(
+                     static_cast<double>(spent.size()) * 0.99)]
+              << ",\"max_us\":" << spent.back()
+              << ",\"mean_us\":" << total / static_cast<double>(runs)
+              // The share of one cycle the stage would take at this block size.
+              << ",\"duty_median\":" << spent[spent.size() / 2] / audio_us
+              << ",\"duty_max\":" << spent.back() / audio_us
+              << "}\n";
+    return 0;
 }
 
 }  // namespace
@@ -87,6 +137,7 @@ int main(const int argc, char** const argv) {
     std::string output_path;
     Format format = Format::s32le;
     std::size_t block = 48;
+    std::size_t bench = 0;
     bool bypass = false;
 
     for (int index = 1; index < argc; ++index) {
@@ -102,6 +153,7 @@ int main(const int argc, char** const argv) {
         else if (argument == "--out") output_path = take();
         else if (argument == "--block") block = std::stoul(take());
         else if (argument == "--bypass") bypass = true;
+        else if (argument == "--bench") bench = std::stoul(take());
         else if (argument == "--format") {
             const std::string value = take();
             if (value == "s32le") format = Format::s32le;
@@ -111,7 +163,8 @@ int main(const int argc, char** const argv) {
         else if (!argument.empty() && argument.front() == '-') return usage();
         else artifact_path = argument;
     }
-    if (artifact_path.empty() || input_path.empty() || output_path.empty()) return usage();
+    if (artifact_path.empty()) return usage();
+    if (bench == 0 && (input_path.empty() || output_path.empty())) return usage();
     if (block == 0) { std::cerr << "--block must be positive\n"; return 2; }
 
     std::ifstream artifact_file(artifact_path, std::ios::binary);
@@ -135,6 +188,10 @@ int main(const int argc, char** const argv) {
               << " delay=" << stage.delay_samples() << " samples"
               << " block=" << block
               << (bypass ? " BYPASSED" : "") << '\n';
+
+    if (bench > 0) {
+        return benchmark(stage, block, bench);
+    }
 
     std::ifstream input(input_path, std::ios::binary);
     if (!input) { std::cerr << "cannot read " << input_path << '\n'; return 3; }

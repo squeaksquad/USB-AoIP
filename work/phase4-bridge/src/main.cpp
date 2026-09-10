@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <csignal>
+#include <fstream>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -19,6 +20,7 @@
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -147,6 +149,11 @@ void signal_handler(int) {
 enum class SampleFormat { s24_3le, s32_le };
 
 struct Options {
+    // Coefficient artifact from `usb16x16-dsp-compile --bridge`. Empty means
+    // direct mode, which is the absence of the stage rather than a preset with
+    // everything switched off: nothing reads or writes the buffer on its way
+    // through, and the accepted profile must measure what it measures today.
+    std::string dsp_preset;
     std::string usb_device{"hw:CARD=UAC2Gadget,DEV=0"};
     std::string ravenna_device{"hw:CARD=RAVENNA,DEV=0"};
     unsigned int rate{48000};
@@ -408,6 +415,7 @@ private:
         << "                         buffer request for RAVENNA playback alone (0 = --buffer)\n"
         << "  --ring FRAMES          elastic-ring capacity (default 768)\n"
         << "  --target FRAMES        elastic-ring target (default 192)\n"
+        << "  --dsp-preset FILE      usb-to-ravenna DSP coefficients (default: no DSP)\n"
         << "  --playback-prime N     frames primed into the ALSA playback queue\n"
         << "                         (default 0 = the whole playback buffer)\n"
         << "  --tx-playback-prime N  usb-to-ravenna override (0 = use --playback-prime)\n"
@@ -513,6 +521,8 @@ Options parse_options(const int argc, char** argv) {
         const char* value = argv[++index];
         if (argument == "--usb") {
             options.usb_device = value;
+        } else if (argument == "--dsp-preset") {
+            options.dsp_preset = value;
         } else if (argument == "--ravenna") {
             options.ravenna_device = value;
         } else if (argument == "--period") {
@@ -888,6 +898,11 @@ struct Telemetry {
     std::atomic<std::uint64_t> rx_consumed_frames{0};
     std::atomic<std::uint64_t> tx_dropped_frames{0};
     std::atomic<std::uint64_t> rx_dropped_frames{0};
+    // The DSP stage's cost on the audio thread, usb-to-ravenna only.
+    std::atomic<std::int64_t> tx_dsp_ns_max{0};
+    std::atomic<std::uint64_t> tx_dsp_ns_total{0};
+    std::atomic<std::uint64_t> tx_dsp_calls{0};
+    std::atomic<std::uint64_t> tx_dsp_frames{0};
     std::atomic<std::uint64_t> tx_short_begin_frames{0};
     std::atomic<std::uint64_t> rx_short_begin_frames{0};
     // -1 means not yet observed.
@@ -1096,6 +1111,23 @@ struct Direction {
     snd_pcm_sframes_t playback_delay{};
     std::array<float, kScratchFrames * kChannels> capture_scratch{};
     std::array<float, kScratchFrames * kChannels> playback_scratch{};
+    // The DSP stage, on usb-to-ravenna only. Loaded before the audio thread
+    // starts; process() allocates nothing and cannot throw.
+    usb16x16::DspStage dsp;
+    bool dsp_enabled{false};
+    bool dsp_announced{false};
+    // Renders since this direction primed. The prime render is 192 frames --
+    // 4 ms of audio -- inside a 150 us placement margin that already spends
+    // about 104 us, so filtering it would miss the target every time and move
+    // the aligned start a period later. It is therefore rendered unfiltered
+    // and the stage engages from the next render on. Reset by a re-prime.
+    std::uint64_t renders_after_prime{};
+    // What the stage costs on the audio thread. The maximum is the figure
+    // that matters: a mean hides exactly the cycle that missed a deadline.
+    std::int64_t dsp_ns_max{};
+    std::uint64_t dsp_ns_total{};
+    std::uint64_t dsp_calls{};
+    std::uint64_t dsp_frames{};
     // Zero-run detectors on the block read from this direction's capture
     // and on the block written to its playback, with the stage names the
     // ZERORUN lines carry. Off unless --zero-run-detect 1.
@@ -1667,6 +1699,27 @@ IoResult render_to_playback(Direction& direction,
         return IoResult::idle;
     }
     frames = static_cast<snd_pcm_uframes_t>(produced);
+    if (direction.dsp_enabled) {
+        if (direction.renders_after_prime == 0) {
+            // The prime render, deliberately unfiltered: see renders_after_prime.
+        } else {
+            if (!direction.dsp_announced) {
+                direction.dsp_announced = true;
+                std::cerr << "DSP engaged direction=" << direction.name
+                          << " preset=\"" << direction.dsp.preset() << "\""
+                          << " biquads=" << direction.dsp.biquad_count()
+                          << " t_us=" << elapsed_us() << '\n';
+            }
+            const std::int64_t started_ns = monotonic_now_ns();
+            direction.dsp.process(direction.playback_scratch.data(), produced);
+            const std::int64_t spent_ns = monotonic_now_ns() - started_ns;
+            direction.dsp_ns_max = std::max(direction.dsp_ns_max, spent_ns);
+            direction.dsp_ns_total += static_cast<std::uint64_t>(spent_ns);
+            ++direction.dsp_calls;
+            direction.dsp_frames += produced;
+        }
+        ++direction.renders_after_prime;
+    }
     std::uint64_t clipped = 0;
     for (snd_pcm_uframes_t frame = 0; frame < frames; ++frame) {
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
@@ -1755,6 +1808,13 @@ void restart_direction(Direction& direction) {
     direction.playback_impulse.reset();
     direction.primed = false;
     direction.playback_started = false;
+    // The stream broke, so the next render is a prime again and must not
+    // filter; and the filter state belongs to a stream that no longer exists,
+    // so it is cleared rather than left to ring into the new one.
+    direction.renders_after_prime = 0;
+    if (direction.dsp_enabled) {
+        direction.dsp.reset();
+    }
     ++direction.restarts;
     if (direction.align_tick_ns > 0 && direction.last_fresh_wake_ns > 0) {
         // Re-prepare on the tick phase the start alignment chose: the next
@@ -2001,6 +2061,10 @@ void publish_telemetry(const Direction& tx,
     telemetry.rx_playback_delay.store(rx.playback_delay, std::memory_order_relaxed);
     telemetry.tx_restarts.store(tx.restarts, std::memory_order_relaxed);
     telemetry.rx_restarts.store(rx.restarts, std::memory_order_relaxed);
+    telemetry.tx_dsp_ns_max.store(tx.dsp_ns_max, std::memory_order_relaxed);
+    telemetry.tx_dsp_ns_total.store(tx.dsp_ns_total, std::memory_order_relaxed);
+    telemetry.tx_dsp_calls.store(tx.dsp_calls, std::memory_order_relaxed);
+    telemetry.tx_dsp_frames.store(tx.dsp_frames, std::memory_order_relaxed);
     telemetry.tx_input_frames.store(tx.input_frames, std::memory_order_relaxed);
     telemetry.rx_input_frames.store(rx.input_frames, std::memory_order_relaxed);
     telemetry.tx_consumed_frames.store(tx.resampler.consumed_frames(), std::memory_order_relaxed);
@@ -2103,6 +2167,18 @@ double capture_mean(const std::uint64_t total, const std::uint64_t samples) noex
     return samples == 0 ? 0.0 : static_cast<double>(total) / static_cast<double>(samples);
 }
 
+// Mean microseconds per DSP call. Reported beside the maximum, never instead
+// of it: the mean is what the stage usually costs, the maximum is whether it
+// fits.
+double dsp_mean_us(const Telemetry& telemetry) noexcept {
+    const std::uint64_t calls = telemetry.tx_dsp_calls.load(std::memory_order_relaxed);
+    if (calls == 0) {
+        return 0.0;
+    }
+    return static_cast<double>(telemetry.tx_dsp_ns_total.load(std::memory_order_relaxed)) /
+           static_cast<double>(calls) / 1000.0;
+}
+
 // The pitch servo's control writes live here, off the audio thread: the
 // audio thread publishes wanted_pitch and this thread applies it, at most
 // once per second, which is well inside the estimator's own update rate.
@@ -2194,6 +2270,9 @@ void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
                   << " rx_caphist=" << format_histogram(telemetry.rx_capture_histogram)
                   << " tx_clip=" << telemetry.tx_clipped_samples.load()
                   << " rx_clip=" << telemetry.rx_clipped_samples.load()
+                  << " dsp_us_max=" << static_cast<double>(telemetry.tx_dsp_ns_max.load()) / 1000.0
+                  << " dsp_us_mean=" << dsp_mean_us(telemetry)
+                  << " dsp_calls=" << telemetry.tx_dsp_calls.load()
                   << " pitch=" << telemetry.applied_pitch.load()
                   << " phase_us=" << telemetry.grid_phase_us.load()
                   << " bias_ppm="
@@ -2212,6 +2291,42 @@ void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
 }
 
 int run(const Options& options) {
+    // Loaded before anything opens a device: a preset that will not load should
+    // cost a message, not a PCM. A preset that will not load also stops the
+    // bridge rather than starting it without one -- a session that silently ran
+    // direct when it was asked for DSP would be measured as if it had filtered.
+    usb16x16::DspStage dsp_stage;
+    bool dsp_loaded = false;
+    if (!options.dsp_preset.empty()) {
+        std::ifstream preset_file(options.dsp_preset, std::ios::binary);
+        if (!preset_file) {
+            std::cerr << "DSP preset " << options.dsp_preset << " cannot be read\n";
+            return 2;
+        }
+        std::ostringstream preset_text;
+        preset_text << preset_file.rdbuf();
+        try {
+            dsp_stage = usb16x16::DspStage::load(preset_text.str());
+        } catch (const std::exception& error) {
+            std::cerr << "DSP preset " << options.dsp_preset << ": " << error.what() << '\n';
+            return 2;
+        }
+        dsp_loaded = true;
+        std::cerr << "DSP loaded file=" << options.dsp_preset
+                  << " preset=\"" << dsp_stage.preset() << "\""
+                  << " internal=" << dsp_stage.internal_channels()
+                  << " biquads=" << dsp_stage.biquad_count()
+                  << " delay_frames=" << dsp_stage.delay_samples() << '\n';
+        if (dsp_stage.delay_samples() > 0) {
+            // The alignment delay is transport latency, all of it, on every
+            // output: the block is not complete until the most delayed channel
+            // has been produced. Said here as well as in the compiler, because
+            // this is where it is actually paid.
+            std::cerr << "DSP delay adds " << dsp_stage.delay_samples() << " frames ("
+                      << static_cast<double>(dsp_stage.delay_samples()) / 48.0
+                      << " ms) of latency to every output, not only the delayed ones\n";
+        }
+    }
     const snd_pcm_uframes_t ravenna_playback_request = options.ravenna_playback_buffer != 0
         ? options.ravenna_playback_buffer
         : options.requested_buffer;
@@ -2257,6 +2372,13 @@ int run(const Options& options) {
 
     Direction tx("usb-to-ravenna", usb_capture, ravenna_playback, options.ring_frames);
     Direction rx("ravenna-to-usb", ravenna_capture, usb_playback, options.ring_frames);
+    if (dsp_loaded) {
+        // usb-to-ravenna is the "USB -> DSP -> AoIP" path. ravenna-to-usb stays
+        // a pass-through and carries no bypassed instance, so there is nothing
+        // on the return path to go wrong.
+        tx.dsp = std::move(dsp_stage);
+        tx.dsp_enabled = true;
+    }
     tx.playback_prime_frames = tx_prime;
     rx.playback_prime_frames = rx_prime;
     tx.prime_trim = options.prime_trim;
@@ -2639,6 +2761,20 @@ int run(const Options& options) {
             : static_cast<std::int64_t>(value);
     };
     std::cout << "SUMMARY {\"ppm\":" << std::fixed << std::setprecision(3) << estimator.ppm()
+              << ",\"dsp_preset\":\"" << (tx.dsp_enabled ? tx.dsp.preset() : std::string{}) << "\""
+              << ",\"dsp_biquads\":" << (tx.dsp_enabled ? tx.dsp.biquad_count() : 0)
+              << ",\"dsp_delay_frames\":" << (tx.dsp_enabled ? tx.dsp.delay_samples() : 0)
+              << ",\"dsp_us_max\":" << static_cast<double>(tx.dsp_ns_max) / 1000.0
+              << ",\"dsp_us_mean\":"
+              << (tx.dsp_calls == 0 ? 0.0
+                  : static_cast<double>(tx.dsp_ns_total) / static_cast<double>(tx.dsp_calls) / 1000.0)
+              << ",\"dsp_calls\":" << tx.dsp_calls
+              << ",\"dsp_frames\":" << tx.dsp_frames
+              // Frames per call, so a maximum can be read against the block it
+              // was paid on rather than against an assumed period.
+              << ",\"dsp_frames_per_call\":"
+              << (tx.dsp_calls == 0 ? 0.0
+                  : static_cast<double>(tx.dsp_frames) / static_cast<double>(tx.dsp_calls))
               << ",\"tx_restarts\":" << tx.restarts
               << ",\"rx_restarts\":" << rx.restarts
               << ",\"tx_input_frames\":" << tx.input_frames
