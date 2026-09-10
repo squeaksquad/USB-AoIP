@@ -1,0 +1,53 @@
+{
+  "preset": "verify-phones",
+  "internalChannels": 4,
+  "channelMap": [
+    {
+      "index": 0,
+      "kind": "phones",
+      "busId": "hp-pair",
+      "ear": 0
+    },
+    {
+      "index": 1,
+      "kind": "phones",
+      "busId": "hp-pair",
+      "ear": 1
+    },
+    {
+      "index": 2,
+      "kind": "phones",
+      "busId": "hp-downmix",
+      "ear": 0
+    },
+    {
+      "index": 3,
+      "kind": "phones",
+      "busId": "hp-downmix",
+      "ear": 1
+    }
+  ],
+  "filterCount": 2,
+  "biquadCount": 0,
+  "crossoverCount": 0,
+  "headroomDb": -9,
+  "worstCaseDbfs": [
+    -9,
+    -9,
+    -1.36,
+    -1.63,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "warnings": []
+}

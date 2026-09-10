@@ -1,0 +1,77 @@
+{
+  "preset": "verify-clip",
+  "internalChannels": 8,
+  "channelMap": [
+    {
+      "index": 0,
+      "kind": "main",
+      "input": 0
+    },
+    {
+      "index": 1,
+      "kind": "main",
+      "input": 1
+    },
+    {
+      "index": 2,
+      "kind": "main",
+      "input": 2
+    },
+    {
+      "index": 3,
+      "kind": "main",
+      "input": 7
+    },
+    {
+      "index": 4,
+      "kind": "bass",
+      "input": 3,
+      "lfe": false
+    },
+    {
+      "index": 5,
+      "kind": "bass",
+      "input": 4,
+      "lfe": false
+    },
+    {
+      "index": 6,
+      "kind": "bass",
+      "input": 5,
+      "lfe": false
+    },
+    {
+      "index": 7,
+      "kind": "bass",
+      "input": 6,
+      "lfe": false
+    }
+  ],
+  "filterCount": 7,
+  "biquadCount": 0,
+  "crossoverCount": 4,
+  "headroomDb": 0,
+  "worstCaseDbfs": [
+    0,
+    6,
+    12,
+    12.04,
+    0,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "warnings": [
+    "Output 2 (Plus 6) can reach 6.00 dBFS from coherent full-scale inputs. Lower the send gains, the output gain, or the headroom trim.",
+    "Output 3 (Plus 12) can reach 12.00 dBFS from coherent full-scale inputs. Lower the send gains, the output gain, or the headroom trim.",
+    "Output 4 (Sum of 4) can reach 12.04 dBFS from coherent full-scale inputs. Lower the send gains, the output gain, or the headroom trim."
+  ]
+}

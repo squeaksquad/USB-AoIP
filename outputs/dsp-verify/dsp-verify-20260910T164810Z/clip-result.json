@@ -1,0 +1,67 @@
+{
+  "frames": 24240,
+  "railFrames": 240,
+  "amplitude": 1.0,
+  "engineStderr": "0 12:48:15.530575 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2373 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.530714 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2369 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.530856 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2479 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.530991 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2457 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.531157 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2376 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.531294 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2367 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.531434 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2376 samples clipped, peak +12.00 dB (398.1%)\n2026-09-10 12:48:15.531578 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2368 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.531706 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2375 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.531828 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2505 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.531956 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2428 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.532079 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2372 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.532193 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2368 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.532258 INFO [camilladsp] <src/bin.rs:420> Capture finished\n2026-09-10 12:48:15.532317 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2375 samples clipped, peak +12.01 dB (398.5%)\n2026-09-10 12:48:15.532439 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2367 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.532575 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2376 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.532680 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2536 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.532777 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2400 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.532883 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2369 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.532983 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2374 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.533089 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 2368 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.533187 \u001b[38;5;208mWARN\u001b[0m [camillalib::utils::conversions] <src/utils/conversions.rs:59> Clipping detected, 1715 samples clipped, peak +12.04 dB (400.0%)\n2026-09-10 12:48:15.533217 INFO [camilladsp] <src/bin.rs:399> Playback finished\n",
+  "unity": {
+    "output": 1,
+    "input": 1,
+    "compared": 24240,
+    "matched": 24240,
+    "mismatches": [],
+    "bitTransparent": true
+  },
+  "invertedUnity": {
+    "output": 5,
+    "input": 8,
+    "compared": 24240,
+    "matched": 24240,
+    "mismatches": [],
+    "verdicts": {
+      "in range": 24200,
+      "saturated": 40
+    },
+    "saturatesCorrectly": true
+  },
+  "gainPaths": [
+    {
+      "source": 2,
+      "gainDb": 6.0,
+      "invert": false,
+      "verdicts": {
+        "in range": 8141,
+        "saturated": 16099
+      },
+      "examples": [],
+      "maxValue": 2147483647,
+      "minValue": -2147483648
+    },
+    {
+      "source": 3,
+      "gainDb": 12.0,
+      "invert": false,
+      "verdicts": {
+        "in range": 3959,
+        "saturated": 20281
+      },
+      "examples": [],
+      "maxValue": 2147483647,
+      "minValue": -2147483648
+    }
+  ],
+  "sumPaths": [
+    {
+      "output": 4,
+      "verdicts": {
+        "in range": 4103,
+        "saturated": 20137
+      },
+      "examples": [],
+      "peakInternal": 3.999834100616955,
+      "maxValue": 2147483647,
+      "minValue": -2147483648,
+      "peakInternalDbfs": 12.041
+    }
+  ],
+  "floatEngineStderr": "2026-09-10 12:48:15.602998 INFO [camilladsp] <src/bin.rs:847> CamillaDSP version 4.1.3 (05e9cfc)\n2026-09-10 12:48:15.603009 INFO [camilladsp] <src/bin.rs:848> Running on linux, aarch64\n2026-09-10 12:48:15.606891 INFO [camilladsp] <src/bin.rs:420> Capture finished\n2026-09-10 12:48:15.607894 INFO [camilladsp] <src/bin.rs:399> Playback finished\n"
+}

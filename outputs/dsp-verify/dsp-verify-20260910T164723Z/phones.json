@@ -1,0 +1,2592 @@
+{
+  "version": 2,
+  "name": "verify-phones",
+  "mode": "dsp",
+  "source": "usb",
+  "sampleRate": 48000,
+  "headroomDb": -9,
+  "bassEnabled": true,
+  "eqBypass": false,
+  "lfe": {
+    "input": 15,
+    "lowpassHz": 120,
+    "slope": 24,
+    "trimDb": 0
+  },
+  "inputs": [
+    {
+      "label": "In 1",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 2",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 3",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 4",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 5",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 6",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 7",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 8",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 9",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 10",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 11",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 12",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 13",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 14",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 15",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    },
+    {
+      "label": "In 16",
+      "crossover": true,
+      "highpassHz": 80,
+      "lowpassHz": 80,
+      "slope": 24
+    }
+  ],
+  "outputs": [
+    {
+      "label": "Pair L",
+      "role": "speaker",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": "hp-pair"
+    },
+    {
+      "label": "Pair R",
+      "role": "speaker",
+      "source": 1,
+      "gainDb": 0,
+      "delayMs": 2.5,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": "hp-pair"
+    },
+    {
+      "label": "Downmix L",
+      "role": "speaker",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": "hp-downmix"
+    },
+    {
+      "label": "Downmix R",
+      "role": "speaker",
+      "source": 1,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": true,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": "hp-downmix"
+    },
+    {
+      "label": "Spare 5",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 6",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 7",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 8",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 9",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 10",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 11",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 12",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 13",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 14",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 15",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    },
+    {
+      "label": "Spare 16",
+      "role": "unused",
+      "source": 0,
+      "gainDb": 0,
+      "delayMs": 0,
+      "mute": false,
+      "invert": false,
+      "eqEnabled": true,
+      "bands": [
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 25,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 40,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 63,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 100,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 160,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 250,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 400,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 630,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 1600,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 2500,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 4000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 6300,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 10000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 14000,
+          "gainDb": 0,
+          "q": 1
+        },
+        {
+          "enabled": true,
+          "type": "bell",
+          "frequency": 18000,
+          "gainDb": 0,
+          "q": 1
+        }
+      ],
+      "busId": null
+    }
+  ],
+  "sends": [
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  ],
+  "buses": [
+    {
+      "id": "hp-pair",
+      "kind": "headphones",
+      "label": "Phones pair",
+      "outputIds": [
+        0,
+        1
+      ],
+      "layoutId": "custom",
+      "gainDb": 0,
+      "mute": false,
+      "inputMode": "pair",
+      "inputPair": [
+        0,
+        1
+      ],
+      "downmixMatrix": [
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ]
+      ],
+      "sourcePreCrossover": true
+    },
+    {
+      "id": "hp-downmix",
+      "kind": "headphones",
+      "label": "Phones downmix",
+      "outputIds": [
+        2,
+        3
+      ],
+      "layoutId": "custom",
+      "gainDb": -3,
+      "mute": false,
+      "inputMode": "downmix",
+      "inputPair": [
+        0,
+        1
+      ],
+      "downmixMatrix": [
+        [
+          0,
+          null
+        ],
+        [
+          null,
+          0
+        ],
+        [
+          -3,
+          -3
+        ],
+        [
+          -6,
+          -6
+        ],
+        [
+          -1.5,
+          null
+        ],
+        [
+          null,
+          -1.5
+        ],
+        [
+          -9,
+          -12
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ],
+        [
+          null,
+          null
+        ]
+      ],
+      "sourcePreCrossover": true
+    }
+  ]
+}

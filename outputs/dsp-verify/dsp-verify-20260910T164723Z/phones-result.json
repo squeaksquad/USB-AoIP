@@ -1,0 +1,158 @@
+{
+  "frames": 19000,
+  "amplitude": 1073741824,
+  "outputs": [
+    {
+      "channel": 0,
+      "events": [
+        {
+          "sample": 1000,
+          "fromInput": 0,
+          "ratio": 0.354813,
+          "db": -9.0,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "channel": 1,
+      "events": [
+        {
+          "sample": 2120,
+          "fromInput": 1,
+          "ratio": 0.354813,
+          "db": -9.0,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "channel": 2,
+      "events": [
+        {
+          "sample": 1000,
+          "fromInput": 0,
+          "ratio": 0.251189,
+          "db": -12.0,
+          "inverted": false
+        },
+        {
+          "sample": 3000,
+          "fromInput": 2,
+          "ratio": 0.177828,
+          "db": -15.0,
+          "inverted": false
+        },
+        {
+          "sample": 4000,
+          "fromInput": 3,
+          "ratio": 0.125893,
+          "db": -18.0,
+          "inverted": false
+        },
+        {
+          "sample": 5000,
+          "fromInput": 4,
+          "ratio": 0.211349,
+          "db": -13.5,
+          "inverted": false
+        },
+        {
+          "sample": 7000,
+          "fromInput": 6,
+          "ratio": 0.089125,
+          "db": -21.0,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "channel": 3,
+      "events": [
+        {
+          "sample": 2000,
+          "fromInput": 1,
+          "ratio": -0.251189,
+          "db": -12.0,
+          "inverted": true
+        },
+        {
+          "sample": 3000,
+          "fromInput": 2,
+          "ratio": -0.177828,
+          "db": -15.0,
+          "inverted": true
+        },
+        {
+          "sample": 4000,
+          "fromInput": 3,
+          "ratio": -0.125893,
+          "db": -18.0,
+          "inverted": true
+        },
+        {
+          "sample": 6000,
+          "fromInput": 5,
+          "ratio": -0.211349,
+          "db": -13.5,
+          "inverted": true
+        },
+        {
+          "sample": 7000,
+          "fromInput": 6,
+          "ratio": -0.063096,
+          "db": -24.0,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 4,
+      "events": []
+    },
+    {
+      "channel": 5,
+      "events": []
+    },
+    {
+      "channel": 6,
+      "events": []
+    },
+    {
+      "channel": 7,
+      "events": []
+    },
+    {
+      "channel": 8,
+      "events": []
+    },
+    {
+      "channel": 9,
+      "events": []
+    },
+    {
+      "channel": 10,
+      "events": []
+    },
+    {
+      "channel": 11,
+      "events": []
+    },
+    {
+      "channel": 12,
+      "events": []
+    },
+    {
+      "channel": 13,
+      "events": []
+    },
+    {
+      "channel": 14,
+      "events": []
+    },
+    {
+      "channel": 15,
+      "events": []
+    }
+  ]
+}

@@ -12,6 +12,7 @@ anything. Nothing in this directory is installed on the Pi.
 ```sh
 node --test work/dsp-compiler/*.test.mjs
 work/dsp-compiler/usb16x16-dsp-compile preset.json -o config.yml --report report.json
+work/dsp-compiler/run-verifications.sh          # the engine runs, on the Pi
 ```
 
 Exit status is `0` on success, `1` when an output can clip (the configuration is
@@ -19,7 +20,11 @@ still written), `2` for bad arguments, `3` for an unreadable preset, `4` when th
 preset cannot be compiled.
 
 `--target file` (the default) emits `RawFile`/`File` devices for offline
-verification. `--target alsa --capture DEV --playback DEV` emits ALSA devices and
+verification. `--format` takes a name the engine knows, which is not the ALSA
+spelling: CamillaDSP 4.1.3 accepts `S16_LE`, `S24_4_RJ_LE`, `S24_4_LJ_LE`,
+`S24_3_LE`, `S32_LE`, `F32_LE` and `F64_LE`, and rejects the configuration
+outright otherwise. The two defaults are both on that list; `F64_LE` is what
+the DFT-based harnesses want. `--target alsa --capture DEV --playback DEV` emits ALSA devices and
 stamps the file with a warning: **capture/playback selection, clock ownership and
 rate matching have not been validated**, and the accepted transport is still the
 existing bridge.
@@ -96,12 +101,24 @@ accepts eight presets: the default, one with all 256 bands shaped plus delays,
 inverts and gains, LR12, LR48, bass off, EQ bypass, a headphone downmix, and a
 deliberately clipping one.
 
-**End-to-end through the engine**, file-to-file. Three harnesses, because no one
+**End-to-end through the engine**, file-to-file. Five harnesses, because no one
 signal checks everything: `verify-run.py` uses staggered impulses for the
 per-output processing, `verify-tone.py` a low-frequency tone for the sub path
 (an 80 Hz LR4 low-pass rings far past any window short enough to keep one
-input's response out of the next), and `verify-response.py` a single impulse
-whose DFT gives the whole PEQ magnitude response with no settling to wait out.
+input's response out of the next), `verify-response.py` a single impulse whose
+DFT gives the whole PEQ magnitude response with no settling to wait out,
+`verify-crossover.py` the same impulse kept complex, so the crossover's phase
+and the sum of its two branches can be read as well as their magnitudes, and
+`verify-clip.py` a full-scale signal, which is the only way to ask what the
+engine does when a preset is driven past 0 dBFS.
+
+The presets these run on are built by `verify-presets.mjs` and pinned by
+`verify-presets.test.mjs`. The earlier runs used ad-hoc presets that were not
+kept, so their figures could not be reproduced without rebuilding the preset by
+hand; these can be. `run-verifications.sh` compiles them on the Mac -- the Pi
+has no node -- stages the configurations and harnesses, and runs the three
+outstanding verifications in one pass. It refuses to run while
+`usb16x16-aes67.service` is up, for the reason in the correction below.
 
 Impulses, on an identity-routed preset:
 
@@ -164,22 +181,106 @@ IIR response biases it low, worst at the centre where it looks most like a real
 disagreement. `verify-response.py` now reports `truncated` per output and warns
 on stderr, so a short capture cannot be mistaken for a discrepancy again.
 
-### Not yet verified end to end
+### MEASURED 2026-09-10: crossover, full scale and the headphone buses
 
-The unit tests pin the emitted mixer gains and filter parameters, and the engine
-runs above prove the engine applies them, but these have **not** been measured
-through the engine:
+The three gaps above are closed. Run `dsp-verify-20260910T164810Z`, CamillaDSP
+4.1.3 (05e9cfc) on the Pi, `usb16x16-aes67.service` stopped for the duration,
+RECOVER count 3 before and 3 after. The headphone table was measured in the
+preceding run of the same afternoon and is identical.
 
-- **Crossover magnitude and phase** as such. The tone test measures the sub path
-  at one frequency well inside the passband; the shape of the Linkwitz-Riley
-  response, and the phase behaviour that decides whether branches sum, are not
-  measured.
-- **True output clipping** at the sample level. The coherent sum was measured
-  well below full scale on purpose; what the engine does at and past 0 dBFS is
-  untested.
-- **Headphone bus paths**, pair and downmix, through the engine.
+Each harness was first exercised on the Mac against purpose-built stand-in
+engines -- one that saturates and one that wraps, and independent
+re-implementations of the Linkwitz-Riley cascades and the phones mixers -- so
+that a pass was known to be distinguishable from the failure being looked for
+before the engine was asked anything.
+
+**Crossover magnitude, phase and summation**, four pairs in one run:
+
+| Outputs | Crossover | At Fc | Phase difference | Main slope | Sub slope | Sum |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1, 2 | LR4 @ 80 Hz | −6.0206 / −6.0206 | 0.0° | 24.081 | 24.141 | flat, 0.0 dB |
+| 3, 4 | LR2 @ 80 Hz | −6.0206 / −6.0206 | 180.0° | 12.035 | 12.539 | **−202.76 dB at 80 Hz** |
+| 5, 6 | LR2 @ 80 Hz, sub inverted | −6.0206 / −6.0206 | 0.0° | 12.035 | 12.539 | flat, 0.0 dB |
+| 7, 8 | LR8 @ 200 Hz | −6.0206 / −6.0206 | 0.0° | 48.132 | 48.179 | flat, 0.0 dB |
+
+Rows 2 and 3 are the same crossover differing only in the sub's polarity. Every
+branch is −6.02 dB at its corner and the two sit exactly 180° apart, so matched
+polarity cancels to −202.76 dB -- double-precision zero -- and inverting the sub
+returns a flat sum. **The 12 dB/oct advisory the compiler and the UI both carry
+is now a measurement rather than received wisdom**, and 24 and 48 dB/oct are
+confirmed not to need it.
+
+Against the analytic Linkwitz-Riley model -- a Butterworth of half the order,
+applied twice, bilinear-transformed -- the deviation is **0.0 dB** on all eight
+branches, over 45 to 85 comparison points each above a −80 dB floor. That
+settles a question the unit tests could only assume: CamillaDSP's `order`
+parameter is the Linkwitz-Riley order, not the Butterworth order the combo is
+built from, which is what `SLOPE_ORDER` in `compile.mjs` maps 12/24/48 dB/oct
+onto.
+
+The sub slopes read a little steep (12.539 where 12 is the asymptote). That is
+the measurement geometry, not the filter: the low-pass octave sits high enough
+that the bilinear transform's frequency warping has begun to steepen it. The
+high-pass slopes, measured at 1.25–100 Hz where there is no warping to speak of,
+read 12.035, 24.081 and 48.132. That the analytic *digital* model agrees to
+0.0 dB is what settles which of the two it is.
+
+**Behaviour at and past full scale.** Not a theoretical worry: the bridge had
+this exact defect, and it was audible. `float_to_s32` rounded before it clamped,
+so `0.9999999999999999 * 2^31` became `2147483648`, and the `int32_t` cast turned
+that into negative full scale -- a click on every clipped peak of 0 dBFS
+material, gone at −3 dB. The engine does not share it.
+
+| Output | Path | Result |
+| --- | --- | --- |
+| 1 | unity from input 1 | **bit transparent**, 24,240 of 24,240 samples, including at ±full scale |
+| 2 | +6 dB from input 2 | 16,099 samples saturated, 0 wrapped |
+| 3 | +12 dB from input 3 | 20,281 saturated, 0 wrapped |
+| 4 | four inputs summed | 20,137 saturated, 0 wrapped, peak internal +12.041 dBFS |
+| 5 | unity from input 8, inverted | 40 rail samples saturated correctly, 0 wrapped |
+
+Every clipped output lands exactly on both rails, −2147483648 and 2147483647,
+which is the signature of saturation; a wrapping converter never reaches either.
+Output 5 is the one that matters most: the integer range is asymmetric, so
+negating −2³¹ asks for a value that does not exist, and the engine returns
++2147483647 rather than folding back to negative. Note that output 1 stayed bit
+transparent under *both* stand-ins, saturating and wrapping alike -- a unity
+path alone would not have caught this class of bug.
+
+Two things worth carrying into the service work. The engine **counts and reports
+clipping itself**: `Clipping detected, 2369 samples clipped, peak +12.04 dB
+(400.0%)`, per chunk, on stderr. An Apply operation has that available without
+adding a meter. And its measured peak of +12.04 dB is the same number
+`worstCaseDbfs` predicted for that output, +12.04 dBFS, which is an independent
+check on the ceiling arithmetic rather than a restatement of it.
+
+**Headphone bus paths**, both source modes in one run, with a 2.5 ms delay on
+one output and a polarity invert on another so the per-output stage is exercised
+on a phones path rather than assumed to behave as it does on a speaker path:
+
+| Output | Bus | Measured |
+| --- | --- | --- |
+| 1 | pair, ear 1 | in1 at 1000, −9.000 dB |
+| 2 | pair, ear 2 | in2 at 2120, −9.000 dB — the 120-sample delay, exactly |
+| 3 | downmix L, bus −3 dB | in1 −12.000, in3 −15.000, in4 −18.000, in5 −13.500, in7 −21.000 |
+| 4 | downmix R, bus −3 dB, inverted | in2 −12.000, in3 −15.000, in4 −18.000, in6 −13.500, in7 −24.000, all inverted |
+| 5–16 | — | silent |
+
+Every value is exact. Input 2 is absent from the left ear and input 1 from the
+right, so the matrix is using the column it should; a downmix that quietly read
+the wrong one would still have looked plausible on level alone. Crossovers are
+switched on at the inputs even though a phones bus is pre-crossover, and every
+event came back as a single unrung impulse, which is the evidence that the
+crossover never reached this path.
+
+### Still not verified end to end
+
 - **Anything about CPU cost, latency, or running against ALSA devices.** No
-  timing claim is established by this compiler.
+  timing claim is established by this compiler, and none of the runs above
+  establishes one either: they are file-to-file, unclocked, and as fast as the
+  Pi can read and write.
+- **The `--target alsa` device section**, which remains stamped unvalidated for
+  capture/playback selection, clock ownership and rate matching.
 
 ### CORRECTION 2026-09-10: an engine run did disturb the bridge
 
