@@ -42,64 +42,69 @@ expected_bridge_sha256=406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080b
 expected_dsp_sha256=2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
+# Only two arguments. Everything below is the accepted profile as a constant:
+# this wrapper exists to run that one operating point with and without the DSP
+# stage, and a positional knob would only let a run drift off it silently. It
+# also means $2 is the preset and nothing else -- it used to be the preset AND
+# period_frames, so "none" failed the unsigned-integer check.
 candidate_seconds=${1:-360}
 dsp_preset=${2:-$work_root/dsp-verify/loaded.dsp}
-period_frames=${2:-96}
-buffer_frames=${3:-384}
-ring_frames=${4:-768}
-target_frames=${5:-192}
+period_frames=48
+buffer_frames=192
+ring_frames=768
+target_frames=48
 # Frames primed into the ALSA playback queue. Zero keeps the historical
 # behaviour of priming the whole playback buffer. This is the ring/queue split
 # knob; the elastic ring keeps target_frames as the jitter reservoir.
-playback_prime_frames=${6:-0}
+playback_prime_frames=96
 # Discard the ring overshoot at prime time (0 or 1). The overshoot is otherwise
 # permanent pipeline depth, because depth is conserved after priming.
-prime_trim=${7:-0}
+prime_trim=0
 # Per-direction prime overrides; 0 inherits playback_prime_frames. tx is
 # usb-to-ravenna (RAVENNA playback), rx is ravenna-to-usb (USB playback).
-tx_playback_prime_frames=${8:-0}
-rx_playback_prime_frames=${9:-0}
+tx_playback_prime_frames=192
+rx_playback_prime_frames=120
 # Buffer request for the RAVENNA playback PCM alone; 0 inherits buffer_frames.
 # Lifts TX's queue-floor ceiling without moving the RAVENNA capture buffer.
-ravenna_playback_buffer_frames=${10:-0}
+ravenna_playback_buffer_frames=384
 # AES67 sink playout delay in samples, applied to both sinks before the bridge
 # primes. Changing it live after priming never reaches the bridge (sweep
 # 022225Z), so the value the run starts with is the one that can matter.
-sink_delay=${11:-103}
+sink_delay=103
 # Phase 5 step 1: 1 steers the USB gadget pitch controls to the PTP rate and
 # runs both converters at exactly 1.0 (bit transparent); 0 is the resampler.
-usb_pitch_servo=${12:-0}
+usb_pitch_servo=1
 # Mode 2 depth setpoints (ring plus playback queue, frames); 0 captures the
 # depth at engagement. Only meaningful with usb_pitch_servo=2.
-tx_depth_frames=${13:-0}
-rx_depth_frames=${14:-0}
+tx_depth_frames=0
+rx_depth_frames=0
 # Mode 2 level gain in ppm per frame of depth error, (0, 0.1]. 0.05 turns 20
 # frames into 1 ppm; 0.01 sat in the 1 ppm quantisation dead zone (142307Z).
-level_gain=${15:-0.05}
+level_gain=0.05
 # Aligned start (0 or 1): the bridge times eight RAVENNA capture wakeups,
 # then re-prepares that capture align_offset_us after the last one, so the
 # driver's reader phase (fixed at prepare, anywhere inside a 1 ms tick) is a
 # constant instead of a per-session draw. Offset in microseconds, 0..10000;
 # a non-default offset needs align_start=1.
-align_start=${16:-0}
-align_offset_us=${17:-600}
+align_start=1
+align_offset_us=600
 # Aligned TX trigger (0 or 1): the RAVENNA playback trigger, at start and at
 # every TX recovery, waits for the next tick-grid point plus
 # align_tx_offset_us on the grid the aligned start measured, so the trigger's
 # phase inside a 1 ms tick (the last per-session draw, up to 48 frames on TX)
 # is a constant. Needs align_start=1; a non-default offset needs
 # align_tx_trigger=1.
-align_tx_trigger=${18:-0}
-align_tx_offset_us=${19:-600}
+align_tx_trigger=1
+align_tx_offset_us=950
 # Aligned TX prime (0 or 1): the prime waits for one more period of ring and
 # drops from the ring's front the frames that make the front frame's age at
 # the first tick after the trigger a constant. Needs align_tx_trigger=1.
-align_tx_prime=${20:-0}
+align_tx_prime=1
 # Zero-run detector (0 or 1): the bridge scans every block entering and
 # leaving it for per-channel runs of exact zeros (8 to 480 frames) and logs
 # each as a ZERORUN line naming its stage, so the 41-sample holes can be
 # placed on the leg that makes them. Behaviour-free; off by default.
-zero_run_detect=${21:-0}
+zero_run_detect=1
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir="$work_root/logs/phase4-dsp-candidate-$timestamp"
 ready_file=/tmp/usb16x16-phase4-candidate.ready
