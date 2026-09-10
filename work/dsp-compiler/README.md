@@ -96,11 +96,12 @@ accepts eight presets: the default, one with all 256 bands shaped plus delays,
 inverts and gains, LR12, LR48, bass off, EQ bypass, a headphone downmix, and a
 deliberately clipping one.
 
-**End-to-end through the engine**, file-to-file. Two harnesses, because one
-signal cannot check both halves: `verify-run.py` uses staggered impulses for the
-per-output processing, and `verify-tone.py` uses a low-frequency tone for the sub
-path, since an 80 Hz LR4 low-pass rings far past any window short enough to keep
-one input's response out of the next.
+**End-to-end through the engine**, file-to-file. Three harnesses, because no one
+signal checks everything: `verify-run.py` uses staggered impulses for the
+per-output processing, `verify-tone.py` a low-frequency tone for the sub path
+(an 80 Hz LR4 low-pass rings far past any window short enough to keep one
+input's response out of the next), and `verify-response.py` a single impulse
+whose DFT gives the whole PEQ magnitude response with no settling to wait out.
 
 Impulses, on an identity-routed preset:
 
@@ -134,15 +135,45 @@ the LFE's 120 Hz corner. That the LFE reads −0.007 and not −0.034 is indepen
 evidence the LFE branch uses its own low-pass. The coherent sum lands 0.04 dB
 *below* the reported ceiling, which is the direction a ceiling should err.
 
+Band response, on a preset shaping each output differently, comparing the
+engine's magnitude against `eqResponse` in `work/web-ui/model.mjs` at 50
+frequencies from 20 Hz to 20 kHz — 800 comparison points:
+
+| Output | Configuration | Max deviation |
+| --- | --- | --- |
+| 1 | flat control | 0.0000 dB |
+| 2–4 | bells: +6 @1k Q1, −9 @100 Q2, +3 @8k Q4 | 0.0000 dB |
+| 5–6 | low shelves: +6 @100 Q0.707, −6 @200 Q1 | 0.0000 dB |
+| 7–8 | high shelves: +6 @5k Q0.707, −6 @3k Q1.5 | 0.0000 dB |
+| 9 | three overlapping bells | 0.0000 dB |
+| 10 | extremes: +18 @40 Q6 and −18 @12k Q0.5 | 0.0000 dB |
+| 11 | all 16 bands shaped, 13 active | 0.0000 dB |
+| 12 | bands shaped but output EQ switched off | 0.0000 dB (flat) |
+| 13 | one disabled +12 dB band among enabled ones | 0.0000 dB (absent) |
+
+Worst deviation anywhere: **5×10⁻⁵ dB**. The engine's `Peaking`, `Lowshelf` and
+`Highshelf` biquads therefore use the same W3C cookbook **Q** parameterization as
+the curve the UI draws — the shelf convention was the real risk here, since the
+cookbook also defines shelves by slope S, and a mismatch would have made the UI's
+plot quietly wrong.
+
+A trap worth recording: at a 16,384-sample capture, output 10 read 0.62 dB low at
+exactly its 40 Hz band centre. That was the measurement, not the engine — a
++18 dB Q6 band at 40 Hz needs about 110,000 samples to decay, and truncating an
+IIR response biases it low, worst at the centre where it looks most like a real
+disagreement. `verify-response.py` now reports `truncated` per output and warns
+on stderr, so a short capture cannot be mistaken for a discrepancy again.
+
 ### Not yet verified end to end
 
 The unit tests pin the emitted mixer gains and filter parameters, and the engine
 runs above prove the engine applies them, but these have **not** been measured
 through the engine:
 
-- **Band response.** That the emitted biquads produce the designed magnitude
-  needs a sweep or tone set compared against `bandResponse` in `model.mjs`. The
-  tone test above drives the crossovers, not the output PEQ.
+- **Crossover magnitude and phase** as such. The tone test measures the sub path
+  at one frequency well inside the passband; the shape of the Linkwitz-Riley
+  response, and the phase behaviour that decides whether branches sum, are not
+  measured.
 - **True output clipping** at the sample level. The coherent sum was measured
   well below full scale on purpose; what the engine does at and past 0 dBFS is
   untested.
