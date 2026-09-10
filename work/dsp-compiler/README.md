@@ -195,14 +195,20 @@ re-prime landed deeper: `tx_dmean` moved from about 200–240 to about 260–280
 the standing rule that the measured level follows the bridge start depth one for
 one, a round-trip figure taken now will read high until the next fresh anchor.
 
-It coincided with the band-response runs. Causation is not proven, but the
-262,144-frame F64 capture written just before it is 33.5 MB of output, far
-outside the "keep runs short" discipline the rest of this file claims. The
-lesson is in the harness now: `verify-response.py` truncates each channel's sum
-where its response has decayed, so the *analysis* is cheap, but the **capture**
-still costs whatever it is told to cost. Size it from the slowest band under
-test — 262,144 frames was chosen without checking that 131,072 would do — and
-prefer running these between measurement sessions, not during one.
+It coincided with the band-response runs, and I first wrote that the
+262,144-frame F64 capture just before it — 33.5 MB of output — was the likely
+cause. **The gap-bar analyser disagrees, and it has better evidence.** It
+classifies this as the record's device open/close signature: a both-PCM XRUN
+pair meaning a gadget PCM restart, which is a Mac-side open/close of the USB
+audio device, not CPU or writeback pressure on the Pi. It is the only such pair
+in the 26.3 h session. So the Pi-load attribution is probably wrong, and the
+honest statement is that the cause was not established.
+
+The sizing point stands on its own merits regardless: `verify-response.py`
+truncates each channel's sum where its response has decayed, so the *analysis*
+is cheap, but the **capture** costs whatever it is told to cost. Size it from
+the slowest band under test — 262,144 frames was chosen without checking that
+131,072 would do — and prefer running these between measurement sessions.
 
 The measurements themselves stand: the band-response run completed before the
 RECOVER, and the figures below were taken from it.
