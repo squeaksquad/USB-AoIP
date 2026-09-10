@@ -1,0 +1,157 @@
+{
+  "format": "s32le",
+  "reference": "camilladsp",
+  "candidate": "bridge",
+  "frames": 19000,
+  "referenceFrames": 19000,
+  "candidateFrames": 19000,
+  "channels": [
+    {
+      "channel": 1,
+      "peakDbfs": -28.553,
+      "worstDiffDbfs": -180.618,
+      "worstDiffRelDb": -152.065,
+      "worstAtFrame": 1001,
+      "differingSamples": 1899,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 2,
+      "peakDbfs": -31.488,
+      "worstDiffDbfs": -180.618,
+      "worstDiffRelDb": -149.13,
+      "worstAtFrame": 2000,
+      "differingSamples": 4321,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 3,
+      "peakDbfs": -29.163,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -145.434,
+      "worstAtFrame": 3000,
+      "differingSamples": 6353,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 4,
+      "peakDbfs": -69.513,
+      "worstDiffDbfs": -186.639,
+      "worstDiffRelDb": -117.126,
+      "worstAtFrame": 1002,
+      "differingSamples": 9139,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 5,
+      "peakDbfs": -27.164,
+      "worstDiffDbfs": -186.639,
+      "worstDiffRelDb": -159.474,
+      "worstAtFrame": 5000,
+      "differingSamples": 5225,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 6,
+      "peakDbfs": -28.2,
+      "worstDiffDbfs": -177.096,
+      "worstDiffRelDb": -148.896,
+      "worstAtFrame": 6000,
+      "differingSamples": 2963,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 7,
+      "peakDbfs": -27.835,
+      "worstDiffDbfs": -186.639,
+      "worstDiffRelDb": -158.803,
+      "worstAtFrame": 7000,
+      "differingSamples": 5467,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 8,
+      "peakDbfs": -28.114,
+      "worstDiffDbfs": -186.639,
+      "worstDiffRelDb": -158.524,
+      "worstAtFrame": 8002,
+      "differingSamples": 2691,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 9,
+      "peakDbfs": -24.412,
+      "worstDiffDbfs": -177.096,
+      "worstDiffRelDb": -152.684,
+      "worstAtFrame": 9000,
+      "differingSamples": 4973,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 10,
+      "peakDbfs": -26.03,
+      "worstDiffDbfs": -180.618,
+      "worstDiffRelDb": -154.588,
+      "worstAtFrame": 10000,
+      "differingSamples": 4400,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 11,
+      "peakDbfs": -24.586,
+      "worstDiffDbfs": -180.618,
+      "worstDiffRelDb": -156.032,
+      "worstAtFrame": 11000,
+      "differingSamples": 3206,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 12,
+      "peakDbfs": -24.79,
+      "worstDiffDbfs": -186.639,
+      "worstDiffRelDb": -161.849,
+      "worstAtFrame": 12000,
+      "differingSamples": 3491,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 13,
+      "peakDbfs": -72.566,
+      "worstDiffDbfs": -186.639,
+      "worstDiffRelDb": -114.073,
+      "worstAtFrame": 2001,
+      "differingSamples": 8508,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 14,
+      "peakDbfs": -26.407,
+      "worstDiffDbfs": -180.618,
+      "worstDiffRelDb": -154.211,
+      "worstAtFrame": 13000,
+      "differingSamples": 3098,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 15,
+      "peakDbfs": -20.775,
+      "worstDiffDbfs": -177.096,
+      "worstDiffRelDb": -156.321,
+      "worstAtFrame": 14000,
+      "differingSamples": 1850,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 16,
+      "peakDbfs": -18.692,
+      "worstDiffDbfs": -169.737,
+      "worstDiffRelDb": -151.044,
+      "worstAtFrame": 15001,
+      "differingSamples": 2002,
+      "totalSamples": 19000
+    }
+  ],
+  "worstRelativeDb": -114.073,
+  "worstRelativeChannel": 13,
+  "identical": false
+}

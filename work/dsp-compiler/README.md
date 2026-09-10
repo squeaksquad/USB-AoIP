@@ -316,6 +316,56 @@ which is why it can exceed what the wall-clock factor alone would suggest.
 
 RECOVER count was 3 before and 3 after, and nothing was throttled.
 
+### MEASURED 2026-09-10: the bridge's own stage against CamillaDSP, on the Pi
+
+Run `headtohead-20260910T173732Z`. Both engines on the same machine, on the
+same input files, from the same compilation of the same preset -- the YAML for
+CamillaDSP and the coefficient artifact for the bridge, emitted together so
+they cannot describe different pipelines. The bridge core and
+`usb16x16-dsp-offline` were built on the Pi for the run; the core suite passes
+there as well as on the Mac. Service stopped, RECOVER count 3 before and 3
+after.
+
+This compares the raw output files sample by sample rather than the harnesses'
+derived numbers, which leaves nowhere for a difference to hide.
+
+| Preset | Format | Frames | Worst difference, relative to the signal that made it |
+| --- | --- | --- | --- |
+| `crossover` | F64_LE | 16,384 | −145.2 dB |
+| `phones` | S32_LE | 19,000 | −151.7 dB |
+| `loaded` — 16 outputs, 256 bands, 26 crossovers | S32_LE | 19,000 | −114.1 dB |
+
+The headline number is the wrong one to read on its own, so here is the right
+one. **Across all 28 channels of all three runs, no sample differs by more than
+one unit in the last place** — one float32 ULP at that channel's own level, or
+one LSB of the integer container, whichever is larger. Zero exceptions.
+
+That is as close as two implementations can come without being the same
+arithmetic, and they are not: the bridge carries float32 samples through
+`playback_scratch` and sums in a different order, while CamillaDSP keeps double
+throughout. Bitwise identity was never available. One ULP is the floor.
+
+The `loaded` run's −114 dB looks worse than the others and is not. Outputs 4
+and 13 peak at −69.5 and −72.6 dBFS, and their worst difference is −186.6 dBFS,
+which is exactly one LSB of the 32-bit container: a rounding tie broken the
+other way at the final integer conversion. A quiet channel makes one LSB a
+larger fraction of its own peak, which is all that number is saying.
+
+Read through the harnesses instead of sample by sample, the two agree exactly
+wherever there is signal to agree about — 0.000 dB at every one of 356
+magnitude points above −40 dB, and identical impulse tables for the headphone
+buses. The differences appear only below −40 dB and grow in inverse proportion
+to level, which is the signature of a precision floor rather than a filter
+disagreement.
+
+**What this establishes.** The filtering the bridge would apply is the
+filtering that was verified against a real engine in the runs above: the same
+crossover corners, slopes, phase and summation, the same band responses, the
+same routing and delay and polarity, and the same behaviour at full scale.
+**What it does not establish** is anything about the bridge applying it in real
+time, which is the whole of the remaining risk and is untouched by a
+file-to-file comparison.
+
 ### Still not verified end to end
 
 - **Anything about CPU cost, latency, or running against ALSA devices.** No

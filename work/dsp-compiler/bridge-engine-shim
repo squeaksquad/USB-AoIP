@@ -1,0 +1,21 @@
+#!/bin/sh
+# Adapter so the verification harnesses can drive the bridge's offline runner.
+#
+# The harnesses invoke an engine as `ENGINE CONFIG` and keep their file paths to
+# themselves, which suits CamillaDSP -- its configuration names the files -- but
+# the bridge's artifact carries coefficients and nothing else. So the paths
+# arrive here through the environment instead, and this is the whole adapter.
+#
+#   BRIDGE_OFFLINE   path to usb16x16-dsp-offline
+#   BRIDGE_IN/OUT    the raw files for an integer run
+#   BRIDGE_FLOAT_IN/OUT  the raw files for a double run
+#   BRIDGE_BLOCK     frames per process() call (default 48, the bridge's period)
+#
+# An artifact named *.f64 selects the double format, which is how verify-clip's
+# two runs are told apart without changing the harness.
+case "$1" in
+  *.f64) format=f64le; input=$BRIDGE_FLOAT_IN; output=$BRIDGE_FLOAT_OUT ;;
+  *)     format=${BRIDGE_FORMAT:-s32le}; input=$BRIDGE_IN; output=$BRIDGE_OUT ;;
+esac
+exec "${BRIDGE_OFFLINE:-usb16x16-dsp-offline}" "$1" \
+  --in "$input" --out "$output" --format "$format" --block "${BRIDGE_BLOCK:-48}"

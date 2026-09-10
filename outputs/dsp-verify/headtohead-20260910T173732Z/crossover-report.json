@@ -1,0 +1,80 @@
+{
+  "preset": "verify-crossover",
+  "internalChannels": 8,
+  "channelMap": [
+    {
+      "index": 0,
+      "kind": "main",
+      "input": 0
+    },
+    {
+      "index": 1,
+      "kind": "main",
+      "input": 1
+    },
+    {
+      "index": 2,
+      "kind": "main",
+      "input": 2
+    },
+    {
+      "index": 3,
+      "kind": "main",
+      "input": 3
+    },
+    {
+      "index": 4,
+      "kind": "bass",
+      "input": 0,
+      "lfe": false
+    },
+    {
+      "index": 5,
+      "kind": "bass",
+      "input": 1,
+      "lfe": false
+    },
+    {
+      "index": 6,
+      "kind": "bass",
+      "input": 2,
+      "lfe": false
+    },
+    {
+      "index": 7,
+      "kind": "bass",
+      "input": 3,
+      "lfe": false
+    }
+  ],
+  "filterCount": 9,
+  "biquadCount": 0,
+  "crossoverCount": 8,
+  "headroomDb": 0,
+  "worstCaseDbfs": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "warnings": [
+    "A 12 dB/oct Linkwitz-Riley crossover needs a polarity decision. Its two branches sit 180 degrees apart at the crossover frequency, so the main and the sub usually need opposite polarity to sum. Nothing has been inverted for you: set Polarity on the output you choose and verify the result acoustically. 24 and 48 dB/oct do not have this property. Affected inputs: 2 In 2, 3 In 3."
+  ],
+  "delayLatency": {
+    "samples": 0,
+    "ms": 0,
+    "text": null
+  }
+}

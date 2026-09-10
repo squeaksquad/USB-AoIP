@@ -1,0 +1,60 @@
+{
+  "preset": "verify-phones",
+  "internalChannels": 4,
+  "channelMap": [
+    {
+      "index": 0,
+      "kind": "phones",
+      "busId": "hp-pair",
+      "ear": 0
+    },
+    {
+      "index": 1,
+      "kind": "phones",
+      "busId": "hp-pair",
+      "ear": 1
+    },
+    {
+      "index": 2,
+      "kind": "phones",
+      "busId": "hp-downmix",
+      "ear": 0
+    },
+    {
+      "index": 3,
+      "kind": "phones",
+      "busId": "hp-downmix",
+      "ear": 1
+    }
+  ],
+  "filterCount": 2,
+  "biquadCount": 0,
+  "crossoverCount": 0,
+  "headroomDb": -9,
+  "worstCaseDbfs": [
+    -9,
+    -9,
+    -1.36,
+    -1.63,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "warnings": [
+    "Alignment delay adds 2.50 ms of latency to every output, not just the delayed ones: the largest delay you have set is what the transport has to carry. Set it to zero everywhere to get that back."
+  ],
+  "delayLatency": {
+    "samples": 120,
+    "ms": 2.5,
+    "text": "Alignment delay adds 2.50 ms of latency to every output, not just the delayed ones: the largest delay you have set is what the transport has to carry. Set it to zero everywhere to get that back."
+  }
+}
