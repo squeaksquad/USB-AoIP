@@ -8,11 +8,13 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { parsePreset } from '../web-ui/model.mjs';
 import { compile, fileDevices, alsaDevices } from './compile.mjs';
 import { toYaml } from './yaml.mjs';
+import { bridgeArtifact, delayLatency } from './bridge-artifact.mjs';
 
 const usage = `usage: usb16x16-dsp-compile PRESET.json [options]
 
   -o, --out FILE          write the configuration here (default: stdout)
       --report FILE       also write the JSON report here
+      --bridge FILE       also write the bridge's coefficient artifact here
       --target file|alsa  device section to emit (default: file)
       --in FILE           file target: raw 16-channel input  (default: in.raw)
       --raw FILE          file target: raw 16-channel output (default: out.raw)
@@ -36,6 +38,7 @@ function parseArgs(argv) {
     if (arg === '-h' || arg === '--help') { process.stdout.write(usage); process.exit(0); }
     else if (arg === '-o' || arg === '--out') options.out = take();
     else if (arg === '--report') options.report = take();
+    else if (arg === '--bridge') options.bridge = take();
     else if (arg === '--target') options.target = take();
     else if (arg === '--in') options.in = take();
     else if (arg === '--raw') options.raw = take();
@@ -109,6 +112,15 @@ function main() {
   const yaml = toYaml(result.config, header);
   if (options.out) writeFileSync(options.out, yaml);
   else process.stdout.write(yaml);
+  // Emitted from the same compilation as the YAML, never a second one, so the
+  // two cannot describe different pipelines.
+  if (options.bridge) {
+    try { writeFileSync(options.bridge, bridgeArtifact(result, {presetName: preset.name})); }
+    catch (error) { process.stderr.write(`Could not write the bridge artifact: ${error.message}\n`); return 4; }
+  }
+  const latency = delayLatency(preset);
+  if (latency.text) result.report.warnings.push(latency.text);
+  result.report.delayLatency = latency;
   if (options.report) writeFileSync(options.report, `${JSON.stringify(result.report, null, 2)}\n`);
 
   for (const warning of result.report.warnings) process.stderr.write(`warning: ${warning}\n`);

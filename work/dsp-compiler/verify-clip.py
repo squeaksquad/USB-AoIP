@@ -34,23 +34,40 @@ CHANNELS = 16
 MAX_S32 = 2 ** 31 - 1
 MIN_S32 = -(2 ** 31)
 
-# Exact values worth putting through a unity path, in the order they are
-# written. The rails are where an off-by-one or an asymmetric scale shows up.
-RAILS = [0, MAX_S32, MIN_S32, MAX_S32 - 1, MIN_S32 + 1, 1, -1,
-         MAX_S32, MIN_S32, MAX_S32 // 2, MIN_S32 // 2, 0]
+def rails(bits):
+    """Exact values worth putting through a unity path, on a `bits` grid.
+
+    The rails are where an off-by-one or an asymmetric scale shows up, so they
+    have to be values the pipeline under test can actually hold. A pipeline
+    carrying float32 samples has a 24-bit mantissa: it represents every 24-bit
+    sample exactly and is one bit short of a 32-bit container. Asking it for
+    bit transparency on 32-bit rails is asking a question with no right answer,
+    and the +/-1 LSB it returns says nothing about the converter.
+
+    CamillaDSP processes in double and answers at 32; the bridge carries float
+    and answers at 24, which is the width its devices actually run.
+    """
+    step = 1 << (32 - bits)
+    top = ((MAX_S32 // step) * step)
+    bottom = MIN_S32
+    return [0, top, bottom, top - step, bottom + step, step, -step,
+            top, bottom, (top // 2 // step) * step, (bottom // 2 // step) * step, 0]
 
 
-def build_input(int_path, float_path, rail_frames, tone_frames, tones, amplitude):
+def build_input(int_path, float_path, rail_frames, tone_frames, tones, amplitude,
+                bits=32):
     """The same signal in both formats: rails first, then a full-scale tone.
 
     Writing both rather than converting one config's format keeps each run on a
     configuration the compiler actually emitted.
     """
     total = rail_frames + tone_frames
+    step = 1 << (32 - bits)
+    grid = rails(bits)
     ints = array.array("i", [0] * (total * CHANNELS))
     floats = array.array("d", [0.0] * (total * CHANNELS))
     for n in range(rail_frames):
-        value = RAILS[n % len(RAILS)]
+        value = grid[n % len(grid)]
         for channel in range(CHANNELS):
             ints[n * CHANNELS + channel] = value
             floats[n * CHANNELS + channel] = value / -MIN_S32
@@ -62,6 +79,9 @@ def build_input(int_path, float_path, rail_frames, tone_frames, tones, amplitude
             # Round to the integer grid once, then use that same number as the
             # float reference, so the two runs are given identical signals.
             quantised = max(MIN_S32, min(MAX_S32, int(round(value * -MIN_S32))))
+            # Onto the same grid as the rails, so the whole signal is
+            # representable in the pipeline under test.
+            quantised = (quantised // step) * step
             ints[frame * CHANNELS + channel] = quantised
             floats[frame * CHANNELS + channel] = quantised / -MIN_S32
     with open(int_path, "wb") as out:
@@ -151,6 +171,8 @@ def main():
                         help="OUT — a 1-based output driven past full scale by summing")
     parser.add_argument("--low-tone-inputs", default="4,5,6,7",
                         help="1-based inputs fed 20 Hz instead of 997 Hz, for bass branches")
+    parser.add_argument("--sample-bits", type=int, default=32, choices=[16, 24, 32],
+                        help="the grid the test signal sits on; 24 for a float32 pipeline")
     arguments = parser.parse_args()
     if arguments.sum_path and not (arguments.float_config and arguments.float_in
                                    and arguments.float_out):
@@ -171,7 +193,7 @@ def main():
     float_in = arguments.float_in or f"{arguments.int_in}.f64"
     ints_in, _, total = build_input(
         arguments.int_in, float_in, arguments.rail_frames,
-        arguments.tone_frames, tones, arguments.amplitude)
+        arguments.tone_frames, tones, arguments.amplitude, arguments.sample_bits)
 
     done, ok = run_engine(arguments.camilladsp, arguments.config, arguments.int_out)
     if not ok:
@@ -182,7 +204,7 @@ def main():
 
     result = {
         "frames": total, "railFrames": arguments.rail_frames,
-        "amplitude": arguments.amplitude,
+        "amplitude": arguments.amplitude, "sampleBits": arguments.sample_bits,
         # The engine's own words. If it counts clipped samples this is where
         # that shows up, and an engine that says nothing is itself a finding.
         "engineStderr": done.stderr[-4000:],

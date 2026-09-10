@@ -7,12 +7,102 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace usb16x16 {
 
 constexpr std::size_t kChannels = 16;
 constexpr double kNominalRate = 48000.0;
+
+// The DSP stage: 16 capture channels through the compiled pipeline and back to
+// 16 playback channels, in place, on the audio thread.
+//
+// It runs difference equations and nothing else. Every coefficient is computed
+// by `work/dsp-compiler` from the same expressions the UI draws its curve with
+// and the same Linkwitz-Riley cascade the engine was measured against, so the
+// correctness of a filter here is the correctness of `process()` alone.
+//
+// Real-time contract. `load()` allocates and may throw; call it off the audio
+// path. `process()` and `reset()` allocate nothing, lock nothing, throw
+// nothing, and touch only storage sized at load. Arithmetic is double
+// throughout, with float only at the buffer boundary: the bridge's samples are
+// float, but a 40 Hz bell at Q 6 has poles close enough to the unit circle that
+// single-precision coefficients would be measurably wrong, and doubles are also
+// what the reference engine uses.
+class DspStage {
+public:
+    // Generous: the worst case a preset can reach is one main branch per
+    // distinct speaker source plus one bass branch per input, and outputs cap
+    // the first at 16. Checked at load rather than assumed.
+    static constexpr std::size_t kMaxInternalChannels = 48;
+    // 10 ms at 48 kHz, the alignment-delay ceiling the preset model validates.
+    static constexpr std::size_t kMaxDelaySamples = 480;
+
+    struct Section {
+        double b0{}, b1{}, b2{}, a1{}, a2{};
+    };
+
+    DspStage() = default;
+
+    // Parse the artifact `usb16x16-dsp-compile --bridge` writes. Throws
+    // std::runtime_error with the offending line on anything malformed;
+    // a bridge that cannot load a preset must refuse it, not run half of one.
+    static DspStage load(std::string_view text);
+
+    [[nodiscard]] bool loaded() const noexcept { return internal_channels_ > 0; }
+    [[nodiscard]] std::size_t internal_channels() const noexcept { return internal_channels_; }
+    [[nodiscard]] const std::string& preset() const noexcept { return preset_; }
+    // The transport cost of the alignment delays: the largest of them, because
+    // the output is not complete until the most delayed channel is produced.
+    [[nodiscard]] std::size_t delay_samples() const noexcept { return delay_samples_; }
+    [[nodiscard]] std::size_t biquad_count() const noexcept { return sections_.size(); }
+
+    void reset() noexcept;
+
+    // 16 interleaved channels in, the same buffer out. Frames must not exceed
+    // what the caller's scratch holds; nothing here depends on the block size.
+    void process(float* interleaved, std::size_t frames) noexcept;
+
+private:
+    struct MixEntry {
+        std::uint16_t dest{};
+        std::uint16_t source{};
+        double gain{};
+    };
+    struct Chain {
+        std::uint16_t channel{};
+        std::uint32_t first{};
+        std::uint32_t count{};
+    };
+    struct OutputSpec {
+        std::uint32_t first{};
+        std::uint32_t count{};
+        std::uint32_t delay{};
+        double gain{1.0};
+    };
+    struct State {
+        double x1{}, x2{}, y1{}, y2{};
+    };
+
+    void run_chain(std::uint32_t first, std::uint32_t count, double& sample) noexcept;
+    void flush_denormals() noexcept;
+
+    std::string preset_;
+    std::size_t internal_channels_{};
+    std::size_t delay_samples_{};
+    std::vector<MixEntry> expand_;
+    std::vector<MixEntry> assign_;
+    std::vector<Chain> branches_;
+    std::vector<Section> sections_;
+    std::vector<State> states_;
+    std::array<OutputSpec, kChannels> outputs_{};
+    // One contiguous block, kMaxDelaySamples per output, so a delay line never
+    // allocates and the whole stage is one cache-friendly region.
+    std::vector<double> delay_lines_;
+    std::array<std::uint32_t, kChannels> delay_write_{};
+};
 
 class AudioRing {
 public:

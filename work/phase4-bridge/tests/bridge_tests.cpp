@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -17,6 +19,256 @@ void check(const bool condition, const std::string_view message) {
         std::cerr << "FAIL: " << message << '\n';
         ++failures;
     }
+}
+
+// ---------------------------------------------------------------- DSP stage
+//
+// Coefficients quoted below were emitted by work/dsp-compiler/coefficients.mjs,
+// which is also what writes the artifacts the bridge loads. Running them here
+// is a cross-language check: the same numbers, a different implementation, and
+// properties that hold only if both halves are right.
+
+std::string dsp_artifact(const std::string& body, const std::size_t internal = 1) {
+    return "usb16x16-dsp 1\npreset test\nrate 48000\nchannels 16\ninternal " +
+           std::to_string(internal) + "\nmaxdelay 480\n" + body + "end\n";
+}
+
+// A pipeline that carries input `in` to output `out` with `gain`, no filters.
+std::string dsp_passthrough(const std::size_t in, const std::size_t out,
+                            const double gain, const std::size_t delay = 0,
+                            const double output_gain = 1.0) {
+    std::string text = "expand 1\n0 " + std::to_string(in) + " " + std::to_string(gain) + "\n";
+    text += "branch 0\n";
+    text += "assign 1\n" + std::to_string(out) + " 0 1\n";
+    text += "output 1\n" + std::to_string(out) + " " + std::to_string(delay) + " " +
+            std::to_string(output_gain) + " 0\n";
+    return text;
+}
+
+std::vector<float> dsp_run(usb16x16::DspStage& stage, std::vector<float> block) {
+    stage.process(block.data(), block.size() / usb16x16::kChannels);
+    return block;
+}
+
+std::vector<float> dsp_impulse(const std::size_t frames, const std::size_t channel,
+                               const float amplitude = 1.0F) {
+    std::vector<float> block(frames * usb16x16::kChannels, 0.0F);
+    block[channel] = amplitude;
+    return block;
+}
+
+void test_dsp_stage_is_inert_until_loaded() {
+    usb16x16::DspStage stage;
+    check(!stage.loaded(), "an unloaded stage reports itself unloaded");
+    // Direct mode is the absence of the stage, so an unloaded one must not
+    // touch the buffer at all rather than route it to silence.
+    std::vector<float> block = dsp_impulse(4, 0, 0.5F);
+    const std::vector<float> before = block;
+    stage.process(block.data(), 4);
+    check(block == before, "an unloaded stage leaves the buffer untouched");
+}
+
+void test_dsp_routing_gain_and_polarity() {
+    auto stage = usb16x16::DspStage::load(dsp_artifact(dsp_passthrough(2, 5, 0.5)));
+    check(stage.loaded(), "a valid artifact loads");
+    check(stage.internal_channels() == 1, "internal channel count is read back");
+    const std::vector<float> out = dsp_run(stage, dsp_impulse(4, 2, 1.0F));
+    check(std::abs(out[5] - 0.5F) < 1e-7F, "input 3 reaches output 6 at the mix gain");
+    for (std::size_t channel = 0; channel < usb16x16::kChannels; ++channel) {
+        if (channel == 5) continue;
+        check(out[channel] == 0.0F, "no other output is written");
+    }
+
+    auto inverted = usb16x16::DspStage::load(dsp_artifact(dsp_passthrough(0, 0, 1.0, 0, -1.0)));
+    const std::vector<float> flipped = dsp_run(inverted, dsp_impulse(4, 0, 0.25F));
+    check(std::abs(flipped[0] + 0.25F) < 1e-7F, "a negative output gain inverts polarity");
+
+    auto muted = usb16x16::DspStage::load(dsp_artifact(dsp_passthrough(0, 0, 1.0, 0, 0.0)));
+    const std::vector<float> silent = dsp_run(muted, dsp_impulse(4, 0, 1.0F));
+    check(silent[0] == 0.0F, "a zero output gain mutes");
+}
+
+void test_dsp_delay_moves_the_impulse() {
+    auto stage = usb16x16::DspStage::load(dsp_artifact(dsp_passthrough(0, 0, 1.0, 120)));
+    check(stage.delay_samples() == 120, "the stage reports the delay it carries");
+    const std::vector<float> out = dsp_run(stage, dsp_impulse(400, 0, 1.0F));
+    std::size_t at = 0;
+    std::size_t hits = 0;
+    for (std::size_t frame = 0; frame < 400; ++frame) {
+        if (out[frame * usb16x16::kChannels] != 0.0F) {
+            at = frame;
+            ++hits;
+        }
+    }
+    check(hits == 1, "a delayed impulse stays one impulse");
+    check(at == 120, "a 120-sample delay lands the impulse at frame 120");
+}
+
+void test_dsp_delay_is_the_largest_not_the_sum() {
+    // Two outputs, 96 and 240 samples. The transport carries the larger: the
+    // block is not complete until the most delayed channel has been produced.
+    std::string body = "expand 1\n0 0 1\nbranch 0\nassign 2\n0 0 1\n1 0 1\n";
+    body += "output 2\n0 96 1 0\n1 240 1 0\n";
+    auto stage = usb16x16::DspStage::load(dsp_artifact(body));
+    check(stage.delay_samples() == 240, "the reported delay is the largest, not the sum");
+    const std::vector<float> out = dsp_run(stage, dsp_impulse(400, 0, 1.0F));
+    check(out[96 * usb16x16::kChannels] != 0.0F, "the short delay lands where it should");
+    check(out[240 * usb16x16::kChannels + 1] != 0.0F, "so does the long one");
+}
+
+// Steady-state amplitude of a sine through the stage, after letting the filter
+// settle. Simpler than a DFT and enough to read a crossover corner.
+double dsp_sine_amplitude(usb16x16::DspStage& stage, const double freq,
+                          const std::size_t output, const std::size_t input) {
+    constexpr std::size_t settle = 48000;
+    constexpr std::size_t measure = 4800;
+    constexpr std::size_t chunk = 480;
+    std::vector<float> block(chunk * usb16x16::kChannels, 0.0F);
+    double peak = 0.0;
+    std::size_t produced = 0;
+    for (std::size_t frame = 0; frame < settle + measure; frame += chunk) {
+        for (std::size_t n = 0; n < chunk; ++n) {
+            const double phase = 2.0 * M_PI * freq * static_cast<double>(frame + n) / 48000.0;
+            std::fill(block.begin() + static_cast<long>(n * usb16x16::kChannels),
+                      block.begin() + static_cast<long>((n + 1) * usb16x16::kChannels), 0.0F);
+            block[n * usb16x16::kChannels + input] = static_cast<float>(std::sin(phase));
+        }
+        stage.process(block.data(), chunk);
+        produced += chunk;
+        if (produced > settle) {
+            for (std::size_t n = 0; n < chunk; ++n) {
+                peak = std::max(peak, std::abs(static_cast<double>(
+                    block[n * usb16x16::kChannels + output])));
+            }
+        }
+    }
+    return peak;
+}
+
+void test_dsp_crossover_branches_are_minus_six_at_the_corner() {
+    // LR4 at 80 Hz from coefficients.mjs. A Linkwitz-Riley is -6.02 dB at its
+    // corner, not -3: that is the property that makes two of them sum flat,
+    // and it is what the engine measured on this same cascade.
+    const std::string highpass =
+        "0.99262254275611894 -1.9852450855122379 0.99262254275611894 -1.9851906578962613 0.98529951312821462\n"
+        "0.99262254275611894 -1.9852450855122379 0.99262254275611894 -1.9851906578962613 0.98529951312821462\n";
+    const std::string lowpass =
+        "0.000027213807988313326 0.000054427615976626652 0.000027213807988313326 -1.9851906578962613 0.98529951312821462\n"
+        "0.000027213807988313326 0.000054427615976626652 0.000027213807988313326 -1.9851906578962613 0.98529951312821462\n";
+    std::string body = "expand 2\n0 0 1\n1 0 1\n";
+    body += "branch 2\n0 2\n" + highpass + "1 2\n" + lowpass;
+    body += "assign 2\n0 0 1\n1 1 1\n";
+    body += "output 2\n0 0 1 0\n1 0 1 0\n";
+    auto stage = usb16x16::DspStage::load(dsp_artifact(body, 2));
+    const double high = dsp_sine_amplitude(stage, 80.0, 0, 0);
+    stage.reset();
+    const double low = dsp_sine_amplitude(stage, 80.0, 1, 0);
+    const double high_db = 20.0 * std::log10(high);
+    const double low_db = 20.0 * std::log10(low);
+    check(std::abs(high_db + 6.0206) < 0.01, "the LR4 high-pass is -6.02 dB at 80 Hz");
+    check(std::abs(low_db + 6.0206) < 0.01, "the LR4 low-pass is -6.02 dB at 80 Hz");
+
+    // Summed onto one output the two branches must come back to unity, which
+    // is the whole reason a Linkwitz-Riley is used and is a far stronger check
+    // than either branch alone.
+    std::string summed = "expand 2\n0 0 1\n1 0 1\n";
+    summed += "branch 2\n0 2\n" + highpass + "1 2\n" + lowpass;
+    summed += "assign 2\n0 0 1\n0 1 1\n";
+    summed += "output 1\n0 0 1 0\n";
+    auto pair = usb16x16::DspStage::load(dsp_artifact(summed, 2));
+    for (const double freq : {40.0, 80.0, 160.0, 400.0}) {
+        pair.reset();
+        const double amplitude = dsp_sine_amplitude(pair, freq, 0, 0);
+        check(std::abs(20.0 * std::log10(amplitude)) < 0.02,
+              "the two LR4 branches sum flat");
+    }
+}
+
+void test_dsp_band_matches_its_design_gain() {
+    // A +6 dB bell at 1 kHz, Q 1, from coefficients.mjs: at the centre it must
+    // deliver its design gain and nothing else.
+    std::string body = "expand 1\n0 0 1\nbranch 0\nassign 1\n0 0 1\n";
+    body += "output 1\n0 0 1 1\n"
+            "1.0439530869903351 -1.8953207239365961 0.86772228475985658 "
+            "-1.8953207239365961 0.91167537175019153\n";
+    auto stage = usb16x16::DspStage::load(dsp_artifact(body));
+    check(stage.biquad_count() == 1, "the band is one biquad");
+    const double centre = 20.0 * std::log10(dsp_sine_amplitude(stage, 1000.0, 0, 0));
+    check(std::abs(centre - 6.0) < 0.02, "a +6 dB bell gives +6 dB at its centre");
+    stage.reset();
+    const double away = 20.0 * std::log10(dsp_sine_amplitude(stage, 60.0, 0, 0));
+    check(std::abs(away) < 0.05, "and leaves 60 Hz alone");
+}
+
+void test_dsp_refuses_what_it_cannot_read() {
+    const std::array<std::string_view, 6> bad{
+        "nothing like it\n",
+        "usb16x16-dsp 2\npreset x\n",
+        "usb16x16-dsp 1\npreset x\nrate 44100\n",
+        "usb16x16-dsp 1\npreset x\nrate 48000\nchannels 8\n",
+        "usb16x16-dsp 1\npreset x\nrate 48000\nchannels 16\ninternal 0\n",
+        "usb16x16-dsp 1\npreset x\nrate 48000\nchannels 16\ninternal 1\nmaxdelay 480\nexpand 1\n0 0 nonsense\n",
+    };
+    for (const auto& text : bad) {
+        bool threw = false;
+        try {
+            usb16x16::DspStage::load(text);
+        } catch (const std::runtime_error&) {
+            threw = true;
+        }
+        check(threw, "a malformed artifact is refused rather than half-loaded");
+    }
+    // A truncated artifact must not load either: half a pipeline still applies
+    // gain, it just applies it to the wrong things.
+    bool truncated_threw = false;
+    try {
+        usb16x16::DspStage::load(
+            "usb16x16-dsp 1\npreset x\nrate 48000\nchannels 16\ninternal 1\nmaxdelay 480\n"
+            "expand 1\n0 0 1\nbranch 0\nassign 1\n0 0 1\n");
+    } catch (const std::runtime_error&) {
+        truncated_threw = true;
+    }
+    check(truncated_threw, "a truncated artifact is refused");
+}
+
+void test_dsp_reset_clears_filter_state() {
+    std::string body = "expand 1\n0 0 1\nbranch 0\nassign 1\n0 0 1\n";
+    body += "output 1\n0 0 1 1\n"
+            "1.0439530869903351 -1.8953207239365961 0.86772228475985658 "
+            "-1.8953207239365961 0.91167537175019153\n";
+    auto stage = usb16x16::DspStage::load(dsp_artifact(body));
+    const std::vector<float> first = dsp_run(stage, dsp_impulse(64, 0, 1.0F));
+    stage.reset();
+    const std::vector<float> second = dsp_run(stage, dsp_impulse(64, 0, 1.0F));
+    check(first == second, "reset returns the stage to its loaded state");
+    // Without a reset the ringing from the first impulse is still arriving, so
+    // the same input must not give the same output.
+    const std::vector<float> third = dsp_run(stage, dsp_impulse(64, 0, 1.0F));
+    check(third != second, "filter state persists across blocks when not reset");
+}
+
+void test_dsp_is_block_size_agnostic() {
+    // The bridge renders whatever the device grants, so a block boundary must
+    // not be audible: one 480-frame call and ten 48-frame calls must agree.
+    std::string body = "expand 1\n0 0 1\nbranch 0\nassign 1\n0 0 1\n";
+    body += "output 1\n0 37 1 1\n"
+            "1.0439530869903351 -1.8953207239365961 0.86772228475985658 "
+            "-1.8953207239365961 0.91167537175019153\n";
+    std::vector<float> input(480 * usb16x16::kChannels, 0.0F);
+    for (std::size_t frame = 0; frame < 480; ++frame) {
+        input[frame * usb16x16::kChannels] =
+            static_cast<float>(0.4 * std::sin(2.0 * M_PI * 220.0 * static_cast<double>(frame) / 48000.0));
+    }
+    auto whole = usb16x16::DspStage::load(dsp_artifact(body));
+    std::vector<float> one = input;
+    whole.process(one.data(), 480);
+
+    auto split = usb16x16::DspStage::load(dsp_artifact(body));
+    std::vector<float> many = input;
+    for (std::size_t frame = 0; frame < 480; frame += 48) {
+        split.process(many.data() + frame * usb16x16::kChannels, 48);
+    }
+    check(one == many, "the stage gives the same result whatever the block size");
 }
 
 void test_packed_24() {
@@ -465,6 +717,16 @@ void test_zero_run_detector() {
 } // namespace
 
 int main() {
+    test_dsp_stage_is_inert_until_loaded();
+    test_dsp_routing_gain_and_polarity();
+    test_dsp_delay_moves_the_impulse();
+    test_dsp_delay_is_the_largest_not_the_sum();
+    test_dsp_crossover_branches_are_minus_six_at_the_corner();
+    test_dsp_band_matches_its_design_gain();
+    test_dsp_refuses_what_it_cannot_read();
+    test_dsp_reset_clears_filter_state();
+    test_dsp_is_block_size_agnostic();
+
     test_packed_24();
     test_full_scale_conversion_does_not_wrap();
     test_ring_wrap();

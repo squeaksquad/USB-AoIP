@@ -1,8 +1,260 @@
 #include "usb16x16/bridge_core.hpp"
 
+#include <sstream>
+
 #include <cstring>
 
 namespace usb16x16 {
+
+namespace {
+
+// Load-time parsing only. Throws on anything it does not understand: a preset
+// the bridge cannot read in full is a preset it must refuse, because half a
+// pipeline is a routing error with the gain still applied.
+class ArtifactReader {
+public:
+    explicit ArtifactReader(const std::string_view text) : stream_(std::string(text)) {}
+
+    std::string word(const char* what) {
+        std::string value;
+        if (!(stream_ >> value)) {
+            throw std::runtime_error(std::string("dsp artifact: expected ") + what);
+        }
+        return value;
+    }
+
+    void expect(const char* keyword) {
+        const std::string value = word(keyword);
+        if (value != keyword) {
+            throw std::runtime_error(std::string("dsp artifact: expected '") + keyword +
+                                     "', found '" + value + "'");
+        }
+    }
+
+    std::string rest_of_line() {
+        std::string line;
+        std::getline(stream_, line);
+        const auto first = line.find_first_not_of(" \t");
+        return first == std::string::npos ? std::string{} : line.substr(first);
+    }
+
+    std::size_t count(const char* what, const std::size_t limit) {
+        const std::string value = word(what);
+        try {
+            const auto parsed = std::stoull(value);
+            if (parsed > limit) {
+                throw std::runtime_error(std::string("dsp artifact: ") + what + " " + value +
+                                         " exceeds the limit " + std::to_string(limit));
+            }
+            return static_cast<std::size_t>(parsed);
+        } catch (const std::invalid_argument&) {
+            throw std::runtime_error(std::string("dsp artifact: ") + what +
+                                     " is not a number: '" + value + "'");
+        } catch (const std::out_of_range&) {
+            throw std::runtime_error(std::string("dsp artifact: ") + what + " out of range");
+        }
+    }
+
+    double real(const char* what) {
+        const std::string value = word(what);
+        try {
+            const double parsed = std::stod(value);
+            if (!std::isfinite(parsed)) {
+                throw std::runtime_error(std::string("dsp artifact: ") + what +
+                                         " is not finite: '" + value + "'");
+            }
+            return parsed;
+        } catch (const std::invalid_argument&) {
+            throw std::runtime_error(std::string("dsp artifact: ") + what +
+                                     " is not a number: '" + value + "'");
+        } catch (const std::out_of_range&) {
+            throw std::runtime_error(std::string("dsp artifact: ") + what + " out of range");
+        }
+    }
+
+private:
+    std::istringstream stream_;
+};
+
+}  // namespace
+
+DspStage DspStage::load(const std::string_view text) {
+    ArtifactReader reader(text);
+    reader.expect("usb16x16-dsp");
+    const std::size_t version = reader.count("version", 1);
+    if (version != 1) {
+        throw std::runtime_error("dsp artifact: unsupported version " + std::to_string(version));
+    }
+    DspStage stage;
+    reader.expect("preset");
+    stage.preset_ = reader.rest_of_line();
+    reader.expect("rate");
+    const std::size_t rate = reader.count("rate", 768000);
+    if (static_cast<double>(rate) != kNominalRate) {
+        throw std::runtime_error("dsp artifact: rate " + std::to_string(rate) +
+                                 " is not the bridge's 48000");
+    }
+    reader.expect("channels");
+    const std::size_t channels = reader.count("channels", kChannels);
+    if (channels != kChannels) {
+        throw std::runtime_error("dsp artifact: " + std::to_string(channels) +
+                                 " channels, the bridge carries " + std::to_string(kChannels));
+    }
+    reader.expect("internal");
+    stage.internal_channels_ = reader.count("internal", kMaxInternalChannels);
+    if (stage.internal_channels_ == 0) {
+        throw std::runtime_error("dsp artifact: a pipeline with no internal channels routes nothing");
+    }
+    reader.expect("maxdelay");
+    const std::size_t declared_delay = reader.count("maxdelay", kMaxDelaySamples);
+
+    const auto read_mix = [&reader](std::vector<MixEntry>& into, const char* what,
+                                    const std::size_t destinations, const std::size_t sources) {
+        reader.expect(what);
+        const std::size_t rows = reader.count(what, destinations * sources + 1);
+        into.reserve(rows);
+        for (std::size_t row = 0; row < rows; ++row) {
+            const std::size_t dest = reader.count("mix destination", destinations - 1);
+            const std::size_t source = reader.count("mix source", sources - 1);
+            const double gain = reader.real("mix gain");
+            into.push_back({static_cast<std::uint16_t>(dest),
+                            static_cast<std::uint16_t>(source), gain});
+        }
+    };
+
+    const auto read_sections = [&reader](std::vector<Section>& into, const std::size_t count) {
+        for (std::size_t index = 0; index < count; ++index) {
+            Section section;
+            section.b0 = reader.real("b0");
+            section.b1 = reader.real("b1");
+            section.b2 = reader.real("b2");
+            section.a1 = reader.real("a1");
+            section.a2 = reader.real("a2");
+            into.push_back(section);
+        }
+    };
+
+    read_mix(stage.expand_, "expand", stage.internal_channels_, kChannels);
+
+    reader.expect("branch");
+    const std::size_t branch_rows = reader.count("branch", kMaxInternalChannels);
+    stage.branches_.reserve(branch_rows);
+    for (std::size_t row = 0; row < branch_rows; ++row) {
+        const std::size_t channel = reader.count("branch channel", stage.internal_channels_ - 1);
+        const std::size_t count = reader.count("branch sections", 64);
+        Chain chain{static_cast<std::uint16_t>(channel),
+                    static_cast<std::uint32_t>(stage.sections_.size()),
+                    static_cast<std::uint32_t>(count)};
+        read_sections(stage.sections_, count);
+        stage.branches_.push_back(chain);
+    }
+
+    read_mix(stage.assign_, "assign", kChannels, stage.internal_channels_);
+
+    reader.expect("output");
+    const std::size_t output_rows = reader.count("output", kChannels);
+    for (std::size_t row = 0; row < output_rows; ++row) {
+        const std::size_t output = reader.count("output index", kChannels - 1);
+        const std::size_t delay = reader.count("output delay", declared_delay);
+        const double gain = reader.real("output gain");
+        const std::size_t count = reader.count("output sections", 64);
+        OutputSpec spec;
+        spec.first = static_cast<std::uint32_t>(stage.sections_.size());
+        spec.count = static_cast<std::uint32_t>(count);
+        spec.delay = static_cast<std::uint32_t>(delay);
+        spec.gain = gain;
+        read_sections(stage.sections_, count);
+        stage.outputs_[output] = spec;
+        stage.delay_samples_ = std::max(stage.delay_samples_, delay);
+    }
+    reader.expect("end");
+
+    stage.states_.assign(stage.sections_.size(), State{});
+    stage.delay_lines_.assign(kChannels * kMaxDelaySamples, 0.0);
+    stage.delay_write_.fill(0);
+    return stage;
+}
+
+void DspStage::reset() noexcept {
+    for (auto& state : states_) {
+        state = State{};
+    }
+    std::fill(delay_lines_.begin(), delay_lines_.end(), 0.0);
+    delay_write_.fill(0);
+}
+
+void DspStage::run_chain(const std::uint32_t first, const std::uint32_t count,
+                         double& sample) noexcept {
+    for (std::uint32_t index = 0; index < count; ++index) {
+        const Section& section = sections_[first + index];
+        State& state = states_[first + index];
+        // Direct form I, the form the emitted coefficients are written for.
+        const double input = sample;
+        const double output = section.b0 * input + section.b1 * state.x1 +
+                              section.b2 * state.x2 - section.a1 * state.y1 -
+                              section.a2 * state.y2;
+        state.x2 = state.x1;
+        state.x1 = input;
+        state.y2 = state.y1;
+        state.y1 = output;
+        sample = output;
+    }
+}
+
+void DspStage::flush_denormals() noexcept {
+    // Once per block, not per sample. A decaying IIR in double precision takes
+    // a very long time to reach the denormal range, but a silent input holds it
+    // there once it arrives, and on hardware that traps denormals the cost is
+    // paid on every sample from then on. Cheap insurance at this rate.
+    constexpr double floor = 1e-100;
+    for (auto& state : states_) {
+        if (std::abs(state.x1) < floor) state.x1 = 0.0;
+        if (std::abs(state.x2) < floor) state.x2 = 0.0;
+        if (std::abs(state.y1) < floor) state.y1 = 0.0;
+        if (std::abs(state.y2) < floor) state.y2 = 0.0;
+    }
+}
+
+void DspStage::process(float* const interleaved, const std::size_t frames) noexcept {
+    if (internal_channels_ == 0) {
+        return;
+    }
+    std::array<double, kMaxInternalChannels> internal{};
+    std::array<double, kChannels> in{};
+    std::array<double, kChannels> out{};
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        float* const block = interleaved + frame * kChannels;
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            in[channel] = static_cast<double>(block[channel]);
+        }
+        std::fill(internal.begin(), internal.begin() + internal_channels_, 0.0);
+        for (const MixEntry& entry : expand_) {
+            internal[entry.dest] += entry.gain * in[entry.source];
+        }
+        for (const Chain& chain : branches_) {
+            run_chain(chain.first, chain.count, internal[chain.channel]);
+        }
+        out.fill(0.0);
+        for (const MixEntry& entry : assign_) {
+            out[entry.dest] += entry.gain * internal[entry.source];
+        }
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            const OutputSpec& spec = outputs_[channel];
+            double sample = out[channel];
+            run_chain(spec.first, spec.count, sample);
+            if (spec.delay > 0) {
+                double* const line = delay_lines_.data() + channel * kMaxDelaySamples;
+                const std::uint32_t write = delay_write_[channel];
+                const double delayed = line[write];
+                line[write] = sample;
+                delay_write_[channel] = (write + 1) % spec.delay;
+                sample = delayed;
+            }
+            block[channel] = static_cast<float>(sample * spec.gain);
+        }
+    }
+    flush_denormals();
+}
 
 AudioRing::AudioRing(const std::size_t capacity_frames)
     : samples_(capacity_frames * kChannels, 0.0F), capacity_frames_(capacity_frames) {
