@@ -9093,6 +9093,13 @@ every impulse (531 at 132), `pi_total` median 677.8 (649.1-692.8; 702.1 at
 one of 5,944 impulses. RTL at 32 by the user is the last item; predicted
 719 + 188 = 907 = 18.896 ms.
 
+NOTE 2026-09-10: the comparison this entry rests on is undersampled. The
+acceptance set below is four runs plus a soak on one anchor, which measures
+run-to-run stability, not draw-to-draw reproducibility; sd103 has since
+drawn 722 on a second fresh anchor and 670/697 on plain restarts, a spread
+wider than the 28 samples separating sd103 from sd132. The measurements
+stand; see FOUND 2026-09-10 00:40 UTC at the tail.
+
 **ACCEPTED 2026-09-07 22:25 UTC: sink delay 103, profile
 `servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd103`
 on bridge `05f37bd9`, supervisor `631e88e1` and module `bc694c24`: 719 at
@@ -9525,3 +9532,64 @@ stand, the count continues, the level re-drawn. No link event, speed
 pair on that interval 817 / 829 (it spans the re-prime; the next read is
 the clean one). Priced: 83 leaves 35 over one period, 168 possible on this
 draw. Day count: day 1 of three on this process.
+
+**FOUND 2026-09-10 00:40 UTC: the acceptance gate measures run-to-run
+stability, not draw-to-draw reproducibility, so the sd103-over-sd132
+comparison rests on one draw each and is not established.** Raised by the
+user asking why a re-draw matters if the draw is random. It matters
+operationally — the draw is fixed once taken, so selecting a good one buys
+real persistent latency — but the same fact undermines how the levels have
+been compared.
+
+(1) Today's draw, for the record. Fresh anchor at 00:30:41 UTC (coreaudiod
+killed on the Mac after the session depth went deep; the supervisor's
+host-absent detector stopped the bridge at 48 recoveries in one second and
+restarted it, a new bridge session and a new Phase 6 count). Harness 64
+frames / 800 impulses: **722**, min 722, max 722, spread 0, score 1.000,
+`levels=722x800`, 0 discontinuities, 0 RECOVERs during the run. RTL
+Utility at 32: **18.958 ms = 910 = 722 + 188 to the sample**. Noise probes
+first, clean at both sizes (`anchor20260910-noise-ch2-{32,64}f-100imp.*`
+in `usb-holes-20260904/`): 0.0 % zeros, no run >= 4, matching
+`accept-noise-ch2-64f`. So 722 is neither a Mac hole nor instrument
+variance. Evidence `anchor20260910-roundtrip-64f-20260910T004003Z.json`.
+
+(2) The gate. The sd103 acceptance set is "4 x 800 loaded and the 600 s
+soak all 719". All five reads were on one anchor, where the level cannot
+vary: today's run confirms the mechanism, 800 impulses at spread 0 on one
+anchor. Four runs agreeing is therefore evidence of run-to-run stability
+and says nothing about whether a second anchor on the same profile would
+read 719 again. No accepted point in this record has been drawn twice.
+
+(3) The spread on a fixed profile. Draws on sd103, unchanged conf, bridge
+and module: **670**, **697** (both on the 2026-09-08 22:11 process, the
+second re-drawn from the first by the +7.65 h open/close pair; the record
+classes both as plain-restart, not fresh-anchor), **719** (fresh, the
+accepted figure) and **722** (fresh, today). 52 samples end to end, and
+n = 2 for fresh-anchor draws. Note also that 697 and 670 sit *below* both
+fresh-anchor figures, against the record's own "plain restarts have read
+757-849" expectation, which remains unexplained.
+
+(4) Why that matters for sd103 over sd132. The point of record moved on
+719 against sd132's 747 — 28 samples, each a single draw on its own
+anchor, read as "sink delay's cost is a whole-frame step". The observed
+draw spread on sd103 alone is at least 52 samples. The claimed effect is
+smaller than the noise measured on one profile, so two single draws cannot
+separate the lever from the draw. This does not retract 719 or 747: both
+were measured cleanly. It says the *comparison* between them is
+undersampled.
+
+(5) The explanatory model does not close the gap either. The record
+attributes the draw to the bridge start depth one for one. Across the
+three draws whose prime figures are recorded, `overshoot + align_dropped`
+is conserved at 45 — 719: overshoot 37, align_dropped 8; 697: 35, 10;
+722: 30, 15 — while the levels span 52 samples. Equal effective start
+depth, different levels. Whatever sets the draw is not captured by that
+sum.
+
+(6) What would settle it: N fresh-anchor draws per profile, comparing
+distributions rather than single figures, with the noise probe before each
+read. Cost per draw is about 60 s of audio plus a Phase 6 count restart,
+which is why it has not been done. Until it is, re-drawing to obtain a
+lower figure and recording it as the profile's latency reports an order
+statistic as a system property, and should not be done. sd103 at 719
+stands as the accepted operating point; 722 is filed as a draw.
