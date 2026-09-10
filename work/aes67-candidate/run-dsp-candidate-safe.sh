@@ -12,7 +12,12 @@
 # and rolling this back is not running it again. The daemon and module
 # lifecycle is the proven one, unchanged.
 #
-# Usage: run-dsp-candidate-safe.sh [SECONDS] [DSP_PRESET]
+# Usage: run-dsp-candidate-safe.sh [SECONDS] [DSP_PRESET|none]
+#
+# "none" runs the same binary with no --dsp-preset at all, which is the direct
+# control: the stage is absent rather than loaded and bypassed, and it is the
+# arm that shows what the candidate binary costs when nothing is filtering.
+# Both arms therefore differ in exactly one argument.
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -271,13 +276,15 @@ if [ "$(sha256sum "$bridge_binary" | awk '{print $1}')" != "$expected_bridge_sha
   echo "candidate bridge hash mismatch" >&2
   exit 27
 fi
-if [ ! -r "$dsp_preset" ]; then
-  echo "missing DSP preset: $dsp_preset" >&2
-  exit 40
-fi
-if [ "$(sha256sum "$dsp_preset" | awk '{print $1}')" != "$expected_dsp_sha256" ]; then
-  echo "DSP preset hash mismatch" >&2
-  exit 41
+if [ "$dsp_preset" != none ]; then
+  if [ ! -r "$dsp_preset" ]; then
+    echo "missing DSP preset: $dsp_preset" >&2
+    exit 40
+  fi
+  if [ "$(sha256sum "$dsp_preset" | awk '{print $1}')" != "$expected_dsp_sha256" ]; then
+    echo "DSP preset hash mismatch" >&2
+    exit 41
+  fi
 fi
 
 original_config_sha256=$(sha256sum "$original_config" | awk '{print $1}')
@@ -389,10 +396,12 @@ bridge_arguments=(
   --align-prime-age-margin-us 50
   --zero-run-detect 1 --impulse-trace 1
   --pitch-seed 0 --level-shift 0
-  --dsp-preset "$dsp_preset"
   --priority 90
   --seconds "$candidate_seconds"
 )
+if [ "$dsp_preset" != none ]; then
+  bridge_arguments+=(--dsp-preset "$dsp_preset")
+fi
 timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" "${bridge_arguments[@]}" \
   > "$result_dir/bridge.log" 2>&1 &
 bridge_pid=$!
@@ -423,7 +432,7 @@ fi
   echo "sink_delay=$sink_delay"
   echo "candidate_seconds=$candidate_seconds"
   echo "dsp_preset=$dsp_preset"
-  echo "dsp_sha256=$(sha256sum "$dsp_preset" | awk '{print $1}')"
+  echo "dsp_sha256=$([ "$dsp_preset" = none ] && echo none || sha256sum "$dsp_preset" | awk '{print $1}')"
   echo "bridge_binary=$bridge_binary"
   echo "bridge_sha256=$(sha256sum "$bridge_binary" | awk '{print $1}')"
   echo "bridge_arguments=${bridge_arguments[*]}"
