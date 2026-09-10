@@ -1,7 +1,7 @@
 import { CHANNELS, createConfig, validateConfig, parsePreset, setOutputRole, bandResponse, eqResponse, subSumBoundDb } from './model.mjs';
 import { LAYOUTS, currentLayout, applyLayout, swapOutputs, applyCrossover, copyChannel, pasteChannel, parseRew, dragEqBand, EQ_RANGE_DB, SERVICE_COMMANDS, journalCommand } from './workflows.mjs';
 import { resetBand } from './reset-band.mjs';
-import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, createSpeakerBus, removeBus, setBusEqLink, setBusOutputs, outputRoleLabel } from './buses.mjs';
+import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, createSpeakerBus, removeBus, setBusEqLink, setBusOutputs, outputRoleLabel, speakerGroupSourceIds } from './buses.mjs';
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
@@ -385,17 +385,19 @@ document.addEventListener('dblclick',event=>{
 });
 
 function crossoverTargets() {
-  return config.inputs.map((_,i)=>i).filter(i=>i!==config.lfe.input && (crossoverScope==='all'||crossoverSelection.has(i)));
+  return speakerGroupSourceIds(config).filter(i=>i!==config.lfe.input && (crossoverScope==='all'||crossoverSelection.has(i)));
 }
 
 function refreshCrossoverControls() {
+  const groupChannels=speakerGroupSourceIds(config).filter(i=>i!==config.lfe.input);
+  for(const i of crossoverSelection) if(!groupChannels.includes(i)) crossoverSelection.delete(i);
   const targets=crossoverTargets(), selectionCount=crossoverSelection.size;
   $('#crossover-scope').value=crossoverScope;
   $('#crossover-apply').textContent=`Apply to ${targets.length} channel${targets.length===1?'':'s'}`;
   $('#crossover-apply').disabled=!targets.length||!config.bassEnabled||config.mode==='direct';
   $('#crossover-count').textContent=`${selectionCount} selected`;
   const all=$('#crossover-select-all');
-  all.checked=selectionCount===config.inputs.length-1;
+  all.checked=groupChannels.length>0&&selectionCount===groupChannels.length;
   all.indeterminate=selectionCount>0&&!all.checked;
 }
 
@@ -447,13 +449,15 @@ function polarityBanner() {
 function renderBassMatrix() {
   const box = $('#bass-matrix-box');
   if (!box) return;
-  crossoverSelection.delete(config.lfe.input);
+  const routingInputs = speakerGroupSourceIds(config);
+  for(const i of crossoverSelection) if(i===config.lfe.input||!routingInputs.includes(i)) crossoverSelection.delete(i);
   const subs = config.outputs.map((o,i)=>({...o,index:i})).filter(o=>o.role==='sub');
   const slopeOptions = value => options([[12,'LR · 12 dB/oct'],[24,'LR · 24 dB/oct'],[48,'LR · 48 dB/oct']],value);
   box.innerHTML = `<fieldset ${disabled(config.mode==='direct')} style="border:0;padding:0;margin:0;min-width:0">
     <div class="bass-box-head"><h3>Bass routing matrix</h3><p>${subs.length} subwoofer output${subs.length===1?'':'s'} within the 16-channel output bank. Enable a send, then set its gain. Redirection on/off, headroom and LFE live in Bass management below.</p></div>
-    ${subs.length ? `<div class="crossover-tools"><strong>Set crossover</strong>${field('Crossover · Hz',`<input type="number" id="crossover-hz" value="${esc(crossoverHz)}" min="20" max="250" step="1" required ${disabled(!config.bassEnabled)}>`)}${field('Apply to',`<select id="crossover-scope" ${disabled(!config.bassEnabled)}>${options([['all','All non-LFE channels'],['selected','Selected channels']],crossoverScope)}</select>`)}<button id="crossover-apply" data-action="crossover-apply">Apply crossover</button><span id="crossover-count" class="muted"></span><p>Sets speaker HP and bass LP together. Select rows for a group, or edit any channel individually. LFE, slopes and HP on/off stay as set.</p></div>
-    <div class="table-scroll"><table class="matrix"><thead><tr><th><label class="checkbox-label"><input type="checkbox" id="crossover-select-all" aria-label="Select all non-LFE channels for crossover" ${disabled(!config.bassEnabled)}>Source</label></th><th>HP on</th><th>Speaker HP · Hz</th><th>Bass LP · Hz</th><th>Slope</th>${subs.map(o=>`<th class="matrix-head">${pad(o.index)} · ${esc(o.label)}<small class="sub-sum">Sum bound: ${Number.isFinite(subSumBoundDb(config,o.index)) ? `${subSumBoundDb(config,o.index).toFixed(1)} dBFS` : 'silent'}</small></th>`).join('')}</tr></thead><tbody>${config.inputs.map((v,i)=>{
+    ${subs.length ? `<div class="crossover-tools"><strong>Set crossover</strong>${field('Crossover · Hz',`<input type="number" id="crossover-hz" value="${esc(crossoverHz)}" min="20" max="250" step="1" required ${disabled(!config.bassEnabled)}>`)}${field('Apply to',`<select id="crossover-scope" ${disabled(!config.bassEnabled)}>${options([['all','All speaker-group channels'],['selected','Selected channels']],crossoverScope)}</select>`)}<button id="crossover-apply" data-action="crossover-apply">Apply crossover</button><span id="crossover-count" class="muted"></span><p>Sets speaker HP and bass LP together. Select rows for a group, or edit any channel individually. LFE, slopes and HP on/off stay as set.</p></div>
+    <div class="table-scroll"><table class="matrix"><thead><tr><th><label class="checkbox-label"><input type="checkbox" id="crossover-select-all" aria-label="Select all speaker-group channels for crossover" ${disabled(!config.bassEnabled)}>Source</label></th><th>HP on</th><th>Speaker HP · Hz</th><th>Bass LP · Hz</th><th>Slope</th>${subs.map(o=>`<th class="matrix-head">${pad(o.index)} · ${esc(o.label)}<small class="sub-sum">Sum bound: ${Number.isFinite(subSumBoundDb(config,o.index)) ? `${subSumBoundDb(config,o.index).toFixed(1)} dBFS` : 'silent'}</small></th>`).join('')}</tr></thead><tbody>${routingInputs.map(i=>{
+      const v=config.inputs[i];
       const lfe = i === config.lfe.input;
       return `<tr class="${lfe?'lfe-row':''}"><td>${lfe?`<strong>${pad(i)} · ${esc(v.label)}</strong> <small>LFE</small>`:`<label class="checkbox-label"><input type="checkbox" data-crossover-select="${i}" aria-label="Select channel ${i+1}: ${esc(v.label)} for crossover" ${checked(crossoverSelection.has(i))} ${disabled(!config.bassEnabled)}><strong>${pad(i)} · ${esc(v.label)}</strong></label>`}</td><td>${lfe?'—':`<input type="checkbox" data-input="${i}" data-param="crossover" aria-label="${esc(v.label)} high-pass enabled" ${checked(v.crossover)} ${disabled(!config.bassEnabled)}>`}</td><td>${lfe?'—':number(`data-input="${i}" data-param="highpassHz" aria-label="${esc(v.label)} high-pass frequency" ${disabled(!config.bassEnabled||!v.crossover)}`,v.highpassHz,20,250)}</td><td>${lfe?`${config.lfe.lowpassHz} Hz`:number(`data-input="${i}" data-param="lowpassHz" aria-label="${esc(v.label)} bass low-pass frequency" ${disabled(!config.bassEnabled)}`,v.lowpassHz,20,250)}</td><td>${lfe?`${config.lfe.slope} dB/oct`:`<select data-input="${i}" data-param="slope" aria-label="${esc(v.label)} crossover slope" ${disabled(!config.bassEnabled)}>${slopeOptions(v.slope)}</select>`}</td>${subs.map(o=>{
         const gain = config.sends[i][o.index], inactive = !lfe && !config.bassEnabled;
@@ -722,7 +726,7 @@ document.addEventListener('change', async event => {
   if(el.dataset.crossoverSelect!==undefined||el.id==='crossover-select-all') {
     if(el.id==='crossover-select-all') {
       crossoverSelection.clear();
-      if(el.checked) config.inputs.forEach((_,i)=>{if(i!==config.lfe.input)crossoverSelection.add(i);});
+      if(el.checked) speakerGroupSourceIds(config).forEach(i=>{if(i!==config.lfe.input)crossoverSelection.add(i);});
       document.querySelectorAll('[data-crossover-select]').forEach(input=>{input.checked=el.checked;});
     } else {
       const i=Number(el.dataset.crossoverSelect);

@@ -12,6 +12,22 @@ export function busForOutput(config, outputId) {
   return config.buses?.find(bus => bus.outputIds.includes(outputId)) ?? null;
 }
 
+/** Input channels that actually feed a speaker bus, in channel order. */
+export function speakerGroupSourceIds(config) {
+  const speakerOutputs = new Set((config.buses || [])
+    .filter(bus => bus.kind === 'speakers')
+    .flatMap(bus => bus.outputIds));
+  const sources = new Set();
+  let hasSub = false;
+  for (const outputId of speakerOutputs) {
+    const output = config.outputs[outputId];
+    if (output?.role === 'speaker') sources.add(output.source);
+    else if (output?.role === 'sub') hasSub = true;
+  }
+  if (hasSub) sources.add(config.lfe.input);
+  return config.inputs.map((_, i) => i).filter(i => sources.has(i));
+}
+
 export function applyBusLayout(config, busId, layoutId, outputIds = null) {
   const sourceBus = getBus(config, busId);
   const layout = LAYOUTS.find(value => value.id === layoutId);

@@ -1,13 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createConfig, parsePreset, setOutputRole, validateConfig } from './model.mjs';
-import { applyBusLayout, busForOutput, createHeadphoneBus, createSpeakerBus, removeBus, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix } from './buses.mjs';
+import { applyBusLayout, busForOutput, createHeadphoneBus, createSpeakerBus, removeBus, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, speakerGroupSourceIds } from './buses.mjs';
 import { swapOutputs } from './workflows.mjs';
 
 test('default owns only the speaker bus and leaves spare outputs reusable', () => {
   const c = createConfig();
   assert.deepEqual(c.buses[0].outputIds, Array.from({length: 13}, (_, i) => i));
   assert.equal(busForOutput(c, 13), null); assert.equal(c.buses.length, 1); validateConfig(c);
+});
+
+test('bass routing sources contain only channels assigned to speaker groups', () => {
+  const c = createConfig();
+  assert.deepEqual(speakerGroupSourceIds(c), Array.from({length: 12}, (_, i) => i));
+  const headphones = createHeadphoneBus(c);
+  assert.deepEqual(speakerGroupSourceIds(headphones), Array.from({length: 12}, (_, i) => i));
+  const stereo = applyBusLayout(headphones, 'speakers', '2.1', [0, 1, 2]);
+  assert.deepEqual(speakerGroupSourceIds(stereo), [0, 1, stereo.lfe.input]);
 });
 
 test('scoped speaker layout preserves bus settings and unrelated headphone bus', () => {
