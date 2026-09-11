@@ -11,6 +11,7 @@ private struct Arguments {
     let impulseCount: Int
     let maximumLagMilliseconds: Double
     let otherChannelLoadAmplitude: Float
+    let seconds: Int
 
     init(_ values: [String]) throws {
         guard values.count >= 2 else { throw CLIError.usage }
@@ -23,9 +24,15 @@ private struct Arguments {
         var impulseCount = 20
         var maximumLagMilliseconds = 200.0
         var otherChannelLoadAmplitude: Float = 0
+        var seconds = 60
         var index = 2
         while index < values.count {
             switch values[index] {
+            case "--seconds":
+                guard index + 1 < values.count, let parsed = Int(values[index + 1]),
+                      (5...600).contains(parsed) else { throw CLIError.usage }
+                seconds = parsed
+                index += 2
             case "--device":
                 guard index + 1 < values.count else { throw CLIError.usage }
                 deviceName = values[index + 1]
@@ -80,6 +87,7 @@ private struct Arguments {
         self.impulseCount = impulseCount
         self.maximumLagMilliseconds = maximumLagMilliseconds
         self.otherChannelLoadAmplitude = otherChannelLoadAmplitude
+        self.seconds = seconds
     }
 }
 
@@ -94,6 +102,8 @@ private enum CLIError: Error, CustomStringConvertible {
             usage:
               usb16x16-latency inspect [--device NAME] [--output FILE]
               usb16x16-latency list [--output FILE]
+              usb16x16-latency continuous [--device NAME] [--buffer-frames 32|64]
+                  [--seconds 5...600] --other-channel-load-amplitude 0.1 [--output FILE]
               usb16x16-latency measure [--device NAME] [--buffer-frames N]
                   [--input-channel N] [--output-channel N] [--impulses N]
                   [--maximum-lag-ms N] [--other-channel-load-amplitude 0...0.25]
@@ -147,6 +157,10 @@ do {
             encoded(LiveImpulseMeasurement.run(configuration: configuration)),
             to: arguments.outputPath
         )
+    case "continuous":
+        try emit(encoded(ContinuousLoad.run(deviceName: arguments.deviceName,
+            bufferFrames: arguments.bufferFrames, seconds: arguments.seconds,
+            amplitude: arguments.otherChannelLoadAmplitude)), to: arguments.outputPath)
     default:
         throw CLIError.usage
     }

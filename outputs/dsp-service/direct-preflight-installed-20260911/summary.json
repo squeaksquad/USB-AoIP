@@ -1,0 +1,14 @@
+{
+  "phase": "preflight",
+  "arm": "direct",
+  "bundle": "2efac5733bef97f6affaf2888d53ea8132f51956edd14e56471b0b8893469624",
+  "harness": "dbed59e762c56fbabb782aef6b9b5a9e5a9acdd20d0391f25f9e5dcbb217422a",
+  "requiredInputs": [
+    1,
+    2
+  ],
+  "passed": false,
+  "runs": [],
+  "acceptance": "not established; manual RTL and final review still required",
+  "error": "harness failed; no retry"
+}

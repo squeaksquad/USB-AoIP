@@ -9672,3 +9672,72 @@ not lost.
 
 Nothing is accepted or retracted by this entry. sd103 at 719 stands. The 716
 and 725 are draws, not new operating points.
+**PREPARED 2026-09-11: fixed-preset DSP service package and corrected validation,
+not installed or accepted.** `work/dsp-service/README.md` is the current DSP
+procedure; the older pickup's full loaded-preset impulse battery is superseded.
+The bundle `outputs/dsp-service/review-20260911/` contains the existing candidate
+bridge 406699bd, direct rollback 05f37bd9, pinned loaded/transparent presets,
+experimental profiles copied from the live selected sd103 block, and an installer
+that verifies the live baseline and applies/restores the files with AES67 stopped.
+It does not alter the USB gadget, unit, sudoers, module or daemon.
+
+Read-only Pi snapshot in this session: service active; installed bridge 05f37bd9,
+supervisor 427982dc, config 306cfa85; zero direction restarts, TX/RX floors 83/72.
+The latter two files were copied as the exact rollback. The older pickup's
+631e88e1 supervisor is stale. No hardware audio test, service stop, install,
+profile change or root operation was performed in this preparation session.
+
+Local verification: 9 Python integration/integrity/failure tests and 7 Swift
+harness tests pass; release harness builds; shell syntax and bundle integrity
+checks pass. The new continuous command drives all 16 outputs through one device
+open and reports bounded activity/silence/clipping/timestamp statistics. Hardware
+validation is still pending. `validate.py` requires an explicit execute flag,
+physically returned input list and short preflight before longer tests; it has no
+readiness retries or remote polling during a measurement. UI Apply remains disabled.
+
+Evidence correction: separate-start 1042/1061 results do not prove zero added DSP
+latency. Loaded filtering invalidates the original impulse correlation method;
+its re-probe/recovery explanation is still to be confirmed by continuous testing.
+Use direct/transparent for impulse latency and manual RTL, loaded for continuous
+stability. Within-session repeats do not measure startup-to-startup variation.
+The next checkpoint is review of the prepared package, playback off, controlled
+installation and three short preflights. Do not begin another latency-tuning or
+repeated-anchor campaign.
+
+
+**INSTALLED / SHORT PREFLIGHTS PASSED 2026-09-11 UTC: DSP bridge under the
+service, direct/transparent/loaded, full acceptance still pending.**
+The reviewed bundle was installed after user confirmed playback off and refreshed
+sudo authentication. Installed bridge 406699bd, supervisor cdc0768d; pinned DSP
+presets under /etc/usb16x16/dsp. Unit, sudoers, daemon, module and USB gadget unchanged.
+Baseline rollback bundle remains intact (05f37bd9 / 427982dc / 306cfa85).
+
+Three separate 60-second continuous, single-open CoreAudio service preflights
+passed: direct TX/RX floors 89/72, transparent 86/72, loaded 88/72. All had zero
+recoveries, direction restarts, drops, clips, low-queue events and input/output
+timestamp discontinuities. Required return inputs were 1/2; all 16 outputs were
+driven, and all 16 returns additionally showed clean activity on post-run review.
+Both DSP starts engaged after their successful aligned prime (TX front age 296,
+under_prime 0, target=prime). Transparent DSP mean/max 43.408/116.554 us per call;
+loaded 308-biquad DSP 58.588/200.445 us. Packet-lead minima by sink: direct
+1000/1004 us, transparent 1016/1029, loaded 1034/1042. These are short stability
+results, not latency, routing, frequency-response or long-soak acceptance.
+
+The loaded single-open run supports, but does not prove, the prior explanation
+that readiness-probe retries caused its recoveries. No impulse/RTL measurement
+was taken. Full acceptance battery, manual RTL on transparent/direct, and UI Apply
+remain pending. Do not initiate another latency-tuning/repeated-anchor campaign.
+
+Final state: returned to dsp-direct; verified active/running, candidate bridge and
+supervisor hashes match, no DSP loaded, zero recoveries. This is DSP disabled on
+the newly installed binary, not a binary rollback. Playback may resume. A future
+battery needs a fresh preflight receipt on its selected arm/process.
+
+Evidence: outputs/dsp-service/PREFLIGHT_RESULTS.md, preflight-results-20260911.json,
+the three *-preflight-coreaudio-20260911 directories, and final-state.json. The
+initial direct-preflight-installed-20260911 attempt is VOID: the sandbox exposed
+zero CoreAudio devices and no audio opened. Outside-sandbox inspection confirmed
+native 48 kHz 16x16 with labels 1–16, and all valid captures used that access.
+Installation initially refused before file changes because the process guard
+matched an audio-binary path in the parent SSH command; an isolated deployment
+command succeeded without changing the guard or the reviewed bundle.

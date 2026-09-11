@@ -1,0 +1,19 @@
+{
+  "state": "prepared-not-installed-not-accepted",
+  "destinations": {
+    "bridge": "/usr/local/libexec/usb16x16-rt-bridge",
+    "supervisor": "/usr/local/sbin/usb16x16-aes67-supervisor",
+    "aes67.conf": "/etc/usb16x16/aes67.conf"
+  },
+  "files": {
+    "baseline/aes67.conf": "306cfa850cb3f16ce49136611bba1ddd942c0b00359d334e8793e11233bcaa7d",
+    "baseline/bridge": "05f37bd911c4f9960eb6f2150accc8603dc4ac92e26622a397706619eea7a233",
+    "baseline/supervisor": "427982dc0f1614f3299c29c29eb20d582a087cd4115f6840387adf32c13c4e25",
+    "candidate/aes67.conf": "c9be65851c2c31051ec86190ab9d4a7bb243a50cb7a5bd028d6d8ef3a4d7b4f7",
+    "candidate/bridge": "406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88",
+    "candidate/loaded.dsp": "2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c",
+    "candidate/supervisor": "cdc0768d20036cd1ddb83608542b7b34320c0ee69fbbbf42f8fabda1aaece6c6",
+    "candidate/transparent.dsp": "ad69598473691bffdd0808d79d4ff37f4d46ef9f0fa2b34b5fa1f3152b9bbeb9",
+    "deploy.py": "e426ab8ae4eed78d6765caec4ee531b67e80b21694967a4661a4c1a0e7aa7457"
+  }
+}

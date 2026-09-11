@@ -379,3 +379,12 @@ which is what `transparent` in `verify-presets.mjs` exists for.
 - **The Mac-side hole check never produced a valid result.** `zeros.py` is for
   the continuous-noise probes; run on an impulse capture its "100% zeros inside
   the span" is the silence between impulses and means nothing.
+
+## Validation correction: prepared service package
+
+The 1042/1061 separate-start comparison is encouraging but does not establish
+latency neutrality: startup variation can conceal a small cost. The loaded-arm
+recovery explanation remains a hypothesis until tested without probe retries.
+The current procedure is `work/dsp-service/README.md`: direct/transparent impulse
+latency, loaded continuous stability, short preflights before the full battery.
+The package is prepared, not installed or accepted. No DSP arithmetic changed.

@@ -1,0 +1,89 @@
+{
+  "state": "three short service preflights passed; full battery pending",
+  "results": [
+    {
+      "arm": "direct",
+      "classification": "valid short preflight; not acceptance",
+      "seconds": 60,
+      "requiredInputs": [
+        1,
+        2
+      ],
+      "metrics": {
+        "tx_qfloor": "89",
+        "rx_qfloor": "72",
+        "tx_gapmax_us": "1040",
+        "rx_gapmax_us": "1055",
+        "dsp_us_max": "0.000",
+        "dsp_us_mean": "0.000"
+      },
+      "lead_us": [
+        1000,
+        1004
+      ],
+      "inputDiscontinuities": 0,
+      "outputDiscontinuities": 0,
+      "invalidBuffers": 0,
+      "recoveries": 0,
+      "all16ActivityInspectedAfterRun": true,
+      "source": "outputs/dsp-service/direct-preflight-coreaudio-20260911"
+    },
+    {
+      "arm": "transparent",
+      "classification": "valid short preflight; not acceptance",
+      "seconds": 60,
+      "requiredInputs": [
+        1,
+        2
+      ],
+      "metrics": {
+        "tx_qfloor": "86",
+        "rx_qfloor": "72",
+        "tx_gapmax_us": "994",
+        "rx_gapmax_us": "1107",
+        "dsp_us_max": "116.554",
+        "dsp_us_mean": "43.408"
+      },
+      "lead_us": [
+        1016,
+        1029
+      ],
+      "inputDiscontinuities": 0,
+      "outputDiscontinuities": 0,
+      "invalidBuffers": 0,
+      "recoveries": 0,
+      "all16ActivityInspectedAfterRun": true,
+      "source": "outputs/dsp-service/transparent-preflight-coreaudio-20260911"
+    },
+    {
+      "arm": "loaded",
+      "classification": "valid short preflight; not acceptance",
+      "seconds": 60,
+      "requiredInputs": [
+        1,
+        2
+      ],
+      "metrics": {
+        "tx_qfloor": "88",
+        "rx_qfloor": "72",
+        "tx_gapmax_us": "1009",
+        "rx_gapmax_us": "1122",
+        "dsp_us_max": "200.445",
+        "dsp_us_mean": "58.588"
+      },
+      "lead_us": [
+        1034,
+        1042
+      ],
+      "inputDiscontinuities": 0,
+      "outputDiscontinuities": 0,
+      "invalidBuffers": 0,
+      "recoveries": 0,
+      "all16ActivityInspectedAfterRun": true,
+      "source": "outputs/dsp-service/loaded-preflight-coreaudio-20260911"
+    }
+  ],
+  "invalidAttempt": "direct-preflight-installed-20260911: sandbox exposed no CoreAudio devices; no audio opened",
+  "latency": "not measured",
+  "notes": "All 16 outputs driven; inputs 1 and 2 predeclared gates. All 16 returned inputs additionally inspected after the runs. No routing or frequency-response claim."
+}

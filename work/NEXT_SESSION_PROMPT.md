@@ -1,5 +1,34 @@
 # Next-session pickup prompt
 
+## Current DSP pickup — service preflights passed
+
+The next step is now the prepared package and runbook in
+`work/dsp-service/README.md`, with the reviewable bundle at
+`outputs/dsp-service/review-20260911/`. Read those before the historical
+DSP battery below. Service integration is now INSTALLED: bridge 406699bd, supervisor cdc0768d.
+Direct, transparent and loaded each passed a 60-second continuous service
+preflight, with zero recoveries, discontinuities and low-queue events. TX/RX
+floors: 89/72, 86/72, 88/72. Loaded DSP mean/max: 58.588/200.445 us per call.
+See `outputs/dsp-service/PREFLIGHT_RESULTS.md` and `final-state.json` beside it.
+Service was returned to dsp-direct and verified active/running, with zero recoveries. Full battery/RTL and UI Apply remain
+pending; NOT fully accepted. Baseline rollback is 05f37bd9 / 427982dc / 306cfa85.
+
+Corrections to older claims below:
+- 1042 versus 1061 on separate starts does not establish latency neutrality.
+- Do not run the loaded preset through the impulse latency/RTL battery.
+  Use the continuous 16-output stability test, with explicit returned inputs.
+- Readiness-probe retries plausibly explain the loaded-arm recoveries;
+  a single-open continuous test must confirm that, rather than assuming it.
+- The four impulse runs per direct/transparent arm test within-session
+  stability, not four independent startup draws. Do not repeat restart campaigns.
+- The package installs the three pinned files together with service stopped;
+  use its deploy.py and rollback, not the historical legacy installer recipe.
+
+Run short preflights first. No automated service restart, coreaudiod kill,
+remote polling during audio, or attempt to enable UI Apply before service
+validation. The detailed older session record follows for provenance.
+
+
 Paste the block below into a fresh Codex or Claude Code session to resume work.
 It points at `PROJECT_HANDOFF.md`, which is authoritative where it conflicts
 with this summary.
