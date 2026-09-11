@@ -481,24 +481,45 @@ function renderSettings() {
     ${field('Saved presets',`<select id="saved-preset" ${disabled(!names.length)}>${names.length?options(names.map(n=>[n,n]),config.name):'<option>No saved presets</option>'}</select>`)}
     <div class="toolbar"><button data-action="load" ${disabled(!names.length)}>Load selected preset</button><button class="quiet" data-action="delete-preset" ${disabled(!names.length)}>Delete selected</button><button class="quiet" data-action="reset">Reset to example layout</button></div>
     <div class="note-box">${esc(presetStore.note)}</div>
-    </section><section class="panel" id="system-panel"><div class="section-heading"><h2>System overview</h2><span class="offline-badge ${health?'live-badge':''}">${health?'Live · '+esc(health.generated):'Not connected'}</span></div>
-    <p>${health?'Read live from the Pi control service. Values the service cannot read say so; none is defaulted to zero.':'No control service answered on this origin. Serve the UI from the Pi to see live state.'}</p>
-    <dl class="fact-list">${systemFacts(health).map(row=>`<div><dt>${esc(row.label)}</dt><dd class="fact-${row.state||'plain'}"${row.title?` title="${esc(row.title)}"`:''}>${esc(row.value)}</dd></div>`).join('')}
-      <div><dt>Output allocation</dt><dd class="fact-plain">${count('speaker')} speakers · ${count('sub')} subs · ${count('unused')} spare</dd></div><div><dt>DSP source draft</dt><dd class="fact-plain">${config.source==='usb'?'USB':'AoIP / AES67'}</dd></div><div><dt>Alignment range</dt><dd class="fact-plain">0–10 ms per output</dd></div></dl>
-    <div class="note-box">${esc(dspNote(health))}</div></section>
+    </section>
+    ${applyPanel()}
     <section class="panel maintenance-panel"><div class="section-heading"><h2>Logs</h2><span class="offline-badge ${health?'live-badge':''}">${health?'Live journal':'Not connected'}</span></div>
     <p>${health?'Read the journal through the Pi control service, or paste a snapshot below. Reading logs does not touch the audio path.':'Live service logs require the Pi connection. Copy a journal command to run on the Pi, then paste its output to inspect a snapshot here.'}</p>
     <div class="log-controls">${field('Service',`<select id="log-service">${options([['all','AES67 + USB'],['aes67','AES67'],['usb','USB']],logService)}</select>`)}${field('Filter snapshot',`<input id="log-filter" type="search" placeholder="Search log text…" value="${esc(logQuery)}">`)}<button data-action="refresh-logs" ${disabled(!health||logBusy)} title="${health?'Read the last 200 journal lines from the Pi':'Requires a Pi control backend'}">${logBusy?'Reading…':'Refresh live logs'}</button></div>
     <div class="command-line"><code id="journal-command">${esc(journalCommand(logService))}</code><button data-action="copy-journal">Copy command</button></div>
     <details class="log-paste"><summary>Paste a log snapshot</summary><label class="field"><span>Journal output · local to this page</span><textarea id="log-paste" rows="4" maxlength="200000" spellcheck="false" placeholder="Paste command output from the Pi here">${esc(logSnapshots[logService])}</textarea></label></details>
     <div class="log-view" tabindex="0" role="region" aria-label="Service log snapshot"><pre id="log-output"></pre></div><p id="log-count" role="status"></p></section>
-    ${applyPanel()}
+    ${systemPanel()}
     <section class="panel maintenance-panel"><div class="section-heading"><h2>Common commands</h2><span class="offline-badge">Run on the Pi</span></div>
     <p>Copy a command for a Pi terminal. ${health?'The control service is read-only apart from the profile switch above: it cannot restart a service or install DSP, because owning a PCM device belongs to the privileged applier, which takes exactly that one request.':'Run buttons become available when device control is connected.'} Restart commands interrupt audio.</p>
     <div class="service-commands">${SERVICE_COMMANDS.map(c=>`<article class="service-command"><h3>${esc(c.label)}</h3><p>${esc(c.detail)}</p><code>${esc(c.command)}</code><div class="toolbar"><button data-copy-command="${c.id}" aria-label="Copy ${esc(c.label)} command">Copy command</button><button disabled title="${health?'The control service is read-only; run this in a Pi terminal':'Requires a Pi control backend'}" aria-label="Run ${esc(c.label)} on Pi">Run on Pi</button></div></article>`).join('')}</div></section>
     <section class="panel"><h2>Input labels</h2><p>Labels belong to this preset. Computer-facing USB channel names remain 1–16.</p><div class="table-scroll"><table><thead><tr><th>Input</th><th>Label</th></tr></thead><tbody>${config.inputs.map((v,i)=>`<tr><td>${pad(i)}</td><td><input data-input="${i}" data-param="label" aria-label="Input ${i+1} label" maxlength="64" value="${esc(v.label)}" required></td></tr>`).join('')}</tbody></table></div></section>
     <section class="panel"><h2>Operating modes</h2><p><strong>Direct bridge</strong> retains the existing bidirectional USB ↔ AoIP path. Its timing profile stays independent of DSP presets.</p><p><strong>DSP processor</strong> takes one 16-channel source bank, redirects bass, applies output correction, and sends 16 channels to AoIP.</p><p>In AoIP source mode, USB is not part of the signal path. The eventual processor must be able to run without a connected USB host.</p><p>Network stream subscriptions and device settings require the future backend. Native Dante control is outside this UI; the current transport uses AES67 interoperability.</p></section></div>`;
   renderLogView();
+}
+
+/** Settings: the live facts. Rebuilt on every health poll by refreshSettingsLive, so it must not hold input state. */
+function systemPanel() {
+  const count = role => config.outputs.filter(o=>o.role===role).length;
+  return `<section class="panel" id="system-panel"><div class="section-heading"><h2>System overview</h2><span class="offline-badge ${health?'live-badge':''}">${health?'Live · '+esc(health.generated):'Not connected'}</span></div>
+    <p>${health?'Read live from the Pi control service. Values the service cannot read say so; none is defaulted to zero.':'No control service answered on this origin. Serve the UI from the Pi to see live state.'}</p>
+    <dl class="fact-list">${systemFacts(health).map(row=>`<div><dt>${esc(row.label)}</dt><dd class="fact-${row.state||'plain'}"${row.title?` title="${esc(row.title)}"`:''}>${esc(row.value)}</dd></div>`).join('')}
+      <div><dt>Output allocation</dt><dd class="fact-plain">${count('speaker')} speakers · ${count('sub')} subs · ${count('unused')} spare</dd></div><div><dt>DSP source draft</dt><dd class="fact-plain">${config.source==='usb'?'USB':'AoIP / AES67'}</dd></div><div><dt>Alignment range</dt><dd class="fact-plain">0–10 ms per output</dd></div></dl>
+    <div class="note-box">${esc(dspNote(health))}</div></section>`;
+}
+
+/** Replace only the live panels on a poll, and not while the user is inside a control on this page:
+ *  rebuilding the whole page every 2 s closed an open dropdown as soon as the mouse moved. */
+function refreshSettingsLive() {
+  if (tab !== 'settings') return;
+  const page = $('#settings-page');
+  if (!page) return;
+  const active = document.activeElement;
+  if (active && page.contains(active) && active.matches('select, input, textarea, button')) return;
+  for (const [id, html] of [['#system-panel', systemPanel()], ['#apply-panel', applyPanel()]]) {
+    const node = page.querySelector(id);
+    if (node) node.outerHTML = html; else { renderSettings(); return; }
+  }
 }
 
 /** Settings: the live service profile and the staged switch between accepted profiles. */
@@ -527,7 +548,7 @@ async function applyProfile() {
   if (!target) { toast('Choose an accepted profile first.'); return; }
   const live = choices.live?.name || null;
   if (!confirm(`Switch the AES67 service from ${live || '?'} to ${target.name}?\n\nAudio stops for about a minute while the stack restarts, and the latency level is drawn afresh. If the stack does not come up clean the applier returns to ${live || 'the previous profile'} on its own. Stop playback before continuing.`)) return;
-  applyBusy = true; renderSettings();
+  applyBusy = true; refreshSettingsLive();
   try {
     const result = await requestProfile(target.name, live);
     toast(result.note || `Queued a switch to ${target.name}.`);
@@ -535,7 +556,7 @@ async function applyProfile() {
     startApplyPolling();
   } catch (e) { toast(`Apply refused: ${e.message}`); }
   applyBusy = false;
-  if (tab === 'settings') renderSettings();
+  refreshSettingsLive();
 }
 
 function startApplyPolling() {
@@ -543,7 +564,7 @@ function startApplyPolling() {
   const tick = async () => {
     try { applyStatus = await fetchApplyStatus(); }
     catch (e) { toast(`Lost the Apply status: ${e.message}`); stopApplyPolling(); return; }
-    if (tab === 'settings') renderSettings();
+    refreshSettingsLive();
     if (applyFinished(applyStatus)) { stopApplyPolling(); toast(applyLine(applyStatus)); pollHealth(); }
   };
   applyPoll = setInterval(tick, APPLY_POLL_MS);
@@ -911,7 +932,7 @@ async function pollHealth() {
     applyStatus = null; // the 1 Hz snapshot is the source of truth while nothing of ours is running
     if (next.apply.inFlight || next.apply.pending) startApplyPolling();
   }
-  if (tab === 'settings') renderSettings();
+  refreshSettingsLive();
   renderConnection();
   $('#mode-note').textContent = modeNote(config.mode === 'direct');
 }
