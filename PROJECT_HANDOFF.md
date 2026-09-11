@@ -10424,3 +10424,22 @@ artifacts/pi-aarch64/ 947e8b4d. Web control 1.4.0 and the page not yet
 installed; the acceptance battery not yet run. Rollback: METERS=0 in the
 live conf and a restart (untapped), or 406699bd from git history through
 the pinned installers of commit 47a6f42.
+
+**DONE 2026-09-11 23:30 UTC: live meters in the browser; the metering item is in
+service, pending the battery.** The user installed usb16x16-web 1.4.0
+(install-web-control.sh, restart) and copied the three page files into
+~/usb-16x16-work/web-ui/. From the browser: both banks move under
+playback, the input bank on usb-capture (the host's USB output, before
+the stage) and the output bank on ravenna-playback (the wire, after it),
+peaks in dBFS under each strip, the summary, toggle and connection line
+reading live. The full path is therefore in service: the tap on the audio
+thread, the seqlock'd window, the publisher's file, /api/meters, the page
+at 10 Hz. Not yet done: the standing battery for a bridge change on
+dsp-direct (four loaded 800-impulse runs, the ten-minute sixteen-channel
+soak, RTL at 32, fresh anchor, noise probe first) against 725 / 19.021 ms
+and floors 84 / 96, with meter_us_max read over the soak; until it passes,
+947e8b4d is INSTALLED, not ACCEPTED, and dsp-direct's MEASURED string in
+the conf still describes 406699bd. Open on the DSP side after that:
+AoIP -> DSP -> AoIP; on the UI side, the live user preset inside the
+editor; and the meters' remaining wish, peak hold and RMS on the strips
+(the data is already in /api/meters).

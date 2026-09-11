@@ -1,8 +1,8 @@
 # Next-session pickup prompt
 
-## Current DSP pickup — the meter tap is STAGED, not built; the build is next
+## Current DSP pickup — the meter tap is INSTALLED and live; the battery is next
 
-Read the handoff's 2026-09-11 entries from FOUND onward (the last nine).
+Read the handoff's 2026-09-11 entries from FOUND onward (the last thirteen).
 Accepted: DSP bridge 406699bd with dsp-direct / dsp-transparent / dsp-loaded
 under reference-events-v1. In service: UI Apply (profile switches, verified,
 receipted, rolled back on failure) and browser-compiled user presets (the
@@ -15,26 +15,25 @@ cycle passed from the user's browser (outputs/dsp-service/user-preset-
 usb16x16-apply 1.1.0, usb16x16-dsp-offline 8469c2e8; the service runs
 dsp-direct. Read work/web-control/README.md before touching any of it.
 
-STAGED 2026-09-11 22:45 UTC (the last entry): the level meter tap.
-`LevelMeter` in the bridge core, `--meter-file` in the bridge (four stage
-taps, prime excluded, timed as meter_us_max on the BRIDGE line, a
-SCHED_OTHER publisher rewriting /run/usb16x16/meters every 50 ms window),
-supervisor key METERS (default 1), usb16x16-web 1.4.0 with /api/meters,
-the page drawing live peaks with a clip hold. Mac-verified only: core
-tests 30, syntax check, 94 node tests, 13 web tests, the in-memory bench
-(0.21 us per 48-frame block on the Mac). Staged on the Pi under
-~/usb-16x16-work/meters-20260911/. The user's next steps are listed at
-the end of that entry: service stopped, build, tests and bench on the Pi,
-bridge hash into the three pins and artifacts/, install, the standing
-battery on dsp-direct. A RECOVER pair at 22:23:51 UTC coincided with a
-`find /usr` from that session: no filesystem walks on the Pi during a
-run, alongside no transfers and no builds.
+The level meter tap (STAGED 22:45, BUILT, FOUND, INSTALLED 23:16, DONE 23:30
+UTC 2026-09-11): bridge 947e8b4d in service on dsp-direct with METERS=1,
+supervisor 23e40f8c, conf b01588df, usb16x16-web 1.4.0 serving
+/api/meters, the page drawing live peaks on both banks. Tap cost on the
+Pi 1.8 us per 48-frame block (bench), meter_us_mean 1.7 / max 24.3 us on
+the audio thread in the first minute. The first build (3503a48c) RECOVERed
+at every start: a std::thread created after capture start under mlockall;
+the publisher is now a 256 KB pthread created before the captures start.
+NOT ACCEPTED: the standing battery on dsp-direct (4 x 800, ten-minute
+all-16 soak, RTL at 32, fresh anchor, noise probe first, against 725 /
+19.021 ms, floors 84 / 96, meter_us_max over the soak) is the next step;
+then the conf's MEASURED string for dsp-direct moves to this bridge.
+Rollback: METERS=0 and a restart, or 406699bd from commit 47a6f42.
+No filesystem walks, transfers or builds on the Pi during a run.
 
 Rules that stand: a user preset is never accepted and never soaked unless
 the user asks; every profile switch is a restart and a new draw; Pi root
 changes are stated and waited for; no coreaudiod kills; no measurement
-campaign without a stated purpose. Open, in the record's order: metering
-(staged, see above; build and accept); AoIP -> DSP -> AoIP (the supervisor's failure
+campaign without a stated purpose. Open, in the record's order: the metering battery (above); AoIP -> DSP -> AoIP (the supervisor's failure
 model waits on the USB host); in the UI, showing which user preset is live
 inside the editor rather than only by name in Settings.
 
