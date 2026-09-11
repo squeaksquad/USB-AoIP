@@ -10361,3 +10361,20 @@ soak on a fresh anchor against 725 / 19.021 ms and floors 84 / 96, zero
 RECOVERs, meter_us_max recorded; METERS=0 is the same binary untapped, the
 control if the figure moves. Rollback: METERS=0 in the conf and a restart
 (untapped), or the previous binary 406699bd through the pinned installers.
+
+**BUILT 2026-09-11 23:05 UTC, not yet installed: the meter-tap bridge 3503a48c.**
+Built by the user on the Pi with the service stopped, in
+~/usb-16x16-work/meters-20260911/phase4-src (Release, ALSA headers from
+deps/libasound2-dev). Core tests pass on the Pi. usb16x16-meter-bench,
+200,000 runs each, median / p99 / max in us: 48 frames 1.815 / 1.852 /
+23.6; 96 3.574 / 3.612 / 24.6; 192 7.093 / 7.13 / 28.4; 512 18.888 /
+27.87 / 1156.9. So 1.8 us per 48-frame block, two taps per direction per
+millisecond cycle: about 3.6 us of the 1000, 0.36 % duty, against the
+stage's 67.8 us median. The 512-frame maximum is one preemption of the
+unpinned SCHED_OTHER bench process, not the tap; the bridge's own
+meter_us_max under SCHED_FIFO is the figure to read. Pins moved to
+3503a48c in install-candidate.sh (0a310415), install-aes67-service.sh
+(9d82830e, supervisor pin 645ea54e) and the supervisor (645ea54e, both
+places); artifacts/pi-aarch64/ is now 3503a48c, the previous 406699bd
+remains in git history and installed until step 3. The three re-pinned
+files re-staged under meters-20260911/, hashes checked.
