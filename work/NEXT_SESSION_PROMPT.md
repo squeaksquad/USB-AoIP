@@ -4,17 +4,29 @@ Paste the block below into a fresh Codex or Claude Code session to resume work.
 It points at `PROJECT_HANDOFF.md`, which is authoritative where it conflicts
 with this summary.
 
-Updated 2026-09-07 23:10 UTC: Phase 6 (the pull-gap bar under the TX
-prime) is running as a daily read-only read; see the LEVERS. Rewritten
-2026-09-07 22:30 UTC after the sd103 acceptance (RTL at 32 18.896
-ms on a fresh anchor; the sink delay is at its floor for the Ferrofish stamp
-phase 41). Where this summary and the handoff tail differ, the handoff
-wins.
+Updated 2026-09-11 01:00 UTC: step 4 of the DSP roadmap -- the filter
+stage inside the bridge -- is built, verified against CamillaDSP, and
+measured under the harness, but NOT installed and NOT accepted. That is
+this file's live work; see THE DSP STAGE and THE DSP BATTERY. Phase 6 (the pull-gap
+bar under the TX prime) is still a standing daily read. The sd103
+acceptance of 2026-09-07 is untouched and is still what the service runs.
+Where this summary and the handoff tail differ, the handoff wins.
 
 ---
 
 Raspberry Pi 5 USB 16x16 / AES67 bridge. Repo: ~/Development/USB 16x16
 (github.com/squeaksquad/usb-16x16-aes67, main, pushed and clean).
+
+If you are picking up the DSP work, read first:
+work/phase4-bridge/DSP_MODE_DESIGN.md whole (the decision, where the stage
+sits, the real-time budget, the acceptance criteria, and the three MEASURED
+sections at the end -- the last one carries what is and is not established),
+then work/dsp-compiler/README.md's verification sections, then
+work/aes67-candidate/run-dsp-candidate-safe.sh (the wrapper's four
+differences from run-phase4-candidate-safe.sh are in its header comment),
+and the DspStage block in work/phase4-bridge/include/usb16x16/bridge_core.hpp
+plus its use in src/main.cpp (search --dsp-preset, renders_after_prime and
+dsp_us_max). The transport work below is unchanged and still applies.
 
 Read the Rollback rules at the end of PROJECT_HANDOFF.md, then everything
 from "FOUND 2026-09-07 21:30 UTC" to the end (the phase arithmetic, the
@@ -35,10 +47,72 @@ about 1400), the PRIMED overshoot/trim code just after it, and
 align_playback_trigger (about 1325, target= and slack_us=).
 
 NOTHING IS BROKEN. The service runs the accepted profile (sd103 on
-bridge 05f37bd9, supervisor 631e88e1, module bc694c24) on the 21:45 UTC
-anchor of 2026-09-07 with zero RECOVERs at the end of the session. The sd103
-labels are copied (22:40 UTC); nothing pending on the Pi. Every read
-starts with a fresh anchor as always. Playback is on.
+bridge 05f37bd9, supervisor 631e88e1, module bc694c24) with zero RECOVERs,
+restarted 2026-09-11 00:55 UTC after the DSP session. The DSP work changed
+nothing it runs: the installed binary is still 05f37bd9 and the supervisor
+still pins it. The sd103 labels are copied; nothing pending on the Pi.
+Every read starts with a fresh anchor as always. Playback is on.
+
+THE DSP STAGE (built and measured 2026-09-10/11, NOT installed, NOT accepted)
+Step 4 of work/web-ui/README.md's sequence. The filtering goes inside the
+bridge rather than into a separate engine; DSP_MODE_DESIGN.md has the
+reasoning and the three alternatives it rejected.
+
+What exists. DspStage in bridge_core (load an artifact off the audio path,
+process() in place with no allocation, locks or throws; double arithmetic,
+float only at the buffer boundary). Wired into main.cpp behind
+--dsp-preset, usb-to-ravenna only. The aligned prime renders unfiltered --
+renders_after_prime is the gate, because the prime block falls through to
+the same render call and `primed` is already true by then -- and the stage
+engages on the next render. The bridge reports dsp_us_max and dsp_us_mean
+on the BRIDGE line and in SUMMARY. work/dsp-compiler emits the coefficient
+artifact from the same compilation as the CamillaDSP YAML, so the two
+cannot describe different pipelines.
+
+What is proven.
+- The bridge's filtering and CamillaDSP 4.1.3 differ by no more than one
+  unit in the last place -- one float32 ULP at the channel's own level, or
+  one LSB of the integer container -- on all 28 channels of three presets,
+  compared sample by sample on the Pi (headtohead-20260910T173732Z).
+- The stage is latency-neutral: transparent arm 1042 samples against the
+  direct arm's 1061, 800 of 800 impulses identical in both, correlation
+  peaks 0.250031 and 0.249999. Separate candidate starts draw their own
+  level, and a stage adding transport depth could only move it up.
+- Its cost is 0.0046-0.0048 us per frame per biquad, flat across idle and
+  harness-loaded runs at 256 and 308 biquads. The mean scales with biquad
+  count and nothing else. (The "+32% under load" of an earlier note is
+  RETRACTED: that compared two maxima, and the maximum tracks the largest
+  block rendered plus any re-prime disturbance.)
+- The prime bypass works and the aligned start is undisturbed: ALIGN
+  status=ok, target=prime, PRIMED front_age_frames 296 under_prime 0, the
+  age50 figures exactly.
+
+What is NOT established, and what the next session is for.
+- Every level measured is an aged-anchor CANDIDATE draw. 1042 and 1061 are
+  internally consistent and are NOT comparable with the accepted 719.
+- Candidate runs, not service runs. The accepted figures come from
+  measure-under-service.sh against usb16x16-aes67.service.
+- One run per arm, no soak, no RTL figure. The battery asks for four
+  800-impulse runs and a 600 s soak per arm.
+- The Mac-side hole check has no valid result: zeros.py is for the
+  continuous-noise probes, and run on an impulse capture its "100% zeros
+  inside the span" is the silence between impulses.
+
+INSTALLED ON THE PI BY THE DSP SESSION (root changes, still in place)
+/usr/local/sbin/run-dsp-candidate-safe.sh (55c70ab4, root:root:755) and
+/etc/sudoers.d/usb16x16-dsp, one NOPASSWD line for it, because
+measure-aes67-roundtrip.sh launches candidates with sudo -n. Remove both to
+revert. Nothing else was installed.
+
+STAGED ON THE PI, NOT INSTALLED
+~/usb-16x16-work/dsp-verify/: the candidate bridge
+bridge-build/usb16x16-rt-bridge (406699bd = the accepted 05f37bd9 source
+plus the stage), the build tree, usb16x16-dsp-offline, the verification
+harnesses, and the compiled presets loaded.dsp (2b6baa04, 308 biquads),
+transparent.dsp (ad695984, 256 biquads at 0.01 dB, no crossovers, no
+delay), crossover.dsp and phones.dsp. The wrapper accepts loaded and
+transparent by hash; a new preset needs its hash added to
+expected_dsp_sha256_list.
 
 THE POINT OF RECORD (accepted 2026-09-07 22:25 UTC)
 Profile servo-aligned-both-240-rx120-sd144-tx192-target48-trace-txoff950-rxtrim-age50-sd103
@@ -158,7 +232,35 @@ THE PROCEDURE (every measurement session starts with it)
    pin, and a copy-<tag>-labels.py for the live conf (labels only, dry
    run without --apply).
 
+THE DSP BATTERY (the next session's job, if the DSP work continues)
+Run it ONCE, properly, rather than repeating tonight's candidate runs. What
+makes it acceptable rather than reconnaissance:
+1. Cold start, so the anchor is fresh without a coreaudiod kill.
+2. Install the candidate bridge so it is service-versus-service, the way
+   the accepted figures were taken. That moves THREE pins (see BUILD AND
+   INSTALL RULES) and the supervisor's expected_bridge_sha256, and the
+   rollback is the artifact in work/phase4-bridge/artifacts/pi-aarch64/.
+   Without this every figure carries the candidate caveat.
+3. The channel-2 noise probe FIRST (procedure step 3). It is the only form
+   that answers the Mac-hole question; an impulse capture cannot.
+4. Three arms, interleaved rather than four-of-one-then-four-of-the-other,
+   because separate starts draw their own level and interleaving makes the
+   drift hit both arms equally: no preset (direct), transparent.dsp
+   (latency), loaded.dsp (cost and stability). Four 800-impulse runs and
+   the 600 s soak per arm, USB16X16_OTHER_LOAD=0.1.
+5. RTL at 32 by the user, per arm, never sharing the device with the
+   harness.
+Latency may only be read through transparent.dsp. loaded.dsp cannot
+measure it at all: its 80 Hz high-pass means the impulse the harness
+correlates against is not in the signal, and the 2090 it produced is a
+smeared peak 13 dB down, not transport depth. That also causes its
+RECOVERs -- the attenuated impulse fails the harness's signal gate, it
+re-probes, and every probe closes and reopens the device, which is the
+recorded both-PCM XRUN pair. Expect zero RECOVERs on the other two arms.
+
 THE LEVERS, IN ORDER, ONE AT A TIME
+(The transport levers below are paused while the DSP work is live. They are
+unchanged and still correct.)
 1. Phase 6 is running (handoff STARTED 2026-09-07 23:05 UTC): the TX
    prime (192) sits over a bar of one period plus the Pi's worst pull
    gap, and the RAVENNA playback queue's running floor (tx_qfloor on the
@@ -194,6 +296,35 @@ THE LEVERS, IN ORDER, ONE AT A TIME
    above on the sd103 profile; expect 719-class levels on anchors whose
    PRIMED lines match (the fresh-anchor draw of the USB remainder is
    about +-10).
+
+DSP BUILD AND MEASUREMENT RULES (learned the expensive way on 2026-09-10)
+- Prove a changed wrapper with a 60 s candidate over ssh before any 480 s
+  measured run: sudo -n /usr/local/sbin/run-dsp-candidate-safe.sh 60 none.
+  Check metadata.txt has direction_restarts, the bridge log has DSP loaded
+  and DSP engaged with the right biquad count, and RECOVERs is 0. Three
+  minutes. Skipping this cost two 40-minute runs to a $2 collision and an
+  unbound variable under set -u.
+- Touch NOTHING on the Pi between launching a measured run and its
+  completion -- no ssh, no pgrep, no scp. Watch the Mac-side output file
+  only.
+- pgrep -f matches its own ssh command line. "candidate up" was reported
+  twice from a pattern matching the very command asking the question. Use
+  pgrep -c -x with exact names, or check for an artifact (a result
+  directory, a log line) instead of a process.
+- A direction restart under the harness is COUNTED, not fatal: the
+  readiness probes open and close the device and every close re-primes the
+  gadget PCM. The wrapper counts them, records direction_restarts, and
+  fails only above USB16X16_DSP_RESTART_LIMIT (8). Its post-run marker
+  check excludes RECOVER lines for the same reason.
+- The Pi has no ALSA dev package. Build the bridge there with the README's
+  temporary sysroot: apt-get download libasound2-dev, dpkg-deb -x to
+  /tmp/alsa-dev, then -DALSA_INCLUDE_DIR=/tmp/alsa-dev/usr/include
+  -DALSA_LIBRARY=/usr/lib/aarch64-linux-gnu/libasound.so.2. No sudo
+  needed. The Pi has no node, so presets and artifacts compile on the Mac.
+- The Pi has no bc. The supervisor's mawk is there; use awk.
+- work/dsp-compiler/run-headtohead.sh re-runs the CamillaDSP comparison and
+  refuses while the service is up; run-verifications.sh and run-load.sh the
+  same.
 
 BUILD AND INSTALL RULES
 - Syntax-check bridge changes on the Mac first: clang++ -std=c++20
@@ -238,7 +369,17 @@ BUILD AND INSTALL RULES
   gitignored).
 
 OPEN, NOT THIS SESSION'S WORK
-A supervisor rule to re-bind after a re-prime storm (the re-prime count
+On the DSP side: metering (still needs the separately benchmarked tap the
+web-control README asks for; the filter stage is a natural place to take it
+from and a natural place to make the audio thread late); Apply from the UI
+(step 5, nothing exposes a control surface yet); AoIP -> DSP -> AoIP, whose
+supervision is largely a separate problem because the supervisor's failure
+model is built on the USB host down to host_absent waiting on dwc2
+enumeration lines; the --target alsa device section, still stamped
+unvalidated; and coefficient double-buffering for live preset changes,
+designed in DSP_MODE_DESIGN.md but not implemented -- today a preset is
+loaded once at startup and a change is a restart.
+On the transport side: a supervisor rule to re-bind after a re-prime storm (the re-prime count
 over days now comes from the Phase 6 daily read); the Pi's re-prime split (805
 once after an RX RECOVER at start); the Mac constant and the gadget's
 share of the USB legs (not reachable by profile); the sink status flags
