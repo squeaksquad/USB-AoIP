@@ -9884,3 +9884,86 @@ CoreAudio still native 48 kHz 16x16 labels 1–16, UDC configured/high-speed.
 Playback may resume. No binary rollback occurred. Next: inspect saved queue
 history and bridge timing code for the late reserve change before proposing
 further live work. UI Apply stays disabled; profiles remain experimental.
+
+**FOUND 2026-09-11 19:32 UTC: the "late reserve change" in the reference-v1 soak is
+the tick phase of the once-per-second sample, not lost reserve; the same
+phase reading explains when every TX floor step lands.** Evidence:
+outputs/dsp-service/reference-v1-live-20260911/queue-phase.py and its output
+queue-phase.txt, run over that soak and the three acceptance-20260911 soaks.
+No live work; the Pi was read once, read-only (service active, NRestarts 0,
+dsp-direct, supervisor cdc0768d, bridge pinned 406699bd).
+
+(1) What tx_queue on the BRIDGE line is. The audio loop stores one
+snd_pcm_delay of the RAVENNA playback device every 480 output frames
+(main.cpp, the `have_playback_delays` block near line 2627), and the
+telemetry thread prints whatever value was last stored, once a second, at
+its own cadence. The TIC pulls 48 frames every millisecond and the bridge
+refills 48 on every USB wake, so within each millisecond the queue is a
+48-frame sawtooth, and a single sample of it reads either side of a pull
+depending on where the bridge's wake sits against the tick. The line's
+phase_us is exactly that: grid_phase_ns of the RAVENNA-driven wake against
+the USB-driven wake, modulo the 1 ms USB frame tick (main.cpp line 2734,
+bridge_core.hpp line 264). It walks at the servo's ppm (about 14 us per
+second here) and is re-based every 18-20 s by the servo's +37-frame
+correction row.
+
+(2) The dips are the phase, in every arm. Rows reading more than 30 frames
+under their block's median, and how many of those had phase_us within
+100 us of the wrap: reference-v1 loaded soak 46 of 56; acceptance direct
+239 of 244; acceptance transparent 316 of 317; acceptance loaded 49 of 49.
+On the other rows phase_us stayed 98-942 in the reference-v1 soak. The
+direct soak had these dips from its third minute on (its phase visited the
+wrap in every block); the two loaded soaks and the reference-v1 soak had
+them only late, because their phase kept away from the wrap until then.
+The "first/last 60-row TX means 176.5 / 159.6" in the campaign's
+queue-review.json are therefore the sampled sawtooth changing which side of
+the pull it reads, not depth leaving the queue. The per-observation window
+means the same line carries moved by about 5 frames over the run (tx_qmean
+141.4 -> 135.6/137.8, tx_dmean 203.7 -> 199.3/201.3), and they are phase-
+sampled too, only more finely. The reserve figures that are not phase-
+sampled stayed put: tx_pullmax 48, tx_gapmax_us 994, tx_qlow 0, rx floor 72,
+no RECOVER, direction restart or drop.
+
+(3) The floor step 86 -> 81 is the same phase. tx_qfloor is the running
+minimum over every queue observation (main.cpp line 1619), so it is drawn
+only when an observation lands just after a pull, with the sawtooth at its
+bottom and a long wake gap behind it. Its DEPTHSTEP at +719.45 s (pull 48,
+gap 864 us) sits on the row whose phase_us read 37 with the wrap on the
+next row; the acceptance direct soak's steps landed on phase 58, 61, 84,
+55, 57, the loaded soak's on 30 and 93, the transparent soak's on 976, 0,
+976. Across the age50/rxtrim lineage the recorded floors are 76-88 and
+their trails show the last step at +2.9 m, +3.1 m, +3.5 m, +6.2 m
+(outputs/latency/phase6-gapbar-20260907/historical-sessions.txt): a step
+at +12 m is that draw, later. 81 leaves 33 over one period; gap-bar.py
+prices the reference-v1 soak at "the prime could drop 24 to 168 on this
+draw", the same as the record's candidate. Nothing about the DSP stage is
+in this: the direct arm, with no preset loaded, shows the strongest form
+of it.
+
+(4) Consequence for the campaign's open items. The reserve-stability
+question the RESULTS.md left open is closed by analysis; no live
+experiment is needed for it. First/last-window means of tx_queue should
+not be used as a reserve metric again; the floors, the pull and gap
+maxima, tx_qlow and the RECOVER count are the reserve evidence, as Phase 6
+already uses them. A future bridge could store the delay at a fixed point
+in the wake (after the commit) so the sample stops straddling the pull;
+that is a telemetry change and not a lever, and it is not proposed now.
+
+(5) The direct/transparent 725 versus 766, read against the record. The
+whole difference is in the AES67 index segment: pos_aes67 544 -> 592
+(+48, one TIC frame), pos_pi 510 -> 561, usb_time 44.2 -> 45.3 (the same),
+tx_depth at the write 133 -> 183. In the transparent start the TX queue
+was already one period deeper at its first DEPTHSTEP (queue 229 at
+t_us 3922) than in the direct start (178 at 3966), and that row precedes
+"DSP engaged" at t_us 4562, the stage's first filtered render; the prime
+renders unfiltered by construction (renders_after_prime). Direct's 725 is
+inside the six fresh-anchor draws on the same profile without DSP
+(716-725, MEASURED 2026-09-10); 766 is that plus one period, the size of
+step the record has on this profile between plain restarts (670, 697,
+719, 722). So the 41 is a start draw of the TX queue depth, the kind the
+record already documents, and nothing in the stage's audio path can have
+placed it there. That is consistent with latency neutrality; it is still
+n = 1 per arm, so the statement stays "no added depth was observed and
+the observed difference is accounted for", not "proven equal". No
+re-draw campaign is proposed; the record's rule against re-drawing for a
+figure stands.

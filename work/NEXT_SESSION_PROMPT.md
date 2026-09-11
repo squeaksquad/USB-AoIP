@@ -1,28 +1,46 @@
 # Next-session pickup prompt
 
-## Current DSP pickup — reference activity pass; reserve and latency open
+## Current DSP pickup — reserve question closed by analysis; acceptance decision open
 
-Read `outputs/dsp-service/reference-v1-live-20260911/RESULTS.md` first.
-One fresh loaded 60-second preflight and 600-second soak passed the frozen
-`reference-events-v1` criterion. All three channel-4 runs (7, 4, 5 zeros) match
-the pinned filter/L24 reference. The 112 retained frames across all 16 channels
-have a maximum error of 1.5625 LSB and share one 1,011-frame index offset.
-That offset is not an impulse latency result. No invalid samples, timestamp
-errors, recovery/drop/clip/low-queue/pitch errors, or missing/truncated events.
+Read `outputs/dsp-service/reference-v1-live-20260911/RESULTS.md`, then the
+handoff's FOUND 2026-09-11 entry (the last one) and `queue-phase.txt` beside
+the RESULTS. One fresh loaded 60-second preflight and 600-second soak passed the
+frozen `reference-events-v1` criterion: all three channel-4 zero runs match the
+pinned filter/L24 reference (112 retained frames, max error 1.5625 LSB, one
+common 1,011-frame index offset that is alignment, not latency). No invalid
+samples, timestamp errors, recovery/drop/clip/low-queue/pitch errors.
 
-TX floor fell 86 to 81; RX stayed 72. First/last 60-row TX queue means were
-176.533/159.583, with the decline late in the run. The activity pass does not
-resolve reserve stability. Next: inspect the saved queue history and bridge
-timing code before proposing another bounded live experiment. No automatic
-retry, transport tuning or full-battery repeat. UI Apply remains disabled and
-profiles experimental.
+The "TX reserve fell late in the soak" objection is CLOSED without live work:
+the once-per-second `tx_queue` is one snd_pcm_delay sample of a 48-frame
+per-millisecond sawtooth and reads a period low whenever the line's `phase_us`
+sits within ~100 us of the tick wrap (650 of 666 dip rows across all four
+soaks, the direct arm worst). The floor step 86 -> 81 is the same phase
+drawing the running minimum, inside the lineage's 76-88 and priced like the
+record's candidate (prime 168). Do not use first/last-window `tx_queue` means
+as a reserve metric; floors, pull/gap maxima, `tx_qlow` and RECOVERs are.
+
+The direct/transparent 725 versus 766 is accounted for: +48 in the AES67
+index segment, a TX queue one period deeper at the transparent start, present
+before the stage's first filtered render, and inside the size of step the
+record has between starts on this profile. Consistent with neutrality, n = 1
+per arm; no re-draw campaign.
+
+What is now open is a decision, not a measurement: whether the candidate
+bridge 406699bd with the `dsp-*` profiles becomes the point of record under
+the `reference-events-v1` criterion (the original zero-run gate stays FAILED
+on its own terms, by policy), and which profile the service runs by default.
+Today it runs `dsp-direct` (DSP disabled on the candidate binary). After
+that decision: UI Apply as a staged stop/configure/start/verify/rollback
+operation (step 5), with draft and applied state kept separate.
 
 The earlier battery remains FAILED under its original zero-run criterion:
 `outputs/dsp-service/acceptance-20260911/RESULTS.md`. Direct/transparent passed
 preflights, 4 x 800 impulses and ten-minute soaks at 725/766 samples; user RTL
-at 32 frames was 19.021/19.875 ms. Separate starts and a 48-sample AES67 index
-step prevent causal attribution or a latency-neutrality claim. Keep that
-latency finding separate from the now-explained filter/quantization events.
+at 32 frames was 19.021/19.875 ms. The 48-sample AES67 index step between
+those two starts is read in the handoff's FOUND 2026-09-11 entry as a TX queue
+start draw that predates the stage's first filtered render; n = 1 per arm, so
+"accounted for", not "proven equal". Keep it separate from the now-explained
+filter/quantization events.
 
 Implementation and policy: `work/dsp-service/REFERENCE_VALIDATION.md`.
 The legacy gate remains default; new receipts bind the chosen criterion,
