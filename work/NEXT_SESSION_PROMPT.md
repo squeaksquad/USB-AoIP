@@ -13,8 +13,8 @@ conf carries the acceptance labels (copy-dsp-labels.py); deploy.py rollback of
 the review bundle will now refuse on the conf, which goes back by hand from
 the bundle's baseline/ if ever needed.
 
-Owed by the user, not a session: one Apply from the browser itself (Basic
-auth), which exercises the 202 / poll / receipt display. Open DSP items, in
+The user's own browser Apply (dsp-direct -> dsp-loaded, 20:48 UTC) also
+passed, so the service now runs dsp-loaded. Open DSP items, in
 the order the record suggests: a browser-compiled preset reaching the bridge
 (artifact validation on the Pi first, then a conf block written under the
 supervisor's rules, then Apply of it); metering (needs the benchmarked tap);

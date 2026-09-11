@@ -10121,3 +10121,15 @@ covered by the Mac tests). Still the user's: one Apply from the browser
 itself, which also exercises the 202 / poll / receipt display. Next on the
 DSP side, if wanted: a browser-compiled preset reaching the bridge, which
 needs artifact validation on the Pi first; metering; AoIP -> DSP -> AoIP.
+
+**DONE 2026-09-11 20:49 UTC: the user's own Apply from the browser (Basic
+auth, the Settings panel) completed: b2cfc5bf, dsp-direct -> dsp-loaded,
+requestedBy bryan, STAGE running 47 s after start, 30 s settle, done at
+20:48:43, zero RECOVERs; the Immersive stereo-subs preset loaded (308
+biquads) and engaged at t_us 4471, TX PRIMED front_age 296 overshoot 31
+dropped 14, dsp_us mean 62.7 / max 201.5 on the first minute. The service
+runs dsp-loaded from here, filtering, until the next Apply; its level is a
+fresh draw and unmeasured (the loaded preset cannot be read by the impulse
+harness). Receipt in outputs/dsp-service/apply-roundtrip-20260911/. Step 5's
+first cut is complete on all three paths: ssh-driven, browser-driven, and the
+refusal.**
