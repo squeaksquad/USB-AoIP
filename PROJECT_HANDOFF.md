@@ -10133,3 +10133,77 @@ fresh draw and unmeasured (the loaded preset cannot be read by the impulse
 harness). Receipt in outputs/dsp-service/apply-roundtrip-20260911/. Step 5's
 first cut is complete on all three paths: ssh-driven, browser-driven, and the
 refusal.**
+
+**STAGED 2026-09-11 21:35 UTC, not installed: browser-compiled presets reaching the
+bridge, as the second Apply request kind.** The user's three decisions:
+guards instead of a soak (a user preset is STATUS=user, never accepted; the
+applier writes its block itself with dsp-direct's transport fields copied
+verbatim, loads the artifact through the bridge's own loader, requires every
+biquad section stable and the total at or under 308, the count the loaded
+soak passed); the compile happens in the browser with the verified compiler
+(work/dsp-compiler's pure ES modules, served beside the UI as
+web-ui/compiler/, symlinks in the repo); one slot per preset name, eight at
+most, a re-apply of the same name replaces its block and file.
+
+What was written:
+- work/aes67-bridge/usb16x16-aes67-supervisor (f3f099b9): validate_dsp_profile
+  accepts /etc/usb16x16/dsp/user-<slug>.dsp beside transparent and loaded;
+  the ownership, hash and bridge-pin checks are unchanged. One regex, the
+  install-aes67-service.sh pin moved. NOT installed: the running supervisor
+  is still cdc0768d, and a user block would fail its validation until this
+  is installed (service stopped, the user's sudo).
+- work/web-control/usb16x16-apply 1.1.0: request kinds profile / preset /
+  remove. For a preset: hash recomputed; parse_artifact walks the artifact
+  exactly as DspStage::load does with its bounds (channels 16, internal <=
+  64, sections <= 64 per chain, delay <= 480, rows bounded) and adds
+  stability (|a2| < 1, |a1| < 1 + a2), a gain bound and the 308 cap; slug
+  rules (1-24 [a-z0-9-], no dash-prefix of another user slug: the
+  supervisor addresses fields as PROFILE_<KEY>_<FIELD>, so user-a's
+  TX_PLAYBACK_PRIME would read as user-a-tx's PLAYBACK_PRIME); the cap;
+  then usb16x16-dsp-offline ARTIFACT --bench 1 (the runner from the dsp-verify
+  build of the accepted source, hash 8469c2e8, installed by the package to
+  /usr/local/libexec, refused-if-absent); the file installed root:644 by
+  rename; the block rendered from the live dsp-direct lines re-keyed
+  PROFILE_USER_<KEY>_ plus DESCRIPTION / STATUS=user / COVER / MEASURED /
+  DSP_PRESET / DSP_SHA256 and a marker comment; the whole file validated by
+  the supervisor's own `profiles` on a temporary copy; replaced atomically;
+  then the existing stop / switch-profile / start / verify / rollback. A
+  profile request may target a user block only while its installed file
+  still hashes to the block's pin. Remove refuses the live profile,
+  otherwise strips the block, validates, replaces, deletes the file.
+- usb16x16-web 1.3.0: POST /api/apply/preset (name, artifact text,
+  optional hash, expectedProfile; the artifact lands in web-apply/presets/
+  beside the request), DELETE /api/apply/preset/<slug>; health rows carry a
+  user flag; the DSP note updated. The installer creates the presets spool,
+  /etc/usb16x16/dsp, and installs the offline runner with its pin.
+- work/web-ui: backend.mjs compileDraft (dynamic import of ./compiler/),
+  presetSummary (the confirm: sections, bands, crossovers, headroom, delay,
+  the compiler's warnings, the not-soaked notice), requestPreset,
+  removePreset, userPresets; the Service profile panel gains "This draft on
+  the Pi" (Compile & apply this draft, DSP mode only) and the list of user
+  presets with Remove; the profile select offers user blocks too.
+
+Verified on the Mac: 33 Python tests (parser on the shipped transparent
+artifact and on broken copies: wrong channel count, missing end, an
+unstable section, the cap; install and switch, bad hash, missing file,
+loader refusal leaving nothing installed, replace rewrites one block,
+slug conflict, the cap of eight, remove while live refused then done,
+tampered file refuses a profile switch) and 30 + 55 node tests
+(compileDraft on the shipped layout, the request shapes, the lists; the
+compiler's own suite still passes through the symlinks). End to end
+locally: the service answered 202 for the node-compiled shipped layout,
+the real applier against the fake stack installed user-immersive-stereo-subs
+(46 biquads, 23 internal channels), wrote the block, validated, switched,
+verified, done; DELETE answered 409 while live and 202 after; remove ran;
+the panel rendered the live user preset, the draft block and the list. On
+the Pi, read-only: the offline runner loads transparent.dsp with --bench 1
+in 125 us and exits 0. Nothing installed.
+
+Install (the user's, in this order): stop usb16x16-aes67, install the
+supervisor from ~/usb-16x16-work/aes67-user-presets-install/, start; then
+sudo ~/usb-16x16-work/web-control/install-web-control.sh and restart
+usb16x16-web (the path unit stays enabled; the applier binary is replaced
+in place). First live test: with playback off, Settings -> Compile & apply
+this draft on the shipped layout, the receipt read (stats, loaderLine,
+start lines: DSP loaded user-…dsp), then Apply profile back to dsp-direct,
+then Remove.

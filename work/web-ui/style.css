@@ -660,3 +660,10 @@ input[type=checkbox],input[type=radio]{background:none;border:0;box-shadow:none;
 .fact-list div { min-width: 0; }
 .fact-list dd { overflow-wrap: anywhere; }
 @media (max-width: 1100px) { .fact-list { grid-template-columns: 1fr; } }
+
+/* Settings · Service profile: the draft-to-Pi block and the user preset list */
+.apply-draft, .apply-presets { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
+.apply-draft p { margin: 4px 0 8px; }
+.apply-presets ul { margin: 6px 0 0; padding-left: 1.1rem; }
+.apply-presets li { margin: 4px 0; }
+.apply-presets code, .apply-draft code { font-size: 11px; }

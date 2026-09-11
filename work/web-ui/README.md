@@ -477,9 +477,13 @@ release; never expose unauthenticated CamillaDSP control to arbitrary clients.
    accepted: the Settings page's "Service profile" panel switches the AES67
    service between accepted profiles through `work/web-control`'s Apply
    (request file, root path unit, verified restart, automatic rollback, receipt).
-   Draft and applied state stay distinct: the editor's preset never reaches the
-   Pi; only a profile name does. A browser-compiled preset reaching the bridge
-   is the next step and needs artifact validation on the Pi first.*
+   Draft and applied state stay distinct: the editor's preset is compiled here,
+   in the browser, with the verified compiler served as `./compiler/*.mjs`, and
+   only the resulting artifact goes to the Pi, where the applier validates it by
+   loading it through the bridge's own code before installing it as a
+   `user-<slug>` profile (STATUS user, never accepted; see
+   `work/web-control/README.md`, "User presets"). Metering and AoIP-only mode
+   remain out of scope.*
 
 Acceptance requires sample-accurate latency measurements with intentional alignment
 delay zeroed, the 64-sample host test where USB is involved, and separate AoIP-only

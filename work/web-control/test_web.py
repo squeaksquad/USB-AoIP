@@ -82,3 +82,39 @@ class WebApplyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WebPresetTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.spool = root / "web-apply"
+        (self.spool / "presets").mkdir(parents=True)
+        self.conf = root / "aes67.conf"
+        self.conf.write_text('PROFILE=dsp-direct\nPROFILE_DSP_DIRECT_STATUS=accepted\nPROFILE_DSP_DIRECT_TARGET=48\n'
+                             'PROFILE_USER_ROOM_STATUS=user\nPROFILE_USER_ROOM_TARGET=48\nPROFILE_USER_ROOM_DSP_PRESET=/etc/usb16x16/dsp/user-room.dsp\n')
+        self.web = load(self.spool, self.conf)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_slugs(self):
+        self.assertEqual(self.web.preset_slug("Room A · night"), "room-a-night")
+        self.assertEqual(self.web.preset_slug("  --Weird__Name!!  "), "weird-name")
+        self.assertEqual(self.web.preset_slug("x" * 40), "x" * 24)
+        self.assertEqual(self.web.preset_slug("···"), "")
+
+    def test_user_rows_are_flagged_and_ordered(self):
+        rows = self.web.conf_profiles(self.web.parse_conf(self.conf.read_text()))
+        self.assertEqual([(r["name"], r["user"]) for r in rows], [("dsp-direct", False), ("user-room", True)])
+
+    def test_preset_request_writes_the_artifact_beside_it(self):
+        artifact = b"usb16x16-dsp 1\npreset x\nend\n"
+        ident = self.web.write_apply_request("user-x", "dsp-direct", "bryan",
+                                             extra={"kind": "preset", "name": "x", "slug": "x", "artifactSha256": "ab"},
+                                             artifact=artifact)
+        body = json.loads((self.spool / "request.json").read_text())
+        self.assertEqual(body["kind"], "preset")
+        self.assertEqual(body["artifactFile"], f"{ident}.dsp")
+        self.assertEqual((self.spool / "presets" / f"{ident}.dsp").read_bytes(), artifact)
+        self.assertEqual(sorted(p.name for p in (self.spool / "presets").iterdir()), [f"{ident}.dsp"])

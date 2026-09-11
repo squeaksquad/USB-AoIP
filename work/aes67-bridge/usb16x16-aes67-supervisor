@@ -235,6 +235,9 @@ shift_frames() { local value; value=$(p LEVEL_SHIFT_FRAMES); printf '%s' "${valu
 
 # Fixed preset, loaded only on bridge startup. No preset means the DSP stage
 # is absent. Files live in a root-owned directory; never accept a user path.
+# 2026-09-11: user-<slug>.dsp are the presets usb16x16-apply installs there
+# from the web UI (root-owned, hash-pinned in their own block like the two
+# packaged ones; the applier validates them by loading them first).
 validate_dsp_profile() {
   local preset digest
   preset=$(p DSP_PRESET); digest=$(p DSP_SHA256)
@@ -242,7 +245,7 @@ validate_dsp_profile() {
     [ -z "$digest" ] || { say "DSP_SHA256 needs DSP_PRESET" >&2; return 1; }
     return 0
   fi
-  [[ $preset =~ ^/etc/usb16x16/dsp/(transparent|loaded)\.dsp$ ]] &&
+  [[ $preset =~ ^/etc/usb16x16/dsp/(transparent|loaded|user-[a-z0-9][a-z0-9-]{0,23})\.dsp$ ]] &&
     [[ $digest =~ ^[0-9a-f]{64}$ ]] ||
     { say "DSP requires a packaged preset path and SHA256" >&2; return 1; }
 }

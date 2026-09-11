@@ -308,8 +308,81 @@ export function profileChoices(health) {
   const live = rows.find(row => row.name === profile.selected) || (profile.selected ? {name: profile.selected} : null);
   return {
     live,
-    accepted: rows.filter(row => row.accepted && row.name !== profile.selected),
+    accepted: rows.filter(row => (row.accepted || row.user) && row.name !== profile.selected),
     available: Boolean(control.available),
     reason: control.available ? (control.scope || '') : (control.reason || 'Apply is not installed on this Pi.'),
   };
+}
+
+// ------------------------------------------------------------- user presets
+
+// The page compiles its own draft with the verified compiler (work/dsp-compiler,
+// served under ./compiler/ as the same ES modules) and posts the bridge
+// artifact; the Pi validates it by loading it and never trusts anything the
+// browser says about it. The compiler is imported on demand so the page loads
+// without it and reports a missing copy honestly.
+
+let compilerPromise = null;
+function loadCompiler(importImpl = path => import(path)) {
+  if (!compilerPromise) {
+    compilerPromise = Promise.all([importImpl('./compiler/compile.mjs'), importImpl('./compiler/bridge-artifact.mjs')])
+      .then(([compileModule, artifactModule]) => ({...compileModule, ...artifactModule}))
+      .catch(error => { compilerPromise = null; throw new Error(`The compiler is not served with this page: ${error.message}`); });
+  }
+  return compilerPromise;
+}
+
+/** Compile a UI draft to the bridge artifact plus the report the confirm shows. */
+export async function compileDraft(config, importImpl) {
+  const compiler = await loadCompiler(importImpl);
+  const result = compiler.compile(config, compiler.fileDevices('in.raw', 'out.raw'));
+  const artifact = compiler.bridgeArtifact(result, {presetName: config.name});
+  const delay = compiler.delayLatency(config);
+  const sections = (artifact.match(/^\S+ \S+ \S+ \S+ \S+$/gm) || []).length;
+  return {artifact, report: result.report, delay, sections};
+}
+
+/** The confirm text for a compiled draft: what will run and what the compiler warns about. */
+export function presetSummary(compiled, name) {
+  const r = compiled.report;
+  const lines = [
+    `Install "${name}" on the Pi and restart the AES67 service on it?`,
+    '',
+    `${compiled.sections} biquad sections (${r.biquadCount} EQ bands, ${r.crossoverCount} crossover filters) across ${r.internalChannels} internal channels; headroom ${r.headroomDb} dB.`,
+    compiled.delay.samples ? `Alignment delay adds ${compiled.delay.ms} ms (${compiled.delay.samples} samples) of latency.` : 'No alignment delay.',
+  ];
+  if (r.warnings?.length) lines.push('', ...r.warnings.map(w => `• ${w}`));
+  lines.push('', 'The preset has not been soaked: the Pi loads it through the bridge\'s own loader, checks every section is stable, and rolls back if the stack does not come up clean. Audio stops for about a minute. Stop playback first.');
+  return lines.join('\n');
+}
+
+export async function requestPreset(name, artifact, expectedProfile, fetchImpl = globalThis.fetch) {
+  const response = await fetchImpl('/api/apply/preset', {
+    method: 'POST',
+    headers: {'content-type': 'application/json', accept: 'application/json'},
+    body: JSON.stringify({name, artifact, expectedProfile}),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !isObject(body) || body.ok !== true) {
+    throw new Error(isObject(body) && body.error ? body.error : `Preset request failed (${response.status})`);
+  }
+  return body;
+}
+
+export async function removePreset(slug, fetchImpl = globalThis.fetch) {
+  const response = await fetchImpl(`/api/apply/preset/${encodeURIComponent(slug)}`, {method: 'DELETE', headers: {accept: 'application/json'}});
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !isObject(body) || body.ok !== true) {
+    throw new Error(isObject(body) && body.error ? body.error : `Remove failed (${response.status})`);
+  }
+  return body;
+}
+
+/** The user presets the Pi holds, from the health snapshot. */
+export function userPresets(health) {
+  const rows = Array.isArray(health?.profile?.profiles) ? health.profile.profiles : [];
+  return rows.filter(row => row.user).map(row => ({
+    name: row.name, slug: row.name.replace(/^user-/, ''), description: row.description || '',
+    live: row.name === health?.profile?.selected,
+  }));
 }

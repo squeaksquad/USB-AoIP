@@ -5,7 +5,7 @@ import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphoneP
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets } from './backend.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
 let channelClipboard = null, pasteScope = 'processing', layoutUndo = null, rewParsed = null;
@@ -533,13 +533,52 @@ function applyPanel() {
     : 'Profile unknown (configuration unreadable).';
   if (!choices.accepted.some(row => row.name === applyChoice)) applyChoice = choices.accepted[0]?.name || '';
   const canApply = Boolean(health) && choices.available && !applyBusy && !inFlight && Boolean(applyChoice);
+  const presetsOnPi = userPresets(health);
   const current = status?.current;
   const steps = current?.steps?.length ? `<ol class="apply-steps">${current.steps.map(step => `<li class="${step.ok ? '' : 'warn'}"><strong>${esc(applyStepLabel(step.name))}</strong>${step.detail ? ` <span class="muted">${esc(step.detail)}</span>` : ''}</li>`).join('')}</ol>` : '';
   return `<section class="panel maintenance-panel" id="apply-panel"><div class="section-heading"><h2>Service profile</h2><span class="offline-badge ${health?'live-badge':''}">${health ? (choices.available ? 'Apply available' : 'Apply not installed') : 'Not connected'}</span></div>
     <p class="fact-plain">${liveLine}</p>
     <div class="log-controls">${field('Switch to', `<select id="apply-profile-choice" ${disabled(!choices.accepted.length || inFlight || applyBusy)}>${choices.accepted.length ? options(choices.accepted.map(row => [row.name, `${row.name}${row.dspPreset ? ' · preset' : ' · no preset'}`]), applyChoice) : '<option value="">No other accepted profile</option>'}</select>`)}<button class="primary" data-action="apply-profile" ${disabled(!canApply)} title="${choices.available ? 'Restart the AES67 service on the chosen profile' : esc(choices.reason)}">${applyBusy ? 'Queueing…' : inFlight ? 'Applying…' : 'Apply profile'}</button></div>
     <p class="muted">${esc(choices.reason.replace(/[.\s]*$/, '.'))}${health ? ' A switch stops audio for about a minute, draws a new latency level, and is rolled back automatically if the stack does not come up clean. Stop playback first.' : ''}</p>
+    ${health ? `<div class="apply-draft"><strong>This draft on the Pi</strong><p class="muted">Compiles <em>${esc(config.name)}</em> in this browser with the verified compiler and installs it as <code>user-${esc(presetSlug(config.name) || '…')}</code>: never soaked, loaded through the bridge's own loader, every section checked stable, at most ${8} user presets.${config.mode === 'direct' ? ' Switch the draft to DSP mode to compile it.' : ''}</p><button data-action="apply-draft" ${disabled(!choices.available || applyBusy || inFlight || config.mode === 'direct' || !presetSlug(config.name))}>Compile &amp; apply this draft</button></div>` : ''}
+    ${presetsOnPi.length ? `<div class="apply-presets"><strong>User presets on the Pi</strong><ul>${presetsOnPi.map(p => `<li><code>${esc(p.name)}</code>${p.live ? ' <span class="badge">live</span>' : ''} <span class="muted">${esc(p.description)}</span> <button class="quiet" data-action="remove-preset" data-slug="${esc(p.slug)}" ${disabled(p.live || inFlight || applyBusy)} title="${p.live ? 'Switch away before removing the live preset' : 'Remove this preset and its block from the Pi'}">Remove</button></li>`).join('')}</ul></div>` : ''}
     <div class="note-box" role="status">${esc(applyLine(status))}</div>${steps}</section>`;
+}
+
+/** The same rule the service and the applier use for user-<slug>. */
+function presetSlug(name) {
+  const slug = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24).replace(/-+$/, '');
+  return /^[a-z0-9][a-z0-9-]{0,23}$/.test(slug) ? slug : '';
+}
+
+async function applyDraft() {
+  const choices = profileChoices(health);
+  const live = choices.live?.name || null;
+  let compiled;
+  try { validateConfig(config); compiled = await compileDraft(config); }
+  catch (e) { toast(`Cannot compile this draft: ${e.message}`); return; }
+  if (!confirm(presetSummary(compiled, config.name))) return;
+  applyBusy = true; refreshSettingsLive();
+  try {
+    const result = await requestPreset(config.name, compiled.artifact, live);
+    toast(`${result.replacing ? 'Replacing' : 'Installing'} ${result.profile} (artifact ${result.artifactSha256.slice(0, 8)}). ${result.note || ''}`);
+    applyStatus = {current: null, pending: true, inFlight: false};
+    startApplyPolling();
+  } catch (e) { toast(`Preset refused: ${e.message}`); }
+  applyBusy = false;
+  refreshSettingsLive();
+}
+
+async function removeUserPreset(slug) {
+  if (!confirm(`Remove user-${slug} and its artifact from the Pi? No restart; the live profile is untouched.`)) return;
+  applyBusy = true; refreshSettingsLive();
+  try {
+    await removePreset(slug);
+    applyStatus = {current: null, pending: true, inFlight: false};
+    startApplyPolling();
+  } catch (e) { toast(`Remove refused: ${e.message}`); }
+  applyBusy = false;
+  refreshSettingsLive();
 }
 
 async function applyProfile() {
@@ -717,6 +756,8 @@ document.addEventListener('click', event => {
   }
   else if (action === 'refresh-logs') { loadLiveLogs(); return; }
   else if (action === 'apply-profile') { applyProfile(); return; }
+  else if (action === 'apply-draft') { applyDraft(); return; }
+  else if (action === 'remove-preset') { removeUserPreset(b.dataset.slug); return; }
   else if (action === 'load') {
     try { config = parsePreset(JSON.stringify(presets()[$('#saved-preset').value])); layoutUndo=null; busUndo=null; dirty = false; render(); toast(`Preset loaded from ${presetStore.label}. No device changes.`); } catch(e) { toast(`Could not load: ${e.message}`); } return;
   } else if (action === 'reset') { config = createConfig(); selected = 0; layoutUndo=null; busUndo=null; }

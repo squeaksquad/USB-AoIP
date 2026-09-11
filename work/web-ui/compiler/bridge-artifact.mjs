@@ -1,0 +1,1 @@
+../../dsp-compiler/bridge-artifact.mjs

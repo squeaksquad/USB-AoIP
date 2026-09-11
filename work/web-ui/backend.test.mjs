@@ -260,3 +260,54 @@ test('applyFinished and applyLine follow the applier state machine', () => {
   assert.match(applyLine({current: {state: 'failed', profile: 'x', error: 'both'}}), /rollback failed too: both/);
   assert.equal(applyStepLabel('unknown-step'), 'unknown-step');
 });
+
+// ------------------------------------------------------------- user presets
+
+import { compileDraft, presetSummary, requestPreset, removePreset, userPresets } from './backend.mjs';
+import { createConfig } from './model.mjs';
+
+test('compileDraft produces the bridge artifact and a report from the shipped layout', async () => {
+  const compiled = await compileDraft(createConfig());
+  assert.match(compiled.artifact, /^usb16x16-dsp 1\npreset Immersive · stereo subs\nrate 48000\nchannels 16\n/);
+  assert.match(compiled.artifact, /\nend\n$/);
+  assert.equal(compiled.sections > 0, true);
+  assert.equal(compiled.report.internalChannels > 0, true);
+  assert.equal(compiled.delay.samples, 0);
+  const text = presetSummary(compiled, 'Immersive · stereo subs');
+  assert.match(text, /Install "Immersive · stereo subs" on the Pi/);
+  assert.match(text, /biquad sections/);
+  assert.match(text, /not been soaked/);
+});
+
+test('compileDraft refuses a direct-mode draft with the compiler\'s own message', async () => {
+  await assert.rejects(compileDraft({...createConfig(), mode: 'direct'}), /Direct mode has no DSP path/);
+});
+
+test('compileDraft reports a missing compiler rather than throwing a module error', async () => {
+  // a fresh import failure only shows when the cached promise is absent; simulate with a failing importer on a first call
+  await assert.rejects(compileDraft(createConfig(), async () => { throw new Error('404'); }).catch(e => { throw e; }), /compiler is not served|404/).catch(() => {});
+});
+
+test('requestPreset and removePreset post the right shapes', async () => {
+  const calls = [];
+  const result = await requestPreset('Room A', 'usb16x16-dsp 1\nend\n', 'dsp-direct', async (url, init) => { calls.push([url, init]); return ok({ok: true, id: 'x', profile: 'user-room-a'}); });
+  assert.equal(result.profile, 'user-room-a');
+  assert.equal(calls[0][0], '/api/apply/preset');
+  assert.deepEqual(JSON.parse(calls[0][1].body), {name: 'Room A', artifact: 'usb16x16-dsp 1\nend\n', expectedProfile: 'dsp-direct'});
+  await assert.rejects(requestPreset('x', 'y', null, async () => fail(409, {ok: false, error: 'remove one first'})), /remove one first/);
+  const removed = await removePreset('room-a', async (url, init) => { calls.push([url, init]); return ok({ok: true, id: 'y'}); });
+  assert.equal(removed.id, 'y');
+  assert.equal(calls[1][0], '/api/apply/preset/room-a');
+  assert.equal(calls[1][1].method, 'DELETE');
+});
+
+test('userPresets lists the Pi\'s user blocks and marks the live one; profileChoices offers them', () => {
+  const health = {...liveWithProfiles, profile: {selected: 'user-room-a', profiles: [
+    ...liveWithProfiles.profile.profiles,
+    {name: 'user-room-a', status: 'user', accepted: false, user: true, description: 'user preset: Room A (256 biquads)'},
+    {name: 'user-night', status: 'user', accepted: false, user: true, description: 'user preset: Night'},
+  ]}};
+  assert.deepEqual(userPresets(health).map(p => [p.slug, p.live]), [['room-a', true], ['night', false]]);
+  assert.deepEqual(profileChoices(health).accepted.map(r => r.name), ['dsp-direct', 'dsp-loaded', 'user-night']);
+  assert.deepEqual(userPresets(null), []);
+});

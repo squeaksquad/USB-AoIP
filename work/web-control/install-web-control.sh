@@ -32,14 +32,22 @@ apply_destination=/usr/local/bin/usb16x16-apply
 apply_unit_destination=/etc/systemd/system/usb16x16-apply.service
 apply_path_destination=/etc/systemd/system/usb16x16-apply.path
 apply_dir=/home/bdimaio/usb-16x16-work/web-apply
+# The bridge's offline DSP runner (work/phase4-bridge/src/dsp_offline.cpp, the
+# same source tree as the accepted bridge 406699bd, built on the Pi 2026-09-10
+# in ~/usb-16x16-work/dsp-verify/bridge-build). The applier loads every user
+# preset through it (--bench 1) before installing it: the bridge's own loader
+# is the check, not a reimplementation.
+offline_source=/home/bdimaio/usb-16x16-work/dsp-verify/bridge-build/usb16x16-dsp-offline
+offline_destination=/usr/local/libexec/usb16x16-dsp-offline
 preset_dir=/home/bdimaio/usb-16x16-work/web-presets
 static_dir=/home/bdimaio/usb-16x16-work/web-ui
 auth_file=/home/bdimaio/usb-16x16-work/web-auth
 
-expected_service_sha256=1711928761934c643338c46bc20ff2e37e05afab48fb7ce8c7028f6a07a2e8d7
+expected_service_sha256=cfbe8593ea089e9cdb8b2b5e48ff77436b0ac823beeb650883b19c555f23b38c
 expected_unit_sha256=f7c7d48cab8b12b9b7ed9f5a920efc497e9874760cc9434c979c25ee68b59761
-expected_apply_sha256=ae6618129fcda284b6cef25c9e0c6b4c9b9f62f864b600a74863a0885369da14
+expected_apply_sha256=f8eb8ab41962edee96459e86bd714ed26196c4ad922ae89c3ef4dfe3c6c0f992
 expected_apply_unit_sha256=43343144abe725d756d0c0731cc525a2da0f2873029d7d17857316314898047c
+expected_offline_sha256=8469c2e83b617b7c39918ecf7a86f3032cda91de48eb926569cc061c416c6641
 expected_apply_path_sha256=5dc4067ec09b0329741aea80f8f8557f7e45cbd70154d15c6888b13598e29aeb
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
@@ -57,6 +65,9 @@ done
   echo "usb16x16-apply.service source hash mismatch" >&2; exit 8; }
 [ "$(sha256_of "$apply_path_source")" = "$expected_apply_path_sha256" ] || {
   echo "usb16x16-apply.path source hash mismatch" >&2; exit 9; }
+[ -r "$offline_source" ] || { echo "missing $offline_source (the dsp-verify build)" >&2; exit 10; }
+[ "$(sha256_of "$offline_source")" = "$expected_offline_sha256" ] || {
+  echo "usb16x16-dsp-offline hash mismatch at $offline_source" >&2; exit 11; }
 [ -r "$static_dir/index.html" ] || {
   echo "no web UI staged at $static_dir/index.html" >&2; exit 6; }
 
@@ -65,11 +76,17 @@ install -o root -g root -m 0644 "$unit_source" "$unit_destination"
 install -o root -g root -m 0755 "$apply_source" "$apply_destination"
 install -o root -g root -m 0644 "$apply_unit_source" "$apply_unit_destination"
 install -o root -g root -m 0644 "$apply_path_source" "$apply_path_destination"
+install -o root -g root -m 0755 "$offline_source" "$offline_destination"
 install -d -o bdimaio -g bdimaio -m 0755 "$preset_dir"
 # The web service (bdimaio) writes request.json here; root writes the
 # receipts. Nothing else lives in it.
 install -d -o bdimaio -g bdimaio -m 0755 "$apply_dir"
 install -d -o root -g root -m 0755 "$apply_dir/receipts"
+# Uploaded artifacts wait here (written by the web service, consumed by root).
+install -d -o bdimaio -g bdimaio -m 0755 "$apply_dir/presets"
+# User presets land beside the two packaged ones; the supervisor requires
+# this directory root:root:755.
+install -d -o root -g root -m 0755 /etc/usb16x16/dsp
 systemctl daemon-reload
 
 echo "installed $service_destination, $unit_destination, $apply_destination and the Apply units"
@@ -86,5 +103,5 @@ echo "arm Apply:                        sudo systemctl enable --now usb16x16-app
 echo "disarm Apply (web stays):         sudo systemctl disable --now usb16x16-apply.path"
 echo "rollback:      sudo systemctl disable --now usb16x16-apply.path usb16x16-web.service &&"
 echo "               sudo rm -f $unit_destination $service_destination \\"
-echo "                 $apply_path_destination $apply_unit_destination $apply_destination &&"
+echo "                 $apply_path_destination $apply_unit_destination $apply_destination $offline_destination &&"
 echo "               sudo systemctl daemon-reload"

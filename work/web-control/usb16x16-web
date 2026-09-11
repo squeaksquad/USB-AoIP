@@ -57,7 +57,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -78,6 +78,9 @@ APPLY_TERMINAL = {"done", "rolled-back", "failed", "refused"}
 # for ever by a receipt that never came.
 APPLY_STALE_SECONDS = 600.0
 REQUEST_MAX_AGE_SECONDS = 120.0
+PRESET_ARTIFACT_MAX = 1 << 18
+USER_PRESET_CAP = 8
+USER_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,23}$")
 
 UNITS = {
     "gadget": "usb-16x16.service",
@@ -206,8 +209,9 @@ def conf_profiles(conf: dict[str, str]) -> list[dict]:
             "measured": field("MEASURED"),
             "cover": field("COVER"),
             "dspPreset": field("DSP_PRESET") or None,
+            "user": field("STATUS") == "user" and upper.startswith("USER_"),
         })
-    rows.sort(key=lambda row: (not row["accepted"], row["name"]))
+    rows.sort(key=lambda row: (not row["accepted"], not row["user"], row["name"]))
     return rows
 
 
@@ -421,16 +425,17 @@ class Collector:
         engine = None
         if CAMILLA_BIN.is_file() and os.access(CAMILLA_BIN, os.X_OK):
             engine = (run([str(CAMILLA_BIN), "--version"]) or "").strip() or "present"
-        missing = ["artifact validation on the Pi for a browser-compiled preset",
-                   "a profile block written for it under the supervisor's rules"]
+        missing = ["metering (a benchmarked tap in the bridge)", "AoIP-only mode"]
         return {
+            # The stage runs in the bridge; the draft reaches it through Apply.
+            # "available" stays false until the editor can show what is live.
             "available": False,
             "engine": engine,
             "missing": missing,
             # The caller already states what is running; do not repeat it here.
-            "reason": "The bridge's DSP stage is accepted with two pinned presets, "
-                      "selected through the Service profile switch in Settings. "
-                      "This editor's own draft cannot reach the Pi yet.",
+            "reason": "The bridge's DSP stage is accepted. Settings switches between the two "
+                      "pinned presets and installs this editor's draft as a user preset "
+                      "(compiled here, validated by the Pi's own loader, never soaked).",
         }
 
     # ---- assembly
@@ -523,15 +528,37 @@ def apply_state() -> dict:
     return state
 
 
-def write_apply_request(profile: str, expected: str | None, user: str | None) -> str:
+def preset_slug(name: str) -> str:
+    """user-<slug> from a preset name: lower-case letters, digits and single
+    dashes, at most 24 characters, the same rule the applier enforces."""
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:24].rstrip("-")
+    return slug if USER_SLUG.match(slug) else ""
+
+
+def write_apply_request(profile: str, expected: str | None, user: str | None, extra: dict | None = None,
+                        artifact: bytes | None = None) -> str:
     """The only write this process makes outside its preset store: one JSON
-    request the path unit picks up. Atomic, so the applier never reads half
-    a file, and the directory is created by the installer, not here."""
+    request the path unit picks up (plus, for a preset, the artifact text it
+    refers to, in the spool's presets/ directory). Atomic, so the applier
+    never reads half a file; the directories are created by the installer."""
     if not APPLY_DIR.is_dir():
         raise PermissionError(f"{APPLY_DIR} does not exist; the Apply units are not installed")
     ident = secrets.token_hex(8)
     payload = {"id": ident, "profile": profile, "expectedProfile": expected,
                "requestedAt": time.time(), "requestedBy": user}
+    if extra:
+        payload.update(extra)
+    if artifact is not None:
+        presets = APPLY_DIR / "presets"
+        if not presets.is_dir():
+            raise PermissionError(f"{presets} does not exist; reinstall the Apply units")
+        temporary = presets / f"{ident}.tmp"
+        with open(temporary, "wb") as handle:
+            handle.write(artifact)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, presets / f"{ident}.dsp")
+        payload["artifactFile"] = f"{ident}.dsp"
     target = APPLY_DIR / "request.json"
     temporary = APPLY_DIR / f"request.{ident}.tmp"
     with open(temporary, "w", encoding="utf-8") as handle:
@@ -974,6 +1001,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorize():
             return
         route = unquote(urlparse(self.path).path)
+        if route.startswith("/api/apply/preset/"):
+            self.discard_body()
+            self.api_remove_preset(route[len("/api/apply/preset/"):])
+            return
         if not route.startswith("/api/presets/"):
             self.unsupported(route)
             return
@@ -989,8 +1020,110 @@ class Handler(BaseHTTPRequestHandler):
         route = unquote(urlparse(self.path).path)
         if route == "/api/apply/profile":
             self.api_apply_profile()
+        elif route == "/api/apply/preset":
+            self.api_apply_preset()
         else:
             self.unsupported(route)
+
+    def apply_gate(self, expected):
+        """The checks every Apply request shares. Returns (snapshot, live) or
+        None after answering."""
+        snapshot = self.collector.snapshot()
+        control = (snapshot.get("control") or {}).get("apply") or {}
+        if not control.get("available"):
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE,
+                                 control.get("reason") or "Apply is not available on this Pi")
+            return None
+        live = (snapshot.get("profile") or {}).get("selected")
+        if expected is not None and expected != live:
+            self.send_error_json(HTTPStatus.CONFLICT,
+                                 f"This page expected {expected} to be live but {live} is; reload and retry")
+            return None
+        current = apply_state()
+        if current["pending"] or current["inFlight"]:
+            self.send_error_json(HTTPStatus.CONFLICT, "An Apply operation is already in progress")
+            return None
+        return snapshot, live
+
+    def api_apply_preset(self) -> None:
+        """Queue a browser-compiled preset for installation and a switch to it.
+
+        The body carries the preset's name, the artifact text the page
+        compiled, and its SHA-256. This process checks shape and size and the
+        user-preset cap from its snapshot; the applier recomputes the hash,
+        parses the artifact with the loader's bounds, loads it through the
+        bridge's own code and writes the block. Nothing here is trusted by it.
+        """
+        body = self.read_body(limit=PRESET_ARTIFACT_MAX + 65536)
+        if not isinstance(body, dict):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object")
+            return
+        name = body.get("name")
+        artifact = body.get("artifact")
+        digest = body.get("artifactSha256")
+        expected = body.get("expectedProfile")
+        if not isinstance(name, str) or not re.match(r"^[A-Za-z0-9][A-Za-z0-9 ._·-]{0,63}$", name):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "name must be 1-64 letters, digits, spaces, dots or dashes")
+            return
+        if not isinstance(artifact, str) or not artifact.startswith("usb16x16-dsp 1\n") or not artifact.endswith("end\n"):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "artifact must be the compiler's bridge artifact text")
+            return
+        data = artifact.encode("utf-8")
+        if len(data) > PRESET_ARTIFACT_MAX:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, f"artifact is larger than {PRESET_ARTIFACT_MAX} bytes")
+            return
+        computed = hashlib.sha256(data).hexdigest()
+        if digest is not None and digest != computed:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "artifactSha256 does not match the artifact")
+            return
+        if expected is not None and not isinstance(expected, str):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "expectedProfile must be a string or null")
+            return
+        slug = preset_slug(name)
+        if not slug:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "the name leaves no letters or digits for a slug")
+            return
+        gate = self.apply_gate(expected)
+        if gate is None:
+            return
+        snapshot, _ = gate
+        users = [row["name"] for row in (snapshot.get("profile") or {}).get("profiles", []) if row.get("user")]
+        if f"user-{slug}" not in users and len(users) >= USER_PRESET_CAP:
+            self.send_error_json(HTTPStatus.CONFLICT, f"{USER_PRESET_CAP} user presets are installed; remove one first")
+            return
+        try:
+            ident = write_apply_request(f"user-{slug}", expected, self.current_user(),
+                                        extra={"kind": "preset", "name": name, "slug": slug, "artifactSha256": computed},
+                                        artifact=data)
+        except OSError as error:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
+            return
+        self.send_json({"ok": True, "id": ident, "profile": f"user-{slug}", "slug": slug, "artifactSha256": computed,
+                        "replacing": f"user-{slug}" in users,
+                        "note": "Queued. The applier checks the artifact, installs it, and restarts the AES67 "
+                                "service on it; audio stops for about a minute."}, HTTPStatus.ACCEPTED)
+
+    def api_remove_preset(self, slug: str) -> None:
+        if not USER_SLUG.match(slug):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "not a user preset slug")
+            return
+        gate = self.apply_gate(None)
+        if gate is None:
+            return
+        snapshot, live = gate
+        users = [row["name"] for row in (snapshot.get("profile") or {}).get("profiles", []) if row.get("user")]
+        if f"user-{slug}" not in users:
+            self.send_error_json(HTTPStatus.NOT_FOUND, f"user-{slug} is not installed")
+            return
+        if live == f"user-{slug}":
+            self.send_error_json(HTTPStatus.CONFLICT, f"user-{slug} is the live profile; switch away first")
+            return
+        try:
+            ident = write_apply_request(f"user-{slug}", None, self.current_user(), extra={"kind": "remove", "slug": slug})
+        except OSError as error:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
+            return
+        self.send_json({"ok": True, "id": ident, "slug": slug, "note": "Queued for removal; no restart."}, HTTPStatus.ACCEPTED)
 
     def api_apply_profile(self) -> None:
         """Queue one profile switch for the privileged applier.

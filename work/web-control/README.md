@@ -31,6 +31,35 @@ and the latency level is drawn afresh (the record's standing rule). The UI
 says so before it asks, and the applier's receipt records the bridge's start
 lines so the draw can be read afterwards.
 
+## User presets (browser-compiled)
+
+Since 2026-09-11 evening the page can send its own draft. The compiler is the
+verified one in `work/dsp-compiler`, served beside the UI as
+`web-ui/compiler/*.mjs` (symlinks in the repo, copies on the Pi), so the
+browser compiles the draft to the bridge artifact and posts the text. The Pi
+never trusts it: the applier recomputes the hash, parses the artifact with the
+bridge loader's own bounds, requires every biquad section to be stable and the
+total to stay at or under 308 (the count the loaded soak passed), then loads it
+through the bridge's own code (`usb16x16-dsp-offline --bench 1`, installed by
+this package from the dsp-verify build of the accepted source), installs it as
+`/etc/usb16x16/dsp/user-<slug>.dsp` (root, 0644), writes a profile block
+`user-<slug>` whose transport fields are dsp-direct's copied verbatim plus the
+preset path and hash, has the supervisor's parser validate the whole file on a
+temporary copy, replaces the live conf atomically, and only then runs the
+switch. Such a block is `STATUS=user`, never `accepted`: the guards stand in
+for a soak and the panel says so. Eight user presets at most; a re-apply of the
+same name replaces its block and file; a slug may not be another's dash-prefix.
+
+```
+POST   /api/apply/preset            {"name", "artifact", "artifactSha256"?, "expectedProfile"} -> 202 {id, profile, slug, replacing}
+DELETE /api/apply/preset/<slug>     queue removal of a user preset that is not live -> 202 {id}
+```
+
+Receipts for a preset carry `kind: "preset"`, `stats` (biquads, internal
+channels, max delay) and `loaderLine` (what the runner printed). The supervisor
+accepts `user-<slug>.dsp` paths since its 2026-09-11 change; the applier
+refuses to install anything if the runner is missing.
+
 ## Apply API and states
 
 ```
@@ -54,8 +83,9 @@ treated as abandoned so a new request is not blocked for ever; the applier's
 unit times out at 480 s.
 
 Tests: `python3 -m unittest work/web-control/test_apply.py work/web-control/test_web.py`
-(the applier's state machine against a scripted stack; the request writer and
-state reader). `sudo /usr/local/bin/usb16x16-apply --check` validates a pending
+(the applier's state machine against a scripted stack, the artifact parser on
+the shipped transparent artifact and on broken copies, the preset install /
+replace / cap / conflict / remove flows; the request writer and state reader). `sudo /usr/local/bin/usb16x16-apply --check` validates a pending
 request without acting.
 
 ## What it deliberately cannot do
@@ -63,7 +93,7 @@ request without acting.
 | Not implemented | Why |
 | --- | --- |
 | Restart a service, switch to a non-accepted profile | Owning a PCM device and interrupting audio belongs to the privileged applier, which takes exactly one request shape: an accepted profile name. This process is unprivileged and its only write outside the preset store is that request file. |
-| Install a preset, edit a profile block, apply the UI's DSP draft | The bridge's DSP stage is accepted with two pinned presets (`work/dsp-service`); a browser-compiled preset reaching the Pi needs artifact validation there and a conf edit under the supervisor's rules, which is the next step, not this one. `/api/health` still reports `dsp.available: false` for the draft editor. |
+| Edit a profile's transport fields, install a preset under any other path, run an engine | User presets are the one write to `/etc/usb16x16/dsp` and to the conf, and it is the applier's, with the guards above; transport fields are always dsp-direct's. No CamillaDSP runs; the bridge's stage is the engine. |
 | Live meters | The bridge has no metering tap. Opening a second ALSA stream to read levels would compete with the audio path, so `/api/health` reports `meters.available: false` and the UI's meters stay labelled as display activity. |
 | Read `/api/sink/status/N` | That endpoint's arrival-lead minimum **resets when read**. The latency harness owns it; a polling dashboard would silently invalidate every lead comparison. |
 

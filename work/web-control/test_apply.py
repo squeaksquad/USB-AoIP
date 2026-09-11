@@ -118,9 +118,12 @@ class Env:
         self.write("stage", f"{int(clock)} running\n")
         self.write("recovers", "")
         lines = ["NEGOTIATED usb_capture=48/192", "ALIGN status=ok", "PRIMED direction=usb-to-ravenna front_age_frames=296"]
-        if profile == "dsp-loaded" and not wrong_dsp:
-            lines = ["DSP loaded file=/etc/usb16x16/dsp/loaded.dsp biquads=308"] + lines + ["DSP engaged direction=usb-to-ravenna biquads=308"]
-        if profile == "dsp-direct" and wrong_dsp:
+        # the bridge loads whatever preset the live profile's block names
+        conf = apply_module.parse_conf(self.conf.read_text())
+        preset = conf.get(f"PROFILE_{apply_module.profile_key(profile)}_DSP_PRESET", "")
+        if preset and not wrong_dsp:
+            lines = [f"DSP loaded file={preset} biquads=308"] + lines + ["DSP engaged direction=usb-to-ravenna biquads=308"]
+        if not preset and wrong_dsp:
             lines = ["DSP loaded file=/etc/usb16x16/dsp/loaded.dsp biquads=308"] + lines
         self.write("bridge.log", "\n".join(lines) + "\n" + "BRIDGE ppm=-14 tx_restarts=0 rx_restarts=0\n" * 3)
         (self.run_dir / "last-bridge").unlink(missing_ok=True)
@@ -292,3 +295,222 @@ class ApplyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ------------------------------------------------------------- presets
+
+REPO = HERE.parent.parent
+REAL_ARTIFACT = REPO / "outputs/dsp-service/review-20260911/candidate/transparent.dsp"
+
+PRESET_CONF = """PROFILE=dsp-direct
+PROFILE_DSP_DIRECT_DESCRIPTION="sd103 transport on the DSP bridge, no preset"
+PROFILE_DSP_DIRECT_STATUS=accepted
+PROFILE_DSP_DIRECT_COVER="x"
+PROFILE_DSP_DIRECT_MEASURED="y"
+PROFILE_DSP_DIRECT_PERIOD=48
+PROFILE_DSP_DIRECT_BUFFER=192
+PROFILE_DSP_DIRECT_TARGET=48
+PROFILE_DSP_DIRECT_SINK_DELAY=103
+PROFILE_DSP_LOADED_STATUS=accepted
+PROFILE_DSP_LOADED_TARGET=48
+PROFILE_DSP_LOADED_DSP_PRESET=/etc/usb16x16/dsp/loaded.dsp
+PROFILE_DSP_LOADED_DSP_SHA256=2b6baa04
+"""
+
+
+class PresetRunner(FakeRunner):
+    """FakeRunner plus the offline runner and the supervisor's `profiles` on a
+    temporary conf, which it answers by parsing the file the way the
+    supervisor would list it."""
+
+    def __init__(self, env, loader_refuses=False, **kw):
+        super().__init__(env, **kw)
+        self.loader_refuses = loader_refuses
+        self.profiles_calls = []
+
+    def run(self, argv, timeout=60.0, env=None):
+        if argv[0] == apply_module.OFFLINE_RUNNER:
+            self.calls.append(argv)
+            if self.loader_refuses:
+                return 4, "dsp artifact: a pipeline with no internal channels routes nothing"
+            return 0, "loaded preset x: 16 internal, 256 sections BENCH"
+        if argv[1] == "profiles":
+            self.profiles_calls.append(env)
+            text = Path(env["USB16X16_AES67_CONF"]).read_text()
+            conf = apply_module.parse_conf(text)
+            for line in text.splitlines():
+                if line and not line.startswith("#") and "=" not in line:
+                    return 1, f"bad line in conf: {line}"
+            out = "\n".join(f"  {name}: {row['status']}, cover: {row['cover']}" for name, row in sorted(apply_module.profiles(conf).items()))
+            return 0, out
+        return super().run(argv, timeout)
+
+
+class PresetTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = Env(self.tmp.name)
+        self.env.conf.write_text(PRESET_CONF)
+        (self.env.spool / "presets").mkdir()
+        self.dsp_dir = Path(self.tmp.name) / "dsp"
+        self.dsp_dir.mkdir()
+        runner_path = Path(self.tmp.name) / "usb16x16-dsp-offline"
+        runner_path.write_text("#!/bin/sh\n")
+        self.saved = (apply_module.DSP_DIR, apply_module.OFFLINE_RUNNER)
+        apply_module.DSP_DIR = self.dsp_dir
+        apply_module.OFFLINE_RUNNER = str(runner_path)
+        self.artifact = REAL_ARTIFACT.read_bytes()
+
+    def tearDown(self):
+        apply_module.DSP_DIR, apply_module.OFFLINE_RUNNER = self.saved
+        self.tmp.cleanup()
+
+    def preset_request(self, data=None, **fields):
+        data = self.artifact if data is None else data
+        ident = fields.pop("id", "abcdef0123")
+        (self.env.spool / "presets" / f"{ident}.dsp").write_bytes(data)
+        body = {"id": ident, "kind": "preset", "name": "Room A · night", "slug": "room-a-night",
+                "artifactSha256": __import__("hashlib").sha256(data).hexdigest(), "artifactFile": f"{ident}.dsp",
+                "expectedProfile": "dsp-direct", "requestedAt": time.time(), "requestedBy": "bryan"}
+        body.update(fields)
+        (self.env.spool / "request.json").write_text(json.dumps(body))
+        return body
+
+    def make(self, runner):
+        applier = make(self.env, runner)
+        return applier
+
+    def test_real_artifact_parses_with_the_loader_bounds(self):
+        stats = apply_module.parse_artifact(self.artifact.decode())
+        self.assertEqual(stats["biquads"], 256)
+        self.assertEqual(stats["internal"], 16)
+        self.assertEqual(stats["maxDelay"], 0)
+        self.assertEqual(stats["preset"], "verify-transparent")
+
+    def test_parser_refuses_what_the_loader_would_and_unstable_sections(self):
+        text = self.artifact.decode()
+        with self.assertRaisesRegex(apply_module.Refused, "channel count"):
+            apply_module.parse_artifact(text.replace("channels 16", "channels 8", 1))
+        with self.assertRaisesRegex(apply_module.Refused, "ends early|expected 'end'"):
+            apply_module.parse_artifact(text.replace("\nend\n", "\n"))
+        lines = text.split("\n")
+        branch_at = next(i for i, l in enumerate(lines) if l.startswith("branch "))
+        first_section = next(i for i, l in enumerate(lines) if i > branch_at and len(l.split()) == 5)
+        parts = lines[first_section].split()
+        parts[4] = "1.5"  # a2 outside the unit circle
+        lines[first_section] = " ".join(parts)
+        with self.assertRaisesRegex(apply_module.Refused, "unstable"):
+            apply_module.parse_artifact("\n".join(lines))
+
+    def test_biquad_cap(self):
+        text = self.artifact.decode().replace("branch 16\n", "branch 16\n", 1)
+        # 256 real sections plus 64 on a synthetic output row pushes past 308
+        text = text.replace("output 16\n", "output 16\n", 1)
+        section = "1 0 0 0 0\n"
+        text = text.replace("\nend\n", "\n15 0 1 64\n" + section * 64 + "end\n")
+        text = text.replace("output 16\n", "output 17\n", 1)
+        with self.assertRaisesRegex(apply_module.Refused, "over the bridge's limit|over the 308"):
+            apply_module.parse_artifact(text)
+
+    def test_preset_install_and_switch(self):
+        runner = PresetRunner(self.env)
+        self.preset_request()
+        result = self.make(runner).consume()
+        self.assertEqual(result["state"], "done", result)
+        self.assertEqual(result["kind"], "preset")
+        self.assertEqual(result["profile"], "user-room-a-night")
+        self.assertEqual(self.env.live_profile(), "user-room-a-night")
+        names = [s["name"] for s in result["steps"]]
+        self.assertEqual(names[:5], ["validating", "checking", "installing", "validating", "stopping"])
+        self.assertTrue((self.dsp_dir / "user-room-a-night.dsp").read_bytes() == self.artifact)
+        conf = self.env.conf.read_text()
+        self.assertIn("PROFILE_USER_ROOM_A_NIGHT_TARGET=48", conf)
+        self.assertIn("PROFILE_USER_ROOM_A_NIGHT_SINK_DELAY=103", conf)
+        self.assertIn("PROFILE_USER_ROOM_A_NIGHT_STATUS=user", conf)
+        self.assertIn(f"PROFILE_USER_ROOM_A_NIGHT_DSP_PRESET={self.dsp_dir}/user-room-a-night.dsp", conf)
+        self.assertNotIn("PROFILE_USER_ROOM_A_NIGHT_DSP_SHA256=2b6baa04", conf)
+        self.assertIn("256 biquads", conf)
+        self.assertEqual(len(runner.profiles_calls), 1, "the supervisor validated the new conf once")
+        self.assertFalse((self.env.spool / "presets" / "abcdef0123.dsp").exists(), "the uploaded artifact is consumed")
+        self.assertEqual(result["stats"]["biquads"], 256)
+        self.assertIn("BENCH", result["loaderLine"])
+
+    def test_bad_hash_and_missing_file_are_refused(self):
+        self.preset_request(artifactSha256="0" * 64)
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("hash does not match", result["error"])
+        self.preset_request(id="1234567890ab")
+        (self.env.spool / "presets" / "1234567890ab.dsp").unlink()
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertIn("missing from the spool", result["error"])
+        self.assertEqual(self.env.live_profile(), "dsp-direct")
+        self.assertEqual(list(self.dsp_dir.iterdir()), [])
+
+    def test_loader_refusal_leaves_nothing_installed(self):
+        self.preset_request()
+        result = self.make(PresetRunner(self.env, loader_refuses=True)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("loader refused", result["error"])
+        self.assertEqual(list(self.dsp_dir.iterdir()), [])
+        self.assertNotIn("PROFILE_USER_", self.env.conf.read_text())
+
+    def test_replacing_a_slug_rewrites_one_block(self):
+        self.preset_request()
+        self.make(PresetRunner(self.env)).consume()
+        changed = self.artifact.replace(b"preset verify-transparent", b"preset verify-transparent v2")
+        self.preset_request(data=changed, id="feedfacefeed", expectedProfile="user-room-a-night")
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused", "the target is already live")
+        self.assertIn("already the live", result["error"])
+        # switch away, then replace
+        self.env.set_profile("dsp-direct")
+        self.preset_request(data=changed, id="feedfacefee1", expectedProfile="dsp-direct")
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertEqual(result["state"], "done", result)
+        conf = self.env.conf.read_text()
+        self.assertEqual(conf.count("PROFILE_USER_ROOM_A_NIGHT_TARGET="), 1)
+        self.assertEqual(conf.count("# user preset [user-room-a-night]"), 1)
+        self.assertEqual((self.dsp_dir / "user-room-a-night.dsp").read_bytes(), changed)
+
+    def test_slug_conflict_and_cap(self):
+        self.preset_request()
+        self.make(PresetRunner(self.env)).consume()
+        self.env.set_profile("dsp-direct")
+        self.preset_request(id="00000000ab", slug="room-a", expectedProfile="dsp-direct")
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("collide", result["error"])
+        for n in range(7):
+            self.preset_request(id=f"{n:010x}", slug=f"p{n}", expectedProfile="dsp-direct")
+            self.assertEqual(self.make(PresetRunner(self.env)).consume()["state"], "done")
+            self.env.set_profile("dsp-direct")
+        self.preset_request(id="aaaaaaaaaa", slug="ninth", expectedProfile="dsp-direct")
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertIn("remove one first", result["error"])
+
+    def test_remove(self):
+        self.preset_request()
+        self.make(PresetRunner(self.env)).consume()
+        (self.env.spool / "request.json").write_text(json.dumps({"id": "bbbbbbbbbb", "kind": "remove", "slug": "room-a-night",
+                                                                  "requestedAt": time.time()}))
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("live profile", result["error"])
+        self.env.set_profile("dsp-direct")
+        (self.env.spool / "request.json").write_text(json.dumps({"id": "cccccccccc", "kind": "remove", "slug": "room-a-night",
+                                                                  "requestedAt": time.time()}))
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertEqual(result["state"], "done", result)
+        self.assertNotIn("PROFILE_USER_", self.env.conf.read_text())
+        self.assertEqual(list(self.dsp_dir.iterdir()), [])
+
+    def test_profile_switch_to_a_user_block_needs_the_pinned_file(self):
+        self.preset_request()
+        self.make(PresetRunner(self.env)).consume()
+        self.env.set_profile("dsp-direct")
+        (self.dsp_dir / "user-room-a-night.dsp").write_bytes(b"tampered")
+        self.env.request(id="dddddddddd", profile="user-room-a-night", expectedProfile="dsp-direct")
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("not accepted", result["error"])

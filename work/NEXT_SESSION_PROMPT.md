@@ -1,26 +1,27 @@
 # Next-session pickup prompt
 
-## Current DSP pickup — Apply in service; next is the browser-side check or the next DSP item
+## Current DSP pickup — user presets staged; install and first live test next
 
-Read the handoff's last four entries (FOUND, ACCEPTED, STAGED, DONE
-2026-09-11). The DSP bridge 406699bd and the dsp-* profiles are the point of
-record under reference-events-v1; the service runs `dsp-direct`. UI Apply
-(step 5, first cut) is installed and armed: usb16x16-apply.path on the spool,
-usb16x16-web 1.2.0, the Settings page's "Service profile" panel. Its first Pi
-round trip (dsp-direct -> dsp-transparent -> dsp-direct) passed with zero
-RECOVERs; receipts in outputs/dsp-service/apply-roundtrip-20260911/. The live
-conf carries the acceptance labels (copy-dsp-labels.py); deploy.py rollback of
-the review bundle will now refuse on the conf, which goes back by hand from
-the bundle's baseline/ if ever needed.
+Read the handoff's last five entries (FOUND, ACCEPTED, STAGED, DONE x2,
+STAGED 2026-09-11). Accepted: DSP bridge 406699bd with dsp-direct /
+dsp-transparent / dsp-loaded under reference-events-v1; UI Apply in service
+(profile switches from the browser, verified, receipted, rolled back on
+failure). Staged, NOT installed: browser-compiled user presets: a supervisor
+regex change (user-<slug>.dsp paths), usb16x16-apply 1.1.0 (preset / remove
+kinds, artifact parser with the loader's bounds plus stability and a 308
+cap, offline-runner load check, block written from dsp-direct's fields,
+supervisor-validated conf replace), usb16x16-web 1.3.0 (POST/DELETE
+/api/apply/preset), the UI's "This draft on the Pi" and user preset list,
+the compiler served as web-ui/compiler/. Read work/web-control/README.md
+("User presets") first.
 
-The user's own browser Apply (dsp-direct -> dsp-loaded, 20:48 UTC) also
-passed, so the service now runs dsp-loaded. Open DSP items, in
-the order the record suggests: a browser-compiled preset reaching the bridge
-(artifact validation on the Pi first, then a conf block written under the
-supervisor's rules, then Apply of it); metering (needs the benchmarked tap);
-AoIP -> DSP -> AoIP (a supervision problem). Rules that stand: no coreaudiod
-kills, no measurement campaign without a stated purpose, every Pi root change
-stated and waited for, one variable at a time.
+Next: the user installs (supervisor with the service stopped, then
+install-web-control.sh, then restart usb16x16-web), then the first live test
+with playback off: Compile & apply this draft on the shipped layout, read the
+receipt (kind preset, stats, loaderLine, DSP loaded user-…dsp in the start
+lines), Apply profile back to dsp-direct, Remove. A user profile is
+STATUS=user and never accepted; do not soak it unless the user asks. Open
+after that: metering (needs the benchmarked tap), AoIP -> DSP -> AoIP.
 
 The earlier battery remains FAILED under its original zero-run criterion:
 `outputs/dsp-service/acceptance-20260911/RESULTS.md`. Direct/transparent passed
