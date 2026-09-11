@@ -1,0 +1,31 @@
+{
+  "error": "profile dsp-transparent is experimental, not accepted; Apply only switches between accepted profiles",
+  "finishedAt": "2026-09-11T20:35:38Z",
+  "id": "e7ef3cb11e777974",
+  "identity": {
+    "bridgeSha256": "406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88",
+    "confSha256": "c9be65851c2c31051ec86190ab9d4a7bb243a50cb7a5bd028d6d8ef3a4d7b4f7",
+    "supervisorSha256": "cdc0768d20036cd1ddb83608542b7b34320c0ee69fbbbf42f8fabda1aaece6c6"
+  },
+  "live": "dsp-direct",
+  "previousProfile": null,
+  "profile": null,
+  "request": {
+    "expectedProfile": "dsp-direct",
+    "profile": "dsp-transparent",
+    "requestedAt": 1789158938.1693788,
+    "requestedBy": "claude-ssh"
+  },
+  "startedAt": "2026-09-11T20:35:38Z",
+  "state": "refused",
+  "steps": [
+    {
+      "at": "2026-09-11T20:35:38Z",
+      "detail": "profile dsp-transparent is experimental, not accepted; Apply only switches between accepted profiles",
+      "name": "validating",
+      "ok": false
+    }
+  ],
+  "updatedAt": "2026-09-11T20:35:38Z",
+  "version": "1.0.0"
+}

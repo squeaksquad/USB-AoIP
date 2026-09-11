@@ -1,26 +1,26 @@
 # Next-session pickup prompt
 
-## Current DSP pickup — UI Apply staged, its first Pi run is the next step
+## Current DSP pickup — Apply in service; next is the browser-side check or the next DSP item
 
-Read the handoff's last three entries (FOUND, ACCEPTED, STAGED 2026-09-11).
-The DSP bridge 406699bd and the dsp-* profiles are the point of record under
-the reference-events-v1 criterion; the service runs `dsp-direct`. Step 5, UI
-Apply, is written and tested on the Mac but not installed: `work/web-control/`
-(usb16x16-apply, its .service and .path, usb16x16-web 1.2.0, the installer) and
-the Settings page's "Service profile" panel in `work/web-ui/`. Read
-`work/web-control/README.md` first: the two halves, the states, the API.
+Read the handoff's last four entries (FOUND, ACCEPTED, STAGED, DONE
+2026-09-11). The DSP bridge 406699bd and the dsp-* profiles are the point of
+record under reference-events-v1; the service runs `dsp-direct`. UI Apply
+(step 5, first cut) is installed and armed: usb16x16-apply.path on the spool,
+usb16x16-web 1.2.0, the Settings page's "Service profile" panel. Its first Pi
+round trip (dsp-direct -> dsp-transparent -> dsp-direct) passed with zero
+RECOVERs; receipts in outputs/dsp-service/apply-roundtrip-20260911/. The live
+conf carries the acceptance labels (copy-dsp-labels.py); deploy.py rollback of
+the review bundle will now refuse on the conf, which goes back by hand from
+the bundle's baseline/ if ever needed.
 
-Next: the user stages the files and installs (README Install); then the first
-Apply on the Pi is this step's acceptance test: playback off, `dsp-direct` ->
-`dsp-transparent` -> `dsp-direct` from the browser, each receipt in
-`~/usb-16x16-work/web-apply/receipts/` read (state, steps, start lines), the
-journal of usb16x16-apply and usb16x16-aes67 clean, zero RECOVERs after each
-start. If the applier misjudges a healthy start (its checks are the stage
-file, the BRIDGE line's freshness and restart counters, the recovers file and
-the DSP lines), fix the check, not the threshold, and re-run. Do not add
-preset installation or block editing to Apply until this is accepted; a
-browser-compiled preset reaching the bridge needs artifact validation on the
-Pi first. No coreaudiod kills, no measurement campaign for this step.
+Owed by the user, not a session: one Apply from the browser itself (Basic
+auth), which exercises the 202 / poll / receipt display. Open DSP items, in
+the order the record suggests: a browser-compiled preset reaching the bridge
+(artifact validation on the Pi first, then a conf block written under the
+supervisor's rules, then Apply of it); metering (needs the benchmarked tap);
+AoIP -> DSP -> AoIP (a supervision problem). Rules that stand: no coreaudiod
+kills, no measurement campaign without a stated purpose, every Pi root change
+stated and waited for, one variable at a time.
 
 The earlier battery remains FAILED under its original zero-run criterion:
 `outputs/dsp-service/acceptance-20260911/RESULTS.md`. Direct/transparent passed

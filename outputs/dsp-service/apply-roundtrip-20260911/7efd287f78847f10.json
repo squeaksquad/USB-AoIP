@@ -1,0 +1,71 @@
+{
+  "error": null,
+  "finishedAt": "2026-09-11T20:41:47Z",
+  "id": "7efd287f78847f10",
+  "identity": {
+    "bridgeSha256": "406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88",
+    "confSha256": "976a6080256854b52b9951ad4717d2aa4fc9f95b3872ef1d75aaa1ceb5b38270",
+    "supervisorSha256": "cdc0768d20036cd1ddb83608542b7b34320c0ee69fbbbf42f8fabda1aaece6c6"
+  },
+  "live": "dsp-direct",
+  "previousProfile": "dsp-transparent",
+  "profile": "dsp-direct",
+  "request": {
+    "expectedProfile": "dsp-transparent",
+    "profile": "dsp-direct",
+    "requestedAt": 1789159223.6098201,
+    "requestedBy": "claude-ssh"
+  },
+  "startLines": {
+    "dsp-direct": [
+      "NEGOTIATED usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384",
+      "PITCHSERVO enabled control=hw:CARD=UAC2Gadget mode=1 level_gain_ppm_per_frame=0.05 level_clamp_ppm=3 tx_depth=0 rx_depth=0 seed_ppm=0 level_shift=0",
+      "ALIGN status=ok offset_us=600 attempts=1 wakeups=8 tick_period_us=1000 wake_to_prepare_us=616 prepare_us=12 intervals_us=988/998/1001/998/1000/999/1000",
+      "PRIMED direction=ravenna-to-usb grid_phase_us=534 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=34 t_us=1404",
+      "PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=271 overshoot=28 trimmed=0 queue_prime=192 align_dropped=17 prime_phase_us=474 first_tick_wait_us=525 front_age_frames=296 under_prime=0 capture_wake_age_us=23 t_us=3858",
+      "ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=951 wake_to_start_us=951 target=prime slack_us=394 sleep_result=0 t_us=4328"
+    ]
+  },
+  "startedAt": "2026-09-11T20:40:23Z",
+  "state": "done",
+  "steps": [
+    {
+      "at": "2026-09-11T20:40:23Z",
+      "detail": "dsp-direct is accepted; live profile dsp-transparent",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T20:40:23Z",
+      "detail": "systemctl stop usb16x16-aes67.service",
+      "name": "stopping",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T20:40:29Z",
+      "detail": "/usr/local/sbin/usb16x16-aes67-supervisor switch-profile dsp-direct",
+      "name": "switching",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T20:40:29Z",
+      "detail": "systemctl start usb16x16-aes67.service",
+      "name": "starting",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T20:40:29Z",
+      "detail": "waiting up to 150 s for STAGE running",
+      "name": "verifying",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T20:41:17Z",
+      "detail": "30 s with zero RECOVERs and no direction restart",
+      "name": "settling",
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-09-11T20:41:47Z",
+  "version": "1.0.0"
+}

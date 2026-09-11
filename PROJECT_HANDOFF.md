@@ -10076,3 +10076,48 @@ is the acceptance test of this step: playback off, dsp-direct ->
 dsp-transparent -> dsp-direct from the browser, each receipt read, the
 supervisor's journal clean, zero RECOVERs after each start. Rollback is in
 the README (disable the path unit; or remove the five files).
+
+**DONE 2026-09-11 20:42 UTC: UI Apply installed, armed, and its first round trip on
+the Pi passed; the acceptance labels copied into the live conf.** The user
+ran install-web-control.sh, restarted usb16x16-web and enabled
+usb16x16-apply.path (~20:34 UTC), playback off. Evidence:
+outputs/dsp-service/apply-roundtrip-20260911/ (the three receipts and the
+journal window).
+
+(1) The first request (e7ef3cb1, dsp-direct -> dsp-transparent) was REFUSED
+in 0 s, nothing touched: the live conf still labelled the three DSP blocks
+STATUS=experimental, because the ACCEPTED entry moved the labels in the repo
+conf only. That is the applier doing exactly its job, and the omission was
+the record's own post-acceptance step. Fixed the record's way: a labels-only
+copy, work/aes67-bridge/dsp-accept-labels/copy-dsp-labels.py (the form of
+copy-sd103-labels.py: DESCRIPTION / STATUS / COVER / MEASURED of the three
+blocks from the shipped repo conf, atomic replace, no other line), dry run
+12 lines, applied by the user with sudo. The live conf is now 976a6080 (was
+c9be6585); the bundle's deploy.py rollback compares the conf byte for byte
+apart from PROFILE= and will refuse from here, so the baseline conf goes
+back by hand from outputs/dsp-service/review-20260911/baseline/ if ever
+needed (bridge and supervisor rollback are unaffected).
+
+(2) The round trip, driven from this session by writing the request file
+into the spool as bdimaio (the web service's exact write; the Basic-auth
+UI path is the user's to exercise): 3c9300fc dsp-direct -> dsp-transparent,
+validating 20:38:15, stop 6 s, switch-profile, start, STAGE running at
+20:39:08 (47 s), 30 s settle, done 20:39:38; the receipt's start lines show
+DSP loaded transparent.dsp 256 biquads, ALIGN ok, TX PRIMED front_age 296
+under_prime 0 overshoot 31 dropped 14, DSP engaged at t_us 4546. Then
+7efd287f dsp-transparent -> dsp-direct, the same shape, STAGE running at
+20:41:17 (48 s), done 20:41:47, no DSP lines, overshoot 28 dropped 17
+(overshoot + dropped 45 on both starts, as the record has it). Zero
+RECOVERs and zero direction restarts after each start, the supervisor's
+journal has no recover / fail / error line in the window, the applier's
+journal one line per operation. The service is back on dsp-direct, running,
+a fresh draw (a profile switch is a restart; the level was not measured
+and is not claimed).
+
+Step 5's first cut is therefore in service: profile switches between the
+accepted set from the Settings page, verified and receipted, with rollback
+built in and untested on real hardware because nothing failed (its path is
+covered by the Mac tests). Still the user's: one Apply from the browser
+itself, which also exercises the 202 / poll / receipt display. Next on the
+DSP side, if wanted: a browser-compiled preset reaching the bridge, which
+needs artifact validation on the Pi first; metering; AoIP -> DSP -> AoIP.
