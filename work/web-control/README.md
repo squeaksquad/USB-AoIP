@@ -46,7 +46,9 @@ this package from the dsp-verify build of the accepted source), installs it as
 `user-<slug>` whose transport fields are dsp-direct's copied verbatim plus the
 preset path and hash, has the supervisor's parser validate the whole file on a
 temporary copy, replaces the live conf atomically, and only then runs the
-switch. Such a block is `STATUS=user`, never `accepted`: the guards stand in
+switch. Such a block is `STATUS=experimental` (the supervisor's own word: it
+refuses to switch to anything but accepted or experimental) and is a user
+preset by its `user-<slug>` name; it is never `accepted`: the guards stand in
 for a soak and the panel says so. Eight user presets at most; a re-apply of the
 same name replaces its block and file; a slug may not be another's dash-prefix.
 

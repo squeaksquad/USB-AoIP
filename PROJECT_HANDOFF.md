@@ -10207,3 +10207,23 @@ in place). First live test: with playback off, Settings -> Compile & apply
 this draft on the shipped layout, the receipt read (stats, loaderLine,
 start lines: DSP loaded user-…dsp), then Apply profile back to dsp-direct,
 then Remove.
+
+**CORRECTION 2026-09-11 21:47 UTC to the STAGED entry above: a user block is
+STATUS=experimental, not STATUS=user.** Installed by the user (supervisor
+f3f099b9 with the service stopped, then the web-control package, ~21:40
+UTC), the first live draft apply (c55762df, the shipped layout, 46 biquads,
+23 internal channels) passed every guard on the Pi: hash, parser, the
+offline runner's load (14.7 us per 48-frame block), the file installed, the
+block written, the supervisor's parser validating the file; then the
+supervisor's switch-profile refused it: "STATUS must be accepted or
+experimental" (supervisor line 409, a check the applier's `profiles` pass
+does not exercise). The applier rolled back to dsp-direct cleanly (STAGE
+running after 47 s, 30 s settle, zero RECOVERs). Fixed by writing
+STATUS=experimental, the supervisor's own word for a profile it will switch
+to without an acceptance; the user identity is the user-<slug> name (the
+applier's user_profile_ok and the service's user flag both key on it). The
+stale STATUS=user block left in the live conf is replaced by the next apply
+of the same name. Not a supervisor change. Also fixed since the STAGED
+entry: the service serves /web-ui/<file> from its static root so the
+compiler's ../web-ui imports resolve in the browser (the first attempt
+failed to fetch model.mjs). Second live attempt pending.

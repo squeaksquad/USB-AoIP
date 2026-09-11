@@ -209,7 +209,9 @@ def conf_profiles(conf: dict[str, str]) -> list[dict]:
             "measured": field("MEASURED"),
             "cover": field("COVER"),
             "dspPreset": field("DSP_PRESET") or None,
-            "user": field("STATUS") == "user" and upper.startswith("USER_"),
+            # A user preset is what usb16x16-apply installed: named user-<slug>,
+            # STATUS=experimental in the supervisor's vocabulary.
+            "user": upper.startswith("USER_") and field("STATUS") == "experimental",
         })
     rows.sort(key=lambda row: (not row["accepted"], not row["user"], row["name"]))
     return rows

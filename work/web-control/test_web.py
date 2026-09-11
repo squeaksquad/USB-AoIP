@@ -92,7 +92,7 @@ class WebPresetTests(unittest.TestCase):
         (self.spool / "presets").mkdir(parents=True)
         self.conf = root / "aes67.conf"
         self.conf.write_text('PROFILE=dsp-direct\nPROFILE_DSP_DIRECT_STATUS=accepted\nPROFILE_DSP_DIRECT_TARGET=48\n'
-                             'PROFILE_USER_ROOM_STATUS=user\nPROFILE_USER_ROOM_TARGET=48\nPROFILE_USER_ROOM_DSP_PRESET=/etc/usb16x16/dsp/user-room.dsp\n')
+                             'PROFILE_USER_ROOM_STATUS=experimental\nPROFILE_USER_ROOM_TARGET=48\nPROFILE_USER_ROOM_DSP_PRESET=/etc/usb16x16/dsp/user-room.dsp\n')
         self.web = load(self.spool, self.conf)
 
     def tearDown(self):

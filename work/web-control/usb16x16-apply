@@ -44,8 +44,10 @@ count the loaded soak passed, loads it through the bridge's own code
 fields are dsp-direct's copied verbatim plus the preset path and hash, has the
 supervisor's own parser validate the resulting configuration before it
 replaces the live one, and only then runs the switch above. Such a block is
-STATUS=user, never accepted: the guards stand in for a soak, and the UI says
-so. A third kind, "remove", deletes a user block and its file when it is not
+STATUS=experimental (the supervisor's own vocabulary; it switches only to
+accepted or experimental profiles) and is identified as a user preset by its
+user-<slug> name; it is never accepted: the guards stand in for a soak, and
+the UI says so. A third kind, "remove", deletes a user block and its file when it is not
 the live profile. Eight user presets at most, one per slug.
 
 Exit status is 0 when a receipt was written (even for a refused or failed
@@ -370,7 +372,7 @@ def render_user_block(conf_text: str, slug: str, name: str, digest: str, stats: 
     lines = [
         f"{block_comment(slug)} \"{safe_name}\" written by usb16x16-apply {utc()}; transport fields copied from dsp-direct.",
         f'{key}DESCRIPTION="user preset: {safe_name} ({stats["biquads"]} biquads, max delay {stats["maxDelay"]} samples)"',
-        f"{key}STATUS=user",
+        f"{key}STATUS=experimental",
         f'{key}COVER="guards, not a soak: loaded by the bridge loader, {stats["biquads"]} stable sections, transport = dsp-direct"',
         f'{key}MEASURED="not measured"',
     ] + lines + [
@@ -546,9 +548,11 @@ class Applier:
         return table[name]
 
     def user_profile_ok(self, row: dict) -> bool:
-        """A user block this program wrote: STATUS=user, a user-<slug> name,
-        and the installed file still hashing to the block's pin."""
-        if row.get("status") != "user" or not row["name"].startswith("user-"):
+        """A user block this program wrote: a user-<slug> name (the identity),
+        STATUS=experimental (the supervisor's word for a profile it will
+        switch to without an acceptance: it refuses anything else), and the
+        installed file still hashing to the block's pin."""
+        if row.get("status") != "experimental" or not row["name"].startswith("user-"):
             return False
         preset = row.get("dspPreset") or ""
         return preset.startswith(str(DSP_DIR) + "/user-") and sha256_of(Path(preset)) == row.get("dspSha256")

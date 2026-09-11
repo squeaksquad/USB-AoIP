@@ -426,7 +426,7 @@ class PresetTests(unittest.TestCase):
         conf = self.env.conf.read_text()
         self.assertIn("PROFILE_USER_ROOM_A_NIGHT_TARGET=48", conf)
         self.assertIn("PROFILE_USER_ROOM_A_NIGHT_SINK_DELAY=103", conf)
-        self.assertIn("PROFILE_USER_ROOM_A_NIGHT_STATUS=user", conf)
+        self.assertIn("PROFILE_USER_ROOM_A_NIGHT_STATUS=experimental", conf)
         self.assertIn(f"PROFILE_USER_ROOM_A_NIGHT_DSP_PRESET={self.dsp_dir}/user-room-a-night.dsp", conf)
         self.assertNotIn("PROFILE_USER_ROOM_A_NIGHT_DSP_SHA256=2b6baa04", conf)
         self.assertIn("256 biquads", conf)
