@@ -10443,3 +10443,32 @@ the conf still describes 406699bd. Open on the DSP side after that:
 AoIP -> DSP -> AoIP; on the UI side, the live user preset inside the
 editor; and the meters' remaining wish, peak hold and RMS on the strips
 (the data is already in /api/meters).
+
+**MEASURED 2026-09-11 23:52 UTC: the meter-tap bridge 947e8b4d on dsp-direct,
+METERS=1, fresh anchor: 703 at 64 (4 x 800, spread 0), floors 83 / 72, zero
+RECOVERs through the whole battery; RTL at 32 pending.** The user restarted
+usb-16x16.service at 23:26:33 UTC (the AES67 service restarted itself; stable
+at 23:29); playback off, device idle. Battery driven from this session by
+work/dsp-service/meter_battery.py (new: validate.py's snapshot() and issues()
+without a bundle, since no review bundle carries this set; the same harness
+commands and gates as accept.py; --execute opens audio; no retry). Evidence:
+outputs/dsp-service/meters-accept-20260911/ (battery.log, per phase the
+before/after snapshots, harness logs, audio JSON and summary.json).
+- Preflight, 60 s continuous on all 16 returns at load 0.1: PASS, longest
+  zero run 1 sample on every return (the noise probe: clean), leads 1031 /
+  1038 us.
+- Latency, 4 x 800 at 64 frames: 703 / 703 / 703 / 703 samples, every run
+  min = max, peak 0.25; leads 980-1025 us across the runs.
+- Soak, 600 s continuous on all 16: PASS, every return at peak 0.1, longest
+  zero run 1; leads 1000 / 1010 us at the end.
+- Counters at the end of the soak: restarts 0/0, dropped 0/0, clip 0/0,
+  qlow 0/0, RECOVER 0; floors TX 83 / RX 72 from the first snapshot to the
+  last, depth floors 137 / 123, pull max 48 / 85, gaps 1082 / 1129 us;
+  meter_us_mean 1.36 us, meter_us_max 56.1 us (stepped 27 -> 56 once, during
+  latency run 2; the mean is the tap, the max is the audio thread's wake
+  jitter on one call, as the stage's 105 us max against a 52 us mean).
+703 is 22 under the record's 725 for this profile on a fresh anchor and
+inside the six no-DSP fresh-anchor draws' neighbourhood (716-725 before the
+DSP bridge; 670-722 on plain restarts): a start draw, read as one, n = 1.
+No claim that the tap moved the level either way. Expected RTL at 32:
+703 + 188 = 891 samples = 18.563 ms.

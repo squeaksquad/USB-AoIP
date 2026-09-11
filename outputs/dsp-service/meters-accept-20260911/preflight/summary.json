@@ -1,0 +1,99 @@
+{
+  "phase": "preflight",
+  "passed": true,
+  "runs": [
+    {
+      "index": 1,
+      "seconds": 60.8,
+      "errors": [],
+      "bridgeBefore": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "27.055",
+        "meter_us_mean": "1.522",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1019",
+        "rx_gapmax_us": "1099"
+      },
+      "bridgeAfter": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "27.055",
+        "meter_us_mean": "1.475",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1050",
+        "rx_gapmax_us": "1129"
+      },
+      "lead": [
+        1031,
+        1038
+      ],
+      "channels": [
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999465,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999465,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999465,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 0
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 0
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 0
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        }
+      ]
+    }
+  ]
+}

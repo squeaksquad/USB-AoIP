@@ -1,0 +1,146 @@
+{
+  "phase": "latency",
+  "passed": true,
+  "runs": [
+    {
+      "index": 1,
+      "seconds": 201.9,
+      "errors": [],
+      "bridgeBefore": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "27.055",
+        "meter_us_mean": "1.474",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1050",
+        "rx_gapmax_us": "1129"
+      },
+      "bridgeAfter": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "27.055",
+        "meter_us_mean": "1.420",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1050",
+        "rx_gapmax_us": "1129"
+      },
+      "lead": [
+        991,
+        997
+      ],
+      "latency": {
+        "medianSamples": 703,
+        "min": 703,
+        "max": 703,
+        "medianMs": 14.645833333333332,
+        "count": 800,
+        "peak": 0.24999902
+      }
+    },
+    {
+      "index": 2,
+      "seconds": 201.9,
+      "errors": [],
+      "bridgeBefore": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "27.055",
+        "meter_us_mean": "1.420",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1050",
+        "rx_gapmax_us": "1129"
+      },
+      "bridgeAfter": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "56.129",
+        "meter_us_mean": "1.401",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1053",
+        "rx_gapmax_us": "1129"
+      },
+      "lead": [
+        1022,
+        1024
+      ],
+      "latency": {
+        "medianSamples": 703,
+        "min": 703,
+        "max": 703,
+        "medianMs": 14.645833333333332,
+        "count": 800,
+        "peak": 0.24999902
+      }
+    },
+    {
+      "index": 3,
+      "seconds": 202.0,
+      "errors": [],
+      "bridgeBefore": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "56.129",
+        "meter_us_mean": "1.401",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1053",
+        "rx_gapmax_us": "1129"
+      },
+      "bridgeAfter": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "56.129",
+        "meter_us_mean": "1.389",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1053",
+        "rx_gapmax_us": "1129"
+      },
+      "lead": [
+        1020,
+        1025
+      ],
+      "latency": {
+        "medianSamples": 703,
+        "min": 703,
+        "max": 703,
+        "medianMs": 14.645833333333332,
+        "count": 800,
+        "peak": 0.24999902
+      }
+    },
+    {
+      "index": 4,
+      "seconds": 201.9,
+      "errors": [],
+      "bridgeBefore": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "56.129",
+        "meter_us_mean": "1.389",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1053",
+        "rx_gapmax_us": "1129"
+      },
+      "bridgeAfter": {
+        "tx_qfloor": "83",
+        "rx_qfloor": "72",
+        "meter_us_max": "56.129",
+        "meter_us_mean": "1.380",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1082",
+        "rx_gapmax_us": "1129"
+      },
+      "lead": [
+        980,
+        990
+      ],
+      "latency": {
+        "medianSamples": 703,
+        "min": 703,
+        "max": 703,
+        "medianMs": 14.645833333333332,
+        "count": 800,
+        "peak": 0.24999902
+      }
+    }
+  ]
+}
