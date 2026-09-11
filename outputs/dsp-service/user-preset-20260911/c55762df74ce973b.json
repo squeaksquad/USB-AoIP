@@ -1,0 +1,128 @@
+{
+  "error": "switch-profile refused: profile user-immersive-stereo-subs: STATUS must be accepted or experimental",
+  "finishedAt": "2026-09-11T21:46:46Z",
+  "id": "c55762df74ce973b",
+  "identity": {
+    "bridgeSha256": "406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88",
+    "confSha256": "44125ce696761b5e264b3440bbb4b912984ce190b811953769a753faefff1bed",
+    "supervisorSha256": "f3f099b92815608bb3cc8e1e553c3140eb4a7c2a9443306e3734ee9dbcf56f22"
+  },
+  "kind": "preset",
+  "live": "dsp-direct",
+  "loaderLine": "{\"block\":48,\"runs\":1,\"audio_us\":1000,\"min_us\":14.704,\"median_us\":14.704,\"p99_us\":14.704,\"max_us\":14.704,\"mean_us\":14.704,\"duty_median\":0.014704,\"duty_max\":0.014704}",
+  "previousProfile": "dsp-direct",
+  "profile": "user-immersive-stereo-subs",
+  "request": {
+    "artifactSha256": "60fad7b3a1319640b88451186bdcd087028428c6c44026d3f5ff410a8c1dd703",
+    "expectedProfile": "dsp-direct",
+    "kind": "preset",
+    "name": "Immersive \u00b7 stereo subs",
+    "profile": "user-immersive-stereo-subs",
+    "requestedAt": 1789163122.465618,
+    "requestedBy": "bryan",
+    "slug": "immersive-stereo-subs"
+  },
+  "startLines": {
+    "dsp-direct": [
+      "NEGOTIATED usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384",
+      "PITCHSERVO enabled control=hw:CARD=UAC2Gadget mode=1 level_gain_ppm_per_frame=0.05 level_clamp_ppm=3 tx_depth=0 rx_depth=0 seed_ppm=0 level_shift=0",
+      "ALIGN status=ok offset_us=600 attempts=1 wakeups=8 tick_period_us=999 wake_to_prepare_us=617 prepare_us=12 intervals_us=996/1001/996/999/999/999/996",
+      "PRIMED direction=ravenna-to-usb grid_phase_us=502 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=32 t_us=1330",
+      "PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=273 overshoot=30 trimmed=0 queue_prime=192 align_dropped=15 prime_phase_us=504 first_tick_wait_us=494 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=3821",
+      "ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=952 wake_to_start_us=952 target=prime slack_us=364 sleep_result=0 t_us=4260"
+    ],
+    "user-immersive-stereo-subs": [
+      "NEGOTIATED usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384",
+      "PITCHSERVO enabled control=hw:CARD=UAC2Gadget mode=1 level_gain_ppm_per_frame=0.05 level_clamp_ppm=3 tx_depth=0 rx_depth=0 seed_ppm=0 level_shift=0",
+      "ALIGN status=ok offset_us=600 attempts=1 wakeups=8 tick_period_us=1000 wake_to_prepare_us=615 prepare_us=10 intervals_us=981/1001/997/999/1000/1001/998",
+      "PRIMED direction=ravenna-to-usb grid_phase_us=481 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=35 t_us=906",
+      "PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=272 overshoot=29 trimmed=0 queue_prime=192 align_dropped=16 prime_phase_us=487 first_tick_wait_us=512 front_age_frames=296 under_prime=0 capture_wake_age_us=22 t_us=3403",
+      "ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=952 wake_to_start_us=952 target=prime slack_us=383 sleep_result=0 t_us=3861",
+      "PITCHSERVO engaged setpoint_frames=29 captured_frames=29 level_shift=0 ppm=-2 t_us=60000376"
+    ]
+  },
+  "startedAt": "2026-09-11T21:45:22Z",
+  "state": "rolled-back",
+  "stats": {
+    "biquads": 46,
+    "internal": 23,
+    "maxDelay": 0,
+    "preset": "Immersive \u00b7 stereo subs"
+  },
+  "steps": [
+    {
+      "at": "2026-09-11T21:45:22Z",
+      "detail": "46 biquads, internal 23, new user-immersive-stereo-subs",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:45:22Z",
+      "detail": "/usr/local/libexec/usb16x16-dsp-offline --bench 1 on the artifact (46 biquads)",
+      "name": "checking",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:45:22Z",
+      "detail": "/etc/usb16x16/dsp/user-immersive-stereo-subs.dsp and the user-immersive-stereo-subs block",
+      "name": "installing",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:45:24Z",
+      "detail": "user-immersive-stereo-subs is accepted; live profile dsp-direct",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:45:24Z",
+      "detail": "systemctl stop usb16x16-aes67.service",
+      "name": "stopping",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:45:28Z",
+      "detail": "/usr/local/sbin/usb16x16-aes67-supervisor switch-profile user-immersive-stereo-subs",
+      "name": "switching",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:45:28Z",
+      "detail": "switch-profile refused: profile user-immersive-stereo-subs: STATUS must be accepted or experimental; returning to dsp-direct",
+      "name": "rolling-back",
+      "ok": false
+    },
+    {
+      "at": "2026-09-11T21:45:29Z",
+      "detail": "systemctl stop usb16x16-aes67.service",
+      "name": "stopping",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:45:29Z",
+      "detail": "/usr/local/sbin/usb16x16-aes67-supervisor switch-profile dsp-direct",
+      "name": "switching",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:45:29Z",
+      "detail": "systemctl start usb16x16-aes67.service",
+      "name": "starting",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:45:29Z",
+      "detail": "waiting up to 150 s for STAGE running",
+      "name": "verifying",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T21:46:16Z",
+      "detail": "30 s with zero RECOVERs and no direction restart",
+      "name": "settling",
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-09-11T21:46:46Z",
+  "version": "1.1.0"
+}

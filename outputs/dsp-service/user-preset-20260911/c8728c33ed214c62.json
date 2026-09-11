@@ -1,0 +1,76 @@
+{
+  "error": null,
+  "finishedAt": "2026-09-11T22:10:27Z",
+  "id": "c8728c33ed214c62",
+  "identity": {
+    "bridgeSha256": "406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88",
+    "confSha256": "5889c39bba19b9b692d731a08962194c1ca35c72cd9b200cafe8c12ca454ae19",
+    "supervisorSha256": "f3f099b92815608bb3cc8e1e553c3140eb4a7c2a9443306e3734ee9dbcf56f22"
+  },
+  "kind": "profile",
+  "live": "dsp-direct",
+  "previousProfile": "user-immersive-stereo-subs",
+  "profile": "dsp-direct",
+  "request": {
+    "artifactSha256": null,
+    "expectedProfile": "user-immersive-stereo-subs",
+    "kind": null,
+    "name": null,
+    "profile": "dsp-direct",
+    "requestedAt": 1789164544.2090962,
+    "requestedBy": "bryan",
+    "slug": null
+  },
+  "startLines": {
+    "dsp-direct": [
+      "NEGOTIATED usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384",
+      "PITCHSERVO enabled control=hw:CARD=UAC2Gadget mode=1 level_gain_ppm_per_frame=0.05 level_clamp_ppm=3 tx_depth=0 rx_depth=0 seed_ppm=0 level_shift=0",
+      "ALIGN status=ok offset_us=600 attempts=1 wakeups=8 tick_period_us=1000 wake_to_prepare_us=617 prepare_us=13 intervals_us=979/1001/997/999/1000/1000/999",
+      "PRIMED direction=ravenna-to-usb grid_phase_us=562 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=34 t_us=1021",
+      "PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=270 overshoot=27 trimmed=0 queue_prime=192 align_dropped=18 prime_phase_us=439 first_tick_wait_us=560 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=3443",
+      "ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=952 wake_to_start_us=952 target=prime slack_us=430 sleep_result=0 t_us=3953"
+    ]
+  },
+  "startedAt": "2026-09-11T22:09:04Z",
+  "state": "done",
+  "steps": [
+    {
+      "at": "2026-09-11T22:09:04Z",
+      "detail": "dsp-direct is accepted; live profile user-immersive-stereo-subs",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:09:04Z",
+      "detail": "systemctl stop usb16x16-aes67.service",
+      "name": "stopping",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:09:10Z",
+      "detail": "/usr/local/sbin/usb16x16-aes67-supervisor switch-profile dsp-direct",
+      "name": "switching",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:09:10Z",
+      "detail": "systemctl start usb16x16-aes67.service",
+      "name": "starting",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:09:10Z",
+      "detail": "waiting up to 150 s for STAGE running",
+      "name": "verifying",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:09:57Z",
+      "detail": "30 s with zero RECOVERs and no direction restart",
+      "name": "settling",
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-09-11T22:10:27Z",
+  "version": "1.1.0"
+}

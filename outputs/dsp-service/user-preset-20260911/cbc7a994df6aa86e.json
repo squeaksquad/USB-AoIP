@@ -1,0 +1,103 @@
+{
+  "error": null,
+  "finishedAt": "2026-09-11T22:06:51Z",
+  "id": "cbc7a994df6aa86e",
+  "identity": {
+    "bridgeSha256": "406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88",
+    "confSha256": "80d99cb803630b59e65faed6895785b2a09fcd32efb07e1a587f5658e33c627e",
+    "supervisorSha256": "f3f099b92815608bb3cc8e1e553c3140eb4a7c2a9443306e3734ee9dbcf56f22"
+  },
+  "kind": "preset",
+  "live": "user-immersive-stereo-subs",
+  "loaderLine": "{\"block\":48,\"runs\":1,\"audio_us\":1000,\"min_us\":14.573,\"median_us\":14.573,\"p99_us\":14.573,\"max_us\":14.573,\"mean_us\":14.573,\"duty_median\":0.014573,\"duty_max\":0.014573}",
+  "previousProfile": "dsp-direct",
+  "profile": "user-immersive-stereo-subs",
+  "request": {
+    "artifactSha256": "60fad7b3a1319640b88451186bdcd087028428c6c44026d3f5ff410a8c1dd703",
+    "expectedProfile": "dsp-direct",
+    "kind": "preset",
+    "name": "Immersive \u00b7 stereo subs",
+    "profile": "user-immersive-stereo-subs",
+    "requestedAt": 1789164326.091787,
+    "requestedBy": "bryan",
+    "slug": "immersive-stereo-subs"
+  },
+  "startLines": {
+    "user-immersive-stereo-subs": [
+      "DSP loaded file=/etc/usb16x16/dsp/user-immersive-stereo-subs.dsp preset=\"Immersive \u00b7 stereo subs\" internal=23 biquads=46 delay_frames=0",
+      "NEGOTIATED usb_capture=48/192 usb_playback=48/192 ravenna_capture=48/192 ravenna_playback=48/384",
+      "PITCHSERVO enabled control=hw:CARD=UAC2Gadget mode=1 level_gain_ppm_per_frame=0.05 level_clamp_ppm=3 tx_depth=0 rx_depth=0 seed_ppm=0 level_shift=0",
+      "ALIGN status=ok offset_us=600 attempts=1 wakeups=8 tick_period_us=1000 wake_to_prepare_us=619 prepare_us=16 intervals_us=984/997/999/999/1000/998/1000",
+      "PRIMED direction=ravenna-to-usb grid_phase_us=444 intended=171 ring_at_prime=192 overshoot=21 trimmed=21 queue_prime=120 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1 under_prime=0 capture_wake_age_us=39 t_us=939",
+      "PRIMED direction=usb-to-ravenna grid_phase_us=-1 intended=243 ring_at_prime=275 overshoot=32 trimmed=0 queue_prime=192 align_dropped=13 prime_phase_us=559 first_tick_wait_us=440 front_age_frames=296 under_prime=0 capture_wake_age_us=24 t_us=3474",
+      "ALIGN trigger direction=usb-to-ravenna status=ok source=fresh-wake wake_age_us=952 wake_to_start_us=952 target=prime slack_us=304 sleep_result=0 t_us=3858",
+      "DSP engaged direction=usb-to-ravenna preset=\"Immersive \u00b7 stereo subs\" biquads=46 t_us=4466"
+    ]
+  },
+  "startedAt": "2026-09-11T22:05:26Z",
+  "state": "done",
+  "stats": {
+    "biquads": 46,
+    "internal": 23,
+    "maxDelay": 0,
+    "preset": "Immersive \u00b7 stereo subs"
+  },
+  "steps": [
+    {
+      "at": "2026-09-11T22:05:26Z",
+      "detail": "46 biquads, internal 23, replacing user-immersive-stereo-subs",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:05:26Z",
+      "detail": "/usr/local/libexec/usb16x16-dsp-offline --bench 1 on the artifact (46 biquads)",
+      "name": "checking",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:05:26Z",
+      "detail": "/etc/usb16x16/dsp/user-immersive-stereo-subs.dsp and the user-immersive-stereo-subs block",
+      "name": "installing",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:05:27Z",
+      "detail": "user-immersive-stereo-subs is accepted; live profile dsp-direct",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:05:27Z",
+      "detail": "systemctl stop usb16x16-aes67.service",
+      "name": "stopping",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:05:33Z",
+      "detail": "/usr/local/sbin/usb16x16-aes67-supervisor switch-profile user-immersive-stereo-subs",
+      "name": "switching",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:05:33Z",
+      "detail": "systemctl start usb16x16-aes67.service",
+      "name": "starting",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:05:33Z",
+      "detail": "waiting up to 150 s for STAGE running",
+      "name": "verifying",
+      "ok": true
+    },
+    {
+      "at": "2026-09-11T22:06:21Z",
+      "detail": "30 s with zero RECOVERs and no direction restart",
+      "name": "settling",
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-09-11T22:06:51Z",
+  "version": "1.1.0"
+}

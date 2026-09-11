@@ -10227,3 +10227,32 @@ of the same name. Not a supervisor change. Also fixed since the STAGED
 entry: the service serves /web-ui/<file> from its static root so the
 compiler's ../web-ui imports resolve in the browser (the first attempt
 failed to fetch model.mjs). Second live attempt pending.
+
+**DONE 2026-09-11 22:11 UTC: browser-compiled presets reach the bridge; the full
+cycle passed on the Pi from the user's browser.** Evidence:
+outputs/dsp-service/user-preset-20260911/ (four receipts). All by bryan,
+playback off, after the corrected package (usb16x16-web b3adaf1f,
+usb16x16-apply c7f2a162, supervisor f3f099b9) was installed at ~22:00 UTC:
+- c55762df 21:45 (the first attempt, before the correction): every guard
+  passed, switch-profile refused STATUS=user, rolled back clean.
+- cbc7a994 22:05:26 -> 22:06:51 preset: the shipped layout compiled in the
+  browser, 46 biquads / 23 internal channels, loader 14.7 us per block,
+  installed replacing the stale block, supervisor-validated, switched;
+  STAGE running after 48 s, 30 s settle, zero RECOVERs; start lines show
+  DSP loaded user-immersive-stereo-subs.dsp and DSP engaged at t_us 4466;
+  dsp_us mean 13.9 / max 80.4 on the first minute.
+- c8728c33 22:09:04 -> 22:10:27 profile: back to dsp-direct, done, zero
+  RECOVERs.
+- eeba6cc9 22:10:33 -> 22:10:35 remove: block stripped, conf validated and
+  replaced, file deleted, no restart. /etc/usb16x16/dsp holds the two
+  packaged presets again; the conf has no PROFILE_USER_ line.
+The service runs dsp-direct. Installed set now: bridge 406699bd, supervisor
+f3f099b9 (user-<slug>.dsp paths; install-aes67-service.sh pin moved),
+usb16x16-web 1.3.0, usb16x16-apply 1.1.0, usb16x16-dsp-offline 8469c2e8 in
+/usr/local/libexec, path unit armed. The Settings layout was tidied twice
+during the day (live panels only refreshed on a poll, overview back to one
+column, receipt steps collapsible). A user preset is STATUS=experimental,
+never accepted; its level is a draw and unmeasured, as every profile switch
+is. Open on the DSP side: metering (the benchmarked tap), AoIP -> DSP ->
+AoIP; on the UI side, showing which user preset is live inside the editor
+(the draft and the applied state are still only related by name).

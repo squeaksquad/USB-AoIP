@@ -1,0 +1,36 @@
+{
+  "error": null,
+  "finishedAt": "2026-09-11T22:10:35Z",
+  "id": "eeba6cc977916ddd",
+  "identity": {
+    "bridgeSha256": "406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88",
+    "confSha256": "976a6080256854b52b9951ad4717d2aa4fc9f95b3872ef1d75aaa1ceb5b38270",
+    "supervisorSha256": "f3f099b92815608bb3cc8e1e553c3140eb4a7c2a9443306e3734ee9dbcf56f22"
+  },
+  "kind": "remove",
+  "live": "dsp-direct",
+  "previousProfile": null,
+  "profile": "user-immersive-stereo-subs",
+  "request": {
+    "artifactSha256": null,
+    "expectedProfile": null,
+    "kind": "remove",
+    "name": null,
+    "profile": "user-immersive-stereo-subs",
+    "requestedAt": 1789164633.601958,
+    "requestedBy": "bryan",
+    "slug": "immersive-stereo-subs"
+  },
+  "startedAt": "2026-09-11T22:10:33Z",
+  "state": "done",
+  "steps": [
+    {
+      "at": "2026-09-11T22:10:33Z",
+      "detail": "user-immersive-stereo-subs block and /etc/usb16x16/dsp/user-immersive-stereo-subs.dsp",
+      "name": "removing",
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-09-11T22:10:35Z",
+  "version": "1.1.0"
+}

@@ -1,27 +1,28 @@
 # Next-session pickup prompt
 
-## Current DSP pickup — user presets staged; install and first live test next
+## Current DSP pickup — user presets in service; next is metering or AoIP-only
 
-Read the handoff's last five entries (FOUND, ACCEPTED, STAGED, DONE x2,
-STAGED 2026-09-11). Accepted: DSP bridge 406699bd with dsp-direct /
-dsp-transparent / dsp-loaded under reference-events-v1; UI Apply in service
-(profile switches from the browser, verified, receipted, rolled back on
-failure). Staged, NOT installed: browser-compiled user presets: a supervisor
-regex change (user-<slug>.dsp paths), usb16x16-apply 1.1.0 (preset / remove
-kinds, artifact parser with the loader's bounds plus stability and a 308
-cap, offline-runner load check, block written from dsp-direct's fields,
-supervisor-validated conf replace), usb16x16-web 1.3.0 (POST/DELETE
-/api/apply/preset), the UI's "This draft on the Pi" and user preset list,
-the compiler served as web-ui/compiler/. Read work/web-control/README.md
-("User presets") first.
+Read the handoff's 2026-09-11 entries from FOUND onward (the last eight).
+Accepted: DSP bridge 406699bd with dsp-direct / dsp-transparent / dsp-loaded
+under reference-events-v1. In service: UI Apply (profile switches, verified,
+receipted, rolled back on failure) and browser-compiled user presets (the
+page compiles with the verified compiler served as web-ui/compiler/, the
+applier validates by loading through the bridge's own runner, installs
+user-<slug>.dsp and a STATUS=experimental block copied from dsp-direct's
+transport, the supervisor validates the file, then the switch). The full
+cycle passed from the user's browser (outputs/dsp-service/user-preset-
+20260911/). Installed: supervisor f3f099b9, usb16x16-web 1.3.0,
+usb16x16-apply 1.1.0, usb16x16-dsp-offline 8469c2e8; the service runs
+dsp-direct. Read work/web-control/README.md before touching any of it.
 
-Next: the user installs (supervisor with the service stopped, then
-install-web-control.sh, then restart usb16x16-web), then the first live test
-with playback off: Compile & apply this draft on the shipped layout, read the
-receipt (kind preset, stats, loaderLine, DSP loaded user-…dsp in the start
-lines), Apply profile back to dsp-direct, Remove. A user profile is
-STATUS=user and never accepted; do not soak it unless the user asks. Open
-after that: metering (needs the benchmarked tap), AoIP -> DSP -> AoIP.
+Rules that stand: a user preset is never accepted and never soaked unless
+the user asks; every profile switch is a restart and a new draw; Pi root
+changes are stated and waited for; no coreaudiod kills; no measurement
+campaign without a stated purpose. Open, in the record's order: metering
+(a benchmarked tap in the bridge, published through preallocated snapshots,
+never a second ALSA stream); AoIP -> DSP -> AoIP (the supervisor's failure
+model waits on the USB host); in the UI, showing which user preset is live
+inside the editor rather than only by name in Settings.
 
 The earlier battery remains FAILED under its original zero-run criterion:
 `outputs/dsp-service/acceptance-20260911/RESULTS.md`. Direct/transparent passed
