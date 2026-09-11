@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include <cstring>
+#include <type_traits>
 
 namespace usb16x16 {
 
@@ -597,6 +598,78 @@ bool ImpulseTraceDetector::pop_event(Event& event) noexcept {
     queue_head_ = (queue_head_ + 1) % kEventCapacity;
     --queue_count_;
     return true;
+}
+
+static_assert(std::is_trivially_copyable_v<LevelMeter::Snapshot>,
+              "the seqlock copies the snapshot with memcpy");
+
+LevelMeter::LevelMeter(const std::size_t window_frames) noexcept
+    : window_frames_(window_frames == 0 ? kDefaultWindowFrames : window_frames) {}
+
+void LevelMeter::observe(const float* interleaved, const std::size_t frames) noexcept {
+    // Sixteen lanes of locals so the block pass vectorises: peak, the square
+    // sum in float over this block only (at most 512 frames, well inside
+    // float's precision), and the full-scale count.
+    std::array<float, kChannels> peak{};
+    std::array<float, kChannels> squares{};
+    std::array<std::uint32_t, kChannels> clipped{};
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        const float* row = interleaved + frame * kChannels;
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            const float sample = row[channel];
+            const float magnitude = std::fabs(sample);
+            peak[channel] = std::max(peak[channel], magnitude);
+            squares[channel] += sample * sample;
+            // The same test exceeds_full_scale() makes, inlined: at or above
+            // +1.0 (not representable in either integer format) or below -1.0.
+            clipped[channel] += (!(sample < 1.0F) || sample < -1.0F) ? 1U : 0U;
+        }
+    }
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        open_.peak[channel] = std::max(open_.peak[channel], peak[channel]);
+        open_.sum_squares[channel] += static_cast<double>(squares[channel]);
+        open_.clipped[channel] += clipped[channel];
+    }
+    open_.frames += static_cast<std::uint32_t>(frames);
+    open_.position += frames;
+    if (open_.frames >= window_frames_) {
+        publish();
+    }
+}
+
+void LevelMeter::publish() noexcept {
+    ++open_.sequence;
+    const std::uint64_t sequence = published_sequence_.load(std::memory_order_relaxed);
+    published_sequence_.store(sequence + 1, std::memory_order_relaxed);
+    std::atomic_thread_fence(std::memory_order_release);
+    published_ = open_;
+    std::atomic_thread_fence(std::memory_order_release);
+    published_sequence_.store(sequence + 2, std::memory_order_release);
+    // The clip counts carry on; everything else starts the next window empty.
+    open_.peak.fill(0.0F);
+    open_.sum_squares.fill(0.0);
+    open_.frames = 0;
+}
+
+bool LevelMeter::read(Snapshot& out) const noexcept {
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        const std::uint64_t before = published_sequence_.load(std::memory_order_acquire);
+        if (before == 0) {
+            return false;
+        }
+        if ((before & 1U) != 0U) {
+            continue;
+        }
+        Snapshot copy;
+        std::memcpy(&copy, &published_, sizeof copy);
+        std::atomic_thread_fence(std::memory_order_acquire);
+        const std::uint64_t after = published_sequence_.load(std::memory_order_relaxed);
+        if (before == after) {
+            out = copy;
+            return true;
+        }
+    }
+    return false;
 }
 
 std::int32_t unpack_s24le(const std::uint8_t* source) noexcept {

@@ -1,8 +1,8 @@
 # Next-session pickup prompt
 
-## Current DSP pickup — user presets in service; next is metering or AoIP-only
+## Current DSP pickup — the meter tap is STAGED, not built; the build is next
 
-Read the handoff's 2026-09-11 entries from FOUND onward (the last eight).
+Read the handoff's 2026-09-11 entries from FOUND onward (the last nine).
 Accepted: DSP bridge 406699bd with dsp-direct / dsp-transparent / dsp-loaded
 under reference-events-v1. In service: UI Apply (profile switches, verified,
 receipted, rolled back on failure) and browser-compiled user presets (the
@@ -15,12 +15,26 @@ cycle passed from the user's browser (outputs/dsp-service/user-preset-
 usb16x16-apply 1.1.0, usb16x16-dsp-offline 8469c2e8; the service runs
 dsp-direct. Read work/web-control/README.md before touching any of it.
 
+STAGED 2026-09-11 22:45 UTC (the last entry): the level meter tap.
+`LevelMeter` in the bridge core, `--meter-file` in the bridge (four stage
+taps, prime excluded, timed as meter_us_max on the BRIDGE line, a
+SCHED_OTHER publisher rewriting /run/usb16x16/meters every 50 ms window),
+supervisor key METERS (default 1), usb16x16-web 1.4.0 with /api/meters,
+the page drawing live peaks with a clip hold. Mac-verified only: core
+tests 30, syntax check, 94 node tests, 13 web tests, the in-memory bench
+(0.21 us per 48-frame block on the Mac). Staged on the Pi under
+~/usb-16x16-work/meters-20260911/. The user's next steps are listed at
+the end of that entry: service stopped, build, tests and bench on the Pi,
+bridge hash into the three pins and artifacts/, install, the standing
+battery on dsp-direct. A RECOVER pair at 22:23:51 UTC coincided with a
+`find /usr` from that session: no filesystem walks on the Pi during a
+run, alongside no transfers and no builds.
+
 Rules that stand: a user preset is never accepted and never soaked unless
 the user asks; every profile switch is a restart and a new draw; Pi root
 changes are stated and waited for; no coreaudiod kills; no measurement
 campaign without a stated purpose. Open, in the record's order: metering
-(a benchmarked tap in the bridge, published through preallocated snapshots,
-never a second ALSA stream); AoIP -> DSP -> AoIP (the supervisor's failure
+(staged, see above; build and accept); AoIP -> DSP -> AoIP (the supervisor's failure
 model waits on the USB host); in the UI, showing which user preset is live
 inside the editor rather than only by name in Settings.
 

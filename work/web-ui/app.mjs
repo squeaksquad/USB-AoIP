@@ -5,7 +5,7 @@ import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphoneP
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS } from './backend.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
 let channelClipboard = null, pasteScope = 'processing', layoutUndo = null, rewParsed = null;
@@ -15,6 +15,10 @@ let selectedBand = 0, eqDrag = null, eqObserver;
 let logService = 'all', logQuery = '';
 // Live state from the Pi control service; null whenever no backend answers.
 let health = null, logBusy = false;
+// The bridge's meter tap: the last window read, when, and a clip hold per strip.
+let liveMeters = null, liveMetersAt = 0, meterBusy = false;
+const clipHold = {inputs: new Array(16).fill(0), outputs: new Array(16).fill(0)};
+const clipSeen = {inputs: new Array(16).fill(null), outputs: new Array(16).fill(null)};
 // Staged Apply (Settings): the chosen target, the last status seen, and the poll that follows an operation.
 let applyChoice = '', applyStatus = null, applyBusy = false, applyPoll = null;
 const logLive = {all:'',aes67:'',usb:''};
@@ -668,7 +672,7 @@ document.addEventListener('click', event => {
   if (b.dataset.action==='copy-journal') {copyCommand(journalCommand(logService));return;}
   if (b.dataset.tab) { tab = b.dataset.tab; render(); return; }
   if (b.dataset.select !== undefined) { selected = Number(b.dataset.select); selectedBand = 0; renderBank(); renderOverview(); renderInspector(); updateMeters(); return; }
-  if (b.id === 'meter-toggle') { metersRunning = !metersRunning; b.textContent = metersRunning ? 'Pause demo meters' : 'Resume demo meters'; updateMeters(); return; }
+  if (b.id === 'meter-toggle') { metersRunning = !metersRunning; syncMeterLabels(); updateMeters(); return; }
   if (b.dataset.mode) { config.mode = b.dataset.mode; markDraft(); render(); return; }
   if (b.dataset.source) { config.source = b.dataset.source; markDraft(); render(); return; }
   if (b.dataset.mute !== undefined) { const o = config.outputs[Number(b.dataset.mute)]; o.mute = !o.mute; markDraft(); render(); return; }
@@ -915,24 +919,71 @@ document.addEventListener('change', async event => {
   else if (el.dataset.sendGain || id==='headroom') refreshSumBounds();
 });
 
+/** The live window if the tap answered within the last 1.5 s, else null. */
+function currentLiveMeters() {
+  return liveMeters && performance.now() - liveMetersAt < 1500 ? liveMeters : null;
+}
+
+function syncMeterLabels() {
+  const live = Boolean(currentLiveMeters());
+  const toggle = $('#meter-toggle');
+  if (toggle) toggle.textContent = live ? (metersRunning ? 'Pause meters' : 'Resume meters') : (metersRunning ? 'Pause demo meters' : 'Resume demo meters');
+  const summary = $('#input-meters summary');
+  if (summary) summary.textContent = live ? 'Input meters · USB from the host · live, before the DSP stage' : 'Input meters · selected source · simulated';
+}
+
+// One strip from a live channel: the window's peak in dBFS, a clip hold of
+// 1.5 s whenever the cumulative clip count moved since the last window.
+function drawLiveStrip(bank, i, channel, bar, label, now) {
+  const db = metersRunning ? channel.peak : -60;
+  if (bar) bar.style.setProperty('--level',`${Math.max(0,Math.min(100,(db+60)/60*100))}%`);
+  const seen = clipSeen[bank][i];
+  if (seen !== null && channel.clipped > seen) clipHold[bank][i] = now + 1500;
+  clipSeen[bank][i] = channel.clipped;
+  if (label) {
+    label.textContent = !metersRunning || db <= -60 ? '—' : db.toFixed(1);
+    label.classList.toggle('clip', clipHold[bank][i] > now);
+  }
+}
+
 function updateMeters() {
   if (document.hidden || tab!=='outputs') return;
-  const t = performance.now()/1000;
+  const now = performance.now(), t = now/1000;
+  const live = currentLiveMeters();
   config.outputs.forEach((o,i)=>{
+    const bar = $(`#meter-${i}`), label = $(`#level-${i}`);
+    if (live) { drawLiveStrip('outputs', i, live.outputs[i], bar, label, now); return; }
     const bus = config.buses?.find(b=>b.id===o.busId);
     const quiet = !metersRunning || (config.mode==='dsp' && (o.role==='unused'||o.mute||bus?.mute));
     // Deliberately synthetic display activity, never represented as a DSP/audio simulation.
     const db = quiet ? -60 : -25 + 8*Math.sin(t*1.4+i*.67) + 3*Math.sin(t*3.1+i);
-    const bar = $(`#meter-${i}`), label = $(`#level-${i}`);
     if (bar) bar.style.setProperty('--level',`${Math.max(0,(db+60)/60*100)}%`);
-    if (label) label.textContent = quiet ? '—' : db.toFixed(1);
+    if (label) { label.textContent = quiet ? '—' : db.toFixed(1); label.classList.remove('clip'); }
   });
   if ($('#input-meters').open) config.inputs.forEach((o,i)=>{
+    const bar = $(`#input-meter-${i}`), label = $(`#input-level-${i}`);
+    if (live) { drawLiveStrip('inputs', i, live.inputs[i], bar, label, now); return; }
     const db = metersRunning ? -29+9*Math.sin(t*1.2+i*.6) : -60;
-    $(`#input-meter-${i}`).style.setProperty('--level',`${Math.max(0,(db+60)/60*100)}%`);
-    $(`#input-level-${i}`).textContent = metersRunning ? db.toFixed(1) : '—';
+    bar.style.setProperty('--level',`${Math.max(0,(db+60)/60*100)}%`);
+    label.textContent = metersRunning ? db.toFixed(1) : '—';
+    label.classList.remove('clip');
   });
 }
+
+// Read the tap at up to 10 Hz, only while the Outputs page is on screen and
+// the service says a tap exists; one request in flight at a time, so a slow
+// answer thins the rate rather than queueing.
+async function pollMeters() {
+  if (meterBusy || document.hidden || tab!=='outputs' || !health?.meters?.available) return;
+  meterBusy = true;
+  try {
+    const levels = meterLevels(await fetchMeters());
+    const wasLive = Boolean(currentLiveMeters());
+    if (levels) { liveMeters = levels; liveMetersAt = performance.now(); }
+    if (wasLive !== Boolean(currentLiveMeters())) syncMeterLabels();
+  } finally { meterBusy = false; }
+}
+setInterval(() => { pollMeters(); if (liveMeters && !currentLiveMeters()) { liveMeters = null; syncMeterLabels(); } }, METER_POLL_MS);
 $('.brand').addEventListener('click',event=>{event.preventDefault(); tab='outputs';render();});
 $('#eq-dialog').addEventListener('close',()=>{endEqDrag(true);renderOverview();});
 // Narrow screens open with the meter bank collapsed: less scrolling before the controls.

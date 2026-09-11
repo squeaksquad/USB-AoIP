@@ -669,3 +669,4 @@ input[type=checkbox],input[type=radio]{background:none;border:0;box-shadow:none;
 .apply-steps-details { margin-top: 8px; font-size: 12px; }
 .apply-steps-details summary { cursor: pointer; color: var(--muted); }
 .apply-presets code, .apply-draft code { font-size: 11px; }
+.meter-value.clip{color:#e58276;font-weight:600}

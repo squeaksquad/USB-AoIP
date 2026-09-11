@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -395,6 +396,74 @@ private:
     std::uint64_t events_{};
     std::uint64_t dropped_events_{};
 };
+
+// Level meter tap (2026-09-11): per-channel peak, sum of squares and
+// full-scale count over a window of frames, taken from a block already in
+// hand at each of the four points where audio enters or leaves the bridge.
+// It reads the buffer and writes nothing into it. The window closes on the
+// first block boundary at or past window_frames, so a window is between
+// window_frames and window_frames plus one block long and carries its own
+// frame count; RMS is sum_squares / frames. The clip counts are cumulative
+// since construction so a client that polls slower than a window still sees
+// every full-scale sample; the peaks are per window, which is why a reader
+// that wants to hold them must read at least once per window.
+//
+// Real-time contract. observe() runs on the audio thread: fixed storage, no
+// allocation, no lock, no syscall, one pass over the block. The finished
+// window is published through a seqlock: the writer bumps a sequence to odd,
+// copies the window in, bumps it to even; a reader copies the snapshot out
+// and keeps it only when the sequence was even and unchanged across the copy.
+// The writer never waits for a reader; a reader that keeps losing the race
+// (it cannot, at one write per 50 ms) gives up after a bounded number of
+// tries and reports no snapshot.
+class LevelMeter {
+public:
+    struct Snapshot {
+        // Windows published so far; 0 until the first one closes.
+        std::uint64_t sequence{};
+        // Stream frames observed at the end of this window.
+        std::uint64_t position{};
+        // Frames in this window.
+        std::uint32_t frames{};
+        // Largest |sample| in the window, per channel.
+        std::array<float, kChannels> peak{};
+        // Sum of sample squares over the window, per channel.
+        std::array<double, kChannels> sum_squares{};
+        // Samples the integer converters would clamp, per channel, since construction.
+        std::array<std::uint64_t, kChannels> clipped{};
+    };
+    static constexpr std::size_t kDefaultWindowFrames = 2400;  // 50 ms at 48 kHz
+
+    LevelMeter() = default;
+    explicit LevelMeter(std::size_t window_frames) noexcept;
+
+    void observe(const float* interleaved, std::size_t frames) noexcept;
+    // Copies the last published window. False until one has been published
+    // or when a consistent copy could not be taken.
+    [[nodiscard]] bool read(Snapshot& out) const noexcept;
+    [[nodiscard]] std::size_t window_frames() const noexcept { return window_frames_; }
+    // Windows published; the same figure a reader sees in Snapshot::sequence.
+    [[nodiscard]] std::uint64_t sequence() const noexcept { return published_sequence_.load(std::memory_order_relaxed) / 2; }
+
+private:
+    void publish() noexcept;
+
+    std::size_t window_frames_{kDefaultWindowFrames};
+    // The open window, writer-private.
+    Snapshot open_{};
+    // The published window and its seqlock word: odd while the writer is
+    // copying, and twice the number of windows published otherwise.
+    Snapshot published_{};
+    std::atomic<std::uint64_t> published_sequence_{0};
+};
+
+// 20 log10 of an amplitude in dBFS, floored so silence prints a number.
+[[nodiscard]] inline double amplitude_to_dbfs(const double amplitude, const double floor_db = -144.0) noexcept {
+    if (!(amplitude > 0.0)) {
+        return floor_db;
+    }
+    return std::max(floor_db, 20.0 * std::log10(amplitude));
+}
 
 [[nodiscard]] std::int32_t unpack_s24le(const std::uint8_t* source) noexcept;
 void pack_s24le(std::int32_t sample, std::uint8_t* destination) noexcept;

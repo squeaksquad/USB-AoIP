@@ -12,7 +12,7 @@ prototype. Every live panel falls back to "Not connected" rather than showing a
 stale or invented value, and presets go to browser storage.
 
 Either way it does not process audio, invoke services, or generate deployable
-CamillaDSP YAML. Meters are synthetic display activity in both modes; measured
+CamillaDSP YAML. Meters are the bridge's live tap when the service reports one, synthetic display activity otherwise; measured
 latency and added DSP cost remain explicitly unavailable. The existing bridge is
 unchanged.
 
@@ -72,10 +72,19 @@ than leaving stale numbers on screen.
   USB ↔ AoIP bridge; DSP processor mode stays a draft, and the panel names what
   is still missing before it could run.
 
-Not supplied, on purpose: live meters (the bridge has no tap, and opening a
-second ALSA stream to read levels would compete with the audio path) and any
-control action (Run on Pi stays disabled, and the service answers 501 to the
-control routes so the boundary is visible from the API).
+- **Meters** (2026-09-11) come from the bridge's own tap when `/api/health`
+  reports `meters.available`: the page reads `/api/meters` at up to 10 Hz while
+  the Outputs tab is visible, draws the window's peak in dBFS on the input bank
+  (USB from the host, before the DSP stage) and the output bank (what leaves on
+  AES67, after it), and holds a clip mark for 1.5 s whenever a channel's
+  cumulative clip count moves. The summary and the toggle say "live"; with the
+  tap absent or stale for 1.5 s the page falls back to its synthetic display
+  activity, labelled as such. Mutes and roles do not shape live values: they
+  are what the wire carries.
+
+Not supplied, on purpose: any control action beyond Apply (the service
+answers 501 to the other control routes so the boundary is visible from the
+API).
 
 ## Agreed scope
 
@@ -418,7 +427,7 @@ Application contract. `work/web-control/usb16x16-web` implements the read half:
 | Operation | Behavior | State |
 | --- | --- | --- |
 | Read state | Actual mode/source, connection, PTP, USB, streams, engine health and applied revision; unavailable is not zero/healthy | `GET /api/health` |
-| Subscribe meters | Timestamped input/output peaks and RMS with clipping counters, tap location, mode and revision | Not implemented; needs the bridge tap |
+| Subscribe meters | Timestamped input/output peaks and RMS with clipping counters, tap location, mode and revision | `GET /api/meters` (2026-09-11): the bridge's 50 ms window per stage, peak and RMS in dBFS, cumulative clip counts, stage names and where they sit; polled, not pushed |
 | Read/write preset | Versioned configuration, separate from applied device state | `GET/PUT/DELETE /api/presets` |
 | Validate draft | Schema + output budgets + installed engine compatibility; return restart requirement and proposed changes | Not implemented |
 | Apply revision | Serialized operation with expected revision and operation ID; never launch two owners of a PCM device | `POST /api/apply/profile` (2026-09-11): a switch between accepted profiles only, the browser naming the profile it believes is live; the root applier `usb16x16-apply` does the stop / switch-profile / start / verify / rollback and writes a receipt. Applying the editor's own draft is still not implemented |

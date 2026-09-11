@@ -10256,3 +10256,108 @@ never accepted; its level is a draw and unmeasured, as every profile switch
 is. Open on the DSP side: metering (the benchmarked tap), AoIP -> DSP ->
 AoIP; on the UI side, showing which user preset is live inside the editor
 (the draft and the applied state are still only related by name).
+
+**STAGED 2026-09-11 22:45 UTC, not built and not installed: the level meter tap,
+the DSP roadmap's metering item, as a benchmarked tap in the bridge published
+through a preallocated snapshot, never a second ALSA stream.** The three
+halves, all in the repo and staged on the Pi under
+~/usb-16x16-work/meters-20260911/ (phase4-src, aes67, web-control, web-ui;
+staged hashes checked against the repo's); nothing live was touched.
+
+(1) The bridge. `LevelMeter` in bridge_core (hpp 9d1fb083, cpp df7ccee0):
+one pass over a block already in hand, sixteen lanes of peak, float square
+sum and full-scale count (the same test exceeds_full_scale makes, so the
+per-channel clip counts add up to tx_clip / rx_clip), folded into a window
+that closes on the first block boundary at or past 2400 frames (50 ms) and
+carries its own frame count; the closed window is published through a
+seqlock (odd while the writer copies, even otherwise, the reader keeps a
+copy only when the word was even and unchanged across it, eight tries then
+"no snapshot"); clip counts are cumulative since start so a reader slower
+than a window loses no overload, peaks are per window. main.cpp (031138b4):
+`--meter-file PATH`, off by default, in which case no block is read and the
+audio path is the accepted one; on, both directions tap their capture block
+after the ring push and their playback block after the write loop (after the
+DSP stage on TX, so the output meters read the wire), the prime render
+excluded like it is unfiltered (renders_after_prime now counts in direct
+mode too, behaviour-free: it is only read by the stage); each observe is
+timed with the two clock reads the stage uses, reported as `meter_us_max`
+and `meter_us_mean` on the BRIDGE line (after dsp_calls) and in SUMMARY
+(`meter_us_max`, `meter_us_mean`, `meter_calls`); a publisher thread,
+demoted to SCHED_OTHER (a std::thread inherits FIFO 90), polls the four taps
+every 25 ms and rewrites PATH by rename when any window moved: a `METERS
+v=1 t_us= window_frames= writes=` line and one `TAP stage= seq= frames=
+position= peak_dbfs= rms_dbfs= clip=` line per stage, dB to one decimal,
+silence floored at -144. `usb16x16-meter-bench` (src/meter_bench.cpp
+3aaff8a8, CMakeLists 8b023e0c; core only, not installed) times observe() in
+memory. Mac figures (Apple silicon, hot cache): 48 frames 0.21 us median /
+0.33 p99, 96 0.42 / 0.63, 192 0.83 / 1.17, 512 2.25 / 7.1; the maxima
+(24-54 us) are macOS preemption. Two taps per direction per cycle, so on
+the Pi expect a few microseconds against the stage's 68 us median at 48
+frames; the Pi figure is the one to record, at the build.
+
+(2) The supervisor (70af8abb) and conf (b01588df). Global key `METERS`
+(0/1, absent 1) passes `--meter-file /run/usb16x16/meters`; the file is
+removed at run start, at bridge start and in cleanup; `status` shows
+meter_us_max. The conf documents the key with its default. Validated: the
+staged supervisor's `profiles` over the staged conf on the Pi (read-only)
+lists the seven blocks unchanged. install-aes67-service.sh pins moved for
+the supervisor and the conf; the bridge pin (406699bd) and install-candidate.sh
+stay until the build. The live conf keeps its labels-copy divergence.
+
+(3) usb16x16-web 1.4.0 (172b7032; install-web-control.sh pin moved) and
+the UI. `GET /api/meters`: the file parsed once per version (mtime cache),
+fresh on every request, `available:false` with the reason when the file is
+missing (bridge stopped or METERS=0), unparseable, or older than 1 s; the
+health fast tier carries `meters` (available, endpoint, stages, windowMs)
+and the bridge block gains `meterUsMax` and `dspUsMax`. The page
+(app.mjs 630b9fdf, backend.mjs 904a8a23, style.css 39b3f54b): while
+health says a tap exists and the Outputs tab is visible it reads
+/api/meters at up to 10 Hz, one request in flight, draws the window's peak
+in dBFS on the input bank (usb-capture: the host's USB output, before the
+stage) and the output bank (ravenna-playback: the wire, after it), holds a
+clip mark 1.5 s when a channel's cumulative count moves, and says "live"
+in the summary, the toggle and the connection line; absent or stale for
+1.5 s it returns to the synthetic activity, labelled as such. Mutes and
+roles do not shape live values.
+
+Verified on the Mac: bridge core tests 30 (four new: a window's peak / RMS
+/ clip arithmetic including that +1.0 clips and -1.0 does not, window
+closing on block boundaries and a 512-frame straddle, cumulative clips, and
+a writer thread against a reader with no torn snapshot in thousands of
+reads); main.cpp syntax-checked clean (clang -std=c++20 -Wall -Wextra
+-Wpedantic -Werror, the Pi's ALSA headers from
+~/usb-16x16-work/deps/libasound2-dev, the endian / clock_nanosleep /
+TIMER_ABSTIME / ESTRPIPE shims); 94 web-ui node tests (four new); test_web
+13 (four new: the parser on the four-stage text, refusals, missing / fresh
+/ stale / garbage file, the health fast tier) and test_apply unchanged;
+supervisor bash -n. Not run anywhere: the bridge with the tap (no ALSA on
+the Mac; no builds on the Pi while the service runs).
+
+RECOVER pair 22:23:51 UTC, recorded against this session: both directions
+capture-avail XRUN at t_us 838.6 s of the 22:09:52 process (the user's
+Apply back to dsp-direct), re-primed and aligned at once, zero since. It
+coincided with a read-only `find /usr -name asoundlib.h` over ssh from
+this session, looking for the ALSA headers (they are not under
+/usr/include; the deb is unpacked under deps/). The same class as the
+record's transfer stalls: a filesystem walk on the Pi counts as a load
+during a run and joins the rule. The file-by-file staging at 22:33 added
+none (the count read 2 before and after). The service runs dsp-direct,
+its level a fresh draw, unmeasured, as it was since the Apply.
+
+Next, the user's, in order: stop usb16x16-aes67; build in
+~/usb-16x16-work/meters-20260911/phase4-src with the README's cmake recipe
+(ALSA include from deps/libasound2-dev), run usb16x16_bridge_tests and
+usb16x16-meter-bench at 48 / 96 / 192 / 512 and record the Pi figures;
+record the bridge hash, move the three bridge pins (install-candidate.sh,
+install-aes67-service.sh, the supervisor) and copy the binary into
+artifacts/pi-aarch64/; install the bridge, then the supervisor and conf
+(install-aes67-service.sh), start; install-web-control.sh, restart
+usb16x16-web, copy the three web-ui files into ~/usb-16x16-work/web-ui/.
+Acceptance for a bridge change stands: on dsp-direct with METERS=1, the
+journal's `METERS enabled` line, meter_us_max on the BRIDGE line, `cat
+/run/usb16x16/meters`, /api/meters from the browser and the Outputs page
+live; then four loaded 800-impulse runs and a ten-minute sixteen-channel
+soak on a fresh anchor against 725 / 19.021 ms and floors 84 / 96, zero
+RECOVERs, meter_us_max recorded; METERS=0 is the same binary untapped, the
+control if the figure moves. Rollback: METERS=0 in the conf and a restart
+(untapped), or the previous binary 406699bd through the pinned installers.

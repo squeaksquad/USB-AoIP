@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <csignal>
+#include <fcntl.h>
 #include <fstream>
 #include <cstdint>
 #include <cstdio>
@@ -154,6 +155,10 @@ struct Options {
     // everything switched off: nothing reads or writes the buffer on its way
     // through, and the accepted profile must measure what it measures today.
     std::string dsp_preset;
+    // Level meter snapshot file (2026-09-11). Empty means no tap: nothing
+    // reads the blocks, no publisher thread starts, and the audio path is
+    // the accepted one byte for byte.
+    std::string meter_file;
     std::string usb_device{"hw:CARD=UAC2Gadget,DEV=0"};
     std::string ravenna_device{"hw:CARD=RAVENNA,DEV=0"};
     unsigned int rate{48000};
@@ -416,6 +421,8 @@ private:
         << "  --ring FRAMES          elastic-ring capacity (default 768)\n"
         << "  --target FRAMES        elastic-ring target (default 192)\n"
         << "  --dsp-preset FILE      usb-to-ravenna DSP coefficients (default: no DSP)\n"
+        << "  --meter-file PATH      publish per-channel levels of all four stages to PATH\n"
+        << "                         every 50 ms window, rewritten atomically (default: no tap)\n"
         << "  --playback-prime N     frames primed into the ALSA playback queue\n"
         << "                         (default 0 = the whole playback buffer)\n"
         << "  --tx-playback-prime N  usb-to-ravenna override (0 = use --playback-prime)\n"
@@ -523,6 +530,8 @@ Options parse_options(const int argc, char** argv) {
             options.usb_device = value;
         } else if (argument == "--dsp-preset") {
             options.dsp_preset = value;
+        } else if (argument == "--meter-file") {
+            options.meter_file = value;
         } else if (argument == "--ravenna") {
             options.ravenna_device = value;
         } else if (argument == "--period") {
@@ -903,6 +912,14 @@ struct Telemetry {
     std::atomic<std::uint64_t> tx_dsp_ns_total{0};
     std::atomic<std::uint64_t> tx_dsp_calls{0};
     std::atomic<std::uint64_t> tx_dsp_frames{0};
+    // The level meter tap's cost on the audio thread, both stages of each
+    // direction together; the maximum is the figure that matters.
+    std::atomic<std::int64_t> tx_meter_ns_max{0};
+    std::atomic<std::int64_t> rx_meter_ns_max{0};
+    std::atomic<std::uint64_t> tx_meter_ns_total{0};
+    std::atomic<std::uint64_t> rx_meter_ns_total{0};
+    std::atomic<std::uint64_t> tx_meter_calls{0};
+    std::atomic<std::uint64_t> rx_meter_calls{0};
     std::atomic<std::uint64_t> tx_short_begin_frames{0};
     std::atomic<std::uint64_t> rx_short_begin_frames{0};
     // -1 means not yet observed.
@@ -1128,6 +1145,16 @@ struct Direction {
     std::uint64_t dsp_ns_total{};
     std::uint64_t dsp_calls{};
     std::uint64_t dsp_frames{};
+    // Level meter taps on the block read from this direction's capture and
+    // on the block written to its playback (after the DSP stage on TX), off
+    // unless --meter-file names a snapshot file. Timed like the stage: the
+    // maximum is what a missed deadline would show.
+    bool meter_enabled{false};
+    usb16x16::LevelMeter capture_meter;
+    usb16x16::LevelMeter playback_meter;
+    std::int64_t meter_ns_max{};
+    std::uint64_t meter_ns_total{};
+    std::uint64_t meter_calls{};
     // Zero-run detectors on the block read from this direction's capture
     // and on the block written to its playback, with the stage names the
     // ZERORUN lines carry. Off unless --zero-run-detect 1.
@@ -1273,6 +1300,19 @@ void write_area_sample(const snd_pcm_channel_area_t& area,
     std::memcpy(address, &value, sizeof(value));
 }
 
+// One timed meter observation. Two clock reads a call, the same instrument
+// the DSP stage carries, so meter_us_max on the BRIDGE line is the tap's own
+// worst case and not an estimate.
+void meter_observe(Direction& direction, usb16x16::LevelMeter& meter,
+                   const float* block, const std::size_t frames) noexcept {
+    const std::int64_t started_ns = monotonic_now_ns();
+    meter.observe(block, frames);
+    const std::int64_t spent_ns = monotonic_now_ns() - started_ns;
+    direction.meter_ns_max = std::max(direction.meter_ns_max, spent_ns);
+    direction.meter_ns_total += static_cast<std::uint64_t>(spent_ns);
+    ++direction.meter_calls;
+}
+
 IoResult capture_into_ring(Direction& direction, const std::int64_t iteration_ns) noexcept {
     const snd_pcm_sframes_t available = direction.capture.available();
     if (available == -EPIPE || available == -ESTRPIPE) {
@@ -1330,6 +1370,9 @@ IoResult capture_into_ring(Direction& direction, const std::int64_t iteration_ns
     if (!direction.ring.push(direction.capture_scratch.data(), frames)) {
         return request_recovery(direction, "capture-ring-push",
                                 static_cast<snd_pcm_sframes_t>(direction.ring.size()));
+    }
+    if (direction.meter_enabled) {
+        meter_observe(direction, direction.capture_meter, direction.capture_scratch.data(), frames);
     }
     if (direction.zero_run_detect) {
         // The block as the device delivered it, positioned on this
@@ -1699,8 +1742,10 @@ IoResult render_to_playback(Direction& direction,
         return IoResult::idle;
     }
     frames = static_cast<snd_pcm_uframes_t>(produced);
+    // The prime render: unfiltered and unmetered, see renders_after_prime.
+    const bool prime_render = direction.renders_after_prime == 0;
     if (direction.dsp_enabled) {
-        if (direction.renders_after_prime == 0) {
+        if (prime_render) {
             // The prime render, deliberately unfiltered: see renders_after_prime.
         } else {
             if (!direction.dsp_announced) {
@@ -1718,8 +1763,8 @@ IoResult render_to_playback(Direction& direction,
             ++direction.dsp_calls;
             direction.dsp_frames += produced;
         }
-        ++direction.renders_after_prime;
     }
+    ++direction.renders_after_prime;
     std::uint64_t clipped = 0;
     for (snd_pcm_uframes_t frame = 0; frame < frames; ++frame) {
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
@@ -1729,6 +1774,11 @@ IoResult render_to_playback(Direction& direction,
         }
     }
     direction.clipped_samples += clipped;
+    if (direction.meter_enabled && !prime_render) {
+        // The block as it leaves: after the stage on TX, so the output meters
+        // read what the wire carries.
+        meter_observe(direction, direction.playback_meter, direction.playback_scratch.data(), frames);
+    }
     if (direction.zero_run_detect) {
         // The block as the bridge hands it to the device, positioned on
         // this direction's cumulative output count.
@@ -2065,6 +2115,12 @@ void publish_telemetry(const Direction& tx,
     telemetry.tx_dsp_ns_total.store(tx.dsp_ns_total, std::memory_order_relaxed);
     telemetry.tx_dsp_calls.store(tx.dsp_calls, std::memory_order_relaxed);
     telemetry.tx_dsp_frames.store(tx.dsp_frames, std::memory_order_relaxed);
+    telemetry.tx_meter_ns_max.store(tx.meter_ns_max, std::memory_order_relaxed);
+    telemetry.rx_meter_ns_max.store(rx.meter_ns_max, std::memory_order_relaxed);
+    telemetry.tx_meter_ns_total.store(tx.meter_ns_total, std::memory_order_relaxed);
+    telemetry.rx_meter_ns_total.store(rx.meter_ns_total, std::memory_order_relaxed);
+    telemetry.tx_meter_calls.store(tx.meter_calls, std::memory_order_relaxed);
+    telemetry.rx_meter_calls.store(rx.meter_calls, std::memory_order_relaxed);
     telemetry.tx_input_frames.store(tx.input_frames, std::memory_order_relaxed);
     telemetry.rx_input_frames.store(rx.input_frames, std::memory_order_relaxed);
     telemetry.tx_consumed_frames.store(tx.resampler.consumed_frames(), std::memory_order_relaxed);
@@ -2170,6 +2226,18 @@ double capture_mean(const std::uint64_t total, const std::uint64_t samples) noex
 // Mean microseconds per DSP call. Reported beside the maximum, never instead
 // of it: the mean is what the stage usually costs, the maximum is whether it
 // fits.
+// The meter tap's mean over both directions and both stages, microseconds.
+double meter_mean_us(const Telemetry& telemetry) noexcept {
+    const std::uint64_t calls = telemetry.tx_meter_calls.load(std::memory_order_relaxed) +
+                                telemetry.rx_meter_calls.load(std::memory_order_relaxed);
+    if (calls == 0) {
+        return 0.0;
+    }
+    const std::uint64_t total = telemetry.tx_meter_ns_total.load(std::memory_order_relaxed) +
+                                telemetry.rx_meter_ns_total.load(std::memory_order_relaxed);
+    return static_cast<double>(total) / static_cast<double>(calls) / 1000.0;
+}
+
 double dsp_mean_us(const Telemetry& telemetry) noexcept {
     const std::uint64_t calls = telemetry.tx_dsp_calls.load(std::memory_order_relaxed);
     if (calls == 0) {
@@ -2273,6 +2341,9 @@ void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
                   << " dsp_us_max=" << static_cast<double>(telemetry.tx_dsp_ns_max.load()) / 1000.0
                   << " dsp_us_mean=" << dsp_mean_us(telemetry)
                   << " dsp_calls=" << telemetry.tx_dsp_calls.load()
+                  << " meter_us_max=" << static_cast<double>(std::max(telemetry.tx_meter_ns_max.load(),
+                                                                     telemetry.rx_meter_ns_max.load())) / 1000.0
+                  << " meter_us_mean=" << meter_mean_us(telemetry)
                   << " pitch=" << telemetry.applied_pitch.load()
                   << " phase_us=" << telemetry.grid_phase_us.load()
                   << " bias_ppm="
@@ -2287,6 +2358,114 @@ void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
                   << " zr_ravplay=" << format_zero_counters(telemetry.ravenna_playback_zero)
                   << " zr_ravcap=" << format_zero_counters(telemetry.ravenna_capture_zero)
                   << " zr_usbplay=" << format_zero_counters(telemetry.usb_playback_zero) << '\n';
+    }
+}
+
+// The meter publisher (2026-09-11). Off the audio thread entirely: every
+// 25 ms it copies the four taps' last windows through their seqlocks and,
+// when any has moved, rewrites the snapshot file in one rename. Text, in
+// the key=value form the BRIDGE line uses, one line per stage, dB with one
+// decimal, so `cat` reads it and the web service parses it with what it
+// already has. It demotes itself to SCHED_OTHER first: a std::thread
+// inherits the audio thread's SCHED_FIFO, and a file writer has no claim
+// on that.
+struct MeterTap {
+    std::string_view stage;
+    const usb16x16::LevelMeter* meter;
+};
+using MeterTaps = std::array<MeterTap, 4>;
+
+void write_meter_file(const std::string& path, const std::string& text, std::uint64_t& failures) noexcept {
+    const std::string temporary = path + ".tmp";
+    const int descriptor = ::open(temporary.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (descriptor < 0) {
+        if (failures++ == 0) {
+            std::cerr << "METERS write failed: " << temporary << ": " << std::strerror(errno) << '\n';
+        }
+        return;
+    }
+    std::size_t written = 0;
+    bool ok = true;
+    while (written < text.size()) {
+        const ssize_t result = ::write(descriptor, text.data() + written, text.size() - written);
+        if (result < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            ok = false;
+            break;
+        }
+        written += static_cast<std::size_t>(result);
+    }
+    ::close(descriptor);
+    if (!ok || std::rename(temporary.c_str(), path.c_str()) != 0) {
+        if (failures++ == 0) {
+            std::cerr << "METERS write failed: " << path << ": " << std::strerror(errno) << '\n';
+        }
+        ::unlink(temporary.c_str());
+    }
+}
+
+void meter_loop(const std::string path, const MeterTaps taps) {
+    {
+        sched_param parameters{};
+        parameters.sched_priority = 0;
+        const int demoted = pthread_setschedparam(pthread_self(), SCHED_OTHER, &parameters);
+        if (demoted != 0) {
+            std::cerr << "METERS publisher kept the inherited scheduler: " << std::strerror(demoted) << '\n';
+        }
+    }
+    std::array<std::uint64_t, 4> last_sequence{};
+    std::array<usb16x16::LevelMeter::Snapshot, 4> snapshots{};
+    std::uint64_t writes = 0;
+    std::uint64_t failures = 0;
+    std::string text;
+    text.reserve(4096);
+    while (!stop_requested.load(std::memory_order_relaxed)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        bool moved = false;
+        for (std::size_t tap = 0; tap < taps.size(); ++tap) {
+            if (taps[tap].meter->read(snapshots[tap]) && snapshots[tap].sequence != last_sequence[tap]) {
+                last_sequence[tap] = snapshots[tap].sequence;
+                moved = true;
+            }
+        }
+        if (!moved) {
+            continue;
+        }
+        ++writes;
+        std::ostringstream out;
+        out << std::fixed << std::setprecision(1)
+            << "METERS v=1 t_us=" << elapsed_us()
+            << " window_frames=" << taps[0].meter->window_frames()
+            << " writes=" << writes << '\n';
+        for (std::size_t tap = 0; tap < taps.size(); ++tap) {
+            const usb16x16::LevelMeter::Snapshot& snapshot = snapshots[tap];
+            out << "TAP stage=" << taps[tap].stage
+                << " seq=" << snapshot.sequence
+                << " frames=" << snapshot.frames
+                << " position=" << snapshot.position
+                << " peak_dbfs=";
+            for (std::size_t channel = 0; channel < kChannels; ++channel) {
+                out << (channel == 0 ? "" : ",") << usb16x16::amplitude_to_dbfs(snapshot.peak[channel]);
+            }
+            out << " rms_dbfs=";
+            for (std::size_t channel = 0; channel < kChannels; ++channel) {
+                const double mean_square = snapshot.frames == 0
+                    ? 0.0 : snapshot.sum_squares[channel] / static_cast<double>(snapshot.frames);
+                out << (channel == 0 ? "" : ",") << usb16x16::amplitude_to_dbfs(std::sqrt(mean_square));
+            }
+            out << " clip=";
+            for (std::size_t channel = 0; channel < kChannels; ++channel) {
+                out << (channel == 0 ? "" : ",") << snapshot.clipped[channel];
+            }
+            out << '\n';
+        }
+        text = out.str();
+        write_meter_file(path, text, failures);
+    }
+    if (writes > 0 || failures > 0) {
+        std::cerr << "METERS stopped writes=" << writes << " failures=" << failures << '\n';
     }
 }
 
@@ -2392,6 +2571,13 @@ int run(const Options& options) {
     tx.playback_stage = "ravenna-playback";
     rx.capture_stage = "ravenna-capture";
     rx.playback_stage = "usb-playback";
+    if (!options.meter_file.empty()) {
+        tx.meter_enabled = true;
+        rx.meter_enabled = true;
+        std::cerr << "METERS enabled file=" << options.meter_file
+                  << " window_frames=" << tx.capture_meter.window_frames()
+                  << " stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback\n";
+    }
     if (options.zero_run_detect) {
         usb16x16::ZeroRunDetector::Config zero_config;
         zero_config.minimum_frames = options.zero_run_minimum_frames;
@@ -2551,6 +2737,15 @@ int run(const Options& options) {
     std::thread telemetry_thread(telemetry_loop, std::ref(telemetry), pitch_control.get());
     const auto started = std::chrono::steady_clock::now();
     process_started = started;
+    // After process_started: the publisher stamps its file with elapsed_us().
+    std::thread meter_thread;
+    if (tx.meter_enabled) {
+        meter_thread = std::thread(meter_loop, options.meter_file, MeterTaps{{
+            {tx.capture_stage, &tx.capture_meter},
+            {tx.playback_stage, &tx.playback_meter},
+            {rx.capture_stage, &rx.capture_meter},
+            {rx.playback_stage, &rx.playback_meter}}});
+    }
     std::uint64_t last_telemetry_frame = 0;
     std::size_t rate_update_samples = 0;
     usb16x16::WindowedLinearRegression rate_regression;
@@ -2750,10 +2945,16 @@ int run(const Options& options) {
     } catch (...) {
         stop_requested.store(true, std::memory_order_relaxed);
         telemetry_thread.join();
+        if (meter_thread.joinable()) {
+            meter_thread.join();
+        }
         throw;
     }
 
     telemetry_thread.join();
+    if (meter_thread.joinable()) {
+        meter_thread.join();
+    }
     publish_telemetry(tx, rx, estimator, telemetry);
     const auto summary_floor = [](const std::size_t value) {
         return value == std::numeric_limits<std::size_t>::max()
@@ -2775,6 +2976,9 @@ int run(const Options& options) {
               << ",\"dsp_frames_per_call\":"
               << (tx.dsp_calls == 0 ? 0.0
                   : static_cast<double>(tx.dsp_frames) / static_cast<double>(tx.dsp_calls))
+              << ",\"meter_us_max\":" << static_cast<double>(std::max(tx.meter_ns_max, rx.meter_ns_max)) / 1000.0
+              << ",\"meter_us_mean\":" << meter_mean_us(telemetry)
+              << ",\"meter_calls\":" << (tx.meter_calls + rx.meter_calls)
               << ",\"tx_restarts\":" << tx.restarts
               << ",\"rx_restarts\":" << rx.restarts
               << ",\"tx_input_frames\":" << tx.input_frames

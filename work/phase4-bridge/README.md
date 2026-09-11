@@ -8,6 +8,19 @@ transport bridge of 2026-09-02 onward (sd103 profile, handoff ACCEPTED
 paragraph that used to sit here described the 2026-09-01 candidate and is
 superseded by the handoff.
 
+Staged 2026-09-11, not built and not installed: the level meter tap
+(`--meter-file PATH`). `LevelMeter` in the core reads each block at the four
+stage points (USB capture, RAVENNA playback after the DSP stage, RAVENNA
+capture, USB playback), accumulates per-channel peak, sum of squares and
+full-scale count over a 2400-frame window, and publishes the closed window
+through a seqlock'd preallocated snapshot; a SCHED_OTHER publisher thread
+rewrites PATH atomically every window (25 ms poll). The prime render is not
+metered, like it is not filtered. The tap is timed on the audio thread and
+reported as `meter_us_max` / `meter_us_mean` on the BRIDGE line and in
+SUMMARY. `usb16x16-meter-bench` (core only, not installed) measures it in
+memory: 0.21 us median per 48-frame block on the Mac. With no `--meter-file`
+nothing in the audio path changes.
+
 This candidate replaces two independent `alsaloop` processes with one process
 that owns all four raw ALSA directions:
 

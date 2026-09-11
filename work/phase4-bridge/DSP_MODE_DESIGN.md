@@ -166,9 +166,10 @@ in `artifacts/pi-aarch64/` as the rollback, per the existing rules.
   supervision path, or a mode flag threaded through four separate detectors.
 - **The `--target alsa` device section**, which stays stamped unvalidated. This
   design does not use it: the bridge owns its own devices already.
-- **Metering.** Still needs the separately benchmarked tap the web-control
-  README asks for. The filter stage is a natural place to take it from, and a
-  natural place to make the audio thread late.
+- **Metering.** Staged 2026-09-11 as `LevelMeter` in the core, tapped after
+  the stage on TX (and at the other three stage points), timed on the audio
+  thread like the stage and reported as `meter_us_max`; see the README's
+  staged paragraph. Not built on the Pi yet.
 - **Apply from the UI.** Step 5. Nothing here exposes a control surface.
 
 ## Acceptance

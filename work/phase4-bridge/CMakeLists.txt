@@ -18,6 +18,12 @@ target_link_libraries(usb16x16-dsp-offline PRIVATE usb16x16_bridge_core)
 target_compile_options(usb16x16-dsp-offline PRIVATE -Wall -Wextra -Wpedantic -Werror)
 install(TARGETS usb16x16-dsp-offline RUNTIME DESTINATION bin)
 
+# In-memory benchmark of the level meter tap; core only, runs on the Mac and
+# the Pi. Not installed: it is a measurement tool, not part of the service.
+add_executable(usb16x16-meter-bench src/meter_bench.cpp)
+target_link_libraries(usb16x16-meter-bench PRIVATE usb16x16_bridge_core)
+target_compile_options(usb16x16-meter-bench PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
 include(CTest)
 if(BUILD_TESTING)
     add_executable(usb16x16_bridge_tests tests/bridge_tests.cpp)

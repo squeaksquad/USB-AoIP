@@ -26,6 +26,7 @@ stage_file=$run_dir/stage
 failures_file=$run_dir/failures
 recovers_file=$run_dir/recovers
 last_bridge_file=$run_dir/last-bridge
+meters_file=$run_dir/meters          # the bridge's level snapshot, rewritten every 50 ms
 bridge_log=$run_dir/bridge.log
 unit_name=usb16x16-aes67
 
@@ -55,6 +56,7 @@ wrapper_pattern='^(/usr/bin/|/bin/)?bash /usr/local/sbin/run-phase4-candidate-sa
 # Service-level settings, overridable from the configuration file.
 journal_bridge_every=10        # one BRIDGE line in N to the journal
 bridge_log_cap_mb=64           # rotate the tmpfs log once at this size
+meters=1                       # METERS: 1 passes --meter-file to the bridge, 0 runs it untapped
 recover_limit_per_minute=5     # more RECOVER lines than this in 60 s fails the run
 host_storm_per_second=10       # RECOVER lines in one second that, with USB input frozen, mean no host
 host_retry_s=60                # with no host, try the bridge again this often (a wake from
@@ -153,6 +155,8 @@ load_conf() {
   host_retry_s=${conf[HOST_RETRY_SECONDS]:-$host_retry_s}
   settle_s=${conf[BRIDGE_SETTLE_SECONDS]:-$settle_s}
   settle_restarts=${conf[BRIDGE_SETTLE_RESTARTS]:-$settle_restarts}
+  meters=${conf[METERS]:-$meters}
+  [[ $meters =~ ^[01]$ ]] || { say "METERS must be 0 or 1" >&2; return 1; }
   for value in "$journal_bridge_every" "$bridge_log_cap_mb" "$recover_limit_per_minute" \
                "$host_storm_per_second" "$host_retry_s"; do
     [[ $value =~ ^[1-9][0-9]*$ ]] || { say "service settings must be positive integers" >&2; return 1; }
@@ -486,6 +490,9 @@ bridge_arguments() {
   if [ -n "$(p DSP_PRESET)" ]; then
     printf '%s\n' --dsp-preset "$(p DSP_PRESET)"
   fi
+  if [ "$meters" = 1 ]; then
+    printf '%s\n' --meter-file "$meters_file"
+  fi
 }
 
 # ------------------------------------------------------------ stop and fail
@@ -583,7 +590,7 @@ cmd_run() {
   install -d -m 755 "$run_dir"
   install -d -m 700 "$daemon_dir"
   : > "$recovers_file"
-  rm -f "$last_bridge_file"
+  rm -f "$last_bridge_file" "$meters_file"
 
   load_conf || fail 10 "configuration"
   select_profile || fail 10 "configuration"
@@ -809,7 +816,7 @@ start_bridge() {
   local -a arguments
   mapfile -t arguments < <(bridge_arguments)
   : > "$recovers_file"
-  rm -f "$last_bridge_file"
+  rm -f "$last_bridge_file" "$meters_file"
   stage "bridge starting: ${arguments[*]}"
   "$bridge_binary" "${arguments[@]}" \
     > >(exec mawk -W interactive -v every="$journal_bridge_every" -v logfile="$bridge_log" \
@@ -922,6 +929,7 @@ cmd_cleanup() {
   if ! bridge_running && ! pgrep -x aes67-daemon >/dev/null; then
     unload_module
   fi
+  [ -d "$run_dir" ] && [ -w "$run_dir" ] && rm -f "$meters_file" "$meters_file.tmp"
   [ -d "$run_dir" ] && [ -w "$run_dir" ] && stage "stopped (cleanup)"
   exit 0
 }
@@ -950,7 +958,7 @@ cmd_status() {
   if [ -r "$last_bridge_file" ] && [ -s "$last_bridge_file" ]; then
     local line
     line=$(cat "$last_bridge_file")
-    say "bridge: ppm=$(bridge_field "$line" ppm) tx_queue=$(bridge_field "$line" tx_queue) rx_queue=$(bridge_field "$line" rx_queue) tx_qfloor=$(bridge_field "$line" tx_qfloor) rx_qfloor=$(bridge_field "$line" rx_qfloor) tx_pullmax=$(bridge_field "$line" tx_pullmax) tx_restarts=$(bridge_field "$line" tx_restarts) rx_restarts=$(bridge_field "$line" rx_restarts) ($(( $(date +%s) - $(stat -c %Y "$last_bridge_file") ))s ago)"
+    say "bridge: ppm=$(bridge_field "$line" ppm) tx_queue=$(bridge_field "$line" tx_queue) rx_queue=$(bridge_field "$line" rx_queue) tx_qfloor=$(bridge_field "$line" tx_qfloor) rx_qfloor=$(bridge_field "$line" rx_qfloor) tx_pullmax=$(bridge_field "$line" tx_pullmax) tx_restarts=$(bridge_field "$line" tx_restarts) rx_restarts=$(bridge_field "$line" rx_restarts) meter_us_max=$(bridge_field "$line" meter_us_max) ($(( $(date +%s) - $(stat -c %Y "$last_bridge_file") ))s ago)"
   else
     say "bridge: no BRIDGE line yet"
   fi

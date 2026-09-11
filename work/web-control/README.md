@@ -90,13 +90,41 @@ the shipped transparent artifact and on broken copies, the preset install /
 replace / cap / conflict / remove flows; the request writer and state reader). `sudo /usr/local/bin/usb16x16-apply --check` validates a pending
 request without acting.
 
+## Meters
+
+The bridge (`--meter-file`, passed by the supervisor when the conf's `METERS`
+is 1, its default) publishes per-channel levels of its four stages every
+50 ms window to `/run/usb16x16/meters`, rewritten atomically: a `METERS`
+header line and one `TAP` line per stage in the BRIDGE line's key=value form,
+with comma-separated per-channel lists. `GET /api/meters` returns it parsed:
+
+```
+{ok, available: true, ageSeconds, windowMs: 50, windowFrames: 2400, bridgeTimeUs, writes,
+ taps: {"usb-capture": {stage, where, sequence, frames, position,
+                        peakDb[16], rmsDb[16], clipped[16]}, "ravenna-playback": ..., "ravenna-capture": ..., "usb-playback": ...}}
+```
+
+`peakDb` is the window's largest magnitude in dBFS (floored at -144),
+`rmsDb` the window's RMS, `clipped` the count of samples the integer
+converters clamp, cumulative since the bridge started so a client polling
+slower than a window still sees every overload. The stages: `usb-capture`
+is what the host sends over USB, before the DSP stage; `ravenna-playback`
+what leaves on AES67, after it (the UI's output bank); `ravenna-capture` and
+`usb-playback` the return leg. The page reads this at up to 10 Hz while its
+Outputs tab is visible and stops otherwise. A file older than 1 s (the bridge
+stopped, or the profile runs `METERS=0`) reads `available: false` with the
+reason; the health snapshot's `meters` block carries the same flag, the
+endpoint, the stages and the window. The bridge reports the tap's own cost
+on its BRIDGE line (`meter_us_max`, `meter_us_mean`), surfaced as
+`bridge.meterUsMax` beside `bridge.dspUsMax`.
+
 ## What it deliberately cannot do
 
 | Not implemented | Why |
 | --- | --- |
 | Restart a service, switch to a non-accepted profile | Owning a PCM device and interrupting audio belongs to the privileged applier, which takes exactly one request shape: an accepted profile name. This process is unprivileged and its only write outside the preset store is that request file. |
 | Edit a profile's transport fields, install a preset under any other path, run an engine | User presets are the one write to `/etc/usb16x16/dsp` and to the conf, and it is the applier's, with the guards above; transport fields are always dsp-direct's. No CamillaDSP runs; the bridge's stage is the engine. |
-| Live meters | The bridge has no metering tap. Opening a second ALSA stream to read levels would compete with the audio path, so `/api/health` reports `meters.available: false` and the UI's meters stay labelled as display activity. |
+| Open a device to meter | Levels come from the bridge's own tap (`--meter-file`, see "Meters"); this service only reads the file the bridge writes. It never opens an ALSA stream: a second one would compete with the audio path. With the file absent or stale, `/api/health` reports `meters.available: false` and the UI's meters stay labelled as display activity. |
 | Read `/api/sink/status/N` | That endpoint's arrival-lead minimum **resets when read**. The latency harness owns it; a polling dashboard would silently invalidate every lead comparison. |
 
 `POST` to `/api/service/*`, `/api/dsp/*` or any other `/api/apply/*` route
@@ -111,7 +139,8 @@ does. Three tiers:
 
 | Tier | Period | Reads |
 | --- | --- | --- |
-| fast | 1 s | `/run/usb16x16/last-bridge`, `stage`, `recovers`, `web-apply/current.json` |
+| fast | 1 s | `/run/usb16x16/last-bridge`, `stage`, `recovers`, `meters` (freshness only), `web-apply/current.json` |
+| per request | up to 10 Hz per page on the Outputs tab | `/run/usb16x16/meters`: one `stat`, and a parse only when the file has changed |
 | slow | 5 s | `systemctl is-active` (the units and `usb16x16-apply.path`), `/etc/usb16x16/aes67.conf` (profile blocks), `/sys/class/net`, `/sys/class/udc`, `vcgencmd`, loadavg |
 | daemon | 10 s | `aes67-daemon` `/api/ptp/status`, `/api/config`, `/api/sinks`, `/api/sources` |
 
@@ -179,6 +208,7 @@ All routes require credentials.
 
 ```
 GET    /api/health              cached snapshot; ok:false means the collector failed
+GET    /api/meters              the bridge's latest level window (see "Meters"); available:false with a reason otherwise
 GET    /api/logs?service=&lines= journalctl for a fixed unit allowlist, 1..2000 lines
 GET    /api/apply/status        the applier's state (see above)
 POST   /api/apply/profile       queue a switch between accepted profiles (see above)

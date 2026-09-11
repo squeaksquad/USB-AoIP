@@ -9,6 +9,11 @@
 
 export const HEALTH_PATH = '/api/health';
 export const POLL_MS = 2000;
+// The bridge's meter tap (2026-09-11): one window every 50 ms on the Pi, read
+// at up to 10 Hz while the Outputs page is visible. Absent or stale, the page
+// draws its synthetic display activity, labelled as such.
+export const METERS_PATH = '/api/meters';
+export const METER_POLL_MS = 100;
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -20,6 +25,33 @@ export async function probeHealth(fetchImpl = globalThis.fetch, signal) {
     const body = await response.json();
     return isObject(body) && body.ok === true ? body : null;
   } catch { return null; }
+}
+
+/** The bridge's latest meter window, or null when no tap is available. */
+export async function fetchMeters(fetchImpl = globalThis.fetch, signal) {
+  try {
+    const response = await fetchImpl(METERS_PATH, { signal, headers: { accept: 'application/json' } });
+    if (!response.ok) return null;
+    const body = await response.json();
+    return isObject(body) && body.ok === true && body.available === true ? body : null;
+  } catch { return null; }
+}
+
+/**
+ * The two banks the Outputs page draws, from the four stage taps: inputs are
+ * what the host sends over USB, before the DSP stage; outputs are what leaves
+ * on AES67, after it. Null unless both stages are present with 16 channels.
+ */
+export function meterLevels(meters) {
+  const taps = meters?.taps;
+  const inputs = taps?.['usb-capture'], outputs = taps?.['ravenna-playback'];
+  const bank = tap => Array.isArray(tap?.peakDb) && tap.peakDb.length === 16
+    ? tap.peakDb.map((peak, i) => ({peak, rms: tap.rmsDb?.[i] ?? null, clipped: tap.clipped?.[i] ?? 0}))
+    : null;
+  const ins = bank(inputs), outs = bank(outputs);
+  if (!ins || !outs) return null;
+  return {inputs: ins, outputs: outs, sequence: outputs.sequence ?? null,
+          windowMs: meters.windowMs ?? null, ageSeconds: meters.ageSeconds ?? null};
 }
 
 export async function fetchLogs(service, lines = 200, fetchImpl = globalThis.fetch) {
@@ -54,7 +86,7 @@ export function connectionLine(health) {
   parts.push(health.mode?.running ? 'Direct bridge running' : (health.mode?.detail || 'Stack state unknown'));
   const ptp = health.ptp?.status;
   if (ptp && ptp !== 'unavailable') parts.push(`PTP ${ptp}${Number.isFinite(health.ptp?.jitter) ? ` · jitter ${health.ptp.jitter}` : ''}`);
-  parts.push('Simulated meters');
+  parts.push(health.meters?.available ? 'Live meters' : 'Simulated meters');
   return parts.join(' · ');
 }
 

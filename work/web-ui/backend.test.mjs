@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, formatDuration, serviceLabel, browserStore, piStore } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, formatDuration, serviceLabel, browserStore, piStore, fetchMeters, meterLevels } from './backend.mjs';
 
 const ok = body => ({ok: true, status: 200, json: async () => body});
 const fail = (status, body) => ({ok: false, status, json: async () => body});
@@ -310,4 +310,50 @@ test('userPresets lists the Pi\'s user blocks and marks the live one; profileCho
   assert.deepEqual(userPresets(health).map(p => [p.slug, p.live]), [['room-a', true], ['night', false]]);
   assert.deepEqual(profileChoices(health).accepted.map(r => r.name), ['dsp-direct', 'dsp-loaded', 'user-night']);
   assert.deepEqual(userPresets(null), []);
+});
+
+// ---------------------------------------------------------------- meters
+
+const tap = (stage, level, clipped = 0) => ({
+  stage, sequence: 40, frames: 2400, position: 96000,
+  peakDb: new Array(16).fill(level), rmsDb: new Array(16).fill(level - 3), clipped: new Array(16).fill(clipped),
+});
+const metersBody = {
+  ok: true, available: true, ageSeconds: 0.03, windowMs: 50,
+  taps: {
+    'usb-capture': tap('usb-capture', -12), 'ravenna-playback': tap('ravenna-playback', -18, 2),
+    'ravenna-capture': tap('ravenna-capture', -20), 'usb-playback': tap('usb-playback', -20),
+  },
+};
+
+test('meterLevels maps USB capture to the input bank and AES67 playback to the output bank', () => {
+  const levels = meterLevels(metersBody);
+  assert.equal(levels.inputs.length, 16);
+  assert.equal(levels.inputs[3].peak, -12);
+  assert.equal(levels.inputs[3].rms, -15);
+  assert.equal(levels.outputs[0].peak, -18);
+  assert.equal(levels.outputs[0].clipped, 2);
+  assert.equal(levels.sequence, 40);
+  assert.equal(levels.windowMs, 50);
+});
+
+test('meterLevels is null without both stages or with a short channel list', () => {
+  assert.equal(meterLevels(null), null);
+  assert.equal(meterLevels({taps: {'usb-capture': tap('usb-capture', -12)}}), null);
+  const short = structuredClone(metersBody);
+  short.taps['ravenna-playback'].peakDb = [-1, -2];
+  assert.equal(meterLevels(short), null);
+});
+
+test('fetchMeters returns the body only when the tap is available', async () => {
+  assert.deepEqual(await fetchMeters(async () => ok(metersBody)), metersBody);
+  assert.equal(await fetchMeters(async () => ok({ok: true, available: false, reason: 'stale'})), null);
+  assert.equal(await fetchMeters(async () => fail(503, {ok: false})), null);
+  assert.equal(await fetchMeters(async () => { throw new Error('down'); }), null);
+});
+
+test('the connection line says whether meters are live', () => {
+  assert.match(connectionLine(live), /Simulated meters/);
+  assert.match(connectionLine({...live, meters: {available: true}}), /Live meters/);
+  assert.equal(factFor({...live, meters: {available: true, reason: ''}}, 'Metering').value, 'Live');
 });

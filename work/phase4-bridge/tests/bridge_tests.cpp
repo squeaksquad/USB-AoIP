@@ -1,6 +1,7 @@
 #include "usb16x16/bridge_core.hpp"
 
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -8,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -269,6 +271,119 @@ void test_dsp_is_block_size_agnostic() {
         split.process(many.data() + frame * usb16x16::kChannels, 48);
     }
     check(one == many, "the stage gives the same result whatever the block size");
+}
+
+// -------------------------------------------------------------- level meter
+
+void test_level_meter_measures_a_window() {
+    usb16x16::LevelMeter meter(2400);
+    usb16x16::LevelMeter::Snapshot snapshot;
+    check(!meter.read(snapshot), "nothing is published before the first window closes");
+    std::vector<float> block(2400 * usb16x16::kChannels, 0.0F);
+    for (std::size_t frame = 0; frame < 2400; ++frame) {
+        float* row = block.data() + frame * usb16x16::kChannels;
+        row[0] = 0.5F;                                   // constant: peak = rms
+        row[1] = (frame % 2 == 0) ? 1.0F : -1.0F;        // full scale, every sample clips
+        row[2] = (frame == 100) ? -0.25F : 0.0F;         // one negative sample
+        row[3] = -1.0F;                                  // -1.0 exactly is representable: no clip
+    }
+    meter.observe(block.data(), 2400);
+    check(meter.read(snapshot), "the window closes on the block that reaches 2400 frames");
+    check(snapshot.sequence == 1 && meter.sequence() == 1, "one window published");
+    check(snapshot.frames == 2400 && snapshot.position == 2400, "the window carries its frame count and position");
+    check(std::abs(snapshot.peak[0] - 0.5F) < 1e-7F, "peak of a constant 0.5 is 0.5");
+    check(std::abs(snapshot.sum_squares[0] / snapshot.frames - 0.25) < 1e-6, "mean square of 0.5 is 0.25");
+    check(snapshot.peak[1] == 1.0F && snapshot.clipped[1] == 1200, "+1.0 clips on every other sample, -1.0 does not");
+    check(snapshot.peak[2] == 0.25F, "peak is a magnitude");
+    check(snapshot.clipped[3] == 0 && snapshot.peak[3] == 1.0F, "-1.0 is not a clip, as the converters see it");
+    check(snapshot.peak[4] == 0.0F && snapshot.sum_squares[4] == 0.0, "an undriven channel reads zero");
+    check(std::abs(usb16x16::amplitude_to_dbfs(0.5) + 6.0206) < 0.001, "0.5 is -6.02 dBFS");
+    check(usb16x16::amplitude_to_dbfs(0.0) == -144.0, "silence is the floor, not -inf");
+}
+
+void test_level_meter_closes_windows_on_block_boundaries() {
+    usb16x16::LevelMeter meter(2400);
+    usb16x16::LevelMeter::Snapshot snapshot;
+    std::vector<float> block(512 * usb16x16::kChannels, 0.0F);
+    block[7] = 0.75F;  // frame 0, channel 7
+    for (int calls = 0; calls < 49; ++calls) {
+        meter.observe(block.data(), 48);
+    }
+    check(!meter.read(snapshot), "2352 frames do not close a 2400-frame window");
+    meter.observe(block.data(), 48);
+    check(meter.read(snapshot) && snapshot.frames == 2400, "the 50th 48-frame block closes it exactly");
+    check(snapshot.peak[7] == 0.75F, "the peak is the window's");
+    // A 512-frame block straddling the boundary closes the next window long.
+    for (int calls = 0; calls < 48; ++calls) {
+        meter.observe(block.data(), 48);
+    }
+    std::vector<float> silent(512 * usb16x16::kChannels, 0.0F);
+    meter.observe(silent.data(), 512);
+    check(meter.read(snapshot) && snapshot.sequence == 2, "a second window");
+    check(snapshot.frames == 48 * 48 + 512, "a window is at least window_frames and at most one block longer");
+    check(snapshot.position == 2400 + 48 * 48 + 512, "position is cumulative");
+    check(snapshot.peak[7] == 0.75F, "the second window still saw the 48-frame blocks");
+    for (int calls = 0; calls < 5; ++calls) {
+        meter.observe(silent.data(), 512);
+    }
+    check(meter.read(snapshot) && snapshot.sequence == 3 && snapshot.peak[7] == 0.0F,
+          "peaks do not carry over between windows");
+}
+
+void test_level_meter_clip_count_is_cumulative() {
+    usb16x16::LevelMeter meter(48);
+    usb16x16::LevelMeter::Snapshot snapshot;
+    std::vector<float> hot(48 * usb16x16::kChannels, 0.0F);
+    for (std::size_t frame = 0; frame < 48; ++frame) {
+        hot[frame * usb16x16::kChannels + 15] = 1.5F;
+    }
+    std::vector<float> silent(48 * usb16x16::kChannels, 0.0F);
+    meter.observe(hot.data(), 48);
+    meter.observe(silent.data(), 48);
+    meter.observe(hot.data(), 48);
+    check(meter.read(snapshot) && snapshot.sequence == 3, "three windows");
+    check(snapshot.clipped[15] == 96, "clips accumulate across windows so a slow reader misses none");
+    check(snapshot.peak[15] == 1.5F, "the last window's peak");
+}
+
+void test_level_meter_snapshot_is_never_torn() {
+    // A writer publishes windows as fast as it can; every window carries one
+    // value on all sixteen channels, so a torn copy would show two values.
+    usb16x16::LevelMeter meter(48);
+    std::atomic<bool> stop{false};
+    std::thread writer([&] {
+        std::vector<float> block(48 * usb16x16::kChannels);
+        std::uint32_t window = 0;
+        while (!stop.load(std::memory_order_relaxed)) {
+            const float value = 0.01F + static_cast<float>(window % 90) / 100.0F;
+            std::fill(block.begin(), block.end(), value);
+            meter.observe(block.data(), 48);
+            ++window;
+        }
+    });
+    std::size_t reads = 0;
+    std::size_t torn = 0;
+    std::size_t consistent = 0;
+    usb16x16::LevelMeter::Snapshot snapshot;
+    for (int attempt = 0; attempt < 200000; ++attempt) {
+        if (!meter.read(snapshot)) {
+            continue;
+        }
+        ++reads;
+        bool same = true;
+        for (std::size_t channel = 1; channel < usb16x16::kChannels; ++channel) {
+            same = same && snapshot.peak[channel] == snapshot.peak[0];
+        }
+        const double mean_square = snapshot.sum_squares[0] / snapshot.frames;
+        same = same && std::abs(mean_square - static_cast<double>(snapshot.peak[0]) * snapshot.peak[0]) < 1e-6;
+        same = same && snapshot.frames == 48 && snapshot.position == snapshot.sequence * 48;
+        (same ? consistent : torn) += 1;
+    }
+    stop.store(true, std::memory_order_relaxed);
+    writer.join();
+    check(reads > 1000, "the reader took snapshots while the writer ran");
+    check(torn == 0, "no snapshot was torn");
+    check(consistent == reads, "every accepted snapshot was self-consistent");
 }
 
 void test_packed_24() {
@@ -726,6 +841,11 @@ int main() {
     test_dsp_refuses_what_it_cannot_read();
     test_dsp_reset_clears_filter_state();
     test_dsp_is_block_size_agnostic();
+
+    test_level_meter_measures_a_window();
+    test_level_meter_closes_windows_on_block_boundaries();
+    test_level_meter_clip_count_is_cumulative();
+    test_level_meter_snapshot_is_never_torn();
 
     test_packed_24();
     test_full_scale_conversion_does_not_wrap();

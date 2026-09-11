@@ -57,7 +57,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -97,6 +97,8 @@ LOG_UNITS = {
 }
 
 FAST_INTERVAL = 1.0    # /run files: bridge telemetry line, stage, recover count
+METERS_FILE = RUN_DIR / "meters"   # the bridge's level snapshot (--meter-file)
+METERS_FRESH_S = 1.0   # older than this and the tap is reported unavailable
 SLOW_INTERVAL = 5.0    # systemctl, sysfs, vcgencmd
 DAEMON_INTERVAL = 10.0  # aes67-daemon HTTP API
 
@@ -174,6 +176,92 @@ def parse_bridge_line(line: str) -> dict:
         number = as_number(value)
         fields[key] = value if number is None else number
     return fields
+
+
+METER_STAGES = {
+    # stage name on the TAP line -> where in the signal path it sits
+    "usb-capture": "USB from the host, before the DSP stage",
+    "ravenna-playback": "AES67 out, after the DSP stage: what the wire carries",
+    "ravenna-capture": "AES67 in from the wire",
+    "usb-playback": "USB to the host",
+}
+
+
+def parse_meters(text: str) -> dict | None:
+    """Parse the bridge's meter snapshot file: a METERS header line and one
+    TAP line per stage, key=value with comma-separated per-channel lists."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines or not lines[0].startswith("METERS "):
+        return None
+    header = parse_bridge_line(lines[0])
+    taps: dict = {}
+    for line in lines[1:]:
+        if not line.startswith("TAP "):
+            continue
+        fields: dict = {}
+        for token in line.split()[1:]:
+            key, _, value = token.partition("=")
+            fields[key] = value
+        stage = fields.get("stage")
+        if not stage:
+            continue
+        try:
+            peaks = [float(v) for v in fields.get("peak_dbfs", "").split(",")]
+            rms = [float(v) for v in fields.get("rms_dbfs", "").split(",")]
+            clipped = [int(v) for v in fields.get("clip", "").split(",")]
+            if not (len(peaks) == len(rms) == len(clipped) == 16):
+                continue
+            taps[stage] = {
+                "stage": stage,
+                "where": METER_STAGES.get(stage, ""),
+                "sequence": int(fields.get("seq", 0)),
+                "frames": int(fields.get("frames", 0)),
+                "position": int(fields.get("position", 0)),
+                "peakDb": peaks,
+                "rmsDb": rms,
+                "clipped": clipped,
+            }
+        except ValueError:
+            continue
+    if not taps:
+        return None
+    return {
+        "version": header.get("v"),
+        "bridgeTimeUs": header.get("t_us"),
+        "windowFrames": header.get("window_frames"),
+        "writes": header.get("writes"),
+        "taps": taps,
+    }
+
+
+_meters_cache: dict = {"mtime": None, "body": None}
+_meters_lock = threading.Lock()
+
+
+def read_meters(now: float | None = None) -> dict:
+    """The latest meter snapshot, parsed once per file version. A missing or
+    stale file (the bridge stopped, or runs untapped) reads as unavailable;
+    the reason says which."""
+    now = time.time() if now is None else now
+    try:
+        stat = METERS_FILE.stat()
+    except OSError:
+        return {"ok": True, "available": False,
+                "reason": "No meter snapshot: the bridge is not running or runs with METERS=0."}
+    age = now - stat.st_mtime
+    with _meters_lock:
+        if _meters_cache["mtime"] != stat.st_mtime:
+            parsed = parse_meters(read_text(METERS_FILE, 16384) or "")
+            _meters_cache["mtime"] = stat.st_mtime
+            _meters_cache["body"] = parsed
+        body = _meters_cache["body"]
+    if body is None:
+        return {"ok": True, "available": False, "reason": "The meter snapshot could not be parsed."}
+    if age > METERS_FRESH_S:
+        return {"ok": True, "available": False, "ageSeconds": round(age, 1),
+                "reason": f"The meter snapshot is {age:.0f} s old: the bridge has stopped publishing."}
+    return {"ok": True, "available": True, "ageSeconds": round(age, 2), "source": "bridge-tap",
+            "windowMs": round((body.get("windowFrames") or 0) / 48.0, 1), **body}
 
 
 def parse_conf(text: str) -> dict[str, str]:
@@ -285,6 +373,8 @@ class Collector:
                 "rxClip": fields.get("rx_clip"),
                 "txPullMax": fields.get("tx_pullmax"),
                 "rxPullMax": fields.get("rx_pullmax"),
+                "dspUsMax": fields.get("dsp_us_max"),
+                "meterUsMax": fields.get("meter_us_max"),
             }
         stage = read_text(RUN_DIR / "stage", 4096)
         if stage:
@@ -299,6 +389,10 @@ class Collector:
         if recovers is not None:
             state["recovers"] = len([v for v in recovers.splitlines() if v.strip()])
         state["apply"] = apply_state()
+        meters = read_meters()
+        state["meters"] = {"available": meters["available"], "endpoint": "/api/meters",
+                           "pollMsMin": 100, "reason": meters.get("reason", ""),
+                           "windowMs": meters.get("windowMs"), "stages": sorted(meters.get("taps", {}))}
         return state
 
     def collect_slow(self) -> dict:
@@ -464,12 +558,8 @@ class Collector:
                 "detail": "Direct USB ↔ AoIP bridge" if running
                           else f"AES67 service {aes67 or 'unknown'}, USB gadget {gadget or 'unknown'}",
             },
-            "meters": {
-                "available": False,
-                "reason": "The bridge has no metering tap. Opening a second ALSA "
-                          "stream to read levels would compete with the audio path, "
-                          "so the meters shown are display activity only.",
-            },
+            # Overridden by the fast tier's read of the bridge's snapshot file.
+            "meters": {"available": False, "reason": "not yet read"},
             "dsp": self._dsp,
         }
         snapshot.update(self._fast)
@@ -955,6 +1045,10 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
         if route == "/api/health":
             self.send_json(self.collector.snapshot())
+        elif route == "/api/meters":
+            # Fresh on every request, parsed once per file version: the page
+            # polls this at up to 10 Hz and the file is two kilobytes on tmpfs.
+            self.send_json(read_meters())
         elif route == "/api/apply/status":
             # Read fresh rather than from the 1 Hz snapshot: the page polls
             # this while an operation runs and it is one small file.

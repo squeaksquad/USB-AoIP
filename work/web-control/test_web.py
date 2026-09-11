@@ -118,3 +118,79 @@ class WebPresetTests(unittest.TestCase):
         self.assertEqual(body["artifactFile"], f"{ident}.dsp")
         self.assertEqual((self.spool / "presets" / f"{ident}.dsp").read_bytes(), artifact)
         self.assertEqual(sorted(p.name for p in (self.spool / "presets").iterdir()), [f"{ident}.dsp"])
+
+
+METERS_TEXT = (
+    "METERS v=1 t_us=123456 window_frames=2400 writes=7\n"
+    "TAP stage=usb-capture seq=3 frames=2400 position=7200 peak_dbfs=" + ",".join(["-12.0"] * 16) +
+    " rms_dbfs=" + ",".join(["-15.0"] * 16) + " clip=" + ",".join(["0"] * 16) + "\n"
+    "TAP stage=ravenna-playback seq=3 frames=2448 position=7248 peak_dbfs=" + ",".join(["-6.0"] * 16) +
+    " rms_dbfs=" + ",".join(["-9.0"] * 16) + " clip=" + ",".join(["4"] * 16) + "\n"
+    "TAP stage=ravenna-capture seq=3 frames=2400 position=7200 peak_dbfs=" + ",".join(["-144.0"] * 16) +
+    " rms_dbfs=" + ",".join(["-144.0"] * 16) + " clip=" + ",".join(["0"] * 16) + "\n"
+    "TAP stage=usb-playback seq=3 frames=2400 position=7200 peak_dbfs=" + ",".join(["-144.0"] * 16) +
+    " rms_dbfs=" + ",".join(["-144.0"] * 16) + " clip=" + ",".join(["0"] * 16) + "\n"
+)
+
+
+class MetersTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.run_dir = root / "run"
+        self.run_dir.mkdir()
+        os.environ["USB16X16_RUN_DIR"] = str(self.run_dir)
+        spool = root / "web-apply"
+        spool.mkdir()
+        conf = root / "aes67.conf"
+        conf.write_text("PROFILE=dsp-direct\nPROFILE_DSP_DIRECT_STATUS=accepted\nPROFILE_DSP_DIRECT_TARGET=48\n")
+        self.web = load(spool, conf)
+
+    def tearDown(self):
+        os.environ.pop("USB16X16_RUN_DIR", None)
+        self.tmp.cleanup()
+
+    def test_parse_meters_reads_the_four_stages(self):
+        body = self.web.parse_meters(METERS_TEXT)
+        self.assertEqual(body["windowFrames"], 2400)
+        self.assertEqual(body["writes"], 7)
+        self.assertEqual(sorted(body["taps"]), ["ravenna-capture", "ravenna-playback", "usb-capture", "usb-playback"])
+        out = body["taps"]["ravenna-playback"]
+        self.assertEqual((out["sequence"], out["frames"], out["position"]), (3, 2448, 7248))
+        self.assertEqual(out["peakDb"], [-6.0] * 16)
+        self.assertEqual(out["rmsDb"], [-9.0] * 16)
+        self.assertEqual(out["clipped"], [4] * 16)
+        self.assertIn("after the DSP stage", out["where"])
+
+    def test_parse_meters_refuses_what_it_cannot_read(self):
+        self.assertIsNone(self.web.parse_meters(""))
+        self.assertIsNone(self.web.parse_meters("BRIDGE ppm=1\n"))
+        self.assertIsNone(self.web.parse_meters("METERS v=1\nTAP stage=usb-capture peak_dbfs=1,2 rms_dbfs=1,2 clip=0,0\n"))
+
+    def test_read_meters_missing_stale_and_fresh(self):
+        self.assertFalse(self.web.read_meters()["available"])
+        self.assertIn("not running", self.web.read_meters()["reason"])
+        path = self.run_dir / "meters"
+        path.write_text(METERS_TEXT)
+        fresh = self.web.read_meters()
+        self.assertTrue(fresh["available"])
+        self.assertEqual(fresh["windowMs"], 50.0)
+        self.assertEqual(fresh["taps"]["usb-capture"]["peakDb"][0], -12.0)
+        stale = self.web.read_meters(now=time.time() + 5)
+        self.assertFalse(stale["available"])
+        self.assertIn("stopped publishing", stale["reason"])
+        path.write_text("garbage\n")
+        self.assertFalse(self.web.read_meters()["available"])
+
+    def test_health_fast_tier_reports_the_tap(self):
+        collector = self.web.Collector(self.run_dir, self.run_dir)
+        state = collector.collect_fast()
+        self.assertFalse(state["meters"]["available"])
+        self.assertEqual(state["meters"]["endpoint"], "/api/meters")
+        (self.run_dir / "meters").write_text(METERS_TEXT)
+        (self.run_dir / "last-bridge").write_text("BRIDGE ppm=-15.3 tx_queue=200 dsp_us_max=12.5 meter_us_max=1.25 rx_queue=100\n")
+        state = collector.collect_fast()
+        self.assertTrue(state["meters"]["available"])
+        self.assertEqual(state["meters"]["stages"], ["ravenna-capture", "ravenna-playback", "usb-capture", "usb-playback"])
+        self.assertEqual(state["bridge"]["meterUsMax"], 1.25)
+        self.assertEqual(state["bridge"]["dspUsMax"], 12.5)
