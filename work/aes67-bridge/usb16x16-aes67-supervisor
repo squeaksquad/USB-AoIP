@@ -45,7 +45,7 @@ candidate_wrapper=/usr/local/sbin/run-phase4-candidate-safe.sh
 candidate_ready_file=/tmp/usb16x16-phase4-candidate.ready
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=bc694c24c77893836dd3a3cfa0c9105e68b556d19dd51a84bf9ee5ca3f1b98ff
-expected_bridge_sha256=05f37bd911c4f9960eb6f2150accc8603dc4ac92e26622a397706619eea7a233
+expected_bridge_sha256=406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 api=http://127.0.0.1:8080
 

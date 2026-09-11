@@ -1,10 +1,12 @@
 # USB 16x16 Phase 4 real-time bridge
 
-Status: implemented and running on the Pi, but not accepted as an operating
-point. The currently pinned build adds exact capture-frame counters for the
-next estimator diagnostic. Its controller is otherwise the same design that
-reached an RX playback XRUN in `phase4-candidate-20260901T134118Z`; it has not
-completed a candidate run or the required loaded ten-minute soak.
+Status (2026-09-11): accepted and in service. Bridge 406699bd is the accepted
+transport bridge of 2026-09-02 onward (sd103 profile, handoff ACCEPTED
+2026-09-07 22:25 UTC) plus the DSP stage of `DSP_MODE_DESIGN.md`, accepted
+2026-09-11 under the reference-events-v1 criterion; the service runs the
+`dsp-direct` profile, so no preset is loaded unless one is selected. The
+paragraph that used to sit here described the 2026-09-01 candidate and is
+superseded by the handoff.
 
 This candidate replaces two independent `alsaloop` processes with one process
 that owns all four raw ALSA directions:
@@ -54,7 +56,7 @@ ctest --test-dir build --output-on-failure
 ```
 
 The pinned aarch64 candidate is in `artifacts/pi-aarch64/` with SHA-256
-`05f37bd911c4f9960eb6f2150accc8603dc4ac92e26622a397706619eea7a233`
+`406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88` (2026-09-11: the accepted 05f37bd9 source plus the DSP stage; 05f37bd9 is the rollback, kept by the review-20260911 bundle)
 (2026-09-07: `--align-prime-age-margin-us N`, the prime margin's 5 frames:
 the aligned prime's front age is priced at N + 2 ticks - offset instead of
 the 150 us placement margin's 1200 us, so at 50 the TX front age is 296

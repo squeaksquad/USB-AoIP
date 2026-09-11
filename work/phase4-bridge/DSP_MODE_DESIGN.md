@@ -1,9 +1,12 @@
 # DSP mode inside the bridge — step 4 design
 
-Status: **measured under the transport and under the harness, not installed.** The stage is wired into `usb-to-ravenna`, the bridge reports what it costs,
-and audio has now been carried through it for 360 seconds on the accepted
-profile. The pinned binary and the installed service are untouched, and the
-supervisor still pins the old hash.
+Status: **installed and accepted 2026-09-11** under the reference-events-v1
+criterion (`work/dsp-service/REFERENCE_VALIDATION.md`), bridge 406699bd,
+supervisor cdc0768d, profiles `dsp-direct` (the default, no preset),
+`dsp-transparent` and `dsp-loaded`; the handoff's ACCEPTED 2026-09-11 entry
+is the record. Acceptance item 3 below was met by the continuous all-16
+soak rather than the impulse battery, which a filtering preset cannot pass
+by construction; item 2 read 725 on its own anchor and 19.021 ms at 32.
 
 See "MEASURED 2026-09-10: the budget" at the end for what the numbers turned
 out to be. Where they contradict what this note predicted, the measurement

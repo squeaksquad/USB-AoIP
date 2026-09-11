@@ -1,5 +1,9 @@
 # Fixed-preset DSP service validation
 
+ACCEPTED 2026-09-11 under the `reference-events-v1` criterion (handoff ACCEPTED
+2026-09-11); the service runs `dsp-direct`. The paragraphs below are the
+campaign record and keep their original wording.
+
 Installed; 2026-09-11 acceptance battery completed with a loaded-arm failure.
 Direct/transparent passed preflight, impulse repeats and ten-minute soaks; loaded
 failed its soak because input 4 had seven consecutive exact zeros (limit <4).

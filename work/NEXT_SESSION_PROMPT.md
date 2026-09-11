@@ -1,37 +1,30 @@
 # Next-session pickup prompt
 
-## Current DSP pickup — reserve question closed by analysis; acceptance decision open
+## Current DSP pickup — ACCEPTED 2026-09-11; next is UI Apply (step 5)
 
-Read `outputs/dsp-service/reference-v1-live-20260911/RESULTS.md`, then the
-handoff's FOUND 2026-09-11 entry (the last one) and `queue-phase.txt` beside
-the RESULTS. One fresh loaded 60-second preflight and 600-second soak passed the
-frozen `reference-events-v1` criterion: all three channel-4 zero runs match the
-pinned filter/L24 reference (112 retained frames, max error 1.5625 LSB, one
-common 1,011-frame index offset that is alignment, not latency). No invalid
-samples, timestamp errors, recovery/drop/clip/low-queue/pitch errors.
+Read the handoff's last two entries (FOUND and ACCEPTED 2026-09-11). Bridge
+406699bd, supervisor cdc0768d and the `dsp-direct` / `dsp-transparent` /
+`dsp-loaded` profiles are the point of record under the `reference-events-v1`
+criterion; the service runs `dsp-direct` (no preset; identical audio to sd103).
+Rollback is the review-20260911 bundle's `deploy.py rollback`, never the legacy
+installers. The repo pins, artifact and conf are on the accepted set; the live
+conf (c9be6585) differs from the repo conf (9af00275) by comments and the
+absent BRIDGE_SETTLE_* lines only. The reserve objection and the 725 / 766
+difference are explained in the FOUND entry: `tx_queue` on the BRIDGE line is
+a tick-phase sample of a 48-frame sawtooth (watch `phase_us`), and the +48 is
+a TX queue start draw that predates the first filtered render.
 
-The "TX reserve fell late in the soak" objection is CLOSED without live work:
-the once-per-second `tx_queue` is one snd_pcm_delay sample of a 48-frame
-per-millisecond sawtooth and reads a period low whenever the line's `phase_us`
-sits within ~100 us of the tick wrap (650 of 666 dip rows across all four
-soaks, the direct arm worst). The floor step 86 -> 81 is the same phase
-drawing the running minimum, inside the lineage's 76-88 and priced like the
-record's candidate (prime 168). Do not use first/last-window `tx_queue` means
-as a reserve metric; floors, pull/gap maxima, `tx_qlow` and RECOVERs are.
-
-The direct/transparent 725 versus 766 is accounted for: +48 in the AES67
-index segment, a TX queue one period deeper at the transparent start, present
-before the stage's first filtered render, and inside the size of step the
-record has between starts on this profile. Consistent with neutrality, n = 1
-per arm; no re-draw campaign.
-
-What is now open is a decision, not a measurement: whether the candidate
-bridge 406699bd with the `dsp-*` profiles becomes the point of record under
-the `reference-events-v1` criterion (the original zero-run gate stays FAILED
-on its own terms, by policy), and which profile the service runs by default.
-Today it runs `dsp-direct` (DSP disabled on the candidate binary). After
-that decision: UI Apply as a staged stop/configure/start/verify/rollback
-operation (step 5), with draft and applied state kept separate.
+Next is UI Apply as a staged operation, in `work/web-control` (the Pi
+service) and `work/web-ui`: draft state stays in the browser; Apply becomes
+one privileged stop / switch-profile (or write a preset + block) / start /
+verify (STAGE running, hashes, counters) / rollback-on-failure sequence with
+a receipt, and the UI shows applied versus draft explicitly. Constraints that
+stand: a profile switch is a service restart and a new latency draw; a preset
+must be compiled on the Mac (the Pi has no node) or the compiler must be
+ported; the web service is unprivileged today and its README lists what it
+deliberately cannot do; no live coefficient updates, no meters, no AoIP-only
+mode. Playback must be off for any Apply test; nothing is installed without
+the user's go.
 
 The earlier battery remains FAILED under its original zero-run criterion:
 `outputs/dsp-service/acceptance-20260911/RESULTS.md`. Direct/transparent passed

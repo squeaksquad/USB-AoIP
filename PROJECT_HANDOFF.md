@@ -9967,3 +9967,47 @@ n = 1 per arm, so the statement stays "no added depth was observed and
 the observed difference is accounted for", not "proven equal". No
 re-draw campaign is proposed; the record's rule against re-drawing for a
 figure stands.
+
+**ACCEPTED 2026-09-11 19:47 UTC: the DSP bridge 406699bd with the dsp-direct /
+dsp-transparent / dsp-loaded profiles is the point of record, under the
+reference-events-v1 criterion; the service runs dsp-direct.** The user's
+decision, taken on the evidence of the two 2026-09-11 campaigns and the
+FOUND entry above, with the original zero-run gate left FAILED on the loaded
+arm by policy (work/dsp-service/REFERENCE_VALIDATION.md). What is accepted:
+
+- Bridge 406699bd: the accepted 05f37bd9 source plus the DspStage, wired
+  behind --dsp-preset on usb-to-ravenna only; the aligned prime renders
+  unfiltered. Supervisor cdc0768d (the repo supervisor with the bridge pin
+  moved; byte-identical to the installed file). Presets loaded.dsp 2b6baa04
+  and transparent.dsp ad695984 under /etc/usb16x16/dsp/. Installed on
+  2026-09-11 by the review-20260911 bundle's deploy.py; the rollback is
+  deploy.py rollback to 05f37bd9 / 427982dc / 306cfa85 from the same
+  bundle, never the legacy installers for this set.
+- The figures: dsp-direct 725 at 64 on its anchor, RTL at 32 19.021 ms =
+  725 + 188, 4 x 800 spread 0, 600 s all-16 soak, floors 84 / 96;
+  dsp-transparent 766 / 19.875 ms = 766 + 188, the same battery, floors
+  133 / 72, dsp max 161.6 us, the +48 over direct a TX queue start draw
+  (FOUND above); dsp-loaded 60 s preflight and 600 s all-16 soak under
+  reference-events-v1, three channel-4 zero events all the pinned filter /
+  L24 quantization, floors 81 / 72, dsp mean / max 50.5 / 138.5 us, lead
+  977 / 989 us, zero RECOVERs in every arm. Direct's 725 sits inside the
+  six no-DSP fresh-anchor draws on sd103 (716-725), so the transport point
+  of record is unchanged in substance; sd103 at 719 remains its figure.
+- Default profile dsp-direct: identical audio to sd103, a preset is
+  applied on purpose (a profile switch is a service restart, a new draw).
+  dsp-loaded has no impulse latency figure by construction; latency is read
+  through dsp-transparent.
+
+Repo brought to the accepted set in this entry: work/aes67-bridge/aes67.conf
+(PROFILE=dsp-direct, the three blocks with their MEASURED / COVER / STATUS
+and a 2026-09-11 comment; hash 9af00275), the supervisor pin (cdc0768d),
+install-aes67-service.sh pins (supervisor, conf, bridge),
+install-candidate.sh pin, artifacts/pi-aarch64/ now 406699bd, the README
+status paragraphs of phase4-bridge, DSP_MODE_DESIGN.md and dsp-service. The
+repo conf was validated by the supervisor's parser on the Pi
+(USB16X16_AES67_CONF=~/usb-16x16-work/aes67-dsp-accept.conf ... profiles).
+The live conf stays c9be6585: it carries the same three blocks without the
+comment and without the repo's BRIDGE_SETTLE_* lines (the supervisor
+defaults them), and deploy.py rollback's baseline check wants it unchanged.
+Nothing else on the Pi was touched. Next: UI Apply (step 5) as a staged
+stop / switch-profile / start / verify / rollback operation on this set.
