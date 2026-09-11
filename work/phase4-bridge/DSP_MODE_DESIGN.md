@@ -1,6 +1,6 @@
 # DSP mode inside the bridge — step 4 design
 
-Status: **measured under the transport, not installed.** The stage is wired into `usb-to-ravenna`, the bridge reports what it costs,
+Status: **measured under the transport and under the harness, not installed.** The stage is wired into `usb-to-ravenna`, the bridge reports what it costs,
 and audio has now been carried through it for 360 seconds on the accepted
 profile. The pinned binary and the installed service are untouched, and the
 supervisor still pins the old hash.
@@ -302,3 +302,80 @@ needs the full battery in this note's Acceptance section: the loaded runs, the
 soak, RTL at 32 on a fresh anchor with the preset loaded and the alignment
 delay zeroed, and the same again with no preset to show direct mode still
 measures what it measures today.
+
+
+## MEASURED 2026-09-11: the stage under the measurement harness
+
+Three arms, same wrapper, same accepted profile, differing only in the preset.
+Candidate runs, not the service, so every absolute level here is a candidate
+draw; see the caveats below before comparing any of it to 719.
+
+| Arm | Preset | Level | Spread over 800 | Correlation peak | `dsp_us_max` | RECOVERs |
+| --- | --- | --- | --- | --- | --- | --- |
+| direct | `none` | 1061 | 0 | 0.249999 | — | 0 |
+| transparent | 256 biquads | **1042** | **0** | **0.250031** | 83.129 µs | **0** |
+| loaded | 308 biquads, crossovers | 2090 | 7 | 0.018677 | 139.220 µs | 6 |
+
+**The stage is latency-neutral.** Transparent reads 19 samples *below* direct,
+not above, with every one of 800 impulses identical in both arms. Two separate
+candidate starts draw their own level -- fresh-anchor draws span 9 samples and
+plain restarts 92 -- so 19 samples in the cheaper direction is draw variation,
+not the stage. A stage that added transport depth could only move the level up,
+and it did not. The correlation peak matching direct to five decimal places is
+the independent check that the preset really is transparent in the signal.
+
+**The stage does not get more expensive under load.** Normalised per frame and
+per biquad, the mean cost is flat across every run taken:
+
+| Run | Biquads | Mean µs/frame | µs per frame per biquad |
+| --- | --- | --- | --- |
+| transparent, under the harness | 256 | 1.178 | 0.00460 |
+| transparent, idle | 256 | 1.206 | 0.00471 |
+| loaded, under the harness | 308 | 1.487 | 0.00483 |
+| loaded, idle | 308 | 1.424 | 0.00462 |
+
+0.0046–0.0048 µs per frame per biquad, a 5% spread, idle or loaded, at both
+biquad counts. **This retracts the "+32% under load" reading of the loaded
+arm.** That comparison was between two *maxima*, and the maximum is an outlier
+statistic: it tracks the largest block the bridge happened to render and any
+re-prime disturbance, and the 139.220 µs run is the one with six re-prime
+events in it. The mean is the figure that scales, and it scales with biquad
+count exactly as it should.
+
+### What a filtering preset does to the measurement
+
+`loaded` cannot be used to measure latency at all, and this is the finding that
+most changes the acceptance criteria above. Its 80 Hz high-pass and 256 shaped
+bands mean the impulse the harness correlates against is no longer in the
+signal: the peak it found was 13 dB down with 7 samples of spread, against zero
+spread on the other two arms. The +1029 samples is a smeared response, not
+transport depth.
+
+It also explains that arm's six RECOVERs, which are three both-PCM XRUN pairs,
+the recorded Mac-side gadget-PCM-restart signature. The attenuated impulse
+fails the harness's signal gate, so it re-probes, and every probe closes and
+reopens the device. Both other arms, whose impulses survive, took none.
+
+The acceptance section above says to zero the alignment delay so the preset's
+own delay is not read as transport latency. That was necessary and not
+sufficient: the filters move the peak too. Any future latency claim about the
+DSP path has to be taken through a preset that is transparent to an impulse,
+which is what `transparent` in `verify-presets.mjs` exists for.
+
+### What this run does not establish
+
+- **Every level is an aged-anchor candidate draw.** The Mac had been up over an
+  hour with several device open/close cycles. 1042 and 1061 are internally
+  consistent and are not comparable with the accepted 719, which was taken on a
+  fresh anchor against the running service.
+- **Candidate, not service.** The accepted figures come from
+  `measure-under-service.sh` against `usb16x16-aes67.service`. These are
+  candidate runs with the installed binary and the supervisor untouched.
+- **One run per arm, no soak.** The acceptance battery is four loaded
+  800-impulse runs and a ten-minute sixteen-channel soak per arm. This is one
+  run each and no soak.
+- **No RTL figure.** RTL Utility at 32 frames is the standard, it is a separate
+  manual pass, and it must never share the device with the harness.
+- **The Mac-side hole check never produced a valid result.** `zeros.py` is for
+  the continuous-noise probes; run on an impulse capture its "100% zeros inside
+  the span" is the silence between impulses and means nothing.
