@@ -1,11 +1,18 @@
 #!/bin/bash
-# Install usb16x16-web.service on the Pi. Run once with sudo from the staging
-# directory that holds usb16x16-web and usb16x16-web.service.
+# Install usb16x16-web.service and the Apply units on the Pi. Run with sudo
+# from the staging directory that holds usb16x16-web, usb16x16-web.service,
+# usb16x16-apply, usb16x16-apply.service and usb16x16-apply.path.
 #
-# The service is read-only: it serves the web UI, reads status and the journal,
-# and stores presets under the user's home. It touches no audio device, no
-# systemd unit and no kernel module, and it runs unprivileged. Installing it
-# does not restart, reload or otherwise disturb the audio stack.
+# The web service is read-only: it serves the web UI, reads status and the
+# journal, and stores presets under the user's home. It touches no audio
+# device, no systemd unit and no kernel module, and it runs unprivileged. Its
+# one write outside the preset store is a request file in the Apply spool.
+# usb16x16-apply (root, run by the path unit on that file) is the privileged
+# half: it switches usb16x16-aes67.service between ACCEPTED profiles with the
+# supervisor's own switch-profile, verifies, rolls back, and leaves a receipt.
+# Installing either does not restart, reload or otherwise disturb the audio
+# stack; enabling the path unit arms Apply, and the web service must be
+# restarted to see the spool (its unit gained a ReadWritePaths entry).
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -16,33 +23,56 @@ fi
 script_dir=$(cd "$(dirname "$0")" && pwd)
 service_source="$script_dir/usb16x16-web"
 unit_source="$script_dir/usb16x16-web.service"
+apply_source="$script_dir/usb16x16-apply"
+apply_unit_source="$script_dir/usb16x16-apply.service"
+apply_path_source="$script_dir/usb16x16-apply.path"
 service_destination=/usr/local/bin/usb16x16-web
 unit_destination=/etc/systemd/system/usb16x16-web.service
+apply_destination=/usr/local/bin/usb16x16-apply
+apply_unit_destination=/etc/systemd/system/usb16x16-apply.service
+apply_path_destination=/etc/systemd/system/usb16x16-apply.path
+apply_dir=/home/bdimaio/usb-16x16-work/web-apply
 preset_dir=/home/bdimaio/usb-16x16-work/web-presets
 static_dir=/home/bdimaio/usb-16x16-work/web-ui
 auth_file=/home/bdimaio/usb-16x16-work/web-auth
 
-expected_service_sha256=c8872ef948333305a79575b8adc6b66b31a8ff7c51c63552a7bbc30ba95d6f54
-expected_unit_sha256=97290615b1db2ee453b7f8d37a1a492529559d5ce1fbf89b215a2c171141914c
+expected_service_sha256=1711928761934c643338c46bc20ff2e37e05afab48fb7ce8c7028f6a07a2e8d7
+expected_unit_sha256=f7c7d48cab8b12b9b7ed9f5a920efc497e9874760cc9434c979c25ee68b59761
+expected_apply_sha256=ae6618129fcda284b6cef25c9e0c6b4c9b9f62f864b600a74863a0885369da14
+expected_apply_unit_sha256=43343144abe725d756d0c0731cc525a2da0f2873029d7d17857316314898047c
+expected_apply_path_sha256=5dc4067ec09b0329741aea80f8f8557f7e45cbd70154d15c6888b13598e29aeb
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
 
-for source in "$service_source" "$unit_source"; do
+for source in "$service_source" "$unit_source" "$apply_source" "$apply_unit_source" "$apply_path_source"; do
   [ -r "$source" ] || { echo "missing staged file: $source" >&2; exit 3; }
 done
 [ "$(sha256_of "$service_source")" = "$expected_service_sha256" ] || {
   echo "usb16x16-web source hash mismatch" >&2; exit 4; }
 [ "$(sha256_of "$unit_source")" = "$expected_unit_sha256" ] || {
   echo "usb16x16-web.service source hash mismatch" >&2; exit 5; }
+[ "$(sha256_of "$apply_source")" = "$expected_apply_sha256" ] || {
+  echo "usb16x16-apply source hash mismatch" >&2; exit 7; }
+[ "$(sha256_of "$apply_unit_source")" = "$expected_apply_unit_sha256" ] || {
+  echo "usb16x16-apply.service source hash mismatch" >&2; exit 8; }
+[ "$(sha256_of "$apply_path_source")" = "$expected_apply_path_sha256" ] || {
+  echo "usb16x16-apply.path source hash mismatch" >&2; exit 9; }
 [ -r "$static_dir/index.html" ] || {
   echo "no web UI staged at $static_dir/index.html" >&2; exit 6; }
 
 install -o root -g root -m 0755 "$service_source" "$service_destination"
 install -o root -g root -m 0644 "$unit_source" "$unit_destination"
+install -o root -g root -m 0755 "$apply_source" "$apply_destination"
+install -o root -g root -m 0644 "$apply_unit_source" "$apply_unit_destination"
+install -o root -g root -m 0644 "$apply_path_source" "$apply_path_destination"
 install -d -o bdimaio -g bdimaio -m 0755 "$preset_dir"
+# The web service (bdimaio) writes request.json here; root writes the
+# receipts. Nothing else lives in it.
+install -d -o bdimaio -g bdimaio -m 0755 "$apply_dir"
+install -d -o root -g root -m 0755 "$apply_dir/receipts"
 systemctl daemon-reload
 
-echo "installed $service_destination and $unit_destination"
+echo "installed $service_destination, $unit_destination, $apply_destination and the Apply units"
 if [ ! -s "$auth_file" ]; then
   echo
   echo "NOTE: no credentials at $auth_file."
@@ -50,7 +80,11 @@ if [ ! -s "$auth_file" ]; then
   echo "Create one first, as bdimaio, not root:"
   echo "  $service_destination --auth-file $auth_file --add-user NAME"
 fi
-echo "start it with: sudo systemctl enable --now usb16x16-web.service"
-echo "rollback:      sudo systemctl disable --now usb16x16-web.service &&"
-echo "               sudo rm -f $unit_destination $service_destination &&"
+echo "start / restart the web service: sudo systemctl enable --now usb16x16-web.service"
+echo "                                  sudo systemctl restart usb16x16-web.service"
+echo "arm Apply:                        sudo systemctl enable --now usb16x16-apply.path"
+echo "disarm Apply (web stays):         sudo systemctl disable --now usb16x16-apply.path"
+echo "rollback:      sudo systemctl disable --now usb16x16-apply.path usb16x16-web.service &&"
+echo "               sudo rm -f $unit_destination $service_destination \\"
+echo "                 $apply_path_destination $apply_unit_destination $apply_destination &&"
 echo "               sudo systemctl daemon-reload"

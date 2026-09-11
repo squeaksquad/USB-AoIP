@@ -5,7 +5,7 @@ import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphoneP
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS } from './backend.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
 let channelClipboard = null, pasteScope = 'processing', layoutUndo = null, rewParsed = null;
@@ -15,6 +15,8 @@ let selectedBand = 0, eqDrag = null, eqObserver;
 let logService = 'all', logQuery = '';
 // Live state from the Pi control service; null whenever no backend answers.
 let health = null, logBusy = false;
+// Staged Apply (Settings): the chosen target, the last status seen, and the poll that follows an operation.
+let applyChoice = '', applyStatus = null, applyBusy = false, applyPoll = null;
 const logLive = {all:'',aes67:'',usb:''};
 let profileState = null;
 // Each slot remembers whether its draft was saved, so recalling one does not read as edited.
@@ -75,9 +77,10 @@ function modeNote(isDirect) {
     ? 'Previewing direct mode. DSP edits are disabled; the DSP draft is retained.'
     : 'Previewing DSP mode.';
   if (!health) return `${draft} No device has been switched.`;
-  const running = health.mode?.running ? 'The Pi is running the direct USB ↔ AoIP bridge.' : `The Pi stack is not running: ${health.mode?.detail || 'state unknown'}.`;
+  const profile = health.profile?.selected ? ` on profile ${health.profile.selected}` : '';
+  const running = health.mode?.running ? `The Pi is running the USB ↔ AoIP bridge${profile}.` : `The Pi stack is not running: ${health.mode?.detail || 'state unknown'}.`;
   const dsp = isDirect ? '' : ` ${dspNote(health)}`;
-  return `${draft} ${running} This UI is read-only; no mode has been switched.${dsp}`;
+  return `${draft} ${running} Browser edits change nothing on the Pi; profile switches go through Apply on the Settings page.${dsp}`;
 }
 
 function renderConnection() {
@@ -489,13 +492,64 @@ function renderSettings() {
     <div class="command-line"><code id="journal-command">${esc(journalCommand(logService))}</code><button data-action="copy-journal">Copy command</button></div>
     <details class="log-paste"><summary>Paste a log snapshot</summary><label class="field"><span>Journal output · local to this page</span><textarea id="log-paste" rows="4" maxlength="200000" spellcheck="false" placeholder="Paste command output from the Pi here">${esc(logSnapshots[logService])}</textarea></label></details>
     <div class="log-view" tabindex="0" role="region" aria-label="Service log snapshot"><pre id="log-output"></pre></div><p id="log-count" role="status"></p></section>
+    ${applyPanel()}
     <section class="panel maintenance-panel"><div class="section-heading"><h2>Common commands</h2><span class="offline-badge">Run on the Pi</span></div>
-    <p>Copy a command for a Pi terminal. ${health?'The control service is deliberately read-only: it cannot restart a service, switch a profile or apply DSP, because owning a PCM device and interrupting audio belongs to a privileged supervisor that is not built yet.':'Run buttons become available when device control is connected.'} Restart commands interrupt audio.</p>
+    <p>Copy a command for a Pi terminal. ${health?'The control service is read-only apart from the profile switch above: it cannot restart a service or install DSP, because owning a PCM device belongs to the privileged applier, which takes exactly that one request.':'Run buttons become available when device control is connected.'} Restart commands interrupt audio.</p>
     <div class="service-commands">${SERVICE_COMMANDS.map(c=>`<article class="service-command"><h3>${esc(c.label)}</h3><p>${esc(c.detail)}</p><code>${esc(c.command)}</code><div class="toolbar"><button data-copy-command="${c.id}" aria-label="Copy ${esc(c.label)} command">Copy command</button><button disabled title="${health?'The control service is read-only; run this in a Pi terminal':'Requires a Pi control backend'}" aria-label="Run ${esc(c.label)} on Pi">Run on Pi</button></div></article>`).join('')}</div></section>
     <section class="panel"><h2>Input labels</h2><p>Labels belong to this preset. Computer-facing USB channel names remain 1–16.</p><div class="table-scroll"><table><thead><tr><th>Input</th><th>Label</th></tr></thead><tbody>${config.inputs.map((v,i)=>`<tr><td>${pad(i)}</td><td><input data-input="${i}" data-param="label" aria-label="Input ${i+1} label" maxlength="64" value="${esc(v.label)}" required></td></tr>`).join('')}</tbody></table></div></section>
     <section class="panel"><h2>Operating modes</h2><p><strong>Direct bridge</strong> retains the existing bidirectional USB ↔ AoIP path. Its timing profile stays independent of DSP presets.</p><p><strong>DSP processor</strong> takes one 16-channel source bank, redirects bass, applies output correction, and sends 16 channels to AoIP.</p><p>In AoIP source mode, USB is not part of the signal path. The eventual processor must be able to run without a connected USB host.</p><p>Network stream subscriptions and device settings require the future backend. Native Dante control is outside this UI; the current transport uses AES67 interoperability.</p></section></div>`;
   renderLogView();
 }
+
+/** Settings: the live service profile and the staged switch between accepted profiles. */
+function applyPanel() {
+  const choices = profileChoices(health);
+  const status = applyStatus || health?.apply || null;
+  const inFlight = Boolean(status && (status.inFlight || status.pending));
+  const live = choices.live;
+  const liveLine = !health ? 'Requires the Pi connection.'
+    : live ? `<strong>${esc(live.name)}</strong>${live.status ? ` · ${esc(live.status)}` : ''}${live.measured ? ` · ${esc(live.measured)}` : ''}${live.description ? `<br><span class="muted">${esc(live.description)}</span>` : ''}`
+    : 'Profile unknown (configuration unreadable).';
+  if (!choices.accepted.some(row => row.name === applyChoice)) applyChoice = choices.accepted[0]?.name || '';
+  const canApply = Boolean(health) && choices.available && !applyBusy && !inFlight && Boolean(applyChoice);
+  const current = status?.current;
+  const steps = current?.steps?.length ? `<ol class="apply-steps">${current.steps.map(step => `<li class="${step.ok ? '' : 'warn'}"><strong>${esc(applyStepLabel(step.name))}</strong>${step.detail ? ` <span class="muted">${esc(step.detail)}</span>` : ''}</li>`).join('')}</ol>` : '';
+  return `<section class="panel maintenance-panel" id="apply-panel"><div class="section-heading"><h2>Service profile</h2><span class="offline-badge ${health?'live-badge':''}">${health ? (choices.available ? 'Apply available' : 'Apply not installed') : 'Not connected'}</span></div>
+    <p class="fact-plain">${liveLine}</p>
+    <div class="log-controls">${field('Switch to', `<select id="apply-profile-choice" ${disabled(!choices.accepted.length || inFlight || applyBusy)}>${choices.accepted.length ? options(choices.accepted.map(row => [row.name, `${row.name}${row.dspPreset ? ' · preset' : ' · no preset'}`]), applyChoice) : '<option value="">No other accepted profile</option>'}</select>`)}<button class="primary" data-action="apply-profile" ${disabled(!canApply)} title="${choices.available ? 'Restart the AES67 service on the chosen profile' : esc(choices.reason)}">${applyBusy ? 'Queueing…' : inFlight ? 'Applying…' : 'Apply profile'}</button></div>
+    <p class="muted">${esc(choices.reason.replace(/[.\s]*$/, '.'))}${health ? ' A switch stops audio for about a minute, draws a new latency level, and is rolled back automatically if the stack does not come up clean. Stop playback first.' : ''}</p>
+    <div class="note-box" role="status">${esc(applyLine(status))}</div>${steps}</section>`;
+}
+
+async function applyProfile() {
+  const choices = profileChoices(health);
+  const target = choices.accepted.find(row => row.name === applyChoice);
+  if (!target) { toast('Choose an accepted profile first.'); return; }
+  const live = choices.live?.name || null;
+  if (!confirm(`Switch the AES67 service from ${live || '?'} to ${target.name}?\n\nAudio stops for about a minute while the stack restarts, and the latency level is drawn afresh. If the stack does not come up clean the applier returns to ${live || 'the previous profile'} on its own. Stop playback before continuing.`)) return;
+  applyBusy = true; renderSettings();
+  try {
+    const result = await requestProfile(target.name, live);
+    toast(result.note || `Queued a switch to ${target.name}.`);
+    applyStatus = {current: null, pending: true, inFlight: false};
+    startApplyPolling();
+  } catch (e) { toast(`Apply refused: ${e.message}`); }
+  applyBusy = false;
+  if (tab === 'settings') renderSettings();
+}
+
+function startApplyPolling() {
+  if (applyPoll) return;
+  const tick = async () => {
+    try { applyStatus = await fetchApplyStatus(); }
+    catch (e) { toast(`Lost the Apply status: ${e.message}`); stopApplyPolling(); return; }
+    if (tab === 'settings') renderSettings();
+    if (applyFinished(applyStatus)) { stopApplyPolling(); toast(applyLine(applyStatus)); pollHealth(); }
+  };
+  applyPoll = setInterval(tick, APPLY_POLL_MS);
+  tick();
+}
+function stopApplyPolling() { clearInterval(applyPoll); applyPoll = null; }
 
 function renderLogView() {
   // A live read wins over a pasted snapshot; the count line always says which.
@@ -640,7 +694,9 @@ document.addEventListener('click', event => {
     if (name && confirm(`Delete preset "${name}" from ${presetStore.label}? The current draft is unaffected.`)) deletePreset(name);
     return;
   }
-  else if (action === 'refresh-logs') { loadLiveLogs(); return; } else if (action === 'load') {
+  else if (action === 'refresh-logs') { loadLiveLogs(); return; }
+  else if (action === 'apply-profile') { applyProfile(); return; }
+  else if (action === 'load') {
     try { config = parsePreset(JSON.stringify(presets()[$('#saved-preset').value])); layoutUndo=null; busUndo=null; dirty = false; render(); toast(`Preset loaded from ${presetStore.label}. No device changes.`); } catch(e) { toast(`Could not load: ${e.message}`); } return;
   } else if (action === 'reset') { config = createConfig(); selected = 0; layoutUndo=null; busUndo=null; }
   else if (action === 'export') {
@@ -667,6 +723,7 @@ let rewFileRead=0;
 document.addEventListener('change', async event => {
   const el = event.target;
   if(el.id==='log-service'){logService=el.value;$('#journal-command').textContent=journalCommand(logService);$('#log-paste').value=logSnapshots[logService];renderLogView();return;}
+  if(el.id==='apply-profile-choice'){applyChoice=el.value;return;}
   if(el.id==='log-filter'||el.id==='log-paste')return;
   if (el.id === 'saved-preset'||el.id==='rew-text') return;
   if (el.id==='output-format') {document.querySelector('[data-action="layout-apply"]').disabled=el.value==='custom'||config.mode==='direct';return;}
@@ -844,11 +901,15 @@ async function pollHealth() {
   const wasConnected = Boolean(health);
   health = next;
   if (!wasConnected && next) {
-    toast(`Connected to ${next.host || 'the Pi'}. Status and logs are live; this UI is read-only.`);
+    toast(`Connected to ${next.host || 'the Pi'}. Status and logs are live; profile switches go through Apply in Settings.`);
     await adoptStore(piStore());
   } else if (wasConnected && !next) {
     toast('Lost the Pi control service. Showing the local draft; presets are back in this browser.');
     await adoptStore(browserStore(storageKey));
+  }
+  if (next?.apply && !applyPoll) {
+    applyStatus = null; // the 1 Hz snapshot is the source of truth while nothing of ours is running
+    if (next.apply.inFlight || next.apply.pending) startApplyPolling();
   }
   if (tab === 'settings') renderSettings();
   renderConnection();

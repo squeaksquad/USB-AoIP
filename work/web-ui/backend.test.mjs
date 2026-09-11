@@ -200,3 +200,63 @@ test('an unanswered daemon API reads as unknown, not as an unlocked clock', () =
   assert.match(row.value, /did not answer/);
   assert.ok(!connectionLine(quiet).includes('PTP'), 'the status line stays quiet about an unknown clock');
 });
+
+// ------------------------------------------------------------- apply
+
+import { requestProfile, fetchApplyStatus, applyFinished, applyLine, profileChoices, applyStepLabel } from './backend.mjs';
+
+const liveWithProfiles = {
+  ...live,
+  profile: {selected: 'dsp-direct', profiles: [
+    {name: 'dsp-direct', status: 'accepted', accepted: true, description: 'no preset', dspPreset: null},
+    {name: 'dsp-loaded', status: 'accepted', accepted: true, description: 'Immersive', dspPreset: '/etc/usb16x16/dsp/loaded.dsp'},
+    {name: 'fast', status: 'experimental', accepted: false},
+  ]},
+  control: {apply: {available: true, unit: 'usb16x16-apply.path', state: 'active', scope: 'accepted profiles only'}},
+};
+
+test('profileChoices offers accepted profiles other than the live one', () => {
+  const choices = profileChoices(liveWithProfiles);
+  assert.equal(choices.live.name, 'dsp-direct');
+  assert.deepEqual(choices.accepted.map(r => r.name), ['dsp-loaded']);
+  assert.equal(choices.available, true);
+  assert.equal(choices.reason, 'accepted profiles only');
+});
+
+test('profileChoices is honest when Apply is not installed or the page is offline', () => {
+  const off = profileChoices({...liveWithProfiles, control: {apply: {available: false, reason: 'unit inactive'}}});
+  assert.equal(off.available, false);
+  assert.equal(off.reason, 'unit inactive');
+  assert.deepEqual(profileChoices(null), {live: null, accepted: [], available: false, reason: 'Apply is not installed on this Pi.'});
+});
+
+test('requestProfile posts the profile and the expected live profile', async () => {
+  const calls = [];
+  const result = await requestProfile('dsp-loaded', 'dsp-direct', async (url, init) => { calls.push([url, init]); return ok({ok: true, id: 'abc'}); });
+  assert.equal(result.id, 'abc');
+  assert.equal(calls[0][0], '/api/apply/profile');
+  assert.equal(calls[0][1].method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0][1].body), {profile: 'dsp-loaded', expectedProfile: 'dsp-direct'});
+  await assert.rejects(requestProfile('x', null, async () => fail(409, {ok: false, error: 'already in progress'})), /already in progress/);
+  await assert.rejects(requestProfile('x', null, async () => fail(503, {})), /503/);
+});
+
+test('fetchApplyStatus returns the body or throws the error', async () => {
+  assert.deepEqual(await fetchApplyStatus(async () => ok({ok: true, current: null, pending: false, inFlight: false})), {ok: true, current: null, pending: false, inFlight: false});
+  await assert.rejects(fetchApplyStatus(async () => fail(500, {ok: false, error: 'boom'})), /boom/);
+});
+
+test('applyFinished and applyLine follow the applier state machine', () => {
+  assert.equal(applyFinished({current: null, pending: false}), false);
+  assert.equal(applyFinished({current: {state: 'verifying'}, pending: false}), false);
+  assert.equal(applyFinished({current: {state: 'done'}, pending: false}), true);
+  assert.equal(applyFinished({current: {state: 'done'}, pending: true}), false, 'a newer request is queued');
+  assert.equal(applyLine(null), 'No Apply operation recorded.');
+  assert.equal(applyLine({current: null, pending: true, inFlight: false}), 'Request queued; waiting for the applier to pick it up.');
+  assert.match(applyLine({current: {state: 'settling', profile: 'dsp-loaded'}}), /Settling with zero recoveries \(dsp-loaded\)/);
+  assert.match(applyLine({current: {state: 'done', profile: 'dsp-loaded', finishedAt: '2026-09-11T20:00:00Z', request: {requestedBy: 'bryan'}}}), /Applied dsp-loaded by bryan · live since 2026-09-11T20:00:00Z/);
+  assert.match(applyLine({current: {state: 'rolled-back', profile: 'dsp-loaded', previousProfile: 'dsp-direct', error: 'no STAGE running'}}), /rolled back to dsp-direct\. no STAGE running/);
+  assert.match(applyLine({current: {state: 'refused', error: 'stale page'}}), /Refused: stale page/);
+  assert.match(applyLine({current: {state: 'failed', profile: 'x', error: 'both'}}), /rollback failed too: both/);
+  assert.equal(applyStepLabel('unknown-step'), 'unknown-step');
+});

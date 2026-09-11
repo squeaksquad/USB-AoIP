@@ -649,3 +649,8 @@ input[type=checkbox],input[type=radio]{background:none;border:0;box-shadow:none;
 .connection-status>span{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .profile-slots{min-width:0;max-width:100%}
 .profile-slots .slot-preset select{max-width:100%}
+
+/* Settings · Service profile (staged Apply) */
+.apply-steps { margin: 0.5rem 0 0; padding-left: 1.25rem; font-size: 0.9rem; }
+.apply-steps li { margin: 0.15rem 0; }
+.apply-steps li.warn strong { color: var(--warn, #e6b35c); }

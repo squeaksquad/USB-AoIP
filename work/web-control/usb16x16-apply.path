@@ -1,0 +1,13 @@
+[Unit]
+Description=USB 16x16 web Apply request watcher
+Documentation=file:///home/bdimaio/usb-16x16-work/web-control/README.md
+
+[Path]
+# The web service writes request.json with a rename into place; PathChanged
+# fires on the move as well as on close-after-write.
+PathChanged=/home/bdimaio/usb-16x16-work/web-apply/request.json
+Unit=usb16x16-apply.service
+MakeDirectory=no
+
+[Install]
+WantedBy=multi-user.target

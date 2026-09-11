@@ -238,3 +238,78 @@ export function piStore(fetchImpl = globalThis.fetch) {
     },
   };
 }
+
+// ------------------------------------------------------------- apply
+
+// Step 5 of the README's sequence: a staged profile switch. The browser asks
+// (POST /api/apply/profile), the unprivileged service writes one request file,
+// a root path unit on the Pi runs usb16x16-apply, and the browser polls
+// /api/apply/status for the receipt. Nothing here changes device state; the
+// applier does, and it verifies and rolls back on its own.
+
+export const APPLY_STATUS_PATH = '/api/apply/status';
+export const APPLY_POLL_MS = 2000;
+const APPLY_TERMINAL = new Set(['done', 'rolled-back', 'failed', 'refused']);
+
+export async function requestProfile(profile, expectedProfile, fetchImpl = globalThis.fetch) {
+  const response = await fetchImpl('/api/apply/profile', {
+    method: 'POST',
+    headers: {'content-type': 'application/json', accept: 'application/json'},
+    body: JSON.stringify({profile, expectedProfile}),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !isObject(body) || body.ok !== true) {
+    throw new Error(isObject(body) && body.error ? body.error : `Apply request failed (${response.status})`);
+  }
+  return body;
+}
+
+export async function fetchApplyStatus(fetchImpl = globalThis.fetch) {
+  const response = await fetchImpl(APPLY_STATUS_PATH, {headers: {accept: 'application/json'}});
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !isObject(body) || body.ok !== true) {
+    throw new Error(isObject(body) && body.error ? body.error : `Status request failed (${response.status})`);
+  }
+  return body;
+}
+
+export const applyFinished = status => Boolean(status?.current) && APPLY_TERMINAL.has(status.current.state) && !status.pending;
+
+const stepWords = {
+  validating: 'Validating the request', stopping: 'Stopping the AES67 service', switching: 'Switching the profile',
+  starting: 'Starting the AES67 service', verifying: 'Waiting for the stack to run', settling: 'Settling with zero recoveries',
+  'rolling-back': 'Rolling back to the previous profile',
+  done: 'Applied', 'rolled-back': 'Rolled back', failed: 'Failed', refused: 'Refused',
+};
+export const applyStepLabel = name => stepWords[name] || name;
+
+/** One line describing an Apply status for the panel and the toast. */
+export function applyLine(status) {
+  if (!status) return 'No Apply operation recorded.';
+  const current = status.current;
+  if (status.pending && !status.inFlight) return 'Request queued; waiting for the applier to pick it up.';
+  if (!current) return 'No Apply operation recorded.';
+  const who = current.request?.requestedBy ? ` by ${current.request.requestedBy}` : '';
+  const target = current.profile || current.request?.profile || '?';
+  switch (current.state) {
+    case 'done': return `Applied ${target}${who} · live since ${current.finishedAt || '?'}.`;
+    case 'rolled-back': return `Could not run ${target}; rolled back to ${current.previousProfile || '?'}. ${current.error || ''}`.trim();
+    case 'failed': return `Apply of ${target} failed and the rollback failed too: ${current.error || 'no detail'}. Check the Pi.`;
+    case 'refused': return `Refused: ${current.error || 'no detail'}`;
+    default: return `${applyStepLabel(current.state)} (${target})…`;
+  }
+}
+
+/** The profile facts the Settings panel shows: what is live, what can be chosen. */
+export function profileChoices(health) {
+  const profile = health?.profile || {};
+  const control = health?.control?.apply || {};
+  const rows = Array.isArray(profile.profiles) ? profile.profiles : [];
+  const live = rows.find(row => row.name === profile.selected) || (profile.selected ? {name: profile.selected} : null);
+  return {
+    live,
+    accepted: rows.filter(row => row.accepted && row.name !== profile.selected),
+    available: Boolean(control.available),
+    reason: control.available ? (control.scope || '') : (control.reason || 'Apply is not installed on this Pi.'),
+  };
+}

@@ -421,8 +421,8 @@ Application contract. `work/web-control/usb16x16-web` implements the read half:
 | Subscribe meters | Timestamped input/output peaks and RMS with clipping counters, tap location, mode and revision | Not implemented; needs the bridge tap |
 | Read/write preset | Versioned configuration, separate from applied device state | `GET/PUT/DELETE /api/presets` |
 | Validate draft | Schema + output budgets + installed engine compatibility; return restart requirement and proposed changes | Not implemented |
-| Apply revision | Serialized operation with expected revision and operation ID; never launch two owners of a PCM device | Not implemented; answers 501 |
-| Read operation | Validating / fading / stopping / starting / verifying / running / rollback / failed | Not implemented |
+| Apply revision | Serialized operation with expected revision and operation ID; never launch two owners of a PCM device | `POST /api/apply/profile` (2026-09-11): a switch between accepted profiles only, the browser naming the profile it believes is live; the root applier `usb16x16-apply` does the stop / switch-profile / start / verify / rollback and writes a receipt. Applying the editor's own draft is still not implemented |
+| Read operation | Validating / fading / stopping / starting / verifying / running / rollback / failed | `GET /api/apply/status`: validating / stopping / switching / starting / verifying / settling / done / rolling-back / rolled-back / failed / refused. No fade: the supervisor's restart is what it is |
 
 Keep live status, editable draft and last applied preset distinct. Reject stale
 edits rather than silently overwriting another client's applied revision. Persist
@@ -473,6 +473,13 @@ release; never expose unauthenticated CamillaDSP control to arbitrary clients.
 5. **Hardware control:** enable staged Apply only after the underlying operations and
    validation are established. Integrate a tailored PEQ UI first; advanced CamillaGUI
    access can follow with configuration ownership clearly defined.
+   *First cut 2026-09-11, after the DSP bridge and its two pinned presets were
+   accepted: the Settings page's "Service profile" panel switches the AES67
+   service between accepted profiles through `work/web-control`'s Apply
+   (request file, root path unit, verified restart, automatic rollback, receipt).
+   Draft and applied state stay distinct: the editor's preset never reaches the
+   Pi; only a profile name does. A browser-compiled preset reaching the bridge
+   is the next step and needs artifact validation on the Pi first.*
 
 Acceptance requires sample-accurate latency measurements with intentional alignment
 delay zeroed, the 64-sample host test where USB is involved, and separate AoIP-only

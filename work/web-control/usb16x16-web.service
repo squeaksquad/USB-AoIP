@@ -24,7 +24,8 @@ RestartSec=5
 
 # The audio stack owns this machine. This service is background work: it must
 # never win a CPU or IO contest against the bridge, and it must not be able to
-# change anything outside its own preset directory.
+# change anything outside its own preset directory and the Apply spool, where
+# the one file it writes is a request that usb16x16-apply.path acts on as root.
 Nice=15
 IOSchedulingClass=idle
 CPUWeight=20
@@ -35,7 +36,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/bdimaio/usb-16x16-work/web-presets
+ReadWritePaths=/home/bdimaio/usb-16x16-work/web-presets /home/bdimaio/usb-16x16-work/web-apply
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes

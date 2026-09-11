@@ -3,9 +3,15 @@
 
 Serves the static UI and a small JSON API describing the running stack. It is
 the "read-only backend" step of work/web-ui/README.md: live health, logs and
-durable presets, with no endpoint that can change device state. Service
-restarts, profile switches and DSP application stay out of this process on
-purpose; they belong to a narrow privileged supervisor that does not exist yet.
+durable presets, with no endpoint that can change device state itself.
+
+The one exception, added 2026-09-11 as step 5 (staged Apply), keeps that
+boundary: POST /api/apply/profile writes a request file into a spool
+directory and nothing else. A root systemd path unit runs usb16x16-apply on
+it, which validates the request against the live configuration, switches the
+AES67 service between ACCEPTED profiles only, verifies the start, rolls back
+on failure and leaves a receipt this process reads back. This process still
+runs with NoNewPrivileges, still opens no device and still restarts nothing.
 
 Design constraints this file honours:
 
@@ -18,7 +24,8 @@ Design constraints this file honours:
     and the latency harness owns that counter.
   * No ALSA device is opened. Meters therefore report unavailable rather than
     inventing a value or competing for a PCM.
-  * Runs unprivileged. Nothing here needs root and nothing here is given it.
+  * Runs unprivileged. Nothing here needs root and nothing here is given it;
+    the Apply request is a file, and the privilege lives in usb16x16-apply.
   * HTTP Basic auth guards every route. Verifying a password costs a real KDF,
     so a successful credential is cached briefly and repeated failures are rate
     limited per client: the 2 s health poll must not turn into a PBKDF2 load on
@@ -29,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import calendar
 import getpass
 import hashlib
 import hmac
@@ -49,7 +57,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -60,6 +68,16 @@ CAMILLA_BIN = Path(
         "/home/bdimaio/usb-16x16-work/camilladsp-v4.1.3/camilladsp",
     )
 )
+
+APPLY_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
+APPLY_UNIT = "usb16x16-apply.path"
+AES67_CONF = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
+APPLY_TERMINAL = {"done", "rolled-back", "failed", "refused"}
+# An operation older than this with no terminal state is treated as abandoned
+# (the applier's own unit timeout is 480 s), so a new request is not blocked
+# for ever by a receipt that never came.
+APPLY_STALE_SECONDS = 600.0
+REQUEST_MAX_AGE_SECONDS = 120.0
 
 UNITS = {
     "gadget": "usb-16x16.service",
@@ -155,6 +173,51 @@ def parse_bridge_line(line: str) -> dict:
     return fields
 
 
+def parse_conf(text: str) -> dict[str, str]:
+    """KEY=value lines of aes67.conf, quotes stripped; the same subset
+    usb16x16-apply reads. Comments and blank lines are skipped."""
+    values: dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = value[1:-1]
+        values[key.strip()] = value
+    return values
+
+
+def conf_profiles(conf: dict[str, str]) -> list[dict]:
+    """Every profile block with the fields the UI shows, accepted first."""
+    rows = []
+    for key in conf:
+        match = re.match(r"^PROFILE_([A-Z0-9_]+)_TARGET$", key)
+        if not match:
+            continue
+        upper = match.group(1)
+        field = lambda suffix, u=upper: conf.get(f"PROFILE_{u}_{suffix}", "")
+        rows.append({
+            "name": upper.lower().replace("_", "-"),
+            "status": field("STATUS"),
+            "accepted": field("STATUS") == "accepted",
+            "description": field("DESCRIPTION"),
+            "measured": field("MEASURED"),
+            "cover": field("COVER"),
+            "dspPreset": field("DSP_PRESET") or None,
+        })
+    rows.sort(key=lambda row: (not row["accepted"], row["name"]))
+    return rows
+
+
+def parse_iso(text) -> float | None:
+    try:
+        return float(calendar.timegm(time.strptime(text, "%Y-%m-%dT%H:%M:%SZ")))
+    except (TypeError, ValueError):
+        return None
+
+
 def interface_address(name: str) -> str | None:
     """The IPv4 address of an interface, read without extra dependencies."""
     output = run(["ip", "-o", "-4", "addr", "show", "dev", name])
@@ -229,6 +292,7 @@ class Collector:
         recovers = read_text(RUN_DIR / "recovers", 1 << 20)
         if recovers is not None:
             state["recovers"] = len([v for v in recovers.splitlines() if v.strip()])
+        state["apply"] = apply_state()
         return state
 
     def collect_slow(self) -> dict:
@@ -265,6 +329,24 @@ class Collector:
                 "speed": (read_text(udc_root / name / "current_speed", 64) or "").strip(),
             }
         state["usb"] = udc
+
+        conf_text = read_text(AES67_CONF, 1 << 20)
+        if conf_text is not None:
+            conf = parse_conf(conf_text)
+            state["profile"] = {"selected": conf.get("PROFILE") or None, "profiles": conf_profiles(conf)}
+        else:
+            state["profile"] = {"selected": None, "profiles": [], "reason": f"{AES67_CONF} unreadable"}
+        applier = (run(["systemctl", "is-active", APPLY_UNIT]) or "unknown").strip()
+        state["control"] = {
+            "apply": {
+                "available": applier == "active",
+                "unit": APPLY_UNIT,
+                "state": applier,
+                "reason": None if applier == "active" else
+                          f"{APPLY_UNIT} is {applier}: install and enable it to switch profiles from here",
+                "scope": "accepted profiles only; a switch restarts the AES67 service and draws a new latency level",
+            }
+        }
 
         system: dict = {}
         temp = run(["vcgencmd", "measure_temp"], timeout=3.0)
@@ -339,17 +421,16 @@ class Collector:
         engine = None
         if CAMILLA_BIN.is_file() and os.access(CAMILLA_BIN, os.X_OK):
             engine = (run([str(CAMILLA_BIN), "--version"]) or "").strip() or "present"
-        missing = []
-        if not engine:
-            missing.append("the CamillaDSP engine binary")
-        missing.append("a preset-to-YAML compiler")
-        missing.append("a DSP service that owns the PCM devices")
+        missing = ["artifact validation on the Pi for a browser-compiled preset",
+                   "a profile block written for it under the supervisor's rules"]
         return {
             "available": False,
             "engine": engine,
             "missing": missing,
             # The caller already states what is running; do not repeat it here.
-            "reason": "DSP processor mode is under development.",
+            "reason": "The bridge's DSP stage is accepted with two pinned presets, "
+                      "selected through the Service profile switch in Settings. "
+                      "This editor's own draft cannot reach the Pi yet.",
         }
 
     # ---- assembly
@@ -416,6 +497,49 @@ class Collector:
 
     def stop(self) -> None:
         self._stop.set()
+
+
+# ------------------------------------------------------------------ apply
+
+def apply_state() -> dict:
+    """What the privileged applier last wrote, plus whether a request waits."""
+    state: dict = {"current": None, "pending": False, "inFlight": False}
+    text = read_text(APPLY_DIR / "current.json", 1 << 18)
+    if text:
+        try:
+            current = json.loads(text)
+        except ValueError:
+            current = None
+        if isinstance(current, dict):
+            state["current"] = current
+            updated = parse_iso(current.get("updatedAt"))
+            fresh = updated is not None and (time.time() - updated) < APPLY_STALE_SECONDS
+            state["inFlight"] = current.get("state") not in APPLY_TERMINAL and fresh
+    try:
+        pending = (APPLY_DIR / "request.json").stat()
+        state["pending"] = (time.time() - pending.st_mtime) < REQUEST_MAX_AGE_SECONDS
+    except OSError:
+        pass
+    return state
+
+
+def write_apply_request(profile: str, expected: str | None, user: str | None) -> str:
+    """The only write this process makes outside its preset store: one JSON
+    request the path unit picks up. Atomic, so the applier never reads half
+    a file, and the directory is created by the installer, not here."""
+    if not APPLY_DIR.is_dir():
+        raise PermissionError(f"{APPLY_DIR} does not exist; the Apply units are not installed")
+    ident = secrets.token_hex(8)
+    payload = {"id": ident, "profile": profile, "expectedProfile": expected,
+               "requestedAt": time.time(), "requestedBy": user}
+    target = APPLY_DIR / "request.json"
+    temporary = APPLY_DIR / f"request.{ident}.tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, indent=2))
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, target)
+    return ident
 
 
 # ------------------------------------------------------------------ presets
@@ -802,6 +926,10 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
         if route == "/api/health":
             self.send_json(self.collector.snapshot())
+        elif route == "/api/apply/status":
+            # Read fresh rather than from the 1 Hz snapshot: the page polls
+            # this while an operation runs and it is one small file.
+            self.send_json({"ok": True, **apply_state()})
         elif route == "/api/logs":
             self.api_logs(query)
         elif route == "/api/presets":
@@ -858,23 +986,93 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if not self.authorize():
             return
-        self.unsupported(unquote(urlparse(self.path).path))
+        route = unquote(urlparse(self.path).path)
+        if route == "/api/apply/profile":
+            self.api_apply_profile()
+        else:
+            self.unsupported(route)
+
+    def api_apply_profile(self) -> None:
+        """Queue one profile switch for the privileged applier.
+
+        Everything the applier will check again is checked here first so the
+        browser gets a reason now rather than a refused receipt later; the
+        applier's checks are the ones that count.
+        """
+        body = self.read_body(limit=4096)
+        if not isinstance(body, dict):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object")
+            return
+        profile = body.get("profile")
+        expected = body.get("expectedProfile")
+        if not isinstance(profile, str) or not re.match(r"^[a-z0-9][a-z0-9-]{0,63}$", profile):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "profile must be a lower-case profile name")
+            return
+        if expected is not None and not isinstance(expected, str):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "expectedProfile must be a string or null")
+            return
+        snapshot = self.collector.snapshot()
+        control = (snapshot.get("control") or {}).get("apply") or {}
+        if not control.get("available"):
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE,
+                                 control.get("reason") or "Apply is not available on this Pi")
+            return
+        live = (snapshot.get("profile") or {}).get("selected")
+        table = {row["name"]: row for row in (snapshot.get("profile") or {}).get("profiles", [])}
+        if profile not in table:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, f"No profile block named {profile}")
+            return
+        if not table[profile]["accepted"]:
+            self.send_error_json(HTTPStatus.BAD_REQUEST,
+                                 f"{profile} is {table[profile]['status'] or 'unmarked'}, not accepted; "
+                                 "Apply switches between accepted profiles only")
+            return
+        if expected is not None and expected != live:
+            self.send_error_json(HTTPStatus.CONFLICT,
+                                 f"This page expected {expected} to be live but {live} is; reload and retry")
+            return
+        if profile == live:
+            self.send_error_json(HTTPStatus.CONFLICT, f"{profile} is already the live profile")
+            return
+        current = apply_state()
+        if current["pending"] or current["inFlight"]:
+            self.send_error_json(HTTPStatus.CONFLICT, "An Apply operation is already in progress")
+            return
+        try:
+            ident = write_apply_request(profile, expected, self.current_user())
+        except OSError as error:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
+            return
+        self.send_json({"ok": True, "id": ident, "profile": profile, "expectedProfile": expected,
+                        "note": "Queued. The AES67 service restarts; audio stops for about a minute "
+                                "and the latency level is drawn afresh."}, HTTPStatus.ACCEPTED)
+
+    def current_user(self) -> str | None:
+        header = self.headers.get("Authorization") or ""
+        if not header.startswith("Basic "):
+            return None
+        try:
+            decoded = base64.b64decode(header[6:].strip(), validate=True).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            return None
+        return decoded.partition(":")[0] or None
 
     def unsupported(self, route: str) -> None:
         self.discard_body()
         """Every device-changing route answers the same way, on purpose.
 
-        Restarting a service, switching a profile or applying DSP means owning
-        a PCM device and interrupting audio. That belongs to a narrow
-        privileged supervisor, not to this unprivileged read-only process.
+        Restarting a service or installing DSP means owning a PCM device and
+        interrupting audio. That belongs to the privileged applier, which
+        takes exactly one request shape (POST /api/apply/profile); nothing
+        else here changes device state.
         """
         if route.startswith("/api/service") or route.startswith("/api/apply") \
                 or route.startswith("/api/dsp"):
             self.send_error_json(
                 HTTPStatus.NOT_IMPLEMENTED,
-                "This service is read-only. Device control (service restart, "
-                "profile switch, DSP apply) is not implemented; run the "
-                "commands on the Pi instead.",
+                "This service is read-only apart from POST /api/apply/profile "
+                "(a switch between accepted profiles). Service restarts and DSP "
+                "installation are not implemented; run the commands on the Pi instead.",
             )
         else:
             self.send_error_json(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed")

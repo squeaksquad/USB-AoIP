@@ -1,0 +1,18 @@
+[Unit]
+Description=USB 16x16 web Apply: switch the AES67 service to an accepted profile on request
+Documentation=file:///home/bdimaio/usb-16x16-work/web-control/README.md
+# Started by usb16x16-apply.path when the web service writes a request. One
+# operation at a time: a request that arrives while this runs re-triggers the
+# path unit afterwards, and the applier refuses anything it has already seen.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/usb16x16-apply
+# A cold start of the stack is about a minute; the applier waits up to 150 s
+# for STAGE running, settles 30 s, and may do all of that twice for a rollback.
+TimeoutStartSec=480
+SyslogIdentifier=usb16x16-apply
+# The audio stack is what this changes on purpose; it must not compete with it
+# while the bridge is starting.
+Nice=10
+IOSchedulingClass=idle

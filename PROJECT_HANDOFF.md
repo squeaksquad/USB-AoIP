@@ -10011,3 +10011,68 @@ comment and without the repo's BRIDGE_SETTLE_* lines (the supervisor
 defaults them), and deploy.py rollback's baseline check wants it unchanged.
 Nothing else on the Pi was touched. Next: UI Apply (step 5) as a staged
 stop / switch-profile / start / verify / rollback operation on this set.
+
+**STAGED 2026-09-11 20:30 UTC, not installed: UI Apply (step 5), a switch between
+accepted profiles from the Settings page, as two halves with a file between
+them.** The user's three decisions, taken after the ACCEPTED entry above: the
+privilege comes from a root systemd path unit on a spool file (the web service
+keeps NoNewPrivileges and gains one ReadWritePaths entry, no sudo, no socket);
+the first version switches between accepted profiles only (dsp-direct /
+dsp-transparent / dsp-loaded, everything already on the Pi and pinned), it
+installs no preset and edits no block; and a failed verification rolls back to
+the previous profile automatically.
+
+What was written (work/web-control unless noted):
+- usb16x16-apply (Python, root): reads web-apply/request.json, refuses a
+  profile whose block is not STATUS=accepted, a stale page (the browser names
+  the profile it believes is live), a request older than 120 s or already
+  receipted; then systemctl stop, the supervisor's own switch-profile,
+  systemctl start; waits up to 150 s for STAGE running, up to 15 s more for
+  the first BRIDGE line, checks it is fresh with zero direction restarts,
+  the RECOVER count is zero, and the bridge log has the DSP loaded / DSP
+  engaged lines the profile calls for (or none); holds 30 s; on any failure
+  returns to the previous profile through the same steps. Every step lands
+  in web-apply/current.json, the outcome in web-apply/receipts/<id>.json
+  with the bridge's start lines (NEGOTIATED / ALIGN / PRIMED / DSP) so the
+  draw can be read afterwards. --check validates without acting.
+- usb16x16-apply.service (oneshot, TimeoutStartSec 480) and
+  usb16x16-apply.path (PathChanged on the request file). The path unit is
+  the switch: disabled, the UI reports Apply as not installed.
+- usb16x16-web 1.2.0: POST /api/apply/profile writes the request file
+  atomically after the same checks against its cached snapshot (400 / 409 /
+  503 with the reason), GET /api/apply/status reads current.json; the
+  health snapshot gains profile.selected, profile.profiles[] (status,
+  description, measured, cover, preset, from the world-readable conf) and
+  control.apply (available = the path unit active). Nothing else changed:
+  no device is opened, no command runs on a request.
+- usb16x16-web.service: ReadWritePaths gains the spool. install-web-control.sh
+  installs the five files, creates the spool (bdimaio) and receipts/ (root),
+  pins all five hashes.
+- work/web-ui: a "Service profile" panel on the Settings page (live profile
+  with its status and measured string, a select of the other accepted
+  profiles, Apply with a confirm that says audio stops for about a minute
+  and the level is re-drawn, the operation's steps as they land, the
+  receipt line); backend.mjs carries the client and the pure formatters.
+  Draft and applied state stay distinct: the editor's preset never reaches
+  the Pi, only a profile name does.
+
+Verified on the Mac: 20 Python tests (the applier's state machine against a
+scripted stack: happy path, seven refusals, start failure, RECOVER in the
+settle window, wrong or missing DSP lines, switch refusal, double failure,
+late first BRIDGE line, no BRIDGE line; the request writer and state reader)
+and 85 web-ui tests; the service run locally with a fake systemctl and conf
+answered 202 / 409 / 409 / 400 as designed, the real applier driven against
+a file model of the stack produced a done receipt (and, before the grace
+wait existed, the failure it should have: the first BRIDGE line follows
+STAGE running by a second), and the panel rendered both. Not yet run on
+the Pi. README sections in work/web-control and work/web-ui updated.
+
+Install (root, the user's): stage work/web-control/* and work/web-ui/* file
+by file into ~/usb-16x16-work/web-control/ and web-ui/, then
+sudo ~/usb-16x16-work/web-control/install-web-control.sh,
+sudo systemctl restart usb16x16-web.service,
+sudo systemctl enable --now usb16x16-apply.path. The first Apply on the Pi
+is the acceptance test of this step: playback off, dsp-direct ->
+dsp-transparent -> dsp-direct from the browser, each receipt read, the
+supervisor's journal clean, zero RECOVERs after each start. Rollback is in
+the README (disable the path unit; or remove the five files).

@@ -1,30 +1,26 @@
 # Next-session pickup prompt
 
-## Current DSP pickup — ACCEPTED 2026-09-11; next is UI Apply (step 5)
+## Current DSP pickup — UI Apply staged, its first Pi run is the next step
 
-Read the handoff's last two entries (FOUND and ACCEPTED 2026-09-11). Bridge
-406699bd, supervisor cdc0768d and the `dsp-direct` / `dsp-transparent` /
-`dsp-loaded` profiles are the point of record under the `reference-events-v1`
-criterion; the service runs `dsp-direct` (no preset; identical audio to sd103).
-Rollback is the review-20260911 bundle's `deploy.py rollback`, never the legacy
-installers. The repo pins, artifact and conf are on the accepted set; the live
-conf (c9be6585) differs from the repo conf (9af00275) by comments and the
-absent BRIDGE_SETTLE_* lines only. The reserve objection and the 725 / 766
-difference are explained in the FOUND entry: `tx_queue` on the BRIDGE line is
-a tick-phase sample of a 48-frame sawtooth (watch `phase_us`), and the +48 is
-a TX queue start draw that predates the first filtered render.
+Read the handoff's last three entries (FOUND, ACCEPTED, STAGED 2026-09-11).
+The DSP bridge 406699bd and the dsp-* profiles are the point of record under
+the reference-events-v1 criterion; the service runs `dsp-direct`. Step 5, UI
+Apply, is written and tested on the Mac but not installed: `work/web-control/`
+(usb16x16-apply, its .service and .path, usb16x16-web 1.2.0, the installer) and
+the Settings page's "Service profile" panel in `work/web-ui/`. Read
+`work/web-control/README.md` first: the two halves, the states, the API.
 
-Next is UI Apply as a staged operation, in `work/web-control` (the Pi
-service) and `work/web-ui`: draft state stays in the browser; Apply becomes
-one privileged stop / switch-profile (or write a preset + block) / start /
-verify (STAGE running, hashes, counters) / rollback-on-failure sequence with
-a receipt, and the UI shows applied versus draft explicitly. Constraints that
-stand: a profile switch is a service restart and a new latency draw; a preset
-must be compiled on the Mac (the Pi has no node) or the compiler must be
-ported; the web service is unprivileged today and its README lists what it
-deliberately cannot do; no live coefficient updates, no meters, no AoIP-only
-mode. Playback must be off for any Apply test; nothing is installed without
-the user's go.
+Next: the user stages the files and installs (README Install); then the first
+Apply on the Pi is this step's acceptance test: playback off, `dsp-direct` ->
+`dsp-transparent` -> `dsp-direct` from the browser, each receipt in
+`~/usb-16x16-work/web-apply/receipts/` read (state, steps, start lines), the
+journal of usb16x16-apply and usb16x16-aes67 clean, zero RECOVERs after each
+start. If the applier misjudges a healthy start (its checks are the stage
+file, the BRIDGE line's freshness and restart counters, the recovers file and
+the DSP lines), fix the check, not the threshold, and re-run. Do not add
+preset installation or block editing to Apply until this is accepted; a
+browser-compiled preset reaching the bridge needs artifact validation on the
+Pi first. No coreaudiod kills, no measurement campaign for this step.
 
 The earlier battery remains FAILED under its original zero-run criterion:
 `outputs/dsp-service/acceptance-20260911/RESULTS.md`. Direct/transparent passed

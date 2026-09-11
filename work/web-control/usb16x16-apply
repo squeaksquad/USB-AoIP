@@ -1,0 +1,506 @@
+#!/usr/bin/env python3
+"""The privileged half of UI Apply: switch the AES67 service between accepted
+profiles on request, verify the result, roll back on failure, leave a receipt.
+
+The web service (usb16x16-web) runs unprivileged with NoNewPrivileges and can
+write exactly one thing outside its preset store: a request file in the spool
+directory. A root systemd path unit (usb16x16-apply.path) runs this program
+whenever that file changes. Nothing in the request is executed; it names an
+accepted profile and the profile the browser believed was live, and this
+program decides everything else from the live configuration.
+
+One operation, in order, each step recorded in current.json as it happens:
+
+  validating   the request is fresh, unseen, well formed; the profile exists
+               in /etc/usb16x16/aes67.conf with STATUS=accepted; the browser's
+               expected profile is the live one (a stale page is refused)
+  stopping     systemctl stop usb16x16-aes67.service
+  switching    usb16x16-aes67-supervisor switch-profile NAME (the supervisor
+               validates the block and the preset hash; the service is down,
+               so it does not restart anything itself)
+  starting     systemctl start usb16x16-aes67.service
+  verifying    the supervisor reaches STAGE running, the bridge's telemetry
+               line is fresh with zero direction restarts, no RECOVER, and
+               the bridge log carries the DSP loaded / engaged lines the
+               profile calls for (or none, for a profile without a preset);
+               then a settle window with the same checks
+  done         or: rolling-back to the previous profile through the same
+               steps, then rolled-back, or failed if that also fails
+
+A profile switch restarts audio and draws a new latency level; that is the
+operation the user asked for, stated in the UI before the request is sent.
+The applier never edits a profile block, never installs a preset, and never
+touches the USB gadget, the daemon or the module: switch-profile is the only
+write, and it is the supervisor's own command.
+
+Exit status is 0 when a receipt was written (even for a refused or failed
+request: the outcome is the receipt), 2 for a broken environment.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+VERSION = "1.0.0"
+
+SPOOL_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
+CONF_PATH = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
+RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
+SUPERVISOR = os.environ.get("USB16X16_SUPERVISOR", "/usr/local/sbin/usb16x16-aes67-supervisor")
+BRIDGE_BINARY = Path(os.environ.get("USB16X16_BRIDGE", "/usr/local/libexec/usb16x16-rt-bridge"))
+UNIT = "usb16x16-aes67.service"
+
+REQUEST_NAME = "request.json"
+STATE_NAME = "current.json"
+RECEIPT_DIR = "receipts"
+
+PROFILE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+REQUEST_ID = re.compile(r"^[a-f0-9]{8,32}$")
+REQUEST_MAX_AGE_S = 120.0
+START_TIMEOUT_S = 150.0     # cold start: module, daemon, PTP lock, sinks, bridge
+SETTLE_S = 30.0             # after STAGE running, with zero RECOVERs
+BRIDGE_LINE_GRACE_S = 15.0  # STAGE running to the first BRIDGE line is about 1 s
+POLL_S = 1.0
+TERMINAL = {"done", "rolled-back", "failed", "refused"}
+
+
+# ------------------------------------------------------------------ helpers
+
+def sha256_of(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def read_text(path: Path, limit: int = 1 << 20) -> str | None:
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            return handle.read(limit)
+    except OSError:
+        return None
+
+
+def write_atomic(path: Path, payload: dict) -> None:
+    text = json.dumps(payload, indent=2, sort_keys=True)
+    temporary = path.with_name(path.name + ".tmp")
+    with open(temporary, "w", encoding="utf-8") as handle:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(temporary, 0o644)
+    os.replace(temporary, path)
+
+
+def utc(stamp: float | None = None) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stamp))
+
+
+class Runner:
+    """Commands and the clock, so the tests can stand in for both."""
+
+    def run(self, argv: list[str], timeout: float = 60.0) -> tuple[int, str]:
+        try:
+            completed = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+        except (OSError, subprocess.SubprocessError) as error:
+            return 1, str(error)
+        return completed.returncode, (completed.stdout + completed.stderr).strip()
+
+    def sleep(self, seconds: float) -> None:
+        time.sleep(seconds)
+
+    def now(self) -> float:
+        return time.time()
+
+
+# ------------------------------------------------------------------ conf
+
+def parse_conf(text: str) -> dict[str, str]:
+    """The subset of the supervisor's parser this program needs: KEY=value
+    lines, double quotes stripped, everything else ignored."""
+    values: dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def profile_key(name: str) -> str:
+    return name.upper().replace("-", "_")
+
+
+def profiles(conf: dict[str, str]) -> dict[str, dict]:
+    """Every profile block, by name, with the fields Apply cares about."""
+    found: dict[str, dict] = {}
+    for key in conf:
+        match = re.match(r"^PROFILE_([A-Z0-9_]+)_TARGET$", key)
+        if not match:
+            continue
+        upper = match.group(1)
+        name = upper.lower().replace("_", "-")
+        field = lambda suffix, u=upper: conf.get(f"PROFILE_{u}_{suffix}", "")
+        found[name] = {
+            "name": name,
+            "status": field("STATUS"),
+            "description": field("DESCRIPTION"),
+            "measured": field("MEASURED"),
+            "cover": field("COVER"),
+            "dspPreset": field("DSP_PRESET") or None,
+            "dspSha256": field("DSP_SHA256") or None,
+            "accepted": field("STATUS") == "accepted",
+        }
+    return found
+
+
+# ------------------------------------------------------------------ applier
+
+class Refused(Exception):
+    pass
+
+
+class Applier:
+    def __init__(self, spool: Path = SPOOL_DIR, conf_path: Path = CONF_PATH, run_dir: Path = RUN_DIR,
+                 runner: Runner | None = None, supervisor: str = SUPERVISOR,
+                 bridge_binary: Path = BRIDGE_BINARY, start_timeout: float = START_TIMEOUT_S,
+                 settle: float = SETTLE_S, poll: float = POLL_S) -> None:
+        self.spool = spool
+        self.conf_path = conf_path
+        self.run_dir = run_dir
+        self.runner = runner or Runner()
+        self.supervisor = supervisor
+        self.bridge_binary = bridge_binary
+        self.start_timeout = start_timeout
+        self.settle = settle
+        self.poll = poll
+        self.state: dict = {}
+
+    # ---- state and receipts
+
+    @property
+    def request_path(self) -> Path:
+        return self.spool / REQUEST_NAME
+
+    @property
+    def state_path(self) -> Path:
+        return self.spool / STATE_NAME
+
+    @property
+    def receipt_dir(self) -> Path:
+        return self.spool / RECEIPT_DIR
+
+    def step(self, name: str, detail: str = "", ok: bool = True) -> None:
+        self.state["state"] = name
+        self.state["updatedAt"] = utc(self.runner.now())
+        self.state.setdefault("steps", []).append(
+            {"name": name, "at": self.state["updatedAt"], "ok": ok, "detail": detail})
+        write_atomic(self.state_path, self.state)
+
+    def finish(self, state: str, error: str | None = None) -> dict:
+        self.state["state"] = state
+        self.state["error"] = error
+        self.state["finishedAt"] = utc(self.runner.now())
+        self.state["updatedAt"] = self.state["finishedAt"]
+        self.state["live"] = self.live_profile()
+        self.state["identity"] = self.identity()
+        write_atomic(self.state_path, self.state)
+        self.receipt_dir.mkdir(mode=0o755, exist_ok=True)
+        write_atomic(self.receipt_dir / f"{self.state['id']}.json", self.state)
+        return self.state
+
+    # ---- reads
+
+    def conf(self) -> dict[str, str]:
+        text = read_text(self.conf_path)
+        if text is None:
+            raise Refused(f"cannot read {self.conf_path}")
+        return parse_conf(text)
+
+    def live_profile(self) -> str | None:
+        try:
+            return self.conf().get("PROFILE") or None
+        except Refused:
+            return None
+
+    def identity(self) -> dict:
+        return {
+            "bridgeSha256": sha256_of(self.bridge_binary),
+            "supervisorSha256": sha256_of(Path(self.supervisor)),
+            "confSha256": sha256_of(self.conf_path),
+        }
+
+    def unit_state(self) -> str:
+        code, out = self.runner.run(["systemctl", "show", "-p", "ActiveState", "--value", UNIT], timeout=10)
+        return out.strip() if code == 0 else "unknown"
+
+    def stage(self) -> tuple[str, float | None]:
+        text = read_text(self.run_dir / "stage", 4096)
+        if not text:
+            return "", None
+        stamp, _, rest = text.strip().partition(" ")
+        try:
+            return rest.strip(), float(stamp)
+        except ValueError:
+            return text.strip(), None
+
+    def bridge_line(self) -> dict:
+        path = self.run_dir / "last-bridge"
+        line = read_text(path, 8192) or ""
+        if not line.startswith("BRIDGE"):
+            return {}
+        fields: dict = {}
+        for token in line.split()[1:]:
+            key, sep, value = token.partition("=")
+            if sep:
+                fields[key] = value
+        try:
+            fields["_age"] = self.runner.now() - path.stat().st_mtime
+        except OSError:
+            fields["_age"] = None
+        return fields
+
+    def recovers(self) -> int:
+        text = read_text(self.run_dir / "recovers", 1 << 20)
+        return len([v for v in (text or "").splitlines() if v.strip()])
+
+    def bridge_log_head(self, lines: int = 400) -> list[str]:
+        text = read_text(self.run_dir / "bridge.log", 1 << 18) or ""
+        return text.splitlines()[:lines]
+
+    # ---- request validation
+
+    def load_request(self) -> dict:
+        text = read_text(self.request_path, 65536)
+        if text is None:
+            raise Refused("no request file")
+        try:
+            request = json.loads(text)
+        except ValueError:
+            raise Refused("request is not JSON")
+        if not isinstance(request, dict):
+            raise Refused("request is not an object")
+        return request
+
+    def validate(self, request: dict, conf: dict[str, str]) -> dict:
+        """Everything that can be checked before touching the service."""
+        ident = request.get("id")
+        if not isinstance(ident, str) or not REQUEST_ID.match(ident):
+            raise Refused("request id must be 8-32 hex characters")
+        if (self.receipt_dir / f"{ident}.json").exists():
+            raise Refused(f"request {ident} was already processed")
+        requested_at = request.get("requestedAt")
+        if not isinstance(requested_at, (int, float)):
+            raise Refused("requestedAt must be a unix time")
+        age = self.runner.now() - float(requested_at)
+        if age < -REQUEST_MAX_AGE_S or age > REQUEST_MAX_AGE_S:
+            raise Refused(f"request is {age:.0f} s old; the limit is {REQUEST_MAX_AGE_S:.0f} s")
+        name = request.get("profile")
+        if not isinstance(name, str) or not PROFILE_NAME.match(name):
+            raise Refused("profile name must be lower-case letters, digits and dashes")
+        table = profiles(conf)
+        if name not in table:
+            raise Refused(f"profile {name} has no block in {self.conf_path}")
+        if not table[name]["accepted"]:
+            raise Refused(f"profile {name} is {table[name]['status'] or 'unmarked'}, not accepted; "
+                          "Apply only switches between accepted profiles")
+        live = conf.get("PROFILE") or ""
+        expected = request.get("expectedProfile")
+        if expected is not None and expected != live:
+            raise Refused(f"the page expected {expected} to be live but {live} is; reload and retry")
+        if name == live:
+            raise Refused(f"{name} is already the live profile")
+        unit = self.unit_state()
+        if unit not in ("active", "inactive", "failed"):
+            raise Refused(f"{UNIT} is {unit}; retry when it has settled")
+        return table[name]
+
+    # ---- the operation
+
+    def switch(self, name: str, target: dict) -> str | None:
+        """Stop, switch, start, verify. Returns None on success or the reason."""
+        self.step("stopping", f"systemctl stop {UNIT}")
+        code, out = self.runner.run(["systemctl", "stop", UNIT], timeout=60)
+        if code != 0:
+            return f"stop failed: {out}"
+        self.step("switching", f"{self.supervisor} switch-profile {name}")
+        code, out = self.runner.run([self.supervisor, "switch-profile", name], timeout=30)
+        if code != 0:
+            return f"switch-profile refused: {out}"
+        if self.live_profile() != name:
+            return f"PROFILE= did not become {name}"
+        self.step("starting", f"systemctl start {UNIT}")
+        code, out = self.runner.run(["systemctl", "start", UNIT], timeout=60)
+        if code != 0:
+            return f"start failed: {out}"
+        self.step("verifying", f"waiting up to {self.start_timeout:.0f} s for STAGE running")
+        return self.verify(target)
+
+    def verify(self, target: dict) -> str | None:
+        deadline = self.runner.now() + self.start_timeout
+        stage_text = ""
+        while True:
+            stage_text, stamp = self.stage()
+            if stage_text.startswith("failed") or stage_text.startswith("backoff"):
+                return f"supervisor: {stage_text}"
+            if self.unit_state() in ("failed", "inactive"):
+                return f"{UNIT} is {self.unit_state()} (stage: {stage_text or 'none'})"
+            if stage_text.startswith("running") or stage_text.startswith("stable"):
+                break
+            if self.runner.now() >= deadline:
+                return f"no STAGE running within {self.start_timeout:.0f} s (stage: {stage_text or 'none'})"
+            self.runner.sleep(self.poll)
+        # The first BRIDGE line follows STAGE running by about a second; give
+        # it a bounded grace before reading its absence as a failure.
+        grace_end = self.runner.now() + BRIDGE_LINE_GRACE_S
+        while True:
+            reason = self.check_bridge(target)
+            if reason is None or not reason.startswith(("no BRIDGE telemetry line", "BRIDGE line is stale")):
+                break
+            if self.runner.now() >= grace_end:
+                break
+            self.runner.sleep(self.poll)
+        if reason:
+            return reason
+        self.step("settling", f"{self.settle:.0f} s with zero RECOVERs and no direction restart")
+        settle_end = self.runner.now() + self.settle
+        while self.runner.now() < settle_end:
+            self.runner.sleep(self.poll)
+            reason = self.check_bridge(target)
+            if reason:
+                return reason
+        return None
+
+    def check_bridge(self, target: dict) -> str | None:
+        line = self.bridge_line()
+        if not line:
+            return "no BRIDGE telemetry line"
+        if line.get("_age") is None or line["_age"] > 5.0:
+            return f"BRIDGE line is stale ({line.get('_age')} s)"
+        if line.get("tx_restarts", "0") != "0" or line.get("rx_restarts", "0") != "0":
+            return f"direction restarts tx={line.get('tx_restarts')} rx={line.get('rx_restarts')}"
+        count = self.recovers()
+        if count:
+            return f"{count} RECOVER since the start"
+        head = self.bridge_log_head()
+        loaded = [v for v in head if v.startswith("DSP loaded ")]
+        engaged = [v for v in head if v.startswith("DSP engaged ")]
+        preset = target.get("dspPreset")
+        if preset:
+            if not loaded or f"file={preset}" not in loaded[0]:
+                return f"bridge log has no 'DSP loaded file={preset}' line"
+            if not engaged:
+                return "bridge log has no 'DSP engaged' line"
+        elif loaded:
+            return "a preset was loaded on a profile without one"
+        stage_text, _ = self.stage()
+        if stage_text.startswith("failed") or stage_text.startswith("backoff"):
+            return f"supervisor: {stage_text}"
+        return None
+
+    def record_start_lines(self, label: str) -> None:
+        keep = ("NEGOTIATED ", "ALIGN ", "PRIMED ", "DSP ", "PITCHSERVO ")
+        self.state.setdefault("startLines", {})[label] = [
+            v[:400] for v in self.bridge_log_head() if v.startswith(keep)][:12]
+
+    def apply(self, request: dict) -> dict:
+        self.spool.mkdir(mode=0o755, exist_ok=True)
+        ident = request.get("id") if isinstance(request.get("id"), str) and REQUEST_ID.match(request.get("id", "")) else "invalid"
+        self.state = {
+            "version": VERSION,
+            "id": ident,
+            "request": {k: request.get(k) for k in ("profile", "expectedProfile", "requestedAt", "requestedBy")},
+            "startedAt": utc(self.runner.now()),
+            "steps": [],
+            "previousProfile": None,
+            "profile": None,
+            "state": "validating",
+            "error": None,
+        }
+        try:
+            conf = self.conf()
+            target = self.validate(request, conf)
+        except Refused as error:
+            self.state["steps"].append({"name": "validating", "at": utc(self.runner.now()), "ok": False, "detail": str(error)})
+            return self.finish("refused", str(error))
+        previous = conf.get("PROFILE") or ""
+        self.state["previousProfile"] = previous
+        self.state["profile"] = target["name"]
+        self.step("validating", f"{target['name']} is accepted; live profile {previous}")
+        reason = self.switch(target["name"], target)
+        self.record_start_lines(target["name"])
+        if reason is None:
+            return self.finish("done")
+        self.step("rolling-back", f"{reason}; returning to {previous}", ok=False)
+        table = profiles(conf)
+        rollback_target = table.get(previous, {"name": previous, "dspPreset": None})
+        if not previous or previous not in table:
+            return self.finish("failed", f"{reason}; no previous profile to return to")
+        rollback_reason = self.switch(previous, rollback_target)
+        self.record_start_lines(previous)
+        if rollback_reason is None:
+            return self.finish("rolled-back", reason)
+        return self.finish("failed", f"{reason}; rollback to {previous} also failed: {rollback_reason}")
+
+    def consume(self) -> dict | None:
+        """One path-unit trigger: take the request file, act, leave receipts."""
+        try:
+            request = self.load_request()
+        except Refused as error:
+            if str(error) == "no request file":
+                return None
+            self.state = {"version": VERSION, "id": "invalid", "request": None, "startedAt": utc(self.runner.now()),
+                          "steps": [], "previousProfile": None, "profile": None, "state": "validating", "error": None}
+            self.request_path.unlink(missing_ok=True)
+            return self.finish("refused", str(error))
+        # The request is consumed before acting so a re-trigger finds nothing.
+        self.request_path.unlink(missing_ok=True)
+        return self.apply(request)
+
+
+# ------------------------------------------------------------------ main
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Apply an accepted AES67 profile on request from the web UI")
+    parser.add_argument("--check", action="store_true",
+                        help="validate the pending request against the live configuration and exit; no changes")
+    parser.add_argument("--spool", default=str(SPOOL_DIR))
+    arguments = parser.parse_args(argv)
+    applier = Applier(spool=Path(arguments.spool))
+    if arguments.check:
+        try:
+            request = applier.load_request()
+            target = applier.validate(request, applier.conf())
+        except Refused as error:
+            print(f"refused: {error}")
+            return 1
+        print(f"ok: would switch {applier.live_profile()} -> {target['name']} "
+              f"(preset {target['dspPreset'] or 'none'})")
+        return 0
+    if os.geteuid() != 0:
+        print("run as root (the path unit does)", file=sys.stderr)
+        return 2
+    result = applier.consume()
+    if result is None:
+        print("no request pending")
+        return 0
+    print(f"{result['id']}: {result['state']}"
+          f"{' — ' + result['error'] if result.get('error') else ''}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
