@@ -1233,6 +1233,12 @@ class Handler(BaseHTTPRequestHandler):
     def serve_static(self, route: str) -> None:
         root = self.collector.static_dir
         relative = route.lstrip("/") or "index.html"
+        # The compiler modules under compiler/ import the UI's shared modules
+        # as ../web-ui/<file> (their path in the repo, where work/dsp-compiler
+        # sits beside work/web-ui); in the browser that is /web-ui/<file>, so
+        # that prefix is the static root itself.
+        if relative.startswith("web-ui/"):
+            relative = relative[len("web-ui/"):]
         target = (root / relative).resolve()
         try:
             target.relative_to(root.resolve())
