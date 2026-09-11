@@ -10378,3 +10378,30 @@ meter_us_max under SCHED_FIFO is the figure to read. Pins moved to
 places); artifacts/pi-aarch64/ is now 3503a48c, the previous 406699bd
 remains in git history and installed until step 3. The three re-pinned
 files re-staged under meters-20260911/, hashes checked.
+
+**FOUND 2026-09-11 23:20 UTC: the first meter-tap build (3503a48c) took a RECOVER
+pair in both captures at every start; not installed further, fixed in
+main.cpp fb68c0ee, rebuild pending.** Installed by the user at 22:50 UTC
+(bridge 3503a48c, supervisor 645ea54e, conf b01588df), the service started
+on dsp-direct and each of three bridge starts (22:51:25, :31, :38; the
+supervisor's two settle restarts) read `capture-avail code=-32` in both
+directions within the first tick after NEGOTIATED, ring 0, before any
+prime; the third bridge then ran with tx/rx restarts 1/1, floors 98 / 24.
+The tap itself worked: `METERS enabled`, the file rewritten every window
+(139 / 142 / 799 writes, 0 failures), meter_us_max 6.074 us and mean
+1.699 us on the audio thread, the four TAP lines at -144 with playback
+off. The user stopped the service at 23:10 UTC.
+
+Reading: the only thing the build adds at that instant is a second
+std::thread created after the captures are running, under
+mlockall(MCL_FUTURE), which populates and locks the thread's 8 MB default
+stack at creation: a few milliseconds of the main thread's time inside a
+4 ms capture buffer. The telemetry thread has always been created there
+too and fits alone; two do not. Fix (fb68c0ee, syntax-checked, staged):
+the publisher is created before either capture starts and before memory
+is locked, as a pthread with a 256 KB stack; the elapsed_us() stamp is
+ordered after process_started by the seqlock on the first published
+window. The telemetry thread is left where it is (one variable). The
+reading is tested by the rebuild: a clean start with zero RECOVERs on
+dsp-direct is the pass. The 3503a48c pins are moot: the rebuilt hash
+replaces them before any further install.

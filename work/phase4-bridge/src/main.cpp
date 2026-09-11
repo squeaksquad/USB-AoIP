@@ -2469,6 +2469,18 @@ void meter_loop(const std::string path, const MeterTaps taps) {
     }
 }
 
+struct MeterThreadContext {
+    std::string path;
+    MeterTaps taps;
+};
+
+void* meter_thread_entry(void* raw) {
+    auto* context = static_cast<MeterThreadContext*>(raw);
+    meter_loop(context->path, context->taps);
+    delete context;
+    return nullptr;
+}
+
 int run(const Options& options) {
     // Loaded before anything opens a device: a preset that will not load should
     // cost a message, not a PCM. A preset that will not load also stops the
@@ -2676,6 +2688,35 @@ int run(const Options& options) {
     // its elastic ring has no excess, producing a SCHED_FIFO busy loop.
     auto poll_descriptors = make_poll_descriptors({&usb_capture, &ravenna_capture});
 
+    // The meter publisher is created here, before either capture starts and
+    // before memory is locked, on a 256 KB stack. The first build created it
+    // as a std::thread after the captures were running: under
+    // mlockall(MCL_FUTURE) that populates and locks an 8 MB stack at once, a
+    // few milliseconds inside a 4 ms capture buffer, and every start took a
+    // RECOVER pair in both captures before the first prime (2026-09-11
+    // 22:51 UTC, three starts). It stamps the file with elapsed_us() only
+    // once a window has been published, which the audio loop does after
+    // process_started is set; the seqlock's release/acquire orders the two.
+    pthread_t meter_thread{};
+    bool meter_thread_started = false;
+    if (tx.meter_enabled) {
+        auto* context = new MeterThreadContext{options.meter_file, MeterTaps{{
+            {tx.capture_stage, &tx.capture_meter},
+            {tx.playback_stage, &tx.playback_meter},
+            {rx.capture_stage, &rx.capture_meter},
+            {rx.playback_stage, &rx.playback_meter}}}};
+        pthread_attr_t attributes;
+        pthread_attr_init(&attributes);
+        pthread_attr_setstacksize(&attributes, 256 * 1024);
+        const int created = pthread_create(&meter_thread, &attributes, meter_thread_entry, context);
+        pthread_attr_destroy(&attributes);
+        if (created != 0) {
+            delete context;
+            throw std::runtime_error("meter publisher thread: " + std::string(std::strerror(created)));
+        }
+        meter_thread_started = true;
+    }
+
     AlignResult align;
     if (options.align_start) {
         // RAVENNA capture first and alone, so its wakeups are all the
@@ -2737,15 +2778,6 @@ int run(const Options& options) {
     std::thread telemetry_thread(telemetry_loop, std::ref(telemetry), pitch_control.get());
     const auto started = std::chrono::steady_clock::now();
     process_started = started;
-    // After process_started: the publisher stamps its file with elapsed_us().
-    std::thread meter_thread;
-    if (tx.meter_enabled) {
-        meter_thread = std::thread(meter_loop, options.meter_file, MeterTaps{{
-            {tx.capture_stage, &tx.capture_meter},
-            {tx.playback_stage, &tx.playback_meter},
-            {rx.capture_stage, &rx.capture_meter},
-            {rx.playback_stage, &rx.playback_meter}}});
-    }
     std::uint64_t last_telemetry_frame = 0;
     std::size_t rate_update_samples = 0;
     usb16x16::WindowedLinearRegression rate_regression;
@@ -2945,15 +2977,15 @@ int run(const Options& options) {
     } catch (...) {
         stop_requested.store(true, std::memory_order_relaxed);
         telemetry_thread.join();
-        if (meter_thread.joinable()) {
-            meter_thread.join();
+        if (meter_thread_started) {
+            pthread_join(meter_thread, nullptr);
         }
         throw;
     }
 
     telemetry_thread.join();
-    if (meter_thread.joinable()) {
-        meter_thread.join();
+    if (meter_thread_started) {
+        pthread_join(meter_thread, nullptr);
     }
     publish_telemetry(tx, rx, estimator, telemetry);
     const auto summary_floor = [](const std::size_t value) {
