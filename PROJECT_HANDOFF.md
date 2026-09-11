@@ -10405,3 +10405,22 @@ window. The telemetry thread is left where it is (one variable). The
 reading is tested by the rebuild: a clean start with zero RECOVERs on
 dsp-direct is the pass. The 3503a48c pins are moot: the rebuilt hash
 replaces them before any further install.
+
+**INSTALLED 2026-09-11 23:16 UTC: meter-tap bridge 947e8b4d, supervisor 23e40f8c,
+conf b01588df; the service runs dsp-direct with the tap on; clean start.**
+The rebuild with the publisher created before capture start (main.cpp
+fb68c0ee) started once: NEGOTIATED, `METERS enabled`, RX PRIMED (overshoot
+21 trimmed 21, as always), TX PRIMED (overshoot 27, align_dropped 18), no
+RECOVER, no settle restart; at +75 s tx/rx restarts 0/0, floors 123 / 72,
+meter_us_max 24.333 us, meter_us_mean 1.700 us, the file at 932 writes
+(seq 775 at t_us 38.8 s), all sixteen channels at -144 dBFS on every stage
+with playback off. That confirms the FOUND reading: the RECOVER pairs were
+the thread creation, not the tap. The 24 us maximum against a 1.7 us mean
+is one call's wake jitter on the audio thread in the first minute, the
+same shape the stage's 105 us max against 52 us mean had; read it over the
+soak. Pins: install-candidate.sh ba753185, install-aes67-service.sh
+6170cff4, supervisor 23e40f8c (bridge pin 947e8b4d, both places),
+artifacts/pi-aarch64/ 947e8b4d. Web control 1.4.0 and the page not yet
+installed; the acceptance battery not yet run. Rollback: METERS=0 in the
+live conf and a restart (untapped), or 406699bd from git history through
+the pinned installers of commit 47a6f42.
