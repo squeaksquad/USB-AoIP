@@ -46,7 +46,7 @@ candidate_wrapper=/usr/local/sbin/run-phase4-candidate-safe.sh
 candidate_ready_file=/tmp/usb16x16-phase4-candidate.ready
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=bc694c24c77893836dd3a3cfa0c9105e68b556d19dd51a84bf9ee5ca3f1b98ff
-expected_bridge_sha256=3503a48c9f6006ff2361f3c0cd379fbc44b5534419a926bb2c673da410a9b503
+expected_bridge_sha256=947e8b4d6842239b5cc33eeedb1a083d292995cdcdd558bb84017d9af45d5d50
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 api=http://127.0.0.1:8080
 
@@ -259,7 +259,7 @@ verify_dsp_artifact() {
   local preset
   preset=$(p DSP_PRESET)
   [ -n "$preset" ] || return 0
-  [ "$expected_bridge_sha256" = 3503a48c9f6006ff2361f3c0cd379fbc44b5534419a926bb2c673da410a9b503 ] ||
+  [ "$expected_bridge_sha256" = 947e8b4d6842239b5cc33eeedb1a083d292995cdcdd558bb84017d9af45d5d50 ] ||
     { say "DSP profile needs the verified DSP bridge build" >&2; return 1; }
   local directory
   for directory in /etc/usb16x16 /etc/usb16x16/dsp; do
