@@ -27,7 +27,7 @@ public struct ChannelActivity: Encodable, Sendable {
 
     mutating func observe(_ value: Float) {
         samples += 1
-        guard value.isFinite else { nonFinite += 1; return }
+        guard value.isFinite else { nonFinite += 1; zeroRun = 0; return }
         peak = max(peak, abs(value))
         sumSquares += Double(value) * Double(value)
         if abs(value) >= 1 { fullScaleSamples += 1 }
@@ -47,7 +47,9 @@ public struct ContinuousLoadReport: Encodable, Sendable {
     public let inputDiscontinuities: Int
     public let outputDiscontinuities: Int
     public let invalidBuffers: Int
+    public let invalidTimestamps: Int
     public let channels: [ChannelActivity]
+    public let eventCapture: ContinuousEventReport
 }
 
 final class ContinuousState: @unchecked Sendable {
@@ -59,7 +61,9 @@ final class ContinuousState: @unchecked Sendable {
     var inputDiscontinuities = 0
     var outputDiscontinuities = 0
     var invalidBuffers = 0
+    var invalidTimestamps = 0
     var channels = [ChannelActivity](repeating: ChannelActivity(), count: 16)
+    let eventCapture = ContinuousEventCapture()
     var load = DeterministicChannelLoad()
     var expectedInput: Double?
     var expectedOutput: Double?
@@ -71,18 +75,30 @@ final class ContinuousState: @unchecked Sendable {
     }
 
     func process(_ input: UnsafePointer<AudioBufferList>, _ inputTime: Double,
-                 _ output: UnsafeMutablePointer<AudioBufferList>, _ outputTime: Double) {
+                 _ output: UnsafeMutablePointer<AudioBufferList>, _ outputTime: Double,
+                 inputTimeValid: Bool = true, outputTimeValid: Bool = true) {
         let outputs = UnsafeMutableAudioBufferListPointer(output)
         for buffer in outputs {
             if let data = buffer.mData { memset(data, 0, Int(buffer.mDataByteSize)) }
         }
+        guard !signaled else { return }
         guard outputs.count == 1, let out = outputs.first, out.mNumberChannels == 16,
               out.mDataByteSize > 0, out.mDataByteSize % 64 == 0, let outData = out.mData else {
-            invalidBuffers += 1; return
+            invalidBuffers += 1
+            eventCapture.breakContinuity()
+            expectedInput = nil; expectedOutput = nil
+            return
         }
         let count = Int(out.mDataByteSize) / 64
-        if let expectedOutput, abs(outputTime - expectedOutput) > 0.5 { outputDiscontinuities += 1 }
-        expectedOutput = outputTime + Double(count)
+        let validOutputTime = outputTimeValid && outputTime.isFinite
+        let validInputTime = inputTimeValid && inputTime.isFinite
+        var continuityBroken = false
+        if !validOutputTime { invalidTimestamps += 1; continuityBroken = true }
+        if validOutputTime, let expectedOutput, abs(outputTime - expectedOutput) > 0.5 {
+            outputDiscontinuities += 1; continuityBroken = true
+        }
+        expectedOutput = validOutputTime ? outputTime + Double(count) : nil
+        let outputFirstFrame = outputFrames
         let samples = outData.assumingMemoryBound(to: Float.self)
         if !signaled {
             for i in 0..<(count * 16) { samples[i] = load.next(amplitude: amplitude) }
@@ -92,16 +108,32 @@ final class ContinuousState: @unchecked Sendable {
         if inputs.count == 1, let buffer = inputs.first, buffer.mNumberChannels == 16,
            buffer.mDataByteSize > 0, buffer.mDataByteSize % 64 == 0, let data = buffer.mData {
             let frames = Int(buffer.mDataByteSize) / 64
-            if let expectedInput, abs(inputTime - expectedInput) > 0.5 { inputDiscontinuities += 1 }
-            expectedInput = inputTime + Double(frames)
+            if !validInputTime { invalidTimestamps += 1; continuityBroken = true }
+            if validInputTime, let expectedInput, abs(inputTime - expectedInput) > 0.5 {
+                inputDiscontinuities += 1; continuityBroken = true
+            }
+            expectedInput = validInputTime ? inputTime + Double(frames) : nil
             if !signaled {
+                if continuityBroken { eventCapture.breakContinuity() }
                 let values = data.assumingMemoryBound(to: Float.self)
-                for frame in 0..<frames where inputFrames + frame >= 96_000 {
-                    for channel in 0..<16 { channels[channel].observe(values[frame * 16 + channel]) }
+                for frame in 0..<frames {
+                    let armed = inputFrames + frame >= 96_000
+                    eventCapture.observe(values.advanced(by: frame * 16),
+                        inputFrame: inputFrames + frame,
+                        inputTime: validInputTime ? inputTime + Double(frame) : nil,
+                        outputFrame: outputFirstFrame, outputTime: validOutputTime ? outputTime : nil,
+                        outputFrames: count, armed: armed)
+                    if armed {
+                        for channel in 0..<16 { channels[channel].observe(values[frame * 16 + channel]) }
+                    }
                 }
                 inputFrames += frames
             }
-        } else { invalidBuffers += 1 }
+        } else {
+            invalidBuffers += 1
+            eventCapture.breakContinuity()
+            expectedInput = nil
+        }
         if !signaled, outputFrames >= totalFrames {
             signaled = true
             finished.signal()
@@ -134,7 +166,9 @@ public enum ContinuousLoad {
             if status != noErr { throw LiveMeasurementError.io(status, operation: "continuous load") }
         }
         try check(AudioDeviceCreateIOProcIDWithBlock(&proc, id, nil) { _, input, inputTime, output, outputTime in
-            state.process(input, inputTime.pointee.mSampleTime, output, outputTime.pointee.mSampleTime)
+            state.process(input, inputTime.pointee.mSampleTime, output, outputTime.pointee.mSampleTime,
+                inputTimeValid: inputTime.pointee.mFlags.contains(.sampleTimeValid),
+                outputTimeValid: outputTime.pointee.mFlags.contains(.sampleTimeValid))
         })
         guard let proc else { throw LiveMeasurementError.noUsableInput }
         defer { AudioDeviceDestroyIOProcID(id, proc) }
@@ -148,6 +182,7 @@ public enum ContinuousLoad {
         return ContinuousLoadReport(device: device, seconds: seconds, amplitude: amplitude,
             outputFrames: state.outputFrames, inputFrames: state.inputFrames,
             inputDiscontinuities: state.inputDiscontinuities, outputDiscontinuities: state.outputDiscontinuities,
-            invalidBuffers: state.invalidBuffers, channels: state.channels)
+            invalidBuffers: state.invalidBuffers, invalidTimestamps: state.invalidTimestamps,
+            channels: state.channels, eventCapture: state.eventCapture.report())
     }
 }

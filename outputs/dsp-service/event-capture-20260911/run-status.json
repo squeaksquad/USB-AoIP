@@ -1,0 +1,8 @@
+{
+  "classification": "diagnostic-only",
+  "preflight": "passed-existing-gate",
+  "capture": "failed-existing-gate-or-run-error",
+  "restoration": "direct-verified",
+  "gate": "unchanged",
+  "error": "silence run, invalid sample or full scale on input 4"
+}

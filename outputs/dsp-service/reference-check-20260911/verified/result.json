@@ -1,0 +1,52 @@
+{
+  "policy": {
+    "id": "loaded-event-reference-v1",
+    "maximumErrorLSB": 2.0,
+    "maximumSearchLagFrames": 9600,
+    "minimumAnchorRangeLSB": 256,
+    "inputModel": "s24-nearest",
+    "gainFitting": false,
+    "alignment": "one integer offset for all channels and events",
+    "zeroRunRule": "exact predicted L24 zero codes with nonzero boundaries",
+    "coverage": "retained event windows only",
+    "wholeRunValidated": false
+  },
+  "status": "matched-events",
+  "wholeRunValidated": false,
+  "coveredInputFrames": 39,
+  "events": [
+    {
+      "channel": 4,
+      "startInputFrame": 3305764,
+      "referenceStartFrame": 3304775,
+      "zeroFrames": 7,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.5625,
+      "matchedFrames": 39
+    }
+  ],
+  "evidenceComplete": true,
+  "inputIndexMinusSourceIndex": 989,
+  "transportAndActivity": "passed",
+  "legacyGateErrors": [
+    "silence run, invalid sample or full scale on input 4"
+  ],
+  "provenance": {
+    "work/dsp-service/reference-export.cpp": "6d65dff0f1e0d2ae6d4ff98db4cd99c956529f37e0122e292309e772bf2fa0f0",
+    "work/phase4-bridge/src/bridge_core.cpp": "111094f46366a1f7285f3cc6cfef4779505a1cb3048af3b1ccb041f3cb9d2fcb",
+    "outputs/dsp-service/review-20260911/candidate/loaded.dsp": "2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c",
+    "work/phase4-bridge/include/usb16x16/bridge_core.hpp": "23cd778849504f3975f41a2245af358249fd43359c1047f8c7426502c4f32d37",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "binarySHA256": "d59de7c379385641c573a6beb9195a19b9ba6a020bcbf6063e61ef25eb20dbca",
+    "referenceSHA256": "fe4fb15246a7e4a1f724cf6ecb276c3e34f5c3031bf92b450940f9658fff9fdc"
+  },
+  "reportSHA256": "ce80df18397f8e89c45fa952b9bce48615a7f4d509565b56bf3aef243389876c",
+  "checkerSHA256": "94125132849febfb6ca91f2e151dcd22c4e011ee7b6918e46348978a4d3d90d4",
+  "ranges": [
+    [
+      3295896,
+      3305535
+    ]
+  ],
+  "acceptance": "not established; unsaved samples were not compared"
+}

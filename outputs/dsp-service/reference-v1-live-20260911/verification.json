@@ -1,0 +1,43 @@
+{
+  "status": "preflight-and-soak-activity-gate-passed",
+  "overallAcceptance": false,
+  "reasonAcceptancePending": "TX reserve decline and separate latency finding remain open",
+  "restoration": "direct-verified",
+  "criterion": {
+    "id": "loaded-event-reference-v1",
+    "sha256": "2e6592b9609a9f721b4a44fcc5f7400010825754f85e8e74536b887ee80d7e2b"
+  },
+  "pythonTests": 26,
+  "swiftTests": 11,
+  "wholeRunValidated": false,
+  "hashes": {
+    "RESULTS.md": "dc1aa836bbac07dfac9f917b120b4ccfdd90e3592f2feda185cad2306c6538ce",
+    "device-after.json": "cb5a510aa990c0b68977a6bbcf2836c001d85a4041703e43e594e4e0adbb55cb",
+    "device-before.json": "9c06b997b2d6af1bd336295048c10aff4ce85d96f8c014daee561a208fa1ae0f",
+    "final-state.json": "3f64c8d773d5c171c4930e3b4a1b54669629e21b0889eb189a33b8459e61cc45",
+    "frozen-verification.json": "9d196b6a565145aac88f6031a7560146a3ff5564b4e116c7a2ac2d58653e337a",
+    "initial-state.json": "662cffe1d40a8337dad619c917cee3673b5dc5f929cbe818694e7d2fdd2217a5",
+    "preflight/1-after.json": "b2a022a47a1eb86eddd32d2569f1ea5158a50c555b6b2fde4bdc563c2bdf543f",
+    "preflight/1-audio.json": "706ed56ce3263a3e060ddabf49058a191dc6a80614496a80239fcfeb9b48308c",
+    "preflight/1-before.json": "260fd6ceefdefc572272e13d7b250137245d34b4b072d06d129c93391e6d8616",
+    "preflight/queue-review.json": "5956bbac65c202fdf977b913a5840b3ed56dfc2c52d699d11032df2a10675a3c",
+    "preflight/reference/result.json": "3acd1869f6a16444850195cfbb98496c2ce5146cb3153a58b48e5ecde83fcda7",
+    "preflight/summary.json": "44edf2b85975ba39d816973aa6121c63b63168b9e194dde68aa7984686284add",
+    "preflight-bridge.txt": "00466309be35b0768eb2f32b3ace93a215d45a82831fd3fc2e41a8dc85e4aa31",
+    "python-tests.txt": "b51286ce149ec86d0cf10b9c4069d07b25b8d88a9d89b156e0ac271394085c86",
+    "review.json": "6413bb008f73ac01555de7dd7bc00c031a19395550fc7524864e85d01d3e9519",
+    "run-soak.py": "4ffa2d2ecef2ffe657e02598d6350356901bcc12be52ea6e9c01bfe64c366a67",
+    "run-status.json": "bdf842e55c0138e13ceb3b43c99fce46eb2b6ec7e0e31233c3e47b04da00068e",
+    "service-after.txt": "01c7f17fd80eceb3dfdf79c57a8091498100cad11305b10ab10969c3ca62a425",
+    "soak/1-after.json": "9233f2dcb1f624889f7cbccd0caca40fa2ecc28315045fe59c2221dec2f7979b",
+    "soak/1-audio.json": "408c1a710bcb649cb432552b04226341ba8bcb25bf6b46b84c613b659bbb66e5",
+    "soak/1-before.json": "8adb8ac5b7771d20c3010e589cdca4183c8fee158760033868dca7ba0bb5540a",
+    "soak/queue-review.json": "8190f27db23daa0c3eae8c30cba780e600a767236358d5c9b3a8047c100e74c5",
+    "soak/reference/ranges.txt": "7bb14e5811628c6794f93a5f8295d57a703a01ce65bada3a3ca7f93a4e3bcb66",
+    "soak/reference/reference.s32le": "8bda73f2375c95bd0f5bb6aeec56374014c29f45d644539f4df5f81162d620a5",
+    "soak/reference/result.json": "35f73fa93454482bdf4ad63d4a9a80df7be3bf7a36b0d18dcdbe99f9f9e364d6",
+    "soak/summary.json": "40dfc21ca112a1ef5e01ddbba587d6a474aca459786b2ffefa683f633f49f37d",
+    "soak-bridge.txt": "c4e8642962f16ba47d3d71b44f8b478dc1a5166530374c2d394a476a952438fe",
+    "swift-tests.txt": "6e0c9dcda9a3f79e11c2bab457bbc195dc6942714a1101b7564013cb85bf2c70"
+  }
+}

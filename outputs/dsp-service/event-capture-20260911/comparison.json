@@ -1,0 +1,232 @@
+{
+  "classification": "live event matches predicted quantization neighborhood",
+  "acceptance": "old gate still failed; no retrospective pass",
+  "referenceStartSourceFrame": 3304775,
+  "liveStartInputFrame": 3305764,
+  "inputIndexMinusSourceIndex": 989,
+  "note": "Index offset aligns this waveform; it is not a loaded impulse latency result.",
+  "startTiming": {
+    "inputFrame": 3305764,
+    "inputSampleTime": 1066555076,
+    "outputCallbackFirstFrame": 3305728,
+    "outputCallbackFrames": 64,
+    "outputCallbackSampleTime": 1066555292
+  },
+  "channels": [
+    {
+      "channel": 1,
+      "matchingNearestL24Codes": 35,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.234375,
+      "rmsRawErrorLSB": 0.38033527978999826,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 2,
+      "matchingNearestL24Codes": 39,
+      "frames": 39,
+      "maximumRawErrorLSB": 0.125,
+      "rmsRawErrorLSB": 0.062237432561586564,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 3,
+      "matchingNearestL24Codes": 36,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.1796875,
+      "rmsRawErrorLSB": 0.3281276642221948,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 4,
+      "matchingNearestL24Codes": 39,
+      "frames": 39,
+      "maximumRawErrorLSB": 6.866455078125e-05,
+      "rmsRawErrorLSB": 2.3045529787292856e-05,
+      "liveZeroFrames": 7
+    },
+    {
+      "channel": 5,
+      "matchingNearestL24Codes": 36,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.28125,
+      "rmsRawErrorLSB": 0.33449365634523914,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 6,
+      "matchingNearestL24Codes": 36,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.140625,
+      "rmsRawErrorLSB": 0.3159977379406945,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 7,
+      "matchingNearestL24Codes": 33,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.1875,
+      "rmsRawErrorLSB": 0.4442468373814864,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 8,
+      "matchingNearestL24Codes": 36,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.1796875,
+      "rmsRawErrorLSB": 0.328589589072276,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 9,
+      "matchingNearestL24Codes": 35,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.2578125,
+      "rmsRawErrorLSB": 0.3888060037639089,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 10,
+      "matchingNearestL24Codes": 35,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.11328125,
+      "rmsRawErrorLSB": 0.3524719842762607,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 11,
+      "matchingNearestL24Codes": 29,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.296875,
+      "rmsRawErrorLSB": 0.5988337021383798,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 12,
+      "matchingNearestL24Codes": 35,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.28125,
+      "rmsRawErrorLSB": 0.39386757411850554,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 13,
+      "matchingNearestL24Codes": 37,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.0263671875,
+      "rmsRawErrorLSB": 0.23384098610335263,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 14,
+      "matchingNearestL24Codes": 36,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.2265625,
+      "rmsRawErrorLSB": 0.34291384235547084,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 15,
+      "matchingNearestL24Codes": 36,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.421875,
+      "rmsRawErrorLSB": 0.41665598476606963,
+      "liveZeroFrames": 0
+    },
+    {
+      "channel": 16,
+      "matchingNearestL24Codes": 28,
+      "frames": 39,
+      "maximumRawErrorLSB": 1.5625,
+      "rmsRawErrorLSB": 0.6629673092652624,
+      "liveZeroFrames": 0
+    }
+  ],
+  "channel4ReferenceL24Codes": [
+    -6,
+    -6,
+    -6,
+    -7,
+    -6,
+    -6,
+    -6,
+    -5,
+    -5,
+    -4,
+    -4,
+    -3,
+    -3,
+    -2,
+    -1,
+    -1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -1,
+    -2,
+    -3,
+    -4,
+    -5,
+    -7,
+    -8,
+    -10,
+    -12,
+    -15,
+    -18,
+    -20,
+    -23,
+    -27,
+    -30,
+    -34
+  ],
+  "channel4LiveFloatInLSBs": [
+    -5.999987602233887,
+    -5.999987602233887,
+    -5.999987602233887,
+    -6.999985694885254,
+    -5.999987602233887,
+    -5.999987602233887,
+    -5.999987602233887,
+    -4.999989986419678,
+    -4.999989986419678,
+    -3.9999918937683105,
+    -3.9999918937683105,
+    -2.9999938011169434,
+    -2.9999938011169434,
+    -1.9999959468841553,
+    -0.9999979734420776,
+    -0.9999979734420776,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    -0.9999979734420776,
+    -1.9999959468841553,
+    -2.9999938011169434,
+    -3.9999918937683105,
+    -4.999989986419678,
+    -6.999985694885254,
+    -7.999983787536621,
+    -9.999979972839355,
+    -11.999975204467773,
+    -14.999969482421875,
+    -17.999963760375977,
+    -19.99995994567871,
+    -22.999954223632812,
+    -26.99994468688965,
+    -29.99993896484375,
+    -33.99993133544922
+  ],
+  "hashes": {
+    "capture/1-audio.json": "ce80df18397f8e89c45fa952b9bce48615a7f4d509565b56bf3aef243389876c",
+    "reference-window.cpp": "a35d4efbab8413c51a808b5e2aedf6558cae42d46dee929e4b3c3b1e54c9207a",
+    "reference-window.txt": "f792ad3a35e0f54d20b40b0485427246c9a96002517e9251a88ea9d8d44a2088"
+  }
+}

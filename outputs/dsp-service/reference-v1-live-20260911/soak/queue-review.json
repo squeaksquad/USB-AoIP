@@ -1,0 +1,126 @@
+{
+  "rows": 602,
+  "interval": "inclusive before/after BRIDGE tx_input counters",
+  "beforeTxInput": "9264968",
+  "afterTxInput": "38116568",
+  "tx_queue": {
+    "before": 179.0,
+    "after": 179.0,
+    "first60Mean": 176.53333333333333,
+    "last60Mean": 159.58333333333334,
+    "min": 126.0,
+    "max": 182.0,
+    "nonoverlapping60RowMeans": [
+      176.533,
+      176.567,
+      176.683,
+      175.683,
+      176.8,
+      176.583,
+      176.417,
+      176.567,
+      173.2,
+      158.783
+    ]
+  },
+  "rx_queue": {
+    "before": 136.0,
+    "after": 138.0,
+    "first60Mean": 139.3,
+    "last60Mean": 143.78333333333333,
+    "min": 133.0,
+    "max": 168.0,
+    "nonoverlapping60RowMeans": [
+      139.3,
+      140.25,
+      140.9,
+      142.033,
+      141.683,
+      142.083,
+      141.983,
+      141.333,
+      141.25,
+      143.767
+    ]
+  },
+  "tx_occ": {
+    "before": 51.0,
+    "after": 51.0,
+    "first60Mean": 51.0,
+    "last60Mean": 51.0,
+    "min": 51.0,
+    "max": 78.0,
+    "nonoverlapping60RowMeans": [
+      51.0,
+      51.0,
+      51.0,
+      51.45,
+      51.0,
+      51.0,
+      51.0,
+      51.0,
+      51.0,
+      51.0
+    ]
+  },
+  "rx_occ": {
+    "before": 51.0,
+    "after": 51.0,
+    "first60Mean": 51.0,
+    "last60Mean": 53.38333333333333,
+    "min": 51.0,
+    "max": 75.0,
+    "nonoverlapping60RowMeans": [
+      51.0,
+      51.0,
+      51.0,
+      51.0,
+      51.0,
+      51.0,
+      51.0,
+      51.0,
+      51.25,
+      53.383
+    ]
+  },
+  "tx_qfloor": {
+    "before": 86.0,
+    "after": 81.0,
+    "first60Mean": 86.0,
+    "last60Mean": 81.0,
+    "min": 81.0,
+    "max": 86.0,
+    "nonoverlapping60RowMeans": [
+      86.0,
+      86.0,
+      86.0,
+      86.0,
+      86.0,
+      86.0,
+      86.0,
+      86.0,
+      85.917,
+      81.0
+    ]
+  },
+  "rx_qfloor": {
+    "before": 72.0,
+    "after": 72.0,
+    "first60Mean": 72.0,
+    "last60Mean": 72.0,
+    "min": 72.0,
+    "max": 72.0,
+    "nonoverlapping60RowMeans": [
+      72.0,
+      72.0,
+      72.0,
+      72.0,
+      72.0,
+      72.0,
+      72.0,
+      72.0,
+      72.0,
+      72.0
+    ]
+  }
+}

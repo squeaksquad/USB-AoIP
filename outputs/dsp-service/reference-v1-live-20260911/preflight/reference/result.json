@@ -1,0 +1,27 @@
+{
+  "policy": {
+    "id": "loaded-event-reference-v1",
+    "maximumErrorLSB": 2.0,
+    "maximumSearchLagFrames": 9600,
+    "minimumAnchorRangeLSB": 256,
+    "inputModel": "s24-nearest",
+    "gainFitting": false,
+    "alignment": "one integer offset for all channels and events",
+    "zeroRunRule": "exact predicted L24 zero codes with nonzero boundaries",
+    "coverage": "retained event windows only",
+    "wholeRunValidated": false
+  },
+  "status": "inconclusive",
+  "wholeRunValidated": false,
+  "coveredInputFrames": 0,
+  "events": [],
+  "evidenceComplete": true,
+  "reason": "no retained windows; waveform not evaluated",
+  "transportAndActivity": "passed",
+  "legacyGateErrors": [],
+  "provenance": {},
+  "reportSHA256": "706ed56ce3263a3e060ddabf49058a191dc6a80614496a80239fcfeb9b48308c",
+  "checkerSHA256": "94125132849febfb6ca91f2e151dcd22c4e011ee7b6918e46348978a4d3d90d4",
+  "ranges": [],
+  "acceptance": "not established; unsaved samples were not compared"
+}

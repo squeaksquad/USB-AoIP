@@ -1,0 +1,28 @@
+{
+  "status": "passed",
+  "checks": [
+    "pinned artifact SHA256",
+    "Swift first 32 stimulus samples bit-identical",
+    "600 s frame counts and finite/bounded outputs in both input models",
+    "all-channel zero-run pattern in both models",
+    "three channel-4 event neighborhoods and independent S32 byte-copy conversion",
+    "existing bridge core test suite",
+    "argument and missing-artifact rejection"
+  ],
+  "sourceHashes": {
+    "work/dsp-service/replay-loaded.cpp": "5447038f9786ceffad4eb95dfaef2046b23ff89179ffad26e1e4006978d6566f",
+    "work/phase4-bridge/src/bridge_core.cpp": "111094f46366a1f7285f3cc6cfef4779505a1cb3048af3b1ccb041f3cb9d2fcb",
+    "work/phase4-bridge/include/usb16x16/bridge_core.hpp": "23cd778849504f3975f41a2245af358249fd43359c1047f8c7426502c4f32d37",
+    "work/latency-harness/Sources/USB16x16LatencyCore/LiveImpulseMeasurement.swift": "70d36bffecf8ad3ec1411c686120c1a4b91bd2b16e5ac81e4a963a481ebde51a",
+    "work/latency-harness/Sources/USB16x16LatencyCore/ContinuousLoad.swift": "8f1f6f9fad9d70c60fa4bb55a0ac082b96093d3801b1cf4512d861746d0d26ea",
+    "work/aes67-linux-daemon/3rdparty/ravenna-alsa-lkm/driver/MTConvert.c": "cc0986ab9ff40ef9734645422581a3e9edc876519a5e6d0c0cb8b8daeda938ca",
+    "outputs/dsp-service/review-20260911/candidate/loaded.dsp": "2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c"
+  },
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "gitHead": "c1e072c2f16d642a68c1178fd6a7f7baacf9e463",
+  "reportHashes": {
+    "s24.json": "c9aae5fb25333451babfbab8a7d8fbf62207fff9d8859007e7b62538f34d9cd6",
+    "float.json": "e292aec52c31314a9b2e75300f852e4956e2567932d9a99d1347915fa1f28b0a"
+  }
+}

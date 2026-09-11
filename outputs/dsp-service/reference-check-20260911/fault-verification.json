@@ -1,0 +1,95 @@
+{
+  "checkerSHA256": "94125132849febfb6ca91f2e151dcd22c4e011ee7b6918e46348978a4d3d90d4",
+  "cases": {
+    "saved_capture": {
+      "policy": {
+        "id": "loaded-event-reference-v1",
+        "maximumErrorLSB": 2.0,
+        "maximumSearchLagFrames": 9600,
+        "minimumAnchorRangeLSB": 256,
+        "inputModel": "s24-nearest",
+        "gainFitting": false,
+        "alignment": "one integer offset for all channels and events",
+        "zeroRunRule": "exact predicted L24 zero codes with nonzero boundaries",
+        "coverage": "retained event windows only",
+        "wholeRunValidated": false
+      },
+      "status": "matched-events",
+      "wholeRunValidated": false,
+      "coveredInputFrames": 39,
+      "events": [
+        {
+          "channel": 4,
+          "startInputFrame": 3305764,
+          "referenceStartFrame": 3304775,
+          "zeroFrames": 7,
+          "alignmentAnchorChannel": 1,
+          "maximumErrorLSB": 1.5625,
+          "matchedFrames": 39
+        }
+      ],
+      "evidenceComplete": true,
+      "inputIndexMinusSourceIndex": 989
+    },
+    "inserted_silence": {
+      "policy": {
+        "id": "loaded-event-reference-v1",
+        "maximumErrorLSB": 2.0,
+        "maximumSearchLagFrames": 9600,
+        "minimumAnchorRangeLSB": 256,
+        "inputModel": "s24-nearest",
+        "gainFitting": false,
+        "alignment": "one integer offset for all channels and events",
+        "zeroRunRule": "exact predicted L24 zero codes with nonzero boundaries",
+        "coverage": "retained event windows only",
+        "wholeRunValidated": false
+      },
+      "status": "mismatch",
+      "wholeRunValidated": false,
+      "coveredInputFrames": 0,
+      "events": [],
+      "evidenceComplete": true,
+      "reason": "unexplained sample at input frame 3305773"
+    },
+    "missing_frame": {
+      "policy": {
+        "id": "loaded-event-reference-v1",
+        "maximumErrorLSB": 2.0,
+        "maximumSearchLagFrames": 9600,
+        "minimumAnchorRangeLSB": 256,
+        "inputModel": "s24-nearest",
+        "gainFitting": false,
+        "alignment": "one integer offset for all channels and events",
+        "zeroRunRule": "exact predicted L24 zero codes with nonzero boundaries",
+        "coverage": "retained event windows only",
+        "wholeRunValidated": false
+      },
+      "status": "mismatch",
+      "wholeRunValidated": false,
+      "coveredInputFrames": 0,
+      "events": [],
+      "evidenceComplete": true,
+      "reason": "unexplained sample at input frame 3305766"
+    },
+    "repeated_frame": {
+      "policy": {
+        "id": "loaded-event-reference-v1",
+        "maximumErrorLSB": 2.0,
+        "maximumSearchLagFrames": 9600,
+        "minimumAnchorRangeLSB": 256,
+        "inputModel": "s24-nearest",
+        "gainFitting": false,
+        "alignment": "one integer offset for all channels and events",
+        "zeroRunRule": "exact predicted L24 zero codes with nonzero boundaries",
+        "coverage": "retained event windows only",
+        "wholeRunValidated": false
+      },
+      "status": "mismatch",
+      "wholeRunValidated": false,
+      "coveredInputFrames": 0,
+      "events": [],
+      "evidenceComplete": true,
+      "reason": "unexplained sample at input frame 3305766"
+    }
+  }
+}

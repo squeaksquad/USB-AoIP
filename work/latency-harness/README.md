@@ -20,6 +20,38 @@ swift test
 swift build -c release
 ```
 
+## Continuous-load event capture
+
+The `continuous` command now includes `eventCapture` in its JSON report. After
+the existing two-second warmup, four consecutive exact zeros on any input
+trigger an event. This records evidence; it does not classify the event or change
+the service validator's fewer-than-four-zero gate.
+
+Each event includes its one-based input channel, zero-based input-frame start,
+observed run length, and all 16 return channels around the event. The target
+window is 16 frames before the run and 16 after it. Storage is allocated before
+audio starts, capped at 32 events and 96 frames per event. Runs longer than the
+window still retain their observed length; `windowCapacityReached` and
+`windowComplete` expose missing context. `omittedEvents` counts triggers after
+the event limit. Runs still active when capture stops use `termination=captureEnd`.
+
+Every saved frame carries its CoreAudio input sample time and the paired output
+callback's first stimulus-frame index, sample time and frame count. The output
+callback fields identify scheduling context, not the source frame returned in
+that input sample; account for transport delay when aligning the deterministic
+reference. The report identifies the generator and seed, and the parent report
+retains amplitude and total input/output frames.
+
+`samples` holds readable Float32 values, with null for nonfinite samples;
+`sampleBits` holds exact UInt32 bit patterns, including signed zero and NaN
+payloads. Invalid timestamps are omitted and counted in `invalidTimestamps`.
+Timestamp gaps or invalid buffers break event continuity, so windows never stitch
+across a known missing interval. JSON construction happens after audio stops.
+
+The DSP service validator provides a single 90-second loaded diagnostic run via
+`--phase capture`, requiring a fresh preflight from the same harness and service
+process. See `work/dsp-service/README.md` for the controlled live procedure.
+
 ## Inspect USB 16x16
 
 ```bash

@@ -1,8 +1,19 @@
 # Fixed-preset DSP service validation
 
-Installed and short-preflight verified on 2026-09-11 UTC; not fully accepted.
-See `outputs/dsp-service/PREFLIGHT_RESULTS.md` for the three valid 60-second
-service runs. The preparation details below remain as provenance.
+Installed; 2026-09-11 acceptance battery completed with a loaded-arm failure.
+Direct/transparent passed preflight, impulse repeats and ten-minute soaks; loaded
+failed its soak because input 4 had seven consecutive exact zeros (limit <4).
+No retries or threshold changes. See `outputs/dsp-service/acceptance-20260911/RESULTS.md`
+for the original evidence, latency difference and limitations.
+Profiles remain experimental and UI Apply stays disabled.
+
+The opt-in `reference-events-v1` activity criterion passed a new 60-second
+preflight and 600-second loaded soak. All three channel-4 events match the pinned
+filter/quantization reference (112 retained frames, maximum error 1.5625 LSB).
+Transport checks and the default legacy gate are preserved. TX queue floor fell
+86 to 81, so reserve stability and overall acceptance remain open. Read
+`outputs/dsp-service/reference-v1-live-20260911/RESULTS.md` and
+`REFERENCE_VALIDATION.md`. Direct restoration is recorded with the campaign.
 
 The bridge already contains the DSP stage. This change loads a pinned preset at
 service startup, only on USB → AES67. A profile switch restarts the existing
@@ -128,6 +139,47 @@ Then use `--preflight <that-directory>/summary.json` for:
 | transparent | Four runs × 800 impulses, other-channel load 0.1 | 600 s continuous 16-output load |
 | loaded | Refused: filtering changes the correlation reference | 600 s continuous 16-output load |
 
+### Targeted event capture
+
+Completed once on 2026-09-11: preflight passed, and the capture retained a complete
+seven-zero channel-4 event. All 39 neighboring samples match the predicted
+nearest L24 codes; clean timestamps/counters and continuous other returns support
+the quantization explanation. Direct mode was restored and verified. The old
+gate remains failed. Read `outputs/dsp-service/event-capture-20260911/RESULTS.md`
+before further hardware work; the commands below document that procedure, not
+an instruction to repeat it. The subsequent reference-criterion run is summarized
+at the top of this document.
+
+The updated signed harness retains bounded zero-run neighborhoods automatically
+in every continuous report. Build verification is recorded at
+`outputs/dsp-service/event-capture-20260911/build-verification.json`.
+The existing acceptance gate remains unchanged; retained event evidence does
+not turn a failed signal check into a pass.
+
+After playback is stopped and RTL Utility is closed, select `dsp-loaded` using
+the existing stop/switch/start procedure. Obtain a new 60-second all-16-input
+preflight with the rebuilt harness. Then run one 90-second diagnostic capture:
+
+```sh
+python3 work/dsp-service/validate.py \
+  --bundle outputs/dsp-service/review-20260911 --arm loaded --phase capture \
+  --required-inputs 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 \
+  --preflight outputs/dsp-service/event-capture-20260911/preflight/summary.json \
+  --output outputs/dsp-service/event-capture-20260911/capture
+```
+
+Default is a plan only; `--execute` opens audio. Output directories must be new.
+The capture requires a preflight tied to the same bundle, rebuilt harness,
+service/bridge process and return inputs. Older preflight receipts cannot be
+reused after rebuilding. Only before/after snapshots contact the Pi.
+
+The offline prediction is a seven-zero channel-4 event around source time
+68.85 seconds. If reproduced, this run will still return failure under the old
+gate, with `1-audio.json` preserving the event's samples, bit patterns and timing.
+Do not retry it. Compare the neighborhood with the offline reference, preserve
+service logs, then restore and verify `dsp-direct` before playback resumes.
+This capture is diagnostic only, not a replacement acceptance battery.
+
 The four runs preserve the existing direct/transparent stability gate. They do
 not provide four independent startup draws. Compare latency as session evidence;
 do not infer zero added transport depth from one direct/transparent pair. If a
@@ -167,19 +219,52 @@ python3 outputs/dsp-service/review-20260911/deploy.py check
 
 The signed local harness app must be rebuilt before hardware tests (the session
 that prepared this package builds it). The continuous IO callback has now passed synthetic tests and the three short
-hardware preflights; the long acceptance battery remains pending.
+hardware preflights; the long acceptance battery failed the loaded zero-run gate.
 
 ## Next boundary
+
+The new loaded activity gate passes; inspect the saved late queue-reserve change
+and keep the separate latency finding open before further live work. The original
+battery remains failed under its original gate; overall acceptance is pending.
 
 After the service battery passes, implement staged UI Apply using the validated
 stop/configure/start/verify/rollback operation. Keep draft and applied state
 separate. Do not promise live-safe editing or extend to AoIP-only until this first
 mode is accepted.
 
-Local result: 9 Python tests and 7 Swift tests passed; release build, shell syntax,
-bundle verification and dry-run planning passed. No hardware acceptance claimed.
+Current local result: 26 Python and 11 Swift tests pass. The pinned bundle and
+criterion were verified for the new hardware run; full acceptance is not claimed.
 
 Hardware-run requirement: the signed CoreAudio harness must run outside the Codex
 filesystem sandbox. Inside the sandbox it enumerated zero audio devices; that
 attempt opened no audio and is invalid evidence. Do not restart the gadget or
 coreaudiod to fix this execution-permission condition.
+
+## Loaded zero-run replay
+
+`outputs/dsp-service/offline-loaded-20260911/RESULTS.md` documents a seven-sample
+zero run reproduced by the pinned filters and S32-to-L24 conversion. No float
+silence occurs. Both modeled USB input conversions reproduce channel 4 = 7 and
+every other channel = 1, matching the live longest-run pattern. The live event
+itself cannot be identified from aggregate statistics alone; the later bounded
+live capture supplies that evidence. This replay does not alter production DSP.
+
+Build and run locally; no audio device or Pi access is needed:
+
+```sh
+clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
+  -I work/phase4-bridge/include work/dsp-service/replay-loaded.cpp \
+  work/phase4-bridge/src/bridge_core.cpp -o /private/tmp/usb16x16-replay-loaded
+/private/tmp/usb16x16-replay-loaded \
+  outputs/dsp-service/review-20260911/candidate/loaded.dsp 600 s24 \
+  > /private/tmp/usb16x16-replay-s24.json
+```
+
+Use `float` instead of `s24` for the input-conversion sensitivity check. `s24`
+rounds input through the bridge converter; the actual host rounding policy is
+not established. Both variants use the actual DSP stage and S32 converter,
+followed by the driver's high-three-byte L24 operation. `nearest24Comparison`
+is diagnostic only. Reports keep all-channel statistics and at most 32 completed
+channel-4 events of at least four zeros, with up to 64 neighborhood samples each.
+An unfinished final run is reported separately. Frame indices are zero-based
+source frames; startup offsets and live transport are not modeled.

@@ -9741,3 +9741,146 @@ native 48 kHz 16x16 with labels 1–16, and all valid captures used that access.
 Installation initially refused before file changes because the process guard
 matched an audio-binary path in the parent SSH command; an isolated deployment
 command succeeded without changing the guard or the reviewed bundle.
+
+
+**DSP ACCEPTANCE BATTERY COMPLETED 2026-09-11: overall FAILED, no retry.**
+Authoritative report: outputs/dsp-service/acceptance-20260911/RESULTS.md.
+All 16 returns were required. Direct and transparent passed 60 s preflight,
+4 x 800 impulses (725 and 766 samples, zero spread), and 600 s soak. User RTL at
+32 frames: 19.021 and 19.875 ms. Separate starts prevent causal attribution;
+trace includes a 48-sample AES67 index step. Do not claim latency neutrality.
+Transparent's much later after-RTL snapshot had lower floors and larger gaps
+without recovery; preserve its separate operating-interval classification.
+Loaded preflight passed; soak failed because input 4 longestZeroRun=7 (limit <4).
+All other inputs longestZeroRun=1; no nonfinite/fullscale samples, invalid buffers,
+timestamp discontinuities or bridge recovery/drop/clip/low-queue counters.
+Loaded TX floor decreased 87 to 82, RX stayed 72. DSP mean/max50.548/134.738 us.
+Aggregate statistics cannot locate or explain the seven-zero event. Next is
+bounded offline channel-4 signal/filter/conversion analysis, followed only if
+needed by a targeted evidence-preserving capture. No full-battery retry, gate
+relaxation, transport tuning or UI Apply. Profiles remain experimental.
+Candidate binary and immutable rollback bundle are unchanged. Service restoration
+to dsp-direct is recorded in campaign final-state.json; this is not binary rollback.
+
+Final state: dsp-direct restored and verified active/running, matching candidate
+bridge/supervisor/config, no DSP loaded or calls, zero recoveries and error
+counters. See final-state.json. Playback may resume. This is DSP disabled on the
+candidate binary, not a baseline binary rollback.
+
+**OFFLINE DSP DIAGNOSIS 2026-09-11: loaded zero-run pattern reproduced by
+filtering and L24 quantization.** Read
+outputs/dsp-service/offline-loaded-20260911/RESULTS.md. A new local replay links
+the unchanged DSP core, uses the pinned loaded artifact and the continuous
+harness's deterministic noise. Both Float32 and S24-rounded input models produce
+channel 4 longestZeroRun=7 and every other channel=1 over 600 s. DSP float output
+has no exact zeros; the RAVENNA high-three-byte S32-to-L24 conversion creates the
+run at source frame 3304775 (68.849479 s). Sample neighborhoods, statistics and
+source hashes are retained. Swift stimulus bit checks, independent byte-copy
+checks and existing bridge core tests passed.
+
+This establishes a quantization mechanism sufficient to fail the existing gate,
+not the identity of the original live event. The battery remains FAILED;
+production DSP, gate, profiles and UI Apply are unchanged. No live access or
+restart occurred. Next: bounded continuous-harness event capture with sample
+times and all-channel neighborhoods, synthetic quantization/loss verification,
+then one targeted loaded capture with preflight and playback coordination. Any
+new criterion must be declared prospectively; do not loosen the old gate or
+repeat the full battery. Latency and queue-reserve questions remain separate.
+
+**EVENT CAPTURE IMPLEMENTED 2026-09-11: signed harness built; hardware run pending.**
+Continuous reports now retain up to 32 zero-run events, each with all 16 return
+channels, input frame/sample times, paired output callback stimulus indices and
+sample times, and exact sample bits. Four zeros trigger recording; the old
+failure gate remains unchanged. Windows target 16 preceding/following frames and
+cap at 96 total, with explicit capacity, incomplete-window and omitted-event
+indicators. Capture buffers are preallocated; reports are built after audio stops.
+Known timestamp/buffer discontinuities split event tracking. Invalid timestamp
+flags now fail validation; nonfinite samples preserve their bits in JSON and end
+exact-zero runs rather than joining zeros across the invalid value.
+
+Eleven Swift and eleven Python tests passed. The release app was rebuilt and
+its ad-hoc signature verified; build-app.sh hit the nested SwiftPM sandbox
+restriction, so the same build used --disable-sandbox and the existing app was
+copied/signed/verified directly. No service or audio device was opened.
+Build/source hashes: outputs/dsp-service/event-capture-20260911/build-verification.json.
+Next is playback coordination, a fresh loaded 60-second process-bound preflight,
+then one 90-second validate.py --phase capture run, preserving its old-gate
+failure and neighborhoods, followed by verified restoration to dsp-direct.
+
+**LIVE EVENT CAPTURE COMPLETED 2026-09-11: quantization signature confirmed.**
+Read outputs/dsp-service/event-capture-20260911/RESULTS.md. User confirmed playback
+stopped and RTL closed. One loaded service start, fresh all-16-input 60-second
+preflight (passed), then one 90-second capture. Input 4 had seven zeros; every
+other input longest run=1. The complete 39-frame channel-4 event neighborhood
+matches all predicted nearest L24 codes, with raw maximum difference
+0.000068665 LSB. The other 15 returns remain nonzero across the window. No event
+omissions/truncation, timestamp gaps, invalid timestamps/buffers, nonfinite or
+full-scale samples. Recovery/restart/drop/clip/low-queue/pitch-error counters
+stayed zero; TX/RX floors stayed 86/96. This identifies the captured event as
+the expected filter/L24 quantization trajectory, not interruption evidence.
+
+The unchanged gate still fails; do not retrospectively pass acceptance. The
+989-frame source/input index alignment is not a loaded impulse latency result.
+All-channel raw reference difference reaches 1.5625 LSB, so no all-channel
+bit-exactness claim. Reference source/output, analysis and comparison hashes
+are retained with the capture. No retries, resets or transport tuning occurred.
+Direct mode was restored and verified active/stable, matching candidate hashes,
+with no DSP or error counters; final-state.json and run-status.json record it.
+Playback may resume. Next is prospective reference-aware loaded-signal validation,
+with existing transport checks and reserve review retained. UI Apply remains
+disabled and a full battery rerun is not the next step.
+
+**REFERENCE EVENT CHECKER IMPLEMENTED LOCALLY: prospective activity criterion.**
+Read work/dsp-service/REFERENCE_VALIDATION.md. reference_check.py and the bounded
+reference-export.cpp replay the pinned core/preset through S24 input and S32/L24
+output conversion. Alignment uses independent pre-event channel samples within
+a fixed 9600-frame bound; exactly one offset must explain every channel/event.
+All retained samples must meet a fixed 2-LSB bound; triggering zero runs must
+match exact predicted L24 zeros and nonzero boundaries. No gain/time fitting.
+Incomplete, omitted, ambiguous, malformed or unaligned evidence cannot clear
+the gate. The two-LSB model limit is diagnostic, not a universal error proof.
+
+The saved live event matched its regenerated full search interval (39 frames,
+offset 989, maximum all-channel difference 1.5625 LSB). Inserted silence and
+missing/repeated frames in that saved window were rejected; 26 tests also cover
+randomized fixtures, strict zero matching, channel/gain changes, cross-window
+offset changes, metadata failures, pins and the prospective validator path.
+Evidence: outputs/dsp-service/reference-check-20260911/verified/result.json and
+the parent directory's fault/final verification records. No new hardware work.
+
+validate.py defaults to legacy. Explicit --signal-criterion reference-events-v1
+is loaded-only and requires all 16 returns. It clears only explained zero-run
+objections; all activity/transport integrity checks remain. New preflight
+receipts bind criterion/checker/exporter/validator hashes as well as the existing
+bundle/harness/process identity. Legacy receipts are not reusable for this mode.
+Historical failure results remain untouched. New reports explicitly state
+window coverage and wholeRunValidated=false: samples outside retained windows
+are not compared, so this is not general missing/repeated-sample proof.
+Next: one coordinated fresh loaded preflight and 600-second soak under the new
+criterion, queue-reserve review, then verified direct restoration. UI Apply and
+overall acceptance remain pending; no full battery or transport tuning campaign.
+
+**PROSPECTIVE LOADED ACTIVITY RUN COMPLETED 2026-09-11: preflight and soak PASS;
+reserve stability and latency remain open.** Read
+outputs/dsp-service/reference-v1-live-20260911/RESULTS.md and review.json.
+One fresh loaded start, 60-second preflight then 600-second soak, using frozen
+criterion loaded-event-reference-v1 (2e6592b9). All three channel-4 events
+(7, 4, 5 zeros) matched exact predicted L24 zero codes and boundaries; all 16
+channels' 112 retained frames were within 1.5625 LSB of reference. One common
+1,011-frame source/input offset is alignment evidence, not loaded impulse latency.
+No omitted/truncated windows, timestamp/invalid-sample errors, recovery, direction
+restart, drop, clip, low-queue or pitch errors. No threshold tuning or retries.
+
+TX floor fell 86 to 81; RX stayed 72. First/last 60-row TX queue means were
+176.533/159.583 frames, with the drop late in the run. DSP mean/max at soak end
+50.512/138.461 us, packet lead minima 977/989 us. The signal gate passes, but
+this is not a clean queue-reserve stability result. Historical acceptance stays
+failed under its original rule; separate direct/transparent latency findings
+remain unresolved. Unsaved samples were not compared (wholeRunValidated=false).
+
+All 26 Python and 11 Swift tests passed. Direct mode restored and verified
+active/stable with candidate hashes, zero error counters and no DSP calls;
+CoreAudio still native 48 kHz 16x16 labels 1–16, UDC configured/high-speed.
+Playback may resume. No binary rollback occurred. Next: inspect saved queue
+history and bridge timing code for the late reserve change before proposing
+further live work. UI Apply stays disabled; profiles remain experimental.

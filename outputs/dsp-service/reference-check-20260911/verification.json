@@ -1,0 +1,22 @@
+{
+  "status": "local-checks-passed-no-new-hardware-run",
+  "pythonTests": 26,
+  "criterion": {
+    "id": "loaded-event-reference-v1",
+    "sha256": "2e6592b9609a9f721b4a44fcc5f7400010825754f85e8e74536b887ee80d7e2b"
+  },
+  "sourceHashes": {
+    "work/dsp-service/reference_check.py": "94125132849febfb6ca91f2e151dcd22c4e011ee7b6918e46348978a4d3d90d4",
+    "work/dsp-service/reference-export.cpp": "6d65dff0f1e0d2ae6d4ff98db4cd99c956529f37e0122e292309e772bf2fa0f0",
+    "work/dsp-service/test_reference_check.py": "3e97c4919d39e29ba31243b69fa35161a3e84d3e8170d71ce1f46d7f6863d278",
+    "work/dsp-service/validate.py": "f192f8f1fb451557dc989552a7d221a8c4c5ddbe296a34a77b87a142b2b27774",
+    "work/dsp-service/test_dsp_service.py": "bfbe6793cf0c988839611aa3013f7a93897f3e42401ef65db8aa2daf76a31e7c",
+    "work/dsp-service/REFERENCE_VALIDATION.md": "f61b97e348896a872ff7546c18056f7fbb3f4e1dc538f6bcb606f03abd5a30d7"
+  },
+  "evidenceHashes": {
+    "verified/result.json": "f87c62bcdc7ef619f4353c137fa8fa7f03b149010b1f071f3eb9d368284d4632",
+    "fault-verification.json": "78723f22088691c0b5f2f8b5ba1b4b57a2adcb18d6d057dbf73bf4e0508348b1",
+    "prospective-plans.json": "12a7fc874dd5ea4f93734dd59157d9f81bd10d135de867cd76ecad64f4c7d599"
+  },
+  "coverage": "saved 39-frame event window; no whole-stream verification"
+}

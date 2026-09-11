@@ -139,6 +139,68 @@ class DSPServiceTests(unittest.TestCase):
         reset = dict(after, bridge=after['bridge'].replace('tx_input=200', 'tx_input=0'))
         self.assertTrue(validate.issues(before, reset, report, 'loaded', [1]))
 
+    def test_invalid_timestamps_fail_without_relaxing_zero_gate(self):
+        before, after, report = self.fixture()
+        report['invalidTimestamps'] = 1
+        self.assertIn('invalid audio timestamps', validate.issues(before, after, report, 'loaded', [4]))
+        report['invalidTimestamps'] = 0
+        report['channels'][3]['longestZeroRun'] = 7
+        report['eventCapture'] = {'version': 1, 'events': [{'zeroFrames': 7}]}
+        self.assertTrue(validate.issues(before, after, report, 'loaded', [4]))
+        self.assertEqual(validate.issues(before, after, report, 'loaded', [4], zero_run_gate=False), [])
+        report['channels'][3]['nonFinite'] = 1
+        self.assertTrue(validate.issues(before, after, report, 'loaded', [4], zero_run_gate=False))
+
+    def test_targeted_capture_plan_is_one_loaded_90_second_run(self):
+        from types import SimpleNamespace
+        import contextlib
+        import io
+        args = SimpleNamespace(bundle=BUNDLE, phase='capture', arm='loaded',
+                               required_inputs=list(range(1, 17)), execute=False)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            validate.execute(args)
+        plan = json.loads(output.getvalue())
+        self.assertEqual(len(plan['commands']), 1)
+        self.assertEqual(plan['commands'][0][:3], ['continuous', '--seconds', '90'])
+        args.arm = 'transparent'
+        with self.assertRaisesRegex(ValueError, 'loaded-only'):
+            validate.execute(args)
+
+    def test_reference_criterion_is_explicit_loaded_all_channel_and_receipt_bound(self):
+        from types import SimpleNamespace
+        import contextlib
+        import hashlib
+        import io
+        args = SimpleNamespace(bundle=BUNDLE, phase='soak', arm='loaded',
+            required_inputs=list(range(1, 17)), execute=False, signal_criterion='reference-events-v1')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            validate.execute(args)
+        identity = json.loads(output.getvalue())['signalCriterion']
+        self.assertEqual(identity['id'], 'loaded-event-reference-v1')
+        self.assertEqual(len(identity['sha256']), 64)
+        args.arm = 'direct'
+        with self.assertRaisesRegex(ValueError, 'loaded-only'):
+            validate.execute(args)
+        args.arm = 'loaded'; args.required_inputs = [1, 2]
+        with self.assertRaisesRegex(ValueError, 'all 16'):
+            validate.execute(args)
+        args.required_inputs = list(range(1, 17)); args.execute = True
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            harness = root / 'harness'; harness.write_bytes(b'test')
+            proof = dict(passed=True, phase='preflight', arm='loaded', requiredInputs=args.required_inputs,
+                bundle=hashlib.sha256((BUNDLE / 'manifest.json').read_bytes()).hexdigest(),
+                harness=hashlib.sha256(harness.read_bytes()).hexdigest())
+            args.preflight = root / 'preflight.json'
+            args.preflight.write_text(json.dumps(proof))
+            args.output = root / 'new-soak'
+            with patch.object(validate, 'HARNESS', harness), patch.object(validate, 'snapshot') as snapshot:
+                with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, 'criterion differs'):
+                    validate.execute(args)
+                snapshot.assert_not_called()
+
     def test_preflight_rejects_dirty_process_and_missing_packet_lead(self):
         manifest = deploy.checked_bundle(BUNDLE)
         conf = (BUNDLE / 'candidate/aes67.conf').read_text()
@@ -151,6 +213,46 @@ class DSPServiceTests(unittest.TestCase):
                        dict(state, bridge=state['bridge'].replace('tx_qlow=0', 'tx_qlow=1'))):
             with self.assertRaises(ValueError):
                 validate.verify_snapshot(broken, manifest, 'direct', conf)
+
+    def test_reference_criterion_controls_only_new_run_gate(self):
+        import contextlib
+        import hashlib
+        import io
+        from types import SimpleNamespace
+        from reference_check import criterion_identity
+        saved = ROOT / 'outputs/dsp-service/event-capture-20260911/capture'
+        report = json.loads((saved / '1-audio.json').read_text())
+        snapshots = [json.loads((saved / name).read_text()) for name in ('1-before.json', '1-after.json')]
+        identity = criterion_identity(deploy.checked_bundle(BUNDLE))
+        for matched in (True, False):
+            with self.subTest(matched=matched), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); harness = root / 'harness'; harness.write_bytes(b'test')
+                proof = dict(passed=True, phase='preflight', arm='loaded', requiredInputs=list(range(1, 17)),
+                    bundle=hashlib.sha256((BUNDLE / 'manifest.json').read_bytes()).hexdigest(),
+                    harness=hashlib.sha256(harness.read_bytes()).hexdigest(), signalCriterion=identity,
+                    invocation=snapshots[0]['InvocationID'], bridge_identity=snapshots[0]['bridge_identity'])
+                receipt = root / 'preflight.json'; receipt.write_text(json.dumps(proof))
+                args = SimpleNamespace(bundle=BUNDLE, phase='capture', arm='loaded', execute=True,
+                    required_inputs=list(range(1, 17)), signal_criterion='reference-events-v1',
+                    host='unused', preflight=receipt, output=root / 'run')
+                assessment = dict(status='matched-events' if matched else 'mismatch',
+                    evidenceComplete=True, transportAndActivity='passed', wholeRunValidated=False,
+                    coveredInputFrames=39, legacyGateErrors=['input 4 zero run'])
+                def run(command, **kwargs):
+                    Path(command[command.index('--output') + 1]).write_text(json.dumps(report))
+                    return SimpleNamespace(returncode=0)
+                with patch.object(validate, 'HARNESS', harness), patch.object(validate, 'snapshot', side_effect=snapshots), \
+                        patch.object(validate.subprocess, 'run', side_effect=run), \
+                        patch('reference_check.analyze', return_value=assessment), contextlib.redirect_stdout(io.StringIO()):
+                    if matched:
+                        validate.execute(args)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'reference event check'):
+                            validate.execute(args)
+                summary = json.loads((args.output / 'summary.json').read_text())
+                self.assertEqual(summary['passed'], matched)
+                self.assertFalse(summary['runs'][0]['reference']['wholeRunValidated'])
+                self.assertEqual(summary['signalCriterion'], identity)
 
 
 if __name__ == '__main__':

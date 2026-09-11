@@ -1,0 +1,27 @@
+{
+  "batteryCompleted": true,
+  "accepted": false,
+  "reason": "loaded input 4 longestZeroRun 7 exceeds predeclared <4 gate",
+  "arms": {
+    "direct": {
+      "preflight": true,
+      "latency": true,
+      "soak": true
+    },
+    "transparent": {
+      "preflight": true,
+      "latency": true,
+      "soak": true
+    },
+    "loaded": {
+      "preflight": true,
+      "soak": false
+    }
+  },
+  "rtlMillisecondsAt32Frames": {
+    "direct": 19.021,
+    "transparent": 19.875
+  },
+  "finalProfile": "dsp-direct",
+  "nextStep": "Bounded offline loaded channel-4 signal/filter/sample-conversion analysis; targeted capture only if needed."
+}

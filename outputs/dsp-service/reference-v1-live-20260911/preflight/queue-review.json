@@ -1,0 +1,72 @@
+{
+  "rows": 61,
+  "interval": "inclusive before/after BRIDGE tx_input counters",
+  "beforeTxInput": "6336778",
+  "afterTxInput": "9216968",
+  "tx_queue": {
+    "before": 181.0,
+    "after": 179.0,
+    "first60Mean": 176.23333333333332,
+    "last60Mean": 176.2,
+    "min": 171.0,
+    "max": 182.0,
+    "nonoverlapping60RowMeans": [
+      176.233
+    ]
+  },
+  "rx_queue": {
+    "before": 133.0,
+    "after": 137.0,
+    "first60Mean": 138.61666666666667,
+    "last60Mean": 138.68333333333334,
+    "min": 133.0,
+    "max": 144.0,
+    "nonoverlapping60RowMeans": [
+      138.617
+    ]
+  },
+  "tx_occ": {
+    "before": 51.0,
+    "after": 51.0,
+    "first60Mean": 51.0,
+    "last60Mean": 51.0,
+    "min": 51.0,
+    "max": 51.0,
+    "nonoverlapping60RowMeans": [
+      51.0
+    ]
+  },
+  "rx_occ": {
+    "before": 51.0,
+    "after": 51.0,
+    "first60Mean": 51.0,
+    "last60Mean": 51.0,
+    "min": 51.0,
+    "max": 51.0,
+    "nonoverlapping60RowMeans": [
+      51.0
+    ]
+  },
+  "tx_qfloor": {
+    "before": 86.0,
+    "after": 86.0,
+    "first60Mean": 86.0,
+    "last60Mean": 86.0,
+    "min": 86.0,
+    "max": 86.0,
+    "nonoverlapping60RowMeans": [
+      86.0
+    ]
+  },
+  "rx_qfloor": {
+    "before": 72.0,
+    "after": 72.0,
+    "first60Mean": 72.0,
+    "last60Mean": 72.0,
+    "min": 72.0,
+    "max": 72.0,
+    "nonoverlapping60RowMeans": [
+      72.0
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "status": "built-and-tested-not-hardware-validated",
+  "swiftTests": 11,
+  "pythonTests": 11,
+  "signature": "codesign --verify --deep --strict passed",
+  "sourceAndBinaryHashes": {
+    "work/latency-harness/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency": "edae7bdb99b28abfb151ee1eeae644542f8e4309785b0e62eb8ef4beae1b9361",
+    "work/latency-harness/Sources/USB16x16LatencyCore/ContinuousEventCapture.swift": "bb70498b51c12db6d00c6ef9f36972ed177da25b61576ebc0e709a80db114302",
+    "work/latency-harness/Sources/USB16x16LatencyCore/ContinuousLoad.swift": "ccbf0b92c6fb2337dc0777ba27b9e6f61b692f933f372c49f7e167f6ad6dac0b",
+    "work/latency-harness/Tests/USB16x16LatencyCoreTests/ContinuousEventCaptureTests.swift": "b29e4033fd2a6f15a2a69e997412f837bd55a963b48fb213f7f529ffdd3822c2",
+    "work/dsp-service/validate.py": "4d76d18b5eb011b030226e363887735982bb1c2a662d0b91b3a0245dfd0a1d6e"
+  },
+  "targetedPlan": {
+    "arm": "loaded",
+    "preflightSeconds": 60,
+    "captureSeconds": 90,
+    "requiredInputs": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "gate": "unchanged; zero run >=4 still fails",
+    "restoration": "dsp-direct"
+  }
+}

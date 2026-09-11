@@ -1,0 +1,43 @@
+{
+  "phase": "preflight",
+  "arm": "loaded",
+  "bundle": "2efac5733bef97f6affaf2888d53ea8132f51956edd14e56471b0b8893469624",
+  "harness": "dbed59e762c56fbabb782aef6b9b5a9e5a9acdd20d0391f25f9e5dcbb217422a",
+  "requiredInputs": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "passed": true,
+  "runs": [
+    {
+      "seconds": 60.88,
+      "errors": [],
+      "metrics": {
+        "tx_qfloor": "87",
+        "rx_qfloor": "72",
+        "tx_gapmax_us": "989",
+        "rx_gapmax_us": "1095",
+        "dsp_us_max": "134.738",
+        "dsp_us_mean": "53.176"
+      },
+      "latency": null
+    }
+  ],
+  "acceptance": "not established; manual RTL and final review still required",
+  "invocation": "59ae99f532d147228182cacd0e91ecc4",
+  "bridge_identity": "4053089:23872962"
+}

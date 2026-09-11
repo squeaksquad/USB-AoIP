@@ -46,7 +46,7 @@ def fields(line):
     return dict(token.split('=', 1) for token in line.split() if '=' in token)
 
 
-def issues(before, after, report, arm, required):
+def issues(before, after, report, arm, required, *, zero_run_gate=True):
     errors = []
     for key in ('InvocationID', 'MainPID', 'NRestarts', 'boot', 'bridge_identity'):
         if before[key] != after[key]:
@@ -71,13 +71,15 @@ def issues(before, after, report, arm, required):
     if report.get('kind') == 'continuous-activity-not-latency':
         if report['invalidBuffers']:
             errors.append('invalid audio buffers')
+        if report.get('invalidTimestamps', 0):
+            errors.append('invalid audio timestamps')
         if report['inputFrames'] < report['seconds'] * 48000 - 48000:
             errors.append('insufficient captured frames')
         for channel in required:
             stats = report['channels'][channel - 1]
             if stats['samples'] < (report['seconds'] - 3) * 48000 or stats['peak'] < 1e-8:
                 errors.append(f'no sustained return signal on input {channel}')
-            if stats['longestZeroRun'] >= 4 or stats['nonFinite'] or stats['fullScaleSamples']:
+            if (zero_run_gate and stats['longestZeroRun'] >= 4) or stats['nonFinite'] or stats['fullScaleSamples']:
                 errors.append(f'silence run, invalid sample or full scale on input {channel}')
     else:
         if arm == 'loaded':
@@ -126,7 +128,17 @@ def verify_snapshot(state, manifest, arm, expected_conf):
 
 def execute(args):
     manifest = checked_bundle(args.bundle)
-    continuous = ['continuous', '--seconds', str(600 if args.phase == 'soak' else 60),
+    criterion = {'id': 'legacy'}
+    if getattr(args, 'signal_criterion', 'legacy') == 'reference-events-v1':
+        if args.arm != 'loaded':
+            raise ValueError('reference event criterion is loaded-only')
+        if sorted(args.required_inputs) != list(range(1, 17)):
+            raise ValueError('reference event criterion requires all 16 returns')
+        from reference_check import analyze, criterion_identity, explains_zero_gate
+        criterion = criterion_identity(manifest)
+    if args.phase == 'capture' and args.arm != 'loaded':
+        raise ValueError('targeted event capture is loaded-only')
+    continuous = ['continuous', '--seconds', str({'soak': 600, 'capture': 90}.get(args.phase, 60)),
                   '--other-channel-load-amplitude', '0.1']
     latency = ['measure', '--impulses', '800', '--input-channel', '1', '--output-channel', '1',
                '--maximum-lag-ms', '200', '--other-channel-load-amplitude', '0.1']
@@ -134,7 +146,8 @@ def execute(args):
         raise ValueError('loaded is stability-only; use --phase preflight or soak')
     plan = [latency] * 4 if args.phase == 'latency' else [continuous]
     print(json.dumps({'arm': args.arm, 'phase': args.phase, 'commands': plan,
-                      'requiredInputs': args.required_inputs, 'execute': args.execute}, indent=2), flush=True)
+                      'requiredInputs': args.required_inputs, 'signalCriterion': criterion,
+                      'execute': args.execute}, indent=2), flush=True)
     if not args.execute:
         return
     args.output.mkdir(parents=True, exist_ok=False)
@@ -149,11 +162,15 @@ def execute(args):
                 proof.get('arm') == args.arm and proof.get('bundle') == bundle_hash and
                 proof.get('harness') == harness_hash and proof.get('requiredInputs') == args.required_inputs):
             raise ValueError('preflight does not match this run')
+        if proof.get('signalCriterion', {'id': 'legacy'}) != criterion:
+            raise ValueError('preflight signal criterion differs; obtain a new preflight')
     expected_conf = (args.bundle / 'candidate/aes67.conf').read_text().replace(
         'PROFILE=dsp-direct\n', f'PROFILE=dsp-{args.arm}\n', 1)
     summary = {'phase': args.phase, 'arm': args.arm, 'bundle': bundle_hash, 'harness': harness_hash,
-               'requiredInputs': args.required_inputs, 'passed': False, 'runs': [],
+               'requiredInputs': args.required_inputs, 'signalCriterion': criterion, 'passed': False, 'runs': [],
                'acceptance': 'not established; manual RTL and final review still required'}
+    if args.phase == 'capture':
+        summary['acceptance'] = 'diagnostic event capture only; existing zero-run gate unchanged'
     try:
         for index, command in enumerate(plan, 1):
             before = snapshot(args.host)
@@ -176,7 +193,18 @@ def execute(args):
             if outcome.returncode != 0:
                 raise ValueError('harness failed; no retry')
             report = json.loads(result_path.read_text())
-            errors = issues(before, after, report, args.arm, args.required_inputs)
+            if args.phase == 'capture' and report.get('eventCapture', {}).get('version') != 1:
+                raise ValueError('harness did not provide event capture evidence')
+            reference = None
+            explained = False
+            if criterion['id'] != 'legacy':
+                # Loaded phases have exactly one run. Analyze saved evidence
+                # only after audio closes; never generate reference on the IO path.
+                reference = analyze(args.output, args.bundle, args.output / 'reference')
+                explained = explains_zero_gate(reference, report)
+            errors = issues(before, after, report, args.arm, args.required_inputs, zero_run_gate=not explained)
+            if reference is not None and not explained:
+                errors.append('reference event check did not clear the signal gate: ' + reference.get('reason', reference['status']))
             if args.phase == 'latency' and summary['runs']:
                 previous = summary['runs'][0]['latency']['medianSamples']
                 if report['correlation']['statistics']['medianSamples'] != previous:
@@ -185,7 +213,9 @@ def execute(args):
             summary['runs'].append({'seconds': round(time.monotonic() - start, 2), 'errors': errors,
                 'metrics': {k: v for k, v in metrics.items() if k in
                     ('tx_qfloor', 'rx_qfloor', 'tx_gapmax_us', 'rx_gapmax_us', 'dsp_us_max', 'dsp_us_mean')},
-                'latency': report.get('correlation', {}).get('statistics')})
+                'latency': report.get('correlation', {}).get('statistics'),
+                'reference': None if reference is None else {k: reference.get(k) for k in
+                    ('status', 'evidenceComplete', 'coveredInputFrames', 'wholeRunValidated', 'legacyGateErrors')}})
             summary['invocation'] = after['InvocationID']
             summary['bridge_identity'] = after['bridge_identity']
             if errors:
@@ -203,12 +233,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bundle', type=Path, required=True)
     parser.add_argument('--arm', choices=('direct', 'transparent', 'loaded'), required=True)
-    parser.add_argument('--phase', choices=('preflight', 'latency', 'soak'), default='preflight')
+    parser.add_argument('--phase', choices=('preflight', 'latency', 'soak', 'capture'), default='preflight')
     parser.add_argument('--required-inputs', type=lambda s: [int(n) for n in s.split(',')], required=True,
                         help='physically patched return inputs, e.g. 1,2; use 1..16 only if all return')
     parser.add_argument('--host', default='bdimaio@192.168.1.201')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--preflight', type=Path)
+    parser.add_argument('--signal-criterion', choices=('legacy', 'reference-events-v1'), default='legacy',
+                        help='opt-in loaded activity criterion; does not verify unsaved samples')
     parser.add_argument('--execute', action='store_true')
     args = parser.parse_args()
     if not args.required_inputs or any(n < 1 or n > 16 for n in args.required_inputs):

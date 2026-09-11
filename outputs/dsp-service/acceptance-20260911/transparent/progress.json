@@ -1,0 +1,11 @@
+{
+  "arm": "transparent",
+  "status": "rtl-checkpoint",
+  "completed": [
+    "preflight",
+    "latency",
+    "soak"
+  ],
+  "fullAcceptance": false,
+  "phaseStarted": 1789126068.280843
+}

@@ -33,6 +33,8 @@ build-*/
 .build/
 *.dSYM/
 node_modules/
+# Local reference replay executables; source and bounded evidence are retained.
+/outputs/dsp-service/**/reference-export
 
 # Reproducible upstream checkout; pinned revisions are documented in the handoff
 work/aes67-linux-daemon/

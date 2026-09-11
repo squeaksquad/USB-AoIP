@@ -1,0 +1,54 @@
+{
+  "phase": "preflight",
+  "arm": "loaded",
+  "bundle": "2efac5733bef97f6affaf2888d53ea8132f51956edd14e56471b0b8893469624",
+  "harness": "edae7bdb99b28abfb151ee1eeae644542f8e4309785b0e62eb8ef4beae1b9361",
+  "requiredInputs": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "signalCriterion": {
+    "id": "loaded-event-reference-v1",
+    "sha256": "2e6592b9609a9f721b4a44fcc5f7400010825754f85e8e74536b887ee80d7e2b"
+  },
+  "passed": true,
+  "runs": [
+    {
+      "seconds": 60.88,
+      "errors": [],
+      "metrics": {
+        "tx_qfloor": "86",
+        "rx_qfloor": "72",
+        "tx_gapmax_us": "992",
+        "rx_gapmax_us": "1064",
+        "dsp_us_max": "114.220",
+        "dsp_us_mean": "53.227"
+      },
+      "latency": null,
+      "reference": {
+        "status": "inconclusive",
+        "evidenceComplete": true,
+        "coveredInputFrames": 0,
+        "wholeRunValidated": false,
+        "legacyGateErrors": []
+      }
+    }
+  ],
+  "acceptance": "not established; manual RTL and final review still required",
+  "invocation": "22d27cd97c3849e7b35da777dc71437c",
+  "bridge_identity": "55974:24885804"
+}

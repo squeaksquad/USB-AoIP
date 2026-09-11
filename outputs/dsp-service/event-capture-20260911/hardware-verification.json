@@ -1,0 +1,18 @@
+{
+  "status": "live-event-evidence-verified",
+  "acceptance": "failed-existing-gate",
+  "restoration": "direct-verified",
+  "hashes": {
+    "run-capture.py": "a62f7e4a5161d2991322fd5ada12feeb8e9f71043c74e52b059f4783dbcc97a2",
+    "reference-window.cpp": "a35d4efbab8413c51a808b5e2aedf6558cae42d46dee929e4b3c3b1e54c9207a",
+    "reference-window.txt": "f792ad3a35e0f54d20b40b0485427246c9a96002517e9251a88ea9d8d44a2088",
+    "analyze-event.py": "fd7755644bb4f0cfe88bbc0bec887ebb02a5872852624223beef05d8bc06ca7e",
+    "comparison.json": "b02de02f55bab2a4974bf9a02b0d42c836c40b849cf8b2423f64a7faceaba954",
+    "preflight/1-audio.json": "b2ef8cb473ef822d5623facda927045d5f9b9a42d81e201f61f311ed3548371f",
+    "preflight/summary.json": "fd09f435ef70659f51753a26e696a80dad10a4ea60ab53b1d4bd549cf940e9b7",
+    "capture/1-audio.json": "ce80df18397f8e89c45fa952b9bce48615a7f4d509565b56bf3aef243389876c",
+    "capture/summary.json": "063e18640f5ba54a5f02c24eebe43342dd6848d74185062a31c71763fdc3e5b9",
+    "final-state.json": "4eea8d4f635f245f3df425424a1f08b74949f15c33171ea30f05d976d5759859",
+    "RESULTS.md": "0f1ebd8a4525e9961a99417651af925d102411868b5fb275884d9b608c0858de"
+  }
+}

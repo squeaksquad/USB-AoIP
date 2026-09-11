@@ -1,0 +1,10 @@
+{
+  "arm": "loaded",
+  "status": "failed",
+  "completed": [
+    "preflight"
+  ],
+  "fullAcceptance": false,
+  "phaseStarted": 1789142148.341228,
+  "error": "silence run, invalid sample or full scale on input 4"
+}

@@ -1,0 +1,46 @@
+{
+  "phase": "soak",
+  "arm": "loaded",
+  "bundle": "2efac5733bef97f6affaf2888d53ea8132f51956edd14e56471b0b8893469624",
+  "harness": "dbed59e762c56fbabb782aef6b9b5a9e5a9acdd20d0391f25f9e5dcbb217422a",
+  "requiredInputs": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "passed": false,
+  "runs": [
+    {
+      "seconds": 600.6,
+      "errors": [
+        "silence run, invalid sample or full scale on input 4"
+      ],
+      "metrics": {
+        "tx_qfloor": "82",
+        "rx_qfloor": "72",
+        "tx_gapmax_us": "1007",
+        "rx_gapmax_us": "1218",
+        "dsp_us_max": "134.738",
+        "dsp_us_mean": "50.548"
+      },
+      "latency": null
+    }
+  ],
+  "acceptance": "not established; manual RTL and final review still required",
+  "invocation": "59ae99f532d147228182cacd0e91ecc4",
+  "bridge_identity": "4053089:23872962",
+  "error": "silence run, invalid sample or full scale on input 4"
+}

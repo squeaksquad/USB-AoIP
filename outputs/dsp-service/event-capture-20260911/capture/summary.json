@@ -1,0 +1,46 @@
+{
+  "phase": "capture",
+  "arm": "loaded",
+  "bundle": "2efac5733bef97f6affaf2888d53ea8132f51956edd14e56471b0b8893469624",
+  "harness": "edae7bdb99b28abfb151ee1eeae644542f8e4309785b0e62eb8ef4beae1b9361",
+  "requiredInputs": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "passed": false,
+  "runs": [
+    {
+      "seconds": 90.84,
+      "errors": [
+        "silence run, invalid sample or full scale on input 4"
+      ],
+      "metrics": {
+        "tx_qfloor": "86",
+        "rx_qfloor": "96",
+        "tx_gapmax_us": "993",
+        "rx_gapmax_us": "1187",
+        "dsp_us_max": "168.239",
+        "dsp_us_mean": "52.081"
+      },
+      "latency": null
+    }
+  ],
+  "acceptance": "diagnostic event capture only; existing zero-run gate unchanged",
+  "invocation": "eaf452339405401b80989bf9f40c3cde",
+  "bridge_identity": "4113466:24184882",
+  "error": "silence run, invalid sample or full scale on input 4"
+}

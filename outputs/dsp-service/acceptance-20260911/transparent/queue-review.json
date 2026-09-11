@@ -1,0 +1,38 @@
+{
+  "tx_queue": {
+    "first60mean": 222.65,
+    "last60mean": 227.417,
+    "min": 185.0,
+    "max": 240.0
+  },
+  "rx_queue": {
+    "first60mean": 131.083,
+    "last60mean": 127.783,
+    "min": 121.0,
+    "max": 156.0
+  },
+  "tx_occ": {
+    "first60mean": 51.0,
+    "last60mean": 51.0,
+    "min": 51.0,
+    "max": 51.0
+  },
+  "rx_occ": {
+    "first60mean": 53.133,
+    "last60mean": 51.617,
+    "min": 51.0,
+    "max": 75.0
+  },
+  "tx_qfloor": {
+    "first60mean": 133.0,
+    "last60mean": 133.0,
+    "min": 133.0,
+    "max": 133.0
+  },
+  "rx_qfloor": {
+    "first60mean": 72.0,
+    "last60mean": 72.0,
+    "min": 72.0,
+    "max": 72.0
+  }
+}

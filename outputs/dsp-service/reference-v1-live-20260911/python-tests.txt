@@ -1,0 +1,31 @@
+test_bundle_tampering_is_rejected (test_dsp_service.DSPServiceTests.test_bundle_tampering_is_rejected) ... ok
+test_direct_bridge_arguments_unchanged (test_dsp_service.DSPServiceTests.test_direct_bridge_arguments_unchanged) ... ok
+test_failed_install_restores_previous_files_and_modes (test_dsp_service.DSPServiceTests.test_failed_install_restores_previous_files_and_modes) ... ok
+test_invalid_timestamps_fail_without_relaxing_zero_gate (test_dsp_service.DSPServiceTests.test_invalid_timestamps_fail_without_relaxing_zero_gate) ... ok
+test_loaded_signal_checks_do_not_use_correlation (test_dsp_service.DSPServiceTests.test_loaded_signal_checks_do_not_use_correlation) ... ok
+test_preflight_rejects_dirty_process_and_missing_packet_lead (test_dsp_service.DSPServiceTests.test_preflight_rejects_dirty_process_and_missing_packet_lead) ... ok
+test_preset_rejections_and_direct_bypass (test_dsp_service.DSPServiceTests.test_preset_rejections_and_direct_bypass) ... ok
+test_profiles_preserve_transport_and_are_experimental (test_dsp_service.DSPServiceTests.test_profiles_preserve_transport_and_are_experimental) ... ok
+test_recovery_or_counter_reset_invalidates_run (test_dsp_service.DSPServiceTests.test_recovery_or_counter_reset_invalidates_run) ... ok
+test_reference_criterion_controls_only_new_run_gate (test_dsp_service.DSPServiceTests.test_reference_criterion_controls_only_new_run_gate) ... ok
+test_reference_criterion_is_explicit_loaded_all_channel_and_receipt_bound (test_dsp_service.DSPServiceTests.test_reference_criterion_is_explicit_loaded_all_channel_and_receipt_bound) ... ok
+test_rollback_permits_only_profile_selection_change (test_dsp_service.DSPServiceTests.test_rollback_permits_only_profile_selection_change) ... ok
+test_targeted_capture_plan_is_one_loaded_90_second_run (test_dsp_service.DSPServiceTests.test_targeted_capture_plan_is_one_loaded_90_second_run) ... ok
+test_activity_waiver_requires_complete_evidence_and_invariants (test_reference_check.ReferenceCheckTests.test_activity_waiver_requires_complete_evidence_and_invariants) ... ok
+test_alignment_cannot_change_between_windows (test_reference_check.ReferenceCheckTests.test_alignment_cannot_change_between_windows) ... ok
+test_ambiguous_alignment_does_not_pass (test_reference_check.ReferenceCheckTests.test_ambiguous_alignment_does_not_pass) ... ok
+test_channel_swap_and_gain_change_are_rejected (test_reference_check.ReferenceCheckTests.test_channel_swap_and_gain_change_are_rejected) ... ok
+test_injected_silence_is_rejected (test_reference_check.ReferenceCheckTests.test_injected_silence_is_rejected) ... ok
+test_missing_or_repeated_sample_inside_zero_span_is_rejected (test_reference_check.ReferenceCheckTests.test_missing_or_repeated_sample_inside_zero_span_is_rejected) ... ok
+test_no_events_does_not_claim_waveform_validation (test_reference_check.ReferenceCheckTests.test_no_events_does_not_claim_waveform_validation) ... ok
+test_quantization_matches_without_whole_run_acceptance (test_reference_check.ReferenceCheckTests.test_quantization_matches_without_whole_run_acceptance) ... ok
+test_real_saved_window_matches_retained_reference_fixture (test_reference_check.ReferenceCheckTests.test_real_saved_window_matches_retained_reference_fixture) ... ok
+test_reference_truncation_is_rejected (test_reference_check.ReferenceCheckTests.test_reference_truncation_is_rejected) ... ok
+test_source_pin_mismatch_refuses_reference (test_reference_check.ReferenceCheckTests.test_source_pin_mismatch_refuses_reference) ... ok
+test_truncated_omitted_missing_and_invalid_evidence_is_inconclusive (test_reference_check.ReferenceCheckTests.test_truncated_omitted_missing_and_invalid_evidence_is_inconclusive) ... ok
+test_zero_rule_is_stricter_than_general_two_lsb_tolerance (test_reference_check.ReferenceCheckTests.test_zero_rule_is_stricter_than_general_two_lsb_tolerance) ... ok
+
+----------------------------------------------------------------------
+Ran 26 tests in 0.327s
+
+OK

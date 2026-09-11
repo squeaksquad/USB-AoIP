@@ -1,0 +1,39 @@
+{
+  "rows": 601,
+  "tx_queue": {
+    "first60mean": 177.76666666666668,
+    "last60mean": 166.86666666666667,
+    "min": 129.0,
+    "max": 183.0
+  },
+  "rx_queue": {
+    "first60mean": 140.03333333333333,
+    "last60mean": 138.9,
+    "min": 99.0,
+    "max": 168.0
+  },
+  "tx_occ": {
+    "first60mean": 51.0,
+    "last60mean": 51.0,
+    "min": 51.0,
+    "max": 51.0
+  },
+  "rx_occ": {
+    "first60mean": 51.0,
+    "last60mean": 52.2,
+    "min": 51.0,
+    "max": 75.0
+  },
+  "tx_qfloor": {
+    "first60mean": 87.0,
+    "last60mean": 82.0,
+    "min": 82.0,
+    "max": 87.0
+  },
+  "rx_qfloor": {
+    "first60mean": 72.0,
+    "last60mean": 72.0,
+    "min": 72.0,
+    "max": 72.0
+  }
+}

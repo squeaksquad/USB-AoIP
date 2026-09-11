@@ -1,17 +1,42 @@
 # Next-session pickup prompt
 
-## Current DSP pickup — service preflights passed
+## Current DSP pickup — reference activity pass; reserve and latency open
 
-The next step is now the prepared package and runbook in
-`work/dsp-service/README.md`, with the reviewable bundle at
-`outputs/dsp-service/review-20260911/`. Read those before the historical
-DSP battery below. Service integration is now INSTALLED: bridge 406699bd, supervisor cdc0768d.
-Direct, transparent and loaded each passed a 60-second continuous service
-preflight, with zero recoveries, discontinuities and low-queue events. TX/RX
-floors: 89/72, 86/72, 88/72. Loaded DSP mean/max: 58.588/200.445 us per call.
-See `outputs/dsp-service/PREFLIGHT_RESULTS.md` and `final-state.json` beside it.
-Service was returned to dsp-direct and verified active/running, with zero recoveries. Full battery/RTL and UI Apply remain
-pending; NOT fully accepted. Baseline rollback is 05f37bd9 / 427982dc / 306cfa85.
+Read `outputs/dsp-service/reference-v1-live-20260911/RESULTS.md` first.
+One fresh loaded 60-second preflight and 600-second soak passed the frozen
+`reference-events-v1` criterion. All three channel-4 runs (7, 4, 5 zeros) match
+the pinned filter/L24 reference. The 112 retained frames across all 16 channels
+have a maximum error of 1.5625 LSB and share one 1,011-frame index offset.
+That offset is not an impulse latency result. No invalid samples, timestamp
+errors, recovery/drop/clip/low-queue/pitch errors, or missing/truncated events.
+
+TX floor fell 86 to 81; RX stayed 72. First/last 60-row TX queue means were
+176.533/159.583, with the decline late in the run. The activity pass does not
+resolve reserve stability. Next: inspect the saved queue history and bridge
+timing code before proposing another bounded live experiment. No automatic
+retry, transport tuning or full-battery repeat. UI Apply remains disabled and
+profiles experimental.
+
+The earlier battery remains FAILED under its original zero-run criterion:
+`outputs/dsp-service/acceptance-20260911/RESULTS.md`. Direct/transparent passed
+preflights, 4 x 800 impulses and ten-minute soaks at 725/766 samples; user RTL
+at 32 frames was 19.021/19.875 ms. Separate starts and a 48-sample AES67 index
+step prevent causal attribution or a latency-neutrality claim. Keep that
+latency finding separate from the now-explained filter/quantization events.
+
+Implementation and policy: `work/dsp-service/REFERENCE_VALIDATION.md`.
+The legacy gate remains default; new receipts bind the chosen criterion,
+checker/exporter/validator hashes, bundle, harness and service/bridge identity.
+Only retained event windows are compared; wholeRunValidated=false. No general
+whole-stream integrity proof is claimed. 26 Python and 11 Swift tests pass.
+Earlier replay/capture evidence is in `offline-loaded-20260911/`,
+`event-capture-20260911/` and `reference-check-20260911/` under outputs/dsp-service.
+Do not rerun the one-use historical wrappers or reuse their receipts.
+
+Candidate bridge 406699bd / supervisor cdc0768d remain installed. Direct
+restoration is recorded in the newest campaign's final-state.json and
+run-status.json. dsp-direct disables DSP on the candidate, not a binary rollback.
+Baseline rollback remains 05f37bd9 / 427982dc / 306cfa85.
 
 Corrections to older claims below:
 - 1042 versus 1061 on separate starts does not establish latency neutrality.
@@ -24,7 +49,7 @@ Corrections to older claims below:
 - The package installs the three pinned files together with service stopped;
   use its deploy.py and rollback, not the historical legacy installer recipe.
 
-Run short preflights first. No automated service restart, coreaudiod kill,
+For any future hardware arm, obtain a fresh process-bound preflight. No coreaudiod kill,
 remote polling during audio, or attempt to enable UI Apply before service
 validation. The detailed older session record follows for provenance.
 

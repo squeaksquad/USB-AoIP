@@ -1,0 +1,233 @@
+{
+  "amplitude" : 0.1,
+  "channels" : [
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.10008422,
+      "rms" : 0.05774541823986626,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.100089945,
+      "rms" : 0.05774180519849343,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.10009185,
+      "rms" : 0.05774132199075582,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.10008911,
+      "rms" : 0.05774386621925201,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.10009638,
+      "rms" : 0.057742401315264084,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.10008804,
+      "rms" : 0.05773817249687909,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.100081004,
+      "rms" : 0.0577466247479855,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.10008899,
+      "rms" : 0.05773977160827995,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.1000934,
+      "rms" : 0.05774580069327432,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.100089945,
+      "rms" : 0.05774887507468654,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.1000934,
+      "rms" : 0.05773498874360925,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.100100316,
+      "rms" : 0.057751011212616915,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.10008506,
+      "rms" : 0.05774554843262276,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.10009054,
+      "rms" : 0.05774824622229038,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.100088514,
+      "rms" : 0.05774240762813638,
+      "samples" : 28704000
+    },
+    {
+      "fullScaleSamples" : 0,
+      "longestZeroRun" : 1,
+      "nonFinite" : 0,
+      "peak" : 0.100090064,
+      "rms" : 0.05774434327345268,
+      "samples" : 28704000
+    }
+  ],
+  "device" : {
+    "actualSampleRate" : 48000,
+    "bufferFrameSize" : 64,
+    "bufferFrameSizeRanges" : [
+      {
+        "maximum" : 4096,
+        "minimum" : 15
+      }
+    ],
+    "capturedAt" : "2026-09-11T11:27:48.834Z",
+    "deviceID" : 338,
+    "input" : {
+      "channelNames" : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ],
+      "channels" : 16,
+      "deviceLatencyFrames" : 74,
+      "safetyOffsetFrames" : 74,
+      "streams" : [
+        {
+          "bitsPerChannel" : 32,
+          "bytesPerFrame" : 64,
+          "channels" : 16,
+          "formatFlagsHex" : "0x00000009",
+          "formatID" : "lpcm",
+          "framesPerPacket" : 1,
+          "interleaved" : true,
+          "latencyFrames" : 0,
+          "sampleRate" : 48000,
+          "streamID" : 340
+        }
+      ]
+    },
+    "isAlive" : true,
+    "manufacturer" : "Bryan DiMaio",
+    "name" : "USB 16x16",
+    "nominalSampleRate" : 48000,
+    "output" : {
+      "channelNames" : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ],
+      "channels" : 16,
+      "deviceLatencyFrames" : 50,
+      "safetyOffsetFrames" : 50,
+      "streams" : [
+        {
+          "bitsPerChannel" : 32,
+          "bytesPerFrame" : 64,
+          "channels" : 16,
+          "formatFlagsHex" : "0x00000009",
+          "formatID" : "lpcm",
+          "framesPerPacket" : 1,
+          "interleaved" : true,
+          "latencyFrames" : 0,
+          "sampleRate" : 48000,
+          "streamID" : 339
+        }
+      ]
+    },
+    "transportType" : "usb ",
+    "uid" : "AppleUSBAudioEngine:Bryan DiMaio:USB 16x16:AUDDEV001:1,2"
+  },
+  "inputDiscontinuities" : 0,
+  "inputFrames" : 28800000,
+  "invalidBuffers" : 0,
+  "kind" : "continuous-activity-not-latency",
+  "outputDiscontinuities" : 0,
+  "outputFrames" : 28800000,
+  "seconds" : 600,
+  "warmupSeconds" : 2
+}

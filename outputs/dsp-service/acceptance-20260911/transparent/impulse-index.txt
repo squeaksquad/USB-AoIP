@@ -1,0 +1,18 @@
+outputs/dsp-service/acceptance-20260911/transparent/latency-bridge.txt: 3200 complete impulses in 1 epochs
+
+epoch 0: 3200 impulses, level 766, bridge t_us 193885436 - 1000769836
+  PRIMED direction=ravenna-to-usb grid_phase_us=323 ring_at_prime=192 overshoot=21 align_dropped=0 prime_phase_us=-1 first_tick_wait_us=-1 front_age_frames=-1
+  PRIMED direction=usb-to-ravenna grid_phase_us=-1 ring_at_prime=280 overshoot=37 align_dropped=8 prime_phase_us=652 first_tick_wait_us=347 front_age_frames=296
+  index chain (frames, exact per impulse):
+  pos_tx     median        -9  min        -9  max        -9  n 3200
+  pos_aes67  median       592  min       592  max       592  n 3200
+  pos_rx     median       -22  min       -22  max       -22  n 3200
+  pos_pi     median       561  min       561  max       561  n 3200
+  usb        level 766 - pos_pi 561 = 205 (two USB legs plus the gadget PCMs' relative start)
+  time domain (samples; write_to_read and cap_to_write are exact ends, pi_total adds the depth at the write):
+  write_to_read median     421.4  min     396.1  max     444.1  n 3200
+  cap_to_write median     586.3  min     541.2  max     613.8  n 3200
+  pi_total   median     720.7  min     705.3  max     729.3  n 3200
+  rx_depth   median     118.0  min     107.0  max     157.0  n 3200
+  tx_depth   median     183.0  min     134.0  max     192.0  n 3200
+  usb_time   level 766 - pi_total 720.7 = 45.3 (the two USB legs on the device timeline, origin-free)

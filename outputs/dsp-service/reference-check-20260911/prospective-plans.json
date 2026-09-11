@@ -1,0 +1,74 @@
+[
+  {
+    "arm": "loaded",
+    "phase": "preflight",
+    "commands": [
+      [
+        "continuous",
+        "--seconds",
+        "60",
+        "--other-channel-load-amplitude",
+        "0.1"
+      ]
+    ],
+    "requiredInputs": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "signalCriterion": {
+      "id": "loaded-event-reference-v1",
+      "sha256": "2e6592b9609a9f721b4a44fcc5f7400010825754f85e8e74536b887ee80d7e2b"
+    },
+    "execute": false
+  },
+  {
+    "arm": "loaded",
+    "phase": "soak",
+    "commands": [
+      [
+        "continuous",
+        "--seconds",
+        "600",
+        "--other-channel-load-amplitude",
+        "0.1"
+      ]
+    ],
+    "requiredInputs": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "signalCriterion": {
+      "id": "loaded-event-reference-v1",
+      "sha256": "2e6592b9609a9f721b4a44fcc5f7400010825754f85e8e74536b887ee80d7e2b"
+    },
+    "execute": false
+  }
+]
