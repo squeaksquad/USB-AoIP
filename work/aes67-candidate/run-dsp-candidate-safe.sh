@@ -118,6 +118,9 @@ ready_file=/tmp/usb16x16-phase4-candidate.ready
 temporary_root=
 daemon_pid=
 bridge_pid=
+# Declared here, not at the watcher loop: the metadata block and the cleanup
+# path both run before that loop, and set -u makes an unbound read fatal.
+restarts_seen=0
 
 for value in "$candidate_seconds" "$period_frames" "$buffer_frames" "$ring_frames" "$target_frames" \
              "$playback_prime_frames" "$prime_trim" \
@@ -453,7 +456,6 @@ fi
   echo "bridge_binary=$bridge_binary"
   echo "bridge_sha256=$(sha256sum "$bridge_binary" | awk '{print $1}')"
   echo "bridge_arguments=${bridge_arguments[*]}"
-  echo "direction_restarts=$restarts_seen"
 } > "$result_dir/metadata.txt"
 echo "$result_dir" > "$ready_file"
 echo "READY result_dir=$result_dir"
@@ -475,7 +477,6 @@ echo "READY result_dir=$result_dir"
 # it. A runaway is still fatal: more than restart_limit means something other
 # than a probe is wrong.
 restart_limit=${USB16X16_DSP_RESTART_LIMIT:-8}
-restarts_seen=0
 while kill -0 "$bridge_pid" 2>/dev/null; do
   restarts_seen=$(awk '/^BRIDGE /{
       for (i = 1; i <= NF; i++) {
@@ -490,6 +491,7 @@ while kill -0 "$bridge_pid" 2>/dev/null; do
   fi
   sleep 1
 done
+echo "direction_restarts=$restarts_seen" >> "$result_dir/metadata.txt"
 if [ "$restarts_seen" -gt 0 ]; then
   echo "note: $restarts_seen ALSA direction restart(s) during the candidate, counted not fatal" >&2
 fi
