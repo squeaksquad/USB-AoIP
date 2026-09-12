@@ -10607,3 +10607,40 @@ usb_capture keys (the loop is tx); fix in the next build. Evidence
 gitignored, the analysis text kept). Design note: MEASURED section
 appended. Service restarted by the user at 13:32 UTC on dsp-direct, a new
 draw. Session rules kept: no ssh reads during a run from here on.
+
+**DONE 2026-09-12 22:13 UTC: the stream-stop candidate did not run; the
+service was stopped 13:38-22:10 UTC and that, not a fault, is why the Pi
+was invisible in Dante Controller.** The user stopped the service for the
+test, was away, and found the Mac's ssh gone and the Pi absent from Dante
+Controller; a ping from the Pi (Pi Connect shell) to the Mac restored ssh,
+and `systemctl restart usb16x16-aes67.service` at 22:10 UTC brought the
+announcements back (running from 22:11:26, stable). Read-only check
+afterwards: one loop result directory only, no eth0 link event or TX
+stall line since the morning's, eth0 transmitting at 2011 packets/s, the
+stage file "stable for 120s". The wireless drop is the morning's pattern
+(the Pi holds its address and the Mac in its neighbour table, the AP's
+path back to the Mac goes stale; wlan0 power save is on) and a packet
+from the Pi's side clears it; turning power save off on wlan0 is the
+candidate fix, not applied. The stream-stop test is still the next run,
+with the same three commands.
+
+**MEASURED 2026-09-12 22:15-22:23 UTC: a second loop run, the stream-stop
+test not performed (the deletes landed 100 s after the bridge had exited;
+my timing instruction was relative to READY and the stack takes over a
+minute to reach it).** `phase4-aoip-candidate-20260912T221521Z`, the same
+set (bridge 0a39f4a6, loop-measure, 420 s): ALIGN ok first attempt, prime
+and trigger as before (front_age 296), 209 impulses, zero clipped. Two
+things the first run did not show, both known classes: a 3333 us gap with
+a 144-frame pull at t=214 s (the RAVENNA playback's three-packet skip of
+the duplex record) took the queue floor from 150 to 54 (198 - 144) with
+no consequence; and dsp_us_max 978 us at t=76 s, a preemption of the
+audio thread mid-call (cron.hourly ran at t=58 s; not proven). One
+RECOVER at t=380 s, playback XRUN with ring 99 and last_gap 10 us (the
+thread not scheduled for over the queue's 4 ms), re-primed identically;
+nothing in the journal at that time, no ssh from the Mac during the run.
+One RECOVER per loop run so far, in line with the DSP candidate history
+(0-1 without the harness). Wireless: power save turned off on wlan0 by
+the user (NetworkManager profile `netplan-wlan0-The Snack Goblins`,
+powersave 2, and `iw` for the running interface). The stream-stop test is
+now scripted, `work/aes67-candidate/aoip-stream-stop.sh` (e8059fb8), timed
+by the wrapper's ready file, staged at ~/usb-16x16-work/aoip-loop/.
