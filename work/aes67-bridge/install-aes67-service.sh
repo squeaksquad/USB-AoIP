@@ -22,7 +22,7 @@ sudoers_destination=/etc/sudoers.d/usb16x16-aes67
 bridge_binary=/usr/local/libexec/usb16x16-rt-bridge
 expected_supervisor_sha256=23e40f8c604152caf8de7d97065731cc3c03f8896d535118b5d81b0d203e15ae
 expected_unit_sha256=77837e60e7a0660ce9d0c31c8077363805c118df6bdcdba9619417669eccd702
-expected_conf_sha256=b01588dfd6d2e4e435265196c8091d9cda6e6a7b73633492ec288767ba8138b5
+expected_conf_sha256=55e86fe5e58af5ea0a48c2e519290705b1f103d27ae60855245d1bc937524cb1
 expected_bridge_sha256=947e8b4d6842239b5cc33eeedb1a083d292995cdcdd558bb84017d9af45d5d50
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }

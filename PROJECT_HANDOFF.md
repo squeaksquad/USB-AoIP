@@ -10472,3 +10472,24 @@ inside the six no-DSP fresh-anchor draws' neighbourhood (716-725 before the
 DSP bridge; 670-722 on plain restarts): a start draw, read as one, n = 1.
 No claim that the tap moved the level either way. Expected RTL at 32:
 703 + 188 = 891 samples = 18.563 ms.
+
+**ACCEPTED 2026-09-11 23:55 UTC: the meter-tap bridge 947e8b4d with METERS=1 on
+dsp-direct is the point of record; RTL at 32 18.563 ms = 703 + 188 to the
+sample.** The user read RTL Utility at 32 frames right after the battery
+(harness closed, device otherwise idle) and quit it. The set: bridge
+947e8b4d, supervisor 23e40f8c, conf b01588df live (repo conf now carries
+the new dsp-direct labels: COVER "TX floor 83 over one period, RX 72; zero
+RECOVERs; meter tap 1.4 us mean", MEASURED "703 at 64 (4 x 800, spread 0),
+RTL at 32 18.563 ms; 600 s soak; bridge 947e8b4d METERS=1 (was 725 /
+19.021 on 406699bd)", and a dated comment; install-aes67-service.sh conf
+pin moved), usb16x16-web 1.4.0 with /api/meters, the page live. The
+dsp-transparent and dsp-loaded blocks keep their 406699bd figures; they
+run on 947e8b4d unmeasured until someone re-measures them (a profile
+switch is a restart and a draw in any case). Rollback: METERS=0 and a
+restart (the same binary untapped); or 406699bd from commit 47a6f42's
+installers. The live conf is one labels copy behind the repo (the
+MEASURED / COVER lines and the comment); install-aes67-service.sh from a
+re-staged copy, or copy-dsp-labels.py's form, brings it across without a
+restart. The DSP roadmap's metering item is closed; open after it:
+AoIP -> DSP -> AoIP, the live user preset inside the editor, peak hold and
+RMS on the strips.
