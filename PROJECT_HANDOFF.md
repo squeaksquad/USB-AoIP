@@ -10493,3 +10493,11 @@ re-staged copy, or copy-dsp-labels.py's form, brings it across without a
 restart. The DSP roadmap's metering item is closed; open after it:
 AoIP -> DSP -> AoIP, the live user preset inside the editor, peak hold and
 RMS on the strips.
+
+**DONE 2026-09-12 00:05 UTC: dsp-direct's labels copied into the live conf.**
+copy-dsp-labels.py (now taking the shipped conf as its first argument) run by
+the user with --apply: the two lines above changed, nothing else; live conf
+37fc790f (the repo's 55e86fe5 differs only by the dated comment and the
+METERS documentation block's position, which the copy does not carry). The
+service was not restarted: active, zero RECOVERs, the same 23:29 process
+the battery ran on. Nothing pending on the Pi.
