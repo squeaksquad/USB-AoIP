@@ -10644,3 +10644,40 @@ the user (NetworkManager profile `netplan-wlan0-The Snack Goblins`,
 powersave 2, and `iw` for the running interface). The stream-stop test is
 now scripted, `work/aes67-candidate/aoip-stream-stop.sh` (e8059fb8), timed
 by the wrapper's ready file, staged at ~/usb-16x16-work/aoip-loop/.
+
+**FOUND 2026-09-12 22:33-22:41 UTC: with no stream arriving, the RAVENNA
+capture keeps its clock and delivers silence; the loop bridge sees nothing,
+needs nothing, and resumes on its own when the stream returns.** Run
+`phase4-aoip-candidate-20260912T223248Z` (the same set, 420 s), the sink
+deletes at 22:34:35.7 UTC (bridge t=65.0 s) and the re-adds at 22:35:05.8
+(t=95.1 s) by `aoip-stream-stop.sh` on the wrapper's ready file. In the
+30 s with both sinks gone: `tx_input` advanced at exactly 48,000 frames
+per second on every BRIDGE line, the ring and the queue held 51 / 198, no
+RECOVER, the injector kept firing (its impulses left and never came back:
+no `ravenna-capture` return from t=64.5 to t=96.5 s, the only gap in 194),
+and the capture zero-run counters stood still because the input was one
+continuous run of zeros. At the re-add the daemon answered both PUTs in
+40 ms (`media 0 sink addr` at 18:35:05.775 and .812 EDT) and the returns
+resumed at t=96.5 s with no re-prime and the bridge dwell unchanged
+(1.076 ms median by the block-to-block reading, before and after, n 19 /
+162). Consequence for the supervisor's loop policy (design step 6): the
+frozen-input test cannot fire on a lost source, because the driver's
+capture runs on PTP and delivers zeros; a lost source is silence, not a
+fault, and restarting anything would only add the sink dead time. The
+loop path therefore takes no action on input; what is worth reporting is
+the capture zero-run detector's long-run count (`zr_usbcap`'s fourth
+field, mislabeled until the next build) or a silence flag derived from it,
+so the UI can say "no signal at the input" while the stack stays up.
+Separately: **one RECOVER per loop run, cause open.** Run 1 at t=56.4 s
+(capture XRUN), run 2 at 380.0 (playback XRUN), run 3 a pair at 44.50 and
+44.52 (capture then playback), each the audio thread not running for over
+the 4 ms the queue and the capture buffer cover, each re-primed
+identically. The tcpdump window is t=19.1-49.0 s in every run: run 3's
+pair lies inside it, run 1's 7 s after, run 2's far outside, so the
+capture is a suspect and not a cause; the run-1 ssh read is cleared as an
+explanation, since run 3 had none. The journal at each event carries only
+the bridge's own re-prepare lines. Next: a loop run with
+`USB16X16_AOIP_CAPTURE_SECONDS=0` as the control for the capture, then the
+TX prime lever; and the count stays in view before any acceptance. Wire
+figure of this run, unchanged: 8.240 ms wall, 504 samples on the Pi's
+stamps, about 420 on the loop.

@@ -409,3 +409,34 @@ no reads at all.
   keys from the direction's stage) in the next build, with the rest of the
   lessons of this run.
 - **The stream-stop behaviour** is still unknown; it is the next run.
+
+## MEASURED 2026-09-12: the stream-stop test, and two more runs
+
+Three loop runs in all (`phase4-aoip-candidate-20260912T{132437,221521,
+223248}Z`), the same set each time. The wire figure held: 8.227 / 8.240 ms
+wall on the two captured runs, 504 samples on the Pi's stamps on every pair
+of both.
+
+**A lost source is silence, not a stall.** With both sinks deleted for 30 s
+during the third run, the RAVENNA capture kept delivering zeros at exactly
+48 kHz, the ring and the queue never moved, no RECOVER, and the loop
+resumed by itself when the sinks came back, with no re-prime and the same
+dwell. So the open question in the supervisor table is decided: in loop
+mode the frozen-input test is meaningless (it cannot fire) and no restart is
+wanted on silence. The loop policy is: act on the link (already) and on
+RECOVER storms (fail the run), report silence at the input from the
+capture zero-run detector's long-run count, never restart for it. The
+"count and report" placeholder in the table above becomes exactly that.
+
+**One RECOVER per run, cause open** (handoff FOUND 2026-09-12 22:33): the
+audio thread absent for over 4 ms once per six-to-seven-minute run, at
+56 s, 380 s and 44.5 s. The tcpdump window (t=19-49 s) is a suspect for two
+of the three and cannot explain the third; the first run's ssh read is
+cleared. A control run without the capture is queued before any lever is
+turned, and no acceptance claim is made while the count stands.
+
+**Known behaviour seen on the loop:** the RAVENNA playback's three-packet
+skip (a 3.3 ms gap, a 144-frame pull) took the floor from 150 to 54 once in
+run 2 with no consequence, as the duplex record says it does; and one
+978 µs `dsp_us_max` in run 2, a preemption mid-call, against 88 and 121 in
+the other runs.

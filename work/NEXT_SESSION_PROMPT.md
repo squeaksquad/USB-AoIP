@@ -31,7 +31,12 @@ AoIP -> DSP -> AoIP, 2026-09-12: designed, built (bridge 0a39f4a6 at
 ~/usb-16x16-work/phase4-aoip-src/build, hash pinned in the wrapper) and
 measured once: 8.227 ms wall / ~419 samples at the Pi's port, TX queue flat
 at 198 so TX_PLAYBACK_PRIME is the first lever; handoff MEASURED 2026-09-12
-13:24 and the design note's MEASURED section. Not installed, not accepted. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
+13:24 and the design note's MEASURED section. Not installed, not accepted. Three runs by 22:41 UTC: the stream-stop test
+answered (a lost source is silence, the capture keeps delivering zeros, the
+loop resumes by itself; the supervisor takes no action on input in loop
+mode), one RECOVER per run with the cause open (tcpdump window a suspect:
+next run with USB16X16_AOIP_CAPTURE_SECONDS=0 as the control), then the TX
+prime lever. aoip-stream-stop.sh is the timed helper for the sink test. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
 paragraph, then "Steps"). Bridge --mode aoip-loop with --loop-impulse in
 main.cpp (syntax-checked on the Mac, the accepted binary untouched),
 loop-measure preset 1e417960 (outputs/dsp-service/aoip-loop-20260912/),
