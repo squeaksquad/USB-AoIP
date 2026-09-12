@@ -5,7 +5,11 @@
 # touched; the transport fields and PROFILE= are not read. Run without --apply
 # for a dry run. Form of copy-sd103-labels.py (2026-09-07).
 import os, sys, tempfile
+# 2026-09-11 23:58: the shipped conf may be given as the first argument (the
+# meters set lives under meters-20260911/aes67/); the default is the DSP set.
 shipped = os.path.expanduser("~bdimaio/usb-16x16-work/aes67-dsp-accept-install/aes67.conf")
+if len(sys.argv) > 1 and not sys.argv[1].startswith("--"):
+    shipped = sys.argv[1]
 live = "/etc/usb16x16/aes67.conf"
 prefixes = ("PROFILE_DSP_DIRECT_", "PROFILE_DSP_TRANSPARENT_", "PROFILE_DSP_LOADED_")
 keys = ("DESCRIPTION", "STATUS", "COVER", "MEASURED")
