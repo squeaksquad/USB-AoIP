@@ -253,6 +253,27 @@ export function transparentPreset() {
   return validateConfig(preset);
 }
 
+/**
+ * The AoIP loop's measurement preset (AOIP_LOOP_DESIGN.md, 2026-09-12).
+ *
+ * In loop mode the bridge's RAVENNA playback comes back into its own RAVENNA
+ * capture through the Ferrofish's 1:1 matrix, so any pass-through preset
+ * closes a unity-gain feedback loop through the DSP. This is `transparent`
+ * with every output at -40 dB: the injected impulse (written after the
+ * stage, so untouched by this gain) leaves at full strength, returns at full
+ * strength, and its re-emission is 40 dB down -- the loop decays by 40 dB per
+ * pass and the wire instrument reads the first pass only. The 256 biquads
+ * stay so the stage pays its full transparent cost; the source is `aoip`
+ * because that is what the mode is, and the compiler emits no device for it.
+ */
+export function loopMeasurePreset() {
+  const preset = transparentPreset();
+  preset.name = 'verify-loop-measure';
+  preset.source = 'aoip';
+  preset.outputs.forEach(output => { output.gainDb = -40; });
+  return validateConfig(preset);
+}
+
 export const PRESETS = {
   crossover: crossoverPreset,
   clip: clipPreset,
@@ -260,6 +281,7 @@ export const PRESETS = {
   default: defaultPreset,
   loaded: loadedPreset,
   transparent: transparentPreset,
+  'loop-measure': loopMeasurePreset,
 };
 
 function main(argv) {

@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compile, fileDevices } from './compile.mjs';
-import { crossoverPreset, clipPreset, phonesPreset } from './verify-presets.mjs';
+import { crossoverPreset, clipPreset, phonesPreset, transparentPreset, loopMeasurePreset } from './verify-presets.mjs';
 
 const build = preset => compile(preset, fileDevices('in.raw', 'out.raw'));
 /** The filters applied to one physical output, in pipeline order. */
@@ -137,4 +137,28 @@ test('the phones preset lands the gains the impulse table expects', () => {
   const delay = result.config.filters[outputFilters(result, 1)[0]];
   assert.deepEqual(delay.parameters, {delay: 120, unit: 'samples', subsample: false});
   assert.equal(result.config.filters[outputFilters(result, 3)[0]].parameters.inverted, true);
+});
+
+test('the loop-measure preset is transparent at -40 dB on every output', () => {
+  const result = build(loopMeasurePreset());
+  const reference = build(transparentPreset());
+  // The same stage cost as transparent: every band emitted, no crossover,
+  // no delay, so the only difference the loop sees is the output gain.
+  assert.equal(result.report.biquadCount, reference.report.biquadCount);
+  assert.equal(result.report.biquadCount, 256);
+  assert.equal(result.report.crossoverCount, 0);
+  assert.equal(result.report.headroomDb, 0);
+  for (let output = 0; output < 16; output++) {
+    const gains = outputFilters(result, output)
+      .map(name => result.config.filters[name])
+      .filter(filter => filter.type === 'Gain');
+    assert.equal(gains.length, 1, `output ${output + 1} carries exactly one gain`);
+    assert.equal(gains[0].parameters.gain, -40);
+    assert.equal(Boolean(gains[0].parameters.inverted), false);
+    assert.equal(Boolean(gains[0].parameters.mute), false);
+    assert.equal(gains[0].parameters.scale, 'dB');
+  }
+  // The loop must decay: a preset whose worst case reached 0 dBFS would not.
+  assert.ok(result.report.worstCaseDbfs.every(level => level === null || level <= -39));
+  assert.equal(result.report.warnings.filter(text => text.includes('dBFS')).length, 0);
 });

@@ -27,6 +27,17 @@ dsp-loaded keep their 406699bd figures, unmeasured on 947e8b4d.
 Rollback: METERS=0 and a restart, or 406699bd from commit 47a6f42.
 No filesystem walks, transfers or builds on the Pi during a run.
 
+AoIP -> DSP -> AoIP, 2026-09-12: designed and written, not built, nothing
+on the Pi. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
+paragraph, then "Steps"). Bridge --mode aoip-loop with --loop-impulse in
+main.cpp (syntax-checked on the Mac, the accepted binary untouched),
+loop-measure preset 1e417960 (outputs/dsp-service/aoip-loop-20260912/),
+work/aes67-candidate/run-aoip-candidate-safe.sh (hash pin FILL-AFTER-PI-BUILD),
+work/phase4-bridge/build-aoip-candidate.sh, analyze-aoip-loop.sh, and
+rtp-impulses.py --loop. Next: stage and build on the Pi with the service
+stopped, pin the hash, first candidate run, then the stream-stop test and
+the supervisor MODE work (steps 5-8 of the design).
+
 Rules that stand: a user preset is never accepted and never soaked unless
 the user asks; every profile switch is a restart and a new draw; Pi root
 changes are stated and waited for; no coreaudiod kills; no measurement

@@ -18,6 +18,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
@@ -159,6 +160,20 @@ struct Options {
     // reads the blocks, no publisher thread starts, and the audio path is
     // the accepted one byte for byte.
     std::string meter_file;
+    // AoIP loop mode (2026-09-12, AOIP_LOOP_DESIGN.md). One direction,
+    // RAVENNA capture -> DSP -> RAVENNA playback, with no USB device opened:
+    // both PCMs are on the RAVENNA card, so the converters run at exactly
+    // 1.0 with no estimator and no pitch servo. Off by default, and with it
+    // off nothing reads the flag on the audio path: the duplex bridge is
+    // the accepted one, argument for argument.
+    bool aoip_loop{false};
+    // The loop's measurement injector: one 0.25 full-scale sample on this
+    // channel (1..16, 0 = off) every loop_impulse_period_frames of output,
+    // written after the DSP stage so the preset's gain does not touch it.
+    // A candidate tool for the wire instrument (rtp-impulses.py); the
+    // supervisor never passes it.
+    std::size_t loop_impulse_channel{0};
+    std::uint64_t loop_impulse_period_frames{0};
     std::string usb_device{"hw:CARD=UAC2Gadget,DEV=0"};
     std::string ravenna_device{"hw:CARD=RAVENNA,DEV=0"};
     unsigned int rate{48000};
@@ -414,13 +429,22 @@ private:
         << "usage: " << executable << " [options]\n"
         << "  --usb DEVICE           raw UAC2 ALSA device\n"
         << "  --ravenna DEVICE       raw RAVENNA ALSA device\n"
+        << "  --mode usb-duplex|aoip-loop\n"
+        << "                         usb-duplex (default): USB <-> RAVENNA, both directions;\n"
+        << "                         aoip-loop: RAVENNA capture -> DSP -> RAVENNA playback, one\n"
+        << "                         direction, no USB device opened, converters at 1.0\n"
+        << "  --loop-impulse CH,SECONDS\n"
+        << "                         aoip-loop only: write one 0.25 full-scale sample on channel\n"
+        << "                         CH (1..16) every SECONDS of output, after the DSP stage,\n"
+        << "                         for the wire instrument (default: off)\n"
         << "  --period FRAMES        requested ALSA period (48 or 96; default 96)\n"
         << "  --buffer FRAMES        requested ALSA buffer (default 384)\n"
         << "  --ravenna-playback-buffer FRAMES\n"
         << "                         buffer request for RAVENNA playback alone (0 = --buffer)\n"
         << "  --ring FRAMES          elastic-ring capacity (default 768)\n"
         << "  --target FRAMES        elastic-ring target (default 192)\n"
-        << "  --dsp-preset FILE      usb-to-ravenna DSP coefficients (default: no DSP)\n"
+        << "  --dsp-preset FILE      DSP coefficients on the RAVENNA playback direction\n"
+        << "                         (usb-to-ravenna, or the loop) (default: no DSP)\n"
         << "  --meter-file PATH      publish per-channel levels of all four stages to PATH\n"
         << "                         every 50 ms window, rewritten atomically (default: no tap)\n"
         << "  --playback-prime N     frames primed into the ALSA playback queue\n"
@@ -534,6 +558,30 @@ Options parse_options(const int argc, char** argv) {
             options.meter_file = value;
         } else if (argument == "--ravenna") {
             options.ravenna_device = value;
+        } else if (argument == "--mode") {
+            const std::string_view mode(value);
+            if (mode == "usb-duplex") {
+                options.aoip_loop = false;
+            } else if (mode == "aoip-loop") {
+                options.aoip_loop = true;
+            } else {
+                throw std::runtime_error("mode must be usb-duplex or aoip-loop");
+            }
+        } else if (argument == "--loop-impulse") {
+            const std::string text(value);
+            const auto comma = text.find(',');
+            if (comma == std::string::npos) {
+                throw std::runtime_error("loop-impulse must be CHANNEL,SECONDS");
+            }
+            options.loop_impulse_channel = parse_unsigned(text.substr(0, comma).c_str(), "loop-impulse channel");
+            const unsigned long seconds = parse_unsigned(text.substr(comma + 1).c_str(), "loop-impulse seconds");
+            if (options.loop_impulse_channel < 1 || options.loop_impulse_channel > kChannels) {
+                throw std::runtime_error("loop-impulse channel must be 1..16");
+            }
+            if (seconds < 1 || seconds > 60) {
+                throw std::runtime_error("loop-impulse seconds must be 1..60");
+            }
+            options.loop_impulse_period_frames = static_cast<std::uint64_t>(seconds) * 48000ULL;
         } else if (argument == "--period") {
             options.requested_period = parse_unsigned(value, "period");
         } else if (argument == "--buffer") {
@@ -756,6 +804,20 @@ Options parse_options(const int argc, char** argv) {
          options.impulse_trace_holdoff != kImpulseHoldoffDefault)) {
         throw std::runtime_error("--impulse-channel, --impulse-threshold and --impulse-holdoff need --impulse-trace 1");
     }
+    if (options.aoip_loop) {
+        // No gadget: nothing to steer, and no second clock to estimate.
+        if (options.usb_pitch_servo || options.pitch_seed_ppm != 0.0 || options.level_shift_frames != 0.0) {
+            throw std::runtime_error("--mode aoip-loop opens no USB gadget: --usb-pitch-servo, --pitch-seed and --level-shift must be 0");
+        }
+        // No ravenna-to-usb direction: its prime, trim, trigger and window
+        // have nothing to act on.
+        if (options.align_rx_trigger || options.align_rx_prime || options.rx_prime_phase_window ||
+            options.rx_prime_trim || options.rx_playback_prime_frames != 0) {
+            throw std::runtime_error("--mode aoip-loop has no ravenna-to-usb direction: the --rx-* and --align-rx-* options must be off");
+        }
+    } else if (options.loop_impulse_channel != 0) {
+        throw std::runtime_error("--loop-impulse needs --mode aoip-loop");
+    }
     if (options.tx_depth_frames != 0 || options.rx_depth_frames != 0 ||
         options.level_gain_ppm_per_frame != 0.05 || options.level_clamp_ppm != 2.0) {
         if (!options.split_pitch_servo) {
@@ -958,6 +1020,8 @@ struct Telemetry {
     // the pitch servo holds both converters at 1.0.
     std::atomic<std::uint64_t> tx_clipped_samples{0};
     std::atomic<std::uint64_t> rx_clipped_samples{0};
+    // Loop-mode injector: impulses written so far (0 in duplex mode).
+    std::atomic<std::uint64_t> tx_loop_impulses{0};
     // Pitch servo: the value the audio thread wants applied, the value the
     // telemetry thread last wrote, and the level bias in milli-ppm.
     std::atomic<int> wanted_pitch{kNominalPitch};
@@ -1139,6 +1203,13 @@ struct Direction {
     // the aligned start a period later. It is therefore rendered unfiltered
     // and the stage engages from the next render on. Reset by a re-prime.
     std::uint64_t renders_after_prime{};
+    // Loop-mode injector (Options::loop_impulse_*): the output position of
+    // the next impulse, zero until the first filtered render after a prime
+    // sets it one period ahead; and the count written.
+    std::size_t loop_impulse_channel{0};
+    std::uint64_t loop_impulse_period_frames{0};
+    std::uint64_t next_loop_impulse_frame{0};
+    std::uint64_t loop_impulses{0};
     // What the stage costs on the audio thread. The maximum is the figure
     // that matters: a mean hides exactly the cycle that missed a deadline.
     std::int64_t dsp_ns_max{};
@@ -1765,6 +1836,23 @@ IoResult render_to_playback(Direction& direction,
         }
     }
     ++direction.renders_after_prime;
+    if (direction.loop_impulse_period_frames != 0 && !prime_render) {
+        // The loop's injector, after the stage so the preset's gain does not
+        // touch it: one 0.25 full-scale sample (the harness level the wire
+        // instrument matches) replacing the sample at that output position,
+        // every period frames of output, from one period after the first
+        // filtered render of this prime.
+        if (direction.next_loop_impulse_frame == 0) {
+            direction.next_loop_impulse_frame = direction.output_frames + direction.loop_impulse_period_frames;
+        }
+        while (direction.next_loop_impulse_frame < direction.output_frames + produced) {
+            const std::size_t frame =
+                static_cast<std::size_t>(direction.next_loop_impulse_frame - direction.output_frames);
+            direction.playback_scratch[frame * kChannels + direction.loop_impulse_channel - 1] = 0.25F;
+            direction.next_loop_impulse_frame += direction.loop_impulse_period_frames;
+            ++direction.loop_impulses;
+        }
+    }
     std::uint64_t clipped = 0;
     for (snd_pcm_uframes_t frame = 0; frame < frames; ++frame) {
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
@@ -1862,6 +1950,7 @@ void restart_direction(Direction& direction) {
     // filter; and the filter state belongs to a stream that no longer exists,
     // so it is cleared rather than left to ring into the new one.
     direction.renders_after_prime = 0;
+    direction.next_loop_impulse_frame = 0;
     if (direction.dsp_enabled) {
         direction.dsp.reset();
     }
@@ -2170,6 +2259,7 @@ void publish_telemetry(const Direction& tx,
     }
     telemetry.tx_clipped_samples.store(tx.clipped_samples, std::memory_order_relaxed);
     telemetry.rx_clipped_samples.store(rx.clipped_samples, std::memory_order_relaxed);
+    telemetry.tx_loop_impulses.store(tx.loop_impulses, std::memory_order_relaxed);
     const auto publish_zero = [](const usb16x16::ZeroRunDetector& detector,
                                  Telemetry::ZeroRunCounters& counters) {
         counters.events.store(detector.events(), std::memory_order_relaxed);
@@ -2270,7 +2360,7 @@ void apply_wanted_pitch(Telemetry& telemetry, PitchControl* pitch_control) noexc
     telemetry.applied_playback_pitch.store(wanted_playback, std::memory_order_relaxed);
 }
 
-void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
+void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control, const bool aoip_loop) {
     WindowMean tx_depth_mean;
     WindowMean rx_depth_mean;
     WindowMean tx_queue_mean;
@@ -2286,8 +2376,14 @@ void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control) {
         const double rx_dmean = rx_depth_mean.update(telemetry.rx_depth_total.load(), rx_samples);
         const double tx_qmean = tx_queue_mean.update(telemetry.tx_queue_total.load(), tx_samples);
         const double rx_qmean = rx_queue_mean.update(telemetry.rx_queue_total.load(), rx_samples);
-        std::cout << std::fixed << std::setprecision(3)
-                  << "BRIDGE ppm=" << static_cast<double>(telemetry.ppm_milli.load()) / 1000.0
+        std::cout << std::fixed << std::setprecision(3) << "BRIDGE ";
+        if (aoip_loop) {
+            // The mode first, so a loop log cannot be read as a duplex one:
+            // the single direction reports under the tx_ keys and the rx_
+            // keys are the idle placeholder's zeros.
+            std::cout << "mode=aoip-loop loop_impulses=" << telemetry.tx_loop_impulses.load() << ' ';
+        }
+        std::cout << "ppm=" << static_cast<double>(telemetry.ppm_milli.load()) / 1000.0
                   << " observed_ppm="
                   << static_cast<double>(telemetry.observed_ppm_milli.load()) / 1000.0
                   << " phase_error="
@@ -2373,7 +2469,7 @@ struct MeterTap {
     std::string_view stage;
     const usb16x16::LevelMeter* meter;
 };
-using MeterTaps = std::array<MeterTap, 4>;
+using MeterTaps = std::vector<MeterTap>;
 
 void write_meter_file(const std::string& path, const std::string& text, std::uint64_t& failures) noexcept {
     const std::string temporary = path + ".tmp";
@@ -2415,8 +2511,8 @@ void meter_loop(const std::string path, const MeterTaps taps) {
             std::cerr << "METERS publisher kept the inherited scheduler: " << std::strerror(demoted) << '\n';
         }
     }
-    std::array<std::uint64_t, 4> last_sequence{};
-    std::array<usb16x16::LevelMeter::Snapshot, 4> snapshots{};
+    std::vector<std::uint64_t> last_sequence(taps.size(), 0);
+    std::vector<usb16x16::LevelMeter::Snapshot> snapshots(taps.size());
     std::uint64_t writes = 0;
     std::uint64_t failures = 0;
     std::string text;
@@ -2521,10 +2617,17 @@ int run(const Options& options) {
     const snd_pcm_uframes_t ravenna_playback_request = options.ravenna_playback_buffer != 0
         ? options.ravenna_playback_buffer
         : options.requested_buffer;
-    Pcm usb_capture("USB capture", options.usb_device, SND_PCM_STREAM_CAPTURE, SampleFormat::s24_3le, options,
-                    options.requested_buffer);
-    Pcm usb_playback("USB playback", options.usb_device, SND_PCM_STREAM_PLAYBACK, SampleFormat::s24_3le, options,
-                     options.requested_buffer);
+    // The gadget PCMs, in the order they have always opened; not opened at
+    // all in loop mode, which is the whole of that mode's footprint on the
+    // host side.
+    std::optional<Pcm> usb_capture;
+    std::optional<Pcm> usb_playback;
+    if (!options.aoip_loop) {
+        usb_capture.emplace("USB capture", options.usb_device, SND_PCM_STREAM_CAPTURE, SampleFormat::s24_3le, options,
+                            options.requested_buffer);
+        usb_playback.emplace("USB playback", options.usb_device, SND_PCM_STREAM_PLAYBACK, SampleFormat::s24_3le, options,
+                             options.requested_buffer);
+    }
     Pcm ravenna_capture("RAVENNA capture", options.ravenna_device, SND_PCM_STREAM_CAPTURE, SampleFormat::s32_le, options,
                         options.requested_buffer);
     Pcm ravenna_playback("RAVENNA playback", options.ravenna_device, SND_PCM_STREAM_PLAYBACK, SampleFormat::s32_le, options,
@@ -2543,32 +2646,55 @@ int run(const Options& options) {
     };
     const std::size_t tx_prime =
         resolve_prime(options.tx_playback_prime_frames, ravenna_playback.buffer());
-    const std::size_t rx_prime =
-        resolve_prime(options.rx_playback_prime_frames, usb_playback.buffer());
+    const std::size_t rx_prime = options.aoip_loop
+        ? 0
+        : resolve_prime(options.rx_playback_prime_frames, usb_playback->buffer());
     if (tx_prime > static_cast<std::size_t>(ravenna_playback.buffer())) {
         throw std::runtime_error("usb-to-ravenna prime exceeds the RAVENNA playback buffer");
     }
-    if (rx_prime > static_cast<std::size_t>(usb_playback.buffer())) {
+    if (!options.aoip_loop && rx_prime > static_cast<std::size_t>(usb_playback->buffer())) {
         throw std::runtime_error("ravenna-to-usb prime exceeds the USB playback buffer");
     }
     if (options.ring_frames < options.target_frames + std::max(tx_prime, rx_prime) + 4) {
         throw std::runtime_error("elastic ring is too small to prime the ALSA playback queues");
     }
 
-    std::cout << "NEGOTIATED"
-              << " usb_capture=" << usb_capture.period() << '/' << usb_capture.buffer()
-              << " usb_playback=" << usb_playback.period() << '/' << usb_playback.buffer()
-              << " ravenna_capture=" << ravenna_capture.period() << '/' << ravenna_capture.buffer()
+    std::cout << "NEGOTIATED";
+    if (options.aoip_loop) {
+        std::cout << " mode=aoip-loop";
+    } else {
+        std::cout << " usb_capture=" << usb_capture->period() << '/' << usb_capture->buffer()
+                  << " usb_playback=" << usb_playback->period() << '/' << usb_playback->buffer();
+    }
+    std::cout << " ravenna_capture=" << ravenna_capture.period() << '/' << ravenna_capture.buffer()
               << " ravenna_playback=" << ravenna_playback.period() << '/' << ravenna_playback.buffer() << '\n';
 
-    Direction tx("usb-to-ravenna", usb_capture, ravenna_playback, options.ring_frames);
-    Direction rx("ravenna-to-usb", ravenna_capture, usb_playback, options.ring_frames);
+    // tx is the direction whose playback is RAVENNA: usb-to-ravenna in duplex
+    // mode, the loop itself in loop mode. rx in loop mode is a placeholder
+    // that is never driven -- it keeps every signature below unchanged, its
+    // counters stay at zero and its floors at -1, and that is what the rx_
+    // fields of a loop-mode BRIDGE line and SUMMARY mean.
+    Direction tx = options.aoip_loop
+        ? Direction("ravenna-to-ravenna", ravenna_capture, ravenna_playback, options.ring_frames)
+        : Direction("usb-to-ravenna", *usb_capture, ravenna_playback, options.ring_frames);
+    Direction rx = options.aoip_loop
+        ? Direction("ravenna-to-usb-idle", ravenna_capture, ravenna_playback, options.ring_frames)
+        : Direction("ravenna-to-usb", ravenna_capture, *usb_playback, options.ring_frames);
     if (dsp_loaded) {
-        // usb-to-ravenna is the "USB -> DSP -> AoIP" path. ravenna-to-usb stays
-        // a pass-through and carries no bypassed instance, so there is nothing
-        // on the return path to go wrong.
+        // usb-to-ravenna is the "USB -> DSP -> AoIP" path, and the loop is
+        // "AoIP -> DSP -> AoIP". ravenna-to-usb stays a pass-through and
+        // carries no bypassed instance, so there is nothing on the return
+        // path to go wrong.
         tx.dsp = std::move(dsp_stage);
         tx.dsp_enabled = true;
+    }
+    if (options.aoip_loop) {
+        tx.loop_impulse_channel = options.loop_impulse_channel;
+        tx.loop_impulse_period_frames = options.loop_impulse_period_frames;
+        if (options.loop_impulse_period_frames != 0) {
+            std::cerr << "LOOPIMPULSE enabled channel=" << options.loop_impulse_channel
+                      << " period_frames=" << options.loop_impulse_period_frames << '\n';
+        }
     }
     tx.playback_prime_frames = tx_prime;
     rx.playback_prime_frames = rx_prime;
@@ -2579,29 +2705,39 @@ int run(const Options& options) {
     // Stage names in signal order round the loop: USB capture is the Mac's
     // output arriving, RAVENNA playback the wire out, RAVENNA capture the
     // wire back, USB playback the Mac's input leaving.
-    tx.capture_stage = "usb-capture";
+    tx.capture_stage = options.aoip_loop ? "ravenna-capture" : "usb-capture";
     tx.playback_stage = "ravenna-playback";
     rx.capture_stage = "ravenna-capture";
     rx.playback_stage = "usb-playback";
+    // The directions that carry audio, in the order the loop drives them,
+    // and their stage names in signal order for the instruments' lines.
+    std::vector<Direction*> live{&tx};
+    if (!options.aoip_loop) {
+        live.push_back(&rx);
+    }
+    const char* const stage_list = options.aoip_loop
+        ? "ravenna-capture,ravenna-playback"
+        : "usb-capture,ravenna-playback,ravenna-capture,usb-playback";
     if (!options.meter_file.empty()) {
-        tx.meter_enabled = true;
-        rx.meter_enabled = true;
+        for (Direction* direction : live) {
+            direction->meter_enabled = true;
+        }
         std::cerr << "METERS enabled file=" << options.meter_file
                   << " window_frames=" << tx.capture_meter.window_frames()
-                  << " stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback\n";
+                  << " stages=" << stage_list << '\n';
     }
     if (options.zero_run_detect) {
         usb16x16::ZeroRunDetector::Config zero_config;
         zero_config.minimum_frames = options.zero_run_minimum_frames;
         zero_config.maximum_frames = options.zero_run_maximum_frames;
-        for (Direction* direction : {&tx, &rx}) {
+        for (Direction* direction : live) {
             direction->zero_run_detect = true;
             direction->capture_zero = usb16x16::ZeroRunDetector(zero_config);
             direction->playback_zero = usb16x16::ZeroRunDetector(zero_config);
         }
         std::cout << "ZERORUN enabled min_frames=" << options.zero_run_minimum_frames
                   << " max_frames=" << options.zero_run_maximum_frames
-                  << " stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback"
+                  << " stages=" << stage_list
                   << " line_cap=" << kZeroRunLineCap << '\n';
     }
     if (options.impulse_trace) {
@@ -2609,7 +2745,7 @@ int run(const Options& options) {
         impulse_config.channel = options.impulse_trace_channel - 1;
         impulse_config.threshold = static_cast<float>(options.impulse_trace_threshold);
         impulse_config.holdoff_frames = options.impulse_trace_holdoff;
-        for (Direction* direction : {&tx, &rx}) {
+        for (Direction* direction : live) {
             direction->impulse_trace = true;
             direction->capture_impulse = usb16x16::ImpulseTraceDetector(impulse_config);
             direction->playback_impulse = usb16x16::ImpulseTraceDetector(impulse_config);
@@ -2617,7 +2753,7 @@ int run(const Options& options) {
         std::cout << "IMPULSE enabled channel=" << options.impulse_trace_channel
                   << " threshold=" << options.impulse_trace_threshold
                   << " holdoff_frames=" << options.impulse_trace_holdoff
-                  << " stages=usb-capture,ravenna-playback,ravenna-capture,usb-playback"
+                  << " stages=" << stage_list
                   << " line_cap=" << kImpulseLineCap << '\n';
     }
     usb16x16::SharedDriftEstimator estimator;
@@ -2686,7 +2822,12 @@ int run(const Options& options) {
     // Capture readiness drives both pipelines. Including playback descriptors
     // makes poll return immediately whenever an ALSA output queue has space but
     // its elastic ring has no excess, producing a SCHED_FIFO busy loop.
-    auto poll_descriptors = make_poll_descriptors({&usb_capture, &ravenna_capture});
+    std::vector<Pcm*> capture_pcms;
+    if (!options.aoip_loop) {
+        capture_pcms.push_back(&*usb_capture);
+    }
+    capture_pcms.push_back(&ravenna_capture);
+    auto poll_descriptors = make_poll_descriptors(capture_pcms);
 
     // The meter publisher is created here, before either capture starts and
     // before memory is locked, on a 256 KB stack. The first build created it
@@ -2700,11 +2841,12 @@ int run(const Options& options) {
     pthread_t meter_thread{};
     bool meter_thread_started = false;
     if (tx.meter_enabled) {
-        auto* context = new MeterThreadContext{options.meter_file, MeterTaps{{
-            {tx.capture_stage, &tx.capture_meter},
-            {tx.playback_stage, &tx.playback_meter},
-            {rx.capture_stage, &rx.capture_meter},
-            {rx.playback_stage, &rx.playback_meter}}}};
+        MeterTaps taps{{tx.capture_stage, &tx.capture_meter}, {tx.playback_stage, &tx.playback_meter}};
+        if (!options.aoip_loop) {
+            taps.push_back({rx.capture_stage, &rx.capture_meter});
+            taps.push_back({rx.playback_stage, &rx.playback_meter});
+        }
+        auto* context = new MeterThreadContext{options.meter_file, std::move(taps)};
         pthread_attr_t attributes;
         pthread_attr_init(&attributes);
         pthread_attr_setstacksize(&attributes, 256 * 1024);
@@ -2734,7 +2876,21 @@ int run(const Options& options) {
                   << " prepare_us=" << align.prepare_us
                   << " intervals_us=" << align.intervals_us
                   << (align.ok ? "" : " reason=" + align.reason) << '\n';
-        if (align.ok) {
+        if (align.ok && options.aoip_loop) {
+            // The loop's capture is the aligned one: its recoveries re-prepare
+            // on the measured phase, and its playback trigger and prime read
+            // the grid through the direction's own fresh wakes, which are the
+            // same RAVENNA capture wakes rx lends tx in duplex mode.
+            tx.align_tick_ns = align.tick_period_us * 1000;
+            tx.align_offset_ns = options.align_offset_us * 1000;
+            if (options.align_tx_trigger) {
+                tx.tick_source = &tx;
+                tx.align_trigger_tick_ns = align.tick_period_us * 1000;
+                tx.align_trigger_offset_ns = options.align_tx_offset_us * 1000;
+                tx.align_trigger_seed_ns = align.reference_ns;
+                tx.align_prime = options.align_tx_prime;
+            }
+        } else if (align.ok) {
             // RX recoveries re-prepare on the same phase; the measured tick
             // is the grid. TX is untouched.
             rx.align_tick_ns = align.tick_period_us * 1000;
@@ -2768,14 +2924,18 @@ int run(const Options& options) {
                 rx.align_prime = options.align_rx_prime;
             }
         }
-        usb_capture.start_capture();
+        if (!options.aoip_loop) {
+            usb_capture->start_capture();
+        }
     } else {
-        usb_capture.start_capture();
+        if (!options.aoip_loop) {
+            usb_capture->start_capture();
+        }
         ravenna_capture.start_capture();
         configure_realtime(options.priority);
     }
 
-    std::thread telemetry_thread(telemetry_loop, std::ref(telemetry), pitch_control.get());
+    std::thread telemetry_thread(telemetry_loop, std::ref(telemetry), pitch_control.get(), options.aoip_loop);
     const auto started = std::chrono::steady_clock::now();
     process_started = started;
     std::uint64_t last_telemetry_frame = 0;
@@ -2796,7 +2956,7 @@ int run(const Options& options) {
             bool restarted = false;
             const std::int64_t iteration_ns = monotonic_now_ns();
             const IoResult tx_capture = capture_into_ring(tx, iteration_ns);
-            const IoResult rx_capture = capture_into_ring(rx, iteration_ns);
+            const IoResult rx_capture = options.aoip_loop ? IoResult::idle : capture_into_ring(rx, iteration_ns);
             if (tx_capture == IoResult::recover) {
                 restart_direction(tx);
                 restarted = true;
@@ -2810,9 +2970,12 @@ int run(const Options& options) {
             // With the pitch servo the correction is applied at the USB
             // endpoints, so both converters run at exactly 1.0 and are bit
             // transparent; without it, the historical reciprocal ratios.
-            const double ratio = options.usb_pitch_servo ? 1.0 : estimator.clock_ratio();
+            // In loop mode both PCMs share the RAVENNA clock: 1.0 by construction.
+            const double ratio = (options.usb_pitch_servo || options.aoip_loop) ? 1.0 : estimator.clock_ratio();
             const IoResult tx_playback = render_to_playback(tx, options.target_frames, ratio);
-            const IoResult rx_playback = render_to_playback(rx, options.target_frames, 1.0 / ratio);
+            const IoResult rx_playback = options.aoip_loop
+                ? IoResult::idle
+                : render_to_playback(rx, options.target_frames, 1.0 / ratio);
             if (tx_playback == IoResult::recover) {
                 restart_direction(tx);
                 restarted = true;
@@ -2831,7 +2994,8 @@ int run(const Options& options) {
                 applied_ppm_seconds = 0.0;
             }
 
-            const std::uint64_t telemetry_frame = std::min(tx.output_frames, rx.output_frames);
+            const std::uint64_t telemetry_frame =
+                options.aoip_loop ? tx.output_frames : std::min(tx.output_frames, rx.output_frames);
             if (telemetry_frame - last_telemetry_frame >= kTelemetryIntervalFrames) {
                 last_telemetry_frame = telemetry_frame;
                 const auto rate_sample_time = std::chrono::steady_clock::now();
@@ -2853,17 +3017,19 @@ int run(const Options& options) {
                 last_rate_integral_time = rate_sample_time;
                 snd_pcm_sframes_t tx_playback_delay = 0;
                 snd_pcm_sframes_t rx_playback_delay = 0;
-                const bool have_playback_delays =
-                    tx.playback_started && rx.playback_started &&
-                    tx.playback.delay(tx_playback_delay) == 0 &&
-                    rx.playback.delay(rx_playback_delay) == 0 &&
-                    tx_playback_delay >= 0 && rx_playback_delay >= 0;
+                const bool have_playback_delays = options.aoip_loop
+                    ? (tx.playback_started &&
+                       tx.playback.delay(tx_playback_delay) == 0 && tx_playback_delay >= 0)
+                    : (tx.playback_started && rx.playback_started &&
+                       tx.playback.delay(tx_playback_delay) == 0 &&
+                       rx.playback.delay(rx_playback_delay) == 0 &&
+                       tx_playback_delay >= 0 && rx_playback_delay >= 0);
                 if (have_playback_delays) {
                     tx.playback_delay = tx_playback_delay;
                     rx.playback_delay = rx_playback_delay;
                 }
                 ++rate_update_samples;
-                if (have_playback_delays && rate_update_samples >= kServoSamplesPerUpdate) {
+                if (!options.aoip_loop && have_playback_delays && rate_update_samples >= kServoSamplesPerUpdate) {
                     rate_update_samples = 0;
                     const double elapsed_seconds =
                         std::chrono::duration<double>(rate_sample_time - started).count();
@@ -2994,6 +3160,8 @@ int run(const Options& options) {
             : static_cast<std::int64_t>(value);
     };
     std::cout << "SUMMARY {\"ppm\":" << std::fixed << std::setprecision(3) << estimator.ppm()
+              << ",\"mode\":\"" << (options.aoip_loop ? "aoip-loop" : "usb-duplex") << "\""
+              << ",\"loop_impulses\":" << tx.loop_impulses
               << ",\"dsp_preset\":\"" << (tx.dsp_enabled ? tx.dsp.preset() : std::string{}) << "\""
               << ",\"dsp_biquads\":" << (tx.dsp_enabled ? tx.dsp.biquad_count() : 0)
               << ",\"dsp_delay_frames\":" << (tx.dsp_enabled ? tx.dsp.delay_samples() : 0)
@@ -3072,7 +3240,7 @@ int run(const Options& options) {
               << ",\"align_start\":" << (options.align_start ? 1 : 0)
               << ",\"align_ok\":" << (align.ok ? 1 : 0)
               << ",\"align_attempts\":" << align.attempts
-              << ",\"align_recoveries\":" << rx.realigned_recoveries
+              << ",\"align_recoveries\":" << (options.aoip_loop ? tx : rx).realigned_recoveries
               << ",\"align_tick_period_us\":" << align.tick_period_us
               << ",\"align_wake_to_prepare_us\":" << align.wake_to_prepare_us
               << ",\"align_prepare_us\":" << align.prepare_us

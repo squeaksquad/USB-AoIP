@@ -10501,3 +10501,79 @@ the user with --apply: the two lines above changed, nothing else; live conf
 METERS documentation block's position, which the copy does not carry). The
 service was not restarted: active, zero RECOVERs, the same 23:29 process
 the battery ran on. Nothing pending on the Pi.
+
+**STAGED 2026-09-12 (design and step 2), not built and not installed: the
+AoIP -> DSP -> AoIP loop mode.** `work/phase4-bridge/AOIP_LOOP_DESIGN.md`
+is the design: one `--mode aoip-loop` direction inside the bridge, RAVENNA
+capture -> DspStage -> RAVENNA playback, no gadget PCM opened, converters
+at 1.0 with no estimator and no servo, the aligned start and the aligned TX
+trigger and prime reusing the direction's own capture wakes as the grid;
+the supervisor's four USB-host detectors decided per profile `MODE`
+(default `usb-duplex`, every existing block unchanged): the start gate
+waits on the link alone, a storm fails the run instead of waiting for a
+dwc2 line, the host retry is never reached, settle and the RECOVER limit
+stay. The rig's Ferrofish matrix returns the Pi's output to its own input,
+so any pass-through preset would close a unity feedback loop through the
+DSP: the measurement preset `loop-measure` (transparent, every output at
+-40 dB) breaks it, and the bridge injects its own 0.25 full-scale impulse
+after the stage (`--loop-impulse CH,SECONDS`, a candidate tool the
+supervisor never passes) so the wire instrument can read AoIP in -> AoIP
+out at the Pi's port without a host. The user's decisions: the -40 dB
+preset (a real deployment would not route back), the stream-stop test
+wanted, one binary with dsp-direct re-measured on it, the `tx_` keys
+reused for the single direction (`rx_` reads an idle placeholder's zeros,
+`mode=aoip-loop` first on every BRIDGE line), the service may stop for
+builds. Written: `main.cpp` (`--mode`, `--loop-impulse`, the placeholder
+`rx`, loop wiring, reporting; syntax-checked clean on the Mac by the
+standing method, the accepted binary untouched), `verify-presets.mjs`
+`loop-measure` with its shape pinned in the test (48 compiler tests pass),
+compiled on the Mac to `outputs/dsp-service/aoip-loop-20260912/
+loop-measure.dsp` `1e417960` (the same compile reproduces the pinned
+`transparent.dsp` `ad69598` byte for byte), `work/aes67-candidate/
+run-aoip-candidate-safe.sh` (no USB gate, dsp-direct's TX levers verbatim,
+the injector, trace at threshold 0.002 / holdoff 96, `none` refused unless
+`USB16X16_AOIP_LOOP_OPEN=1`, a bounded tcpdump of the two channel-1
+streams to tmpfs moved into the result directory after the bridge exits;
+bridge hash pin `FILL-AFTER-PI-BUILD`), `work/phase4-bridge/
+build-aoip-candidate.sh` (refuses while the service is active, core tests,
+four parser self-checks that open no device, prints the hash),
+`analyze-aoip-loop.sh` (fetch after DONE), `rtp-impulses.py --loop`
+(pairs each return with its re-emission, wall time and media-clock
+samples, plus the bridge dwell from the IMPULSE `value=`; checked on a
+synthetic capture). Nothing on the Pi. Next: stage and build with the
+service stopped, pin the hash, the first candidate run, the stream-stop
+test during a candidate, then the supervisor `MODE` and the `aoip-direct`
+block (design steps 5-8); dsp-direct's battery on the new binary before
+any acceptance.
+
+**FOUND 2026-09-12 13:00-13:15 UTC (09:00-09:13 EDT): the Pi's Ethernet
+controller stopped transmitting after a 2 s link drop, and the supervisor
+cannot see that failure.** `macb 1f00100000.ethernet eth0: Link is Down`
+09:00:47 EDT, `TX stall detected on queue 0 (tail=569398338
+head=569398340); re-kicking TSTART` 09:00:49, `Link is Up - 1Gbps/Full`
+09:00:51; the link watch failed the run (38) and the stack restarted,
+settled with one bridge restart at +5 s, and reported running and stable
+from 09:03:58. From then until 09:12 eth0's TX packet counter stood at
+569,398,294 while RX advanced at stream rate: PTP locked (received Sync
+alone), the sinks received the Ferrofish flows, the bridge ran with
+`tx_restarts=0`, and nothing the Pi sent reached the wire -- no SAP, no
+source RTP (the Mac's receive-only join of 239.69.16.1 counted 0 packets
+in 4 s against 4001 from the Ferrofish's group), no ping reply on eth0.
+Dante Controller lost the device; the user also lost wireless ssh for a
+while, which was the access point (the Pi held 192.168.1.201 on the
+5 GHz radio with the Mac in its neighbour table and no unicast reply
+path; it cleared on its own and is unrelated to eth0). First `TX stall`
+line in the retained journals, kernel 6.18.34+rpt-rpi-2712; the driver's
+own re-kick did not recover the queue. Fix, run by the user: `sudo ip
+link set eth0 down && sleep 2 && sudo ip link set eth0 up` at 09:12:00
+EDT; the link watch failed the run, the stack restarted, TX at
+2002 packets/s, the Ferrofish answers ping on eth0, the Mac hears SAP
+(6 in 35 s) and the source stream (4001 in 4 s); running from 09:13:02,
+floors TX 131 / RX 72, zero restarts. Consequence for the supervisor: a
+TX stall is invisible to every detector it has (link up at 1000, RECOVERs
+zero, USB input moving) and to the bridge's counters; the one cheap
+signal on the Pi is `ip -s link show eth0`'s TX packet count not moving
+across a second while the bridge runs, and on the Mac a receive-only
+join of the Pi's source group. Not automated; noted for the supervisor
+work the loop mode needs anyway (a per-tick TX-counter check beside
+`link_ok` would catch it). The level is a new draw, unmeasured.

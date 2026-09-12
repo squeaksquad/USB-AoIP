@@ -21,6 +21,18 @@ SUMMARY. `usb16x16-meter-bench` (core only, not installed) measures it in
 memory: 0.21 us median per 48-frame block on the Mac. With no `--meter-file`
 nothing in the audio path changes.
 
+Written 2026-09-12, syntax-checked on the Mac, not built and not installed:
+the AoIP loop mode (`--mode aoip-loop`, `AOIP_LOOP_DESIGN.md`). One direction,
+RAVENNA capture -> DSP stage -> RAVENNA playback, no gadget PCM opened, the
+converters at exactly 1.0 with no estimator and no pitch servo; the aligned
+start and the aligned TX trigger and prime reuse the direction's own capture
+wakes as the grid. The single direction reports under the `tx_` keys with
+`mode=aoip-loop` first on every BRIDGE line; `rx_` reads an idle placeholder's
+zeros. `--loop-impulse CH,SECONDS` is the loop's measurement injector (one
+0.25 full-scale sample after the stage), a candidate tool the supervisor never
+passes. With the flag absent nothing on the audio path changes; the accepted
+profile is re-measured on the build all the same.
+
 This candidate replaces two independent `alsaloop` processes with one process
 that owns all four raw ALSA directions:
 

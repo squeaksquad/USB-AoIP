@@ -1,0 +1,114 @@
+{
+  "preset": "verify-loop-measure",
+  "internalChannels": 16,
+  "channelMap": [
+    {
+      "index": 0,
+      "kind": "main",
+      "input": 0
+    },
+    {
+      "index": 1,
+      "kind": "main",
+      "input": 1
+    },
+    {
+      "index": 2,
+      "kind": "main",
+      "input": 2
+    },
+    {
+      "index": 3,
+      "kind": "main",
+      "input": 3
+    },
+    {
+      "index": 4,
+      "kind": "main",
+      "input": 4
+    },
+    {
+      "index": 5,
+      "kind": "main",
+      "input": 5
+    },
+    {
+      "index": 6,
+      "kind": "main",
+      "input": 6
+    },
+    {
+      "index": 7,
+      "kind": "main",
+      "input": 7
+    },
+    {
+      "index": 8,
+      "kind": "main",
+      "input": 8
+    },
+    {
+      "index": 9,
+      "kind": "main",
+      "input": 9
+    },
+    {
+      "index": 10,
+      "kind": "main",
+      "input": 10
+    },
+    {
+      "index": 11,
+      "kind": "main",
+      "input": 11
+    },
+    {
+      "index": 12,
+      "kind": "main",
+      "input": 12
+    },
+    {
+      "index": 13,
+      "kind": "main",
+      "input": 13
+    },
+    {
+      "index": 14,
+      "kind": "main",
+      "input": 14
+    },
+    {
+      "index": 15,
+      "kind": "main",
+      "input": 15
+    }
+  ],
+  "filterCount": 272,
+  "biquadCount": 256,
+  "crossoverCount": 0,
+  "headroomDb": 0,
+  "worstCaseDbfs": [
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40,
+    -40
+  ],
+  "warnings": [],
+  "delayLatency": {
+    "samples": 0,
+    "ms": 0,
+    "text": null
+  }
+}
