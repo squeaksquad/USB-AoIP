@@ -1,0 +1,18 @@
+loop mode: injected 15, re-emitted 15 (out threshold 0x2000)
+packets to 239.69.16.1: 29894, to 239.69.121.9: 29894; impulses out 15, back 15
+15 out/back pairs; wire loop (packet out -> packet back) median 1.774 ms min 1.695 max 1.884
+Ferrofish stamp - Pi stamp for the same impulse: median 531217875 samples min 531217875 max 531217875 (frame offsets out 6 back 22)
+first pairs (utc s, seq, rtp_ts, frame): out / back
+  1789219540.247200 20023 381913872 6  /  1789219540.248989 54691 913131747 22   loop 1.789 ms
+  1789219542.247200 22023 382009872 6  /  1789219542.248974 56691 913227747 22   loop 1.774 ms
+  1789219544.247200 24023 382105872 6  /  1789219544.248959 58691 913323747 22   loop 1.759 ms
+15 back/re-emit pairs; AoIP in -> AoIP out at the Pi's port (packet back -> re-emitted packet out): median 8.227 ms min 8.116 max 8.305
+  Pi stamps, injected sample -> re-emitted sample: median 504 samples (10.500 ms) min 504 max 504; minus the wall-clock wire loop 1.774 ms: loop about 419 samples (8.726 ms)
+  re-emission level median 0x51ee
+first loop pairs (utc s, seq, rtp_ts, frame): back / re-emit
+  1789219540.248989 54691 913131747 22  /  1789219540.257201 20033 381914352 30   loop 8.212 ms
+  1789219542.248974 56691 913227747 22  /  1789219542.257201 22033 382010352 30   loop 8.227 ms
+  1789219544.248959 58691 913323747 22  /  1789219544.257201 24033 382106352 30   loop 8.242 ms
+ravenna-playback write -> packet out: median 4.907 ms min 4.899 max 4.907 n 14
+packet back -> ravenna-capture frame: median 1.724 ms min 1.614 max 1.802 n 15
+ravenna-capture frame -> ravenna-playback write of the re-emission (bridge dwell): median 1.596 ms min 1.591 max 1.604 n 179

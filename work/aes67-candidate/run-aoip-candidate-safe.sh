@@ -48,9 +48,11 @@ original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=bc694c24c77893836dd3a3cfa0c9105e68b556d19dd51a84bf9ee5ca3f1b98ff
-# The loop-mode candidate build. Filled in after build.sh on the Pi prints
-# the hash; until then this wrapper refuses to run, which is the point.
-expected_bridge_sha256=FILL-AFTER-PI-BUILD
+# The loop-mode candidate build: main.cpp 59cf978d (bridge 947e8b4d's source
+# plus --mode aoip-loop and --loop-impulse), built on the Pi 2026-09-12 by
+# build-aoip-candidate.sh with the service stopped, zero warnings, core tests
+# and the four parser self-checks passed.
+expected_bridge_sha256=0a39f4a614898dd55a10f84b3d4d971c0993bf2a44d31179bf11f80e8b70b79f
 # loop-measure.dsp: verify-presets.mjs loop-measure, compiled on the Mac
 # 2026-09-12 (outputs/dsp-service/aoip-loop-20260912/). transparent.dsp is
 # listed too for a run with the Ferrofish loop opened.

@@ -10577,3 +10577,33 @@ across a second while the bridge runs, and on the Mac a receive-only
 join of the Pi's source group. Not automated; noted for the supervisor
 work the loop mode needs anyway (a per-tick TX-counter check beside
 `link_ok` would catch it). The level is a new draw, unmeasured.
+
+**MEASURED 2026-09-12 13:24-13:32 UTC: the AoIP -> DSP -> AoIP loop's
+first candidate, 8.227 ms wall / about 419 samples on the media clock at
+the Pi's port, the mode running as designed.** Bridge 0a39f4a6 (main.cpp
+59cf978d, built by the user with the service stopped; zero warnings, core
+tests and the four parser refusals verified), module bc694c24, preset
+loop-measure 1e417960, dsp-direct's TX levers verbatim, sink delay 103,
+360 s, injector on channel 1 every 2 s, trace at 0.002 / 96, a 30 s eth0
+capture. `ALIGN status=ok`, prime and trigger as in duplex
+(front_age_frames=296, align_dropped=39), DSP engaged after the prime, 179
+impulses each stamped three times, dsp max 88.4 / mean 49.5 us, zero
+clipped, zero dropped. The wire split (rtp-impulses.py --loop, saved as
+wire-analysis.txt in the run): packet back -> capture frame 1.724 ms,
+bridge dwell 1.596 ms (n=179, spread 13 us), playback write -> packet out
+4.907 ms, total 8.227 ms (8.116-8.305, n=15); on the Pi's own stamps the
+injected -> re-emitted round trip is 504 samples on every pair, about 419
+after the 1.774 ms Ferrofish wire loop. The TX queue sat at 198 on every
+BRIDGE line, floor 150 from the first line, depth 249 flat: the prime is
+sized for USB jitter the loop does not have, so TX_PLAYBACK_PRIME is the
+first lever (about 4.1 ms of the 8.2 is queue). One RECOVER at t=56.4 s
+(capture XRUN, ring 51, gap 82 us), re-primed identically, clean for the
+remaining 304 s; it coincided with my ssh read of the log from the Mac, the
+known pattern, and the next run takes no reads. Not established: no soak,
+n=15 on the wire, no meter tap in the wrapper, the stream-stop behaviour
+(next run). Wart: the SUMMARY prints the loop's capture counters under the
+usb_capture keys (the loop is tx); fix in the next build. Evidence
+`outputs/latency/phase4-aoip-candidate-20260912T132437Z/` (the pcap
+gitignored, the analysis text kept). Design note: MEASURED section
+appended. Service restarted by the user at 13:32 UTC on dsp-direct, a new
+draw. Session rules kept: no ssh reads during a run from here on.

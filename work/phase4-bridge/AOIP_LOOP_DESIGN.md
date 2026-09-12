@@ -1,7 +1,7 @@
 # AoIP → DSP → AoIP — the loop mode design
 
-Status: **step 2 written 2026-09-12, syntax-checked on the Mac, not built
-and not on the Pi.** The bridge change (`--mode aoip-loop`, `--loop-impulse`),
+Status: **built and measured 2026-09-12 (see the MEASURED section at the end);
+not installed, not accepted, the service untouched.** Earlier that day: The bridge change (`--mode aoip-loop`, `--loop-impulse`),
 the `loop-measure` preset (compiled, hash 1e417960), the candidate wrapper
 `work/aes67-candidate/run-aoip-candidate-safe.sh`, the Pi build script
 `build-aoip-candidate.sh` beside this note, the wire analyser's `--loop`
@@ -338,3 +338,74 @@ measured, and the first one is a candidate draw like every first one.
    the read matters more than the diff.
 5. **When the service can stop** for the Pi build and the install. Every
    stop is a restart and a new draw for dsp-direct.
+
+## MEASURED 2026-09-12: the loop's first run
+
+Run `phase4-aoip-candidate-20260912T132437Z` (`outputs/latency/`), bridge
+0a39f4a6 (main.cpp 59cf978d: 947e8b4d's source plus the mode), module
+bc694c24, preset `loop-measure` 1e417960, dsp-direct's TX levers verbatim,
+sink delay 103, 360 s, the injector on channel 1 every 2 s, the trace at
+threshold 0.002 / holdoff 96, a 30 s eth0 capture from +15 s. Service
+stopped throughout; the accepted binary untouched.
+
+**The mode runs as designed.** `ALIGN status=ok` on the second attempt, the
+prime and the aligned trigger landing where they land in duplex mode
+(`front_age_frames=296`, `align_dropped=39`, `slack_us=844`), `DSP engaged`
+on the render after the prime, 179 impulses injected, each stamped three
+times (out at 0.25, back at 0.25, out again at 0.0025). `dsp_us_max`
+88.4 µs, mean 49.5 (transparent's cost, as in duplex), zero clipped and
+dropped frames, `tx_pull_max` 48, `tx_gap_max_us` 1096.
+
+**The figure.** From the wire, the Pi's port to the Pi's port:
+
+| Leg | Median | Min | Max | n |
+| --- | --- | --- | --- | --- |
+| packet back -> `ravenna-capture` frame (driver receive leg) | 1.724 ms | 1.614 | 1.802 | 15 |
+| `ravenna-capture` frame -> `ravenna-playback` write (bridge dwell) | 1.596 ms | 1.591 | 1.604 | 179 |
+| `ravenna-playback` write -> packet out (TX queue and driver transmit leg) | 4.907 ms | 4.899 | 4.907 | 14 |
+| **AoIP in -> AoIP out, wall clock** | **8.227 ms** | 8.116 | 8.305 | 15 |
+
+The three legs sum to the whole to the microsecond. On the Pi's own RTP
+stamps the round trip injected sample -> re-emitted sample is **504
+samples, every one of 15 pairs** (10.500 ms), which with the wall-clock
+Ferrofish wire loop of 1.774 ms removed puts the loop at about **419
+samples, 8.73 ms** on the media clock; the 0.5 ms between that and the
+wall figure is packet granularity (the injected sample sat at frame 6 of
+its packet, the re-emission at frame 30). A constant to the sample over
+the capture, which is what a shared clock should give.
+
+**Where it sits.** The TX queue never moved: `tx_queue=198` on every
+BRIDGE line, `tx_qfloor=150` from the first line to the last, mean 175,
+`tx_depth` 249 flat. In duplex mode the same prime gives a TX floor of
+83 because the USB capture's arrival jitter eats into it; on the loop the
+capture and the playback share the tick and the queue sits at the prime.
+About 4.1 ms of the 8.2 is that queue (198 frames), 1.6 ms is the ring
+(target 48 plus the block in hand, 77 frames), and the rest is the driver
+each way with the sink delay inside the receive leg. The prime is sized
+for a jitter the loop does not have: `TX_PLAYBACK_PRIME` is the first
+lever, not the trigger offset this note guessed at.
+
+**One RECOVER at t=56.4 s**, a capture XRUN with both PCMs in XRUN,
+`ring=51 last_gap_us=82`, re-primed identically (`front_age_frames=296`)
+and clean for the remaining 304 s. It coincided with an ssh read of the
+bridge log from the Mac, the pattern the record already has for ssh work
+during a run; counted, not attributed to the mode, and the next run takes
+no reads at all.
+
+### What this run does not establish
+
+- **No soak, one run, n=15 on the wire.** The bridge dwell has n=179 and
+  a 13 µs spread; the wire legs have the 30 s capture's fifteen.
+- **No meter tap:** the wrapper passes no `--meter-file`, so the two-tap
+  publisher is unexercised in loop mode.
+- **The SUMMARY mislabels the loop's capture-side counters:** the loop
+  direction is `tx`, so its capture zero runs and impulse events print
+  under `zero_usb_capture` / `impulse_usb_capture` and the `ravenna_capture`
+  keys read the idle placeholder's zeros. `zero_usb_capture` =
+  1074/74160/169/183 is the loop's capture: the silence between impulses
+  (183 long runs) and, at the -80 dB second pass, LSB-level tails
+  interleaved with exact zeros (the 1074 short runs), a property of the
+  measurement signal and not holes. To be fixed in the bridge (name the
+  keys from the direction's stage) in the next build, with the rest of the
+  lessons of this run.
+- **The stream-stop behaviour** is still unknown; it is the next run.

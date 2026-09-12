@@ -22,12 +22,12 @@ name=${1:?result directory name, e.g. phase4-aoip-candidate-20260912T120000Z}
 local_dir="$repo_root/outputs/latency/$name"
 tool="$repo_root/outputs/latency/stage-trace-20260906/rtp-impulses.py"
 
-if ssh "$pi" 'pgrep -f "run-aoip-candidate-safe.sh" >/dev/null'; then
+if ssh "$pi" 'pgrep -f "[r]un-aoip-candidate-safe.sh" >/dev/null'; then
   print -r -- "the loop candidate is still running on the Pi; fetch after DONE" >&2
   exit 1
 fi
 mkdir -p "$local_dir"
-rsync -a --info=progress2 "$pi:usb-16x16-work/logs/$name/" "$local_dir/" || exit 2
+rsync -aq "${pi}:usb-16x16-work/logs/${name}/" "$local_dir/" || exit 2
 print -r -- "--- $local_dir"
 cat "$local_dir/metadata.txt"
 print -r -- "--- bridge lines of note"

@@ -27,8 +27,11 @@ dsp-loaded keep their 406699bd figures, unmeasured on 947e8b4d.
 Rollback: METERS=0 and a restart, or 406699bd from commit 47a6f42.
 No filesystem walks, transfers or builds on the Pi during a run.
 
-AoIP -> DSP -> AoIP, 2026-09-12: designed and written, not built, nothing
-on the Pi. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
+AoIP -> DSP -> AoIP, 2026-09-12: designed, built (bridge 0a39f4a6 at
+~/usb-16x16-work/phase4-aoip-src/build, hash pinned in the wrapper) and
+measured once: 8.227 ms wall / ~419 samples at the Pi's port, TX queue flat
+at 198 so TX_PLAYBACK_PRIME is the first lever; handoff MEASURED 2026-09-12
+13:24 and the design note's MEASURED section. Not installed, not accepted. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
 paragraph, then "Steps"). Bridge --mode aoip-loop with --loop-impulse in
 main.cpp (syntax-checked on the Mac, the accepted binary untouched),
 loop-measure preset 1e417960 (outputs/dsp-service/aoip-loop-20260912/),

@@ -193,15 +193,26 @@ def main():
                 loop_pairs.append((b, reemitted[k]))
         if loop_pairs:
             wall = [(r[0] - b[0]) * 1e3 for b, r in loop_pairs]
-            # Stamp plus frame offset on each side: the Pi's playout stamp of
-            # the re-emitted sample minus the Ferrofish's stamp of the
-            # returned one, both on the PTP media clock.
-            samples = [(((r[2] + r[3]) - (b[2] + b[3]) + 2**31) & 0xFFFFFFFF) - 2**31 for b, r in loop_pairs]
             print(f"{len(loop_pairs)} back/re-emit pairs; AoIP in -> AoIP out at the Pi's port (packet back -> re-emitted packet out): "
                   f"median {statistics.median(wall):.3f} ms min {min(wall):.3f} max {max(wall):.3f}")
-            print(f"  on the media clock (Pi stamp of the re-emission - Ferrofish stamp of the return): "
-                  f"median {statistics.median(samples):.0f} samples min {min(samples)} max {max(samples)} "
-                  f"({statistics.median(samples) / 48.0:.3f} ms); re-emission level median {int(statistics.median(r[5] for _, r in loop_pairs)):#x}")
+            # Sample-accurate, on the Pi's own stamps only (the Ferrofish's stamps
+            # sit on a different base, a constant offset per session): the
+            # re-emitted sample's playout stamp minus the injected sample's, which
+            # is the whole round trip, loop plus the Ferrofish wire loop. The loop
+            # alone in samples is that minus the wall-clock wire loop, an estimate
+            # to the packet granularity of the wall clock.
+            trips = []
+            for b, r in loop_pairs:
+                o = max((o for o in out if o[0] <= b[0]), key=lambda o: o[0], default=None)
+                if o is not None:
+                    trips.append((((r[2] + r[3]) - (o[2] + o[3]) + 2**31) & 0xFFFFFFFF) - 2**31)
+            if trips:
+                trip = statistics.median(trips)
+                wire = statistics.median(loops)
+                print(f"  Pi stamps, injected sample -> re-emitted sample: median {trip:.0f} samples ({trip / 48.0:.3f} ms) "
+                      f"min {min(trips)} max {max(trips)}; minus the wall-clock wire loop {wire:.3f} ms: "
+                      f"loop about {trip - wire * 48.0:.0f} samples ({trip / 48.0 - wire:.3f} ms)")
+            print(f"  re-emission level median {int(statistics.median(r[5] for _, r in loop_pairs)):#x}")
             print("first loop pairs (utc s, seq, rtp_ts, frame): back / re-emit")
             for b, r in loop_pairs[:3]:
                 print(f"  {b[0]:.6f} {b[1]} {b[2]} {b[3]}  /  {r[0]:.6f} {r[1]} {r[2]} {r[3]}   loop {(r[0]-b[0])*1e3:.3f} ms")
