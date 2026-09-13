@@ -378,7 +378,8 @@ export async function compileDraft(config, importImpl, {shape = 'fixed'} = {}) {
   const sections = (artifact.match(/^-?\d*\.?\d+(e[-+]?\d+)? -?\S+ -?\S+ -?\S+ -?\S+$/gm) || [])
     .filter(line => !/^preset /.test(line)).length;
   const shapeKey = await compiler.artifactShapeKey(artifact);
-  return {artifact, report: result.report, delay, sections, shapeKey};
+  const sha256 = await compiler.sha256Hex(artifact);
+  return {artifact, report: result.report, delay, sections, shapeKey, sha256};
 }
 
 /** The confirm text for a compiled draft: what will run and what the compiler warns about. */

@@ -91,15 +91,10 @@ async function scheduleLive() {
   const state = liveState(health, draftShapeKey);
   renderLiveState();
   if (state.state !== 'live') { liveQueue.cancel(); return; }
-  const sha256 = await sha256Hex(compiled.artifact);
+  const sha256 = compiled.sha256;
   if (sha256 === (liveLastSent || state.liveSha256)) return;
   liveQueue.submit({artifact: compiled.artifact, sha256, expectedProfile: state.profile,
                     expectedLiveSha256: liveLastSent || state.liveSha256});
-}
-
-async function sha256Hex(text) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** The three-state line in the EQ editor and the Settings panel. */
@@ -110,9 +105,13 @@ function liveStateHtml() {
   const preview = state.previewing ? ' A preview is running that is not the installed preset: commit it to keep it, or discard it.' : '';
   return `<p id="live-state" class="${cls}" data-live-state="${state.state}"><strong>${label}.</strong> ${esc(state.reason)}${preview}${liveLine ? ` <span class="muted">${esc(liveLine)}</span>` : ''}</p>`;
 }
+let lastLiveStateHtml = '';
 function renderLiveState() {
+  const html = liveStateHtml();
+  if (html === lastLiveStateHtml) return;
+  lastLiveStateHtml = html;
   const node = $('#live-state');
-  if (node) node.outerHTML = liveStateHtml();
+  if (node) node.outerHTML = html;
   refreshSettingsLive();
 }
 
@@ -577,9 +576,15 @@ function refreshSettingsLive() {
   if (!page) return;
   const active = document.activeElement;
   if (active && page.contains(active) && active.matches('select, input, textarea, button')) return;
+  // A disclosure the user opened stays open across the 1 Hz re-render.
+  const openDetails = [...page.querySelectorAll('details[open]')].map(node => node.className);
   for (const [id, html] of [['#system-panel', systemPanel()], ['#apply-panel', applyPanel()]]) {
     const node = page.querySelector(id);
     if (node) node.outerHTML = html; else { renderSettings(); return; }
+  }
+  for (const className of openDetails) {
+    const node = className ? page.querySelector(`details.${className.split(' ')[0]}`) : null;
+    if (node) node.open = true;
   }
 }
 

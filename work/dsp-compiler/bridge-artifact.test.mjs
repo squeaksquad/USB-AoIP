@@ -188,7 +188,7 @@ test('the loaded preset emits all 256 bands', () => {
 // changes only numbers. These tests hold the compiler to that, and pin the
 // shape key the applier (Python) and the bridge (C++) must reproduce.
 
-import { artifactShape, artifactShapeKey } from './bridge-artifact.mjs';
+import { artifactShape, artifactShapeKey, sha256HexSync, sha256Hex } from './bridge-artifact.mjs';
 import { setOutputRole } from '../web-ui/model.mjs';
 
 const fixed = preset => bridgeArtifact(compile(preset, fileDevices('in.raw', 'out.raw'), {shape: 'fixed'}));
@@ -336,4 +336,19 @@ test('the shape key is pinned: the applier and the bridge must reproduce it', as
                   await artifactShapeKey(artifact));
   assert.throws(() => artifactShape(artifact.replace('end\n', '')), /unexpected end/);
   assert.throws(() => artifactShape(artifact.replace('assign 2', 'assign 3')), /assign row|expected 'output'/);
+});
+
+test('the plain SHA-256 matches the known vectors and WebCrypto', async () => {
+  const encode = text => new TextEncoder().encode(text);
+  assert.equal(sha256HexSync(encode('')), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  assert.equal(sha256HexSync(encode('abc')), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  assert.equal(sha256HexSync(encode('abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq')),
+               '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1');
+  // Exactly one block of padding boundary cases: 55, 56 and 64 bytes.
+  for (const length of [55, 56, 64, 119, 120, 1000]) {
+    const text = 'x'.repeat(length);
+    assert.equal(sha256HexSync(encode(text)), await sha256Hex(text), `length ${length} agrees with WebCrypto`);
+  }
+  const artifact = bridgeArtifact(build(loadedPreset()));
+  assert.equal(sha256HexSync(encode(artifactShape(artifact))), await artifactShapeKey(artifact));
 });
