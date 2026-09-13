@@ -10754,3 +10754,24 @@ first check is the count of full-strength `ravenna-capture` returns
 against `loop_impulses`, before any figure is read from it; the analyser
 helper prints it from now on. The Ferrofish's subscriptions are the
 user's to inspect in Dante Controller before the next run.
+
+**MEASURED 2026-09-13 00:27-00:35 UTC: prime 96 repeated after Dante
+Controller showed the Ferrofish's subscriptions resolved; still zero
+returns; and one RECOVER at 366 s with no capture running, a playback
+underrun the 96-frame queue no longer covers.**
+`phase4-aoip-candidate-20260913T002755Z` (`USB16X16_AOIP_TX_PRIME=96`,
+capture off): 209 impulses out, 0 full-strength returns, so the break in
+the return path (from 23:34:37 UTC, entry above) is not the subscription.
+Transport as in run 5: `front_age_frames=200`, queue 102 flat (mean
+97.3), floor 54, depth 153, `tx_queue_below_period=0`, zero clipped, dsp
+max 172 us. The RECOVER: `playback-avail` XRUN at t=366.75 s with
+`capture_state=RUNNING ring=195 last_queue=102 last_gap_us=69`, the
+thread absent for more than the 2.1 ms a 96-frame queue holds; at 192
+the same absence is inside the 4.1 ms and invisible. So the loop's stall
+distribution has a tail between 2 and 4 ms that the prime lever exposes
+one-for-one, and the tcpdump reading of the one-per-run events (entry of
+23:32) is weakened: this one had no capture. Next: prove whether the
+Pi's audio reaches the Ferrofish at all with the duplex harness through
+the running service (20 impulses at 64, the user's go, the Mac idle),
+since the loop's own instrument cannot tell "not returned" from "not
+delivered to the Ferrofish's matrix".
