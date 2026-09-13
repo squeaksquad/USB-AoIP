@@ -27,6 +27,8 @@ failures_file=$run_dir/failures
 recovers_file=$run_dir/recovers
 last_bridge_file=$run_dir/last-bridge
 meters_file=$run_dir/meters          # the bridge's level snapshot, rewritten every 50 ms
+dsp_live_file=$run_dir/dsp-live.dsp  # LIVE_COEFFICIENTS_DESIGN.md: a root-written artifact the bridge
+dsp_live_status=$run_dir/dsp-live.status  # publishes live; its outcome line. Only with DSP_LIVE=1.
 bridge_log=$run_dir/bridge.log
 unit_name=usb16x16-aes67
 
@@ -252,6 +254,9 @@ validate_dsp_profile() {
   [[ $preset =~ ^/etc/usb16x16/dsp/(transparent|loaded|user-[a-z0-9][a-z0-9-]{0,23})\.dsp$ ]] &&
     [[ $digest =~ ^[0-9a-f]{64}$ ]] ||
     { say "DSP requires a packaged preset path and SHA256" >&2; return 1; }
+  local live
+  live=$(p DSP_LIVE)
+  [ -z "$live" ] || [[ $live =~ ^[01]$ ]] || { say "DSP_LIVE must be 0 or 1" >&2; return 1; }
 }
 
 verify_dsp_artifact() {
@@ -489,6 +494,13 @@ bridge_arguments() {
     --seconds 0
   if [ -n "$(p DSP_PRESET)" ]; then
     printf '%s\n' --dsp-preset "$(p DSP_PRESET)"
+    # DSP_LIVE=1 starts the bridge's control thread on the live file. Off by
+    # default so an accepted block's argument list is unchanged; the applier
+    # is the only writer of the file, and the bridge ignores one that predates
+    # its own start.
+    if [ "$(p DSP_LIVE)" = 1 ]; then
+      printf '%s\n' --dsp-live-file "$dsp_live_file" --dsp-live-status "$dsp_live_status"
+    fi
   fi
   if [ "$meters" = 1 ]; then
     printf '%s\n' --meter-file "$meters_file"
@@ -590,7 +602,7 @@ cmd_run() {
   install -d -m 755 "$run_dir"
   install -d -m 700 "$daemon_dir"
   : > "$recovers_file"
-  rm -f "$last_bridge_file" "$meters_file"
+  rm -f "$last_bridge_file" "$meters_file" "$dsp_live_file" "$dsp_live_status"
 
   load_conf || fail 10 "configuration"
   select_profile || fail 10 "configuration"
@@ -816,7 +828,7 @@ start_bridge() {
   local -a arguments
   mapfile -t arguments < <(bridge_arguments)
   : > "$recovers_file"
-  rm -f "$last_bridge_file" "$meters_file"
+  rm -f "$last_bridge_file" "$meters_file" "$dsp_live_file" "$dsp_live_status"
   stage "bridge starting: ${arguments[*]}"
   "$bridge_binary" "${arguments[@]}" \
     > >(exec mawk -W interactive -v every="$journal_bridge_every" -v logfile="$bridge_log" \
@@ -929,7 +941,8 @@ cmd_cleanup() {
   if ! bridge_running && ! pgrep -x aes67-daemon >/dev/null; then
     unload_module
   fi
-  [ -d "$run_dir" ] && [ -w "$run_dir" ] && rm -f "$meters_file" "$meters_file.tmp"
+  [ -d "$run_dir" ] && [ -w "$run_dir" ] && rm -f "$meters_file" "$meters_file.tmp" \
+    "$dsp_live_file" "$dsp_live_status" "$dsp_live_status.tmp"
   [ -d "$run_dir" ] && [ -w "$run_dir" ] && stage "stopped (cleanup)"
   exit 0
 }

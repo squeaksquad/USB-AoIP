@@ -421,6 +421,14 @@ bridge_arguments=(
 )
 if [ "$dsp_preset" != none ]; then
   bridge_arguments+=(--dsp-preset "$dsp_preset")
+  # USB16X16_DSP_LIVE=1 (LIVE_COEFFICIENTS_DESIGN.md step 3): the candidate
+  # polls $result_dir/dsp-live.dsp and answers on dsp-live.status, so a swap
+  # can be driven from the Mac during the run by copying an artifact of the
+  # same shape into place (write to a temporary name, then mv: the bridge
+  # reads whole files only after a rename).
+  if [ "${USB16X16_DSP_LIVE:-0}" = 1 ]; then
+    bridge_arguments+=(--dsp-live-file "$result_dir/dsp-live.dsp" --dsp-live-status "$result_dir/dsp-live.status")
+  fi
 fi
 timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" "${bridge_arguments[@]}" \
   > "$result_dir/bridge.log" 2>&1 &
@@ -453,6 +461,7 @@ fi
   echo "candidate_seconds=$candidate_seconds"
   echo "dsp_preset=$dsp_preset"
   echo "dsp_sha256=$([ "$dsp_preset" = none ] && echo none || sha256sum "$dsp_preset" | awk '{print $1}')"
+  echo "dsp_live=${USB16X16_DSP_LIVE:-0}"
   echo "bridge_binary=$bridge_binary"
   echo "bridge_sha256=$(sha256sum "$bridge_binary" | awk '{print $1}')"
   echo "bridge_arguments=${bridge_arguments[*]}"

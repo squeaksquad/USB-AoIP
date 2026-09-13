@@ -56,6 +56,29 @@ syntax-checks clean against the new header; the control thread and the two
 files are step 3, and until then nothing the running bridge does is
 different.
 
+Written 2026-09-13, syntax-checked on the Mac, not built on the Pi and not
+installed: the live coefficient control thread (`LIVE_COEFFICIENTS_DESIGN.md`
+step 3). `--dsp-live-file PATH` (needs `--dsp-preset`) starts one more
+`pthread` next to the meter publisher, created the same way (before capture,
+256 KB stack, `SCHED_OTHER`), which stats PATH every 50 ms; when the inode,
+size or mtime moved it reads the file, loads it through the preset loader and
+calls `publish()` on the running stage. A file that predates the process is
+ignored, so a restart always comes back on the installed preset. The outcome
+of every file is one line rewritten by rename to `--dsp-live-status PATH`
+(default PATH`.status`): `DSPLIVE gen=N sha256=HEX state=applied|refused|
+ignored|idle reason="..." t_us=T`, `gen` being the publishes the audio thread
+has taken. "previous update not yet taken" is retried on the next poll, never
+waited for. The BRIDGE line carries `dsp_live_gen`, `dsp_live_sha` (first 16
+hex digits, 0 = none) and `dsp_live_refused`; the SUMMARY carries
+`dsp_live_gen`, `dsp_live_sha` (full), `dsp_live_applied` and
+`dsp_live_refused`. The `DSP loaded` and `DSPLIVE enabled` lines print the
+stage's shape key. The supervisor passes the two paths under `/run/usb16x16/`
+when a profile block sets `DSP_LIVE=1` (off by default, so an accepted block's
+argument list is unchanged) and clears both files whenever it clears the meter
+file; `run-dsp-candidate-safe.sh` passes them under the result directory when
+`USB16X16_DSP_LIVE=1`. With the flag absent the thread does not exist and
+nothing on the audio path changes.
+
 This candidate replaces two independent `alsaloop` processes with one process
 that owns all four raw ALSA directions:
 

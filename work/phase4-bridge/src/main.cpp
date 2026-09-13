@@ -27,6 +27,7 @@
 #include <string>
 #include <string_view>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <thread>
 #include <time.h>
 #include <unistd.h>
@@ -156,6 +157,13 @@ struct Options {
     // everything switched off: nothing reads or writes the buffer on its way
     // through, and the accepted profile must measure what it measures today.
     std::string dsp_preset;
+    // Live coefficient updates (2026-09-13, LIVE_COEFFICIENTS_DESIGN.md step
+    // 3). A root-written artifact the control thread polls every 50 ms and
+    // publishes into the running stage when its shape matches; the outcome
+    // goes to the status file by rename. Empty means no control thread
+    // starts and nothing on the audio path changes. Needs --dsp-preset.
+    std::string dsp_live_file;
+    std::string dsp_live_status;
     // Level meter snapshot file (2026-09-11). Empty means no tap: nothing
     // reads the blocks, no publisher thread starts, and the audio path is
     // the accepted one byte for byte.
@@ -445,6 +453,10 @@ private:
         << "  --target FRAMES        elastic-ring target (default 192)\n"
         << "  --dsp-preset FILE      DSP coefficients on the RAVENNA playback direction\n"
         << "                         (usb-to-ravenna, or the loop) (default: no DSP)\n"
+        << "  --dsp-live-file PATH   poll PATH (50 ms) for a same-shape artifact and publish its\n"
+        << "                         coefficients into the running stage (default: no control thread)\n"
+        << "  --dsp-live-status PATH where the outcome of each live file is written (default:\n"
+        << "                         --dsp-live-file with .status appended)\n"
         << "  --meter-file PATH      publish per-channel levels of all four stages to PATH\n"
         << "                         every 50 ms window, rewritten atomically (default: no tap)\n"
         << "  --playback-prime N     frames primed into the ALSA playback queue\n"
@@ -554,6 +566,10 @@ Options parse_options(const int argc, char** argv) {
             options.usb_device = value;
         } else if (argument == "--dsp-preset") {
             options.dsp_preset = value;
+        } else if (argument == "--dsp-live-file") {
+            options.dsp_live_file = value;
+        } else if (argument == "--dsp-live-status") {
+            options.dsp_live_status = value;
         } else if (argument == "--meter-file") {
             options.meter_file = value;
         } else if (argument == "--ravenna") {
@@ -974,6 +990,12 @@ struct Telemetry {
     std::atomic<std::uint64_t> tx_dsp_ns_total{0};
     std::atomic<std::uint64_t> tx_dsp_calls{0};
     std::atomic<std::uint64_t> tx_dsp_frames{0};
+    // Live coefficient updates: publishes the audio thread has taken, the
+    // first 16 hex digits of the live artifact's SHA-256 (0 = none), and
+    // files refused. Written by the control thread, read by the BRIDGE line.
+    std::atomic<std::uint64_t> dsp_live_generation{0};
+    std::atomic<std::uint64_t> dsp_live_sha_prefix{0};
+    std::atomic<std::uint64_t> dsp_live_refused{0};
     // The level meter tap's cost on the audio thread, both stages of each
     // direction together; the maximum is the figure that matters.
     std::atomic<std::int64_t> tx_meter_ns_max{0};
@@ -2437,6 +2459,10 @@ void telemetry_loop(Telemetry& telemetry, PitchControl* pitch_control, const boo
                   << " dsp_us_max=" << static_cast<double>(telemetry.tx_dsp_ns_max.load()) / 1000.0
                   << " dsp_us_mean=" << dsp_mean_us(telemetry)
                   << " dsp_calls=" << telemetry.tx_dsp_calls.load()
+                  << " dsp_live_gen=" << telemetry.dsp_live_generation.load()
+                  << " dsp_live_sha=" << std::hex << std::setfill('0') << std::setw(16)
+                  << telemetry.dsp_live_sha_prefix.load() << std::dec << std::setfill(' ')
+                  << " dsp_live_refused=" << telemetry.dsp_live_refused.load()
                   << " meter_us_max=" << static_cast<double>(std::max(telemetry.tx_meter_ns_max.load(),
                                                                      telemetry.rx_meter_ns_max.load())) / 1000.0
                   << " meter_us_mean=" << meter_mean_us(telemetry)
@@ -2471,12 +2497,13 @@ struct MeterTap {
 };
 using MeterTaps = std::vector<MeterTap>;
 
-void write_meter_file(const std::string& path, const std::string& text, std::uint64_t& failures) noexcept {
+void write_meter_file(const std::string& path, const std::string& text, std::uint64_t& failures,
+                      const char* const tag = "METERS") noexcept {
     const std::string temporary = path + ".tmp";
     const int descriptor = ::open(temporary.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
     if (descriptor < 0) {
         if (failures++ == 0) {
-            std::cerr << "METERS write failed: " << temporary << ": " << std::strerror(errno) << '\n';
+            std::cerr << tag << " write failed: " << temporary << ": " << std::strerror(errno) << '\n';
         }
         return;
     }
@@ -2496,7 +2523,7 @@ void write_meter_file(const std::string& path, const std::string& text, std::uin
     ::close(descriptor);
     if (!ok || std::rename(temporary.c_str(), path.c_str()) != 0) {
         if (failures++ == 0) {
-            std::cerr << "METERS write failed: " << path << ": " << std::strerror(errno) << '\n';
+            std::cerr << tag << " write failed: " << path << ": " << std::strerror(errno) << '\n';
         }
         ::unlink(temporary.c_str());
     }
@@ -2577,6 +2604,152 @@ void* meter_thread_entry(void* raw) {
     return nullptr;
 }
 
+// The live coefficient control thread (2026-09-13, LIVE_COEFFICIENTS_DESIGN.md
+// step 3). Off the audio thread entirely, built like the meter publisher:
+// created before capture starts on a 256 KB stack, demoted to SCHED_OTHER.
+// Every 50 ms it stats the live file; when the inode, size or mtime moved it
+// reads the file, loads it through the same loader the preset went through
+// (allocation is fine here), and hands the numbers to the running stage with
+// publish(), which refuses without touching anything the audio thread reads
+// when the shape differs. "previous update not yet taken" is retried on the
+// next poll rather than waited for. A file that predates this process is
+// ignored: a restart comes back on the installed preset, never on a preview
+// left behind, which is what the design promises the applier.
+//
+// The outcome of every file is one line, rewritten by rename:
+//
+//   DSPLIVE gen=N sha256=HEX state=applied|refused|ignored reason="..." t_us=T
+//
+// where gen is the publish count the audio thread has taken so far.
+struct DspLiveContext {
+    std::string path;
+    std::string status_path;
+    usb16x16::DspStage* stage;
+    Telemetry* telemetry;
+    struct timespec started{};
+    // Read back for the SUMMARY after the thread is joined.
+    std::string last_sha;
+    std::uint64_t applied{0};
+    std::uint64_t refused{0};
+    std::uint64_t ignored{0};
+};
+
+std::uint64_t sha_prefix(const std::string& hex) {
+    std::uint64_t value = 0;
+    for (std::size_t index = 0; index < 16 && index < hex.size(); ++index) {
+        const char digit = hex[index];
+        const unsigned nibble = digit >= 'a' ? static_cast<unsigned>(digit - 'a' + 10)
+                                             : static_cast<unsigned>(digit - '0');
+        value = (value << 4) | nibble;
+    }
+    return value;
+}
+
+void dsp_live_loop(DspLiveContext& context) {
+    {
+        sched_param parameters{};
+        parameters.sched_priority = 0;
+        const int demoted = pthread_setschedparam(pthread_self(), SCHED_OTHER, &parameters);
+        if (demoted != 0) {
+            std::cerr << "DSPLIVE control thread kept the inherited scheduler: " << std::strerror(demoted) << '\n';
+        }
+    }
+    std::uint64_t failures = 0;
+    struct Seen { ino_t inode{}; off_t size{}; struct timespec mtime{}; bool any{false}; } seen;
+    // A loaded update the audio thread has not yet made room for.
+    std::optional<usb16x16::DspStage> pending;
+    std::string pending_sha;
+    const auto write_status = [&](const std::string& sha, const char* const state, const std::string& reason) {
+        std::ostringstream out;
+        out << "DSPLIVE gen=" << context.stage->generation()
+            << " sha256=" << (sha.empty() ? "none" : sha)
+            << " state=" << state
+            << " reason=\"" << reason << "\""
+            << " t_us=" << elapsed_us() << '\n';
+        write_meter_file(context.status_path, out.str(), failures, "DSPLIVE");
+        context.telemetry->dsp_live_generation.store(context.stage->generation(), std::memory_order_relaxed);
+    };
+    write_status(std::string{}, "idle", "no live file yet");
+    while (!stop_requested.load(std::memory_order_relaxed)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        context.telemetry->dsp_live_generation.store(context.stage->generation(), std::memory_order_relaxed);
+        if (pending) {
+            std::string reason;
+            if (context.stage->publish(*pending, reason)) {
+                ++context.applied;
+                context.last_sha = pending_sha;
+                context.telemetry->dsp_live_sha_prefix.store(sha_prefix(pending_sha), std::memory_order_relaxed);
+                std::cerr << "DSPLIVE applied sha256=" << pending_sha << " t_us=" << elapsed_us() << '\n';
+                write_status(pending_sha, "applied", "");
+                pending.reset();
+            } else if (reason != "previous update not yet taken") {
+                ++context.refused;
+                context.telemetry->dsp_live_refused.fetch_add(1, std::memory_order_relaxed);
+                std::cerr << "DSPLIVE refused sha256=" << pending_sha << " reason=\"" << reason << "\"\n";
+                write_status(pending_sha, "refused", reason);
+                pending.reset();
+            }
+            continue;
+        }
+        struct stat status{};
+        if (::stat(context.path.c_str(), &status) != 0) {
+            continue;   // absent is not an event
+        }
+        if (seen.any && status.st_ino == seen.inode && status.st_size == seen.size &&
+            status.st_mtim.tv_sec == seen.mtime.tv_sec && status.st_mtim.tv_nsec == seen.mtime.tv_nsec) {
+            continue;
+        }
+        seen = {status.st_ino, status.st_size, status.st_mtim, true};
+        std::ifstream file(context.path, std::ios::binary);
+        std::ostringstream text;
+        text << file.rdbuf();
+        const std::string body = text.str();
+        const std::string sha = usb16x16::sha256_hex(body);
+        if (status.st_mtim.tv_sec < context.started.tv_sec ||
+            (status.st_mtim.tv_sec == context.started.tv_sec &&
+             status.st_mtim.tv_nsec < context.started.tv_nsec)) {
+            ++context.ignored;
+            std::cerr << "DSPLIVE ignored sha256=" << sha << " reason=\"predates start\"\n";
+            write_status(sha, "ignored", "predates start");
+            continue;
+        }
+        try {
+            pending.emplace(usb16x16::DspStage::load(body));
+        } catch (const std::exception& error) {
+            ++context.refused;
+            context.telemetry->dsp_live_refused.fetch_add(1, std::memory_order_relaxed);
+            std::cerr << "DSPLIVE refused sha256=" << sha << " reason=\"" << error.what() << "\"\n";
+            write_status(sha, "refused", error.what());
+            continue;
+        }
+        pending_sha = sha;
+        // Tried now rather than at the next poll, so the common case costs
+        // one poll interval, not two.
+        std::string reason;
+        if (context.stage->publish(*pending, reason)) {
+            ++context.applied;
+            context.last_sha = pending_sha;
+            context.telemetry->dsp_live_sha_prefix.store(sha_prefix(pending_sha), std::memory_order_relaxed);
+            std::cerr << "DSPLIVE applied sha256=" << pending_sha << " t_us=" << elapsed_us() << '\n';
+            write_status(pending_sha, "applied", "");
+            pending.reset();
+        } else if (reason != "previous update not yet taken") {
+            ++context.refused;
+            context.telemetry->dsp_live_refused.fetch_add(1, std::memory_order_relaxed);
+            std::cerr << "DSPLIVE refused sha256=" << pending_sha << " reason=\"" << reason << "\"\n";
+            write_status(pending_sha, "refused", reason);
+            pending.reset();
+        }
+    }
+    std::cerr << "DSPLIVE stopped applied=" << context.applied << " refused=" << context.refused
+              << " ignored=" << context.ignored << " failures=" << failures << '\n';
+}
+
+void* dsp_live_thread_entry(void* raw) {
+    dsp_live_loop(*static_cast<DspLiveContext*>(raw));
+    return nullptr;
+}
+
 int run(const Options& options) {
     // Loaded before anything opens a device: a preset that will not load should
     // cost a message, not a PCM. A preset that will not load also stops the
@@ -2584,6 +2757,10 @@ int run(const Options& options) {
     // direct when it was asked for DSP would be measured as if it had filtered.
     usb16x16::DspStage dsp_stage;
     bool dsp_loaded = false;
+    if (!options.dsp_live_file.empty() && options.dsp_preset.empty()) {
+        std::cerr << "--dsp-live-file needs --dsp-preset: there is no stage to update\n";
+        return 2;
+    }
     if (!options.dsp_preset.empty()) {
         std::ifstream preset_file(options.dsp_preset, std::ios::binary);
         if (!preset_file) {
@@ -2603,7 +2780,8 @@ int run(const Options& options) {
                   << " preset=\"" << dsp_stage.preset() << "\""
                   << " internal=" << dsp_stage.internal_channels()
                   << " biquads=" << dsp_stage.biquad_count()
-                  << " delay_frames=" << dsp_stage.delay_samples() << '\n';
+                  << " delay_frames=" << dsp_stage.delay_samples()
+                  << " shape=" << dsp_stage.shape_key() << '\n';
         if (dsp_stage.delay_samples() > 0) {
             // The alignment delay is transport latency, all of it, on every
             // output: the block is not complete until the most delayed channel
@@ -2857,6 +3035,32 @@ int run(const Options& options) {
             throw std::runtime_error("meter publisher thread: " + std::string(std::strerror(created)));
         }
         meter_thread_started = true;
+    }
+
+    // The live coefficient control thread, created here for the same
+    // reason and in the same way as the meter publisher above.
+    pthread_t dsp_live_thread{};
+    bool dsp_live_thread_started = false;
+    std::unique_ptr<DspLiveContext> dsp_live;
+    if (!options.dsp_live_file.empty()) {
+        dsp_live = std::make_unique<DspLiveContext>();
+        dsp_live->path = options.dsp_live_file;
+        dsp_live->status_path = options.dsp_live_status.empty()
+            ? options.dsp_live_file + ".status" : options.dsp_live_status;
+        dsp_live->stage = &tx.dsp;
+        dsp_live->telemetry = &telemetry;
+        clock_gettime(CLOCK_REALTIME, &dsp_live->started);
+        pthread_attr_t attributes;
+        pthread_attr_init(&attributes);
+        pthread_attr_setstacksize(&attributes, 256 * 1024);
+        const int created = pthread_create(&dsp_live_thread, &attributes, dsp_live_thread_entry, dsp_live.get());
+        pthread_attr_destroy(&attributes);
+        if (created != 0) {
+            throw std::runtime_error("dsp live control thread: " + std::string(std::strerror(created)));
+        }
+        dsp_live_thread_started = true;
+        std::cerr << "DSPLIVE enabled file=" << dsp_live->path << " status=" << dsp_live->status_path
+                  << " shape=" << tx.dsp.shape_key() << '\n';
     }
 
     AlignResult align;
@@ -3146,12 +3350,18 @@ int run(const Options& options) {
         if (meter_thread_started) {
             pthread_join(meter_thread, nullptr);
         }
+        if (dsp_live_thread_started) {
+            pthread_join(dsp_live_thread, nullptr);
+        }
         throw;
     }
 
     telemetry_thread.join();
     if (meter_thread_started) {
         pthread_join(meter_thread, nullptr);
+    }
+    if (dsp_live_thread_started) {
+        pthread_join(dsp_live_thread, nullptr);
     }
     publish_telemetry(tx, rx, estimator, telemetry);
     const auto summary_floor = [](const std::size_t value) {
@@ -3170,6 +3380,10 @@ int run(const Options& options) {
               << (tx.dsp_calls == 0 ? 0.0
                   : static_cast<double>(tx.dsp_ns_total) / static_cast<double>(tx.dsp_calls) / 1000.0)
               << ",\"dsp_calls\":" << tx.dsp_calls
+              << ",\"dsp_live_gen\":" << (tx.dsp_enabled ? tx.dsp.generation() : 0)
+              << ",\"dsp_live_sha\":\"" << (dsp_live ? dsp_live->last_sha : std::string{}) << "\""
+              << ",\"dsp_live_applied\":" << (dsp_live ? dsp_live->applied : 0)
+              << ",\"dsp_live_refused\":" << (dsp_live ? dsp_live->refused : 0)
               << ",\"dsp_frames\":" << tx.dsp_frames
               // Frames per call, so a maximum can be read against the block it
               // was paid on rather than against an assumed period.

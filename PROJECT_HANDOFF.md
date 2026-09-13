@@ -11035,3 +11035,30 @@ the service was not touched (dsp-direct at 103, no RECOVER today). Next is
 step 3, the control thread and `/run/usb16x16/dsp-live.{dsp,status}` in
 `main.cpp`, which is the first step that needs a Pi build and the
 acceptance battery.
+
+**STAGED 2026-09-13, syntax-checked on the Mac, not built on the Pi, nothing
+installed: step 3 of the live coefficient design, the control thread in
+`main.cpp`.** `--dsp-live-file PATH` (needs `--dsp-preset`) and
+`--dsp-live-status PATH` (default PATH.status). One more `pthread`, created
+where and how the meter publisher is (before capture, 256 KB stack,
+demoted to SCHED_OTHER), stats the live file every 50 ms, and on an
+inode/size/mtime change reads it, loads it with `DspStage::load` (control
+thread, allocation allowed) and calls `publish()` on `tx.dsp`; a file whose
+mtime predates the process is ignored so a restart comes back on the
+installed preset; "previous update not yet taken" is retried next poll;
+every outcome is one `DSPLIVE gen= sha256= state=applied|refused|ignored|
+idle reason= t_us=` line rewritten by rename. BRIDGE line gains
+`dsp_live_gen`, `dsp_live_sha` (16 hex prefix) and `dsp_live_refused`;
+SUMMARY gains `dsp_live_gen`, `dsp_live_sha` (full), `dsp_live_applied`,
+`dsp_live_refused`; the `DSP loaded` line prints the shape key. The
+supervisor passes both paths under `/run/usb16x16/` only for a block with
+`DSP_LIVE=1` (validated 0/1; accepted blocks unchanged argument for
+argument) and clears `dsp-live.dsp` and `.status` at every place it clears
+the meter file; `run-dsp-candidate-safe.sh` passes them under the result
+directory with `USB16X16_DSP_LIVE=1` and records `dsp_live=` in
+metadata.txt. `main.cpp` syntax-checks clean with clang `-Wall -Wextra
+-Wpedantic -Werror` (alsa-lib 1.2.11 headers, the endian/clock stubs plus
+`st_mtim` -> `st_mtimespec` for the Mac's `stat`); both scripts pass
+`bash -n`. Not done: the Pi build (service stopped), the acceptance
+battery, the pinned hashes in the supervisor and the wrapper. The service
+was not touched.

@@ -1,7 +1,9 @@
 # Live coefficient updates: EQ and bass-management preview without a restart
 
 Design note, 2026-09-13. Steps 1 (the compiler) and 2 (the bridge core) are
-built and tested on the Mac the same day; see the corrections at the end. The accepted bridge, the supervisor's
+built and tested on the Mac the same day, step 3 (the control thread) is
+written and syntax-checked but not built on the Pi; see the corrections at
+the end. The accepted bridge, the supervisor's
 pinned hash, the applier and the UI are untouched. This is the
 "Coefficient updates" paragraph of `DSP_MODE_DESIGN.md` worked out to the
 point where it can be built, plus the two halves that paragraph does not
@@ -393,3 +395,27 @@ place where they state a rule, and this records why.
   shape to a variant with a band cut, a 2 ms delay and a bus at -6 dB, run
   file to file on a 1 kHz sine, took at frame 24000 and dropped the output
   by 7 dB from there; the minimal shape of the same preset is refused.
+
+## Corrections from step 3 (2026-09-13)
+
+- **Two flags, not one path.** `--dsp-live-file` and `--dsp-live-status`
+  (default: the live path with `.status` appended); the supervisor passes
+  both under `/run/usb16x16/` only when the profile block says `DSP_LIVE=1`.
+  An accepted block's argument list is unchanged unless that key is set.
+- **A file that predates the bridge's start is ignored**, with
+  `state=ignored reason="predates start"`. The note relied on the applier
+  removing the live file on a profile switch; the bridge now guarantees the
+  restart semantics on its own, and the supervisor also clears both files
+  wherever it clears the meter file.
+- **Status states** are `idle` (thread up, nothing seen yet), `applied`,
+  `refused` (loader error or shape mismatch, with the reason) and
+  `ignored`. The "engaged" distinction the note had is unnecessary: a
+  publish before the stage engages is simply the set it engages with.
+- **The common case costs one poll interval**, not two: a freshly loaded
+  file is published in the same iteration that read it; only "previous
+  update not yet taken" waits for the next 50 ms poll.
+- **The BRIDGE line's `dsp_live_sha` is the first 16 hex digits** (an
+  atomic word); the SUMMARY and the status file carry the full hash.
+- **Not yet done:** the Pi build with the service stopped, the acceptance
+  battery, the pinned hash. `USB16X16_DSP_LIVE=1` on the candidate wrapper
+  is how the swap-under-load test will be driven.
