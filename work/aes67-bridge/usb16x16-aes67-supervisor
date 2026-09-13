@@ -264,8 +264,15 @@ verify_dsp_artifact() {
   local preset
   preset=$(p DSP_PRESET)
   [ -n "$preset" ] || return 0
-  [ "$expected_bridge_sha256" = 947e8b4d6842239b5cc33eeedb1a083d292995cdcdd558bb84017d9af45d5d50 ] ||
-    { say "DSP profile needs the verified DSP bridge build" >&2; return 1; }
+  # The DSP-capable builds: 406699bd (stage), 947e8b4d (meter tap), 7e8f1064
+  # (live coefficients). The pin above must be one of them for a preset to
+  # be passed; a transport-only build would take --dsp-preset and ignore it.
+  case "$expected_bridge_sha256" in
+    406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88|\
+    947e8b4d6842239b5cc33eeedb1a083d292995cdcdd558bb84017d9af45d5d50|\
+    7e8f106404e38b0ffb814595102c9b3f89bc215ff91c5d147ba63593363f799f) ;;
+    *) say "DSP profile needs the verified DSP bridge build" >&2; return 1 ;;
+  esac
   local directory
   for directory in /etc/usb16x16 /etc/usb16x16/dsp; do
     [ ! -L "$directory" ] && [ "$(stat -c '%U:%G:%a' "$directory")" = root:root:755 ] ||

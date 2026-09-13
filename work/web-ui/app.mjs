@@ -576,9 +576,15 @@ function refreshSettingsLive() {
   if (!page) return;
   const active = document.activeElement;
   if (active && page.contains(active) && active.matches('select, input, textarea, button')) return;
+  // Text the user has selected in the page survives: no rebuild while a
+  // selection is open, and no rebuild at all when nothing changed.
+  const selection = document.getSelection();
+  if (selection && !selection.isCollapsed && selection.anchorNode && page.contains(selection.anchorNode)) return;
+  const nextHtml = {'#system-panel': systemPanel(), '#apply-panel': applyPanel()};
+  if (Object.entries(nextHtml).every(([id, html]) => page.querySelector(id)?.outerHTML === html)) return;
   // A disclosure the user opened stays open across the 1 Hz re-render.
   const openDetails = [...page.querySelectorAll('details[open]')].map(node => node.className);
-  for (const [id, html] of [['#system-panel', systemPanel()], ['#apply-panel', applyPanel()]]) {
+  for (const [id, html] of Object.entries(nextHtml)) {
     const node = page.querySelector(id);
     if (node) node.outerHTML = html; else { renderSettings(); return; }
   }

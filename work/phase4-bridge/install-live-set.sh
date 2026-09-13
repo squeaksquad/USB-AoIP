@@ -24,7 +24,7 @@ sha256_of() { sha256sum "$1" | awk '{print $1}'; }
 bridge_destination=/usr/local/libexec/usb16x16-rt-bridge
 supervisor_destination=/usr/local/sbin/usb16x16-aes67-supervisor
 live_bridge=7e8f106404e38b0ffb814595102c9b3f89bc215ff91c5d147ba63593363f799f
-live_supervisor=9480985348c1474a3105c58e3e4d81a629a6533b78a79f8dc238ced6a847548f
+live_supervisor=8b42e4ecf449ef6f41ed7995e4fdd1202f34a6b47f44b3cd96310abdbc14292f
 accepted_bridge=947e8b4d6842239b5cc33eeedb1a083d292995cdcdd558bb84017d9af45d5d50
 accepted_supervisor=23e40f8c604152caf8de7d97065731cc3c03f8896d535118b5d81b0d203e15ae
 if [ "$mode" = install ]; then
