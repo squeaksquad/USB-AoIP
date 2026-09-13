@@ -11378,3 +11378,31 @@ line reads "Sent to the bridge (f63f880b)…"; the mock and the browser
 pane's module cache cost three restarts to see it (a fresh origin was
 needed). Staged to `~/usb-16x16-work/web-ui/live.mjs`; the service serves
 statics with `Cache-Control: no-cache`, so a reload picks it up.
+
+**MEASURED and FOUND 2026-09-13 22:02 UTC (step 6): live edits from the
+page reach the bridge in about a second; nine in a row tripped systemd's
+start burst limit and left the bridge on an edit the page had moved past.**
+After the `live.mjs` fix the operator's edits on `user-immersive-stereo-
+subs` produced nine `live` receipts, every one `done`, applied hashes
+cebab5ba, c6d12b63, a67f70ed, ee2fa5e5, 8d0b552d, 7c760ada, 8d0b552d,
+1a8db2d3, 8d0b552d, 7ede2f4a, `dsp_live_gen=9`, zero refusals, zero
+RECOVERs; the applier ran once per request as a fresh process, 1-13 s
+apart. The tenth request landed within systemd's default 5-starts-in-10-s
+window: `usb16x16-apply.service: Start request repeated too quickly`,
+`usb16x16-apply.path: Failed with result 'unit-start-limit-hit'`. The
+request (277af5b0, the page's newest draft) stayed in the spool unread and
+aged past the applier's 120 s limit; the bridge kept running 7ede2f4a,
+whose output 1 gain is -1 (a polarity edit the operator had since
+reversed), so the channel was inverted while the page showed it upright.
+The page did report the state: with the path unit failed, health's Apply
+availability drops and the EQ editor read "Not previewable.
+usb16x16-apply.path is failed". Fixes, staged to `~/usb-16x16-work/
+web-control/` and `web-ui/`, repo 03cba3c: `StartLimitIntervalSec=0` on
+the apply service and path units (e11f0fc9 / 6d53b053); the applier
+drains every queued `live` / `commit` request in one invocation (c9bd9181,
+restart operations still one per invocation); the page re-sends its
+current draft when health shows the bridge applied something other than
+the page's last edit with nothing pending (app.mjs c0d739b9);
+`install-web-control.sh` cd54d94a re-pinned. Recovery is the operator's:
+reset-failed and start the path unit, reinstall the web-control set, nudge
+an edit. Not yet done.
