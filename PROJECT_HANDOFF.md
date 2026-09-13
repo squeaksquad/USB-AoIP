@@ -11062,3 +11062,21 @@ metadata.txt. `main.cpp` syntax-checks clean with clang `-Wall -Wextra
 `bash -n`. Not done: the Pi build (service stopped), the acceptance
 battery, the pinned hashes in the supervisor and the wrapper. The service
 was not touched.
+
+**BUILT 2026-09-13 ~19:05 UTC on the Pi, service stopped by the operator:
+the live-coefficient candidate bridge 7e8f1064 (full hash
+7e8f106404e38b0ffb814595102c9b3f89bc215ff91c5d147ba63593363f799f).**
+Sources main.cpp 06f587c6, bridge_core.cpp 01dd07e9, bridge_core.hpp
+1443dc03 (the repo's fa9aeae), built by `build-live-candidate.sh` from
+`~/usb-16x16-work/phase4-live-src/`: zero warnings, all core tests pass on
+aarch64 (the seven live-update tests included), the parser refuses
+`--dsp-live-file` without `--dsp-preset`, and the Pi build of
+`usb16x16-dsp-offline` reproduces the pinned shape key 7d17e417… on the
+vector. The binary is kept in the repo as `artifacts/pi-aarch64/
+usb16x16-rt-bridge-live-7e8f1064` (copied off the Pi while the service was
+down). `run-dsp-candidate-safe.sh` now defaults to this binary and hash
+(`USB16X16_DSP_BRIDGE` / `_SHA256` override) and carries `live-base`
+a10eeacb and `live-toggle` 227b134a in its preset list. Not installed: the
+service restarts on the accepted 947e8b4d; the supervisor's pin is
+unchanged. Next: the candidate run under `USB16X16_DSP_LIVE=1` with
+`live-base`, a toggle pushed every 2 s, and the acceptance battery.

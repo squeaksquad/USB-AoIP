@@ -29,14 +29,17 @@ work_root=/home/bdimaio/usb-16x16-work
 source_root="$work_root/aes67-daemon-src"
 daemon_binary="$source_root/build-daemon/aes67-daemon"
 module_binary="$work_root/aes67-source/ravenna-alsa-lkm-v2.1/driver/MergingRavennaALSA.ko"
-bridge_binary=$work_root/dsp-verify/bridge-build/usb16x16-rt-bridge
+# 2026-09-13: the live-coefficient candidate (LIVE_COEFFICIENTS_DESIGN.md
+# step 3), built by phase4-bridge/build-live-candidate.sh with the service
+# stopped. The previous default was dsp-verify/bridge-build (406699bd).
+bridge_binary=${USB16X16_DSP_BRIDGE:-$work_root/phase4-live-src/build/usb16x16-rt-bridge}
 original_config="$source_root/runtime/daemon-eth0.conf"
 original_status="$source_root/runtime/status.json"
 expected_daemon_sha256=e31ba2c44cdf07fd6ee0aef7d9a8457bfdd36321cc0407a35275e842b4577416
 expected_module_sha256=f65a49558a0f8f16efbbe7afa45464d41529faacfcb1a838e897f99d9649604e
 # The candidate build of 2026-09-10: the accepted 05f37bd9 source plus the DSP
 # stage, wired into usb-to-ravenna only.
-expected_bridge_sha256=406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080be026c88
+expected_bridge_sha256=${USB16X16_DSP_BRIDGE_SHA256:-7e8f106404e38b0ffb814595102c9b3f89bc215ff91c5d147ba63593363f799f}
 # The compiled presets this wrapper will run. Pinned like every other artifact:
 # a run that filtered something other than what was recorded would be worse
 # than no run. Two are accepted, because the battery needs both:
