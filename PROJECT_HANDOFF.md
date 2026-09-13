@@ -11169,3 +11169,19 @@ at ~18:31 UTC, a fresh anchor, kept. The candidate 7e8f1064 itself is not
 implicated by any of the three runs: `dsp_us_max` 154-180 us, zero
 refusals, and the swap run's 44/44 stand. Service restarted on 947e8b4d.
 Pi logs in `outputs/latency/phase4-dsp-candidate-20260913T183324Z/`.
+
+**MEASURED 2026-09-13 18:40 UTC: the control arm of the live candidate
+7e8f1064 on the tmpfs-logging wrapper (installed e79a05c4) is clean.**
+`live-base` (transparent, fixed shape, 288 biquads), no live file, load
+0.1, coreaudiod fresh from ~18:31: readiness on three probes, then 800
+impulses all at 1044 samples (21.750 ms), spread 0, **zero RECOVERs**
+(`direction_restarts=0`, SUMMARY `tx_restarts=0 rx_restarts=0`),
+`dsp_us_max` 140.4 us. Bridge log on `/run/usb16x16-candidate-log.*`,
+copied to the result directory. This confirms the FOUND above: the same
+binary, preset, harness and Mac that hit the restart limit at 100-190 s
+three times with the log on the SD card ran 480 s without one restart
+with the log on tmpfs. The 1044 figure is a harness-arm number on a fresh
+anchor through the wrapper's daemon and sink configuration, not the
+service's RTL standard, and is quoted only as the control for the toggle
+arm that follows. Pi logs in
+`outputs/latency/phase4-dsp-candidate-20260913T184026Z/`.
