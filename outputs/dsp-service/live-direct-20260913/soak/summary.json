@@ -1,0 +1,99 @@
+{
+  "phase": "soak",
+  "passed": true,
+  "runs": [
+    {
+      "index": 1,
+      "seconds": 600.6,
+      "errors": [],
+      "bridgeBefore": {
+        "tx_qfloor": "85",
+        "rx_qfloor": "96",
+        "meter_us_max": "109.147",
+        "meter_us_mean": "1.402",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1109",
+        "rx_gapmax_us": "1178"
+      },
+      "bridgeAfter": {
+        "tx_qfloor": "85",
+        "rx_qfloor": "96",
+        "meter_us_max": "109.147",
+        "meter_us_mean": "1.387",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1109",
+        "rx_gapmax_us": "1178"
+      },
+      "lead": [
+        652,
+        659
+      ],
+      "channels": [
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.099999584,
+          "longestZeroRun": 1
+        }
+      ]
+    }
+  ]
+}

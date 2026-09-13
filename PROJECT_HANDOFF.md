@@ -11278,3 +11278,33 @@ from the Mac), and the new web-control files under `~/usb-16x16-work/
 web-control/`. `install-aes67-service.sh` re-pinned to the new supervisor
 and bridge for coherence; it is not the installer this plan uses. The
 service was not touched: dsp-direct, stable, 0/0 restarts.
+
+**INSTALLED 2026-09-13 21:02 UTC (operator, install-live-set.sh) and MEASURED
+21:05-21:35 UTC: the live candidate bridge 7e8f1064 under supervisor
+94809853 passes the standing battery on dsp-direct.** Installed hashes
+read back: bridge 7e8f1064, supervisor 94809853, conf 37fc790f unchanged,
+web-control still 172b7032 / c7f2a162 (step 2 of the plan not yet run).
+Service started by the operator on dsp-direct at 17:02:06 EDT: STAGE
+running then stable, BRIDGE line fresh, `dsp_live_gen=0`, no `DSP loaded`
+and no `DSPLIVE` line in the journal (the accepted block has no DSP_LIVE,
+so no control thread exists), 0 RECOVERs: the direct control (design test
+1) holds. `meter_battery.py --execute` against the service
+(`outputs/dsp-service/live-direct-20260913/`): preflight 60 s all-16 at
+load 0.1, no errors, longest zero run 1 sample on every channel, lead
+593-611 us, PASS; latency four 800-impulse runs, every impulse at 746
+samples (15.542 ms), spread 0 in all four, no errors, lead 613-675 us,
+PASS; soak 600 s all-16, no errors, longest zero run 1, lead 652-659 us,
+PASS. Queue floors 85 / 96 through the battery (86 -> 85 TX over the four
+runs), `tx_gapmax_us` 1109, `rx_gapmax_us` 1178, `meter_us_max` 109 us,
+`zr_ravcap` 0 events, RECOVER count 0 on the Pi after the battery, restarts
+0/0. The first launch of the battery was refused at preflight because the
+service was still `running` (stable needs 120 s), and the second left a
+directory the third had to clear; neither opened audio. 746 is this
+start's draw on the new binary (dsp-direct read 725 on 406699bd and 703 on
+947e8b4d on their own anchors; the level follows the start depth, and no
+re-draw is proposed). What this decides: by the repo's rule (four loaded
+800s and a ten-minute sixteen-channel soak) 7e8f1064 is measurable as the
+transport point of record on dsp-direct, subject to the operator's
+ACCEPTED. Next in the plan: step 2 (web-control install), step 5 (a user
+preset from the page with DSP_LIVE=1), 6-8 (live edits, the soak under
+swaps, restart semantics).
