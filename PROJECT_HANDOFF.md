@@ -11360,3 +11360,21 @@ installed preset hashes to user-base) so the operator can run the pusher
 in the ssh session while `meter_battery.py --phases soak` runs from the
 Mac; the applier's API path needs the page's credentials this session
 does not hold. Next: step 6, live edits from the page.
+
+**FOUND 2026-09-13 22:10 UTC (step 6): no live edit ever left the page.**
+The operator's edits on the live user preset produced no
+`POST /api/apply/live` in the web journal and no DSPLIVE line. Reproduced
+on the Mac against a mock of the control service carrying the Pi's real
+profile row: the page's state line read Live and the edit reached the
+queue, which threw `TypeError: Illegal invocation` in `LiveQueue.submit`.
+`live.mjs` stored `globalThis.setTimeout` as an instance property and
+called it through the queue object; browsers refuse a timer called with a
+receiver other than the window, Node does not, so the 103 passing tests
+never saw it. Fix (`live.mjs` c6d2287a, repo b95b4aa): the default timers
+are wrapped in arrows; a test installs a receiver-checking stand-in for
+the browser's timers. On the mock the same edit now posts the fixed-shape
+artifact with `expectedProfile` and `expectedLiveSha256` and the state
+line reads "Sent to the bridge (f63f880b)…"; the mock and the browser
+pane's module cache cost three restarts to see it (a fresh origin was
+needed). Staged to `~/usb-16x16-work/web-ui/live.mjs`; the service serves
+statics with `Cache-Control: no-cache`, so a reload picks it up.
