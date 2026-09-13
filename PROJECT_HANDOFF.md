@@ -11110,3 +11110,34 @@ costs anything. Dante Controller has been open on the Mac since 2026-09-12
 09:01 and the service ran the day clean beside it, so it is not the new
 factor. Service restarted after the run on the accepted 947e8b4d,
 `ptp locked`. Pi logs in `outputs/latency/phase4-dsp-candidate-20260913T181335Z/`.
+
+**MEASURED 2026-09-13 18:24 UTC, aborted at 100 s: the control run (same
+candidate 7e8f1064, `live-base`, no live file, no toggle) hit the same
+restart limit. FOUND: the stalls are the Mac's USB host, not the candidate
+and not the swap.** Wrapper 05c0ed3a (live traffic on tmpfs, unused in this
+arm). Nine RECOVERs (tx 4, rx 5): pairs in both directions within 50-900 us
+at 35.40, 65.69, 94.40 and 99.43 s and singles at 75.66 s, gaps 3598 / 903 /
+981 / 598 / 362 / 81 us, `tx_gapmax_us` 3598, `dsp_us_max` 154 us, zero
+DSPLIVE lines. The stage on the usb-to-ravenna side is `capture-avail`
+Broken pipe with `capture_state=XRUN`: the gadget's capture ran dry, that
+is the Mac stopped delivering USB packets for the length of the gap, and
+the ravenna-to-usb playback XRUN in the same 50 us is the same stall seen
+from the other side of the one USB device. Pi state during the run: 55.4 C,
+`get_throttled` 0x0, arm 2.4 GHz, performance governor, eth0 1000 Mbit,
+load 0.03. On the Mac, coreaudiod has been up since 2026-09-10 17:10 (an
+aged anchor; the record's cure for output holes is `killall coreaudiod`,
+proven 2026-09-06), and both of today's wrapper runs were unloaded
+(`USB16X16_OTHER_CHANNEL_LOAD_AMPLITUDE` defaults to 0 on this path),
+where the 2026-09-11 acceptance was the standing battery against the
+running service at load 0.1 with zero RECOVERs in every arm. Consequences:
+(1) the 18:13 swap run's abort is attributed to the same Mac-side stalls,
+and its 44/44 applied swaps with the first ten under zero restarts stand
+as the mechanism's evidence; (2) the SD-card hypothesis for 18:13 is
+withdrawn as the cause (the tmpfs wrapper is kept, it is the right shape
+regardless); (3) the swap-under-load comparison is re-run only after a
+fresh coreaudiod on the Mac and with load 0.1, control and toggle arms
+alike, and the candidate is measured for acceptance the way 2026-09-11
+was: installed under the supervisor and put through `meter_battery.py`
+against the service, not through the wrapper. Service restarted on
+947e8b4d, `ptp locked`. Pi logs in
+`outputs/latency/phase4-dsp-candidate-20260913T182418Z/`.
