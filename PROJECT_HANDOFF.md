@@ -11210,3 +11210,30 @@ and 4 (restart semantics under the supervisor) of the design. Service
 restarted on 947e8b4d, `ptp locked`. Nothing installed; the supervisor's
 pin is unchanged. Pi logs in
 `outputs/latency/phase4-dsp-candidate-20260913T184945Z/`.
+
+**IMPLEMENTED 2026-09-13, Mac only, nothing installed: step 4 of the live
+coefficient design, the applier's `live` and `commit` request kinds and
+the web routes.** `usb16x16-apply` 1.2.0 gains `artifact_shape` /
+`shape_key` (pinned to 7d17e417…, the same vector as the compiler and the
+bridge), kind `live` (the preset guards, plus: the live profile must be a
+user preset whose block carries the new `DSP_LIVE=1`, the artifact's shape
+key must equal the installed file's, the offline runner load-checks it,
+then a rename into `/run/usb16x16/dsp-live.dsp` and up to 3 s for the
+bridge's `dsp-live.status` line to change and report the hash applied;
+refusal or silence is a `failed` receipt with the file left for the
+bridge) and kind `commit` (the applied live file copied over
+`user-<slug>.dsp`, the block's `DSP_SHA256` rewritten through the
+supervisor-validated copy and atomic replace, no restart). Every user
+block the applier writes now carries `DSP_LIVE=1`, so the supervisor
+passes the bridge the live file for user presets and for nothing else;
+existing user blocks without it are refused for live until re-applied.
+`usb16x16-web` gains `POST /api/apply/live` and `POST /api/apply/commit`
+(the preset gate plus a live gate: user preset, `DSP_LIVE=1`,
+`expectedLiveSha256` against the bridge's line), `health.dspLive` from the
+status file at the fast tier, `dspLiveGen` / `dspLiveRefused` from the
+BRIDGE line, and `dspLive` on profile rows. Tests: 37 in `test_apply.py`
+and 17 in `test_web.py`, all passing; `install-web-control.sh` re-pinned
+to the new `usb16x16-web` and `usb16x16-apply` hashes. The Pi's installed
+web-control set is unchanged; installing this, the live bridge 7e8f1064
+and the `DSP_LIVE`-aware supervisor is one root step with the standing
+battery after it. Step 5 (the UI) is next and needs no Pi time.

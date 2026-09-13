@@ -50,6 +50,23 @@ user-<slug> name; it is never accepted: the guards stand in for a soak, and
 the UI says so. A third kind, "remove", deletes a user block and its file when it is not
 the live profile. Eight user presets at most, one per slug.
 
+Two more kinds (2026-09-13, work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md
+step 4) update a running user preset without a restart. "live" takes an
+artifact the same way "preset" does, runs the same guards, and additionally
+requires the live profile to be a user preset whose block carries DSP_LIVE=1
+and whose installed file has the same *shape* (every count and index in the
+artifact, with gains, delays and coefficients blanked: artifact_shape()
+below, the same text bridge-artifact.mjs and DspStage::shape() produce, hashed
+with SHA-256). It then writes the artifact to the bridge's live file under
+/run/usb16x16 by rename and waits for the bridge's status line to report
+that hash applied. Nothing is installed: a restart comes back on the
+installed file, by the bridge's own rule (a live file older than the process
+is ignored). "commit" copies the applied live file over the installed
+user-<slug>.dsp and rewrites the block's DSP_SHA256, through the same
+validate-on-a-copy and atomic replace as "preset", with no restart: the
+running coefficients already equal the file. Neither kind ever touches an
+accepted profile.
+
 Exit status is 0 when a receipt was written (even for a refused or failed
 request: the outcome is the receipt), 2 for a broken environment.
 """
@@ -66,7 +83,7 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 SPOOL_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
 CONF_PATH = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
@@ -86,7 +103,12 @@ ARTIFACT_MAX_INTERNAL = 64
 ARTIFACT_MAX_DELAY = 480
 ARTIFACT_MAX_SECTIONS = 64
 USER_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,23}$")
-LABEL_FIELDS = ("DESCRIPTION", "STATUS", "COVER", "MEASURED", "DSP_PRESET", "DSP_SHA256")
+LABEL_FIELDS = ("DESCRIPTION", "STATUS", "COVER", "MEASURED", "DSP_PRESET", "DSP_SHA256", "DSP_LIVE")
+
+LIVE_FILE = "dsp-live.dsp"          # the bridge's live artifact, under RUN_DIR (the supervisor's names)
+LIVE_STATUS = "dsp-live.status"
+LIVE_TIMEOUT_S = 3.0                 # the bridge polls every 50 ms; a publish waits at most one more poll
+LIVE_POLL_S = 0.1
 
 REQUEST_NAME = "request.json"
 STATE_NAME = "current.json"
@@ -194,6 +216,7 @@ def profiles(conf: dict[str, str]) -> dict[str, dict]:
             "cover": field("COVER"),
             "dspPreset": field("DSP_PRESET") or None,
             "dspSha256": field("DSP_SHA256") or None,
+            "dspLive": field("DSP_LIVE") == "1",
             "accepted": field("STATUS") == "accepted",
         }
     return found
@@ -201,6 +224,10 @@ def profiles(conf: dict[str, str]) -> dict[str, dict]:
 
 class Refused(Exception):
     pass
+
+
+class Failed(Exception):
+    """A live push the bridge did not take: nothing to roll back, but not a refusal."""
 
 
 # ------------------------------------------------------------------ artifact
@@ -324,6 +351,97 @@ def parse_artifact(text: str) -> dict:
     return {"preset": preset, "internal": internal, "biquads": sections, "maxDelay": max_delay}
 
 
+def artifact_shape(text: str) -> str:
+    """The canonical shape text: every count and index, with gains, delays
+    and coefficients blanked; all 16 outputs in index order. Line for line
+    what `artifactShape` (bridge-artifact.mjs) and `DspStage::shape()`
+    (bridge_core.cpp) produce; the three are pinned to one vector."""
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    at = 0
+
+    def next_line() -> str:
+        nonlocal at
+        if at >= len(lines):
+            raise Refused("artifact shape: unexpected end")
+        at += 1
+        return lines[at - 1]
+
+    def header(keyword: str, arity: int = 1) -> list[str]:
+        parts = next_line().split()
+        if parts[0] != keyword or len(parts) != arity + 1:
+            raise Refused(f"artifact shape: expected '{keyword}', found '{' '.join(parts)}'")
+        return parts[1:]
+
+    def counted(keyword: str) -> int:
+        value = header(keyword)[0]
+        if not value.isdigit():
+            raise Refused(f"artifact shape: {keyword} count '{value}'")
+        return int(value)
+
+    out = []
+    if header("usb16x16-dsp")[0] != "1":
+        raise Refused("artifact shape: unsupported version")
+    out.append("usb16x16-dsp-shape 1")
+    if not next_line().startswith("preset"):
+        raise Refused("artifact shape: expected 'preset'")
+    for keyword in ("rate", "channels", "internal", "maxdelay"):
+        out.append(f"{keyword} {header(keyword)[0]}")
+
+    def mix(keyword: str) -> None:
+        rows = counted(keyword)
+        out.append(f"{keyword} {rows}")
+        for row in range(rows):
+            parts = next_line().split()
+            if len(parts) != 3:
+                raise Refused(f"artifact shape: {keyword} row {row + 1}")
+            out.append(f"{parts[0]} {parts[1]}")
+
+    def skip(count: int) -> None:
+        for _ in range(count):
+            next_line()
+
+    mix("expand")
+    branches = counted("branch")
+    out.append(f"branch {branches}")
+    for row in range(branches):
+        parts = next_line().split()
+        if len(parts) != 2 or not parts[1].isdigit():
+            raise Refused(f"artifact shape: branch row {row + 1}")
+        out.append(f"{parts[0]} {parts[1]}")
+        skip(int(parts[1]))
+    mix("assign")
+    outputs = counted("output")
+    per_output = [0] * ARTIFACT_CHANNELS
+    for row in range(outputs):
+        parts = next_line().split()
+        if len(parts) != 4 or not parts[0].isdigit() or not parts[3].isdigit() or int(parts[0]) >= ARTIFACT_CHANNELS:
+            raise Refused(f"artifact shape: output row {row + 1}")
+        per_output[int(parts[0])] = int(parts[3])
+        skip(int(parts[3]))
+    out.append("output 16")
+    out.extend(f"{index} {sections}" for index, sections in enumerate(per_output))
+    if next_line() != "end" or at != len(lines):
+        raise Refused("artifact shape: expected 'end'")
+    out.append("end")
+    return "\n".join(out) + "\n"
+
+
+def shape_key(text: str) -> str:
+    return hashlib.sha256(artifact_shape(text).encode("utf-8")).hexdigest()
+
+
+def parse_live_status(text: str | None) -> dict | None:
+    """One DSPLIVE line from the bridge: gen=, sha256=, state=, reason="..", t_us=."""
+    if not text or not text.startswith("DSPLIVE "):
+        return None
+    fields: dict = {}
+    for match in re.finditer(r'(\w+)=("([^"]*)"|\S+)', text[len("DSPLIVE "):]):
+        fields[match.group(1)] = match.group(3) if match.group(3) is not None else match.group(2)
+    if "state" not in fields:
+        return None
+    return fields
+
+
 # ------------------------------------------------------------------ user blocks
 
 def user_profiles(conf: dict[str, str]) -> dict[str, dict]:
@@ -378,8 +496,22 @@ def render_user_block(conf_text: str, slug: str, name: str, digest: str, stats: 
     ] + lines + [
         f"{key}DSP_PRESET={DSP_DIR}/user-{slug}.dsp",
         f"{key}DSP_SHA256={digest}",
+        # The bridge's live file: user presets are the only profiles that
+        # take live coefficient updates (LIVE_COEFFICIENTS_DESIGN.md).
+        f"{key}DSP_LIVE=1",
     ]
     return "\n".join(lines) + "\n"
+
+
+def with_user_sha256(conf_text: str, slug: str, digest: str) -> str:
+    """The block's pin moved to the committed file; nothing else in it changes."""
+    key = f"PROFILE_USER_{profile_key(slug)}_DSP_SHA256="
+    lines = conf_text.split("\n")
+    hits = [index for index, line in enumerate(lines) if line.startswith(key)]
+    if len(hits) != 1:
+        raise Refused(f"user-{slug} has {len(hits)} DSP_SHA256 lines; expected one")
+    lines[hits[0]] = key + digest
+    return "\n".join(lines)
 
 
 def with_user_block(conf_text: str, slug: str, block: str | None) -> str:
@@ -678,6 +810,150 @@ class Applier:
         (DSP_DIR / f"{name}.dsp").unlink(missing_ok=True)
         return name
 
+    # ---- live coefficient updates (no restart)
+
+    @property
+    def live_file(self) -> Path:
+        return self.run_dir / LIVE_FILE
+
+    @property
+    def live_status_path(self) -> Path:
+        return self.run_dir / LIVE_STATUS
+
+    def live_status(self) -> dict | None:
+        return parse_live_status(read_text(self.live_status_path, 4096))
+
+    def live_target(self, request: dict, conf: dict[str, str]) -> dict:
+        """The live profile must be a user preset with DSP_LIVE=1 whose
+        installed file still hashes to its pin; the page must agree on it."""
+        live = conf.get("PROFILE") or ""
+        expected = request.get("expectedProfile")
+        if expected is not None and expected != live:
+            raise Refused(f"the page expected {expected} to be live but {live} is; reload and retry")
+        table = profiles(conf)
+        row = table.get(live)
+        if row is None or not self.user_profile_ok(row):
+            raise Refused(f"{live or 'no profile'} is not a user preset; live updates never touch an accepted profile")
+        if not row.get("dspLive"):
+            raise Refused(f"{live} has no DSP_LIVE=1: the bridge started without a live file; re-apply the preset")
+        if self.unit_state() != "active":
+            raise Refused(f"{UNIT} is {self.unit_state()}; nothing is running to update")
+        expected_sha = request.get("expectedLiveSha256")
+        if expected_sha is not None:
+            status = self.live_status()
+            current = (status or {}).get("sha256", "none")
+            if not isinstance(expected_sha, str) or expected_sha != current:
+                raise Refused(f"the page expected live coefficients {expected_sha} but the bridge reports {current}; reload and retry")
+        return row
+
+    def validate_live(self, request: dict, conf: dict[str, str]) -> dict:
+        row = self.live_target(request, conf)
+        digest = request.get("artifactSha256")
+        if not isinstance(digest, str) or not re.match(r"^[0-9a-f]{64}$", digest):
+            raise Refused("artifactSha256 must be 64 hex characters")
+        file_name = request.get("artifactFile")
+        if not isinstance(file_name, str) or not re.match(r"^[a-f0-9]{8,32}\.dsp$", file_name):
+            raise Refused("artifactFile must be <request id>.dsp in the spool's presets directory")
+        source = self.spool / "presets" / file_name
+        try:
+            data = source.read_bytes()
+        except OSError:
+            raise Refused(f"artifact {file_name} is missing from the spool")
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise Refused("artifact hash does not match artifactSha256")
+        text = data.decode("utf-8", errors="replace")
+        stats = parse_artifact(text)
+        installed = read_text(Path(row["dspPreset"]), MAX_ARTIFACT_BYTES + 1)
+        if installed is None:
+            raise Refused(f"{row['dspPreset']} cannot be read")
+        want = shape_key(installed)
+        have = shape_key(text)
+        if have != want:
+            raise Refused(f"shape differs from the installed preset ({have[:12]} vs {want[:12]}): "
+                          "this edit changes the pipeline's shape and needs Compile & apply")
+        if not Path(OFFLINE_RUNNER).is_file():
+            raise Refused(f"{OFFLINE_RUNNER} is not installed; live updates cannot be load-checked")
+        return {"profile": row["name"], "digest": digest, "data": data, "stats": stats, "shape": have}
+
+    def push_live(self, spec: dict) -> None:
+        """Load-check, write the live file by rename, wait for the bridge."""
+        self.step("checking", f"{OFFLINE_RUNNER} --bench 1 on the artifact ({spec['stats']['biquads']} biquads)")
+        staged = self.spool / "presets" / f"check-{self.state['id']}.dsp"
+        staged.write_bytes(spec["data"])
+        try:
+            code, out = self.runner.run([OFFLINE_RUNNER, str(staged), "--bench", "1"], timeout=60)
+        finally:
+            staged.unlink(missing_ok=True)
+        if code != 0:
+            raise Refused(f"the bridge's loader refused the artifact: {out[:300]}")
+        self.state["loaderLine"] = out.splitlines()[0][:200] if out else ""
+        self.step("pushing", f"{self.live_file} ({spec['digest'][:12]})")
+        # The bridge answers by rewriting its status line, so a line that has
+        # not changed since before the push is an old answer, whatever hash it
+        # names (t_us makes every answer distinct).
+        before = read_text(self.live_status_path, 4096)
+        temporary = self.live_file.with_name(f".{LIVE_FILE}.{self.state['id']}")
+        with open(temporary, "wb") as handle:
+            handle.write(spec["data"])
+            handle.flush()
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, self.live_file)
+        self.step("verifying", f"waiting up to {LIVE_TIMEOUT_S:.0f} s for the bridge to report {spec['digest'][:12]}")
+        deadline = self.runner.now() + LIVE_TIMEOUT_S
+        while True:
+            text = read_text(self.live_status_path, 4096)
+            status = parse_live_status(text) if text != before else None
+            if status and status.get("sha256") == spec["digest"]:
+                if status.get("state") == "applied":
+                    self.state["liveUpdate"] = {"gen": status.get("gen"), "sha256": spec["digest"], "line": status}
+                    return
+                raise Failed(f"the bridge {status.get('state')} the artifact: {status.get('reason') or 'no reason'}")
+            if self.runner.now() >= deadline:
+                raise Failed(f"the bridge did not report {spec['digest'][:12]} within {LIVE_TIMEOUT_S:.0f} s "
+                             f"(status: {status.get('state') if status else 'none'}); the file is left for it")
+            self.runner.sleep(LIVE_POLL_S)
+
+    def commit_live(self, request: dict, conf: dict[str, str], conf_text: str) -> dict:
+        """The applied live file becomes the installed preset; no restart."""
+        row = self.live_target(request, conf)
+        status = self.live_status()
+        if not status or status.get("state") != "applied":
+            raise Refused(f"nothing applied to commit (bridge status: {status.get('state') if status else 'none'})")
+        digest = status.get("sha256") or ""
+        data = None
+        try:
+            data = self.live_file.read_bytes()
+        except OSError:
+            pass
+        if data is None or hashlib.sha256(data).hexdigest() != digest:
+            raise Refused("the live file no longer matches what the bridge applied; push it again")
+        text = data.decode("utf-8", errors="replace")
+        stats = parse_artifact(text)
+        installed_path = Path(row["dspPreset"])
+        installed = read_text(installed_path, MAX_ARTIFACT_BYTES + 1) or ""
+        if shape_key(installed) != shape_key(text):
+            raise Refused("the live file's shape differs from the installed preset; it cannot be committed")
+        if digest == row.get("dspSha256"):
+            self.step("committing", "the live coefficients already equal the installed file")
+            return {"profile": row["name"], "digest": digest, "stats": stats, "changed": False}
+        slug = row["name"][len("user-"):]
+        self.step("committing", f"{installed_path} <- live {digest[:12]}, block pin rewritten, no restart")
+        temporary = installed_path.with_name(f".{installed_path.name}.commit")
+        with open(temporary, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o644)
+        try:
+            os.chown(temporary, 0, 0)
+        except PermissionError:
+            pass
+        new_text = with_user_sha256(conf_text, slug, digest)
+        self.validate_conf_text(new_text, row["name"])
+        os.replace(temporary, installed_path)
+        self.replace_conf(new_text)
+        return {"profile": row["name"], "digest": digest, "stats": stats, "changed": True}
+
     # ---- the operation
 
     def switch(self, name: str, target: dict) -> str | None:
@@ -775,7 +1051,7 @@ class Applier:
             "id": ident,
             "kind": kind,
             "request": {k: request.get(k) for k in ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
-                                                     "name", "slug", "artifactSha256")},
+                                                     "name", "slug", "artifactSha256", "expectedLiveSha256")},
             "startedAt": utc(self.runner.now()),
             "steps": [],
             "previousProfile": None,
@@ -799,6 +1075,25 @@ class Applier:
                 conf_text = read_text(self.conf_path) or ""
                 name = self.remove_preset(request, conf, conf_text)
                 self.state["profile"] = name
+                return self.finish("done")
+            elif kind == "live":
+                spec = self.validate_live(request, conf)
+                self.state["profile"] = spec["profile"]
+                self.state["stats"] = spec["stats"]
+                self.state["shape"] = spec["shape"]
+                self.step("validating", f"{spec['stats']['biquads']} biquads, shape {spec['shape'][:12]} matches {spec['profile']}")
+                try:
+                    self.push_live(spec)
+                except Failed as error:
+                    self.state["steps"].append({"name": "verifying", "at": utc(self.runner.now()), "ok": False, "detail": str(error)})
+                    return self.finish("failed", str(error))
+                return self.finish("done")
+            elif kind == "commit":
+                conf_text = read_text(self.conf_path) or ""
+                outcome = self.commit_live(request, conf, conf_text)
+                self.state["profile"] = outcome["profile"]
+                self.state["stats"] = outcome["stats"]
+                self.state["committed"] = {"sha256": outcome["digest"], "changed": outcome["changed"]}
                 return self.finish("done")
             elif kind == "profile":
                 target = self.validate(request, conf)

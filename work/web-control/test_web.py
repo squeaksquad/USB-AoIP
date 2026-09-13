@@ -194,3 +194,63 @@ class MetersTests(unittest.TestCase):
         self.assertEqual(state["meters"]["stages"], ["ravenna-capture", "ravenna-playback", "usb-capture", "usb-playback"])
         self.assertEqual(state["bridge"]["meterUsMax"], 1.25)
         self.assertEqual(state["bridge"]["dspUsMax"], 12.5)
+
+
+class WebLiveTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.run_dir = root / "run"
+        self.run_dir.mkdir()
+        os.environ["USB16X16_RUN_DIR"] = str(self.run_dir)
+        self.spool = root / "web-apply"
+        (self.spool / "presets").mkdir(parents=True)
+        self.conf = root / "aes67.conf"
+        self.conf.write_text('PROFILE=user-room\nPROFILE_DSP_DIRECT_STATUS=accepted\nPROFILE_DSP_DIRECT_TARGET=48\n'
+                             'PROFILE_USER_ROOM_STATUS=experimental\nPROFILE_USER_ROOM_TARGET=48\n'
+                             'PROFILE_USER_ROOM_DSP_PRESET=/etc/usb16x16/dsp/user-room.dsp\nPROFILE_USER_ROOM_DSP_LIVE=1\n')
+        self.web = load(self.spool, self.conf)
+
+    def tearDown(self):
+        os.environ.pop("USB16X16_RUN_DIR", None)
+        self.tmp.cleanup()
+
+    def test_rows_carry_dsp_live(self):
+        rows = {r["name"]: r for r in self.web.conf_profiles(self.web.parse_conf(self.conf.read_text()))}
+        self.assertTrue(rows["user-room"]["dspLive"])
+        self.assertFalse(rows["dsp-direct"]["dspLive"])
+
+    def test_live_status_missing_and_present(self):
+        status = self.web.read_live_status()
+        self.assertFalse(status["available"])
+        (self.run_dir / "dsp-live.status").write_text('DSPLIVE gen=7 sha256=abc state=applied reason="" t_us=99\n')
+        status = self.web.read_live_status()
+        self.assertTrue(status["available"])
+        self.assertEqual((status["gen"], status["sha256"], status["state"], status["reason"]), (7, "abc", "applied", ""))
+        self.assertLess(status["ageSeconds"], 5)
+        (self.run_dir / "dsp-live.status").write_text('DSPLIVE gen=0 sha256=none state=idle reason="no live file yet" t_us=1\n')
+        status = self.web.read_live_status()
+        self.assertIsNone(status["sha256"])
+        self.assertEqual(status["state"], "idle")
+
+    def test_fast_tier_carries_the_live_fields(self):
+        collector = self.web.Collector(self.run_dir, self.run_dir)
+        (self.run_dir / "last-bridge").write_text("BRIDGE ppm=-15.3 tx_queue=200 dsp_live_gen=12 dsp_live_refused=0 rx_queue=100\n")
+        (self.run_dir / "dsp-live.status").write_text('DSPLIVE gen=12 sha256=abc state=applied reason="" t_us=99\n')
+        state = collector.collect_fast()
+        self.assertEqual(state["bridge"]["dspLiveGen"], 12)
+        self.assertEqual(state["dspLive"]["gen"], 12)
+        self.assertEqual(state["dspLive"]["state"], "applied")
+
+    def test_live_and_commit_requests_are_written_as_their_kinds(self):
+        artifact = b"usb16x16-dsp 1\npreset x\nend\n"
+        ident = self.web.write_apply_request("user-room", "user-room", "bryan",
+                                             extra={"kind": "live", "artifactSha256": "ab", "expectedLiveSha256": None},
+                                             artifact=artifact)
+        body = json.loads((self.spool / "request.json").read_text())
+        self.assertEqual((body["kind"], body["profile"], body["artifactFile"]), ("live", "user-room", f"{ident}.dsp"))
+        ident = self.web.write_apply_request("user-room", "user-room", "bryan",
+                                             extra={"kind": "commit", "expectedLiveSha256": "ab"})
+        body = json.loads((self.spool / "request.json").read_text())
+        self.assertEqual((body["kind"], body["expectedLiveSha256"]), ("commit", "ab"))
+        self.assertNotIn("artifactFile", body)

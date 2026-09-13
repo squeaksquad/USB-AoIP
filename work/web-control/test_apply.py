@@ -346,7 +346,10 @@ class PresetRunner(FakeRunner):
         return super().run(argv, timeout)
 
 
-class PresetTests(unittest.TestCase):
+class PresetFixture(unittest.TestCase):
+    """The preset environment: a conf with dsp-direct live, a DSP directory
+    and a stub offline runner. Test classes inherit it; it holds no tests."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.env = Env(self.tmp.name)
@@ -380,6 +383,8 @@ class PresetTests(unittest.TestCase):
         applier = make(self.env, runner)
         return applier
 
+
+class PresetTests(PresetFixture):
     def test_real_artifact_parses_with_the_loader_bounds(self):
         stats = apply_module.parse_artifact(self.artifact.decode())
         self.assertEqual(stats["biquads"], 256)
@@ -514,3 +519,216 @@ class PresetTests(unittest.TestCase):
         result = self.make(PresetRunner(self.env)).consume()
         self.assertEqual(result["state"], "refused")
         self.assertIn("not accepted", result["error"])
+
+
+# ---------------------------------------------------------------- live updates
+# LIVE_COEFFICIENTS_DESIGN.md step 4: the "live" and "commit" kinds.
+
+PINNED_VECTOR = (
+    "usb16x16-dsp 1\npreset pinned shape vector\nrate 48000\nchannels 16\ninternal 2\nmaxdelay 480\n"
+    "expand 2\n0 0 0.125\n1 1 -0.5\nbranch 1\n1 2\n1 0 0 0 0\n0.5 0.25 0 -0.1 0.01\n"
+    "assign 2\n0 0 1\n3 1 0\noutput 16\n0 48 0.5 1\n1 0 0 0 0\n"
+    + "".join(f"{i} 0 1 0\n" for i in range(1, 16)) + "end\n")
+PINNED_KEY = "7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0"
+
+
+class ShapeTests(unittest.TestCase):
+    def test_pinned_vector(self):
+        self.assertEqual(apply_module.shape_key(PINNED_VECTOR), PINNED_KEY,
+                         "the applier must agree with bridge-artifact.test.mjs and bridge_tests.cpp")
+        shape = apply_module.artifact_shape(PINNED_VECTOR)
+        self.assertTrue(shape.startswith("usb16x16-dsp-shape 1\nrate 48000\nchannels 16\ninternal 2\nmaxdelay 480\nexpand 2\n0 0\n1 1\nbranch 1\n1 2\nassign 2\n0 0\n3 1\noutput 16\n0 1\n1 0\n"))
+        self.assertTrue(shape.endswith("15 0\nend\n"))
+
+    def test_values_are_not_shape_and_counts_are(self):
+        renumbered = PINNED_VECTOR.replace("0 48 0.5 1", "0 96 0.25 1").replace("0.5 0.25 0 -0.1 0.01", "0.6 0.2 0 -0.2 0.02")
+        self.assertEqual(apply_module.shape_key(renumbered), PINNED_KEY)
+        reshaped = PINNED_VECTOR.replace("assign 2\n0 0 1\n3 1 0", "assign 1\n0 0 1")
+        self.assertNotEqual(apply_module.shape_key(reshaped), PINNED_KEY)
+        with self.assertRaises(apply_module.Refused):
+            apply_module.artifact_shape(PINNED_VECTOR.replace("end\n", ""))
+
+    def test_real_artifact_has_a_shape(self):
+        text = REAL_ARTIFACT.read_text()
+        self.assertEqual(len(apply_module.shape_key(text)), 64)
+
+    def test_live_status_line(self):
+        line = 'DSPLIVE gen=43 sha256=abc state=applied reason="" t_us=100\n'
+        self.assertEqual(apply_module.parse_live_status(line), {"gen": "43", "sha256": "abc", "state": "applied", "reason": "", "t_us": "100"})
+        line = 'DSPLIVE gen=0 sha256=def state=refused reason="shape differs" t_us=5\n'
+        self.assertEqual(apply_module.parse_live_status(line)["reason"], "shape differs")
+        self.assertIsNone(apply_module.parse_live_status("BRIDGE ppm=1\n"))
+        self.assertIsNone(apply_module.parse_live_status(None))
+
+
+class LiveRunner(PresetRunner):
+    """PresetRunner plus a model of the bridge's control thread: every sleep,
+    if the live file holds something new, the status line answers it."""
+
+    def __init__(self, env, bridge_refuses=None, bridge_silent=False, **kw):
+        super().__init__(env, **kw)
+        self.bridge_refuses = bridge_refuses
+        self.bridge_silent = bridge_silent
+        self.seen = None
+        self.gen = 0
+
+    def sleep(self, seconds):
+        super().sleep(seconds)
+        live = self.env.run_dir / "dsp-live.dsp"
+        if self.bridge_silent or not live.exists():
+            return
+        data = live.read_bytes()
+        if data == self.seen:
+            return
+        self.seen = data
+        digest = __import__("hashlib").sha256(data).hexdigest()
+        if self.bridge_refuses:
+            line = f'DSPLIVE gen={self.gen} sha256={digest} state=refused reason="{self.bridge_refuses}" t_us=1\n'
+        else:
+            self.gen += 1
+            line = f'DSPLIVE gen={self.gen} sha256={digest} state=applied reason="" t_us=1\n'
+        self.env.write("dsp-live.status", line)
+
+
+class LiveTests(PresetFixture):
+    """Starts from an installed, live user preset (through the preset kind),
+    then exercises live and commit against it."""
+
+    def setUp(self):
+        super().setUp()
+        self.preset_request()
+        result = self.make(PresetRunner(self.env)).consume()
+        assert result["state"] == "done", result
+        self.installed = self.dsp_dir / "user-room-a-night.dsp"
+        # A same-shape variant: the first output gain halved.
+        text = self.artifact.decode()
+        lines = text.split("\n")
+        at = next(i for i, l in enumerate(lines) if l.startswith("output "))
+        parts = lines[at + 1].split(" ")
+        parts[2] = str(float(parts[2]) * 0.5)
+        lines[at + 1] = " ".join(parts)
+        self.variant = "\n".join(lines).encode()
+        assert apply_module.shape_key(self.variant.decode()) == apply_module.shape_key(text)
+        self.env.write("dsp-live.status", 'DSPLIVE gen=0 sha256=none state=idle reason="no live file yet" t_us=1\n')
+
+    def live_request(self, data=None, **fields):
+        data = self.variant if data is None else data
+        ident = fields.pop("id", "1234567890ab")
+        (self.env.spool / "presets" / f"{ident}.dsp").write_bytes(data)
+        body = {"id": ident, "kind": "live", "artifactSha256": __import__("hashlib").sha256(data).hexdigest(),
+                "artifactFile": f"{ident}.dsp", "expectedProfile": "user-room-a-night",
+                "requestedAt": time.time(), "requestedBy": "bryan"}
+        body.update(fields)
+        (self.env.spool / "request.json").write_text(json.dumps(body))
+        return body
+
+    def commit_request(self, **fields):
+        body = {"id": "fedcba987654", "kind": "commit", "expectedProfile": "user-room-a-night",
+                "requestedAt": time.time(), "requestedBy": "bryan"}
+        body.update(fields)
+        (self.env.spool / "request.json").write_text(json.dumps(body))
+        return body
+
+    def test_user_block_carries_dsp_live(self):
+        self.assertIn("PROFILE_USER_ROOM_A_NIGHT_DSP_LIVE=1", self.env.conf.read_text())
+
+    def test_live_push_is_applied_without_a_restart(self):
+        runner = LiveRunner(self.env)
+        self.live_request()
+        result = self.make(runner).consume()
+        self.assertEqual(result["state"], "done", result)
+        self.assertEqual(result["kind"], "live")
+        self.assertEqual([s["name"] for s in result["steps"]], ["validating", "checking", "pushing", "verifying"])
+        self.assertEqual(result["liveUpdate"]["gen"], "1")
+        self.assertEqual(result["liveUpdate"]["sha256"], __import__("hashlib").sha256(self.variant).hexdigest())
+        self.assertEqual((self.env.run_dir / "dsp-live.dsp").read_bytes(), self.variant)
+        self.assertEqual(self.installed.read_bytes(), self.artifact, "nothing installed by a live push")
+        self.assertFalse(any(c[:2] == ["systemctl", "stop"] for c in runner.calls), "no restart")
+        self.assertTrue(any(c[0] == apply_module.OFFLINE_RUNNER for c in runner.calls), "load-checked first")
+        self.assertFalse((self.env.spool / "presets" / "1234567890ab.dsp").exists(), "the upload is consumed")
+
+    def test_live_refuses_a_different_shape(self):
+        reshaped = self.artifact.decode().replace("assign 16\n", "assign 15\n", 1)
+        # drop one assign row so the count stays honest
+        lines = reshaped.split("\n")
+        at = next(i for i, l in enumerate(lines) if l.startswith("assign "))
+        del lines[at + 1]
+        self.live_request("\n".join(lines).encode())
+        result = self.make(LiveRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("shape differs", result["error"])
+        self.assertFalse((self.env.run_dir / "dsp-live.dsp").exists())
+
+    def test_live_refuses_on_an_accepted_profile_and_without_dsp_live(self):
+        self.env.set_profile("dsp-direct")
+        self.live_request(expectedProfile="dsp-direct")
+        result = self.make(LiveRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("not a user preset", result["error"])
+        self.env.set_profile("user-room-a-night")
+        conf = self.env.conf.read_text().replace("PROFILE_USER_ROOM_A_NIGHT_DSP_LIVE=1\n", "")
+        self.env.conf.write_text(conf)
+        self.live_request()
+        result = self.make(LiveRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("DSP_LIVE", result["error"])
+
+    def test_live_refuses_a_stale_page(self):
+        self.live_request(expectedProfile="dsp-direct")
+        result = self.make(LiveRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("expected dsp-direct", result["error"])
+        self.live_request(expectedLiveSha256="0" * 64)
+        result = self.make(LiveRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("bridge reports none", result["error"])
+
+    def test_bridge_refusal_and_silence_are_failed_not_refused(self):
+        self.live_request()
+        result = self.make(LiveRunner(self.env, bridge_refuses="shape differs")).consume()
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("refused the artifact: shape differs", result["error"])
+        self.live_request()
+        result = self.make(LiveRunner(self.env, bridge_silent=True)).consume()
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("did not report", result["error"])
+        self.assertTrue((self.env.run_dir / "dsp-live.dsp").exists(), "left for the bridge")
+
+    def test_commit_makes_the_live_file_the_installed_preset(self):
+        runner = LiveRunner(self.env)
+        self.live_request()
+        assert self.make(runner).consume()["state"] == "done"
+        digest = __import__("hashlib").sha256(self.variant).hexdigest()
+        self.commit_request(expectedLiveSha256=digest)
+        result = self.make(runner).consume()
+        self.assertEqual(result["state"], "done", result)
+        self.assertEqual(result["kind"], "commit")
+        self.assertTrue(result["committed"]["changed"])
+        self.assertEqual(self.installed.read_bytes(), self.variant)
+        conf = self.env.conf.read_text()
+        self.assertIn(f"PROFILE_USER_ROOM_A_NIGHT_DSP_SHA256={digest}", conf)
+        self.assertEqual(conf.count("PROFILE_USER_ROOM_A_NIGHT_DSP_SHA256="), 1)
+        self.assertIn("PROFILE_USER_ROOM_A_NIGHT_DSP_LIVE=1", conf)
+        self.assertFalse(any(c[:2] == ["systemctl", "stop"] for c in runner.calls), "commit never restarts")
+        self.assertEqual(len(runner.profiles_calls), 1, "the supervisor validated the rewritten conf")
+        # A second commit of the same coefficients changes nothing.
+        self.commit_request(id="fedcba987655")
+        result = self.make(runner).consume()
+        self.assertEqual(result["state"], "done")
+        self.assertFalse(result["committed"]["changed"])
+
+    def test_commit_with_nothing_applied_is_refused(self):
+        self.commit_request()
+        result = self.make(LiveRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("nothing applied", result["error"])
+
+    def test_commit_refuses_a_live_file_that_moved(self):
+        runner = LiveRunner(self.env)
+        self.live_request()
+        assert self.make(runner).consume()["state"] == "done"
+        (self.env.run_dir / "dsp-live.dsp").write_bytes(self.artifact)   # changed behind the bridge's back
+        self.commit_request()
+        result = self.make(runner).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("no longer matches", result["error"])

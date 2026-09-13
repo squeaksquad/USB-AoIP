@@ -55,7 +55,41 @@ same name replaces its block and file; a slug may not be another's dash-prefix.
 ```
 POST   /api/apply/preset            {"name", "artifact", "artifactSha256"?, "expectedProfile"} -> 202 {id, profile, slug, replacing}
 DELETE /api/apply/preset/<slug>     queue removal of a user preset that is not live -> 202 {id}
+POST   /api/apply/live              {"artifact", "artifactSha256"?, "expectedProfile", "expectedLiveSha256"?} -> 202 {id, profile, artifactSha256}
+POST   /api/apply/commit            {"expectedProfile", "expectedLiveSha256"?} -> 202 {id, profile, sha256}
 ```
+
+### Live coefficient updates (2026-09-13, step 4 of LIVE_COEFFICIENTS_DESIGN.md)
+
+`live` is a same-shape update of the running user preset with **no restart**.
+The page compiles its draft in the fixed shape and posts the artifact; the
+applier runs the preset guards (hash, loader bounds, stable sections, the
+308 cap, the offline runner's load check) and additionally requires the
+live profile to be a user preset whose block carries `DSP_LIVE=1` (every
+block this program writes since this change; older user blocks are refused
+with "Compile & apply it again") and the artifact's **shape key** to equal
+the installed file's: the artifact with every gain, delay and coefficient
+blanked, hashed with SHA-256, computed the same way by
+`bridge-artifact.mjs`, this applier and the bridge, all pinned to one
+vector. It then writes the artifact to `/run/usb16x16/dsp-live.dsp` by
+rename and waits up to 3 s for the bridge's `dsp-live.status` line to
+change and report that hash `applied`; a bridge refusal or silence is a
+`failed` receipt (the file is left for the bridge), never a rollback,
+since nothing was restarted. A live update is not installed: a restart
+comes back on the installed file, by the bridge's own rule that a live
+file older than its process is ignored. `commit` copies the applied live
+file over `user-<slug>.dsp` and rewrites the block's `DSP_SHA256` through
+the same validate-on-a-copy and atomic replace, with no restart. Neither
+kind touches an accepted profile. `expectedLiveSha256` is what the page
+believes the bridge last applied (`health.dspLive.sha256`); a mismatch is
+409 here and `refused` there. Receipts for `live` carry `liveUpdate`
+(`gen`, `sha256`, the bridge's line), `stats` and `shape`; for `commit`,
+`committed` (`sha256`, `changed`).
+
+`/api/health` carries `dspLive` (`available`, `gen`, `sha256`, `state`,
+`reason`, `ageSeconds`) from the status file, read at the fast tier, and
+the BRIDGE line's `dspLiveGen` / `dspLiveRefused`; profile rows carry
+`dspLive`.
 
 Receipts for a preset carry `kind: "preset"`, `stats` (biquads, internal
 channels, max delay) and `loaderLine` (what the runner printed). The supervisor

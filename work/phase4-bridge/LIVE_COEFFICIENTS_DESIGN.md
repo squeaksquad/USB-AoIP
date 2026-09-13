@@ -441,3 +441,37 @@ place where they state a rule, and this records why.
   soak), test 3 (audibility on the return) and test 4 (restart semantics:
   a live update without commit is gone after a restart; the applier's
   `commit` is step 4).
+
+## Results from step 4 (2026-09-13)
+
+Built and tested on the Mac; not installed on the Pi (`install-web-control.sh`
+re-pinned, the install is a separate sudo step).
+
+- **Applier** (`work/web-control/usb16x16-apply` 1.2.0): `artifact_shape` and
+  `shape_key` in Python, pinned to the same vector as the compiler and the
+  bridge; request kinds `live` (validate as a preset, plus: live profile is a
+  user preset with `DSP_LIVE=1`, shape key equals the installed file's; load
+  check; write `/run/usb16x16/dsp-live.dsp` by rename; wait up to 3 s for the
+  bridge's status line to *change* and report the hash applied) and `commit`
+  (the applied live file over `user-<slug>.dsp`, the block's `DSP_SHA256`
+  rewritten through validate-on-a-copy and atomic replace, no restart).
+  User blocks now carry `DSP_LIVE=1`. A bridge refusal or silence is a
+  `failed` receipt, not a rollback: nothing was restarted.
+- **Web service** (`usb16x16-web`): `POST /api/apply/live` and `POST
+  /api/apply/commit` behind the same gate as presets plus a live gate (user
+  preset, `DSP_LIVE=1`, `expectedLiveSha256` against the bridge's line);
+  `health.dspLive` from the status file at the fast tier; `dspLiveGen` /
+  `dspLiveRefused` from the BRIDGE line; profile rows carry `dspLive`.
+- **Tests:** 37 in `test_apply.py` (the pinned vector, the live push with a
+  fake bridge answering the file, shape / accepted-profile / stale-page
+  refusals, bridge refusal and silence as `failed`, commit happy path, a
+  no-op re-commit, nothing-applied and moved-file refusals) and 17 in
+  `test_web.py`. All pass.
+- **Corrections:** the receipt's `live` field was already the live profile
+  name, so the update record is `liveUpdate`. A status line that has not
+  changed since before the push is an old answer whatever hash it names
+  (found by the silence test); the applier compares the whole line.
+  Older user blocks without `DSP_LIVE=1` are refused with "Compile & apply
+  it again" rather than silently restarted.
+- **Still owed:** the Pi install of the bridge, the supervisor and this
+  web-control set, and step 5 (the UI).

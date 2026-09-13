@@ -300,6 +300,8 @@ def conf_profiles(conf: dict[str, str]) -> list[dict]:
             # A user preset is what usb16x16-apply installed: named user-<slug>,
             # STATUS=experimental in the supervisor's vocabulary.
             "user": upper.startswith("USER_") and field("STATUS") == "experimental",
+            # The block passes the bridge a live file (LIVE_COEFFICIENTS_DESIGN.md).
+            "dspLive": field("DSP_LIVE") == "1",
         })
     rows.sort(key=lambda row: (not row["accepted"], not row["user"], row["name"]))
     return rows
@@ -374,6 +376,8 @@ class Collector:
                 "txPullMax": fields.get("tx_pullmax"),
                 "rxPullMax": fields.get("rx_pullmax"),
                 "dspUsMax": fields.get("dsp_us_max"),
+                "dspLiveGen": fields.get("dsp_live_gen"),
+                "dspLiveRefused": fields.get("dsp_live_refused"),
                 "meterUsMax": fields.get("meter_us_max"),
             }
         stage = read_text(RUN_DIR / "stage", 4096)
@@ -389,6 +393,7 @@ class Collector:
         if recovers is not None:
             state["recovers"] = len([v for v in recovers.splitlines() if v.strip()])
         state["apply"] = apply_state()
+        state["dspLive"] = read_live_status()
         meters = read_meters()
         state["meters"] = {"available": meters["available"], "endpoint": "/api/meters",
                            "pollMsMin": 100, "reason": meters.get("reason", ""),
@@ -618,6 +623,27 @@ def apply_state() -> dict:
     except OSError:
         pass
     return state
+
+
+def read_live_status(now: float | None = None) -> dict:
+    """The bridge's one-line answer to the last live file, under RUN_DIR:
+    DSPLIVE gen= sha256= state=applied|refused|ignored|idle reason="" t_us=."""
+    path = RUN_DIR / "dsp-live.status"
+    text = read_text(path, 4096)
+    if not text or not text.startswith("DSPLIVE "):
+        return {"available": False, "reason": "the bridge has no live file (the profile does not set DSP_LIVE=1)"}
+    fields: dict = {}
+    for match in re.finditer(r'(\w+)=("([^"]*)"|\S+)', text[len("DSPLIVE "):]):
+        fields[match.group(1)] = match.group(3) if match.group(3) is not None else match.group(2)
+    try:
+        age = (now if now is not None else time.time()) - path.stat().st_mtime
+    except OSError:
+        age = None
+    gen = fields.get("gen")
+    return {"available": True, "gen": int(gen) if gen and gen.isdigit() else None,
+            "sha256": None if fields.get("sha256") in (None, "none") else fields.get("sha256"),
+            "state": fields.get("state"), "reason": fields.get("reason", ""),
+            "ageSeconds": None if age is None else round(age, 1)}
 
 
 def preset_slug(name: str) -> str:
@@ -1118,6 +1144,10 @@ class Handler(BaseHTTPRequestHandler):
             self.api_apply_profile()
         elif route == "/api/apply/preset":
             self.api_apply_preset()
+        elif route == "/api/apply/live":
+            self.api_apply_live()
+        elif route == "/api/apply/commit":
+            self.api_apply_commit()
         else:
             self.unsupported(route)
 
@@ -1198,6 +1228,107 @@ class Handler(BaseHTTPRequestHandler):
                         "replacing": f"user-{slug}" in users,
                         "note": "Queued. The applier checks the artifact, installs it, and restarts the AES67 "
                                 "service on it; audio stops for about a minute."}, HTTPStatus.ACCEPTED)
+
+    def live_gate(self, expected, expected_sha):
+        """The live and commit kinds share the preset gate plus: the live
+        profile must be a user preset whose block passes the bridge a live
+        file, and the page must agree on what the bridge last applied."""
+        if expected is not None and not isinstance(expected, str):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "expectedProfile must be a string or null")
+            return None
+        if expected_sha is not None and (not isinstance(expected_sha, str) or not re.match(r"^[0-9a-f]{64}$", expected_sha)):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "expectedLiveSha256 must be 64 hex characters or null")
+            return None
+        gate = self.apply_gate(expected)
+        if gate is None:
+            return None
+        snapshot, live = gate
+        table = {row["name"]: row for row in (snapshot.get("profile") or {}).get("profiles", [])}
+        row = table.get(live or "")
+        if row is None or not row.get("user"):
+            self.send_error_json(HTTPStatus.CONFLICT,
+                                 f"{live or 'no profile'} is live; live updates apply only to a user preset, "
+                                 "never to an accepted profile")
+            return None
+        if not row.get("dspLive"):
+            self.send_error_json(HTTPStatus.CONFLICT,
+                                 f"{live} was installed before live updates existed; Compile & apply it again")
+            return None
+        status = read_live_status()
+        if expected_sha is not None and expected_sha != (status.get("sha256") or ""):
+            self.send_error_json(HTTPStatus.CONFLICT,
+                                 f"This page expected live coefficients {expected_sha[:12]} but the bridge "
+                                 f"reports {(status.get('sha256') or 'none')[:12]}; reload and retry")
+            return None
+        return snapshot, live, status
+
+    def api_apply_live(self) -> None:
+        """Queue a same-shape coefficient update for the running user preset.
+
+        No restart: the applier checks the artifact the way it checks a
+        preset, requires its shape key to match the installed file, writes it
+        to the bridge's live file and waits for the bridge's answer. It is
+        not installed; a restart returns to the installed preset unless the
+        page commits it.
+        """
+        body = self.read_body(limit=PRESET_ARTIFACT_MAX + 65536)
+        if not isinstance(body, dict):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object")
+            return
+        artifact = body.get("artifact")
+        digest = body.get("artifactSha256")
+        if not isinstance(artifact, str) or not artifact.startswith("usb16x16-dsp 1\n") or not artifact.endswith("end\n"):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "artifact must be the compiler's bridge artifact text")
+            return
+        data = artifact.encode("utf-8")
+        if len(data) > PRESET_ARTIFACT_MAX:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, f"artifact is larger than {PRESET_ARTIFACT_MAX} bytes")
+            return
+        computed = hashlib.sha256(data).hexdigest()
+        if digest is not None and digest != computed:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "artifactSha256 does not match the artifact")
+            return
+        gate = self.live_gate(body.get("expectedProfile"), body.get("expectedLiveSha256"))
+        if gate is None:
+            return
+        _, live, _ = gate
+        try:
+            ident = write_apply_request(live, body.get("expectedProfile"), self.current_user(),
+                                        extra={"kind": "live", "artifactSha256": computed,
+                                               "expectedLiveSha256": body.get("expectedLiveSha256")},
+                                        artifact=data)
+        except OSError as error:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
+            return
+        self.send_json({"ok": True, "id": ident, "profile": live, "artifactSha256": computed,
+                        "note": "Queued. The applier checks the artifact against the running preset's shape "
+                                "and hands it to the bridge; no restart. Not kept across a restart until committed."},
+                       HTTPStatus.ACCEPTED)
+
+    def api_apply_commit(self) -> None:
+        """Make the coefficients the bridge is running the installed preset;
+        no restart, since the running numbers already equal the file."""
+        body = self.read_body(limit=4096)
+        if not isinstance(body, dict):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object")
+            return
+        gate = self.live_gate(body.get("expectedProfile"), body.get("expectedLiveSha256"))
+        if gate is None:
+            return
+        _, live, status = gate
+        if status.get("state") != "applied":
+            self.send_error_json(HTTPStatus.CONFLICT,
+                                 f"Nothing to commit: the bridge's last live answer is {status.get('state') or 'none'}")
+            return
+        try:
+            ident = write_apply_request(live, body.get("expectedProfile"), self.current_user(),
+                                        extra={"kind": "commit", "expectedLiveSha256": body.get("expectedLiveSha256")})
+        except OSError as error:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
+            return
+        self.send_json({"ok": True, "id": ident, "profile": live, "sha256": status.get("sha256"),
+                        "note": "Queued. The applier copies the live coefficients over the installed preset "
+                                "and re-pins its block; no restart."}, HTTPStatus.ACCEPTED)
 
     def api_remove_preset(self, slug: str) -> None:
         if not USER_SLUG.match(slug):
