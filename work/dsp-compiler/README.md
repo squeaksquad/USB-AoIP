@@ -57,6 +57,47 @@ Only branches something consumes are allocated. The default 7.2.4 preset uses 23
 internal channels (11 main, 12 bass); inputs 13–16 drive nothing there and cost
 nothing. Two outputs sharing a speaker source share one main branch.
 
+### Fixed shape (2026-09-13, for live coefficient updates)
+
+`compile(preset, devices, {shape: 'fixed'})`, or `--shape fixed` on the CLI,
+emits the same audio in a shape that depends on the routing alone, so that a
+value edit changes only numbers in the bridge artifact. This is step 1 of
+`work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md`; nothing downstream consumes
+it yet, and the UI still compiles the minimal shape.
+
+What the fixed shape pads, and how:
+
+| Minimal omits | Fixed emits |
+|---|---|
+| a disabled or 0 dB band, a band under output EQ off or global bypass | a `Free` biquad at unity (`b0=1`, the rest 0), in the band's own slot, so every output always carries 16 sections in band order |
+| a switched-off high-pass (bass redirection on) | a chain of unity `Free` biquads as long as the slope would take |
+| a muted bus (the whole assign destination) | the same rows with every source `mute: true`, which the artifact writes as gain 0 |
+| a send that is `null` from a bass branch that exists | the row, muted |
+| an empty headphone downmix cell | the row, muted |
+
+What it does not pad, because each would cost sections or branches the soak
+never licensed: **which branches exist** (an input's first send, or its last
+one removed, allocates or frees a bass branch), **crossover order at 48 dB/oct**
+(four sections against two: LR12 and LR24 are both two sections, so that pair
+is a coefficient change), **bass redirection off** (the branches disappear),
+and anything that changes an output's role or source. The default 7.2.4
+layout is 302 sections fixed; the `loaded` acceptance preset is 308 in both
+shapes, since it already carries every band.
+
+The **shape key** (`artifactShape`, `artifactShapeKey` in
+`bridge-artifact.mjs`) is the artifact with every gain, delay and coefficient
+blanked: the header, the mix `(dest, source)` pairs, each branch's channel and
+section count, each output's index and section count. Two artifacts with the
+same key differ only in numbers. `bridge-artifact.test.mjs` pins one vector
+(`7d17e417…`) that the applier's Python and the bridge's C++ must reproduce,
+and holds a list of edits to "live" or "restart" against the default preset.
+
+The report carries `shape` and `placeholderCount`; `biquadCount` keeps meaning
+bands that shape the audio. Not yet verified: CamillaDSP 4.1.3 accepting the
+`Free` biquad as emitted (`a1 a2 b0 b1 b2` as its documentation gives them).
+The artifact test proves the fixed artifact says the same thing as the minimal
+one; an engine `--check` on a fixed configuration on the Pi is still owed.
+
 ## Headroom policy
 
 `headroomDb` is applied **exactly once**, in the expand mixer, to every branch of
@@ -374,6 +415,9 @@ file-to-file comparison.
   Pi can read and write.
 - **The `--target alsa` device section**, which remains stamped unvalidated for
   capture/playback selection, clock ownership and rate matching.
+- **The fixed shape against the engine.** Its `Free` unity biquads have not
+  been through CamillaDSP `--check` or a file-to-file run; only the artifact
+  test says the fixed and minimal artifacts carry the same audio.
 
 ### CORRECTION 2026-09-10: an engine run did disturb the bridge
 

@@ -182,3 +182,158 @@ test('the loaded preset emits all 256 bands', () => {
   assert.equal(bandSections, 16 * FREQUENCIES.length);
   assert.equal(result.report.biquadCount, 256);
 });
+
+// ---------------------------------------------------------------- fixed shape
+// LIVE_COEFFICIENTS_DESIGN.md: the fixed shape exists so that a value edit
+// changes only numbers. These tests hold the compiler to that, and pin the
+// shape key the applier (Python) and the bridge (C++) must reproduce.
+
+import { artifactShape, artifactShapeKey } from './bridge-artifact.mjs';
+import { setOutputRole } from '../web-ui/model.mjs';
+
+const fixed = preset => bridgeArtifact(compile(preset, fileDevices('in.raw', 'out.raw'), {shape: 'fixed'}));
+const shapeOf = preset => artifactShape(fixed(preset));
+const unity = s => s.b0 === 1 && s.b1 === 0 && s.b2 === 0 && s.a1 === 0 && s.a2 === 0;
+
+test('the fixed shape holds every band of every output, unity where flat', () => {
+  const artifact = parse(fixed(createConfig()));
+  for (const entry of artifact.outputs) {
+    assert.equal(entry.sections.length, FREQUENCIES.length, `output ${entry.index + 1} carries all bands`);
+    assert.ok(entry.sections.every(unity), 'a flat default band is the unity section');
+  }
+  const minimal = parse(bridgeArtifact(build(createConfig())));
+  assert.ok(minimal.outputs.every(entry => entry.sections.length === 0),
+            'the minimal shape still emits nothing for flat bands');
+});
+
+test('the fixed shape says the same audio as the minimal one', () => {
+  // Every non-unity section and every non-zero row of the fixed artifact is
+  // the minimal artifact's, in order; the fixed one only adds unity and zero.
+  for (const preset of [createConfig(), loadedPreset(), crossoverPreset(), clipPreset(), phonesPreset()]) {
+    const a = parse(bridgeArtifact(build(preset)));
+    const b = parse(fixed(preset));
+    assert.equal(a.internal, b.internal, 'the fixed shape allocates no extra branch');
+    const live = rows => rows.filter(row => row.gain !== 0);
+    assert.deepEqual(live(b.expand), live(a.expand));
+    assert.deepEqual(live(b.assign), live(a.assign));
+    // Chains that shape the audio, with unity sections and empty chains dropped
+    // (the minimal shape omits an empty branch; the fixed one holds it at unity).
+    const shaping = entries => entries
+      .map(entry => entry.sections.filter(s => !unity(s)))
+      .filter(chain => chain.length);
+    assert.deepEqual(shaping(b.branch), shaping(a.branch));
+    assert.deepEqual(shaping(b.outputs), shaping(a.outputs));
+    b.outputs.forEach((entry, index) => {
+      assert.equal(entry.delay, a.outputs[index].delay);
+      assert.equal(entry.gain, a.outputs[index].gain);
+    });
+  }
+});
+
+test('value edits leave the fixed shape unchanged', () => {
+  const base = shapeOf(createConfig());
+  const edits = {
+    'band gain through zero': p => { p.outputs[0].bands[3].gainDb = 4.5; },
+    'band disabled': p => { p.outputs[0].bands[3].enabled = false; },
+    'band type and Q': p => { p.outputs[5].bands[0].type = 'lowShelf'; p.outputs[5].bands[0].q = 0.6; p.outputs[5].bands[0].gainDb = -3; },
+    'output EQ off': p => { p.outputs[2].eqEnabled = false; },
+    'global EQ bypass': p => { p.eqBypass = true; },
+    'crossover frequency': p => { p.inputs[0].highpassHz = 100; p.inputs[0].lowpassHz = 100; },
+    'high-pass off': p => { p.inputs[4].crossover = false; },
+    'LFE low-pass and trim': p => { p.lfe.lowpassHz = 90; p.lfe.trimDb = 10; },
+    'existing send gain': p => { p.sends[0][3] = -12; },
+    'send muted (null) on a branch that stays': p => { p.sends[2][12] = null; },
+    'send added on a branch that exists': p => { p.sends[1][3] = -6; },
+    'bus gain and mute': p => { p.buses[0].gainDb = -4; p.buses[0].mute = true; },
+    'output gain, polarity, mute': p => { p.outputs[1].gainDb = -2; p.outputs[1].invert = true; p.outputs[6].mute = true; },
+    'alignment delay': p => { p.outputs[7].delayMs = 3.5; },
+    'headroom': p => { p.headroomDb = -12; },
+    // LR12 and LR24 are both two sections (coefficients.mjs), so this pair is
+    // a coefficient change; only 48 dB/oct changes the count.
+    'slope 24 to 12': p => { p.inputs[0].slope = 12; },
+  };
+  for (const [name, edit] of Object.entries(edits)) {
+    const preset = createConfig();
+    edit(preset);
+    assert.equal(shapeOf(preset), base, `${name} is a live edit`);
+  }
+});
+
+test('shape edits change the fixed shape', () => {
+  const base = shapeOf(createConfig());
+  const edits = {
+    'crossover slope': p => { p.inputs[0].slope = 48; },
+    'LFE slope to 48': p => { p.lfe.slope = 48; },
+    'bass redirection off': p => { p.bassEnabled = false; },
+    'first send from an input with none': p => { p.sends[12][3] = 0; },
+    'last send removed from an input': p => { p.sends[0][3] = null; },
+    'output role': p => { setOutputRole(p, 13, 'speaker'); },
+    'output source': p => { p.outputs[0].source = 1; },
+  };
+  for (const [name, edit] of Object.entries(edits)) {
+    const preset = createConfig();
+    edit(preset);
+    assert.notEqual(shapeOf(preset), base, `${name} needs a restart`);
+  }
+});
+
+test('a switched-off high-pass holds its slope\'s slots at unity', () => {
+  const preset = createConfig();
+  preset.inputs[0].crossover = false;
+  preset.inputs[0].slope = 48;
+  const on = createConfig();
+  on.inputs[0].slope = 48;
+  const off = parse(fixed(preset));
+  const live = parse(fixed(on));
+  const main = live.branch.findIndex(entry => entry.sections.length === 4);
+  assert.ok(main >= 0, 'the 48 dB/oct high-pass is four sections');
+  assert.equal(off.branch[main].sections.length, 4);
+  assert.ok(off.branch[main].sections.every(unity));
+  assert.equal(artifactShape(fixed(preset)), artifactShape(fixed(on)));
+});
+
+test('the fixed shape of the acceptance layouts stays within the soak count', () => {
+  const sections = text => parse(text).outputs.reduce((n, e) => n + e.sections.length, 0)
+    + parse(text).branch.reduce((n, e) => n + e.sections.length, 0);
+  assert.equal(sections(fixed(loadedPreset())), 308, 'the loaded preset is already full: fixed adds nothing');
+  assert.ok(sections(fixed(createConfig())) <= 308, 'the shipped 7.2.4 layout fits');
+});
+
+test('the muted bus keeps its rows at zero in the fixed shape', () => {
+  const preset = createConfig();
+  preset.buses.find(bus => bus.kind === 'speakers').mute = true;
+  const artifact = parse(fixed(preset));
+  assert.ok(artifact.assign.length > 0, 'rows are present');
+  assert.ok(artifact.assign.every(row => row.gain === 0), 'and all at zero');
+});
+
+test('the shape key is pinned: the applier and the bridge must reproduce it', async () => {
+  // A small artifact written by hand; its canonical shape and SHA-256 are the
+  // cross-implementation vector. Change either only with all three.
+  const artifact = [
+    'usb16x16-dsp 1',
+    'preset pinned shape vector',
+    'rate 48000', 'channels 16', 'internal 2', 'maxdelay 480',
+    'expand 2', '0 0 0.125', '1 1 -0.5',
+    'branch 1', '1 2', '1 0 0 0 0', '0.5 0.25 0 -0.1 0.01',
+    'assign 2', '0 0 1', '3 1 0',
+    'output 16',
+    ...Array.from({length: 16}, (_, i) => (i === 0 ? '0 48 0.5 1\n1 0 0 0 0' : `${i} 0 1 0`)),
+    'end',
+  ].join('\n') + '\n';
+  const shape = artifactShape(artifact);
+  assert.equal(shape, [
+    'usb16x16-dsp-shape 1', 'rate 48000', 'channels 16', 'internal 2', 'maxdelay 480',
+    'expand 2', '0 0', '1 1', 'branch 1', '1 2', 'assign 2', '0 0', '3 1',
+    'output 16', ...Array.from({length: 16}, (_, i) => `${i} ${i === 0 ? 1 : 0}`), 'end',
+  ].join('\n') + '\n');
+  assert.equal(await artifactShapeKey(artifact),
+               '7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0');
+  // Values do not move the key; a count does.
+  const renumbered = artifact.replace('0 48 0.5 1', '0 96 0.25 1').replace('0.5 0.25 0 -0.1 0.01', '0.6 0.2 0 -0.2 0.02');
+  assert.equal(await artifactShapeKey(renumbered), await artifactShapeKey(artifact));
+  assert.notEqual(await artifactShapeKey(artifact.replace('assign 2\n0 0 1\n3 1 0', 'assign 1\n0 0 1')),
+                  await artifactShapeKey(artifact));
+  assert.throws(() => artifactShape(artifact.replace('end\n', '')), /unexpected end/);
+  assert.throws(() => artifactShape(artifact.replace('assign 2', 'assign 3')), /assign row|expected 'output'/);
+});

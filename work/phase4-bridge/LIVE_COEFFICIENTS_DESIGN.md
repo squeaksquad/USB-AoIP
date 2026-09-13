@@ -1,7 +1,8 @@
 # Live coefficient updates: EQ and bass-management preview without a restart
 
-Design note, 2026-09-13. Nothing here is built. The accepted bridge, the
-supervisor's pinned hash, the applier and the UI are untouched. This is the
+Design note, 2026-09-13. Step 1 (the compiler) is built and tested the same
+day; see the corrections at the end. The accepted bridge, the supervisor's
+pinned hash, the applier and the UI are untouched. This is the
 "Coefficient updates" paragraph of `DSP_MODE_DESIGN.md` worked out to the
 point where it can be built, plus the two halves that paragraph does not
 cover: how a new coefficient set reaches a running bridge, and which UI
@@ -72,16 +73,19 @@ live path and for the user preset that the live path starts from:
    256 sections on every fixed-shape preset, which is exactly the band load
    the 600 s all-16 soak carried (`loaded`, 308 biquads, DSP_MODE_DESIGN.md
    "Measured").
-2. **Mix rows.** Every send the bus layout *allows* is a row: each speaker
-   output in a bus to that bus's bass branch, each bass branch to each LFE
-   or sub output it can feed, each output's main route. A disabled send, a
-   muted output or a muted bus is a row with gain 0. The row set is decided
-   by the bus layout and roles alone.
+2. **Mix rows.** Every send an *existing* bass branch can make to a sub
+   output is a row, muted when the preset has none; a muted bus keeps its
+   rows with each source muted; an empty headphone downmix cell is a muted
+   row. Which branches exist is not padded (see the corrections): a bass
+   branch is allocated as today, for an input with at least one send, so an
+   input's first send or its last one removed is a shape change.
 3. **Crossovers.** Emitted at the draft's order, as today. A slope change
-   is a restart. Padding every crossover to order 8 would make slopes live
-   but could push a full layout past 308 sections, and 308 is the count
-   the soak licensed; a slope is also the control least likely to be swept
-   by ear. Revisit only if it turns out to matter.
+   to or from 48 dB/oct is a restart; 12 and 24 are both two sections in
+   `coefficients.mjs`, so that pair is live (found in step 1). Padding every
+   crossover to order 8 would make slopes live but could push a full layout
+   past 308 sections, and 308 is the count the soak licensed; a slope is
+   also the control least likely to be swept by ear. Revisit only if it
+   turns out to matter.
 4. **Bass redirection off.** Still a restart: the branches disappear. The
    fixed shape is defined for `bassEnabled: true`; with it off the draft
    compiles as today.
@@ -341,3 +345,29 @@ never started.
 
 Steps 1 and 2 need no Pi time and no service stop. Nothing before step 3
 changes what runs.
+
+## Corrections from step 1 (2026-09-13)
+
+Found while building the compiler half; the sections above are amended in
+place where they state a rule, and this records why.
+
+- **Bass branches are not padded.** The note first said every speaker
+  output's input gets a bass branch. On the `loaded` acceptance preset that
+  is three more branches than today, 314 sections against the 308 the soak
+  passed. So branch allocation stays as `planChannels` has it: an input's
+  first send to a sub, or its last one removed, is a shape change. Every
+  other send edit is live, because rows to every sub exist, muted, once the
+  branch does.
+- **LR12 and LR24 are the same shape.** Both are two sections in
+  `coefficients.mjs` (a first-order Butterworth applied twice is two
+  first-order sections; a second-order applied twice is two biquads). Only
+  48 dB/oct, four sections, changes the count. The UI classification
+  becomes: slope 12 <-> 24 live, anything involving 48 restart.
+- **Unity placeholders are CamillaDSP `Free` biquads** with explicit
+  coefficients, so the YAML and the artifact carry the same section and the
+  "one pipeline serialised twice" property survives. Whether 4.1.3 parses
+  the `Free` parameters as emitted is not yet checked on the Pi.
+- **Counts.** Default 7.2.4 layout: 302 sections fixed. `loaded`: 308 in
+  both shapes. The shape key vector pinned for the applier and the bridge is
+  `7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0` over
+  the artifact written out in `bridge-artifact.test.mjs`.

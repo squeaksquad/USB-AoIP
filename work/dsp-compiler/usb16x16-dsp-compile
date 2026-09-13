@@ -15,6 +15,10 @@ const usage = `usage: usb16x16-dsp-compile PRESET.json [options]
   -o, --out FILE          write the configuration here (default: stdout)
       --report FILE       also write the JSON report here
       --bridge FILE       also write the bridge's coefficient artifact here
+      --shape minimal|fixed
+                          minimal (default) emits only what shapes the audio;
+                          fixed pads every band and row so value edits keep the
+                          artifact's shape (LIVE_COEFFICIENTS_DESIGN.md)
       --target file|alsa  device section to emit (default: file)
       --in FILE           file target: raw 16-channel input  (default: in.raw)
       --raw FILE          file target: raw 16-channel output (default: out.raw)
@@ -25,7 +29,7 @@ const usage = `usage: usb16x16-dsp-compile PRESET.json [options]
 `;
 
 function parseArgs(argv) {
-  const options = {target: 'file', in: 'in.raw', raw: 'out.raw', chunksize: 1024};
+  const options = {target: 'file', in: 'in.raw', raw: 'out.raw', chunksize: 1024, shape: 'minimal'};
   const rest = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -39,6 +43,7 @@ function parseArgs(argv) {
     else if (arg === '-o' || arg === '--out') options.out = take();
     else if (arg === '--report') options.report = take();
     else if (arg === '--bridge') options.bridge = take();
+    else if (arg === '--shape') options.shape = take();
     else if (arg === '--target') options.target = take();
     else if (arg === '--in') options.in = take();
     else if (arg === '--raw') options.raw = take();
@@ -78,7 +83,7 @@ function main() {
   }
 
   let result;
-  try { result = compile(preset, devices); }
+  try { result = compile(preset, devices, {shape: options.shape}); }
   catch (error) { process.stderr.write(`Could not compile: ${error.message}\n`); return 4; }
 
   const header = [
@@ -88,7 +93,8 @@ function main() {
       + ` (${result.plan.channels.filter(c => c.kind === 'main').length} main,`
       + ` ${result.plan.channels.filter(c => c.kind === 'bass').length} bass,`
       + ` ${result.plan.channels.filter(c => c.kind === 'phones').length} headphone)`,
-    `Filters: ${result.report.biquadCount} PEQ biquads, ${result.report.crossoverCount} crossover combos`,
+    `Filters: ${result.report.biquadCount} PEQ biquads, ${result.report.crossoverCount} crossover combos`
+      + (result.report.shape === 'fixed' ? `, ${result.report.placeholderCount} unity placeholders (fixed shape)` : ''),
     `Headroom: ${result.report.headroomDb} dB, applied once in the expand mixer`,
     '',
     'Filter steps before the "assign" mixer index the internal channels below;',

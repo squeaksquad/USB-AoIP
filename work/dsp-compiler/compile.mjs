@@ -24,6 +24,20 @@
 // sends, bus gain and output gain are all applied after it, so a preset can
 // still be driven into clipping; worstCaseDbfs in the report says by how much,
 // for coherent full-scale inputs.
+//
+// Two emission shapes (LIVE_COEFFICIENTS_DESIGN.md). `minimal`, the default,
+// emits only what changes the audio: a flat band, a bypassed high-pass, a muted
+// bus and an empty downmix cell are absent. `fixed` emits the same audio in a
+// shape that depends on the routing alone, so that a value edit changes only
+// numbers in the artifact: every band of every output is present (a unity
+// section when it does nothing), a switched-off high-pass is a unity chain of
+// its slope's length, a muted bus or output keeps its rows at gain zero, and
+// every send a branch can make to a sub is a row, muted when the preset has
+// none. What the fixed shape does *not* pad, because it would cost sections
+// the soak never licensed: which branches exist (an input's first send, or its
+// last one removed, is still a shape change), crossover order, and bass
+// redirection off. Both shapes run the same audio; the harnesses verify the
+// minimal one and the artifact test proves the fixed one says the same thing.
 
 import { CHANNELS, validateConfig } from '../web-ui/model.mjs';
 import { polarityWarningText } from '../web-ui/crossover-notes.mjs';
@@ -32,6 +46,9 @@ export const SAMPLE_RATE = 48000;
 
 // Linkwitz-Riley order is twice the Butterworth order: 12 dB/oct is order 2.
 const SLOPE_ORDER = {12: 2, 24: 4, 48: 8};
+// Sections the artifact emits per crossover of each slope (coefficients.mjs:
+// a Butterworth of order N/2 applied twice, one section per pole pair or pole).
+const SLOPE_SECTIONS = {12: 2, 24: 2, 48: 4};
 const BIQUAD_TYPE = {bell: 'Peaking', lowShelf: 'Lowshelf', highShelf: 'Highshelf'};
 
 const round = (value, places = 6) => Number(value.toFixed(places));
@@ -40,6 +57,14 @@ const dbToLinear = db => 10 ** (db / 20);
 /** A band that changes nothing is not worth a biquad. */
 function bandIsFlat(band) {
   return !band.enabled || band.gainDb === 0;
+}
+
+export const SHAPES = ['minimal', 'fixed'];
+
+/** The unity section the fixed shape holds a slot with. CamillaDSP's `Free`
+ *  biquad takes explicit coefficients, so both serialisations agree exactly. */
+function unityBiquad() {
+  return {type: 'Biquad', parameters: {type: 'Free', b0: 1, b1: 0, b2: 0, a1: 0, a2: 0}};
 }
 
 function busOf(config, outputIndex) {
@@ -92,7 +117,7 @@ export function planChannels(config) {
 }
 
 /** The expand mixer: capture channels into branch channels, with headroom. */
-function expandMixer(config, plan) {
+function expandMixer(config, plan, fixed) {
   const mapping = plan.channels.map((channel, dest) => {
     if (channel.kind === 'phones') {
       const bus = config.buses.find(value => value.id === channel.busId);
@@ -103,6 +128,7 @@ function expandMixer(config, plan) {
       bus.downmixMatrix.forEach((row, input) => {
         const gain = row[channel.ear];
         if (gain !== null) sources.push(source(input, config.headroomDb + gain));
+        else if (fixed) sources.push(muted(input));
       });
       // An ear with no contributions is silent, not an error: the UI allows it.
       return {dest, sources};
@@ -118,8 +144,13 @@ function source(channel, gainDb, inverted = false) {
   return {channel, gain: round(gainDb, 4), inverted, scale: 'dB'};
 }
 
+/** A row that exists so the shape does, contributing nothing. */
+function muted(channel) {
+  return {channel, gain: 0, inverted: false, mute: true, scale: 'dB'};
+}
+
 /** Crossover filters, one set per branch channel that needs them. */
-function branchFilters(config, plan, filters) {
+function branchFilters(config, plan, filters, fixed) {
   const steps = [];
   for (const [index, channel] of plan.channels.entries()) {
     const names = [];
@@ -133,6 +164,14 @@ function branchFilters(config, plan, filters) {
           parameters: {type: 'LinkwitzRileyHighpass', freq: input.highpassHz, order: SLOPE_ORDER[input.slope]},
         };
         names.push(name);
+      } else if (config.bassEnabled && fixed) {
+        // The high-pass is off: hold its slots with unity sections, as many as
+        // the slope would take, so switching it on is a coefficient change.
+        for (let section = 0; section < SLOPE_SECTIONS[input.slope]; section += 1) {
+          const name = `hp_in${channel.input + 1}_off${section + 1}`;
+          filters[name] = unityBiquad();
+          names.push(name);
+        }
       }
     } else if (channel.kind === 'bass') {
       const name = `lp_in${channel.input + 1}`;
@@ -151,13 +190,17 @@ function branchFilters(config, plan, filters) {
 }
 
 /** The assign mixer: branch channels into the 16 physical outputs. */
-function assignMixer(config, plan) {
+function assignMixer(config, plan, fixed) {
   const mapping = [];
   for (let output = 0; output < CHANNELS; output += 1) {
     const spec = config.outputs[output];
     const bus = busOf(config, output);
     const busGain = bus?.gainDb ?? 0;
-    const entry = {dest: output, mute: Boolean(bus?.mute), sources: []};
+    // The fixed shape keeps a muted bus's rows and mutes each source instead,
+    // which CamillaDSP treats the same and the artifact can hold at zero.
+    const busMute = Boolean(bus?.mute);
+    const entry = {dest: output, mute: busMute && !fixed, sources: []};
+    const push = row => entry.sources.push(fixed && busMute ? {...row, mute: true} : row);
     if (spec.role === 'unused' || !bus) {
       // No sources: CamillaDSP writes silence. Kept in the mapping so the
       // channel is explicitly accounted for rather than absent.
@@ -166,17 +209,18 @@ function assignMixer(config, plan) {
     }
     if (bus.kind === 'headphones') {
       const channel = plan.phonesOf.get(`${bus.id}:${bus.outputIds.indexOf(output)}`);
-      entry.sources.push(source(channel, busGain));
+      push(source(channel, busGain));
     } else if (spec.role === 'speaker') {
-      entry.sources.push(source(plan.mainOf.get(spec.source), busGain));
+      push(source(plan.mainOf.get(spec.source), busGain));
     } else if (spec.role === 'sub') {
       config.sends.forEach((row, input) => {
         const gain = row[output];
-        if (gain === null) return;
         const channel = plan.bassOf.get(input);
         // Bass redirection off leaves only the LFE branch feeding the subs.
         if (channel === undefined) return;
-        entry.sources.push(source(channel, busGain + gain));
+        if (gain !== null) push(source(channel, busGain + gain));
+        // A branch that exists can reach every sub: hold the row, muted.
+        else if (fixed) push(muted(channel));
       });
     }
     mapping.push(entry);
@@ -185,15 +229,21 @@ function assignMixer(config, plan) {
 }
 
 /** Per-output PEQ, alignment delay, gain, polarity and mute. */
-function outputFilters(config, filters) {
+function outputFilters(config, filters, fixed) {
   const steps = [];
   for (let output = 0; output < CHANNELS; output += 1) {
     const spec = config.outputs[output];
     const names = [];
-    if (spec.eqEnabled && !config.eqBypass) {
+    const eqActive = spec.eqEnabled && !config.eqBypass;
+    if (eqActive || fixed) {
       spec.bands.forEach((band, index) => {
-        if (bandIsFlat(band)) return;
         const name = `eq_out${output + 1}_b${index + 1}`;
+        if (!eqActive || bandIsFlat(band)) {
+          // Fixed shape: the slot stays, at unity, so enabling the band or
+          // moving its gain off zero changes coefficients and nothing else.
+          if (fixed) { filters[name] = unityBiquad(); names.push(name); }
+          return;
+        }
         filters[name] = {
           type: 'Biquad',
           parameters: {
@@ -318,7 +368,9 @@ export function alsaDevices(captureDevice, playbackDevice, format = 'S24_3_LE', 
  * choosing capture and playback devices is an integration decision this
  * compiler has no basis to make.
  */
-export function compile(preset, devices) {
+export function compile(preset, devices, {shape = 'minimal'} = {}) {
+  if (!SHAPES.includes(shape)) throw new Error(`Unknown shape ${shape}; use ${SHAPES.join(' or ')}`);
+  const fixed = shape === 'fixed';
   const config = validateConfig(structuredClone(preset));
   if (config.mode !== 'dsp') {
     throw new Error('Direct mode has no DSP path to compile. Switch the preset to DSP mode.');
@@ -330,12 +382,12 @@ export function compile(preset, devices) {
     throw new Error('This preset routes nothing: every output is unused or unassigned.');
   }
   const filters = {};
-  const mixers = {expand: expandMixer(config, plan), assign: assignMixer(config, plan)};
+  const mixers = {expand: expandMixer(config, plan, fixed), assign: assignMixer(config, plan, fixed)};
   const pipeline = [
     {type: 'Mixer', name: 'expand'},
-    ...branchFilters(config, plan, filters),
+    ...branchFilters(config, plan, filters, fixed),
     {type: 'Mixer', name: 'assign'},
-    ...outputFilters(config, filters),
+    ...outputFilters(config, filters, fixed),
   ];
   const levels = worstCase(config, plan);
 
@@ -343,7 +395,8 @@ export function compile(preset, devices) {
     title: config.name,
     description:
       `Compiled from USB 16x16 preset "${config.name}" (version ${config.version}). ` +
-      `Headroom ${config.headroomDb} dB applied once in the expand mixer.`,
+      `Headroom ${config.headroomDb} dB applied once in the expand mixer.` +
+      (fixed ? ' Fixed shape: unity sections and muted rows hold slots for live coefficient updates.' : ''),
     devices,
     filters,
     mixers,
@@ -355,10 +408,14 @@ export function compile(preset, devices) {
     plan,
     report: {
       preset: config.name,
+      shape,
       internalChannels: plan.channels.length,
       channelMap: plan.channels.map((channel, index) => ({index, ...channel})),
       filterCount: Object.keys(filters).length,
-      biquadCount: Object.values(filters).filter(f => f.type === 'Biquad').length,
+      // Bands that shape the audio; the fixed shape's unity placeholders are
+      // counted apart so a summary can say "N of 256 active".
+      biquadCount: Object.values(filters).filter(f => f.type === 'Biquad' && f.parameters.type !== 'Free').length,
+      placeholderCount: Object.values(filters).filter(f => f.type === 'Biquad' && f.parameters.type === 'Free').length,
       crossoverCount: Object.values(filters).filter(f => f.type === 'BiquadCombo').length,
       headroomDb: config.headroomDb,
       worstCaseDbfs: levels,

@@ -26,11 +26,17 @@ const ORDER_SLOPE = {2: 12, 4: 24, 8: 48};
 /** JavaScript's default number formatting round-trips exactly; keep it. */
 const number = value => String(value);
 const linear = source =>
-  10 ** (source.gain / 20) * (source.inverted ? -1 : 1);
+  source.mute ? 0 : 10 ** (source.gain / 20) * (source.inverted ? -1 : 1);
 
 function sectionsFor(filter) {
   if (filter.type === 'Biquad') {
     const {type, freq, q, gain} = filter.parameters;
+    if (type === 'Free') {
+      // Explicit coefficients: the fixed shape's unity placeholder. Taken as
+      // written so the two serialisations cannot disagree on a slot.
+      const {b0, b1, b2, a1, a2} = filter.parameters;
+      return [{b0, b1, b2, a1, a2}];
+    }
     const band = CAMILLA_BAND_TYPE[type];
     if (band === undefined) throw new Error(`Unknown biquad type ${type}`);
     return [bandBiquad({type: band, frequency: freq, q, gainDb: gain})];
@@ -157,6 +163,88 @@ export function bridgeArtifact(result, {presetName} = {}) {
   }
   lines.push('end');
   return `${lines.join('\n')}\n`;
+}
+
+/**
+ * The shape of an artifact: everything in it that is a count or an index, with
+ * every gain, delay and coefficient blanked. Two artifacts with the same shape
+ * describe the same allocation in the bridge and differ only in numbers, which
+ * is exactly what a running `DspStage` can take without a restart
+ * (LIVE_COEFFICIENTS_DESIGN.md). Delay is a value here, not shape: the delay
+ * lines are sized at the ceiling regardless.
+ *
+ * Returns the canonical shape text. The same text is what the applier hashes
+ * in Python and the bridge derives in C++; `artifactShapeKey` is its SHA-256,
+ * and the test pins one vector so all three implementations must agree.
+ */
+export function artifactShape(text) {
+  const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+  let at = 0;
+  const next = () => {
+    if (at >= lines.length) throw new Error('artifact shape: unexpected end');
+    return lines[at++];
+  };
+  const words = line => line.split(/\s+/);
+  const header = (keyword, arity = 1) => {
+    const parts = words(next());
+    if (parts[0] !== keyword || parts.length !== arity + 1) {
+      throw new Error(`artifact shape: expected '${keyword}', found '${parts.join(' ')}'`);
+    }
+    return parts.slice(1);
+  };
+  const counted = keyword => {
+    const [count] = header(keyword);
+    if (!/^\d+$/.test(count)) throw new Error(`artifact shape: ${keyword} count '${count}'`);
+    return Number(count);
+  };
+  const out = [];
+  const [version] = header('usb16x16-dsp');
+  if (version !== String(ARTIFACT_VERSION)) throw new Error(`artifact shape: version ${version}`);
+  out.push(`usb16x16-dsp-shape ${ARTIFACT_VERSION}`);
+  // The preset name is not shape.
+  if (!next().startsWith('preset')) throw new Error("artifact shape: expected 'preset'");
+  out.push(`rate ${header('rate')[0]}`);
+  out.push(`channels ${header('channels')[0]}`);
+  out.push(`internal ${header('internal')[0]}`);
+  out.push(`maxdelay ${header('maxdelay')[0]}`);
+  const mix = keyword => {
+    const rows = counted(keyword);
+    out.push(`${keyword} ${rows}`);
+    for (let row = 0; row < rows; row += 1) {
+      const [dest, source, gain, ...extra] = words(next());
+      if (gain === undefined || extra.length) throw new Error(`artifact shape: ${keyword} row ${row + 1}`);
+      out.push(`${dest} ${source}`);
+    }
+  };
+  const skipSections = count => { for (let i = 0; i < count; i += 1) next(); };
+  mix('expand');
+  const branches = counted('branch');
+  out.push(`branch ${branches}`);
+  for (let row = 0; row < branches; row += 1) {
+    const [channel, sections, ...extra] = words(next());
+    if (sections === undefined || extra.length) throw new Error(`artifact shape: branch row ${row + 1}`);
+    out.push(`${channel} ${sections}`);
+    skipSections(Number(sections));
+  }
+  mix('assign');
+  const outputs = counted('output');
+  out.push(`output ${outputs}`);
+  for (let row = 0; row < outputs; row += 1) {
+    const [index, delay, gain, sections, ...extra] = words(next());
+    if (sections === undefined || extra.length) throw new Error(`artifact shape: output row ${row + 1}`);
+    out.push(`${index} ${sections}`);
+    skipSections(Number(sections));
+  }
+  if (next() !== 'end' || at !== lines.length) throw new Error("artifact shape: expected 'end'");
+  out.push('end');
+  return `${out.join('\n')}\n`;
+}
+
+/** SHA-256 of the canonical shape text, lower-case hex. */
+export async function artifactShapeKey(text) {
+  const bytes = new TextEncoder().encode(artifactShape(text));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**

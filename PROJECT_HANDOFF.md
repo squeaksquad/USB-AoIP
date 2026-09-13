@@ -10959,3 +10959,30 @@ path-triggered applier; measured before any daemon is considered. Sits
 behind the AoIP-only item. The service was not touched: dsp-direct at 103,
 the post-move check (eth0 1000 Mbit, same link-local, four units active,
 TX moving) clean after the Pi went into its housing this morning.
+
+**IMPLEMENTED 2026-09-13, Mac only, nothing installed: step 1 of the live
+coefficient design, the compiler's fixed shape and the shape key.**
+`compile(preset, devices, {shape: 'fixed'})` and `--shape fixed` on
+`usb16x16-dsp-compile` emit the same audio in a routing-only shape: every
+band of every output present (a CamillaDSP `Free` biquad at unity where the
+band does nothing, including under output EQ off and global bypass), a
+switched-off high-pass held as a unity chain of its slope's length, a muted
+bus's rows kept with each source muted, and every send an existing bass
+branch can make to a sub present as a muted row. `artifactShape` and
+`artifactShapeKey` in `bridge-artifact.mjs` are the shape key: the artifact
+with gains, delays and coefficients blanked, SHA-256 of the canonical text;
+the pinned cross-implementation vector is 7d17e417…ecb4e57d0. Two rules
+corrected against the design note while building: bass branches are not
+padded (padding the `loaded` preset's three unsent inputs would be 314
+sections against the 308 the soak licensed; an input's first send or last
+removal stays a shape change), and LR12 <-> LR24 is a coefficient change
+(both two sections), only 48 dB/oct changes the count. Counts: the shipped
+7.2.4 layout is 302 sections fixed, `loaded` 308 in both shapes. Tests:
+`bridge-artifact.test.mjs` pins the vector, holds sixteen value edits to the
+same key and seven routing edits to a different one, and proves the fixed
+artifact's non-unity sections and non-zero rows equal the minimal one's on
+five presets; 150 pass across `work/dsp-compiler` and `work/web-ui`. The
+minimal shape is untouched and stays the default, so the verified presets
+and the UI's Compile & apply are unchanged. Not verified: CamillaDSP 4.1.3
+accepting the emitted `Free` biquad (an engine `--check` on the Pi is owed
+and was not run, the service being up). Nothing on the Pi changed.
