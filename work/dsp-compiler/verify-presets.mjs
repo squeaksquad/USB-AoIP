@@ -296,3 +296,25 @@ function main(argv) {
 }
 
 if (import.meta.filename === process.argv[1]) process.exit(main(process.argv.slice(2)));
+
+/**
+ * The live-update pair (LIVE_COEFFICIENTS_DESIGN.md, acceptance test 2).
+ *
+ * `liveBasePreset` is `transparent` again -- every band emitted, no crossover,
+ * an impulse stays an impulse on channels 1-2 -- and is compiled in the fixed
+ * shape. `liveTogglePreset` is the same preset with band 1 of outputs 3-16 at
+ * +3 dB, so the two share a shape key and the swap-under-load run can push
+ * one over the other every two seconds while the harness measures 1-2.
+ */
+export function liveBasePreset() {
+  const preset = transparentPreset();
+  preset.name = 'verify-live-base';
+  return validateConfig(preset);
+}
+
+export function liveTogglePreset() {
+  const preset = transparentPreset();
+  preset.name = 'verify-live-toggle';
+  for (let index = 2; index < CHANNELS; index += 1) preset.outputs[index].bands[0].gainDb = 3;
+  return validateConfig(preset);
+}

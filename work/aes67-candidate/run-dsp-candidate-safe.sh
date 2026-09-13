@@ -46,7 +46,12 @@ expected_bridge_sha256=406699bd4cf5763defb3560dca3d447d1dd2e8928dc370a643f1a080b
 #                stage does to latency, which cannot be asked of `loaded` at
 #                all, since its 80 Hz high-pass means the impulse the harness
 #                correlates against is no longer in the signal
-expected_dsp_sha256_list="2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c ad69598473691bffdd0808d79d4ff37f4d46ef9f0fa2b34b5fa1f3152b9bbeb9"
+#   live-base    transparent again, compiled in the fixed shape (2026-09-13,
+#                LIVE_COEFFICIENTS_DESIGN.md): the swap-under-load base
+#   live-toggle  live-base with band 1 of outputs 3-16 at +3 dB, the same
+#                shape key; pushed over live-base during a run through the
+#                live file, never started from
+expected_dsp_sha256_list="2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c ad69598473691bffdd0808d79d4ff37f4d46ef9f0fa2b34b5fa1f3152b9bbeb9 a10eeacbd44a9ee68e5d00b35f85d10a4c95e2c87bb1f6ff43a9c877a3ffb3da 227b134a2aa14cab328403d765225c14e210c066b19ea0f01aee622dc5fb4668"
 expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 
 # Only two arguments. Everything below is the accepted profile as a constant:

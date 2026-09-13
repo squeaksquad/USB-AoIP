@@ -6,7 +6,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compile, fileDevices } from './compile.mjs';
-import { crossoverPreset, clipPreset, phonesPreset, transparentPreset, loopMeasurePreset } from './verify-presets.mjs';
+import { crossoverPreset, clipPreset, phonesPreset, transparentPreset, loopMeasurePreset, liveBasePreset, liveTogglePreset } from './verify-presets.mjs';
+import { bridgeArtifact, artifactShape } from './bridge-artifact.mjs';
 
 const build = preset => compile(preset, fileDevices('in.raw', 'out.raw'));
 /** The filters applied to one physical output, in pipeline order. */
@@ -161,4 +162,23 @@ test('the loop-measure preset is transparent at -40 dB on every output', () => {
   // The loop must decay: a preset whose worst case reached 0 dBFS would not.
   assert.ok(result.report.worstCaseDbfs.every(level => level === null || level <= -39));
   assert.equal(result.report.warnings.filter(text => text.includes('dBFS')).length, 0);
+});
+
+test('the live pair shares one fixed shape and differs only on outputs 3-16', () => {
+  const fixed = preset => bridgeArtifact(compile(preset, fileDevices('in.raw', 'out.raw'), {shape: 'fixed'}));
+  const base = fixed(liveBasePreset());
+  const toggle = fixed(liveTogglePreset());
+  assert.equal(artifactShape(base), artifactShape(toggle), 'same shape key');
+  assert.notEqual(base, toggle, 'different numbers');
+  // Outputs 1 and 2 are byte-identical between the two artifacts: the
+  // harness channels see no change from the toggle.
+  const outputRows = text => text.split('\n').slice(text.split('\n').findIndex(l => l.startsWith('output ')));
+  const rowsFor = (text, index) => {
+    const rows = outputRows(text);
+    const at = rows.findIndex(r => r.startsWith(`${index} `));
+    const sections = Number(rows[at].split(' ')[3]);
+    return rows.slice(at, at + 1 + sections).join('\n');
+  };
+  for (const index of [0, 1]) assert.equal(rowsFor(base, index), rowsFor(toggle, index));
+  assert.notEqual(rowsFor(base, 2), rowsFor(toggle, 2));
 });
