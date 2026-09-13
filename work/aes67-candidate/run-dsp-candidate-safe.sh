@@ -75,6 +75,14 @@ dsp_preset=${2:-$work_root/dsp-verify/loaded.dsp}
 live_toggle=${3:-}
 live_period=${4:-2}
 live_dir=
+# The bridge's full-rate log goes to tmpfs, as the supervisor's does, and is
+# copied into the result directory at the end. Three wrapper runs on
+# 2026-09-13 (18:13, 18:24, 18:33 UTC) hit the restart limit at ~100 s on
+# XRUN pairs whose times sit on a ~5 s lattice: the audio thread writes
+# IMPULSE / RECOVER / PRIMED lines with unbuffered cerr, this file was on
+# the SD card, and a write into a page under the kernel's 5 s writeback
+# blocks for the card. The service pipes its log to /run and never sees it.
+log_dir=
 period_frames=48
 buffer_frames=192
 ring_frames=768
@@ -355,6 +363,10 @@ rm -f "$ready_file"
 cleanup() {
   if [ -n "${toggle_pid:-}" ]; then kill "$toggle_pid" 2>/dev/null || true; fi
   case "${live_dir:-}" in /run/usb16x16-live-candidate.*) rm -rf "$live_dir" ;; esac
+  if [ -n "${log_dir:-}" ] && [ -f "$log_dir/bridge.log" ] && [ -d "${result_dir:-/nonexistent}" ]; then
+    cp "$log_dir/bridge.log" "$result_dir/bridge.log" 2>/dev/null || true
+  fi
+  case "${log_dir:-}" in /run/usb16x16-candidate-log.*) rm -rf "$log_dir" ;; esac
   set +e
   rm -f "$ready_file"
   if [ -n "$bridge_pid" ] && kill -0 "$bridge_pid" 2>/dev/null; then
@@ -472,8 +484,10 @@ if [ "$dsp_preset" != none ]; then
     bridge_arguments+=(--dsp-live-file "$live_dir/dsp-live.dsp" --dsp-live-status "$live_dir/dsp-live.status")
   fi
 fi
+log_dir=$(mktemp -d /run/usb16x16-candidate-log.XXXXXX)
+bridge_log=$log_dir/bridge.log
 timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" "${bridge_arguments[@]}" \
-  > "$result_dir/bridge.log" 2>&1 &
+  > "$bridge_log" 2>&1 &
 bridge_pid=$!
 
 sleep 4
@@ -481,12 +495,12 @@ if ! kill -0 "$bridge_pid" 2>/dev/null; then
   echo "Phase 4 bridge exited during startup" >&2
   exit 31
 fi
-if ! grep -q '^NEGOTIATED ' "$result_dir/bridge.log"; then
+if ! grep -q '^NEGOTIATED ' "$bridge_log"; then
   echo "Phase 4 bridge did not report negotiated ALSA parameters" >&2
   exit 32
 fi
 if grep -Eq '^BRIDGE .*tx_restarts=[1-9][0-9]*|^BRIDGE .*rx_restarts=[1-9][0-9]*' \
-    "$result_dir/bridge.log"; then
+    "$bridge_log"; then
   echo "Phase 4 bridge restarted an ALSA direction during startup" >&2
   exit 33
 fi
@@ -563,7 +577,7 @@ while kill -0 "$bridge_pid" 2>/dev/null; do
         if ($i ~ /^tx_restarts=/) { split($i, a, "="); tx = a[2] }
         if ($i ~ /^rx_restarts=/) { split($i, a, "="); rx = a[2] }
       }
-    } END { print tx + rx + 0 }' "$result_dir/bridge.log" 2>/dev/null)
+    } END { print tx + rx + 0 }' "$bridge_log" 2>/dev/null)
   restarts_seen=${restarts_seen:-0}
   if [ "$restarts_seen" -gt "$restart_limit" ]; then
     echo "Phase 4 bridge restarted an ALSA direction $restarts_seen times, over the limit of $restart_limit" >&2
@@ -571,6 +585,8 @@ while kill -0 "$bridge_pid" 2>/dev/null; do
   fi
   sleep 1
 done
+cp "$bridge_log" "$result_dir/bridge.log" 2>/dev/null || true
+echo "bridge_log_dir=$log_dir" >> "$result_dir/metadata.txt"
 echo "direction_restarts=$restarts_seen" >> "$result_dir/metadata.txt"
 if [ -n "$toggle_pid" ]; then
   kill "$toggle_pid" 2>/dev/null || true
@@ -603,12 +619,12 @@ esac
 # leaving them in would fail every run that the watcher above deliberately let
 # finish -- which is what happened on 2026-09-10: six counted restarts, a valid
 # measurement, and exit 35 anyway. Markers anywhere else still fail the run.
-if grep -v '^RECOVER ' "$result_dir/bridge.log" |
+if grep -v '^RECOVER ' "$bridge_log" |
    grep -Eqi 'fatal:|xrun|overrun|underrun|broken pipe|restart[^s]'; then
   echo "Phase 4 bridge log contains a failure marker outside a counted RECOVER" >&2
   exit 35
 fi
-if ! grep -Eq '^SUMMARY .*"tx_restarts":0,"rx_restarts":0' "$result_dir/bridge.log"; then
+if ! grep -Eq '^SUMMARY .*"tx_restarts":0,"rx_restarts":0' "$bridge_log"; then
   echo "Phase 4 bridge did not finish with zero direction restarts" >&2
   exit 36
 fi

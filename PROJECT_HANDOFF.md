@@ -11141,3 +11141,31 @@ was: installed under the supervisor and put through `meter_battery.py`
 against the service, not through the wrapper. Service restarted on
 947e8b4d, `ptp locked`. Pi logs in
 `outputs/latency/phase4-dsp-candidate-20260913T182418Z/`.
+
+**MEASURED 2026-09-13 18:33 UTC, aborted at 190 s: the loaded control run
+(fresh coreaudiod, load 0.1, no live file) hit the limit too. CORRECTION:
+the Mac-hole attribution of 18:24 is withdrawn. FOUND: the wrapper writes
+the bridge's full-rate log to the SD card, and the audio thread blocks on
+it.** Nine RECOVERs at 63.37, 88.39, 123.63, 143.86, 168.85 and 189.35 s
+(pairs and singles, gaps 5-843 us, several with no audio-thread gap at
+all), coreaudiod 81 s old at launch, `USB16X16_OTHER_CHANNEL_LOAD_
+AMPLITUDE=0.1` exported. Across the three runs of the day the RECOVER
+times fall on a lattice of about 5.0 s (18:13: 34.06, 39.06, 69.31, 74.32,
+79.32, 99.55; 18:24: 35.40, 65.69, 75.66, 94.40, 99.43), and 5 s is both
+the Pi's ext4 journal commit interval and `dirty_writeback_centisecs`
+(500). The bridge writes IMPULSE, ZERORUN, PRIMED and RECOVER lines from
+the audio thread with unbuffered `std::cerr` (`main.cpp` 1322, 1355, 1692,
+1943); the wrapper redirected that to `bridge.log` under the result
+directory on the SD card (`/`, ext4 on mmcblk0p2), so a write into a page
+the flusher holds under writeback waits for the card. The supervisor pipes
+the same stream through mawk into `/run/usb16x16/bridge.log` on tmpfs and
+the service does not see this, which is why the 2026-09-11 battery against
+the service had zero RECOVERs in every arm and why the 2026-09-10 wrapper
+runs died at 15 and 21 s. The wrapper now writes the bridge log to a tmpfs
+directory (`/run/usb16x16-candidate-log.*`) and copies it into the result
+directory at the end and on the abort path; staged on the Pi (see the
+hash on the next install). Mac-side: coreaudiod restarted by the operator
+at ~18:31 UTC, a fresh anchor, kept. The candidate 7e8f1064 itself is not
+implicated by any of the three runs: `dsp_us_max` 154-180 us, zero
+refusals, and the swap run's 44/44 stand. Service restarted on 947e8b4d.
+Pi logs in `outputs/latency/phase4-dsp-candidate-20260913T183324Z/`.
