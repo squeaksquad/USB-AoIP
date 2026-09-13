@@ -10775,3 +10775,27 @@ Pi's audio reaches the Ferrofish at all with the duplex harness through
 the running service (20 impulses at 64, the user's go, the Mac idle),
 since the loop's own instrument cannot tell "not returned" from "not
 delivered to the Ferrofish's matrix".
+
+**FOUND 2026-09-13 00:46-00:55 UTC: the Ferrofish is not returning the
+Pi's audio on the duplex path either; the Pi is sending.**
+`measure-under-service.sh 64 20 ferrofish-check` against the running
+service (dsp-direct, stable): forty readiness probes, `rawInputPeak=0.0
+capturePeak=0` on every one, exit 6, no signal ever. In the same window
+the service bridge's impulse trace (journal) stamped 320 impulses at
+`usb-capture` and 319 at `ravenna-playback`, none at `ravenna-capture`,
+zero RECOVER or PRIMED lines. The daemon's sources (239.69.16.1/.2, maps
+0-7 / 8-15, enabled) and sinks (FF-PULSE RX 49-56 / 57-64 at 103,
+use_sdp) are the recorded configuration; eth0 holds all six group
+memberships; PTP locked to the GM, jitter 30. The Pi's journal has no
+entry between 23:33:30 and 23:35:30 UTC, the minute the returns died in
+run 4. So the break is downstream of the Pi's port, and the loop
+candidate is cleared of it: runs 5 and 6 measured a transport with no
+audio arriving, and nothing else. Hypothesis to check first: the 09:00
+UTC link drop was the GS305EP power-cycling and it came back with IGMP
+snooping on (the 2026-09-01 finding: with no querier a receiver's
+membership ages out after about 260 s and its port stops getting the
+group, while a subscription still reads resolved), which fits a loop
+that worked for a while after each fresh session and then went silent
+with no Pi-side event. The switch's snooping setting and the Ferrofish's
+receive-channel status are the user's to read; no loop run is worth
+taking until the duplex harness sees its return again.
