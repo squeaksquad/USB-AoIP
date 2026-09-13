@@ -251,6 +251,8 @@ test('value edits leave the fixed shape unchanged', () => {
     // LR12 and LR24 are both two sections (coefficients.mjs), so this pair is
     // a coefficient change; only 48 dB/oct changes the count.
     'slope 24 to 12': p => { p.inputs[0].slope = 12; },
+    // Off = unity high-passes and muted non-LFE sends in the same pipeline.
+    'bass redirection off': p => { p.bassEnabled = false; },
   };
   for (const [name, edit] of Object.entries(edits)) {
     const preset = createConfig();
@@ -264,7 +266,6 @@ test('shape edits change the fixed shape', () => {
   const edits = {
     'crossover slope': p => { p.inputs[0].slope = 48; },
     'LFE slope to 48': p => { p.lfe.slope = 48; },
-    'bass redirection off': p => { p.bassEnabled = false; },
     'first send from an input with none': p => { p.sends[12][3] = 0; },
     'last send removed from an input': p => { p.sends[0][3] = null; },
     'output role': p => { setOutputRole(p, 13, 'speaker'); },
@@ -351,4 +352,19 @@ test('the plain SHA-256 matches the known vectors and WebCrypto', async () => {
   }
   const artifact = bridgeArtifact(build(loadedPreset()));
   assert.equal(sha256HexSync(encode(artifactShape(artifact))), await artifactShapeKey(artifact));
+});
+
+test('bass redirection off is muted sends and unity high-passes, same shape', () => {
+  const off = createConfig(); off.bassEnabled = false;
+  const a = parse(fixed(createConfig()));
+  const b = parse(fixed(off));
+  assert.equal(a.internal, b.internal);
+  assert.equal(a.assign.length, b.assign.length, 'the same rows');
+  // Subs (outputs 4 and 13) keep only the LFE input's sends when off.
+  const subRows = rows => rows.filter(r => r.dest === 3 || r.dest === 12);
+  assert.ok(subRows(a.assign).filter(r => r.gain !== 0).length > subRows(b.assign).filter(r => r.gain !== 0).length);
+  assert.ok(subRows(b.assign).some(r => r.gain !== 0), 'the LFE branch still feeds the subs');
+  assert.ok(b.branch.filter(e => e.sections.every(unity)).length >= 11, 'every main high-pass is at unity');
+  const minimalOff = parse(bridgeArtifact(build(off)));
+  assert.notEqual(minimalOff.internal, b.internal, 'the minimal shape drops the branches; the fixed one keeps them');
 });

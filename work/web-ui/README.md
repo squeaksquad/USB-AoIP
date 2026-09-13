@@ -373,12 +373,11 @@ EQ editor and the Settings panel show one of three states:
   one request in flight; `POST /api/apply/live` hands the artifact to the
   applier, which checks it and gives it to the bridge. Band gain, frequency,
   Q, type and enable; output EQ enable and global bypass; crossover
-  frequency and a 12 <-> 24 dB/oct slope; high-pass on and off; send gains;
-  LFE trim; bus gain and mute; output gain, polarity, mute and delay are all
-  live edits.
+  frequency and a 12 <-> 24 dB/oct slope; high-pass on and off; bass
+  redirection on and off; send gains; LFE trim; bus gain and mute; output
+  gain, polarity, mute and delay are all live edits.
 - **Needs apply.** Same profile, different shape: routing, a bus format or
-  membership, a 48 dB/oct slope, bass redirection on or off, or an input's
-  first send. Compile & apply runs it, with the restart that implies.
+  membership, a 48 dB/oct slope, or an input's first send. Compile & apply runs it, with the restart that implies.
 - **Not previewable.** No Pi, Apply not installed, an accepted profile live
   (live edits never touch an accepted profile), or a user preset installed
   before live updates existed (re-apply it).

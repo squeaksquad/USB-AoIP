@@ -510,3 +510,18 @@ Built and tested on the Mac; nothing installed on the Pi.
   a user block, this web-control set, then four loaded 800s and a 600 s
   soak against the service, tests 3 and 4 of this note, and a live edit
   from the page heard on the Ferrofish return.
+
+## Correction from the first live session (2026-09-13 evening)
+
+- **Bass redirection on/off is live.** The note made it a restart because
+  the minimal shape drops the branches. In the fixed shape the branches are
+  kept with the sends muted and the main high-passes at unity, the same
+  pipeline as "on", so the toggle changes numbers only. The operator found
+  it held back as Needs apply in the first session; the compiler change is
+  in step 1's module and the shipped preset's shape key is unchanged
+  (064ef631), so nothing on the Pi needed re-applying.
+- **Operational findings from the same session**, recorded in the handoff:
+  the page must not call the browser's timers with the queue as receiver;
+  the apply units need no start burst limit and the applier drains queued
+  live requests in one invocation; the page re-sends its draft when the
+  bridge is not on its last edit.

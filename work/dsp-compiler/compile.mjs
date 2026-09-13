@@ -33,10 +33,12 @@
 // section when it does nothing), a switched-off high-pass is a unity chain of
 // its slope's length, a muted bus or output keeps its rows at gain zero, and
 // every send a branch can make to a sub is a row, muted when the preset has
-// none. What the fixed shape does *not* pad, because it would cost sections
-// the soak never licensed: which branches exist (an input's first send, or its
-// last one removed, is still a shape change), crossover order, and bass
-// redirection off. Both shapes run the same audio; the harnesses verify the
+// none. Bass redirection off is, in the fixed shape, the same pipeline with
+// every main high-pass at unity and every non-LFE sub send muted, so the
+// toggle is a live edit. What the fixed shape does *not* pad, because it would
+// cost sections the soak never licensed: which branches exist (an input's
+// first send, or its last one removed, is still a shape change) and crossover
+// order at 48 dB/oct. Both shapes run the same audio; the harnesses verify the
 // minimal one and the artifact test proves the fixed one says the same thing.
 
 import { CHANNELS, validateConfig } from '../web-ui/model.mjs';
@@ -79,7 +81,7 @@ function busOf(config, outputIndex) {
  * bass branches. The returned plan is stable and is emitted into the config as
  * comments, so the channel map is auditable against the YAML.
  */
-export function planChannels(config) {
+export function planChannels(config, fixed = false) {
   const channels = [];
   const mainOf = new Map();     // input index -> internal channel
   const bassOf = new Map();     // input index -> internal channel
@@ -105,7 +107,9 @@ export function planChannels(config) {
   // A bass branch exists for an input only if some enabled send carries it.
   for (let input = 0; input < CHANNELS; input += 1) {
     const isLfe = input === config.lfe.input;
-    if (!config.bassEnabled && !isLfe) continue;
+    // Fixed shape: the branch stays when bass redirection is off (its sends
+    // are muted), so the toggle changes numbers only.
+    if (!config.bassEnabled && !isLfe && !fixed) continue;
     const sends = config.sends[input];
     const used = sends.some((gain, output) =>
       gain !== null && config.outputs[output].role === 'sub');
@@ -164,9 +168,10 @@ function branchFilters(config, plan, filters, fixed) {
           parameters: {type: 'LinkwitzRileyHighpass', freq: input.highpassHz, order: SLOPE_ORDER[input.slope]},
         };
         names.push(name);
-      } else if (config.bassEnabled && fixed) {
-        // The high-pass is off: hold its slots with unity sections, as many as
-        // the slope would take, so switching it on is a coefficient change.
+      } else if (fixed) {
+        // The high-pass is off, or bass redirection is: hold its slots with
+        // unity sections, as many as the slope would take, so switching it
+        // on is a coefficient change.
         for (let section = 0; section < SLOPE_SECTIONS[input.slope]; section += 1) {
           const name = `hp_in${channel.input + 1}_off${section + 1}`;
           filters[name] = unityBiquad();
@@ -218,7 +223,8 @@ function assignMixer(config, plan, fixed) {
         const channel = plan.bassOf.get(input);
         // Bass redirection off leaves only the LFE branch feeding the subs.
         if (channel === undefined) return;
-        if (gain !== null) push(source(channel, busGain + gain));
+        const carried = gain !== null && (config.bassEnabled || input === config.lfe.input);
+        if (carried) push(source(channel, busGain + gain));
         // A branch that exists can reach every sub: hold the row, muted.
         else if (fixed) push(muted(channel));
       });
@@ -377,7 +383,7 @@ export function compile(preset, devices, {shape = 'minimal'} = {}) {
   }
   if (!devices) throw new Error('Supply a devices section (fileDevices or alsaDevices)');
 
-  const plan = planChannels(config);
+  const plan = planChannels(config, fixed);
   if (!plan.channels.length) {
     throw new Error('This preset routes nothing: every output is unused or unassigned.');
   }

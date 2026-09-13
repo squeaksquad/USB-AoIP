@@ -75,12 +75,15 @@ What the fixed shape pads, and how:
 | a send that is `null` from a bass branch that exists | the row, muted |
 | an empty headphone downmix cell | the row, muted |
 
-What it does not pad, because each would cost sections or branches the soak
-never licensed: **which branches exist** (an input's first send, or its last
-one removed, allocates or frees a bass branch), **crossover order at 48 dB/oct**
-(four sections against two: LR12 and LR24 are both two sections, so that pair
-is a coefficient change), **bass redirection off** (the branches disappear),
-and anything that changes an output's role or source. The default 7.2.4
+Bass redirection off is, in the fixed shape, the same pipeline with every
+main high-pass at unity and every non-LFE sub send muted (2026-09-13
+evening, after the first live session found the toggle held back), so the
+toggle is a live edit. What it does not pad, because each would cost sections
+or branches the soak never licensed: **which branches exist** (an input's
+first send, or its last one removed, allocates or frees a bass branch),
+**crossover order at 48 dB/oct** (four sections against two: LR12 and LR24
+are both two sections, so that pair is a coefficient change), and anything
+that changes an output's role or source. The default 7.2.4
 layout is 302 sections fixed; the `loaded` acceptance preset is 308 in both
 shapes, since it already carries every band.
 
