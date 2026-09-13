@@ -10724,3 +10724,33 @@ as run 3 the bridge dwell is unchanged. So 96 frames = 2.0 ms come off
 the loop's 8.2 ms with nothing else moving, as the design's reading of
 the flat queue predicted; the wire figure at this point is a captured run
 away. Next: prime 48.
+
+**CORRECTION 2026-09-13 00:30 UTC to the two entries above: the return
+path was dead from 23:34:37 UTC, so the control run is half a run and the
+prime-96 run measured no loop at all; "dwell unchanged" at prime 96 is
+withdrawn.** Read from the IMPULSE lines, which the SUMMARY summary I used
+does not carry per stage under the right names: run 4 (the control)
+stamped 52 returns at full strength, the last at t=104.0 s (23:34:37 UTC),
+and none after, while its 209 impulses kept leaving; run 5 (prime 96)
+stamped 208 outgoing impulses and no return at all, and its capture
+zero-run counters read 0/0/0/0, which is one unbroken run of silence
+(the detector reports a run only when it ends). The Ferrofish's return
+flows kept arriving throughout (the Mac hears 239.69.121.9 at 1000
+packets/s; both streams read all zeros now with the service on dsp-direct
+and the Mac silent, which cannot separate "routing gone" from "nothing
+sent"). Nothing in the run's daemon log at 23:34:37 and no eth0 event; the
+Pi's transmit was alive (impulses left, and the service's stream is on
+the wire now). So the Ferrofish stopped returning the Pi's audio at
+23:34:37 UTC, most likely its subscription to the Pi's two transmit flows
+(re-resolved after the day's many daemon restarts and the eight-hour
+silence) or its matrix; only Dante Controller can say which. What stands
+from the two runs: zero RECOVERs in 420 s twice without the capture
+(that part of the control is unaffected by the input's content), and at
+prime 96 the aligned start, `front_age_frames=200`, queue 102 flat, floor
+54, depth 153, zero clipped, dsp max 82 us, which is the transport doing
+what the prime says regardless of what arrives. The dwell and the wire
+figure at prime 96 are unmeasured. Standing rule added: a loop run's
+first check is the count of full-strength `ravenna-capture` returns
+against `loop_impulses`, before any figure is read from it; the analyser
+helper prints it from now on. The Ferrofish's subscriptions are the
+user's to inspect in Dante Controller before the next run.

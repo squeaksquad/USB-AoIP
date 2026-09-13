@@ -32,6 +32,9 @@ print -r -- "--- $local_dir"
 cat "$local_dir/metadata.txt"
 print -r -- "--- bridge lines of note"
 grep -E '^(NEGOTIATED|ALIGN status|DSP loaded|DSP engaged|LOOPIMPULSE|PRIMED|RECOVER|METERS enabled)' "$local_dir/bridge.log" | head -20
+print -r -- "--- returns: full-strength ravenna-capture stamps against impulses injected (read this first)"
+awk '/^IMPULSE stage=ravenna-capture/{for(i=1;i<=NF;i++) if($i ~ /^value=/){split($i,a,"="); if (a[2]+0 >= 0.1 || a[2]+0 <= -0.1) n++}} /^LOOPIMPULSE/{} END{print "  full-strength returns: " n+0}' "$local_dir/bridge.log"
+grep -o 'loop_impulses=[0-9]*' "$local_dir/bridge.log" | tail -1 | sed 's/^/  /'
 print -r -- "--- SUMMARY"
 if [ -s "$local_dir/summary.json" ]; then
   python3 - "$local_dir/summary.json" <<'PY'
