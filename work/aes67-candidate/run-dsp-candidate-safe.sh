@@ -74,6 +74,7 @@ candidate_seconds=${1:-360}
 dsp_preset=${2:-$work_root/dsp-verify/loaded.dsp}
 live_toggle=${3:-}
 live_period=${4:-2}
+live_dir=
 period_frames=48
 buffer_frames=192
 ring_frames=768
@@ -353,6 +354,7 @@ rm -f "$ready_file"
 
 cleanup() {
   if [ -n "${toggle_pid:-}" ]; then kill "$toggle_pid" 2>/dev/null || true; fi
+  case "${live_dir:-}" in /run/usb16x16-live-candidate.*) rm -rf "$live_dir" ;; esac
   set +e
   rm -f "$ready_file"
   if [ -n "$bridge_pid" ] && kill -0 "$bridge_pid" 2>/dev/null; then
@@ -460,10 +462,14 @@ bridge_arguments=(
 )
 if [ "$dsp_preset" != none ]; then
   bridge_arguments+=(--dsp-preset "$dsp_preset")
-  # The live file (LIVE_COEFFICIENTS_DESIGN.md step 3): the candidate polls
-  # $result_dir/dsp-live.dsp and answers on dsp-live.status.
+  # The live file (LIVE_COEFFICIENTS_DESIGN.md step 3). On tmpfs, as the
+  # service's is: the first run (2026-09-13 18:13 UTC) kept it under the
+  # result directory on the SD card and took whole-thread stalls of 3-4.5 ms
+  # during the measurement, which is the class of event this record ties to
+  # filesystem writes. Copied into the result directory at the end.
   if [ -n "$live_toggle" ]; then
-    bridge_arguments+=(--dsp-live-file "$result_dir/dsp-live.dsp" --dsp-live-status "$result_dir/dsp-live.status")
+    live_dir=$(mktemp -d /run/usb16x16-live-candidate.XXXXXX)
+    bridge_arguments+=(--dsp-live-file "$live_dir/dsp-live.dsp" --dsp-live-status "$live_dir/dsp-live.status")
   fi
 fi
 timeout -k 5 -s INT "$candidate_seconds" "$bridge_binary" "${bridge_arguments[@]}" \
@@ -516,13 +522,18 @@ toggle_pid=
 if [ -n "$live_toggle" ]; then
   (
     set +e
+    # Both presets read once into memory; each push is a builtin write to a
+    # temporary name on tmpfs and one rename, with no process spawned beyond
+    # mv itself. Timestamps come from bash's printf, not date.
+    toggle_text=$(cat "$live_toggle"; printf x); toggle_text=${toggle_text%x}
+    base_text=$(cat "$dsp_preset"; printf x); base_text=${base_text%x}
     pushes=0
     sleep 10
     while true; do
-      if [ $((pushes % 2)) -eq 0 ]; then source_preset=$live_toggle; else source_preset=$dsp_preset; fi
-      cp "$source_preset" "$result_dir/dsp-live.tmp" && mv "$result_dir/dsp-live.tmp" "$result_dir/dsp-live.dsp"
+      if [ $((pushes % 2)) -eq 0 ]; then text=$toggle_text; name=toggle; else text=$base_text; name=base; fi
+      printf '%s' "$text" > "$live_dir/dsp-live.tmp" && mv "$live_dir/dsp-live.tmp" "$live_dir/dsp-live.dsp"
       pushes=$((pushes + 1))
-      echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) push=$pushes file=$(basename "$source_preset")" >> "$result_dir/dsp-live-pushes.log"
+      printf '%(%Y-%m-%dT%H:%M:%SZ)T push=%s file=%s\n' -1 "$pushes" "$name" >> "$live_dir/dsp-live-pushes.log"
       sleep "$live_period"
     done
   ) &
@@ -565,6 +576,8 @@ if [ -n "$toggle_pid" ]; then
   kill "$toggle_pid" 2>/dev/null || true
   wait "$toggle_pid" 2>/dev/null || true
   toggle_pid=
+  cp "$live_dir"/dsp-live.dsp "$live_dir"/dsp-live.status "$live_dir"/dsp-live-pushes.log "$result_dir/" 2>/dev/null || true
+  echo "dsp_live_dir=$live_dir" >> "$result_dir/metadata.txt"
   echo "dsp_live_pushes=$(wc -l < "$result_dir/dsp-live-pushes.log" 2>/dev/null || echo 0)" >> "$result_dir/metadata.txt"
   echo "dsp_live_status_final=$(cat "$result_dir/dsp-live.status" 2>/dev/null || echo none)" >> "$result_dir/metadata.txt"
 fi

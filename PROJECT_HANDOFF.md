@@ -11080,3 +11080,33 @@ a10eeacb and `live-toggle` 227b134a in its preset list. Not installed: the
 service restarts on the accepted 947e8b4d; the supervisor's pin is
 unchanged. Next: the candidate run under `USB16X16_DSP_LIVE=1` with
 `live-base`, a toggle pushed every 2 s, and the acceptance battery.
+
+**MEASURED 2026-09-13 18:13 UTC, aborted at 100 s: the first swap-under-load
+run of the live candidate 7e8f1064.** Wrapper (installed eea0bd5f) on
+`live-base` (transparent in the fixed shape, 288 biquads, shape 4fef3f1d)
+with `live-toggle` pushed every 2 s from 10 s in. The mechanism worked: 44
+pushes, 44 applied (`dsp_live_gen=44`, `dsp_live_refused=0`, SUMMARY
+`dsp_live_applied=44`), every DSPLIVE line `applied` 1-30 ms after its
+push, `dsp_us_max` 180 us / mean 55 us for 288 biquads at a 48-frame
+period. The first ten swaps (14-32 s) ran with zero restarts; readiness
+passed on three probes at 1100 samples, spread 0. Then the wrapper hit its
+restart limit: RECOVER at 34.06 and 39.06 s (single direction, the usual
+device-close signature at probe close), and pairs in both directions
+within 50 us of each other at 69.31, 74.32, 79.32 and 99.55 s with gaps of
+75/4477/336/563 us: whole-audio-thread stalls, not device closes, during
+the measurement. Total 10 (tx 4, rx 6), limit 8, exit 33, no harness
+figure. Not yet attributed. The pushes are every 2 s so any event is
+within 2 s of one; the stalls are not on the push cadence. What the run
+did that no accepted run has done: the live file, the status file (one
+rename per push) and the push log were under the result directory on the
+SD card, and each push forked cp, mv, date and a subshell. This record
+already ties SD-card and filesystem activity to RECOVER pairs (2026-09-10
+capture, 2026-09-11 `find`), so the wrapper now keeps the live traffic on
+tmpfs (`/run/usb16x16-live-candidate.*`, copied to the result directory
+at the end) and pushes from memory with one `mv` per push. Next: the
+control run (same binary and preset, no toggle) and the toggle run again,
+both on the corrected wrapper, before any word on whether the swap itself
+costs anything. Dante Controller has been open on the Mac since 2026-09-12
+09:01 and the service ran the day clean beside it, so it is not the new
+factor. Service restarted after the run on the accepted 947e8b4d,
+`ptp locked`. Pi logs in `outputs/latency/phase4-dsp-candidate-20260913T181335Z/`.
