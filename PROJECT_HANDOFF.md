@@ -11308,3 +11308,33 @@ transport point of record on dsp-direct, subject to the operator's
 ACCEPTED. Next in the plan: step 2 (web-control install), step 5 (a user
 preset from the page with DSP_LIVE=1), 6-8 (live edits, the soak under
 swaps, restart semantics).
+
+**FOUND 2026-09-13 21:39 UTC (step 5 of the install plan): the first
+Compile & apply from the new page installed the fixed-shape user preset
+correctly and the switch was refused by the supervisor; the applier rolled
+back to dsp-direct as designed.** Web-control set installed by the operator
+(usb16x16-web df9490b8, usb16x16-apply abeaa869, both units active); the
+page files staged to `~/usb-16x16-work/web-ui/` (app.mjs, backend.mjs,
+live.mjs, compiler/compile.mjs, compiler/bridge-artifact.mjs). Two page
+bugs found by the operator and fixed the same hour: `crypto.subtle` does
+not exist on a plain-HTTP origin, so the compiler now carries a plain
+SHA-256 (vectors pinned, agrees with WebCrypto), and the Settings panels'
+1 Hz rebuild lost open disclosures and text selections (now kept; unchanged
+panels are not rebuilt). The preset then installed:
+`/etc/usb16x16/dsp/user-immersive-stereo-subs.dsp` 79fbc5f9, 8614 bytes,
+410 lines, 256 unity sections, byte-identical to the Mac's fixed compile
+of the shipped draft (shape 064ef631), block written with `DSP_LIVE=1`.
+The switch failed at `switch-profile refused: DSP profile needs the
+verified DSP bridge build`: the supervisor's `verify_dsp_artifact` compared
+its bridge pin against the literal 947e8b4d, not against the DSP-capable
+lineage, so moving the pin to 7e8f1064 made every preset profile
+unswitchable. Receipt `rolled-back`, steps validating / checking /
+installing / validating / stopping / switching / rolling-back / stopping /
+switching / starting / verifying / settling; the service came back on
+dsp-direct, stable, and the block and file stayed installed. Fix:
+supervisor 8b42e4ec (the check is a case over 406699bd, 947e8b4d and
+7e8f1064), `install-live-set.sh` ed135aee and `install-aes67-service.sh`
+re-pinned, staged under `live-install-20260913/`; the staged supervisor
+parses the live conf and lists the user block. Not yet installed: the
+operator reinstalls with the service stopped, then switches to
+`user-immersive-stereo-subs` from the page (Apply profile, no recompile).
