@@ -11258,3 +11258,23 @@ passing. Every step of the design is now built on the Mac; what remains
 is the one root install (bridge 7e8f1064, supervisor with DSP_LIVE,
 web-control) and the acceptance battery under the supervisor, plus tests
 3 and 4 of the design.
+
+**STAGED 2026-09-13 ~21:20 UTC, nothing installed: the live-coefficient
+install set and its plan.** `work/phase4-bridge/LIVE_INSTALL_PLAN.md` is the
+sequence: install the bridge 7e8f1064 and the supervisor 94809853 (the repo
+supervisor with its bridge pin moved to 7e8f1064) with the hash-guarded
+`install-live-set.sh` (3dc0a459; refuses while the service is active,
+verifies both hashes both ways, runs `profiles` on the live conf), install
+the web-control set (`usb16x16-web` df9490b8, `usb16x16-apply` abeaa869,
+installer 9448b247, offline runner unchanged), start on dsp-direct as the
+direct control, the standing battery on dsp-direct, a user preset applied
+from the page (DSP_LIVE=1), live edits heard on the return, the
+swap-under-load soak against the service, the restart semantics, then
+ACCEPTED or rollback. Staged on the Pi under `~/usb-16x16-work/
+live-install-20260913/` with `rollback/` holding the installed bridge
+947e8b4d, supervisor 23e40f8c, conf 37fc790f and the web-control files
+172b7032 / c7f2a162 (all copied from the installed paths, hashes verified
+from the Mac), and the new web-control files under `~/usb-16x16-work/
+web-control/`. `install-aes67-service.sh` re-pinned to the new supervisor
+and bridge for coherence; it is not the installer this plan uses. The
+service was not touched: dsp-direct, stable, 0/0 restarts.
