@@ -35,9 +35,15 @@ at 198 so TX_PLAYBACK_PRIME is the first lever; handoff MEASURED 2026-09-12
 answered (a lost source is silence, the capture keeps delivering zeros, the
 loop resumes by itself; the supervisor takes no action on input in loop
 mode), one RECOVER per run with the cause open (tcpdump window a suspect:
-the capture-off control read zero in 420 s), then the TX prime lever
-(USB16X16_AOIP_TX_PRIME=96 then 48, capture off; one captured run at the
-chosen point). The Wi-Fi keepalive unit is installed (work/pi-tuning). aoip-stream-stop.sh is the timed helper for the sink test. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
+the capture-off control read zero in 420 s). Prime 96 measured 5.844 ms
+but is unsafe (queue to 6 on a 96-frame pull, one RECOVER; the driver's
+144-frame skip bounds the prime at 192): the loop's figure is 8.2 ms at
+192. OPEN FIRST THING: the Ferrofish's stamp phase moved 41 -> 11 (a
+44.1 kHz Logic session via the Metric Halo, 2026-09-12 23:34 UTC) and the
+service's SINK_DELAY=103 now crosses (lowest free 133): switch the
+service to an accepted >=133 profile or re-read the phase (handoff FOUND
+2026-09-13 01:35); re-read the phase at the start of every measuring
+day. The Wi-Fi keepalive unit is installed (work/pi-tuning). aoip-stream-stop.sh is the timed helper for the sink test. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
 paragraph, then "Steps"). Bridge --mode aoip-loop with --loop-impulse in
 main.cpp (syntax-checked on the Mac, the accepted binary untouched),
 loop-measure preset 1e417960 (outputs/dsp-service/aoip-loop-20260912/),

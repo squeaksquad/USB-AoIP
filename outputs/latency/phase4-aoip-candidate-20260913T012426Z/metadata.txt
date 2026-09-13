@@ -1,0 +1,16 @@
+result_dir=/home/bdimaio/usb-16x16-work/logs/phase4-aoip-candidate-20260913T012426Z
+mode=aoip-loop
+sink_delay=103
+candidate_seconds=420
+impulse_seconds=2
+tx_prime=96
+dsp_preset=/home/bdimaio/usb-16x16-work/aoip-loop/loop-measure.dsp
+dsp_sha256=1e417960b8df91483d839814d66a3a27241fca45752bddfd9a09c18f2b594b3c
+module_sha256=bc694c24c77893836dd3a3cfa0c9105e68b556d19dd51a84bf9ee5ca3f1b98ff
+bridge_binary=/home/bdimaio/usb-16x16-work/phase4-aoip-src/build/usb16x16-rt-bridge
+bridge_sha256=0a39f4a614898dd55a10f84b3d4d971c0993bf2a44d31179bf11f80e8b70b79f
+bridge_arguments=--mode aoip-loop --period 48 --buffer 192 --ring 768 --target 48 --playback-prime 96 --prime-trim 0 --rx-prime-trim 0 --tx-playback-prime 96 --rx-playback-prime 0 --ravenna-playback-buffer 384 --usb-pitch-servo 0 --tx-depth 0 --rx-depth 0 --level-gain 0.05 --align-start 1 --align-offset-us 600 --align-tx-trigger 1 --align-tx-offset-us 950 --align-tx-prime 1 --align-rx-trigger 0 --align-rx-offset-us 600 --align-rx-prime 0 --align-prime-age-margin-us 50 --zero-run-detect 1 --impulse-trace 1 --impulse-channel 1 --impulse-threshold 0.002 --impulse-holdoff 96 --loop-impulse 1,2 --pitch-seed 0 --level-shift 0 --priority 90 --seconds 420 --dsp-preset /home/bdimaio/usb-16x16-work/aoip-loop/loop-measure.dsp
+mono_offset=1788903224.646294
+capture_file=aoip-loop-20260913T012426Z.pcap
+capture_seconds=30
+direction_restarts=1

@@ -10846,3 +10846,52 @@ The runs taken while the path was dead (`20260912T233211Z` from t=104 s,
 `20260913T000326Z`, `20260913T002755Z`) stay in the record as
 transport-only. Next: the lead pair and the stamp phase after the clock
 excursion (the 2026-09-07 rule), then prime 96 with a capture.
+
+**MEASURED 2026-09-13 01:24-01:32 UTC: the loop at TX prime 96 with the
+return path back: 5.844 ms wall / about 305 samples at the Pi's port
+(2.4 ms off the 8.2 of prime 192), and not a safe point: the queue went
+to 6 frames on a 96-frame pull and took one RECOVER.**
+`phase4-aoip-candidate-20260913T012426Z` (`USB16X16_AOIP_TX_PRIME=96`,
+capture at t=330-360 s): 208 returns of 209, ALIGN ok, `front_age_frames
+=200`. The wire split: packet back -> capture frame 1.343 ms, bridge
+dwell 1.596 (n=207, unchanged from 192), write -> packet out 2.909 (4.907
+at 192: the 96 frames exactly), total 5.844 ms (5.735-5.963, n=14); on
+the Pi's stamps 408 samples per pair (504 at 192, the 96 again), about
+305 on the loop after the 2.151 ms Ferrofish wire loop. The receive leg
+and the wire loop moved by the same 0.38 ms in opposite directions
+(1.724 -> 1.343, 1.774 -> 2.151): the Ferrofish's phase, see the next
+entry, not the prime. The cost: at t=41 s a 96-frame pull with a 2759 us
+gap took the 102-frame queue to 6 (`tx_qlow=1`), and at t=363.8 s a
+playback XRUN (ring 147, gap 18 us) with a re-prime. The RAVENNA
+playback's skips (96 here, 144 in the duplex record) are what bounds the
+prime: a queue must hold the largest skip plus a period, so 144 + 48
+makes 192 the smallest prime that survives the three-packet skip, and 96
+is exposed to every skip and to the 2-4 ms stall tail alike. The loop's
+prime lever is therefore worth about nothing unless the skip itself is
+addressed; 192 stays the loop's operating prime, and the mode's figure
+stands at 8.2 ms wall / about 420 samples with that prime.
+
+**FOUND 2026-09-13 01:35 UTC: the Ferrofish's stamp phase moved from 41
+to 11 with the clock excursion, the lowest free sink delay is now 133,
+and the service's sink delay 103 crosses.** `stamp-phase.py` on the
+run's capture with the Pi's own source as the reference: the Pi's wire
+phase 0 (16 on 2026-09-09; the daily 2^32 mod 48 shift), the Ferrofish's
+11 (9), grid phase 11 (41): "lowest free delay 133 (11 samples under
+144); 132 crosses". The lead pair read the same thing first: 638 / 641
+us over a clean fourteen minutes after the fix, against about 1 ms at
+this delay in the record. So dsp-direct's SINK_DELAY=103, the floor for
+phase 41 (ACCEPTED 2026-09-07 22:25), is 30 samples under the floor for
+phase 11, and the service's sink is reading one frame early: the
+41-sample-hole class of 2026-09-04, this time 30 samples, on the return
+into the Mac, invisible to a silent input and to the harness's 718 x 20.
+Every figure of today's loop runs was taken at 103 on phase 11 except
+the morning's (phase not read then; the lead of the morning was not
+read either), so the receive leg they carry is one frame short and the
+8.2 / 5.8 ms figures are 0.6 ms optimistic on that leg; they are not
+re-measured tonight. What the standing rule asks for now: the service
+on a sink delay of at least 133 until the phase is read again (a
+Ferrofish clock event redraws it; the daily wrap shifts both devices
+together), which is a profile switch and the user's call; the dsp-direct
+block carries 103 by copy and its DSP siblings the same. The phase is
+to be re-read at the start of every measuring day from here, not only
+after a known change: the excursion that moved it was on the Mac.

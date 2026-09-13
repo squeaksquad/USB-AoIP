@@ -445,3 +445,14 @@ the other runs.
 Consistent with the tcpdump window as the cause of the one-per-run events,
 not proof of it. Lever runs go without the capture from here; one captured
 run at the chosen point closes each lever, with the window late in the run.
+
+**Prime 96 (run 7, 01:24 UTC, return path back): 5.844 ms wall, about 305
+samples, the 96 frames exactly off the queue leg and nothing else moved; but
+the 102-frame queue went to 6 on one 96-frame pull and took one RECOVER, and
+the duplex record's 144-frame skip would underrun it outright.** The prime
+is bounded below by the RAVENNA playback's largest skip plus a period: 192
+stays the loop's prime, and the mode's figure is the 8.2 ms of prime 192.
+The lever the design named turns out to be the driver's skip behaviour, not
+the prime. The runs of the evening also found the Ferrofish's stamp phase
+moved (41 to 11) with a Mac-side clock excursion, so the sink delay of 103
+they ran at crosses by 30 samples; see the handoff FOUND 2026-09-13 01:35.
