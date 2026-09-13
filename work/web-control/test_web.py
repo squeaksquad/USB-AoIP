@@ -254,3 +254,18 @@ class WebLiveTests(unittest.TestCase):
         body = json.loads((self.spool / "request.json").read_text())
         self.assertEqual((body["kind"], body["expectedLiveSha256"]), ("commit", "ab"))
         self.assertNotIn("artifactFile", body)
+
+    def test_shape_key_is_pinned_and_rows_carry_the_installed_shape(self):
+        vector = ("usb16x16-dsp 1\npreset pinned shape vector\nrate 48000\nchannels 16\ninternal 2\nmaxdelay 480\n"
+                  "expand 2\n0 0 0.125\n1 1 -0.5\nbranch 1\n1 2\n1 0 0 0 0\n0.5 0.25 0 -0.1 0.01\n"
+                  "assign 2\n0 0 1\n3 1 0\noutput 16\n0 48 0.5 1\n1 0 0 0 0\n"
+                  + "".join(f"{i} 0 1 0\n" for i in range(1, 16)) + "end\n")
+        self.assertEqual(self.web.shape_key(vector), "7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0")
+        self.assertIsNone(self.web.shape_key("not an artifact\n"))
+        preset = Path(self.tmp.name) / "user-room.dsp"
+        preset.write_text(vector)
+        conf = self.conf.read_text().replace("/etc/usb16x16/dsp/user-room.dsp", str(preset)) + "PROFILE_USER_ROOM_DSP_SHA256=ab\n"
+        rows = {r["name"]: r for r in self.web.conf_profiles(self.web.parse_conf(conf))}
+        self.assertEqual(rows["user-room"]["dspShape"], "7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0")
+        self.assertEqual(rows["user-room"]["dspSha256"], "ab")
+        self.assertIsNone(rows["dsp-direct"]["dspShape"])

@@ -364,14 +364,21 @@ function loadCompiler(importImpl = path => import(path)) {
   return compilerPromise;
 }
 
-/** Compile a UI draft to the bridge artifact plus the report the confirm shows. */
-export async function compileDraft(config, importImpl) {
+/** Compile a UI draft to the bridge artifact plus the report the confirm shows.
+ *  The fixed shape (LIVE_COEFFICIENTS_DESIGN.md) since 2026-09-13: a user
+ *  preset is the base of live coefficient updates, so every band and row is
+ *  present and a value edit changes only numbers. `shapeKey` is the key the
+ *  Pi compares against the installed preset's. */
+export async function compileDraft(config, importImpl, {shape = 'fixed'} = {}) {
   const compiler = await loadCompiler(importImpl);
-  const result = compiler.compile(config, compiler.fileDevices('in.raw', 'out.raw'));
+  const result = compiler.compile(config, compiler.fileDevices('in.raw', 'out.raw'), {shape});
   const artifact = compiler.bridgeArtifact(result, {presetName: config.name});
   const delay = compiler.delayLatency(config);
-  const sections = (artifact.match(/^\S+ \S+ \S+ \S+ \S+$/gm) || []).length;
-  return {artifact, report: result.report, delay, sections};
+  // Coefficient rows only: five numbers, of which the first is not an index.
+  const sections = (artifact.match(/^-?\d*\.?\d+(e[-+]?\d+)? -?\S+ -?\S+ -?\S+ -?\S+$/gm) || [])
+    .filter(line => !/^preset /.test(line)).length;
+  const shapeKey = await compiler.artifactShapeKey(artifact);
+  return {artifact, report: result.report, delay, sections, shapeKey};
 }
 
 /** The confirm text for a compiled draft: what will run and what the compiler warns about. */
@@ -380,7 +387,7 @@ export function presetSummary(compiled, name) {
   const lines = [
     `Install "${name}" on the Pi and restart the AES67 service on it?`,
     '',
-    `${compiled.sections} biquad sections (${r.biquadCount} EQ bands, ${r.crossoverCount} crossover filters) across ${r.internalChannels} internal channels; headroom ${r.headroomDb} dB.`,
+    `${compiled.sections} biquad sections (${r.biquadCount} EQ bands shaping, ${r.placeholderCount ?? 0} held at unity, ${r.crossoverCount} crossover filters) across ${r.internalChannels} internal channels; headroom ${r.headroomDb} dB.`,
     compiled.delay.samples ? `Alignment delay adds ${compiled.delay.ms} ms (${compiled.delay.samples} samples) of latency.` : 'No alignment delay.',
   ];
   if (r.warnings?.length) lines.push('', ...r.warnings.map(w => `• ${w}`));
@@ -417,4 +424,62 @@ export function userPresets(health) {
     name: row.name, slug: row.name.replace(/^user-/, ''), description: row.description || '',
     live: row.name === health?.profile?.selected,
   }));
+}
+
+// ------------------------------------------------------- live coefficient updates
+// LIVE_COEFFICIENTS_DESIGN.md step 5. The page decides from the shape key alone
+// whether an edit can go to the running bridge without a restart.
+
+/**
+ * One of three states for the draft against what the Pi is running:
+ *   live            the live profile is a user preset the bridge takes live
+ *                   updates on, and the draft has its shape
+ *   needs-apply     same, but the draft's shape differs (a routing, slope,
+ *                   bass-redirection or first-send change): Compile & apply
+ *   not-previewable no Pi, Apply not installed, an accepted profile live, or
+ *                   a user preset installed before live updates existed
+ */
+export function liveState(health, draftShapeKey) {
+  if (!health) return {state: 'not-previewable', reason: 'Not connected to the Pi.', profile: null};
+  const choices = profileChoices(health);
+  if (!choices.available) return {state: 'not-previewable', reason: choices.reason || 'Apply is not installed.', profile: null};
+  const live = choices.live;
+  if (!live?.user) return {state: 'not-previewable', reason: `${live?.name || 'No profile'} is live; live edits apply only to a user preset, never to an accepted profile.`, profile: live?.name || null};
+  if (!live.dspLive) return {state: 'not-previewable', reason: `${live.name} was installed before live updates existed. Compile & apply it again.`, profile: live.name};
+  if (!live.dspShape) return {state: 'not-previewable', reason: `${live.name}'s installed file could not be read for its shape.`, profile: live.name};
+  const dspLive = health.dspLive || {};
+  const base = {profile: live.name, liveSha256: dspLive.sha256 || null, installedSha256: live.dspSha256 || null,
+                previewing: Boolean(dspLive.sha256) && dspLive.sha256 !== live.dspSha256, liveShape: live.dspShape};
+  if (!draftShapeKey) return {...base, state: 'live', reason: 'Edits go to the running bridge as you make them.'};
+  if (draftShapeKey !== live.dspShape) return {...base, state: 'needs-apply', reason: 'This edit changes the pipeline\'s shape (routing, a 48 dB/oct slope, bass redirection, or an input\'s first send). Compile & apply to run it.'};
+  return {...base, state: 'live', reason: 'Edits go to the running bridge as you make them; not kept across a restart until committed.'};
+}
+
+export async function requestLive(artifact, expectedProfile, expectedLiveSha256, fetchImpl = globalThis.fetch) {
+  const body = artifact === null
+    ? {revert: true, expectedProfile, expectedLiveSha256}
+    : {artifact, expectedProfile, expectedLiveSha256};
+  const response = await fetchImpl('/api/apply/live', {
+    method: 'POST',
+    headers: {'content-type': 'application/json', accept: 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !isObject(result) || result.ok !== true) {
+    throw new Error(isObject(result) && result.error ? result.error : `Live update failed (${response.status})`);
+  }
+  return result;
+}
+
+export async function requestCommit(expectedProfile, expectedLiveSha256, fetchImpl = globalThis.fetch) {
+  const response = await fetchImpl('/api/apply/commit', {
+    method: 'POST',
+    headers: {'content-type': 'application/json', accept: 'application/json'},
+    body: JSON.stringify({expectedProfile, expectedLiveSha256}),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !isObject(result) || result.ok !== true) {
+    throw new Error(isObject(result) && result.error ? result.error : `Commit failed (${response.status})`);
+  }
+  return result;
 }

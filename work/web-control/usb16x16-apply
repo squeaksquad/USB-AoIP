@@ -848,6 +848,14 @@ class Applier:
 
     def validate_live(self, request: dict, conf: dict[str, str]) -> dict:
         row = self.live_target(request, conf)
+        if request.get("revert") is True:
+            # Discard the preview: the installed file goes back to the bridge.
+            installed = Path(row["dspPreset"]).read_bytes()
+            if hashlib.sha256(installed).hexdigest() != row.get("dspSha256"):
+                raise Refused(f"{row['dspPreset']} does not hash to its block's pin")
+            text = installed.decode("utf-8", errors="replace")
+            return {"profile": row["name"], "digest": row["dspSha256"], "data": installed,
+                    "stats": parse_artifact(text), "shape": shape_key(text), "revert": True}
         digest = request.get("artifactSha256")
         if not isinstance(digest, str) or not re.match(r"^[0-9a-f]{64}$", digest):
             raise Refused("artifactSha256 must be 64 hex characters")
@@ -1051,7 +1059,7 @@ class Applier:
             "id": ident,
             "kind": kind,
             "request": {k: request.get(k) for k in ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
-                                                     "name", "slug", "artifactSha256", "expectedLiveSha256")},
+                                                     "name", "slug", "artifactSha256", "expectedLiveSha256", "revert")},
             "startedAt": utc(self.runner.now()),
             "steps": [],
             "previousProfile": None,

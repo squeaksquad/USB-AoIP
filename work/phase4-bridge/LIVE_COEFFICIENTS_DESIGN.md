@@ -475,3 +475,38 @@ re-pinned, the install is a separate sudo step).
   it again" rather than silently restarted.
 - **Still owed:** the Pi install of the bridge, the supervisor and this
   web-control set, and step 5 (the UI).
+
+## Results from step 5 (2026-09-13)
+
+Built and tested on the Mac; nothing installed on the Pi.
+
+- **`backend.mjs`**: `compileDraft` compiles the fixed shape by default and
+  returns the shape key; `liveState(health, draftShapeKey)` is the
+  three-state classification (live / needs-apply / not-previewable) with a
+  `previewing` flag when the bridge's applied hash differs from the installed
+  file's; `requestLive` (with a `revert` form for Discard) and
+  `requestCommit`.
+- **`live.mjs`**: `LiveQueue`, the debounce (150 ms), newest-draft-only,
+  one-in-flight policy, timer-injectable and tested without a browser.
+- **`app.mjs`**: every edit passes through `markDraft` -> `scheduleLive`,
+  which compiles, classifies, and submits; the state line sits under the EQ
+  editor's header and in Settings; Commit preview and Discard preview appear
+  in Settings while a preview runs; the bridge's answer arrives through
+  `health.dspLive` and the applier's receipt.
+- **Server side for the page**: profile rows carry `dspShape` (the installed
+  file's shape key, cached on its mtime) and `dspSha256`, so the page never
+  has to compile the installed file; the `live` kind takes `revert: true` to
+  push the installed file back.
+- **Tests**: 159 across `work/web-ui` and `work/dsp-compiler`, 56 across
+  `work/web-control`. The standalone page was loaded in a browser with no
+  backend and reports Not previewable, as designed.
+- **Corrections**: the confirm text's section count regex matched the
+  preset's name line when it had four words (a pre-existing off-by-one); it
+  now matches coefficient rows only. Discard needed a way to recover the
+  installed file's text, which the page never has: the applier's `live`
+  kind does it from the file it installed.
+- **What remains is the Pi install and the acceptance battery**, one root
+  step: the live bridge 7e8f1064 under the supervisor with `DSP_LIVE=1` on
+  a user block, this web-control set, then four loaded 800s and a 600 s
+  soak against the service, tests 3 and 4 of this note, and a live edit
+  from the page heard on the Ferrofish return.

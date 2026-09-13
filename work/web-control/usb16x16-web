@@ -302,6 +302,9 @@ def conf_profiles(conf: dict[str, str]) -> list[dict]:
             "user": upper.startswith("USER_") and field("STATUS") == "experimental",
             # The block passes the bridge a live file (LIVE_COEFFICIENTS_DESIGN.md).
             "dspLive": field("DSP_LIVE") == "1",
+            "dspSha256": field("DSP_SHA256") or None,
+            # The installed file's shape key, user presets only (the live base).
+            "dspShape": installed_shape(field("DSP_PRESET")) if upper.startswith("USER_") and field("DSP_PRESET") else None,
         })
     rows.sort(key=lambda row: (not row["accepted"], not row["user"], row["name"]))
     return rows
@@ -623,6 +626,92 @@ def apply_state() -> dict:
     except OSError:
         pass
     return state
+
+
+def artifact_shape(text: str) -> str | None:
+    """The canonical shape text of a bridge artifact (every count and index,
+    gains, delays and coefficients blanked; all 16 outputs in index order),
+    line for line what bridge-artifact.mjs, usb16x16-apply and the bridge
+    produce. None when the text is not an artifact. Read-only use here: the
+    installed preset's shape key lets the page tell a live edit from one
+    that needs Compile & apply without compiling the installed file itself."""
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    at = 0
+    try:
+        def next_line() -> str:
+            nonlocal at
+            at += 1
+            return lines[at - 1]
+        def header(keyword: str) -> str:
+            parts = next_line().split()
+            if parts[0] != keyword or len(parts) != 2:
+                raise ValueError(keyword)
+            return parts[1]
+        out = []
+        if header("usb16x16-dsp") != "1":
+            return None
+        out.append("usb16x16-dsp-shape 1")
+        if not next_line().startswith("preset"):
+            return None
+        for keyword in ("rate", "channels", "internal", "maxdelay"):
+            out.append(f"{keyword} {header(keyword)}")
+        def mix(keyword: str) -> None:
+            rows = int(header(keyword))
+            out.append(f"{keyword} {rows}")
+            for _ in range(rows):
+                parts = next_line().split()
+                if len(parts) != 3:
+                    raise ValueError(keyword)
+                out.append(f"{parts[0]} {parts[1]}")
+        mix("expand")
+        branches = int(header("branch"))
+        out.append(f"branch {branches}")
+        for _ in range(branches):
+            parts = next_line().split()
+            if len(parts) != 2:
+                raise ValueError("branch")
+            out.append(f"{parts[0]} {parts[1]}")
+            at += int(parts[1])
+        mix("assign")
+        per_output = [0] * 16
+        for _ in range(int(header("output"))):
+            parts = next_line().split()
+            if len(parts) != 4 or int(parts[0]) >= 16:
+                raise ValueError("output")
+            per_output[int(parts[0])] = int(parts[3])
+            at += int(parts[3])
+        out.append("output 16")
+        out.extend(f"{index} {sections}" for index, sections in enumerate(per_output))
+        if next_line() != "end" or at != len(lines):
+            return None
+    except (ValueError, IndexError):
+        return None
+    out.append("end")
+    return "\n".join(out) + "\n"
+
+
+def shape_key(text: str) -> str | None:
+    shape = artifact_shape(text)
+    return None if shape is None else hashlib.sha256(shape.encode("utf-8")).hexdigest()
+
+
+_shape_cache: dict = {}
+
+
+def installed_shape(path: str) -> str | None:
+    """The shape key of an installed preset file, cached on its mtime and size."""
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    stamp = (stat.st_mtime_ns, stat.st_size)
+    hit = _shape_cache.get(path)
+    if hit and hit[0] == stamp:
+        return hit[1]
+    text = read_text(Path(path), 1 << 18)
+    key = shape_key(text) if text else None
+    _shape_cache[path] = (stamp, key)
+    return key
 
 
 def read_live_status(now: float | None = None) -> dict:
@@ -1274,6 +1363,23 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_body(limit=PRESET_ARTIFACT_MAX + 65536)
         if not isinstance(body, dict):
             self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object")
+            return
+        if body.get("revert") is True:
+            # Discard the preview: the applier pushes the installed file back.
+            gate = self.live_gate(body.get("expectedProfile"), body.get("expectedLiveSha256"))
+            if gate is None:
+                return
+            _, live, _ = gate
+            try:
+                ident = write_apply_request(live, body.get("expectedProfile"), self.current_user(),
+                                            extra={"kind": "live", "revert": True,
+                                                   "expectedLiveSha256": body.get("expectedLiveSha256")})
+            except OSError as error:
+                self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
+                return
+            self.send_json({"ok": True, "id": ident, "profile": live, "revert": True,
+                            "note": "Queued. The applier hands the installed preset back to the bridge; no restart."},
+                           HTTPStatus.ACCEPTED)
             return
         artifact = body.get("artifact")
         digest = body.get("artifactSha256")

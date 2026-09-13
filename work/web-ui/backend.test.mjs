@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, formatDuration, serviceLabel, browserStore, piStore, fetchMeters, meterLevels } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, formatDuration, serviceLabel, browserStore, piStore, fetchMeters, meterLevels, liveState, requestLive, requestCommit } from './backend.mjs';
 
 const ok = body => ({ok: true, status: 200, json: async () => body});
 const fail = (status, body) => ({ok: false, status, json: async () => body});
@@ -356,4 +356,70 @@ test('the connection line says whether meters are live', () => {
   assert.match(connectionLine(live), /Simulated meters/);
   assert.match(connectionLine({...live, meters: {available: true}}), /Live meters/);
   assert.equal(factFor({...live, meters: {available: true, reason: ''}}, 'Metering').value, 'Live');
+});
+
+// ------------------------------------------------------ live coefficient updates
+
+const liveHealth = (over = {}) => ({
+  ...live,
+  control: {apply: {available: true, scope: 'accepted profiles and user presets'}},
+  profile: {selected: 'user-room', profiles: [
+    {name: 'dsp-direct', accepted: true, status: 'accepted', user: false, dspLive: false, dspShape: null, dspSha256: null},
+    {name: 'user-room', accepted: false, status: 'experimental', user: true, dspLive: true, dspShape: 'shape-a', dspSha256: 'file-1'},
+  ]},
+  dspLive: {available: true, gen: 3, sha256: 'file-1', state: 'applied', reason: ''},
+  ...over,
+});
+
+test('liveState classifies the draft against what the Pi is running', () => {
+  assert.equal(liveState(null, 'shape-a').state, 'not-previewable');
+  assert.equal(liveState(liveHealth({control: {apply: {available: false, reason: 'not installed'}}}), 'shape-a').state, 'not-previewable');
+  const accepted = liveHealth({profile: {selected: 'dsp-direct', profiles: liveHealth().profile.profiles}});
+  assert.equal(liveState(accepted, 'shape-a').state, 'not-previewable');
+  assert.match(liveState(accepted, 'shape-a').reason, /never to an accepted profile/);
+  const old = liveHealth(); old.profile.profiles[1] = {...old.profile.profiles[1], dspLive: false};
+  assert.match(liveState(old, 'shape-a').reason, /Compile & apply it again/);
+  assert.equal(liveState(liveHealth(), 'shape-a').state, 'live');
+  assert.equal(liveState(liveHealth(), null).state, 'live', 'no draft key yet: still a live profile');
+  const needs = liveState(liveHealth(), 'shape-b');
+  assert.equal(needs.state, 'needs-apply');
+  assert.match(needs.reason, /Compile & apply/);
+  assert.equal(needs.profile, 'user-room');
+});
+
+test('liveState says whether a preview is running that is not the installed file', () => {
+  assert.equal(liveState(liveHealth(), 'shape-a').previewing, false);
+  const previewing = liveState(liveHealth({dspLive: {available: true, gen: 4, sha256: 'file-2', state: 'applied'}}), 'shape-a');
+  assert.equal(previewing.previewing, true);
+  assert.equal(previewing.liveSha256, 'file-2');
+  assert.equal(previewing.installedSha256, 'file-1');
+});
+
+test('requestLive and requestCommit post the right shapes, including the revert form', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push([url, JSON.parse(init.body)]); return ok({ok: true, id: 'x'}); };
+  await requestLive('usb16x16-dsp 1\nend\n', 'user-room', 'file-1', fetchImpl);
+  await requestLive(null, 'user-room', 'file-2', fetchImpl);
+  await requestCommit('user-room', 'file-2', fetchImpl);
+  assert.deepEqual(calls, [
+    ['/api/apply/live', {artifact: 'usb16x16-dsp 1\nend\n', expectedProfile: 'user-room', expectedLiveSha256: 'file-1'}],
+    ['/api/apply/live', {revert: true, expectedProfile: 'user-room', expectedLiveSha256: 'file-2'}],
+    ['/api/apply/commit', {expectedProfile: 'user-room', expectedLiveSha256: 'file-2'}],
+  ]);
+  await assert.rejects(requestLive('x', 'user-room', null, async () => fail(409, {error: 'stale'})), /stale/);
+  await assert.rejects(requestCommit('user-room', null, async () => fail(409, {error: 'nothing'})), /nothing/);
+});
+
+test('compileDraft compiles the fixed shape by default and carries the shape key', async () => {
+  const importImpl = path => import(path.replace('./compiler/', '../dsp-compiler/'));
+  const compiled = await compileDraft(createConfig(), importImpl);
+  assert.equal(compiled.report.shape, 'fixed');
+  assert.equal(compiled.report.placeholderCount, 256);
+  assert.equal(compiled.sections, 302, 'the shipped 7.2.4 layout in the fixed shape');
+  assert.match(compiled.shapeKey, /^[0-9a-f]{64}$/);
+  const edited = createConfig(); edited.outputs[0].bands[2].gainDb = -3;
+  assert.equal((await compileDraft(edited, importImpl)).shapeKey, compiled.shapeKey, 'a gain edit keeps the shape');
+  const minimal = await compileDraft(createConfig(), importImpl, {shape: 'minimal'});
+  assert.equal(minimal.report.shape, 'minimal');
+  assert.equal(minimal.sections, 46);
 });

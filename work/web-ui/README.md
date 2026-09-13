@@ -358,6 +358,41 @@ this text importer. Input is parsed locally and never uploaded to a server.
 REW documentation: [EQ filter text export](https://www.roomeqwizard.com/help/help_en-GB/html/eqwindow.html),
 [equaliser definitions](https://www.roomeqwizard.com/help/help_en-GB/html/equaliser.html).
 
+### Live preview (2026-09-13, step 5 of `work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md`)
+
+When the Pi is running a user preset that the bridge takes live updates on,
+edits go to the running bridge as they are made, with no restart. Whether an
+edit can go live is decided from the **shape key** alone: the compiled
+artifact with every gain, delay and coefficient blanked, hashed, computed the
+same way here (`bridge-artifact.mjs`), in the applier and in the bridge. The
+EQ editor and the Settings panel show one of three states:
+
+- **Live.** The live profile is a user preset with `DSP_LIVE=1` and the draft
+  has its shape. Every edit compiles the draft in the fixed shape, and
+  `live.mjs` debounces (150 ms), keeps only the newest draft and has at most
+  one request in flight; `POST /api/apply/live` hands the artifact to the
+  applier, which checks it and gives it to the bridge. Band gain, frequency,
+  Q, type and enable; output EQ enable and global bypass; crossover
+  frequency and a 12 <-> 24 dB/oct slope; high-pass on and off; send gains;
+  LFE trim; bus gain and mute; output gain, polarity, mute and delay are all
+  live edits.
+- **Needs apply.** Same profile, different shape: routing, a bus format or
+  membership, a 48 dB/oct slope, bass redirection on or off, or an input's
+  first send. Compile & apply runs it, with the restart that implies.
+- **Not previewable.** No Pi, Apply not installed, an accepted profile live
+  (live edits never touch an accepted profile), or a user preset installed
+  before live updates existed (re-apply it).
+
+A live update is not kept: a restart returns to the installed preset. While
+the bridge runs coefficients that differ from the installed file, Settings
+shows **Commit preview** (`POST /api/apply/commit`: the running coefficients
+become the installed file, no restart) and **Discard preview** (the installed
+file is handed back to the bridge). The page's expectation of what the
+bridge last applied travels with every request and a stale page is refused.
+Compile & apply itself now emits the fixed shape, so every user preset
+installed from here on is a live base; the confirm text says how many bands
+shape the audio and how many are held at unity.
+
 ## Processing architecture
 
 ```text

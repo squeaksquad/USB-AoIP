@@ -5,7 +5,8 @@ import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphoneP
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit } from './backend.mjs';
+import { LiveQueue } from './live.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
 let channelClipboard = null, pasteScope = 'processing', layoutUndo = null, rewParsed = null;
@@ -21,6 +22,23 @@ const clipHold = {inputs: new Array(16).fill(0), outputs: new Array(16).fill(0)}
 const clipSeen = {inputs: new Array(16).fill(null), outputs: new Array(16).fill(null)};
 // Staged Apply (Settings): the chosen target, the last status seen, and the poll that follows an operation.
 let applyChoice = '', applyStatus = null, applyBusy = false, applyPoll = null;
+// Live coefficient updates (LIVE_COEFFICIENTS_DESIGN.md step 5): the draft's
+// shape key from its last compile, what the bridge last took from this page,
+// and the debounced one-in-flight queue that carries edits to the Pi.
+let draftShapeKey = null, liveLastSent = null, liveLine = '';
+const liveQueue = new LiveQueue({
+  send: async ({artifact, sha256, expectedProfile, expectedLiveSha256}) => {
+    const result = await requestLive(artifact, expectedProfile, expectedLiveSha256);
+    liveLastSent = sha256;
+    return result;
+  },
+  onSettled: outcome => {
+    liveLine = outcome.ok ? `Sent to the bridge (${outcome.draft.sha256.slice(0, 8)})…` : `Live update refused: ${outcome.error.message}`;
+    if (!outcome.ok) toast(liveLine);
+    renderLiveState();
+    if (outcome.ok) startApplyPolling();
+  },
+});
 const logLive = {all:'',aes67:'',usb:''};
 let profileState = null;
 // Each slot remembers whether its draft was saved, so recalling one does not read as edited.
@@ -58,7 +76,45 @@ async function deletePreset(name) {
   try { await presetStore.remove(name); render(); toast(`Deleted "${name}" from ${presetStore.label}.`); }
   catch (e) { toast(`Could not delete: ${e.message}`); }
 }
-function markDraft() { dirty = true; $('#draft-status').textContent = 'Draft · unsaved'; }
+function markDraft() { dirty = true; $('#draft-status').textContent = 'Draft · unsaved'; scheduleLive(); }
+
+/** Every edit: compile in the fixed shape and, when the running preset has the
+ *  same shape, hand the numbers to the bridge through the debounced queue. */
+async function scheduleLive() {
+  if (!health || config.mode === 'direct') return;
+  const before = liveState(health, null);
+  if (before.state !== 'live') return;
+  let compiled;
+  try { validateConfig(config); compiled = await compileDraft(config); }
+  catch (e) { liveLine = `Not sent: ${e.message}`; renderLiveState(); return; }
+  draftShapeKey = compiled.shapeKey;
+  const state = liveState(health, draftShapeKey);
+  renderLiveState();
+  if (state.state !== 'live') { liveQueue.cancel(); return; }
+  const sha256 = await sha256Hex(compiled.artifact);
+  if (sha256 === (liveLastSent || state.liveSha256)) return;
+  liveQueue.submit({artifact: compiled.artifact, sha256, expectedProfile: state.profile,
+                    expectedLiveSha256: liveLastSent || state.liveSha256});
+}
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** The three-state line in the EQ editor and the Settings panel. */
+function liveStateHtml() {
+  const state = liveState(health, draftShapeKey);
+  const label = state.state === 'live' ? 'Live' : state.state === 'needs-apply' ? 'Needs apply' : 'Not previewable';
+  const cls = state.state === 'live' ? 'banner-note' : state.state === 'needs-apply' ? 'banner-warn' : 'muted';
+  const preview = state.previewing ? ' A preview is running that is not the installed preset: commit it to keep it, or discard it.' : '';
+  return `<p id="live-state" class="${cls}" data-live-state="${state.state}"><strong>${label}.</strong> ${esc(state.reason)}${preview}${liveLine ? ` <span class="muted">${esc(liveLine)}</span>` : ''}</p>`;
+}
+function renderLiveState() {
+  const node = $('#live-state');
+  if (node) node.outerHTML = liveStateHtml();
+  refreshSettingsLive();
+}
 
 function render() {
   const isDirect = config.mode === 'direct';
@@ -207,6 +263,7 @@ function renderInspector() {
   $('#inspector').innerHTML = `<div class="inspector-head"><div><h2 id="eq-dialog-title"><span class="badge">${pad(selected)}</span>${esc(o.label)}</h2><p>AoIP output ${selected + 1} · ${headphone ? `${ear===0?'Left ear':ear===1?'Right ear':'Headphone'} · ${esc(owner.label)}` : o.role === 'sub' ? 'Independent subwoofer correction' : o.role === 'unused' ? 'Assign a role to use this output' : 'Independent speaker correction'}</p></div>
     <div class="channel-nav" role="group" aria-label="Go to another output"><button data-action="channel-prev" aria-label="Edit the previous output" title="Previous output (Alt + ←)">◀</button><select id="channel-jump" aria-label="Edit another output" title="Open another output in this editor">${options(config.outputs.map((v,i)=>[i,`${pad(i)} · ${v.label}`]),selected)}</select><button data-action="channel-next" aria-label="Edit the next output" title="Next output (Alt + →)">▶</button></div>
     <button class="quiet" data-action="eq-close" aria-label="Close EQ editor">Close</button></div>
+    ${off ? '' : liveStateHtml()}
     <fieldset class="eq-body" ${disabled(off)}>
     <div class="channel-tools"><button data-action="channel-copy">Copy channel</button><label class="field"><span>Paste scope</span><select id="paste-scope">${options([['processing','All output processing'],['eq','EQ only']],pasteScope)}</select></label><button data-action="channel-paste" ${disabled(!channelClipboard)}>Paste${channelClipboard?` from ${esc(channelClipboard.label)}`:''}</button><button data-action="rew-open">Import REW EQ</button>${field('Swap with output', `<select id="out-destination" title="Exchange this channel with another physical output, including processing and bass sends">${options(config.outputs.map((v,i)=>[i,`${pad(i)} · ${v.label}${i===selected?' (this one)':''}`]),selected)}</select>`)}<small>Copy/paste moves EQ, gain, delay, mute and polarity. Swapping exchanges two physical outputs, routing included.</small></div>
     <div class="eq-title"><div><h3>Parametric EQ <span class="muted">/ 16 bands</span></h3><p>Calculated PEQ response only · excludes crossovers, output gain and room response</p></div>
@@ -544,6 +601,7 @@ function applyPanel() {
     <p class="fact-plain">${liveLine}</p>
     <div class="log-controls">${field('Switch to', `<select id="apply-profile-choice" ${disabled(!choices.accepted.length || inFlight || applyBusy)}>${choices.accepted.length ? options(choices.accepted.map(row => [row.name, `${row.name}${row.dspPreset ? ' · preset' : ' · no preset'}`]), applyChoice) : '<option value="">No other accepted profile</option>'}</select>`)}<button class="primary" data-action="apply-profile" ${disabled(!canApply)} title="${choices.available ? 'Restart the AES67 service on the chosen profile' : esc(choices.reason)}">${applyBusy ? 'Queueing…' : inFlight ? 'Applying…' : 'Apply profile'}</button></div>
     <p class="muted">${esc(choices.reason.replace(/[.\s]*$/, '.'))}${health ? ' A switch stops audio for about a minute, draws a new latency level, and is rolled back automatically if the stack does not come up clean. Stop playback first.' : ''}</p>
+    ${health ? (() => { const state = liveState(health, draftShapeKey); return state.previewing ? `<div class="apply-draft"><strong>Live preview running</strong><p class="muted">The bridge is running coefficients (${esc((state.liveSha256 || '').slice(0, 8))}) that are not the installed <code>${esc(state.profile)}</code> (${esc((state.installedSha256 || '').slice(0, 8))}). A restart returns to the installed file.</p><button data-action="live-commit" ${disabled(applyBusy || inFlight)}>Commit preview</button> <button class="quiet" data-action="live-discard" ${disabled(applyBusy || inFlight)}>Discard preview</button></div>` : ''; })() : ''}
     ${health ? `<div class="apply-draft"><strong>This draft on the Pi</strong><p class="muted">Compiles <em>${esc(config.name)}</em> in this browser with the verified compiler and installs it as <code>user-${esc(presetSlug(config.name) || '…')}</code>: never soaked, loaded through the bridge's own loader, every section checked stable, at most ${8} user presets.${config.mode === 'direct' ? ' Switch the draft to DSP mode to compile it.' : ''}</p><button data-action="apply-draft" ${disabled(!choices.available || applyBusy || inFlight || config.mode === 'direct' || !presetSlug(config.name))}>Compile &amp; apply this draft</button></div>` : ''}
     ${presetsOnPi.length ? `<div class="apply-presets"><strong>User presets on the Pi</strong><ul>${presetsOnPi.map(p => `<li><div class="apply-preset-text"><code>${esc(p.name)}</code>${p.live ? ' <span class="badge">live</span>' : ''}<span class="muted" title="${esc(p.description)}">${esc(p.description.replace(/^user preset: /, ''))}</span></div><button class="quiet" data-action="remove-preset" data-slug="${esc(p.slug)}" ${disabled(p.live || inFlight || applyBusy)} title="${p.live ? 'Switch away before removing the live preset' : 'Remove this preset and its block from the Pi'}">Remove</button></li>`).join('')}</ul></div>` : ''}
     <div class="note-box" role="status">${esc(applyLine(status))}</div>${steps}</section>`;
@@ -569,6 +627,37 @@ async function applyDraft() {
     applyStatus = {current: null, pending: true, inFlight: false};
     startApplyPolling();
   } catch (e) { toast(`Preset refused: ${e.message}`); }
+  applyBusy = false;
+  refreshSettingsLive();
+}
+
+async function commitLive() {
+  const state = liveState(health, draftShapeKey);
+  if (!state.previewing) { toast('Nothing to commit: the bridge is running the installed preset.'); return; }
+  if (!confirm(`Make the coefficients the bridge is running the installed ${state.profile}? No restart.`)) return;
+  applyBusy = true; refreshSettingsLive();
+  try {
+    const result = await requestCommit(state.profile, state.liveSha256);
+    toast(result.note || 'Commit queued.');
+    applyStatus = {current: null, pending: true, inFlight: false};
+    startApplyPolling();
+  } catch (e) { toast(`Commit refused: ${e.message}`); }
+  applyBusy = false;
+  refreshSettingsLive();
+}
+
+async function discardLive() {
+  const state = liveState(health, draftShapeKey);
+  if (!state.previewing) { toast('Nothing to discard.'); return; }
+  liveQueue.cancel();
+  applyBusy = true; refreshSettingsLive();
+  try {
+    const result = await requestLive(null, state.profile, state.liveSha256);
+    liveLastSent = state.installedSha256;
+    toast(result.note || 'Discard queued.');
+    applyStatus = {current: null, pending: true, inFlight: false};
+    startApplyPolling();
+  } catch (e) { toast(`Discard refused: ${e.message}`); }
   applyBusy = false;
   refreshSettingsLive();
 }
@@ -670,6 +759,8 @@ document.addEventListener('click', event => {
   if (b.dataset.bandSelect!==undefined) {selectedBand=Number(b.dataset.bandSelect);renderSelectedBand();drawEq();return;}
   if (b.dataset.copyCommand) {const command=SERVICE_COMMANDS.find(c=>c.id===b.dataset.copyCommand);if(command)copyCommand(command.command);return;}
   if (b.dataset.action==='copy-journal') {copyCommand(journalCommand(logService));return;}
+  if (b.dataset.action==='live-commit') {commitLive();return;}
+  if (b.dataset.action==='live-discard') {discardLive();return;}
   if (b.dataset.tab) { tab = b.dataset.tab; render(); return; }
   if (b.dataset.select !== undefined) { selected = Number(b.dataset.select); selectedBand = 0; renderBank(); renderOverview(); renderInspector(); updateMeters(); return; }
   if (b.id === 'meter-toggle') { metersRunning = !metersRunning; syncMeterLabels(); updateMeters(); return; }
@@ -1024,8 +1115,12 @@ async function pollHealth() {
     applyStatus = null; // the 1 Hz snapshot is the source of truth while nothing of ours is running
     if (next.apply.inFlight || next.apply.pending) startApplyPolling();
   }
+  // The bridge's answer to the last live update arrives through health.
+  if (next?.dspLive?.sha256 && next.dspLive.state === 'applied' && liveLastSent === next.dspLive.sha256) liveLine = `Applied (${next.dspLive.sha256.slice(0, 8)}).`;
+  if (!next) { liveQueue.cancel(); liveLastSent = null; }
   refreshSettingsLive();
   renderConnection();
+  renderLiveState();
   $('#mode-note').textContent = modeNote(config.mode === 'direct');
 }
 

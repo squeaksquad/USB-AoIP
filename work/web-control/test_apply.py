@@ -732,3 +732,16 @@ class LiveTests(PresetFixture):
         result = self.make(runner).consume()
         self.assertEqual(result["state"], "refused")
         self.assertIn("no longer matches", result["error"])
+
+    def test_revert_pushes_the_installed_file_back(self):
+        runner = LiveRunner(self.env)
+        self.live_request()
+        assert self.make(runner).consume()["state"] == "done"
+        body = {"id": "abcdefabcdef", "kind": "live", "revert": True, "expectedProfile": "user-room-a-night",
+                "requestedAt": time.time(), "requestedBy": "bryan"}
+        (self.env.spool / "request.json").write_text(json.dumps(body))
+        result = self.make(runner).consume()
+        self.assertEqual(result["state"], "done", result)
+        self.assertEqual(result["liveUpdate"]["sha256"], __import__("hashlib").sha256(self.artifact).hexdigest())
+        self.assertEqual((self.env.run_dir / "dsp-live.dsp").read_bytes(), self.artifact)
+        self.assertFalse(any(c[:2] == ["systemctl", "stop"] for c in runner.calls))

@@ -43,3 +43,6 @@ work/aes67-linux-daemon/
 *~
 *.swp
 __pycache__/
+
+# Local preview launcher for the desktop app; not part of the project
+.claude/launch.json

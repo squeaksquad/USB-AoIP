@@ -11237,3 +11237,24 @@ to the new `usb16x16-web` and `usb16x16-apply` hashes. The Pi's installed
 web-control set is unchanged; installing this, the live bridge 7e8f1064
 and the `DSP_LIVE`-aware supervisor is one root step with the standing
 battery after it. Step 5 (the UI) is next and needs no Pi time.
+
+**IMPLEMENTED 2026-09-13, Mac only, nothing installed: step 5 of the live
+coefficient design, the UI.** `work/web-ui/backend.mjs`: `compileDraft`
+emits the fixed shape by default and returns the shape key; `liveState`
+classifies the draft as live / needs-apply / not-previewable from the
+shape key against the live profile row's `dspShape` (new on the server's
+profile rows with `dspSha256`, the installed file's key cached on mtime)
+and flags a running preview; `requestLive` (and its `revert` form) and
+`requestCommit`. `work/web-ui/live.mjs`: `LiveQueue`, 150 ms debounce,
+newest draft only, one request in flight, tested with injected timers.
+`app.mjs`: `markDraft` -> `scheduleLive` on every edit; the state line in
+the EQ editor and Settings; Commit preview / Discard preview in Settings
+while the bridge's applied hash differs from the installed file. Server:
+`usb16x16-apply` `live` takes `revert: true` (pushes the installed file
+back), `usb16x16-web` accepts it on `/api/apply/live` and carries
+`dspShape` / `dspSha256` on rows; `install-web-control.sh` re-pinned.
+Tests: 159 JS (web-ui + dsp-compiler), 56 Python (web-control), all
+passing. Every step of the design is now built on the Mac; what remains
+is the one root install (bridge 7e8f1064, supervisor with DSP_LIVE,
+web-control) and the acceptance battery under the supervisor, plus tests
+3 and 4 of the design.
