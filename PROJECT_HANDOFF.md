@@ -11426,3 +11426,33 @@ nothing was re-applied (compile.mjs 68bfd65c staged). The bus format
 control works (verified on a mock: Apply format re-roles the outputs and
 the state line reads Needs apply); a format change is a routing change and
 goes through Compile & apply by design.
+
+**MEASURED 2026-09-13 22:19-22:29 UTC (step 7): the 600 s all-16 soak
+against the service on `user-immersive-stereo-subs` with a same-shape
+swap every 2 s. Transport clean; the legacy activity gate FAILs on the
+preset's own routing, not on the bridge.** The operator ran
+`live-toggle-push.sh 660 2` in the ssh session (root; alternating the
+installed file 79fbc5f9 and `user-toggle.dsp` d54a7229, band 1 of outputs
+3-16 at +3 dB, same shape 064ef631) while `meter_battery.py --phases soak
+--execute` ran from the Mac (`outputs/dsp-service/live-swap-soak-20260913/`).
+Transport: 341 `DSPLIVE applied` during the window, zero refused,
+`dsp_live_gen` 391 at the read, zero new RECOVERs (restarts stayed at the
+1/1 pair of 22:09, the reinstall), queue floors 81 / 66 unchanged start to
+end, `tx_gapmax_us` 1279 / `rx_gapmax_us` 1393 unchanged, `dsp_us_max`
+132.98 us / mean 50.6 us (the direct arm read 140 / 48), lead 601-609 us,
+`meter_us_max` 30 -> 41 us. Return channels 1-13 carried the load signal
+(peaks 0.122 / 0.128 on the mains, 0.018 on the others at the preset's
+-18 dB headroom); the gate's eight errors are inputs 4 and 13 (the
+subwoofer outputs, low-passed at 80 Hz: longest zero runs 4 and 6 samples
+against the legacy limit of 4, a noise floor crossing zero) and inputs
+14-16 (the shipped layout's unused outputs, silent by design). This is the
+class the 2026-09-11 loaded arm hit and the record answered with the
+reference-events-v1 criterion; `meter_battery.py` takes no criterion
+option, so the legacy verdict stands as written and the transport
+counters are what step 7 asked for: ~340 same-shape swaps under the
+all-16 load with no restart, no refusal and the stage cost unmoved. The
+bridge's `zr_ravcap` counted 1099 events (max 479) on the same silent
+outputs. Owed: a criterion-aware soak (validate.py's
+`--signal-criterion reference-events-v1` through the battery, or a preset
+that routes all 16 outputs) before the word ACCEPTED is used for the
+feature. The pusher leaves the installed file running at its end.

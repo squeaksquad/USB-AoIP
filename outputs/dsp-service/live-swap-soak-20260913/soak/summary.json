@@ -1,0 +1,109 @@
+{
+  "phase": "soak",
+  "passed": false,
+  "runs": [
+    {
+      "index": 1,
+      "seconds": 600.9,
+      "errors": [
+        "silence run, invalid sample or full scale on input 4",
+        "silence run, invalid sample or full scale on input 13",
+        "no sustained return signal on input 14",
+        "silence run, invalid sample or full scale on input 14",
+        "no sustained return signal on input 15",
+        "silence run, invalid sample or full scale on input 15",
+        "no sustained return signal on input 16",
+        "silence run, invalid sample or full scale on input 16"
+      ],
+      "bridgeBefore": {
+        "tx_qfloor": "81",
+        "rx_qfloor": "66",
+        "meter_us_max": "30.184",
+        "meter_us_mean": "1.397",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1279",
+        "rx_gapmax_us": "1393"
+      },
+      "bridgeAfter": {
+        "tx_qfloor": "81",
+        "rx_qfloor": "66",
+        "meter_us_max": "41.073",
+        "meter_us_mean": "1.416",
+        "tx_pullmax": "48",
+        "tx_gapmax_us": "1279",
+        "rx_gapmax_us": "1393"
+      },
+      "lead": [
+        601,
+        609
+      ],
+      "channels": [
+        {
+          "peak": 0.12232386,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.12781297,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.017524207,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.05942571,
+          "longestZeroRun": 4
+        },
+        {
+          "peak": 0.017785752,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.017701829,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.018212043,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.017919624,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.017539943,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.01751026,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.017815912,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.018302403,
+          "longestZeroRun": 1
+        },
+        {
+          "peak": 0.06088042,
+          "longestZeroRun": 6
+        },
+        {
+          "peak": 0,
+          "longestZeroRun": 28704000
+        },
+        {
+          "peak": 0,
+          "longestZeroRun": 28704000
+        },
+        {
+          "peak": 0,
+          "longestZeroRun": 28704000
+        }
+      ]
+    }
+  ],
+  "error": "silence run, invalid sample or full scale on input 4; silence run, invalid sample or full scale on input 13; no sustained return signal on input 14; silence run, invalid sample or full scale on input 14; no sustained return signal on input 15; silence run, invalid sample or full scale on input 15; no sustained return signal on input 16; silence run, invalid sample or full scale on input 16"
+}
