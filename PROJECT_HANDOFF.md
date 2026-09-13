@@ -10986,3 +10986,19 @@ minimal shape is untouched and stays the default, so the verified presets
 and the UI's Compile & apply are unchanged. Not verified: CamillaDSP 4.1.3
 accepting the emitted `Free` biquad (an engine `--check` on the Pi is owed
 and was not run, the service being up). Nothing on the Pi changed.
+
+**CHECKED 2026-09-13 ~17:04 UTC: CamillaDSP 4.1.3 accepts the fixed shape's
+`Free` unity biquads.** Two fixed-shape configurations compiled on the Mac
+(`--shape fixed --format F64_LE`, file devices at `/dev/zero` and
+`/dev/null` so the device check passes: the default 7.2.4 preset, 256
+placeholders and 302 sections, and `loaded`, 308) were copied to
+`~/usb-16x16-work/dsp-shape-check/` and run through
+`camilladsp-v4.1.3/camilladsp --check` with the service up. Both report
+`Config is valid`, exit 0. A control with one placeholder's `a2` line
+removed reports `Invalid config file! filters: missing field a2` at that
+line, exit 101, so the check parses the `Free` parameters and is not
+passing them unread. `--check` opens no audio; `/run/usb16x16/last-bridge`
+showed tx/rx restarts and drops at 0 before and after, and the journal has
+no RECOVER in the window. The check directory was removed afterwards;
+nothing pending on the Pi. The README's "not verified" line for the fixed
+shape now reads: `--check` accepted, no file-to-file engine run made.

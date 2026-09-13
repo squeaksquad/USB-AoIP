@@ -365,8 +365,9 @@ place where they state a rule, and this records why.
   becomes: slope 12 <-> 24 live, anything involving 48 restart.
 - **Unity placeholders are CamillaDSP `Free` biquads** with explicit
   coefficients, so the YAML and the artifact carry the same section and the
-  "one pipeline serialised twice" property survives. Whether 4.1.3 parses
-  the `Free` parameters as emitted is not yet checked on the Pi.
+  "one pipeline serialised twice" property survives. CamillaDSP 4.1.3 on the
+  Pi passes `--check` on the fixed default and `loaded` configurations and
+  rejects a control with a placeholder's `a2` removed (2026-09-13).
 - **Counts.** Default 7.2.4 layout: 302 sections fixed. `loaded`: 308 in
   both shapes. The shape key vector pinned for the applier and the bridge is
   `7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0` over

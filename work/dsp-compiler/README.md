@@ -93,10 +93,16 @@ same key differ only in numbers. `bridge-artifact.test.mjs` pins one vector
 and holds a list of edits to "live" or "restart" against the default preset.
 
 The report carries `shape` and `placeholderCount`; `biquadCount` keeps meaning
-bands that shape the audio. Not yet verified: CamillaDSP 4.1.3 accepting the
-`Free` biquad as emitted (`a1 a2 b0 b1 b2` as its documentation gives them).
-The artifact test proves the fixed artifact says the same thing as the minimal
-one; an engine `--check` on a fixed configuration on the Pi is still owed.
+bands that shape the audio. **CHECKED 2026-09-13:** CamillaDSP 4.1.3
+(05e9cfc) on the Pi reports `Config is valid` for the fixed shape of the
+default preset (256 `Free` placeholders, 302 sections) and of `loaded`
+(308 sections), file devices pointed at `/dev/zero` and `/dev/null`; a control
+with one placeholder's `a2` line removed is rejected at that filter
+("missing field `a2`"), so the check does parse the `Free` parameters as
+emitted. `--check` parses only and opens no audio: bridge restarts and
+drops stayed at 0 and the journal shows no RECOVER across the three runs.
+Not run: a file-to-file pass through the fixed shape; the artifact test is
+what proves it carries the minimal shape's audio.
 
 ## Headroom policy
 
@@ -415,9 +421,9 @@ file-to-file comparison.
   Pi can read and write.
 - **The `--target alsa` device section**, which remains stamped unvalidated for
   capture/playback selection, clock ownership and rate matching.
-- **The fixed shape against the engine.** Its `Free` unity biquads have not
-  been through CamillaDSP `--check` or a file-to-file run; only the artifact
-  test says the fixed and minimal artifacts carry the same audio.
+- **The fixed shape through the engine file to file.** `--check` accepts it
+  (above); no engine run has been made on it, and only the artifact test says
+  the fixed and minimal artifacts carry the same audio.
 
 ### CORRECTION 2026-09-10: an engine run did disturb the bridge
 
