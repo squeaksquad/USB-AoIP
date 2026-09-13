@@ -10824,3 +10824,25 @@ same harness run with the wire decode beside it. The standing rule from
 2026-09-07 applies once it returns: the lead pair first after any
 Ferrofish change, the phase re-read by stamp-phase.py, before any loop
 figure is compared with the 8.2 ms of the morning.
+
+**ROOT CAUSE 2026-09-13 01:06 UTC: the Ferrofish's silent return from
+23:34:37 UTC was a 44.1 kHz Logic Pro session on the Mac, which set the
+Metric Halo (a Dante device on the same domain) to 44.1 kHz; the
+Ferrofish muted the Pi's 48 kHz flow while its subscription stayed
+resolved.** The user closed the session and set the Metric Halo back to
+48 kHz; the same check (`ferrofish-check3`, 64 frames, 20 impulses, the
+wire decode beside it) then read the impulses on both groups (44 hits on
+239.69.16.1 and 44 on 239.69.121.9, peak 0x1FFFFC on each) and the
+harness `718 x 20, spread 0, score 1.000` (a plain-restart draw against
+the accepted 703 fresh-anchor figure). Corrects the previous entry's
+"inside the Ferrofish": the Ferrofish did what a Dante receiver does at a
+domain rate mismatch, and nothing on it, the switch or the Pi had
+changed. Lesson for the record: when the return goes silent with every
+subscription green, the first check is the sample rate of every Dante
+device on the domain, the Metric Halo included, before anything on the
+Pi is suspected; the two-minute test that separates the Pi from the rest
+is `measure-under-service.sh 64 20` with `aoip-wire-listen.py` beside it.
+The runs taken while the path was dead (`20260912T233211Z` from t=104 s,
+`20260913T000326Z`, `20260913T002755Z`) stay in the record as
+transport-only. Next: the lead pair and the stamp phase after the clock
+excursion (the 2026-09-07 rule), then prime 96 with a capture.
