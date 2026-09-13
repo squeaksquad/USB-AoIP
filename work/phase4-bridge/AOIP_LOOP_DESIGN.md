@@ -440,3 +440,8 @@ skip (a 3.3 ms gap, a 144-frame pull) took the floor from 150 to 54 once in
 run 2 with no consequence, as the duplex record says it does; and one
 978 µs `dsp_us_max` in run 2, a preemption mid-call, against 88 and 121 in
 the other runs.
+
+**Control without the capture (run 4, 23:32 UTC): zero RECOVERs in 420 s.**
+Consistent with the tcpdump window as the cause of the one-per-run events,
+not proof of it. Lever runs go without the capture from here; one captured
+run at the chosen point closes each lever, with the window late in the run.

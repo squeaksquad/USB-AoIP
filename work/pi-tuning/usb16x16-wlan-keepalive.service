@@ -1,0 +1,24 @@
+# Keep the access point's forwarding state for the Pi's wireless management
+# link alive. 2026-09-12: three times in a day the Mac lost ssh to the Pi
+# over Wi-Fi while the Pi held its address, saw the Mac in its neighbour
+# table, and reached the internet; each time one packet from the Pi's side
+# (a ping to the Mac from the Pi Connect shell) restored the path. Power save
+# off on wlan0 did not change it, so the state that goes stale is the AP's,
+# and the cheapest cure is to never let it: one ping to each of the Mac's
+# addresses every 20 s. Management only: nothing here touches eth0, the
+# AES67 stack or the gadget. Remove with:
+#   sudo systemctl disable --now usb16x16-wlan-keepalive.service
+[Unit]
+Description=USB 16x16 wireless management keepalive (pings the Mac so the AP keeps the path)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'while :; do ping -c 1 -W 1 -I wlan0 192.168.1.58 >/dev/null 2>&1; ping -c 1 -W 1 -I wlan0 192.168.1.67 >/dev/null 2>&1; sleep 20; done'
+Restart=always
+RestartSec=10
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

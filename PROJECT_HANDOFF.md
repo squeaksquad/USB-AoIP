@@ -10681,3 +10681,31 @@ the bridge's own re-prepare lines. Next: a loop run with
 TX prime lever; and the count stays in view before any acceptance. Wire
 figure of this run, unchanged: 8.240 ms wall, 504 samples on the Pi's
 stamps, about 420 on the loop.
+
+**INSTALLED 2026-09-12 23:20 UTC: `usb16x16-wlan-keepalive.service`
+(work/pi-tuning, 05e3b8c1), the wireless management keepalive.** After the
+third loss of the Mac's ssh path in a day (the Pi holding 192.168.1.201,
+the Mac in its neighbour table, the internet reachable, power save
+already off on wlan0, the Mac's ARP for the Pi resolved and still no
+reply), each cleared by one packet from the Pi's side, the unit pings
+the Mac's two addresses (192.168.1.58 wired, 192.168.1.67 Wi-Fi) from
+wlan0 every 20 s so the access point's forwarding state for the Pi never
+goes stale. Management only, nothing on eth0 or the stack; installed by
+the user with `install`, `daemon-reload`, `enable --now`; active. The
+addresses are the Mac's of today and must follow it if the router moves
+them. The AP itself (a locally administered BSSID one step off the
+router's) is the real place to fix this.
+
+**MEASURED 2026-09-12 23:32-23:40 UTC: the capture-off control, zero
+RECOVERs in 420 s.** `phase4-aoip-candidate-20260912T233211Z`, the same
+set with `USB16X16_AOIP_CAPTURE_SECONDS=0`: ALIGN ok, prime and trigger
+as before (front_age 296), 209 impulses, zero clipped, zero dropped,
+dsp max 204.3 / mean 49.5 us, the 144-frame skip once (gap 2995 us,
+floor 150 -> 54, depth floor 201), `tx_restarts=0`. Against one RECOVER
+in each of the three captured runs (t=56.4, 380.0, 44.5 s; window
+19-49 s), consistent with the tcpdump capture as the cause and not proof
+of it (n=1, and run 2's event lay outside its window). Standing
+practice from here: lever runs without the capture, one captured run at
+the chosen point at the end, and the capture moved late in the run so a
+RECOVER it causes cannot contaminate the floors. The wrapper gained
+`USB16X16_AOIP_TX_PRIME` (48..384, default 192; fda618cf staged).

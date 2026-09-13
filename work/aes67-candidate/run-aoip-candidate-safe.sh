@@ -62,7 +62,14 @@ expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 candidate_seconds=${1:-360}
 dsp_preset=${2:-$work_root/aoip-loop/loop-measure.dsp}
 impulse_seconds=${3:-2}
+# The TX prime, frames: 192 is dsp-direct's, sized for the USB capture's
+# arrival jitter, which the loop does not have (its queue sat at 198 with a
+# floor of 150 on every run). The lever the design names; 48..384 and the
+# ring relation are checked below.
+tx_prime=${USB16X16_AOIP_TX_PRIME:-192}
 # tcpdump window, seconds, started once the loop has been running this long.
+# 0 disables the capture: the four runs of 2026-09-12 read one RECOVER in
+# each of the three captured runs and none in the uncaptured one.
 capture_seconds=${USB16X16_AOIP_CAPTURE_SECONDS:-30}
 capture_after_seconds=${USB16X16_AOIP_CAPTURE_AFTER:-15}
 sink_delay=103
@@ -76,7 +83,7 @@ bridge_pid=
 capture_pid=
 restarts_seen=0
 
-for value in "$candidate_seconds" "$impulse_seconds" "$capture_seconds" "$capture_after_seconds"; do
+for value in "$candidate_seconds" "$impulse_seconds" "$capture_seconds" "$capture_after_seconds" "$tx_prime"; do
   if ! [[ "$value" =~ ^[0-9]+$ ]]; then
     echo "candidate arguments must be unsigned integers" >&2
     exit 10
@@ -92,6 +99,10 @@ if [ "$impulse_seconds" -lt 1 ] || [ "$impulse_seconds" -gt 60 ]; then
 fi
 if [ "$capture_seconds" -gt 120 ]; then
   echo "capture window must be at most 120 seconds (tmpfs)" >&2
+  exit 11
+fi
+if [ "$tx_prime" -lt 48 ] || [ "$tx_prime" -gt 384 ] || [ $((48 + tx_prime + 4)) -gt 768 ]; then
+  echo "TX prime must be 48..384 frames within the ring" >&2
   exit 11
 fi
 if [ "$dsp_preset" = none ] && [ "${USB16X16_AOIP_LOOP_OPEN:-0}" != 1 ]; then
@@ -272,7 +283,7 @@ bridge_arguments=(
   --mode aoip-loop
   --period 48 --buffer 192 --ring 768 --target 48
   --playback-prime 96 --prime-trim 0 --rx-prime-trim 0
-  --tx-playback-prime 192 --rx-playback-prime 0
+  --tx-playback-prime "$tx_prime" --rx-playback-prime 0
   --ravenna-playback-buffer 384
   --usb-pitch-servo 0 --tx-depth 0 --rx-depth 0 --level-gain 0.05
   --align-start 1 --align-offset-us 600
@@ -313,6 +324,7 @@ fi
   echo "sink_delay=$sink_delay"
   echo "candidate_seconds=$candidate_seconds"
   echo "impulse_seconds=$impulse_seconds"
+  echo "tx_prime=$tx_prime"
   echo "dsp_preset=$dsp_preset"
   echo "dsp_sha256=$([ "$dsp_preset" = none ] && echo none || sha256sum "$dsp_preset" | awk '{print $1}')"
   echo "module_sha256=$expected_module_sha256"

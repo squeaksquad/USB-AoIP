@@ -35,8 +35,9 @@ at 198 so TX_PLAYBACK_PRIME is the first lever; handoff MEASURED 2026-09-12
 answered (a lost source is silence, the capture keeps delivering zeros, the
 loop resumes by itself; the supervisor takes no action on input in loop
 mode), one RECOVER per run with the cause open (tcpdump window a suspect:
-next run with USB16X16_AOIP_CAPTURE_SECONDS=0 as the control), then the TX
-prime lever. aoip-stream-stop.sh is the timed helper for the sink test. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
+the capture-off control read zero in 420 s), then the TX prime lever
+(USB16X16_AOIP_TX_PRIME=96 then 48, capture off; one captured run at the
+chosen point). The Wi-Fi keepalive unit is installed (work/pi-tuning). aoip-stream-stop.sh is the timed helper for the sink test. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
 paragraph, then "Steps"). Bridge --mode aoip-loop with --loop-impulse in
 main.cpp (syntax-checked on the Mac, the accepted binary untouched),
 loop-measure preset 1e417960 (outputs/dsp-service/aoip-loop-20260912/),
