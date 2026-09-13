@@ -12,7 +12,15 @@
 # and rolling this back is not running it again. The daemon and module
 # lifecycle is the proven one, unchanged.
 #
-# Usage: run-dsp-candidate-safe.sh [SECONDS] [DSP_PRESET|none]
+# Usage: run-dsp-candidate-safe.sh [SECONDS] [DSP_PRESET|none] [LIVE_TOGGLE_PRESET [PERIOD_S]]
+#
+# LIVE_TOGGLE_PRESET (2026-09-13, LIVE_COEFFICIENTS_DESIGN.md acceptance test
+# 2) turns on the candidate's live file under the result directory and, once
+# the bridge is up, alternates that preset and DSP_PRESET into it every
+# PERIOD_S seconds (default 2), each push a write to a temporary name and a
+# rename. Both presets must be in the pinned list and share a shape key; the
+# bridge refuses otherwise and the run records it. Positional because the
+# sudo boundary keeps only a fixed env list.
 #
 # "none" runs the same binary with no --dsp-preset at all, which is the direct
 # control: the stage is absent rather than loaded and bypassed, and it is the
@@ -64,6 +72,8 @@ expected_gmid=00-1D-C1-FF-FE-1D-27-DC
 # period_frames, so "none" failed the unsigned-integer check.
 candidate_seconds=${1:-360}
 dsp_preset=${2:-$work_root/dsp-verify/loaded.dsp}
+live_toggle=${3:-}
+live_period=${4:-2}
 period_frames=48
 buffer_frames=192
 ring_frames=768
@@ -314,6 +324,26 @@ if [ "$dsp_preset" != none ]; then
     exit 41
   fi
 fi
+if [ -n "$live_toggle" ]; then
+  if [ "$dsp_preset" = none ]; then
+    echo "a live toggle needs a DSP preset to start from" >&2
+    exit 42
+  fi
+  if [ ! -r "$live_toggle" ]; then
+    echo "missing live toggle preset: $live_toggle" >&2
+    exit 40
+  fi
+  toggle_sha256=$(sha256sum "$live_toggle" | awk '{print $1}')
+  toggle_known=0
+  for known in $expected_dsp_sha256_list; do
+    [ "$toggle_sha256" = "$known" ] && toggle_known=1
+  done
+  if [ "$toggle_known" -ne 1 ]; then
+    echo "live toggle hash $toggle_sha256 is not one this wrapper will run" >&2
+    exit 41
+  fi
+  [[ $live_period =~ ^[0-9]+$ ]] && [ "$live_period" -ge 1 ] || { echo "PERIOD_S must be a whole number of seconds" >&2; exit 43; }
+fi
 
 original_config_sha256=$(sha256sum "$original_config" | awk '{print $1}')
 original_status_sha256=$(sha256sum "$original_status" | awk '{print $1}')
@@ -322,6 +352,7 @@ mkdir -p "$result_dir"
 rm -f "$ready_file"
 
 cleanup() {
+  if [ -n "${toggle_pid:-}" ]; then kill "$toggle_pid" 2>/dev/null || true; fi
   set +e
   rm -f "$ready_file"
   if [ -n "$bridge_pid" ] && kill -0 "$bridge_pid" 2>/dev/null; then
@@ -429,12 +460,9 @@ bridge_arguments=(
 )
 if [ "$dsp_preset" != none ]; then
   bridge_arguments+=(--dsp-preset "$dsp_preset")
-  # USB16X16_DSP_LIVE=1 (LIVE_COEFFICIENTS_DESIGN.md step 3): the candidate
-  # polls $result_dir/dsp-live.dsp and answers on dsp-live.status, so a swap
-  # can be driven from the Mac during the run by copying an artifact of the
-  # same shape into place (write to a temporary name, then mv: the bridge
-  # reads whole files only after a rename).
-  if [ "${USB16X16_DSP_LIVE:-0}" = 1 ]; then
+  # The live file (LIVE_COEFFICIENTS_DESIGN.md step 3): the candidate polls
+  # $result_dir/dsp-live.dsp and answers on dsp-live.status.
+  if [ -n "$live_toggle" ]; then
     bridge_arguments+=(--dsp-live-file "$result_dir/dsp-live.dsp" --dsp-live-status "$result_dir/dsp-live.status")
   fi
 fi
@@ -469,13 +497,37 @@ fi
   echo "candidate_seconds=$candidate_seconds"
   echo "dsp_preset=$dsp_preset"
   echo "dsp_sha256=$([ "$dsp_preset" = none ] && echo none || sha256sum "$dsp_preset" | awk '{print $1}')"
-  echo "dsp_live=${USB16X16_DSP_LIVE:-0}"
+  echo "dsp_live_toggle=${live_toggle:-none}"
+  echo "dsp_live_toggle_sha256=${toggle_sha256:-none}"
+  echo "dsp_live_period_s=${live_toggle:+$live_period}"
   echo "bridge_binary=$bridge_binary"
   echo "bridge_sha256=$(sha256sum "$bridge_binary" | awk '{print $1}')"
   echo "bridge_arguments=${bridge_arguments[*]}"
 } > "$result_dir/metadata.txt"
 echo "$result_dir" > "$ready_file"
 echo "READY result_dir=$result_dir"
+
+# The toggle pusher: the alternate preset, then the start preset, every
+# live_period seconds, from ten seconds in (the stage engages on the render
+# after the prime; ten seconds is generous). Each push is a temporary name
+# and a rename, the only way the bridge sees a whole file. Runs as root
+# because the result directory is root's; killed by cleanup.
+toggle_pid=
+if [ -n "$live_toggle" ]; then
+  (
+    set +e
+    pushes=0
+    sleep 10
+    while true; do
+      if [ $((pushes % 2)) -eq 0 ]; then source_preset=$live_toggle; else source_preset=$dsp_preset; fi
+      cp "$source_preset" "$result_dir/dsp-live.tmp" && mv "$result_dir/dsp-live.tmp" "$result_dir/dsp-live.dsp"
+      pushes=$((pushes + 1))
+      echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) push=$pushes file=$(basename "$source_preset")" >> "$result_dir/dsp-live-pushes.log"
+      sleep "$live_period"
+    done
+  ) &
+  toggle_pid=$!
+fi
 
 # A direction restart is counted, not fatal.
 #
@@ -509,6 +561,13 @@ while kill -0 "$bridge_pid" 2>/dev/null; do
   sleep 1
 done
 echo "direction_restarts=$restarts_seen" >> "$result_dir/metadata.txt"
+if [ -n "$toggle_pid" ]; then
+  kill "$toggle_pid" 2>/dev/null || true
+  wait "$toggle_pid" 2>/dev/null || true
+  toggle_pid=
+  echo "dsp_live_pushes=$(wc -l < "$result_dir/dsp-live-pushes.log" 2>/dev/null || echo 0)" >> "$result_dir/metadata.txt"
+  echo "dsp_live_status_final=$(cat "$result_dir/dsp-live.status" 2>/dev/null || echo none)" >> "$result_dir/metadata.txt"
+fi
 if [ "$restarts_seen" -gt 0 ]; then
   echo "note: $restarts_seen ALSA direction restart(s) during the candidate, counted not fatal" >&2
 fi
