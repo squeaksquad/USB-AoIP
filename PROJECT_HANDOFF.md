@@ -10709,3 +10709,18 @@ practice from here: lever runs without the capture, one captured run at
 the chosen point at the end, and the capture moved late in the run so a
 RECOVER it causes cannot contaminate the floors. The wrapper gained
 `USB16X16_AOIP_TX_PRIME` (48..384, default 192; fda618cf staged).
+
+**MEASURED 2026-09-13 00:03-00:11 UTC: the loop at TX prime 96 (from
+192), capture off: zero RECOVERs in 420 s, the queue 96 frames lower, the
+dwell unchanged.** `phase4-aoip-candidate-20260913T000326Z`
+(`USB16X16_AOIP_TX_PRIME=96`, everything else the set): ALIGN ok first
+attempt, `PRIMED intended=147 ring_at_prime=153 queue_prime=96
+align_dropped=39 front_age_frames=200` (296 at 192: the prime's share
+exactly), trigger `slack_us=871`, 209 impulses, zero clipped, zero
+dropped, dsp max 82.0 us, `tx_gap_max_us` 1042, pull max 48, no skip this
+run, `tx_queue_below_period=0`, queue mean 79.1 (175 at 192), depth 153
+flat (249), floor 54, `tx_restarts=0`. By the same block-to-block reading
+as run 3 the bridge dwell is unchanged. So 96 frames = 2.0 ms come off
+the loop's 8.2 ms with nothing else moving, as the design's reading of
+the flat queue predicted; the wire figure at this point is a captured run
+away. Next: prime 48.
