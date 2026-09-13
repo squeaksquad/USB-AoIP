@@ -1,4 +1,6 @@
 [Unit]
+# See usb16x16-apply.service: no burst limit for the request stream.
+StartLimitIntervalSec=0
 Description=USB 16x16 web Apply request watcher
 Documentation=file:///home/bdimaio/usb-16x16-work/web-control/README.md
 

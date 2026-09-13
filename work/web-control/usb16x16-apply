@@ -1172,12 +1172,21 @@ def main(argv: list[str] | None = None) -> int:
     if os.geteuid() != 0:
         print("run as root (the path unit does)", file=sys.stderr)
         return 2
-    result = applier.consume()
-    if result is None:
+    # Drain: live updates arrive about one a second, and a fresh process per
+    # request is what tripped systemd's start burst limit on 2026-09-13. One
+    # invocation takes every request that lands while it runs, bounded.
+    handled = 0
+    while handled < 100:
+        result = applier.consume()
+        if result is None:
+            break
+        handled += 1
+        print(f"{result['id']}: {result['state']}"
+              f"{' — ' + result['error'] if result.get('error') else ''}")
+        if result["kind"] not in ("live", "commit"):
+            break   # a restart operation is one per invocation, as before
+    if handled == 0:
         print("no request pending")
-        return 0
-    print(f"{result['id']}: {result['state']}"
-          f"{' — ' + result['error'] if result.get('error') else ''}")
     return 0
 
 

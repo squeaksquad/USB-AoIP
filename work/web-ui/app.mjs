@@ -1129,6 +1129,15 @@ async function pollHealth() {
   // The bridge's answer to the last live update arrives through health.
   if (next?.dspLive?.sha256 && next.dspLive.state === 'applied' && liveLastSent === next.dspLive.sha256) liveLine = `Applied (${next.dspLive.sha256.slice(0, 8)}).`;
   if (!next) { liveQueue.cancel(); liveLastSent = null; }
+  // Self-heal: the bridge runs something other than what this page last
+  // sent (a request the applier never took, a watcher that was down) and
+  // nothing is pending or in flight: send the current draft again.
+  if (next?.dspLive?.state === 'applied' && liveLastSent && next.dspLive.sha256 !== liveLastSent
+      && !liveQueue.busy && !next.apply?.pending && !next.apply?.inFlight && liveState(next, draftShapeKey).state === 'live') {
+    liveLastSent = null;
+    liveLine = 'The bridge is not on this page\'s last edit; sending it again…';
+    scheduleLive();
+  }
   refreshSettingsLive();
   renderConnection();
   renderLiveState();
