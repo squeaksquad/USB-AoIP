@@ -17,6 +17,11 @@ namespace usb16x16 {
 constexpr std::size_t kChannels = 16;
 constexpr double kNominalRate = 48000.0;
 
+// SHA-256 as lower-case hex. Self-contained so the core stays free of any
+// library on the audio host; used for the DSP shape key only, off the audio
+// path.
+std::string sha256_hex(std::string_view text);
+
 // The DSP stage: 16 capture channels through the compiled pipeline and back to
 // 16 playback channels, in place, on the audio thread.
 //
@@ -32,6 +37,16 @@ constexpr double kNominalRate = 48000.0;
 // float, but a 40 Hz bell at Q 6 has poles close enough to the unit circle that
 // single-precision coefficients would be measurably wrong, and doubles are also
 // what the reference engine uses.
+//
+// Live coefficient updates (LIVE_COEFFICIENTS_DESIGN.md). A loaded stage has a
+// shape -- every count and index in the artifact -- and numbers: the biquad
+// coefficients, the mix gains, the output gains and delays. The shape is fixed
+// at load. The numbers live in two sets; `process()` takes the active one by a
+// single acquire load at the top of each block, and `publish()` (control
+// thread, never the audio thread) fills the inactive set from another loaded
+// stage of the same shape and switches the index with a release store. Filter
+// state is not part of a set and is kept across a switch, which is what makes
+// a gain or frequency move continuous rather than a restart from silence.
 class DspStage {
 public:
     // Generous: the worst case a preset can reach is one main branch per
@@ -46,11 +61,35 @@ public:
     };
 
     DspStage() = default;
+    // Atomics are not copyable; the stage moves (into the direction struct)
+    // and is copied only by `load()` returning it.
+    DspStage(DspStage&& other) noexcept;
+    DspStage& operator=(DspStage&& other) noexcept;
+    DspStage(const DspStage&) = delete;
+    DspStage& operator=(const DspStage&) = delete;
 
     // Parse the artifact `usb16x16-dsp-compile --bridge` writes. Throws
     // std::runtime_error with the offending line on anything malformed;
     // a bridge that cannot load a preset must refuse it, not run half of one.
     static DspStage load(std::string_view text);
+
+    // The canonical shape text and its SHA-256, as `artifactShape` and
+    // `artifactShapeKey` in work/dsp-compiler/bridge-artifact.mjs define them;
+    // the three implementations are pinned to one vector.
+    [[nodiscard]] const std::string& shape() const noexcept { return shape_; }
+    [[nodiscard]] std::string shape_key() const;
+
+    // Take `other`'s numbers as the next active set. Control thread only.
+    // Returns false and sets `reason` without touching anything the audio
+    // thread reads when the shapes differ, when the stage is not loaded, or
+    // when the audio thread has not yet taken the previous publish (retry on
+    // the next poll: the inactive set is still the one it may be reading).
+    // Copies into storage sized at load; no allocation.
+    bool publish(const DspStage& other, std::string& reason) noexcept;
+    // How many publishes the audio thread has taken so far.
+    [[nodiscard]] std::uint64_t generation() const noexcept {
+        return seen_.load(std::memory_order_acquire);
+    }
 
     [[nodiscard]] bool loaded() const noexcept { return internal_channels_ > 0; }
     [[nodiscard]] std::size_t internal_channels() const noexcept { return internal_channels_; }
@@ -58,7 +97,7 @@ public:
     // The transport cost of the alignment delays: the largest of them, because
     // the output is not complete until the most delayed channel is produced.
     [[nodiscard]] std::size_t delay_samples() const noexcept { return delay_samples_; }
-    [[nodiscard]] std::size_t biquad_count() const noexcept { return sections_.size(); }
+    [[nodiscard]] std::size_t biquad_count() const noexcept { return sets_[0].sections.size(); }
 
     void reset() noexcept;
 
@@ -67,10 +106,10 @@ public:
     void process(float* interleaved, std::size_t frames) noexcept;
 
 private:
+    // Shape: where things are. Fixed at load.
     struct MixEntry {
         std::uint16_t dest{};
         std::uint16_t source{};
-        double gain{};
     };
     struct Chain {
         std::uint16_t channel{};
@@ -80,25 +119,40 @@ private:
     struct OutputSpec {
         std::uint32_t first{};
         std::uint32_t count{};
-        std::uint32_t delay{};
-        double gain{1.0};
     };
     struct State {
         double x1{}, x2{}, y1{}, y2{};
     };
+    // Numbers: what a live update may change. Two copies, sized at load.
+    struct Coefficients {
+        std::vector<Section> sections;
+        std::vector<double> expand_gain;   // parallel to expand_
+        std::vector<double> assign_gain;   // parallel to assign_
+        std::array<double, kChannels> output_gain{};
+        std::array<std::uint32_t, kChannels> output_delay{};
+    };
 
-    void run_chain(std::uint32_t first, std::uint32_t count, double& sample) noexcept;
+    void run_chain(const Coefficients& c, std::uint32_t first, std::uint32_t count,
+                   double& sample) noexcept;
     void flush_denormals() noexcept;
+    static std::string shape_text(const DspStage& stage);
 
     std::string preset_;
+    std::string shape_;
     std::size_t internal_channels_{};
     std::size_t delay_samples_{};
     std::vector<MixEntry> expand_;
     std::vector<MixEntry> assign_;
     std::vector<Chain> branches_;
-    std::vector<Section> sections_;
     std::vector<State> states_;
     std::array<OutputSpec, kChannels> outputs_{};
+    std::array<Coefficients, 2> sets_{};
+    // Which set the audio thread reads, and the publish count on each side.
+    // `published_` is stored before `active_` (release); the audio thread
+    // loads `active_` (acquire), then `published_`, and records it in `seen_`.
+    std::atomic<unsigned> active_{0};
+    std::atomic<std::uint64_t> published_{0};
+    std::atomic<std::uint64_t> seen_{0};
     // One contiguous block, kMaxDelaySamples per output, so a delay line never
     // allocates and the whole stage is one cache-friendly region.
     std::vector<double> delay_lines_;

@@ -1,7 +1,7 @@
 # Live coefficient updates: EQ and bass-management preview without a restart
 
-Design note, 2026-09-13. Step 1 (the compiler) is built and tested the same
-day; see the corrections at the end. The accepted bridge, the supervisor's
+Design note, 2026-09-13. Steps 1 (the compiler) and 2 (the bridge core) are
+built and tested on the Mac the same day; see the corrections at the end. The accepted bridge, the supervisor's
 pinned hash, the applier and the UI are untouched. This is the
 "Coefficient updates" paragraph of `DSP_MODE_DESIGN.md` worked out to the
 point where it can be built, plus the two halves that paragraph does not
@@ -372,3 +372,24 @@ place where they state a rule, and this records why.
   both shapes. The shape key vector pinned for the applier and the bridge is
   `7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0` over
   the artifact written out in `bridge-artifact.test.mjs`.
+
+## Corrections from step 2 (2026-09-13)
+
+- **Two publish counters, not one plus a wait.** The note had the control
+  thread "wait for equality" before the next publish. Built as: `publish()`
+  returns false with "previous update not yet taken" when the audio thread's
+  `seen_` has not caught up with `published_`, and the caller retries on its
+  next poll. Nothing on the control thread ever blocks on the audio thread.
+- **Delay is live, with the write index reduced modulo the new length** at
+  the top of the first block that sees the switch, as the note says; a
+  delay to zero simply stops reading the line. Tested under ASan/UBSan.
+- **The shape text lists all 16 outputs in index order** whatever the
+  artifact listed, on both sides (`artifactShape` in JS was changed to match
+  the bridge, which keeps one spec per output). The emitter always writes
+  16 in order, so no compiled artifact is affected.
+- **Offline runner:** `--shape` prints the key and the canonical text;
+  `--swap-at FRAME FILE` publishes at the first block boundary at or after
+  FRAME and exits 5 on a refused swap. A swap of the default preset's fixed
+  shape to a variant with a band cut, a 2 ms delay and a bus at -6 dB, run
+  file to file on a 1 kHz sine, took at frame 24000 and dropped the output
+  by 7 dB from there; the minimal shape of the same preset is refused.

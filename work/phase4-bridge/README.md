@@ -33,6 +33,29 @@ zeros. `--loop-impulse CH,SECONDS` is the loop's measurement injector (one
 passes. With the flag absent nothing on the audio path changes; the accepted
 profile is re-measured on the build all the same.
 
+Built and tested on the Mac 2026-09-13, not built on the Pi and not
+installed: live coefficient updates in the core (`LIVE_COEFFICIENTS_DESIGN.md`,
+step 2). `DspStage` now keeps its shape (every count and index) apart from its
+numbers (coefficients, mix gains, output gains and delays), holds the numbers
+in two sets sized at load, and `publish()` takes another loaded stage's
+numbers when the shape keys match: fills the inactive set, then one release
+store of the index. `process()` takes the active set with one acquire load at
+the top of each block, records the publish count it saw, and keeps filter
+state across the switch, so a gain or frequency move is continuous (tested
+sample for sample against a difference equation with the state carried). A
+publish is refused, touching nothing, on a different shape, an unloaded
+stage, or before the audio thread has taken the previous one (retry next
+poll). A delay that shrank keeps the write index inside the new length. The
+shape key (`shape()`, `shape_key()`, a self-contained SHA-256) is pinned to
+the same vector as `bridge-artifact.test.mjs`, and the two agree on every
+artifact the compiler writes. `usb16x16-dsp-offline --shape` prints it;
+`--swap-at FRAME FILE` publishes FILE at the first block boundary at or after
+FRAME, so a swap can be run file to file. The audio thread's cost is one
+acquire load and one relaxed store per block. `main.cpp` is unchanged and
+syntax-checks clean against the new header; the control thread and the two
+files are step 3, and until then nothing the running bridge does is
+different.
+
 This candidate replaces two independent `alsaloop` processes with one process
 that owns all four raw ALSA directions:
 

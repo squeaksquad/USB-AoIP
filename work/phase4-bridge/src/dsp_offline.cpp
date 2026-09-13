@@ -80,7 +80,10 @@ int usage() {
         "  --format s32le|f64le   sample format of both files (default s32le)\n"
         "  --block N              frames per process() call (default 48)\n"
         "  --bypass               load the artifact but do not run it\n"
-        "  --bench N              time N process() calls in memory and exit\n";
+        "  --bench N              time N process() calls in memory and exit\n"
+        "  --shape                print the shape key and canonical shape, then exit\n"
+        "  --swap-at FRAME FILE   publish FILE's coefficients at the first block\n"
+        "                         boundary at or after FRAME (same shape required)\n";
     return 2;
 }
 
@@ -139,6 +142,10 @@ int main(const int argc, char** const argv) {
     std::size_t block = 48;
     std::size_t bench = 0;
     bool bypass = false;
+    bool shape_only = false;
+    bool swap = false;
+    std::size_t swap_frame = 0;
+    std::string swap_path;
 
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -154,6 +161,8 @@ int main(const int argc, char** const argv) {
         else if (argument == "--block") block = std::stoul(take());
         else if (argument == "--bypass") bypass = true;
         else if (argument == "--bench") bench = std::stoul(take());
+        else if (argument == "--shape") shape_only = true;
+        else if (argument == "--swap-at") { swap = true; swap_frame = std::stoul(take()); swap_path = take(); }
         else if (argument == "--format") {
             const std::string value = take();
             if (value == "s32le") format = Format::s32le;
@@ -164,7 +173,7 @@ int main(const int argc, char** const argv) {
         else artifact_path = argument;
     }
     if (artifact_path.empty()) return usage();
-    if (bench == 0 && (input_path.empty() || output_path.empty())) return usage();
+    if (bench == 0 && !shape_only && (input_path.empty() || output_path.empty())) return usage();
     if (block == 0) { std::cerr << "--block must be positive\n"; return 2; }
 
     std::ifstream artifact_file(artifact_path, std::ios::binary);
@@ -181,6 +190,28 @@ int main(const int argc, char** const argv) {
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 4;
+    }
+    if (shape_only) {
+        std::cout << "shape_key=" << stage.shape_key() << '\n' << stage.shape();
+        return 0;
+    }
+    usb16x16::DspStage update;
+    if (swap) {
+        std::ifstream update_file(swap_path, std::ios::binary);
+        if (!update_file) { std::cerr << "cannot read " << swap_path << '\n'; return 3; }
+        std::ostringstream update_text;
+        update_text << update_file.rdbuf();
+        try {
+            update = usb16x16::DspStage::load(update_text.str());
+        } catch (const std::exception& error) {
+            std::cerr << swap_path << ": " << error.what() << '\n';
+            return 4;
+        }
+        if (update.shape_key() != stage.shape_key()) {
+            std::cerr << "swap refused: " << swap_path << " has shape " << update.shape_key()
+                      << ", the loaded artifact " << stage.shape_key() << '\n';
+            return 5;
+        }
     }
     std::cerr << "preset=\"" << stage.preset() << "\""
               << " internal=" << stage.internal_channels()
@@ -210,6 +241,18 @@ int main(const int argc, char** const argv) {
         if (frames == 0) break;
         for (std::size_t index = 0; index < frames * kChannels; ++index) {
             samples[index] = decode(raw.data() + index * width, format);
+        }
+        if (swap && frames_done >= swap_frame) {
+            // The first block boundary at or after the frame, once.
+            std::string reason;
+            if (stage.publish(update, reason)) {
+                std::cerr << "DSPLIVE published at frame " << frames_done
+                          << " preset=\"" << update.preset() << "\"" << '\n';
+            } else {
+                std::cerr << "DSPLIVE refused at frame " << frames_done << ": " << reason << '\n';
+                return 5;
+            }
+            swap = false;
         }
         if (!bypass) {
             stage.process(samples.data(), frames);

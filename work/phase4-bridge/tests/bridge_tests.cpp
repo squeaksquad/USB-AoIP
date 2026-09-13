@@ -249,6 +249,200 @@ void test_dsp_reset_clears_filter_state() {
     check(third != second, "filter state persists across blocks when not reset");
 }
 
+// ------------------------------------------------- live coefficient updates
+//
+// LIVE_COEFFICIENTS_DESIGN.md, step 2: a loaded stage takes another stage's
+// numbers without a restart when the shapes match, keeps its filter state
+// across the switch, and refuses everything else without touching what the
+// audio thread reads.
+
+// The artifact bridge-artifact.test.mjs pins its shape vector on.
+std::string dsp_pinned_vector() {
+    std::string text =
+        "usb16x16-dsp 1\npreset pinned shape vector\nrate 48000\nchannels 16\ninternal 2\nmaxdelay 480\n"
+        "expand 2\n0 0 0.125\n1 1 -0.5\n"
+        "branch 1\n1 2\n1 0 0 0 0\n0.5 0.25 0 -0.1 0.01\n"
+        "assign 2\n0 0 1\n3 1 0\n"
+        "output 16\n";
+    for (std::size_t output = 0; output < 16; ++output) {
+        text += output == 0 ? "0 48 0.5 1\n1 0 0 0 0\n"
+                            : std::to_string(output) + " 0 1 0\n";
+    }
+    return text + "end\n";
+}
+
+void test_sha256_known_vectors() {
+    check(usb16x16::sha256_hex("") ==
+              "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "SHA-256 of the empty string");
+    check(usb16x16::sha256_hex("abc") ==
+              "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+          "SHA-256 of 'abc'");
+    // Two blocks: the padding boundary.
+    check(usb16x16::sha256_hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq") ==
+              "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+          "SHA-256 across a block boundary");
+}
+
+void test_dsp_shape_key_matches_the_pinned_vector() {
+    auto stage = usb16x16::DspStage::load(dsp_pinned_vector());
+    std::string expected =
+        "usb16x16-dsp-shape 1\nrate 48000\nchannels 16\ninternal 2\nmaxdelay 480\n"
+        "expand 2\n0 0\n1 1\nbranch 1\n1 2\nassign 2\n0 0\n3 1\noutput 16\n";
+    for (std::size_t output = 0; output < 16; ++output) {
+        expected += std::to_string(output) + (output == 0 ? " 1\n" : " 0\n");
+    }
+    expected += "end\n";
+    check(stage.shape() == expected, "the canonical shape text matches artifactShape");
+    check(stage.shape_key() ==
+              "7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0",
+          "the shape key matches the vector pinned in bridge-artifact.test.mjs");
+    // Numbers do not move the key; a count does.
+    std::string renumbered = dsp_pinned_vector();
+    renumbered.replace(renumbered.find("0 48 0.5 1"), 10, "0 96 0.25 1");
+    check(usb16x16::DspStage::load(renumbered).shape_key() == stage.shape_key(),
+          "gains, delays and coefficients are not shape");
+    std::string reshaped = dsp_pinned_vector();
+    reshaped.replace(reshaped.find("assign 2\n0 0 1\n3 1 0"), 20, "assign 1\n0 0 1");
+    check(usb16x16::DspStage::load(reshaped).shape_key() != stage.shape_key(),
+          "a mix row is shape");
+}
+
+// One bell on output 0, the +6 dB 1 kHz band used above, and a -6 dB one.
+const char* const kBellUp =
+    "1.0439530869903351 -1.8953207239365961 0.86772228475985658 "
+    "-1.8953207239365961 0.91167537175019153";
+const char* const kBellDown =
+    "0.97012906118456326 -1.8953207239365961 0.94154631056562832 "
+    "-1.8953207239365961 0.91167537175019153";
+
+std::string dsp_one_band(const char* const section, const double output_gain = 1.0,
+                         const std::size_t delay = 0) {
+    return "expand 1\n0 0 1\nbranch 0\nassign 1\n0 0 1\noutput 1\n0 " + std::to_string(delay) +
+           " " + std::to_string(output_gain) + " 1\n" + section + "\n";
+}
+
+void test_dsp_publish_keeps_filter_state() {
+    // Reference: the same difference equation run in the test, switching
+    // coefficients at the swap frame with the state carried over. The stage
+    // must agree sample for sample, which it can only do by keeping state.
+    auto stage = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellUp)));
+    auto update = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellDown)));
+    const std::size_t block = 48;
+    const std::size_t blocks = 20;
+    const std::size_t swap_block = 7;
+    std::vector<float> input(block * blocks * usb16x16::kChannels, 0.0F);
+    for (std::size_t frame = 0; frame < block * blocks; ++frame) {
+        input[frame * usb16x16::kChannels] =
+            static_cast<float>(0.4 * std::sin(2.0 * M_PI * 1000.0 * static_cast<double>(frame) / 48000.0));
+    }
+    struct Coefficients { double b0, b1, b2, a1, a2; };
+    const Coefficients up{1.0439530869903351, -1.8953207239365961, 0.86772228475985658,
+                          -1.8953207239365961, 0.91167537175019153};
+    const Coefficients down{0.97012906118456326, -1.8953207239365961, 0.94154631056562832,
+                            -1.8953207239365961, 0.91167537175019153};
+    double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    std::vector<float> reference(input.size(), 0.0F);
+    std::vector<float> actual = input;
+    std::string reason;
+    bool published = false;
+    for (std::size_t index = 0; index < blocks; ++index) {
+        if (index == swap_block) {
+            published = stage.publish(update, reason);
+            check(published, "a same-shape update is accepted: " + reason);
+        }
+        const Coefficients& c = index >= swap_block ? down : up;
+        for (std::size_t frame = index * block; frame < (index + 1) * block; ++frame) {
+            const double in = static_cast<double>(input[frame * usb16x16::kChannels]);
+            const double out = c.b0 * in + c.b1 * x1 + c.b2 * x2 - c.a1 * y1 - c.a2 * y2;
+            x2 = x1; x1 = in; y2 = y1; y1 = out;
+            reference[frame * usb16x16::kChannels] = static_cast<float>(out);
+        }
+        stage.process(actual.data() + index * block * usb16x16::kChannels, block);
+    }
+    check(actual == reference, "output after the switch equals the reference with state carried");
+    check(stage.generation() == 1, "the audio thread reports having taken one publish");
+
+    // Without state continuity the two would differ: a fresh stage on the
+    // second set is not the same signal after the swap.
+    auto fresh = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellDown)));
+    std::vector<float> naive = input;
+    for (std::size_t index = 0; index < blocks; ++index) {
+        fresh.process(naive.data() + index * block * usb16x16::kChannels, block);
+    }
+    check(naive != reference, "the check has teeth: a cold second filter is a different signal");
+}
+
+void test_dsp_publish_refuses_a_different_shape() {
+    auto stage = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellUp)));
+    auto other = usb16x16::DspStage::load(dsp_artifact(dsp_passthrough(0, 0, 1.0)));
+    const std::vector<float> before = dsp_run(stage, dsp_impulse(64, 0, 1.0F));
+    std::string reason;
+    check(!stage.publish(other, reason), "a different shape is refused");
+    check(reason == "shape differs", "with the reason named");
+    stage.reset();
+    const std::vector<float> after = dsp_run(stage, dsp_impulse(64, 0, 1.0F));
+    check(before == after, "a refused publish changes nothing");
+    usb16x16::DspStage unloaded;
+    check(!unloaded.publish(other, reason) && reason == "stage not loaded",
+          "an unloaded stage refuses");
+    check(!stage.publish(unloaded, reason) && reason == "update not loaded",
+          "an unloaded update is refused");
+}
+
+void test_dsp_publish_waits_for_the_audio_thread() {
+    auto stage = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellUp)));
+    auto update = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellDown)));
+    std::string reason;
+    check(stage.publish(update, reason), "the first publish is taken");
+    check(!stage.publish(update, reason), "a second publish before any block is refused");
+    check(reason == "previous update not yet taken", "because the audio thread has not seen it");
+    std::vector<float> block = dsp_impulse(48, 0, 0.0F);
+    stage.process(block.data(), 48);
+    check(stage.publish(update, reason), "after one block the inactive set is free again");
+    check(stage.generation() == 1, "generation counts what the audio thread took");
+}
+
+void test_dsp_publish_shrinking_delay_stays_in_bounds() {
+    auto stage = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellUp, 1.0, 480)));
+    auto shorter = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellUp, 1.0, 48)));
+    auto none = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellUp, 1.0, 0)));
+    // Fill the long line so the write index sits well past 48.
+    std::vector<float> silence(96 * usb16x16::kChannels, 0.0F);
+    stage.process(silence.data(), 96);
+    stage.process(silence.data(), 96);
+    std::string reason;
+    check(stage.publish(shorter, reason), "a delay change is a live update");
+    check(stage.delay_samples() == 48, "the reported delay follows the update");
+    // 30 blocks through the shortened line: no out-of-bounds read or write
+    // (this would trip under a sanitiser) and, once the stale samples are out,
+    // an impulse arrives 48 frames late.
+    for (int index = 0; index < 30; ++index) stage.process(silence.data(), 96);
+    std::vector<float> out = dsp_run(stage, dsp_impulse(200, 0, 1.0F));
+    std::size_t at = 0;
+    float peak = 0.0F;
+    for (std::size_t frame = 0; frame < 200; ++frame) {
+        const float value = std::abs(out[frame * usb16x16::kChannels]);
+        if (value > peak) { peak = value; at = frame; }
+    }
+    check(at == 48, "after the switch the impulse lands at the new delay");
+    check(stage.publish(none, reason), "delay to zero is a live update too");
+    stage.process(silence.data(), 96);
+    out = dsp_run(stage, dsp_impulse(200, 0, 1.0F));
+    check(out[0] != 0.0F, "with no delay the impulse is immediate");
+}
+
+void test_dsp_moved_stage_keeps_working() {
+    auto loaded = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellUp)));
+    const std::string key = loaded.shape_key();
+    usb16x16::DspStage moved = std::move(loaded);
+    check(moved.loaded() && !loaded.loaded(), "move transfers the load");
+    check(moved.shape_key() == key, "and the shape");
+    auto update = usb16x16::DspStage::load(dsp_artifact(dsp_one_band(kBellDown)));
+    std::string reason;
+    check(moved.publish(update, reason), "a moved stage still takes updates");
+}
+
 void test_dsp_is_block_size_agnostic() {
     // The bridge renders whatever the device grants, so a block boundary must
     // not be audible: one 480-frame call and ten 48-frame calls must agree.
@@ -841,6 +1035,13 @@ int main() {
     test_dsp_refuses_what_it_cannot_read();
     test_dsp_reset_clears_filter_state();
     test_dsp_is_block_size_agnostic();
+    test_sha256_known_vectors();
+    test_dsp_shape_key_matches_the_pinned_vector();
+    test_dsp_publish_keeps_filter_state();
+    test_dsp_publish_refuses_a_different_shape();
+    test_dsp_publish_waits_for_the_audio_thread();
+    test_dsp_publish_shrinking_delay_stays_in_bounds();
+    test_dsp_moved_stage_keeps_working();
 
     test_level_meter_measures_a_window();
     test_level_meter_closes_windows_on_block_boundaries();

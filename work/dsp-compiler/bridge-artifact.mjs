@@ -227,14 +227,19 @@ export function artifactShape(text) {
     skipSections(Number(sections));
   }
   mix('assign');
+  // Always all 16 outputs in index order, whatever the artifact listed: the
+  // bridge keeps one spec per output, and its shape text is written from
+  // those (bridge_core.cpp, shape_text), so the two agree on every artifact.
   const outputs = counted('output');
-  out.push(`output ${outputs}`);
+  const perOutput = new Array(16).fill(0);
   for (let row = 0; row < outputs; row += 1) {
     const [index, delay, gain, sections, ...extra] = words(next());
-    if (sections === undefined || extra.length) throw new Error(`artifact shape: output row ${row + 1}`);
-    out.push(`${index} ${sections}`);
+    if (sections === undefined || extra.length || !(Number(index) < 16)) throw new Error(`artifact shape: output row ${row + 1}`);
+    perOutput[Number(index)] = Number(sections);
     skipSections(Number(sections));
   }
+  out.push('output 16');
+  perOutput.forEach((sections, index) => out.push(`${index} ${sections}`));
   if (next() !== 'end' || at !== lines.length) throw new Error("artifact shape: expected 'end'");
   out.push('end');
   return `${out.join('\n')}\n`;

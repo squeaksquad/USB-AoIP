@@ -79,6 +79,47 @@ private:
 
 }  // namespace
 
+DspStage::DspStage(DspStage&& other) noexcept
+    : preset_(std::move(other.preset_)),
+      shape_(std::move(other.shape_)),
+      internal_channels_(other.internal_channels_),
+      delay_samples_(other.delay_samples_),
+      expand_(std::move(other.expand_)),
+      assign_(std::move(other.assign_)),
+      branches_(std::move(other.branches_)),
+      states_(std::move(other.states_)),
+      outputs_(other.outputs_),
+      sets_(std::move(other.sets_)),
+      active_(other.active_.load(std::memory_order_relaxed)),
+      published_(other.published_.load(std::memory_order_relaxed)),
+      seen_(other.seen_.load(std::memory_order_relaxed)),
+      delay_lines_(std::move(other.delay_lines_)),
+      delay_write_(other.delay_write_) {
+    other.internal_channels_ = 0;
+}
+
+DspStage& DspStage::operator=(DspStage&& other) noexcept {
+    if (this != &other) {
+        preset_ = std::move(other.preset_);
+        shape_ = std::move(other.shape_);
+        internal_channels_ = other.internal_channels_;
+        delay_samples_ = other.delay_samples_;
+        expand_ = std::move(other.expand_);
+        assign_ = std::move(other.assign_);
+        branches_ = std::move(other.branches_);
+        states_ = std::move(other.states_);
+        outputs_ = other.outputs_;
+        sets_ = std::move(other.sets_);
+        active_.store(other.active_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        published_.store(other.published_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        seen_.store(other.seen_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        delay_lines_ = std::move(other.delay_lines_);
+        delay_write_ = other.delay_write_;
+        other.internal_channels_ = 0;
+    }
+    return *this;
+}
+
 DspStage DspStage::load(const std::string_view text) {
     ArtifactReader reader(text);
     reader.expect("usb16x16-dsp");
@@ -87,6 +128,7 @@ DspStage DspStage::load(const std::string_view text) {
         throw std::runtime_error("dsp artifact: unsupported version " + std::to_string(version));
     }
     DspStage stage;
+    Coefficients& numbers = stage.sets_[0];
     reader.expect("preset");
     stage.preset_ = reader.rest_of_line();
     reader.expect("rate");
@@ -109,17 +151,19 @@ DspStage DspStage::load(const std::string_view text) {
     reader.expect("maxdelay");
     const std::size_t declared_delay = reader.count("maxdelay", kMaxDelaySamples);
 
-    const auto read_mix = [&reader](std::vector<MixEntry>& into, const char* what,
-                                    const std::size_t destinations, const std::size_t sources) {
+    const auto read_mix = [&reader](std::vector<MixEntry>& into, std::vector<double>& gains,
+                                    const char* what, const std::size_t destinations,
+                                    const std::size_t sources) {
         reader.expect(what);
         const std::size_t rows = reader.count(what, destinations * sources + 1);
         into.reserve(rows);
+        gains.reserve(rows);
         for (std::size_t row = 0; row < rows; ++row) {
             const std::size_t dest = reader.count("mix destination", destinations - 1);
             const std::size_t source = reader.count("mix source", sources - 1);
             const double gain = reader.real("mix gain");
-            into.push_back({static_cast<std::uint16_t>(dest),
-                            static_cast<std::uint16_t>(source), gain});
+            into.push_back({static_cast<std::uint16_t>(dest), static_cast<std::uint16_t>(source)});
+            gains.push_back(gain);
         }
     };
 
@@ -135,7 +179,7 @@ DspStage DspStage::load(const std::string_view text) {
         }
     };
 
-    read_mix(stage.expand_, "expand", stage.internal_channels_, kChannels);
+    read_mix(stage.expand_, numbers.expand_gain, "expand", stage.internal_channels_, kChannels);
 
     reader.expect("branch");
     const std::size_t branch_rows = reader.count("branch", kMaxInternalChannels);
@@ -144,14 +188,16 @@ DspStage DspStage::load(const std::string_view text) {
         const std::size_t channel = reader.count("branch channel", stage.internal_channels_ - 1);
         const std::size_t count = reader.count("branch sections", 64);
         Chain chain{static_cast<std::uint16_t>(channel),
-                    static_cast<std::uint32_t>(stage.sections_.size()),
+                    static_cast<std::uint32_t>(numbers.sections.size()),
                     static_cast<std::uint32_t>(count)};
-        read_sections(stage.sections_, count);
+        read_sections(numbers.sections, count);
         stage.branches_.push_back(chain);
     }
 
-    read_mix(stage.assign_, "assign", kChannels, stage.internal_channels_);
+    read_mix(stage.assign_, numbers.assign_gain, "assign", kChannels, stage.internal_channels_);
 
+    numbers.output_gain.fill(1.0);
+    numbers.output_delay.fill(0);
     reader.expect("output");
     const std::size_t output_rows = reader.count("output", kChannels);
     for (std::size_t row = 0; row < output_rows; ++row) {
@@ -160,20 +206,95 @@ DspStage DspStage::load(const std::string_view text) {
         const double gain = reader.real("output gain");
         const std::size_t count = reader.count("output sections", 64);
         OutputSpec spec;
-        spec.first = static_cast<std::uint32_t>(stage.sections_.size());
+        spec.first = static_cast<std::uint32_t>(numbers.sections.size());
         spec.count = static_cast<std::uint32_t>(count);
-        spec.delay = static_cast<std::uint32_t>(delay);
-        spec.gain = gain;
-        read_sections(stage.sections_, count);
+        read_sections(numbers.sections, count);
         stage.outputs_[output] = spec;
+        numbers.output_delay[output] = static_cast<std::uint32_t>(delay);
+        numbers.output_gain[output] = gain;
         stage.delay_samples_ = std::max(stage.delay_samples_, delay);
     }
     reader.expect("end");
 
-    stage.states_.assign(stage.sections_.size(), State{});
+    // The second set is sized now, so a publish never allocates.
+    stage.sets_[1] = numbers;
+    stage.states_.assign(numbers.sections.size(), State{});
     stage.delay_lines_.assign(kChannels * kMaxDelaySamples, 0.0);
     stage.delay_write_.fill(0);
+    stage.shape_ = shape_text(stage);
     return stage;
+}
+
+// The canonical shape: the artifact with every gain, delay and coefficient
+// blanked. Must match `artifactShape` in bridge-artifact.mjs line for line.
+std::string DspStage::shape_text(const DspStage& stage) {
+    std::string out;
+    out += "usb16x16-dsp-shape 1\n";
+    out += "rate 48000\n";
+    out += "channels " + std::to_string(kChannels) + "\n";
+    out += "internal " + std::to_string(stage.internal_channels_) + "\n";
+    out += "maxdelay " + std::to_string(kMaxDelaySamples) + "\n";
+    out += "expand " + std::to_string(stage.expand_.size()) + "\n";
+    for (const MixEntry& entry : stage.expand_) {
+        out += std::to_string(entry.dest) + " " + std::to_string(entry.source) + "\n";
+    }
+    out += "branch " + std::to_string(stage.branches_.size()) + "\n";
+    for (const Chain& chain : stage.branches_) {
+        out += std::to_string(chain.channel) + " " + std::to_string(chain.count) + "\n";
+    }
+    out += "assign " + std::to_string(stage.assign_.size()) + "\n";
+    for (const MixEntry& entry : stage.assign_) {
+        out += std::to_string(entry.dest) + " " + std::to_string(entry.source) + "\n";
+    }
+    // The artifact lists outputs in its own order and may omit some; the
+    // loader keeps only the per-output spec, so the shape lists all 16 in
+    // index order. The emitter writes all 16 in index order too
+    // (bridge-artifact.mjs), so the two agree on every artifact it writes.
+    out += "output " + std::to_string(kChannels) + "\n";
+    for (std::size_t output = 0; output < kChannels; ++output) {
+        out += std::to_string(output) + " " + std::to_string(stage.outputs_[output].count) + "\n";
+    }
+    out += "end\n";
+    return out;
+}
+
+std::string DspStage::shape_key() const {
+    return sha256_hex(shape_);
+}
+
+bool DspStage::publish(const DspStage& other, std::string& reason) noexcept {
+    if (!loaded()) {
+        reason = "stage not loaded";
+        return false;
+    }
+    if (!other.loaded()) {
+        reason = "update not loaded";
+        return false;
+    }
+    if (other.shape_ != shape_) {
+        reason = "shape differs";
+        return false;
+    }
+    const std::uint64_t published = published_.load(std::memory_order_relaxed);
+    if (seen_.load(std::memory_order_acquire) != published) {
+        reason = "previous update not yet taken";
+        return false;
+    }
+    const unsigned active = active_.load(std::memory_order_relaxed);
+    Coefficients& inactive = sets_[1 - active];
+    const Coefficients& from = other.sets_[other.active_.load(std::memory_order_acquire)];
+    // Same shape means same sizes: element copies into storage sized at load.
+    std::copy(from.sections.begin(), from.sections.end(), inactive.sections.begin());
+    std::copy(from.expand_gain.begin(), from.expand_gain.end(), inactive.expand_gain.begin());
+    std::copy(from.assign_gain.begin(), from.assign_gain.end(), inactive.assign_gain.begin());
+    inactive.output_gain = from.output_gain;
+    inactive.output_delay = from.output_delay;
+    delay_samples_ = static_cast<std::size_t>(
+        *std::max_element(from.output_delay.begin(), from.output_delay.end()));
+    published_.store(published + 1, std::memory_order_relaxed);
+    active_.store(1 - active, std::memory_order_release);
+    reason.clear();
+    return true;
 }
 
 void DspStage::reset() noexcept {
@@ -184,10 +305,10 @@ void DspStage::reset() noexcept {
     delay_write_.fill(0);
 }
 
-void DspStage::run_chain(const std::uint32_t first, const std::uint32_t count,
-                         double& sample) noexcept {
+void DspStage::run_chain(const Coefficients& c, const std::uint32_t first,
+                         const std::uint32_t count, double& sample) noexcept {
     for (std::uint32_t index = 0; index < count; ++index) {
-        const Section& section = sections_[first + index];
+        const Section& section = c.sections[first + index];
         State& state = states_[first + index];
         // Direct form I, the form the emitted coefficients are written for.
         const double input = sample;
@@ -220,6 +341,20 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
     if (internal_channels_ == 0) {
         return;
     }
+    // One acquire per block: this block runs on one set throughout. The
+    // publish count is read after the index so the value seen is at least
+    // the one that went with this set; recording it releases the other set
+    // back to the control thread.
+    const Coefficients& c = sets_[active_.load(std::memory_order_acquire)];
+    seen_.store(published_.load(std::memory_order_relaxed), std::memory_order_release);
+    // A delay that shrank under a live update: keep the write index inside
+    // the new length. Up to `delay` stale samples come out of the line once.
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        const std::uint32_t delay = c.output_delay[channel];
+        if (delay > 0 && delay_write_[channel] >= delay) {
+            delay_write_[channel] %= delay;
+        }
+    }
     std::array<double, kMaxInternalChannels> internal{};
     std::array<double, kChannels> in{};
     std::array<double, kChannels> out{};
@@ -229,32 +364,97 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
             in[channel] = static_cast<double>(block[channel]);
         }
         std::fill(internal.begin(), internal.begin() + internal_channels_, 0.0);
-        for (const MixEntry& entry : expand_) {
-            internal[entry.dest] += entry.gain * in[entry.source];
+        for (std::size_t row = 0; row < expand_.size(); ++row) {
+            const MixEntry& entry = expand_[row];
+            internal[entry.dest] += c.expand_gain[row] * in[entry.source];
         }
         for (const Chain& chain : branches_) {
-            run_chain(chain.first, chain.count, internal[chain.channel]);
+            run_chain(c, chain.first, chain.count, internal[chain.channel]);
         }
         out.fill(0.0);
-        for (const MixEntry& entry : assign_) {
-            out[entry.dest] += entry.gain * internal[entry.source];
+        for (std::size_t row = 0; row < assign_.size(); ++row) {
+            const MixEntry& entry = assign_[row];
+            out[entry.dest] += c.assign_gain[row] * internal[entry.source];
         }
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
             const OutputSpec& spec = outputs_[channel];
             double sample = out[channel];
-            run_chain(spec.first, spec.count, sample);
-            if (spec.delay > 0) {
+            run_chain(c, spec.first, spec.count, sample);
+            const std::uint32_t delay = c.output_delay[channel];
+            if (delay > 0) {
                 double* const line = delay_lines_.data() + channel * kMaxDelaySamples;
                 const std::uint32_t write = delay_write_[channel];
                 const double delayed = line[write];
                 line[write] = sample;
-                delay_write_[channel] = (write + 1) % spec.delay;
+                delay_write_[channel] = (write + 1) % delay;
                 sample = delayed;
             }
-            block[channel] = static_cast<float>(sample * spec.gain);
+            block[channel] = static_cast<float>(sample * c.output_gain[channel]);
         }
     }
     flush_denormals();
+}
+
+// ---------------------------------------------------------------- SHA-256
+//
+// FIPS 180-4, straight from the standard. Used only for the DSP shape key and
+// only off the audio path; a few hundred bytes hashed once per publish.
+std::string sha256_hex(const std::string_view text) {
+    static constexpr std::array<std::uint32_t, 64> k{
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
+    std::array<std::uint32_t, 8> h{0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                                   0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+    const auto rotr = [](const std::uint32_t x, const unsigned n) {
+        return (x >> n) | (x << (32 - n));
+    };
+    std::vector<unsigned char> message(text.begin(), text.end());
+    const std::uint64_t bit_length = static_cast<std::uint64_t>(message.size()) * 8;
+    message.push_back(0x80);
+    while (message.size() % 64 != 56) message.push_back(0);
+    for (int shift = 56; shift >= 0; shift -= 8) {
+        message.push_back(static_cast<unsigned char>(bit_length >> shift));
+    }
+    for (std::size_t offset = 0; offset < message.size(); offset += 64) {
+        std::array<std::uint32_t, 64> w{};
+        for (std::size_t i = 0; i < 16; ++i) {
+            w[i] = (static_cast<std::uint32_t>(message[offset + i * 4]) << 24) |
+                   (static_cast<std::uint32_t>(message[offset + i * 4 + 1]) << 16) |
+                   (static_cast<std::uint32_t>(message[offset + i * 4 + 2]) << 8) |
+                   static_cast<std::uint32_t>(message[offset + i * 4 + 3]);
+        }
+        for (std::size_t i = 16; i < 64; ++i) {
+            const std::uint32_t s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >> 3);
+            const std::uint32_t s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+        }
+        std::uint32_t a = h[0], b = h[1], cc = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+        for (std::size_t i = 0; i < 64; ++i) {
+            const std::uint32_t s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+            const std::uint32_t ch = (e & f) ^ (~e & g);
+            const std::uint32_t t1 = hh + s1 + ch + k[i] + w[i];
+            const std::uint32_t s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+            const std::uint32_t maj = (a & b) ^ (a & cc) ^ (b & cc);
+            const std::uint32_t t2 = s0 + maj;
+            hh = g; g = f; f = e; e = d + t1; d = cc; cc = b; b = a; a = t1 + t2;
+        }
+        h[0] += a; h[1] += b; h[2] += cc; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
+    }
+    static constexpr char digits[] = "0123456789abcdef";
+    std::string hex;
+    hex.reserve(64);
+    for (const std::uint32_t word : h) {
+        for (int shift = 28; shift >= 0; shift -= 4) {
+            hex.push_back(digits[(word >> shift) & 0xF]);
+        }
+    }
+    return hex;
 }
 
 AudioRing::AudioRing(const std::size_t capacity_frames)

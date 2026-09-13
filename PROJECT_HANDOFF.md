@@ -11002,3 +11002,36 @@ showed tx/rx restarts and drops at 0 before and after, and the journal has
 no RECOVER in the window. The check directory was removed afterwards;
 nothing pending on the Pi. The README's "not verified" line for the fixed
 shape now reads: `--check` accepted, no file-to-file engine run made.
+
+**IMPLEMENTED 2026-09-13, Mac only, not built on the Pi, nothing installed:
+step 2 of the live coefficient design, the bridge core's two coefficient
+sets.** `DspStage` (`bridge_core.hpp/.cpp`) now separates shape from
+numbers: `MixEntry` is `(dest, source)`, `OutputSpec` is `(first, count)`,
+and a `Coefficients` set holds the sections, the expand and assign gains,
+and the per-output gain and delay; two sets are sized at load. `publish(
+other, reason)` (control thread only) copies `other`'s numbers into the
+inactive set and switches with one release store of the index; it refuses,
+touching nothing, on "shape differs", "stage not loaded", "update not
+loaded" and "previous update not yet taken" (the audio thread's `seen_`
+counter has not reached `published_`; the caller retries next poll, nothing
+blocks). `process()` does one acquire load of the index at the top of each
+block, records the publish count it saw, keeps `states_` across the switch,
+and reduces a delay write index modulo a delay that shrank. `shape()` is
+the canonical text (all 16 outputs in index order; `artifactShape` in JS
+changed to match), `shape_key()` its SHA-256 through a self-contained FIPS
+180-4 implementation (`sha256_hex`, empty/abc/two-block vectors tested);
+the pinned vector 7d17e417…ecb4e57d0 holds in C++ and JS, and the two agree
+on the compiler's real artifacts (default fixed 064ef631…, default minimal
+ef95d124…). `usb16x16-dsp-offline --shape` and `--swap-at FRAME FILE` added.
+Tests: seven new in `bridge_tests.cpp` (SHA vectors, pinned shape, a swap
+sample-exact against a difference equation with state carried and a cold
+second filter shown to differ, refusal cases, the not-yet-taken guard,
+delay 480 -> 48 -> 0 under ASan/UBSan, a moved stage), all passing in
+Release and sanitizer builds; the core, runner and tests build `-Werror`
+clean with clang. `main.cpp` is untouched and syntax-checks clean against
+the new header (alsa-lib 1.2.11 headers plus the endian/clock stubs on the
+Mac). The accepted binary and the supervisor's pinned hash are unchanged;
+the service was not touched (dsp-direct at 103, no RECOVER today). Next is
+step 3, the control thread and `/run/usb16x16/dsp-live.{dsp,status}` in
+`main.cpp`, which is the first step that needs a Pi build and the
+acceptance battery.
