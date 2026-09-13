@@ -18,7 +18,13 @@ export class LiveQueue {
    * @param {(handle: any) => void} [options.clearTimeout]
    * @param {(outcome: {ok: boolean, draft: any, result?: any, error?: Error}) => void} [options.onSettled]
    */
-  constructor({send, delayMs = LIVE_DEBOUNCE_MS, setTimeout: setT = globalThis.setTimeout, clearTimeout: clearT = globalThis.clearTimeout, onSettled = () => {}}) {
+  constructor({send, delayMs = LIVE_DEBOUNCE_MS,
+               // Wrapped, not stored bare: a browser's setTimeout called with
+               // `this` set to anything but the window throws Illegal invocation
+               // (Node does not care, so the tests could not see it).
+               setTimeout: setT = (fn, ms) => globalThis.setTimeout(fn, ms),
+               clearTimeout: clearT = handle => globalThis.clearTimeout(handle),
+               onSettled = () => {}}) {
     this.send = send;
     this.delayMs = delayMs;
     this.setT = setT;

@@ -76,3 +76,19 @@ test('cancel drops what is waiting but not what is in flight', async () => {
   queue.submit('y'); t.fire(); await settle();
   assert.deepEqual(sent, ['y']);
 });
+
+test('the default timers are called free of the queue as receiver (browser Illegal invocation)', async () => {
+  // A stand-in for a browser: a timer that throws when its receiver is not the global.
+  const real = globalThis.setTimeout, realClear = globalThis.clearTimeout;
+  globalThis.setTimeout = function (fn, ms) { if (this !== globalThis && this !== undefined) throw new TypeError('Illegal invocation'); return real(fn, ms); };
+  globalThis.clearTimeout = function (h) { if (this !== globalThis && this !== undefined) throw new TypeError('Illegal invocation'); return realClear(h); };
+  try {
+    const sent = [];
+    const queue = new LiveQueue({send: async d => { sent.push(d); }, delayMs: 1});
+    queue.submit('a'); queue.submit('b');
+    await new Promise(resolve => real(resolve, 20));
+    assert.deepEqual(sent, ['b']);
+  } finally {
+    globalThis.setTimeout = real; globalThis.clearTimeout = realClear;
+  }
+});
