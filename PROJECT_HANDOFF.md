@@ -10799,3 +10799,28 @@ that worked for a while after each fresh session and then went silent
 with no Pi-side event. The switch's snooping setting and the Ferrofish's
 receive-channel status are the user's to read; no loop run is worth
 taking until the duplex harness sees its return again.
+
+**FOUND 2026-09-13 01:05 UTC: on the wire, the Pi's stream carries the
+audio and the Ferrofish's return carries zeros; the Pi is cleared, the
+switch (snooping still off, nothing changed) and the 09:00 link drop
+(the user reseating the cable) are cleared, and the break is inside the
+Ferrofish's receive-to-output path.** The same short harness run
+(`ferrofish-check2`, 64 frames, 20 impulses, exit 6, no signal) with a
+receive-only decode of both groups on the Mac's AoIP interface
+(`scratchpad/listen.py`, 150 s): 239.69.16.1 (the Pi's TX 01-08) 150,002
+packets, channel-1 peak 0x1FFFFC, 264 samples at or over 0.125 full scale
+(the harness impulses), first 2.6 s in; 239.69.121.9 (the Ferrofish's
+Output 49-56) 150,000 packets, every channel's peak 0x0. The Ferrofish
+receives the flow at its port (the switch floods it to every port, the
+Mac's included) and transmits silence where the Pi's audio should be,
+while Dante Controller shows the subscription resolved and the user
+reports nothing changed on the unit. The loop candidate, the sink test,
+the keepalive and the eth0 bounce are all on the Pi and are not it. What
+would put it right, in the order to try: re-subscribing the Ferrofish's
+receive channels 49-64 to the Pi's two flows in Dante Controller
+(unsubscribe, then subscribe, which restarts its receiver), and if that
+does not, a power cycle of the Ferrofish; the check afterwards is the
+same harness run with the wire decode beside it. The standing rule from
+2026-09-07 applies once it returns: the lead pair first after any
+Ferrofish change, the phase re-read by stamp-phase.py, before any loop
+figure is compared with the 8.2 ms of the morning.
