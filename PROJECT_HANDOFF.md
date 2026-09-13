@@ -11406,3 +11406,23 @@ the page's last edit with nothing pending (app.mjs c0d739b9);
 `install-web-control.sh` cd54d94a re-pinned. Recovery is the operator's:
 reset-failed and start the path unit, reinstall the web-control set, nudge
 an edit. Not yet done.
+
+**MEASURED 2026-09-13 22:14-22:17 UTC: after the apply-unit fixes, live
+edits from the page run without a stall.** Operator reinstalled the
+web-control set (units without a start limit, the draining applier),
+reset the failed watcher and reloaded; the page's self-heal re-sent the
+draft and the inverted output 1 came back upright. Since the start of the
+user preset: 54 `DSPLIVE applied`, `dsp_live_gen=53`, zero refused, and
+bursts of three requests within two seconds (22:15:31-35) each `done`.
+One RECOVER pair at 18:09:23 EDT (22:09:23 UTC), both directions within
+the same second, XRUN on both, with no live update in that minute: it
+coincides with the operator's reinstall of the web-control set
+(daemon-reload, web service and path unit restarts), the process-churn
+class this record already knows; not attributed to the live path. Bass
+redirection was found held back as Needs apply: the fixed shape now keeps
+the branches when it is off (unity high-passes, muted non-LFE sends), the
+toggle is live, and the shipped preset's shape key is unchanged, so
+nothing was re-applied (compile.mjs 68bfd65c staged). The bus format
+control works (verified on a mock: Apply format re-roles the outputs and
+the state line reads Needs apply); a format change is a routing change and
+goes through Compile & apply by design.

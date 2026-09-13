@@ -452,7 +452,7 @@ export function liveState(health, draftShapeKey) {
   const base = {profile: live.name, liveSha256: dspLive.sha256 || null, installedSha256: live.dspSha256 || null,
                 previewing: Boolean(dspLive.sha256) && dspLive.sha256 !== live.dspSha256, liveShape: live.dspShape};
   if (!draftShapeKey) return {...base, state: 'live', reason: 'Edits go to the running bridge as you make them.'};
-  if (draftShapeKey !== live.dspShape) return {...base, state: 'needs-apply', reason: 'This edit changes the pipeline\'s shape (routing, a 48 dB/oct slope, bass redirection, or an input\'s first send). Compile & apply to run it.'};
+  if (draftShapeKey !== live.dspShape) return {...base, state: 'needs-apply', reason: 'This edit changes the pipeline\'s shape (routing, a bus format, a 48 dB/oct slope, or an input\'s first send). Compile & apply to run it.'};
   return {...base, state: 'live', reason: 'Edits go to the running bridge as you make them; not kept across a restart until committed.'};
 }
 
