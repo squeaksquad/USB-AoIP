@@ -10927,3 +10927,35 @@ trigger for a switch to a >=133 profile, not the model. The "0.6 ms
 optimistic" remark about the day's loop figures is withdrawn with it.
 Mac-side dumps of the probe are in the scratchpad only; the two harness
 JSONs are in `outputs/latency/`.
+
+**STAGED 2026-09-13 (design only), nothing built and nothing installed:
+live EQ and bass-management preview.** The operator asked whether the UI
+can preview EQ and bass-management edits without the minute of silence a
+profile switch costs. It cannot today: `POST /api/apply/preset` ends in a
+supervisor restart, and the bridge has no control channel (the stage loads
+once before any device opens). `work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md`
+is the plan, the "Coefficient updates" paragraph of `DSP_MODE_DESIGN.md`
+taken to buildable detail. The finding that shapes it: `compile.mjs` emits
+the minimal pipeline, so a disabled or 0 dB band, a bypassed high-pass and
+a muted output are omitted rather than emitted at unity or zero, and a
+slider passing through 0 dB is therefore a shape change. The design adds a
+fixed-shape emission (all 16 bands per output as unity sections, every
+allowed mix row present with gain 0; crossover order and bus routing stay
+shape), a shape key shared by the compiler, the applier and the bridge,
+two coefficient sets in `DspStage` swapped by one acquire/release index
+with filter state kept, a control thread created where the meter publisher
+is (before capture, 256 KB stack, SCHED_OTHER) polling a root-written
+`/run/usb16x16/dsp-live.dsp` every 50 ms and answering on
+`dsp-live.status`, applier request kinds `live` (validate, push, wait for
+the bridge's ack) and `commit` (copy the live file over the user preset and
+rewrite its hash, no restart), and a UI that marks each edit live or
+restart. Live is never offered on an accepted profile; a restart always
+returns to the installed file unless committed. The bridge binary changes,
+so the acceptance battery applies, plus a swap-under-load run (about 400
+swaps on outputs 3-16 during an 800-impulse run on 1-2, zero RECOVERs,
+`dsp_us_max` unmoved) and a Ferrofish-return audibility check. Expected
+loop from slider release to audio about 0.5 to 1 s through the
+path-triggered applier; measured before any daemon is considered. Sits
+behind the AoIP-only item. The service was not touched: dsp-direct at 103,
+the post-move check (eth0 1000 Mbit, same link-local, four units active,
+TX moving) clean after the Pi went into its housing this morning.
