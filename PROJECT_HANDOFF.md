@@ -11338,3 +11338,25 @@ re-pinned, staged under `live-install-20260913/`; the staged supervisor
 parses the live conf and lists the user block. Not yet installed: the
 operator reinstalls with the service stopped, then switches to
 `user-immersive-stereo-subs` from the page (Apply profile, no recompile).
+
+**INSTALLED 2026-09-13 21:44 UTC (operator): supervisor 8b42e4ec; MEASURED
+21:47 UTC: step 5 of the install plan passes, a user preset with a live
+file is the live profile.** Bridge 7e8f1064 (re-verified by the installer),
+supervisor 8b42e4ec, PROFILE=user-immersive-stereo-subs (the operator
+re-ran Compile & apply; receipt `preset` / `done`, nine steps). Journal:
+`DSP loaded file=/etc/usb16x16/dsp/user-immersive-stereo-subs.dsp
+internal=23 biquads=302 delay_frames=0 shape=064ef631…`, `DSPLIVE enabled
+file=/run/usb16x16/dsp-live.dsp status=/run/usb16x16/dsp-live.status
+shape=064ef631…` (the same key), `DSP engaged … biquads=302 t_us=4894`.
+`/run/usb16x16/dsp-live.status` = `DSPLIVE gen=0 sha256=none state=idle
+reason="no live file yet"`. BRIDGE: `dsp_live_gen=0 dsp_live_refused=0
+dsp_us_max=132.980`, restarts 0/0, 0 RECOVERs, floors 127 / 72 in the
+first minutes. Prepared for step 7: `live-install-20260913/
+live-toggle-push.sh` (root; alternates `user-base.dsp` = the installed
+file 79fbc5f9 and `user-toggle.dsp` = the same draft with band 1 of
+outputs 3-16 at +3 dB, same shape 064ef631, into the live file every 2 s by
+rename, and leaves the base running at the end; refuses unless the
+installed preset hashes to user-base) so the operator can run the pusher
+in the ssh session while `meter_battery.py --phases soak` runs from the
+Mac; the applier's API path needs the page's credentials this session
+does not hold. Next: step 6, live edits from the page.
