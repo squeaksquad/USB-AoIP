@@ -11185,3 +11185,28 @@ anchor through the wrapper's daemon and sink configuration, not the
 service's RTL standard, and is quoted only as the control for the toggle
 arm that follows. Pi logs in
 `outputs/latency/phase4-dsp-candidate-20260913T184026Z/`.
+
+**MEASURED 2026-09-13 18:49 UTC: the swap-under-load arm of the live
+candidate 7e8f1064 is clean, and matches its control.** Same wrapper
+(e79a05c4), preset, load 0.1 and anchor as the 18:40 control, with
+`live-toggle` (band 1 of outputs 3-16 at +3 dB, the same shape key
+4fef3f1d) pushed over `live-base` and back every 2 s from 10 s in: 234
+pushes, 233 applied (the last landed after the bridge's stop), **zero
+refused, zero RECOVERs** (`direction_restarts=0`, SUMMARY `tx_restarts=0
+rx_restarts=0`), 800 impulses all at 1046 samples (21.792 ms), spread 0,
+against the control's 1044 / spread 0. `dsp_us_max` 133.0 us and mean 47.9
+us against the control's 140.4 max: the swap costs nothing measurable on
+the audio thread, as designed (one acquire load and one relaxed store per
+block). Queue floors 83 / 72, the accepted service's own. The 2-sample
+difference between the arms is one fresh-anchor draw each and inside the
+record's draw scatter; both are wrapper-arm figures, not the RTL standard.
+This is acceptance test 2 of `LIVE_COEFFICIENTS_DESIGN.md` passed on the
+candidate path: about 230 same-shape swaps under an 800-impulse loaded
+run, no restart, no refusal, the stage cost unmoved. What it is not: the
+standing battery against the installed service (four loaded 800s and a
+600 s soak under the supervisor), which is what ACCEPTED requires and is
+the next step, together with tests 3 (audibility on the Ferrofish return)
+and 4 (restart semantics under the supervisor) of the design. Service
+restarted on 947e8b4d, `ptp locked`. Nothing installed; the supervisor's
+pin is unchanged. Pi logs in
+`outputs/latency/phase4-dsp-candidate-20260913T184945Z/`.

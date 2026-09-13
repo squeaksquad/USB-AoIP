@@ -419,3 +419,25 @@ place where they state a rule, and this records why.
 - **Not yet done:** the Pi build with the service stopped, the acceptance
   battery, the pinned hash. `USB16X16_DSP_LIVE=1` on the candidate wrapper
   is how the swap-under-load test will be driven.
+
+## Results from step 3 (2026-09-13)
+
+- **Candidate 7e8f1064 built on the Pi**, zero warnings, core tests and the
+  pinned shape key pass on aarch64.
+- **Acceptance test 2 passed on the candidate path** (handoff MEASURED
+  18:40 and 18:49 UTC): control arm 800 x 1044 samples, spread 0, zero
+  RECOVERs, `dsp_us_max` 140 us; toggle arm with 233 same-shape swaps
+  applied at 2 s intervals, zero refused, 800 x 1046, spread 0, zero
+  RECOVERs, `dsp_us_max` 133 us. The swap has no measurable cost on the
+  audio thread.
+- **Three earlier runs aborted on the wrapper, not the candidate**: the
+  wrapper had the bridge's full-rate log on the SD card and the audio
+  thread's unbuffered log writes blocked on the 5 s writeback; fixed by
+  logging to tmpfs (the supervisor already did). Recorded as FOUND in the
+  handoff; the acceptance battery must be run against the service, where
+  this never applied.
+- **Still owed before ACCEPTED**: the standing battery under the supervisor
+  with `DSP_LIVE=1` on a user preset block (four loaded 800s and a 600 s
+  soak), test 3 (audibility on the return) and test 4 (restart semantics:
+  a live update without commit is gone after a restart; the applier's
+  `commit` is step 4).
