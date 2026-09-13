@@ -38,12 +38,14 @@ mode), one RECOVER per run with the cause open (tcpdump window a suspect:
 the capture-off control read zero in 420 s). Prime 96 measured 5.844 ms
 but is unsafe (queue to 6 on a 96-frame pull, one RECOVER; the driver's
 144-frame skip bounds the prime at 192): the loop's figure is 8.2 ms at
-192. OPEN FIRST THING: the Ferrofish's stamp phase moved 41 -> 11 (a
-44.1 kHz Logic session via the Metric Halo, 2026-09-12 23:34 UTC) and the
-service's SINK_DELAY=103 now crosses (lowest free 133): switch the
-service to an accepted >=133 profile or re-read the phase (handoff FOUND
-2026-09-13 01:35); re-read the phase at the start of every measuring
-day. The Wi-Fi keepalive unit is installed (work/pi-tuning). aoip-stream-stop.sh is the timed helper for the sink test. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
+192. The Ferrofish's stamp phase moved 41 -> 11 (a 44.1 kHz Logic session via
+the Metric Halo, 2026-09-12 23:34 UTC) and the lead shrank to 0.64 ms,
+but sink delay 103 does NOT cross: lead positive, zero ravenna-capture
+zero runs in four minutes of 15-channel noise (handoff CORRECTION
+2026-09-13 02:00). No switch. Read the lead pair at the start of every
+measuring day; a lead under ~0.3 ms or any ravenna-capture zero-run
+event under signal triggers a >=133 profile. The frame model of
+stamp-phase.py disagreeing with the measured lead is an open item. The Wi-Fi keepalive unit is installed (work/pi-tuning). aoip-stream-stop.sh is the timed helper for the sink test. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
 paragraph, then "Steps"). Bridge --mode aoip-loop with --loop-impulse in
 main.cpp (syntax-checked on the Mac, the accepted binary untouched),
 loop-measure preset 1e417960 (outputs/dsp-service/aoip-loop-20260912/),

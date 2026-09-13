@@ -10895,3 +10895,35 @@ together), which is a profile switch and the user's call; the dsp-direct
 block carries 103 by copy and its DSP siblings the same. The phase is
 to be re-read at the start of every measuring day from here, not only
 after a known change: the excursion that moved it was on the Mac.
+
+**CORRECTION 2026-09-13 02:00 UTC to FOUND 01:35: "sink delay 103 now
+crosses" is withdrawn; the observables show no crossing, and the switch
+is not required.** Tested rather than modelled, the user's question being
+the right one: (1) the arrival lead over a clean interval is +638 / +641
+us, positive, where a sink one frame early reads at or below zero; (2) a
+100-impulse probe and then an 800-impulse soak with deterministic noise
+on the other fifteen channels (`sd103-phase11-noise`, `sd103-phase11-
+noisesoak`, 732 x 100 and 732 x 800, spread 0, score 1.000, no RECOVER)
+put about four minutes of continuous signal through the return, and the
+service bridge's zero-run detector on `ravenna-capture` logged zero
+events (journal, and `zr_ravcap=0/0/0/978` on the BRIDGE line: no run of
+8-480 frames, the class the 2026-09-04 holes belong to); (3) the
+Ferrofish's live SAP announcements still carry `mediaclk:direct=531217786`
+and the same session versions the sinks hold, so the stamp tool's offset
+constant is current and the grid-phase reading of 11 is computed on the
+right numbers. What stands: the stamp phase did move (41 to 11) and the
+lead did shrink (about 1.0 ms to 0.64), so the margin under sink delay
+103 is smaller than on 2026-09-07; what does not stand is the frame-index
+model's conclusion that 103 therefore sits one frame early, since a
+whole-frame step would have taken the lead through zero and produced
+holes, and neither happened. The disagreement between `stamp-phase.py`'s
+frame model and the measured lead is an open item for a quieter day; the
+observables gate, per the record's own rule. Practical consequence: the
+service stays on dsp-direct at 103; the lead pair is read at the start
+of every measuring day and `zr_ravcap` events watched under the service
+(the web UI's health carries the BRIDGE fields); a lead under about
+0.3 ms or any `ravenna-capture` zero-run event under signal is the
+trigger for a switch to a >=133 profile, not the model. The "0.6 ms
+optimistic" remark about the day's loop figures is withdrawn with it.
+Mac-side dumps of the probe are in the scratchpad only; the two harness
+JSONs are in `outputs/latency/`.
