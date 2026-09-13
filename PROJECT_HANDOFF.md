@@ -11456,3 +11456,23 @@ outputs. Owed: a criterion-aware soak (validate.py's
 `--signal-criterion reference-events-v1` through the battery, or a preset
 that routes all 16 outputs) before the word ACCEPTED is used for the
 feature. The pusher leaves the installed file running at its end.
+
+**MEASURED 2026-09-13 23:48 UTC (step 8, part 1): a restart returns to the
+installed preset, never to an uncommitted preview.** Before: the bridge
+ran live coefficients 4faad3bb (gen 392) over the installed
+`user-immersive-stereo-subs.dsp`, which by then was 309b44df with the
+block's `DSP_SHA256` matching, so an earlier Commit preview by the
+operator had already taken (the file and pin moved together from
+79fbc5f9, no restart). `systemctl restart usb16x16-aes67` (passwordless):
+the outgoing bridge logged `DSPLIVE stopped applied=393 refused=0
+ignored=0 failures=0`; the new one `DSP loaded file=…user-immersive-
+stereo-subs.dsp … shape=064ef631`, `DSPLIVE enabled` on the same shape,
+status `gen=0 sha256=none state=idle`, BRIDGE `dsp_live_gen=0`, restarts
+0/0. The supervisor's start path had removed `/run/usb16x16/dsp-live.dsp`
+(only the status file remained), so the bridge's own predates-start guard
+was not exercised here; it is covered by the wrapper runs' `ignored`
+path and the unit test. The pusher's `live-toggle-push.sh` finished
+earlier at 22:29:22 UTC after 330 pushes (its log stamps are local time
+labelled Z; a cosmetic fault in the script). `app.mjs` 73f2d0eb (the
+two-author fix) staged to the Pi at 22:33 UTC. Part 2 (commit, restart,
+the committed numbers come back) follows.
