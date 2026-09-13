@@ -387,7 +387,12 @@ the bridge runs coefficients that differ from the installed file, Settings
 shows **Commit preview** (`POST /api/apply/commit`: the running coefficients
 become the installed file, no restart) and **Discard preview** (the installed
 file is handed back to the bridge). The page's expectation of what the
-bridge last applied travels with every request and a stale page is refused.
+bridge last applied travels with every request and a stale page is refused;
+on such a refusal the page forgets its expectation and the next edit carries
+the bridge's current hash. When the bridge reports coefficients the page did
+not send (a second tab, a test pusher), the page re-sends its draft once per
+such state and not again until the user edits, so two authors converge
+rather than loop.
 Compile & apply itself now emits the fixed shape, so every user preset
 installed from here on is a live base; the confirm text says how many bands
 shape the audio and how many are held at unity.

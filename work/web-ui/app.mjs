@@ -26,6 +26,10 @@ let applyChoice = '', applyStatus = null, applyBusy = false, applyPoll = null;
 // shape key from its last compile, what the bridge last took from this page,
 // and the debounced one-in-flight queue that carries edits to the Pi.
 let draftShapeKey = null, liveLastSent = null, liveLine = '';
+// Foreign coefficients the page has already answered once: another author
+// (a second tab, a test pusher) may keep the bridge on something else, and
+// the page re-sends its draft once per such state, never in a loop.
+let liveAnsweredForeign = null;
 const liveQueue = new LiveQueue({
   send: async ({artifact, sha256, expectedProfile, expectedLiveSha256}) => {
     const result = await requestLive(artifact, expectedProfile, expectedLiveSha256);
@@ -34,7 +38,13 @@ const liveQueue = new LiveQueue({
   },
   onSettled: outcome => {
     liveLine = outcome.ok ? `Sent to the bridge (${outcome.draft.sha256.slice(0, 8)})…` : `Live update refused: ${outcome.error.message}`;
-    if (!outcome.ok) toast(liveLine);
+    if (!outcome.ok) {
+      toast(liveLine);
+      // A stale expectation (the bridge moved under us): forget what we
+      // last sent so the next edit, or the self-heal, carries the bridge's
+      // current hash instead of ours.
+      if (/expected live coefficients/.test(outcome.error.message)) liveLastSent = null;
+    }
     renderLiveState();
     if (outcome.ok) startApplyPolling();
   },
@@ -76,7 +86,7 @@ async function deletePreset(name) {
   try { await presetStore.remove(name); render(); toast(`Deleted "${name}" from ${presetStore.label}.`); }
   catch (e) { toast(`Could not delete: ${e.message}`); }
 }
-function markDraft() { dirty = true; $('#draft-status').textContent = 'Draft · unsaved'; scheduleLive(); }
+function markDraft() { dirty = true; $('#draft-status').textContent = 'Draft · unsaved'; liveAnsweredForeign = null; scheduleLive(); }
 
 /** Every edit: compile in the fixed shape and, when the running preset has the
  *  same shape, hand the numbers to the bridge through the debounced queue. */
@@ -1133,7 +1143,9 @@ async function pollHealth() {
   // sent (a request the applier never took, a watcher that was down) and
   // nothing is pending or in flight: send the current draft again.
   if (next?.dspLive?.state === 'applied' && liveLastSent && next.dspLive.sha256 !== liveLastSent
+      && next.dspLive.sha256 !== liveAnsweredForeign
       && !liveQueue.busy && !next.apply?.pending && !next.apply?.inFlight && liveState(next, draftShapeKey).state === 'live') {
+    liveAnsweredForeign = next.dspLive.sha256;
     liveLastSent = null;
     liveLine = 'The bridge is not on this page\'s last edit; sending it again…';
     scheduleLive();
