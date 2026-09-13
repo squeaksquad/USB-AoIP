@@ -525,3 +525,15 @@ Built and tested on the Mac; nothing installed on the Pi.
   the apply units need no start burst limit and the applier drains queued
   live requests in one invocation; the page re-sends its draft when the
   bridge is not on its last edit.
+
+## Installed and measured (2026-09-13 evening)
+
+All eight steps of `LIVE_INSTALL_PLAN.md` ran on the Pi the same day: the
+battery on dsp-direct passed (test 1), a user preset went live from the
+page (5), edits reached the bridge in about a second and were heard (3 and
+6), ~340 swaps under the all-16 soak cost nothing on the audio thread
+(2, service edition; the legacy activity gate does not fit a preset with
+low-passed subs and unused outputs), and a restart returns to the
+installed file or to a committed preview (4). ACCEPTED is the operator's
+decision; the handoff carries the figures and the one owed item, a
+criterion-aware soak on the preset arm.

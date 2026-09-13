@@ -11476,3 +11476,35 @@ earlier at 22:29:22 UTC after 330 pushes (its log stamps are local time
 labelled Z; a cosmetic fault in the script). `app.mjs` 73f2d0eb (the
 two-author fix) staged to the Pi at 22:33 UTC. Part 2 (commit, restart,
 the committed numbers come back) follows.
+
+**MEASURED 2026-09-13 23:57 UTC (step 8, part 2): a committed preview is
+what a restart comes back on.** The operator edited, saw it applied, and
+pressed Commit preview: receipt `commit` / `done`, `changed: true`,
+sha256 3deb94b9; before the restart the live file, the installed
+`user-immersive-stereo-subs.dsp` and the block's `DSP_SHA256` were all
+3deb94b9. `systemctl restart usb16x16-aes67`: the outgoing bridge
+`DSPLIVE stopped applied=1 refused=0`; the new one `DSP loaded
+file=…user-immersive-stereo-subs.dsp … biquads=302 shape=064ef631` (the
+supervisor's pin check passed on the committed file), `DSPLIVE enabled`,
+status `gen=0 state=idle`, restarts 0/0, no RECOVER. With this, every
+step of `LIVE_INSTALL_PLAN.md` has been run on the installed set: 1-2
+install, 3 direct control, 4 the standing battery on dsp-direct (PASS,
+746 x 4 spread 0, 600 s soak, zero RECOVERs), 5 a user preset with a live
+file, 6 live edits from the page (about a second each, audible to the
+operator, 54 then 341 applied, zero refused), 7 the swap soak (transport
+clean; the legacy activity gate FAILs on the preset's low-passed subs and
+unused outputs, the class the 2026-09-11 record answered with
+reference-events-v1), 8 restart semantics both ways. Bugs found and fixed
+in the same session, all on the page or the units, none in the bridge:
+`crypto.subtle` absent on plain HTTP, the Settings rebuild losing
+disclosures and selections, the supervisor's literal bridge hash in the
+DSP-build check, `Illegal invocation` in the live queue, systemd's start
+burst limit on the apply units, and the two-author loop. What ACCEPTED
+would still want, the operator's call: a criterion-aware soak on the
+preset arm (or a preset routing all 16 outputs), since the transport
+counters of step 7 are clean but its activity verdict is not the legacy
+PASS. `live-toggle-push.sh` now lives in `work/phase4-bridge/` with its
+stamps in UTC. Service state at the end: `user-immersive-stereo-subs`
+committed at 3deb94b9, bridge 7e8f1064, supervisor 8b42e4ec, web-control
+df9490b8 / c9bd9181, units e11f0fc9 / 6d53b053, page files as staged,
+0/0 restarts.

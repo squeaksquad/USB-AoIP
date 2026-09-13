@@ -27,6 +27,7 @@
 # arm that shows what the candidate binary costs when nothing is filtering.
 # Both arms therefore differ in exactly one argument.
 set -euo pipefail
+export TZ=UTC   # the push log stamps are labelled Z; make them so
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "run as root with sudo" >&2
