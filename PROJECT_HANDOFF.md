@@ -11554,3 +11554,16 @@ after the next poll; receipts get 15 s. Assessment for the record: the
 bridge and applier have been correct on every request today; every fault
 so far was in the page's bookkeeping or the units, and the page's state
 machine is where the remaining risk sits.
+
+**MEASURED 2026-09-14 00:46-00:47 UTC: after the patient self-heal
+(app.mjs c2c1500b, page reloaded 00:46:04), every edit landed.** Three
+`live` requests (00:46:19, :27, :45), three `DSPLIVE applied` (4563ceb1,
+f2a9b8f1, 3e9670e5), two commits done, zero 409s, receipts within 1.1 s,
+`dsp_live_refused=0`, gen 20, 0/0 restarts, 0 RECOVERs. The minute before
+the reload, on the previous page, two of four had been refused. A small
+sample; the tally is what the next session should repeat over a longer
+edit run. Noted for watching: `dsp_us_max` on this bridge process reads
+290.8 us (the earlier processes read 133-140), a one-off maximum since
+the 23:57 UTC start with no restart or refusal beside it; the mean was not
+read. Service left as is: `user-immersive-stereo-subs`, committed
+3e9670e5.
