@@ -1,5 +1,15 @@
 # USB 16x16 Phase 4 real-time bridge
 
+Status (2026-09-13): accepted and in service. Bridge 7e8f1064 is the accepted
+947e8b4d (meter tap) plus the live coefficient updates of
+`LIVE_COEFFICIENTS_DESIGN.md`: two coefficient sets in `DspStage`, a control
+thread polling `/run/usb16x16/dsp-live.dsp`, the DSPLIVE status line and
+BRIDGE / SUMMARY fields. ACCEPTED 2026-09-14 on the standing battery on
+dsp-direct (746 x 4, spread 0, 600 s soak, zero RECOVERs) and the day's live
+sessions (handoff). `artifacts/pi-aarch64/usb16x16-rt-bridge` is 7e8f1064;
+the previous accepted binary is kept beside it as `usb16x16-rt-bridge-947e8b4d`.
+The paragraph below is the 2026-09-11 status, kept for the record.
+
 Status (2026-09-11): accepted and in service. Bridge 406699bd is the accepted
 transport bridge of 2026-09-02 onward (sd103 profile, handoff ACCEPTED
 2026-09-07 22:25 UTC) plus the DSP stage of `DSP_MODE_DESIGN.md`, accepted

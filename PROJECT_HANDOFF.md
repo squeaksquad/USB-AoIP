@@ -11585,3 +11585,36 @@ the next session should read `dsp_us_max` over a quiet hour with the page
 closed and then open, before the word ACCEPTED is used for the live
 feature. Service left on `user-immersive-stereo-subs`, committed; page
 files as staged (app.mjs c2c1500b).
+
+**ACCEPTED 2026-09-14 ~01:00 UTC: the live-coefficient bridge 7e8f1064 with
+supervisor 8b42e4ec is the point of record; live coefficient updates are
+an accepted feature on user presets.** The operator's decision, on this
+evidence: bridge 7e8f1064 (sources main.cpp 06f587c6, bridge_core.cpp
+01dd07e9, bridge_core.hpp 1443dc03) built on the Pi with the service
+stopped, zero warnings, core tests and the pinned shape key passing on
+aarch64; installed 21:02 UTC by `install-live-set.sh`; the standing
+battery on dsp-direct (`outputs/dsp-service/live-direct-20260913/`):
+preflight PASS, four 800-impulse runs all at 746 samples (15.542 ms),
+spread 0, 600 s all-16 soak PASS, zero RECOVERs, floors 85 / 96,
+`dsp_us_max` 140 us; dsp-direct on this bridge is argument for argument
+the accepted transport, no control thread, and 746 is its draw on this
+start (725 on 406699bd, 703 on 947e8b4d, their own draws). The feature:
+a user preset in the fixed shape applied from the page with DSP_LIVE=1;
+edits reach the bridge in about a second (43 of 43 after the page's
+self-heal fix, receipts within 0.7 s); ~340 same-shape swaps under the
+600 s all-16 soak with zero RECOVERs, zero refusals and the stage cost
+unmoved (133 / 51 us against 140 / 48 direct); a restart returns to the
+installed file or to a committed preview; the applier's `live` and
+`commit` kinds, the web routes and the page as recorded through the day.
+Installed set: bridge 7e8f1064, supervisor 8b42e4ec, web-control
+df9490b8 / c9bd9181 with units e11f0fc9 / 6d53b053 (the store's name-rule
+fix 396a2fa0 staged, not yet installed), page files as staged. Repo:
+`artifacts/pi-aarch64/usb16x16-rt-bridge` is now 7e8f1064 with 947e8b4d
+kept beside it, `install-candidate.sh` pinned to it, the dsp-direct block
+annotated. What is accepted with its caveats stated: the step 7 soak's
+activity verdict is the legacy gate failing on the preset's low-passed
+subs and unused outputs (the 2026-09-11 precedent), and `dsp_us_max`
+crept to 334 us over the evening's session with the mean flat; both are
+owed reads, not blockers, by the operator's call. Rollback is
+`live-install-20260913/install-live-set.sh rollback` plus the web-control
+copies in `rollback/web-control/`.
