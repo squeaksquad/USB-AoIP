@@ -30,6 +30,11 @@ let draftShapeKey = null, liveLastSent = null, liveLine = '';
 // (a second tab, a test pusher) may keep the bridge on something else, and
 // the page re-sends its draft once per such state, never in a loop.
 let liveAnsweredForeign = null;
+// The self-heal must not act on one stale health poll: a disagreement has to
+// be seen on two consecutive polls with the same hash, and never within a
+// few seconds of the page's own last receipt (health lags the bridge by up
+// to one poll, and that lag looked like a foreign author on 2026-09-13).
+let liveForeignSeen = {sha: null, polls: 0}, liveLastReceiptAt = 0, liveRetryTimer = null;
 // Whether the user has touched the draft since the page loaded: a draft the
 // user has not edited follows the live user preset's saved UI configuration.
 let editedSinceLoad = false;
@@ -40,7 +45,8 @@ const liveQueue = new LiveQueue({
     // The applier is one process per request and the service refuses a new
     // one while the previous is pending: wait for this receipt before the
     // queue may send the next edit.
-    await awaitReceipt(result.id);
+    await awaitReceipt(result.id, undefined, {timeoutMs: 15000});
+    liveLastReceiptAt = Date.now();
     return result;
   },
   onSettled: outcome => {
@@ -50,7 +56,14 @@ const liveQueue = new LiveQueue({
       // A stale expectation (the bridge moved under us): forget what we
       // last sent so the next edit, or the self-heal, carries the bridge's
       // current hash instead of ours.
-      if (/expected live coefficients/.test(outcome.error.message)) liveLastSent = null;
+      if (/expected live coefficients/.test(outcome.error.message)) {
+        liveLastSent = null;
+        // One automatic retry after the next health poll, which then carries
+        // the bridge's current hash; the draft is unchanged, so this is the
+        // same edit sent with the right expectation.
+        clearTimeout(liveRetryTimer);
+        liveRetryTimer = setTimeout(() => { liveRetryTimer = null; if (!liveQueue.busy) scheduleLive(); }, 1300);
+      }
     }
     renderLiveState();
     if (outcome.ok) startApplyPolling();
@@ -1192,10 +1205,12 @@ async function pollHealth() {
   // Self-heal: the bridge runs something other than what this page last
   // sent (a request the applier never took, a watcher that was down) and
   // nothing is pending or in flight: send the current draft again.
-  if (next?.dspLive?.state === 'applied' && liveLastSent && next.dspLive.sha256 !== liveLastSent
-      && next.dspLive.sha256 !== liveAnsweredForeign
+  const foreign = next?.dspLive?.state === 'applied' && liveLastSent && next.dspLive.sha256 !== liveLastSent ? next.dspLive.sha256 : null;
+  liveForeignSeen = foreign && foreign === liveForeignSeen.sha ? {sha: foreign, polls: liveForeignSeen.polls + 1} : {sha: foreign, polls: foreign ? 1 : 0};
+  if (foreign && liveForeignSeen.polls >= 2 && Date.now() - liveLastReceiptAt > 3000
+      && foreign !== liveAnsweredForeign
       && !liveQueue.busy && !next.apply?.pending && !next.apply?.inFlight && liveState(next, draftShapeKey).state === 'live') {
-    liveAnsweredForeign = next.dspLive.sha256;
+    liveAnsweredForeign = foreign;
     liveLastSent = null;
     liveLine = 'The bridge is not on this page\'s last edit; sending it again…';
     scheduleLive();
