@@ -11531,3 +11531,26 @@ Compile & apply; on connecting to a live user preset an untouched draft
 becomes the saved configuration whose name slugs to the profile, so the
 page shows what the bridge runs. 104 web-ui tests pass. The service was
 not touched (bridge on 249bfc4a, 0/0 restarts).
+
+**FOUND 2026-09-14 00:44 UTC: the page's self-heal, fed by a one-poll-stale
+health snapshot, refused a third of the operator's edits.** In the fifteen
+minutes to 00:43: 13 `live` requests accepted and every one `done` within
+0.1-0.8 s, two commits done, zero refusals or failures at the applier and
+zero at the bridge (`dsp_live_refused=0`, gen 17), 0/0 restarts; and 7
+`POST /api/apply/live` refused 409 by the web service's gate, each in the
+same second as a successful receipt. Mechanism: after a receipt the page
+starts the health poll; health's `dspLive` is read at the 1 s fast tier
+and still names the previous hash, so the page's self-heal read the bridge
+as "not on my last edit", re-sent with that stale expectation, and the
+gate (which reads the status file fresh) refused it; on the refusal the
+page dropped its expectation and the operator's next edit went through,
+which is why it felt hit or miss rather than broken. The commit's saved
+configuration had also failed once on the preset store's name rule (the
+middle dot; fixed both sides, page saves as "Immersive - stereo subs"). Fix
+staged (app.mjs c2c1500b, repo 60d6a3e): the self-heal acts only when two
+consecutive polls show the same foreign hash and more than 3 s have passed
+since the page's own receipt; a stale-expectation refusal retries once
+after the next poll; receipts get 15 s. Assessment for the record: the
+bridge and applier have been correct on every request today; every fault
+so far was in the page's bookkeeping or the units, and the page's state
+machine is where the remaining risk sits.
