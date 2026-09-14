@@ -5,7 +5,7 @@ import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphoneP
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt } from './backend.mjs';
 import { LiveQueue } from './live.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
@@ -30,14 +30,21 @@ let draftShapeKey = null, liveLastSent = null, liveLine = '';
 // (a second tab, a test pusher) may keep the bridge on something else, and
 // the page re-sends its draft once per such state, never in a loop.
 let liveAnsweredForeign = null;
+// Whether the user has touched the draft since the page loaded: a draft the
+// user has not edited follows the live user preset's saved UI configuration.
+let editedSinceLoad = false;
 const liveQueue = new LiveQueue({
   send: async ({artifact, sha256, expectedProfile, expectedLiveSha256}) => {
     const result = await requestLive(artifact, expectedProfile, expectedLiveSha256);
     liveLastSent = sha256;
+    // The applier is one process per request and the service refuses a new
+    // one while the previous is pending: wait for this receipt before the
+    // queue may send the next edit.
+    await awaitReceipt(result.id);
     return result;
   },
   onSettled: outcome => {
-    liveLine = outcome.ok ? `Sent to the bridge (${outcome.draft.sha256.slice(0, 8)})…` : `Live update refused: ${outcome.error.message}`;
+    liveLine = outcome.ok ? `Applied (${outcome.draft.sha256.slice(0, 8)}).` : `Live update refused: ${outcome.error.message}`;
     if (!outcome.ok) {
       toast(liveLine);
       // A stale expectation (the bridge moved under us): forget what we
@@ -86,7 +93,38 @@ async function deletePreset(name) {
   try { await presetStore.remove(name); render(); toast(`Deleted "${name}" from ${presetStore.label}.`); }
   catch (e) { toast(`Could not delete: ${e.message}`); }
 }
-function markDraft() { dirty = true; $('#draft-status').textContent = 'Draft · unsaved'; liveAnsweredForeign = null; scheduleLive(); }
+function markDraft() { dirty = true; editedSinceLoad = true; $('#draft-status').textContent = 'Draft · unsaved'; liveAnsweredForeign = null; scheduleLive(); }
+
+/** The saved UI preset that belongs to the live user profile, if any: the
+ *  Pi store entry whose name slugs to the profile's slug. */
+function presetForLiveProfile(next) {
+  const live = profileChoices(next).live;
+  if (!live?.user) return null;
+  const slug = live.name.replace(/^user-/, '');
+  const entry = Object.entries(presetStore.cache || {}).find(([name]) => presetSlug(name) === slug);
+  return entry ? {name: entry[0], document: entry[1]} : null;
+}
+
+/** On connecting to a live user preset, an untouched draft becomes its saved
+ *  configuration, so the page shows what the bridge runs. */
+function followLivePreset(next) {
+  if (editedSinceLoad) return;
+  const found = presetForLiveProfile(next);
+  if (!found) return;
+  try {
+    const document = validateConfig(structuredClone(found.document));
+    config = document; selected = Math.min(selected, CHANNELS - 1); dirty = false; draftShapeKey = null;
+    render();
+    toast(`Showing "${found.name}", the configuration saved with the live preset.`);
+  } catch (e) { toast(`The saved configuration for ${found.name} could not be loaded: ${e.message}`); }
+}
+
+/** Keep the UI configuration on the Pi in step with what was committed or
+ *  applied, under the draft's name, so a reload can find it. */
+async function saveDraftWithPreset(reason) {
+  try { validateConfig(config); await presetStore.save(config.name, structuredClone(config)); dirty = false; render(); }
+  catch (e) { toast(`Could not save the configuration with the ${reason}: ${e.message}`); }
+}
 
 /** Every edit: compile in the fixed shape and, when the running preset has the
  *  same shape, hand the numbers to the bridge through the debounced queue. */
@@ -645,6 +683,7 @@ async function applyDraft() {
   try {
     const result = await requestPreset(config.name, compiled.artifact, live);
     toast(`${result.replacing ? 'Replacing' : 'Installing'} ${result.profile} (artifact ${result.artifactSha256.slice(0, 8)}). ${result.note || ''}`);
+    await saveDraftWithPreset('preset');
     applyStatus = {current: null, pending: true, inFlight: false};
     startApplyPolling();
   } catch (e) { toast(`Preset refused: ${e.message}`); }
@@ -659,12 +698,18 @@ async function commitLive() {
   applyBusy = true; refreshSettingsLive();
   try {
     const result = await requestCommit(state.profile, state.liveSha256);
-    toast(result.note || 'Commit queued.');
     applyStatus = {current: null, pending: true, inFlight: false};
-    startApplyPolling();
-  } catch (e) { toast(`Commit refused: ${e.message}`); }
+    refreshSettingsLive();
+    const receipt = await awaitReceipt(result.id);
+    const sha = receipt.committed?.sha256 || state.liveSha256 || '';
+    liveLine = `Committed (${sha.slice(0, 8)}): the installed preset now carries these coefficients.`;
+    toast(liveLine);
+    await saveDraftWithPreset('commit');
+    pollHealth();
+  } catch (e) { toast(`Commit failed: ${e.message}`); }
   applyBusy = false;
   refreshSettingsLive();
+  renderLiveState();
 }
 
 async function discardLive() {
@@ -1128,6 +1173,7 @@ async function pollHealth() {
   if (!wasConnected && next) {
     toast(`Connected to ${next.host || 'the Pi'}. Status and logs are live; profile switches go through Apply in Settings.`);
     await adoptStore(piStore());
+    followLivePreset(next);
   } else if (wasConnected && !next) {
     toast('Lost the Pi control service. Showing the local draft; presets are back in this browser.');
     await adoptStore(browserStore(storageKey));

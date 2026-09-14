@@ -484,3 +484,24 @@ export async function requestCommit(expectedProfile, expectedLiveSha256, fetchIm
   }
   return result;
 }
+
+/**
+ * Wait for the applier's receipt for one request id: the live path is one
+ * process per request, and the web service refuses a new request while the
+ * previous one is pending, so the page must not send the next edit before
+ * the receipt lands. Resolves with the terminal status; throws with the
+ * applier's reason on refused / failed; throws on timeout.
+ */
+export async function awaitReceipt(id, fetchImpl = globalThis.fetch, {pollMs = 250, timeoutMs = 8000, sleep = ms => new Promise(r => setTimeout(r, ms))} = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const status = await fetchApplyStatus(fetchImpl);
+    const current = status.current;
+    if (current && current.id === id && APPLY_TERMINAL.has(current.state) && !status.pending) {
+      if (current.state !== 'done') throw new Error(current.error || current.state);
+      return current;
+    }
+    if (Date.now() >= deadline) throw new Error(`no receipt for ${id.slice(0, 8)} within ${Math.round(timeoutMs / 1000)} s`);
+    await sleep(pollMs);
+  }
+}

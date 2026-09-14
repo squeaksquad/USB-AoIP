@@ -11508,3 +11508,26 @@ stamps in UTC. Service state at the end: `user-immersive-stereo-subs`
 committed at 3deb94b9, bridge 7e8f1064, supervisor 8b42e4ec, web-control
 df9490b8 / c9bd9181, units e11f0fc9 / 6d53b053, page files as staged,
 0/0 restarts.
+
+**FOUND 2026-09-13 23:59 UTC: Commit preview works on the Pi and the page
+did not show it; the page's draft did not follow the committed preset
+across a reload; and edits raced the applier.** Receipts: four `live`
+`done` and one `commit` `done` (`changed: true`, 249bfc4a), with the
+installed file, the block's pin and the bridge's applied hash all
+249bfc4a afterwards. The page hid the Commit button the moment running
+and installed matched and said nothing, so the operator read it as "does
+not commit". A reload resets the page's draft to the default while the
+bridge keeps the committed coefficients, and the next edit sends the
+default-based draft, so the operator read it as "does not survive a
+reload". Two `POST /api/apply/live` returned 409 (an Apply already in
+progress): the queue sent the next edit on the previous request's 202,
+before its receipt. Fixes, staged (`app.mjs` and `backend.mjs`, repo):
+`awaitReceipt(id)` polls `/api/apply/status` until that id's terminal
+receipt (refused / failed surface the applier's reason; 8 s timeout) and
+the live send resolves only then, so one applier operation runs at a
+time; Commit reports "Committed (hash)" on its receipt and saves the UI
+configuration to the Pi preset store under the draft's name, as does
+Compile & apply; on connecting to a live user preset an untouched draft
+becomes the saved configuration whose name slugs to the profile, so the
+page shows what the bridge runs. 104 web-ui tests pass. The service was
+not touched (bridge on 249bfc4a, 0/0 restarts).

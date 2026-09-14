@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, formatDuration, serviceLabel, browserStore, piStore, fetchMeters, meterLevels, liveState, requestLive, requestCommit } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, formatDuration, serviceLabel, browserStore, piStore, fetchMeters, meterLevels, liveState, requestLive, requestCommit, awaitReceipt } from './backend.mjs';
 
 const ok = body => ({ok: true, status: 200, json: async () => body});
 const fail = (status, body) => ({ok: false, status, json: async () => body});
@@ -422,4 +422,21 @@ test('compileDraft compiles the fixed shape by default and carries the shape key
   const minimal = await compileDraft(createConfig(), importImpl, {shape: 'minimal'});
   assert.equal(minimal.report.shape, 'minimal');
   assert.equal(minimal.sections, 46);
+});
+
+test('awaitReceipt waits for the terminal receipt of its own id and surfaces refusals', async () => {
+  const states = [
+    {ok: true, current: {id: 'old0000000', state: 'done'}, pending: true, inFlight: false},
+    {ok: true, current: {id: 'abc1234567', state: 'validating'}, pending: false, inFlight: true},
+    {ok: true, current: {id: 'abc1234567', state: 'done'}, pending: false, inFlight: false},
+  ];
+  let at = 0;
+  const fetchImpl = async () => ok(states[Math.min(at++, states.length - 1)]);
+  const done = await awaitReceipt('abc1234567', fetchImpl, {pollMs: 1, sleep: async () => {}});
+  assert.equal(done.state, 'done');
+  assert.equal(at, 3, 'polled until its own terminal receipt');
+  const refused = async () => ok({ok: true, current: {id: 'abc1234567', state: 'refused', error: 'shape differs'}, pending: false, inFlight: false});
+  await assert.rejects(awaitReceipt('abc1234567', refused, {pollMs: 1, sleep: async () => {}}), /shape differs/);
+  const never = async () => ok({ok: true, current: {id: 'other00000', state: 'done'}, pending: false, inFlight: false});
+  await assert.rejects(awaitReceipt('abc1234567', never, {pollMs: 1, timeoutMs: 5, sleep: async () => {}}), /no receipt/);
 });
