@@ -102,7 +102,8 @@ METERS_FRESH_S = 1.0   # older than this and the tap is reported unavailable
 SLOW_INTERVAL = 5.0    # systemctl, sysfs, vcgencmd
 DAEMON_INTERVAL = 10.0  # aes67-daemon HTTP API
 
-PRESET_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$")
+# The same rule the preset route uses: the shipped draft's name carries a middle dot.
+PRESET_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._·-]{0,63}$")
 USER_NAME = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 REALM = "USB 16x16 control"

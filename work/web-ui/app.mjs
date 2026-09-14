@@ -122,7 +122,11 @@ function followLivePreset(next) {
 /** Keep the UI configuration on the Pi in step with what was committed or
  *  applied, under the draft's name, so a reload can find it. */
 async function saveDraftWithPreset(reason) {
-  try { validateConfig(config); await presetStore.save(config.name, structuredClone(config)); dirty = false; render(); }
+  // The Pi store's name rule is letters, digits, spaces, dots and dashes;
+  // the shipped draft's middle dot is not among them, and the store name
+  // only has to slug to the profile's slug to be found again.
+  const name = String(config.name).replace(/[^A-Za-z0-9 ._-]/g, '-').replace(/\s+/g, ' ').trim() || 'preset';
+  try { validateConfig(config); await presetStore.save(name, structuredClone(config)); dirty = false; render(); toast(`Configuration saved on the Pi as "${name}" with the ${reason}.`); }
   catch (e) { toast(`Could not save the configuration with the ${reason}: ${e.message}`); }
 }
 

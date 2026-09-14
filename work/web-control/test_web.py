@@ -269,3 +269,7 @@ class WebLiveTests(unittest.TestCase):
         self.assertEqual(rows["user-room"]["dspShape"], "7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0")
         self.assertEqual(rows["user-room"]["dspSha256"], "ab")
         self.assertIsNone(rows["dsp-direct"]["dspShape"])
+
+    def test_preset_store_accepts_the_shipped_name(self):
+        self.assertTrue(self.web.PRESET_NAME.match("Immersive · stereo subs"))
+        self.assertFalse(self.web.PRESET_NAME.match("../x"))
