@@ -11567,3 +11567,21 @@ edit run. Noted for watching: `dsp_us_max` on this bridge process reads
 the 23:57 UTC start with no restart or refusal beside it; the mean was not
 read. Service left as is: `user-immersive-stereo-subs`, committed
 3e9670e5.
+
+**MEASURED 2026-09-14 00:47-00:54 UTC: a seven-minute edit session on the
+patient page, 40 of 40 live edits applied.** `POST /api/apply/live` 40
+accepted, 0 refused; 41 receipts (40 `live`, 1 `commit`) all `done`,
+request-to-receipt at most 0.7 s; `DSPLIVE applied` 40, `dsp_live_gen` 60,
+`dsp_live_refused` 0; restarts 0/0, 0 RECOVERs; queue floors 75 / 72.
+With the 00:46 minute this is 43 of 43 since the self-heal fix, against
+13 of 20 before it. `dsp_us_max` on this process now reads 333.7 us
+(mean 53.1 us): the maximum has risen with the session (133 on the
+earlier processes, 291 at 00:47) while the mean has not moved; nothing on
+the audio path changed in the page fixes, so the candidates are cache
+effects at the moment a freshly written coefficient set is first read, or
+the web service's request load beside it (the page polls `/api/meters`
+about ten times a second). Not a fault at 1/3 of the 48-frame period, but
+the next session should read `dsp_us_max` over a quiet hour with the page
+closed and then open, before the word ACCEPTED is used for the live
+feature. Service left on `user-immersive-stereo-subs`, committed; page
+files as staged (app.mjs c2c1500b).
