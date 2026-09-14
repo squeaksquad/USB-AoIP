@@ -11618,3 +11618,22 @@ crept to 334 us over the evening's session with the mean flat; both are
 owed reads, not blockers, by the operator's call. Rollback is
 `live-install-20260913/install-live-set.sh rollback` plus the web-control
 copies in `rollback/web-control/`.
+
+**INSTALLED 2026-09-14 ~02:25 UTC: a gentler fan curve on the Pi, config
+only, no service touched.** The Pi 5's stock pwm-fan trips are 50 / 60 /
+67.5 / 75 C at PWM 75 / 125 / 175 / 250 with a 5 C hysteresis, and the
+box idles in the mid 50s (56.0 C at load 0.16 with the fan held in tier 2
+at 6163 rpm: it had crossed 60 and could not fall back below 55). The
+operator raised every trip by 5 C, keeping the tier speeds and the
+hysteresis: 55 / 65 / 72.5 / 80 C, the top tier at the 80 C soft-throttle
+line so full speed still arrives before any throttling that would show as
+RECOVERs. Applied live by writing
+`/sys/class/thermal/thermal_zone0/trip_point_{1..4}_temp` (fan dropped to
+tier 1, 3826 rpm at 58.7 C) and persisted as a `[pi5]` block of four
+`dtparam=fan_tempN=...,fan_tempN_hyst=5000,fan_tempN_speed=...` lines
+appended to `/boot/firmware/config.txt`; the config.txt copy takes effect
+on the next reboot (uptime 12 h 47 m at the time, not rebooted). Rollback:
+delete that block, or write the stock temperatures back to the same sysfs
+files. Owed: watch `vcgencmd measure_temp` during the next 800-impulse
+battery on this curve; 56 C idle under the PoE HAT is warm for the active
+cooler, so enclosure airflow is the next lever if noise returns.
