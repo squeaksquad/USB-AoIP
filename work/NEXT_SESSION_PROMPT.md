@@ -1,5 +1,74 @@
 # Next-session pickup prompt
 
+## Current pickup — live coefficient updates are ACCEPTED (2026-09-14); owed: two reads and one reinstall
+
+Read the handoff from `STAGED 2026-09-13 (design only)` to the tail: one
+day, about thirty entries, ending in ACCEPTED 2026-09-14. Then
+`work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md` (its Corrections and
+Results sections carry what changed against the plan) and
+`work/phase4-bridge/LIVE_INSTALL_PLAN.md` (the sequence that ran).
+
+**In service.** Bridge 7e8f1064 (the meter-tap bridge plus two coefficient
+sets in `DspStage`, a control thread polling `/run/usb16x16/dsp-live.dsp`,
+the `DSPLIVE` status line, `dsp_live_*` on BRIDGE and SUMMARY), supervisor
+8b42e4ec (pins 7e8f1064, passes the live file for blocks with `DSP_LIVE=1`,
+DSP-build check is a list), `usb16x16-web` df9490b8 and `usb16x16-apply`
+c9bd9181 1.2.0 (kinds `live`, `commit`, `revert`; drains queued requests;
+units e11f0fc9 / 6d53b053 without a start limit), the page files staged
+under `~/usb-16x16-work/web-ui/` (app.mjs c2c1500b, backend.mjs 9c949398,
+live.mjs c6d2287a, compiler copies). The service runs
+`user-immersive-stereo-subs`, a fixed-shape user preset (shape 064ef631)
+with `DSP_LIVE=1`, committed by the operator; every page edit is a live
+preview until Commit preview. The accepted transport figure on this bridge
+is dsp-direct 746 at 64 (4 x 800, spread 0), 600 s soak, floors 85 / 96
+(`outputs/dsp-service/live-direct-20260913/`). Repo artifact pin moved;
+947e8b4d kept beside it. Rollback: `~/usb-16x16-work/live-install-20260913/
+install-live-set.sh rollback` plus `rollback/web-control/` copies (switch to
+dsp-direct first if a user block is live: the old supervisor does not know
+`DSP_LIVE`).
+
+**Owed, in this order.**
+
+1. `dsp_us_max` over a quiet hour, page closed then open. It crept 133 ->
+   334 us across the evening's live session with the mean flat at ~53 us;
+   candidates are the first cold read of a freshly published set and the
+   page's ~10 Hz `/api/meters` polling. Read-only: BRIDGE line via
+   `/run/usb16x16/last-bridge`.
+2. A criterion-aware soak on the preset arm. `meter_battery.py` applies the
+   legacy activity gate, which fails on a preset's low-passed subs and unused
+   outputs (as the 2026-09-11 loaded arm did); either thread validate.py's
+   `--signal-criterion reference-events-v1` through the battery or soak on a
+   preset that routes all 16 outputs. Transport counters of the 2026-09-13
+   swap soak were clean (~340 swaps, zero RECOVERs, cost unmoved).
+3. Reinstall the web-control set once (`~/usb-16x16-work/web-control/
+   install-web-control.sh`, operator's sudo): the staged `usb16x16-web`
+   396a2fa0 lets the preset store accept the shipped draft's middle-dot
+   name; the page saves as "Immersive - stereo subs" meanwhile.
+4. Repeat the edit tally after any page change: count `POST /api/apply/live`
+   202 vs 409 in the web journal against `DSPLIVE applied` in the bridge
+   journal. The bar is every edit applied within a second; the day ended at
+   43 of 43.
+
+**Rules learned on 2026-09-13, all in memory too.** Page changes must be
+tried in a browser against a mock of the control service (the scratchpad
+pattern: serve `work/web-ui` with a fake `/api/health` built from the real
+profile row, on a fresh port each time because the browser pane caches
+modules); Node's tests cannot see `crypto.subtle` missing on plain HTTP,
+timers called with the wrong receiver, or the 1 Hz Settings rebuild. Two
+writers to the live file (a pusher and the page) make the page's
+expected-hash guard refuse; the page now answers a foreign state once and
+retries a stale refusal once. Candidate wrapper runs log the bridge to
+tmpfs (an SD-card log stalled the audio thread on the 5 s writeback and
+three runs aborted before that was found). A `pgrep -f` over ssh matches
+its own command line. The applier is one process per request; the units
+carry no start limit and it drains what is queued.
+
+**Not started.** AoIP-only (the entry below), the Dante mode plan, the
+`--shape` runner is not needed by the applier.
+
+---
+
+
 ## Current DSP pickup — the meter tap is ACCEPTED; next is AoIP-only or the UI items
 
 Read the handoff's 2026-09-11 entries from FOUND onward (the last fifteen).
