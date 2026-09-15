@@ -522,6 +522,102 @@ class PresetTests(PresetFixture):
 
 
 # ---------------------------------------------------------------- live updates
+class ShutdownRunner(FakeRunner):
+    """The stack plus systemctl poweroff, which the profile model never sees."""
+
+    def __init__(self, env, fail_stop=False, fail_poweroff=False):
+        super().__init__(env)
+        self.fail_stop = fail_stop
+        self.fail_poweroff = fail_poweroff
+        self.powered_off_at = None
+
+    def run(self, argv, timeout=60.0):
+        if argv[:2] == ["systemctl", "stop"] and self.fail_stop:
+            self.calls.append(argv)
+            return 1, "Job for usb16x16-aes67.service canceled"
+        if argv[:2] == ["systemctl", "poweroff"]:
+            self.calls.append(argv)
+            if self.fail_poweroff:
+                return 1, "Failed to power off: Access denied"
+            self.powered_off_at = self.clock
+            return 0, ""
+        return super().run(argv, timeout)
+
+
+class ShutdownTests(unittest.TestCase):
+    """The "shutdown" kind: stop the service in order, receipt, then poweroff."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = Env(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def request(self, **fields):
+        return self.env.request(kind="shutdown", profile="dsp-direct", expectedProfile=None, **fields)
+
+    def test_stops_the_service_writes_the_receipt_then_powers_off(self):
+        runner = ShutdownRunner(self.env)
+        self.request()
+        result = make(self.env, runner).consume()
+        self.assertEqual((result["kind"], result["state"], result["error"]), ("shutdown", "done", None))
+        self.assertEqual(result["profile"], "dsp-direct", "the receipt names what was live")
+        acted = [c for c in runner.calls if c[0] != "systemctl" or c[1] != "show"]
+        self.assertEqual(acted, [["systemctl", "stop", "usb16x16-aes67.service"], ["systemctl", "poweroff", "--no-block"]])
+        self.assertEqual([s["name"] for s in result["steps"]], ["validating", "stopping", "powering-off"])
+        self.assertTrue(all(s["ok"] for s in result["steps"]))
+        receipt = json.loads((self.env.spool / "receipts" / "abcdef0123.json").read_text())
+        self.assertEqual(receipt["state"], "done")
+        self.assertEqual(self.env.live_profile(), "dsp-direct", "the conf is never edited")
+        self.assertFalse((self.env.spool / "request.json").exists())
+
+    def test_refusals_never_reach_poweroff(self):
+        cases = [
+            (dict(requestedAt=time.time() - 1000), "old"),
+            (dict(id="zz"), "hex"),
+            (dict(requestedAt="soon"), "unix time"),
+        ]
+        for index, (fields, message) in enumerate(cases):
+            with self.subTest(fields=fields):
+                runner = ShutdownRunner(self.env)
+                self.request(**{"id": f"{index:08x}", **fields})
+                result = make(self.env, runner).consume()
+                self.assertEqual(result["state"], "refused")
+                self.assertIn(message, result["error"])
+                self.assertEqual([c for c in runner.calls if c[0] != "systemctl" or c[1] != "show"], [])
+                self.assertIsNone(runner.powered_off_at)
+
+    def test_duplicate_id_is_refused(self):
+        self.request()
+        make(self.env, ShutdownRunner(self.env)).consume()
+        self.request()
+        runner = ShutdownRunner(self.env)
+        result = make(self.env, runner).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("already processed", result["error"])
+        self.assertIsNone(runner.powered_off_at)
+
+    def test_a_stop_that_fails_is_recorded_and_poweroff_still_happens(self):
+        runner = ShutdownRunner(self.env, fail_stop=True)
+        self.request()
+        result = make(self.env, runner).consume()
+        self.assertEqual(result["state"], "done")
+        self.assertIsNotNone(runner.powered_off_at)
+        stopping = [s for s in result["steps"] if s["name"] == "stopping"]
+        self.assertEqual([s["ok"] for s in stopping], [True, False])
+        self.assertIn("powering off regardless", stopping[1]["detail"])
+
+    def test_a_poweroff_that_fails_is_a_failed_receipt(self):
+        runner = ShutdownRunner(self.env, fail_poweroff=True)
+        self.request()
+        result = make(self.env, runner).consume()
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("poweroff exited 1", result["error"])
+        receipt = json.loads((self.env.spool / "receipts" / "abcdef0123.json").read_text())
+        self.assertEqual(receipt["state"], "failed", "the done receipt written before poweroff is overwritten")
+
+
 # LIVE_COEFFICIENTS_DESIGN.md step 4: the "live" and "commit" kinds.
 
 PINNED_VECTOR = (

@@ -1238,6 +1238,8 @@ class Handler(BaseHTTPRequestHandler):
             self.api_apply_live()
         elif route == "/api/apply/commit":
             self.api_apply_commit()
+        elif route == "/api/apply/shutdown":
+            self.api_apply_shutdown()
         else:
             self.unsupported(route)
 
@@ -1514,6 +1516,39 @@ class Handler(BaseHTTPRequestHandler):
                         "note": "Queued. The AES67 service restarts; audio stops for about a minute "
                                 "and the latency level is drawn afresh."}, HTTPStatus.ACCEPTED)
 
+    def api_apply_shutdown(self) -> None:
+        """Queue a power-off of the Pi for the privileged applier.
+
+        The body must say so twice ({"confirm": "shutdown"}) so a stray POST
+        cannot do it; the browser asks the operator before sending. The
+        applier stops the AES67 service in order, writes its receipt, and
+        then asks systemd to power off; this service goes down with it.
+        """
+        body = self.read_body(limit=4096)
+        if not isinstance(body, dict):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object")
+            return
+        if body.get("confirm") != "shutdown":
+            self.send_error_json(HTTPStatus.BAD_REQUEST, 'confirm must be "shutdown"')
+            return
+        expected = body.get("expectedProfile")
+        if expected is not None and not isinstance(expected, str):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "expectedProfile must be a string or null")
+            return
+        gate = self.apply_gate(expected)
+        if gate is None:
+            return
+        _, live = gate
+        try:
+            ident = write_apply_request(live or "none", expected, self.current_user(), extra={"kind": "shutdown"})
+        except OSError as error:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
+            return
+        self.send_json({"ok": True, "id": ident, "profile": live,
+                        "note": "Queued. The AES67 service stops, then the Pi powers off; this page loses its "
+                                "connection. Once activity stops, unplug the USB data cable, then PoE."},
+                       HTTPStatus.ACCEPTED)
+
     def current_user(self) -> str | None:
         header = self.headers.get("Authorization") or ""
         if not header.startswith("Basic "):
@@ -1530,16 +1565,17 @@ class Handler(BaseHTTPRequestHandler):
 
         Restarting a service or installing DSP means owning a PCM device and
         interrupting audio. That belongs to the privileged applier, which
-        takes exactly one request shape (POST /api/apply/profile); nothing
-        else here changes device state.
+        takes only the request kinds under POST /api/apply/* (a profile
+        switch, a user preset, a live update, a commit, a power-off);
+        nothing else here changes device state.
         """
         if route.startswith("/api/service") or route.startswith("/api/apply") \
                 or route.startswith("/api/dsp"):
             self.send_error_json(
                 HTTPStatus.NOT_IMPLEMENTED,
-                "This service is read-only apart from POST /api/apply/profile "
-                "(a switch between accepted profiles). Service restarts and DSP "
-                "installation are not implemented; run the commands on the Pi instead.",
+                "This service is read-only apart from the POST /api/apply/* requests "
+                "(a profile switch, a user preset, a live update, a commit, a power-off). "
+                "Service restarts are not implemented; run the commands on the Pi instead.",
             )
         else:
             self.send_error_json(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed")

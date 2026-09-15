@@ -11637,3 +11637,51 @@ delete that block, or write the stock temperatures back to the same sysfs
 files. Owed: watch `vcgencmd measure_temp` during the next 800-impulse
 battery on this curve; 56 C idle under the PoE HAT is warm for the active
 cooler, so enclosure airflow is the next lever if noise returns.
+
+**STAGED 2026-09-14, not installed: a Shut down button in the web UI,
+through the applier.** The page's System overview gains a Power box whose
+button asks `POST /api/apply/shutdown` (body `{"confirm": "shutdown",
+"expectedProfile"}`; a stray POST without the word is 400). The request
+passes the same gate as every Apply request (path unit active, nothing
+queued or in flight, the page's expected profile the live one) and is
+written to the spool as a sixth request kind, `shutdown`. The applier's
+`shutdown` kind takes the envelope checks only (id, unseen, fresh), stops
+`usb16x16-aes67.service` so the bridge and daemon tear down in order, writes
+its receipt first (steps `validating`, `stopping`, `powering-off`, state
+`done`: it is the last thing the page can read), then runs `systemctl
+poweroff --no-block`. A stop that fails is recorded and the poweroff still
+happens; a poweroff that fails overwrites the receipt as `failed`. The conf
+is never edited and the USB gadget service is left to systemd's own order.
+The page confirms in words (audio stops, the connection drops, USB data out
+before PoE), shows "Shutting down…", reads the receipt as a power-off, and
+when health stops answering says the Pi has powered off. Files:
+`work/web-control/usb16x16-apply` 1.3.0 `e6e7e844`, `usb16x16-web`
+`207ff5cb` (from the staged, uninstalled `396a2fa0`), installer re-pinned,
+units unchanged; `work/web-ui/{app,backend}.mjs`, `style.css`. Tests: 63
+Python (five new for the kind: happy path, refusals never reach poweroff,
+duplicate id, failed stop, failed poweroff), 106 Node (two new); the page
+driven end to end against a mock backend in the browser pane. Install is the
+usual `sudo ~/usb-16x16-work/web-control/install-web-control.sh` then
+`sudo systemctl restart usb16x16-web.service` after staging the two service
+files and the three page files one by one ([[no-transfers-during-measurement]]
+rule, as before); the path unit needs no change. Owed on the Pi: one real
+press with playback stopped, then check the receipt in
+`~/usb-16x16-work/web-apply/receipts/` after PoE brings it back, and that
+the journal shows the AES67 stop before the poweroff.
+
+**INSTALLED 2026-09-15 01:46 UTC: `user-immersive-one-sub` (7.1.4) is the
+live user preset, installed from the page.** The 7.2.4 to 7.1.4 bus format
+change had looked as if it did not take: the bus card's Apply changed only the
+draft (a bus format is a shape change, so it cannot go live) and nothing had
+been sent; the receipts showed only 7.2.4-shape live pushes to 01:22:04Z.
+Compile & apply then installed it clean in nine steps (302 biquads, settle 30 s
+with zero RECOVERs), receipt `finished 2026-09-15T01:46:40Z`;
+`user-immersive-stereo-subs` remains installed beside it. Page changes from
+that: the bus button is "Apply format to draft" with a toast and panel note
+naming the second step; Compile & apply asks for the preset name first
+(prefilled with the draft name, becomes the draft name and the slug); the
+Service profile panel is reworked (Running now card, user presets as rows with
+Switch and Remove and the draft as the last row, accepted profiles behind a
+disclosure with the servo-aligned lineage in one select). Mock-backend
+verified in the browser pane, 106 Node tests. Not yet copied to the Pi:
+`work/web-ui/app.mjs` `0f16dfb5`, `style.css` `b1578d6b`.

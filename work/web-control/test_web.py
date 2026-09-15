@@ -74,6 +74,13 @@ class WebApplyTests(unittest.TestCase):
         self.assertAlmostEqual(body["requestedAt"], time.time(), delta=5)
         self.assertEqual(sorted(p.name for p in self.spool.iterdir()), ["request.json"], "no temp file left")
 
+    def test_shutdown_request_is_written_as_its_kind(self):
+        ident = self.web.write_apply_request("dsp-direct", None, "bryan", extra={"kind": "shutdown"})
+        body = json.loads((self.spool / "request.json").read_text())
+        self.assertEqual((body["id"], body["kind"], body["profile"], body["expectedProfile"], body["requestedBy"]),
+                         (ident, "shutdown", "dsp-direct", None, "bryan"))
+        self.assertNotIn("artifactFile", body)
+
     def test_write_request_needs_the_spool(self):
         os.rmdir(self.spool)
         with self.assertRaises(PermissionError):

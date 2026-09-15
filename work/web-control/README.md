@@ -57,7 +57,25 @@ POST   /api/apply/preset            {"name", "artifact", "artifactSha256"?, "exp
 DELETE /api/apply/preset/<slug>     queue removal of a user preset that is not live -> 202 {id}
 POST   /api/apply/live              {"artifact", "artifactSha256"?, "expectedProfile", "expectedLiveSha256"?} -> 202 {id, profile, artifactSha256}
 POST   /api/apply/commit            {"expectedProfile", "expectedLiveSha256"?} -> 202 {id, profile, sha256}
+POST   /api/apply/shutdown          {"confirm": "shutdown", "expectedProfile"?} -> 202 {id, profile}
 ```
+
+### Shut down the Pi (2026-09-14)
+
+The page's Power box (System overview) sends `POST /api/apply/shutdown`. The
+body must carry `"confirm": "shutdown"` (a stray POST is 400) and passes the
+same gate as every Apply request: the path unit active, no operation queued
+or running, and the page's expected profile the live one. The applier's
+`shutdown` kind takes the envelope checks only (id, unseen, fresh), stops
+`usb16x16-aes67.service` so the bridge and daemon tear down in order, writes
+its receipt (state `done`, steps `validating`, `stopping`, `powering-off`),
+and then runs `systemctl poweroff --no-block`. The receipt is written before
+poweroff on purpose: it is the last thing the page can read. A stop that
+fails is recorded as a failed step and the poweroff still happens; a
+poweroff that fails overwrites the receipt as `failed`. Nothing edits the
+conf, and the USB gadget service is left to systemd's own shutdown order.
+The page then loses its connection and says so; the operator unplugs the USB
+data cable, then PoE (the handoff's clean shutdown), and PoE brings it back.
 
 ### Live coefficient updates (2026-09-13, step 4 of LIVE_COEFFICIENTS_DESIGN.md)
 
@@ -111,7 +129,8 @@ description, measured, cover, preset) and `control.apply` (`available`,
 `reason`, `scope`).
 
 States, in order: `validating`, `stopping`, `switching`, `starting`,
-`verifying`, `settling`, then `done`; or `rolling-back` then `rolled-back`,
+`verifying`, `settling`, then `done` (a `shutdown` receipt has `validating`,
+`stopping`, `powering-off`, then `done`); or `rolling-back` then `rolled-back`,
 `failed` (the rollback failed too: read the receipt and the journal,
 `journalctl -u usb16x16-apply -u usb16x16-aes67`), or `refused` (nothing was
 touched). A `current.json` left in a non-terminal state for ten minutes is
@@ -156,7 +175,7 @@ on its BRIDGE line (`meter_us_max`, `meter_us_mean`), surfaced as
 
 | Not implemented | Why |
 | --- | --- |
-| Restart a service, switch to a non-accepted profile | Owning a PCM device and interrupting audio belongs to the privileged applier, which takes exactly one request shape: an accepted profile name. This process is unprivileged and its only write outside the preset store is that request file. |
+| Restart a service, switch to a non-accepted profile | Owning a PCM device and interrupting audio belongs to the privileged applier, which takes only the request kinds listed above (a profile switch, a user preset, a live update, a commit, a power-off). This process is unprivileged and its only write outside the preset store is that request file. |
 | Edit a profile's transport fields, install a preset under any other path, run an engine | User presets are the one write to `/etc/usb16x16/dsp` and to the conf, and it is the applier's, with the guards above; transport fields are always dsp-direct's. No CamillaDSP runs; the bridge's stage is the engine. |
 | Open a device to meter | Levels come from the bridge's own tap (`--meter-file`, see "Meters"); this service only reads the file the bridge writes. It never opens an ALSA stream: a second one would compete with the audio path. With the file absent or stale, `/api/health` reports `meters.available: false` and the UI's meters stay labelled as display activity. |
 | Read `/api/sink/status/N` | That endpoint's arrival-lead minimum **resets when read**. The latency harness owns it; a polling dashboard would silently invalidate every lead comparison. |
@@ -246,6 +265,7 @@ GET    /api/meters              the bridge's latest level window (see "Meters");
 GET    /api/logs?service=&lines= journalctl for a fixed unit allowlist, 1..2000 lines
 GET    /api/apply/status        the applier's state (see above)
 POST   /api/apply/profile       queue a switch between accepted profiles (see above)
+POST   /api/apply/shutdown      queue a power-off of the Pi (see "Shut down the Pi")
 GET    /api/presets             names and mtimes
 GET    /api/presets/<name>      one preset document
 PUT    /api/presets/<name>      atomic write (tmp + fsync + rename), 1 MB / 200 presets

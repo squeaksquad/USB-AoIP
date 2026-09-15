@@ -67,6 +67,16 @@ validate-on-a-copy and atomic replace as "preset", with no restart: the
 running coefficients already equal the file. Neither kind ever touches an
 accepted profile.
 
+A sixth kind, "shutdown" (2026-09-14), powers the Pi off from the page. It
+takes the envelope checks only (fresh, unseen, well formed), stops
+usb16x16-aes67.service so the bridge and daemon tear down in order before
+the rest of the system does, writes its receipt, and then asks systemd for
+`systemctl poweroff --no-block`. The receipt is written first on purpose:
+it is the last thing the browser can read before the connection drops. The
+USB gadget service is not touched; systemd stops it with everything else.
+The operator then unplugs the USB data cable, then PoE, as the handoff's
+clean shutdown says.
+
 Exit status is 0 when a receipt was written (even for a refused or failed
 request: the outcome is the receipt), 2 for a broken environment.
 """
@@ -83,7 +93,7 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 SPOOL_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
 CONF_PATH = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
@@ -646,8 +656,8 @@ class Applier:
             raise Refused("request is not an object")
         return request
 
-    def validate(self, request: dict, conf: dict[str, str]) -> dict:
-        """Everything that can be checked before touching the service."""
+    def validate_envelope(self, request: dict) -> None:
+        """The checks every request shares: an id, unseen, and fresh."""
         ident = request.get("id")
         if not isinstance(ident, str) or not REQUEST_ID.match(ident):
             raise Refused("request id must be 8-32 hex characters")
@@ -659,6 +669,10 @@ class Applier:
         age = self.runner.now() - float(requested_at)
         if age < -REQUEST_MAX_AGE_S or age > REQUEST_MAX_AGE_S:
             raise Refused(f"request is {age:.0f} s old; the limit is {REQUEST_MAX_AGE_S:.0f} s")
+
+    def validate(self, request: dict, conf: dict[str, str]) -> dict:
+        """Everything that can be checked before touching the service."""
+        self.validate_envelope(request)
         name = request.get("profile")
         if not isinstance(name, str) or not PROFILE_NAME.match(name):
             raise Refused("profile name must be lower-case letters, digits and dashes")
@@ -1103,6 +1117,9 @@ class Applier:
                 self.state["stats"] = outcome["stats"]
                 self.state["committed"] = {"sha256": outcome["digest"], "changed": outcome["changed"]}
                 return self.finish("done")
+            elif kind == "shutdown":
+                self.validate_envelope(request)
+                return self.shutdown(conf)
             elif kind == "profile":
                 target = self.validate(request, conf)
             else:
@@ -1128,6 +1145,30 @@ class Applier:
         if rollback_reason is None:
             return self.finish("rolled-back", reason)
         return self.finish("failed", f"{reason}; rollback to {previous} also failed: {rollback_reason}")
+
+    def shutdown(self, conf: dict[str, str]) -> dict:
+        """Stop the AES67 service in order, leave the receipt, then power off.
+
+        The stop is best effort and recorded either way: a service that will
+        not stop cleanly is no reason to leave the box running when the
+        operator asked for it off, and systemd stops it again on the way
+        down. The receipt goes to disk before poweroff is requested because
+        nothing after that is guaranteed to run."""
+        self.state["profile"] = conf.get("PROFILE") or None
+        self.step("validating", f"shutdown requested; live profile {self.state['profile'] or 'unknown'}")
+        self.step("stopping", f"systemctl stop {UNIT}")
+        code, out = self.runner.run(["systemctl", "stop", UNIT], timeout=90)
+        if code != 0:
+            self.state["steps"].append({"name": "stopping", "at": utc(self.runner.now()), "ok": False,
+                                        "detail": f"stop exited {code}: {out.strip()[:200]}; powering off regardless"})
+        self.step("powering-off", "systemctl poweroff --no-block")
+        self.finish("done")
+        code, out = self.runner.run(["systemctl", "poweroff", "--no-block"], timeout=30)
+        if code != 0:
+            self.state["steps"].append({"name": "powering-off", "at": utc(self.runner.now()), "ok": False,
+                                        "detail": f"poweroff exited {code}: {out.strip()[:200]}"})
+            return self.finish("failed", f"systemctl poweroff exited {code}: {out.strip()[:200]}")
+        return self.state
 
     def consume(self) -> dict | None:
         """One path-unit trigger: take the request file, act, leave receipts."""
