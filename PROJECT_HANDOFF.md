@@ -11689,3 +11689,13 @@ verified in the browser pane, 106 Node tests. Not yet copied to the Pi:
 **INSTALLED 2026-09-15 ~02:00 UTC: page files `app.mjs` `0f16dfb5` and
 `style.css` `b1578d6b` copied to `~/usb-16x16-work/web-ui/` and confirmed
 working in the browser.** The "not yet copied" line above is superseded.
+
+**CORRECTION 2026-09-15: the shutdown backend is installed, not merely
+staged.** `/usr/local/sbin/usb16x16-apply` is `e6e7e844` (1.3.0) and
+`/usr/local/bin/usb16x16-web` is `207ff5cb`, matching the staged copies and
+the repo; the web service has run that build since about 01:13 UTC (health
+reports service 1.4.0, tonight's receipts carry applier 1.3.0). The STAGED
+2026-09-14 entry above stands as written except for its "not installed"
+lead-in. Still owed: one real press of Shut down with playback stopped, then
+the receipt under `~/usb-16x16-work/web-apply/receipts/` and the journal
+order (AES67 stop before poweroff) once PoE brings the Pi back.
