@@ -11685,3 +11685,7 @@ Switch and Remove and the draft as the last row, accepted profiles behind a
 disclosure with the servo-aligned lineage in one select). Mock-backend
 verified in the browser pane, 106 Node tests. Not yet copied to the Pi:
 `work/web-ui/app.mjs` `0f16dfb5`, `style.css` `b1578d6b`.
+
+**INSTALLED 2026-09-15 ~02:00 UTC: page files `app.mjs` `0f16dfb5` and
+`style.css` `b1578d6b` copied to `~/usb-16x16-work/web-ui/` and confirmed
+working in the browser.** The "not yet copied" line above is superseded.
