@@ -1,6 +1,78 @@
 # Next-session pickup prompt
 
-## Current pickup — live coefficient updates are ACCEPTED (2026-09-14); owed: two reads and one reinstall
+## Current pickup — 2026-09-15: user-immersive-one-sub (7.1.4) live from the page; shutdown set installed, its press owed
+
+Read the handoff from `ACCEPTED 2026-09-14` to the tail (the fan curve, the
+STAGED shutdown entry and its CORRECTION, the 01:46 UTC install and the page
+rework). The 2026-09-14 pickup below still holds for the live-coefficient
+mechanism and its rules; this section is what changed on top of it.
+
+**In service.** Unchanged bridge 7e8f1064 and supervisor 8b42e4ec. Web set
+now `usb16x16-apply` e6e7e844 (1.3.0, sixth request kind `shutdown`) and
+`usb16x16-web` 207ff5cb (health reports 1.4.0; the middle-dot store name
+fix is in it, so the reinstall the old item 3 asked for is done). Page files
+in `~/usb-16x16-work/web-ui/`: app.mjs 0f16dfb5, style.css b1578d6b,
+backend.mjs e6f590ee, live.mjs c6d2287a. The live profile is
+`user-immersive-one-sub`, a 7.1.4 fixed-shape user preset (shape 2b31e8d3,
+302 biquads, `DSP_LIVE=1`), installed from the page at 01:46:40Z in nine
+clean steps; `user-immersive-stereo-subs` (7.2.4, shape 064ef631) is
+installed beside it and is one row-Switch away. The compiler warned that the
+7.1.4 draft's output 4 (LFE) can reach +3.6 dBFS from coherent full-scale
+inputs; the operator accepted it, nothing has been trimmed.
+
+**What the page does now.** The bus card's button is "Apply format to
+draft": a bus format is a shape change, it edits only the draft, and the
+toast and the panel note name Compile & apply as the step that reaches the
+Pi (the 7.2.4 to 7.1.4 change had looked as if it did not take for exactly
+that reason; the receipts directory showed nothing had been sent). Compile &
+apply asks for the preset name first, prefilled with the draft name; the
+answer becomes the draft name and the `user-<slug>`. The Service profile
+panel leads with a Running now card, then the user presets as rows with
+their own Switch and Remove and this draft as the last row beside Compile &
+apply; the accepted profiles sit behind a disclosure, the servo-aligned
+lineage in one select with the prefix trimmed. Every switch still goes
+through `applyProfile` and its confirm. A Power box on the System overview
+posts `/api/apply/shutdown` (confirm word required).
+
+**Owed, in this order.**
+
+1. The real Shut down press, playback stopped: then, after PoE brings the
+   Pi back, the receipt under `~/usb-16x16-work/web-apply/receipts/` (kind
+   `shutdown`, steps validating / stopping / powering-off, state done) and
+   the journal order (AES67 stop before poweroff). The same boot also
+   settles whether the 2026-09-14 fan-curve entry's pending reboot has
+   happened.
+2. The edit tally on the reworked page: `POST /api/apply/live` 202 vs 409
+   in the web journal against `DSPLIVE applied` in the bridge journal, on
+   the 7.1.4 preset. Bar unchanged: every edit applied within a second.
+3. `dsp_us_max` over a quiet hour (item 1 of the 2026-09-14 list, still
+   unread).
+4. The criterion-aware soak on a preset arm (item 2 of that list). The
+   7.1.4 preset routes 12 of 16 outputs, so the legacy activity gate still
+   fails on it; thread `--signal-criterion reference-events-v1` through the
+   battery or soak on a preset that routes all 16.
+5. If the LFE warning matters in practice: lower the sub sends or the LFE
+   gain on the draft and Compile & apply again (same name replaces).
+
+**Rules learned on 2026-09-14/15.** When a page action "does not take",
+read `~/usb-16x16-work/web-apply/receipts/` and the web journal's POST
+lines first: they say whether anything reached the Pi at all before any
+page code is suspected. The connected-page mock must serve
+`/compiler/*.mjs` from `work/dsp-compiler` and `/web-ui/*.mjs` from
+`work/web-ui` or compileDraft fails with "compiler is not served"; the
+browser pane caches `style.css` and modules across server restarts, so
+`fetch(url, {cache: 'reload'})` before `location.reload()`. Light theme is
+what the operator sees: colours in new CSS must come from the theme
+variables or translucent values, never dark literals. A `<details>` in the
+Settings page keeps its open state across the 1 Hz rebuild by class name,
+so give each one a class.
+
+**Not started.** AoIP-only, the Dante mode plan (unchanged from below).
+
+---
+
+
+## Previous pickup (2026-09-14) — live coefficient updates are ACCEPTED; owed: two reads and one reinstall
 
 Read the handoff from `STAGED 2026-09-13 (design only)` to the tail: one
 day, about thirty entries, ending in ACCEPTED 2026-09-14. Then
