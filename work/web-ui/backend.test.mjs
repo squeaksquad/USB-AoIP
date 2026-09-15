@@ -203,7 +203,7 @@ test('an unanswered daemon API reads as unknown, not as an unlocked clock', () =
 
 // ------------------------------------------------------------- apply
 
-import { requestProfile, fetchApplyStatus, applyFinished, applyLine, profileChoices, applyStepLabel } from './backend.mjs';
+import { requestProfile, fetchApplyStatus, applyFinished, applyLine, profileChoices, applyStepLabel, requestShutdown } from './backend.mjs';
 
 const liveWithProfiles = {
   ...live,
@@ -259,6 +259,24 @@ test('applyFinished and applyLine follow the applier state machine', () => {
   assert.match(applyLine({current: {state: 'refused', error: 'stale page'}}), /Refused: stale page/);
   assert.match(applyLine({current: {state: 'failed', profile: 'x', error: 'both'}}), /rollback failed too: both/);
   assert.equal(applyStepLabel('unknown-step'), 'unknown-step');
+});
+
+test('requestShutdown posts the confirm word and surfaces refusals', async () => {
+  const calls = [];
+  const result = await requestShutdown('dsp-direct', async (url, init) => { calls.push([url, init]); return ok({ok: true, id: 'abc', profile: 'dsp-direct'}); });
+  assert.equal(result.id, 'abc');
+  assert.equal(calls[0][0], '/api/apply/shutdown');
+  assert.equal(calls[0][1].method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0][1].body), {confirm: 'shutdown', expectedProfile: 'dsp-direct'});
+  await assert.rejects(requestShutdown(null, async () => fail(409, {ok: false, error: 'already in progress'})), /already in progress/);
+  await assert.rejects(requestShutdown(null, async () => fail(503, {})), /503/);
+});
+
+test('applyLine reads a shutdown receipt as a power-off, not an applied profile', () => {
+  assert.match(applyLine({current: {kind: 'shutdown', state: 'done', profile: 'dsp-direct', finishedAt: '2026-09-14T03:00:00Z', request: {requestedBy: 'bryan'}}}), /Shutdown issued by bryan at 2026-09-14T03:00:00Z: the Pi is powering off/);
+  assert.match(applyLine({current: {kind: 'shutdown', state: 'powering-off', profile: 'dsp-direct'}}), /Powering off the Pi \(shutdown\)/);
+  assert.match(applyLine({current: {kind: 'shutdown', state: 'failed', error: 'poweroff exited 1'}}), /Shutdown failed: poweroff exited 1/);
+  assert.match(applyLine({current: {kind: 'shutdown', state: 'refused', error: 'stale'}}), /Refused: stale/);
 });
 
 // ------------------------------------------------------------- user presets

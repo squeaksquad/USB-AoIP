@@ -321,9 +321,15 @@ for each output if the source uses a different order. Input labels remain
 user-editable; applying a format does not rename them. USB host channel labels
 remain 1–16.
 
-Choose a bus format and press **Apply format**. This resets that bus's output labels,
+Choose a bus format and press **Apply format to draft**. This resets that bus's output labels,
 roles, source assignments, bass sends and output correction to the layout defaults.
 Other buses, input settings, source selection and preset name remain unchanged.
+It changes only this draft: a bus format is a shape change, so when the page is
+connected the toast and the bus panel say that it reaches the Pi through
+**Compile & apply this draft** on System & presets (2026-09-14, after a format
+change that looked as if it had not taken). That step now asks for the preset's
+name first, prefilled with the draft name; the answer becomes the draft name and
+the `user-<slug>` it installs as.
 One sub receives the layout's active main bass plus LFE; two subs use left/right
 sends with Center and LFE sent to both. Global bass bypass remains an explicit
 shared control. **Undo last bus format** restores the affected bus's output bank
@@ -531,7 +537,16 @@ release; never expose unauthenticated CamillaDSP control to arbitrary clients.
    loading it through the bridge's own code before installing it as a
    `user-<slug>` profile (STATUS user, never accepted; see
    `work/web-control/README.md`, "User presets"). Metering and AoIP-only mode
-   remain out of scope.*
+   remain out of scope. Reworked 2026-09-14 after the switch menu had grown to
+   nineteen flat entries: the panel now leads with a "Running now" card (name,
+   kind, description, live-since from the last receipt), then "Your presets on
+   the Pi" as rows with their own Switch and Remove, with this draft as the last
+   row beside its Compile & apply button, so installing a preset and switching
+   between presets happen in one list; the accepted profiles sit behind a
+   disclosure, the five standard ones as rows and the servo-aligned research
+   lineage in one select with the common prefix trimmed. Every switch goes
+   through the same confirm and `applyProfile`; the mock-backend check drove a
+   row Switch to the confirm and the request.*
 
 Acceptance requires sample-accurate latency measurements with intentional alignment
 delay zeroed, the 64-sample host test where USB is involved, and separate AoIP-only
@@ -554,6 +569,18 @@ is established by this browser prototype.
   and `PROJECT_HANDOFF.md` rollback rules. Consult the latest live state before deployment.
 
 ## Verification of this prototype
+
+- Shut down the Pi (2026-09-14): a Power box at the foot of System overview
+  sends `POST /api/apply/shutdown` with the confirm word after a browser
+  confirm that says audio stops, the page loses its connection, and USB data
+  comes out before PoE. `requestShutdown` in `backend.mjs` and the shutdown
+  branch of `applyLine` are unit-tested; the page was driven against a mock
+  backend in the browser pane: the button went to "Shutting down…" and
+  disabled, the Apply status line read the receipt as a power-off, and when
+  the mock stopped answering the connection line fell back to the local draft
+  with the toast "The Pi has powered off. Once activity stops, unplug the USB
+  data cable, then PoE." Not yet run against the Pi: the service and applier
+  are staged in the repo, not installed.
 
 - Crossover polarity note: 10 new tests in `crossover-notes.test.mjs` cover which
   crossovers are active (high-pass only where a main branch exists, low-pass only

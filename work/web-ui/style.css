@@ -669,4 +669,31 @@ input[type=checkbox],input[type=radio]{background:none;border:0;box-shadow:none;
 .apply-steps-details { margin-top: 8px; font-size: 12px; }
 .apply-steps-details summary { cursor: pointer; color: var(--muted); }
 .apply-presets code, .apply-draft code { font-size: 11px; }
+/* Service profile, 2026-09-14 rework: running-now header, preset rows with their own Switch/Remove, accepted profiles behind a disclosure */
+.running-now { padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel2); }
+.running-now .overline { margin-bottom: 4px; }
+.running-name { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.running-name strong { font-size: 14px; overflow-wrap: anywhere; }
+.running-name .muted, .running-now p { font-size: 12px; }
+.running-now p { margin-top: 4px; }
+.profile-row { display: flex; align-items: center; gap: 8px; }
+.profile-row .profile-text { flex: 1; min-width: 0; }
+.profile-row .profile-text > span:not(.badge) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-row .profile-text > .badge { margin: 0 0 0 6px; padding: 1px 6px; font-size: 10px; }
+.profile-row .profile-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.profile-row .profile-actions button { min-height: 30px; padding: 5px 10px; font-size: 11px; }
+.profile-row.is-live { background: rgba(100, 160, 130, .14); margin: 4px -8px; padding: 6px 8px !important; border-radius: 6px; border-bottom: 0 !important; }
+.profile-row.draft-row { border-top: 1px dashed var(--line); margin-top: 6px; padding-top: 8px !important; }
+.apply-more { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
+.apply-more summary { cursor: pointer; color: var(--muted); }
+.apply-more ul { margin: 6px 0 0; padding: 0; list-style: none; }
+.apply-more li { margin: 4px 0; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.apply-more li:last-child { border-bottom: 0; }
+.research-lineage { margin-top: 8px; }
+.research-lineage .field { max-width: none; }
+.apply-rule { margin-top: 12px; font-size: 11px; }
+@media (max-width: 700px) { .profile-row { flex-wrap: wrap; } .profile-row .profile-actions { width: 100%; justify-content: flex-end; } }
 .meter-value.clip{color:#e58276;font-weight:600}
+button.danger { border-color: #7a4a3e; color: #f0b7a6; background: #33221f; }
+button.danger:hover { background: #4a2c27; border-color: #a35f4f; }
+.power-box { margin-top: 16px; }

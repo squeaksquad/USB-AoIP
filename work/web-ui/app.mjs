@@ -5,7 +5,7 @@ import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphoneP
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown } from './backend.mjs';
 import { LiveQueue } from './live.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
@@ -21,7 +21,7 @@ let liveMeters = null, liveMetersAt = 0, meterBusy = false;
 const clipHold = {inputs: new Array(16).fill(0), outputs: new Array(16).fill(0)};
 const clipSeen = {inputs: new Array(16).fill(null), outputs: new Array(16).fill(null)};
 // Staged Apply (Settings): the chosen target, the last status seen, and the poll that follows an operation.
-let applyChoice = '', applyStatus = null, applyBusy = false, applyPoll = null;
+let applyChoice = '', applyStatus = null, applyBusy = false, applyPoll = null, shutdownRequested = false;
 // Live coefficient updates (LIVE_COEFFICIENTS_DESIGN.md step 5): the draft's
 // shape key from its last compile, what the bridge last took from this page,
 // and the debounced one-in-flight queue that carries edits to the Pi.
@@ -259,7 +259,7 @@ function renderBuses() {
   const allocated = config.outputs.filter(o=>o.busId!==null).length;
   const action = (label, content) => `<div class="field"><span class="field-spacer" aria-hidden="true">${label}</span>${content}</div>`;
   $('#bus-controls').innerHTML = `<details class="panel bus-panel page-section" data-section="buses" ${sectionAttr('buses')}><summary class="section-summary">Output buses <small>${allocated}/16 outputs allocated · ${buses.length} bus${buses.length===1?'':'es'}</small></summary>
-    <div class="section-heading"><div><p>Each physical output belongs to one bus. Formats apply only to the selected bus; unrelated buses keep their routing. Bus level sits above each output's own gain.</p></div><div class="toolbar"><button data-action="bus-add-speakers" ${disabled(off||freeCount<2)}>Add speaker bus</button><button data-action="bus-add-headphones" ${disabled(off||freeCount<2)}>Add headphones</button></div></div>
+    <div class="section-heading"><div><p>Each physical output belongs to one bus. Formats apply only to the selected bus; unrelated buses keep their routing. Bus level sits above each output's own gain.${health && !off ? ' A format change edits this draft; it runs on the Pi only after <strong>Compile &amp; apply this draft</strong> on System &amp; presets, which restarts the AES67 service.' : ''}</p></div><div class="toolbar"><button data-action="bus-add-speakers" ${disabled(off||freeCount<2)}>Add speaker bus</button><button data-action="bus-add-headphones" ${disabled(off||freeCount<2)}>Add headphones</button></div></div>
     <fieldset ${disabled(off)} style="border:0;padding:0;margin:0;min-width:0">
     <div class="bus-list">${buses.map(bus => {
       const headphone = bus.kind === 'headphones';
@@ -269,7 +269,7 @@ function renderBuses() {
       <div class="bus-grid">
         ${field('Bus name',`<input data-bus="${esc(bus.id)}" data-bus-param="label" value="${esc(bus.label)}" maxlength="64" aria-label="${esc(bus.label)} bus name">`)}
         ${field('Output format',`<select data-bus="${esc(bus.id)}" data-bus-param="layout" aria-label="${esc(bus.label)} output format">${options(layoutOptions,bus.layoutId||'custom')}</select>`)}
-        ${action('Apply', `<button data-action="bus-apply" data-bus-id="${esc(bus.id)}">Apply format</button>`)}
+        ${action('Apply', `<button data-action="bus-apply" data-bus-id="${esc(bus.id)}" title="Changes this draft only. A bus format changes the pipeline's shape, so it reaches the Pi through Compile &amp; apply on System &amp; presets.">Apply format to draft</button>`)}
         ${field('Bus gain · dB',number(`data-bus="${esc(bus.id)}" data-bus-param="gainDb" aria-label="${esc(bus.label)} bus gain"`,bus.gainDb,-60,12,.1))}
         ${action('Mute', `<label class="checkbox-label"><input type="checkbox" data-bus="${esc(bus.id)}" data-bus-param="mute" ${checked(bus.mute)} aria-label="Mute ${esc(bus.label)} bus">Mute bus</label>`)}
       </div>
@@ -616,7 +616,7 @@ function renderSettings() {
     <div class="log-view" tabindex="0" role="region" aria-label="Service log snapshot"><pre id="log-output"></pre></div><p id="log-count" role="status"></p></section>
     ${systemPanel()}
     <section class="panel maintenance-panel"><div class="section-heading"><h2>Common commands</h2><span class="offline-badge">Run on the Pi</span></div>
-    <p>Copy a command for a Pi terminal. ${health?'The control service is read-only apart from the profile switch above: it cannot restart a service or install DSP, because owning a PCM device belongs to the privileged applier, which takes exactly that one request.':'Run buttons become available when device control is connected.'} Restart commands interrupt audio.</p>
+    <p>Copy a command for a Pi terminal. ${health?'The control service is read-only apart from Apply and the Shut down button above: it cannot restart a service, because owning a PCM device belongs to the privileged applier, which takes only those requests.':'Run buttons become available when device control is connected.'} Restart commands interrupt audio.</p>
     <div class="service-commands">${SERVICE_COMMANDS.map(c=>`<article class="service-command"><h3>${esc(c.label)}</h3><p>${esc(c.detail)}</p><code>${esc(c.command)}</code><div class="toolbar"><button data-copy-command="${c.id}" aria-label="Copy ${esc(c.label)} command">Copy command</button><button disabled title="${health?'The control service is read-only; run this in a Pi terminal':'Requires a Pi control backend'}" aria-label="Run ${esc(c.label)} on Pi">Run on Pi</button></div></article>`).join('')}</div></section>
     <section class="panel"><h2>Input labels</h2><p>Labels belong to this preset. Computer-facing USB channel names remain 1–16.</p><div class="table-scroll"><table><thead><tr><th>Input</th><th>Label</th></tr></thead><tbody>${config.inputs.map((v,i)=>`<tr><td>${pad(i)}</td><td><input data-input="${i}" data-param="label" aria-label="Input ${i+1} label" maxlength="64" value="${esc(v.label)}" required></td></tr>`).join('')}</tbody></table></div></section>
     <section class="panel"><h2>Operating modes</h2><p><strong>Direct bridge</strong> retains the existing bidirectional USB ↔ AoIP path. Its timing profile stays independent of DSP presets.</p><p><strong>DSP processor</strong> takes one 16-channel source bank, redirects bass, applies output correction, and sends 16 channels to AoIP.</p><p>In AoIP source mode, USB is not part of the signal path. The eventual processor must be able to run without a connected USB host.</p><p>Network stream subscriptions and device settings require the future backend. Native Dante control is outside this UI; the current transport uses AES67 interoperability.</p></section></div>`;
@@ -630,7 +630,8 @@ function systemPanel() {
     <p>${health?'Read live from the Pi control service. Values the service cannot read say so; none is defaulted to zero.':'No control service answered on this origin. Serve the UI from the Pi to see live state.'}</p>
     <dl class="fact-list">${systemFacts(health).map(row=>`<div><dt>${esc(row.label)}</dt><dd class="fact-${row.state||'plain'}"${row.title?` title="${esc(row.title)}"`:''}>${esc(row.value)}</dd></div>`).join('')}
       <div><dt>Output allocation</dt><dd class="fact-plain">${count('speaker')} speakers · ${count('sub')} subs · ${count('unused')} spare</dd></div><div><dt>DSP source draft</dt><dd class="fact-plain">${config.source==='usb'?'USB':'AoIP / AES67'}</dd></div><div><dt>Alignment range</dt><dd class="fact-plain">0–10 ms per output</dd></div></dl>
-    <div class="note-box">${esc(dspNote(health))}</div></section>`;
+    <div class="note-box">${esc(dspNote(health))}</div>
+    ${health ? `<div class="apply-draft power-box"><strong>Power</strong><p class="muted">Stops the AES67 service in order, then powers the Pi off through the same privileged applier as Apply. This page loses its connection. Once activity stops, unplug the USB data cable first, then PoE; reconnecting PoE starts it again.</p><button class="danger" data-action="shutdown-pi" ${disabled(applyBusy || shutdownRequested || !(health.control?.apply?.available))} title="${health.control?.apply?.available ? 'Stop the AES67 service and power the Pi off' : esc(health.control?.apply?.reason || 'Apply is not installed')}">${shutdownRequested ? 'Shutting down…' : 'Shut down the Pi'}</button></div>` : ''}</section>`;
 }
 
 /** Replace only the live panels on a poll, and not while the user is inside a control on this page:
@@ -659,27 +660,47 @@ function refreshSettingsLive() {
   }
 }
 
-/** Settings: the live service profile and the staged switch between accepted profiles. */
+/** Settings: what the service runs now, the user presets it can switch between,
+ *  this draft's place among them, and the accepted profiles behind a disclosure. */
 function applyPanel() {
   const choices = profileChoices(health);
   const status = applyStatus || health?.apply || null;
   const inFlight = Boolean(status && (status.inFlight || status.pending));
+  const busy = applyBusy || inFlight;
   const live = choices.live;
-  const liveLine = !health ? 'Requires the Pi connection.'
-    : live ? `<strong>${esc(live.name)}</strong>${live.status ? ` · ${esc(live.status)}` : ''}${live.measured ? ` · ${esc(live.measured)}` : ''}${live.description ? `<br><span class="muted">${esc(live.description)}</span>` : ''}`
-    : 'Profile unknown (configuration unreadable).';
-  if (!choices.accepted.some(row => row.name === applyChoice)) applyChoice = choices.accepted[0]?.name || '';
-  const canApply = Boolean(health) && choices.available && !applyBusy && !inFlight && Boolean(applyChoice);
   const presetsOnPi = userPresets(health);
+  const research = choices.accepted.filter(row => !row.user && /^servo-aligned/.test(row.name));
+  const standard = choices.accepted.filter(row => !row.user && !/^servo-aligned/.test(row.name));
+  if (!research.some(row => row.name === applyChoice)) applyChoice = research[0]?.name || '';
   const current = status?.current;
+  const since = current?.state === 'done' && current.kind !== 'shutdown' && current.profile === live?.name ? current.finishedAt : null;
+  const describe = text => String(text || '').replace(/^user preset: /, '');
+  const switchButton = name => `<button class="quiet" data-action="switch-profile" data-name="${esc(name)}" ${disabled(!choices.available || busy)} title="${choices.available ? `Restart the AES67 service on ${esc(name)}` : esc(choices.reason)}">Switch</button>`;
+  const badge = `<span class="offline-badge ${health ? 'live-badge' : ''}">${health ? (choices.available ? 'Apply available' : 'Apply not installed') : 'Not connected'}</span>`;
+  if (!health) return `<section class="panel maintenance-panel" id="apply-panel"><div class="section-heading"><h2>Service profile</h2>${badge}</div><p class="fact-plain">Requires the Pi connection.</p><div class="note-box" role="status">${esc(applyLine(status))}</div></section>`;
+
+  const running = live
+    ? `<div class="running-now"><span class="overline">Running now</span><div class="running-name"><strong>${esc(live.name)}</strong><span class="muted">${live.user ? 'your preset' : esc(live.status || 'profile')}${live.measured ? ` · ${esc(live.measured)}` : ''}${since ? ` · since ${esc(since)}` : ''}</span></div>${live.description ? `<p class="muted">${esc(describe(live.description))}</p>` : ''}</div>`
+    : `<p class="fact-plain">Profile unknown (configuration unreadable).</p>`;
+
+  const preview = (() => { const state = liveState(health, draftShapeKey); return state.previewing ? `<div class="apply-draft"><strong>Live preview running</strong><p class="muted">The bridge is running coefficients (${esc((state.liveSha256 || '').slice(0, 8))}) that are not the installed <code>${esc(state.profile)}</code> (${esc((state.installedSha256 || '').slice(0, 8))}). A restart returns to the installed file.</p><button data-action="live-commit" ${disabled(busy)}>Commit preview</button> <button class="quiet" data-action="live-discard" ${disabled(busy)}>Discard preview</button></div>` : ''; })();
+
+  const draftSlug = presetSlug(config.name);
+  const draftTarget = draftSlug ? `user-${draftSlug}` : '';
+  const draftReplaces = presetsOnPi.some(p => p.name === draftTarget);
+  const draftBlocked = config.mode === 'direct' ? 'Switch the draft to DSP mode to install it.' : !draftSlug ? 'Give the draft a name first.' : '';
+  const presetRows = presetsOnPi.map(p => `<li class="profile-row ${p.live ? 'is-live' : ''}"><div class="profile-text"><code>${esc(p.name)}</code>${p.live ? ' <span class="badge">live</span>' : ''}<span class="muted" title="${esc(p.description)}">${esc(describe(p.description))}</span></div><div class="profile-actions">${p.live ? '' : switchButton(p.name)}<button class="quiet" data-action="remove-preset" data-slug="${esc(p.slug)}" ${disabled(p.live || busy)} title="${p.live ? 'Switch away before removing the live preset' : 'Remove this preset and its block from the Pi'}">Remove</button></div></li>`).join('');
+  const draftRow = `<li class="profile-row draft-row"><div class="profile-text"><span>This draft · <em>${esc(config.name)}</em></span><span class="muted">${draftBlocked || (draftReplaces ? `Compiles here and replaces <code>${esc(draftTarget)}</code>, then restarts on it.` : `Compiles here and installs as <code>${esc(draftTarget)}</code>, then restarts on it.`)}</span></div><div class="profile-actions"><button class="primary" data-action="apply-draft" ${disabled(!choices.available || busy || Boolean(draftBlocked))} title="${choices.available ? 'Compile this draft in the browser, install it on the Pi and restart the AES67 service on it' : esc(choices.reason)}">Compile &amp; apply</button></div></li>`;
+  const presets = `<div class="apply-presets"><strong>Your presets on the Pi</strong><span class="muted"> · ${presetsOnPi.length} of 8 · never soaked, loaded through the bridge's own loader, every section checked stable</span><ul>${presetRows}${draftRow}</ul></div>`;
+
+  const standardRows = standard.map(row => `<li class="profile-row"><div class="profile-text"><code>${esc(row.name)}</code><span class="muted">${esc(row.description || (row.dspPreset ? 'preset' : 'no preset'))}</span></div><div class="profile-actions">${switchButton(row.name)}</div></li>`).join('');
+  const researchBlock = research.length ? `<div class="log-controls research-lineage">${field(`Research lineage · ${research.length} servo-aligned profiles`, `<select id="apply-profile-choice" ${disabled(busy)}>${options(research.map(row => [row.name, row.name.replace(/^servo-aligned-?/, '') || 'servo-aligned']), applyChoice)}</select>`)}<button data-action="apply-profile" ${disabled(!choices.available || busy || !applyChoice)} title="${choices.available ? 'Restart the AES67 service on the chosen profile' : esc(choices.reason)}">${applyBusy ? 'Queueing…' : inFlight ? 'Applying…' : 'Switch'}</button></div>` : '';
+  const accepted = choices.accepted.some(row => !row.user) ? `<details class="apply-more"><summary>Accepted profiles · ${standard.length + research.length} measured points of record, no user DSP</summary>${standardRows ? `<ul>${standardRows}</ul>` : ''}${researchBlock}</details>` : '';
+
   const steps = current?.steps?.length ? `<details class="apply-steps-details" ${inFlight ? 'open' : ''}><summary>${current.steps.length} step${current.steps.length === 1 ? '' : 's'}${current.finishedAt ? ` · finished ${esc(current.finishedAt)}` : ' · in progress'}</summary><ol class="apply-steps">${current.steps.map(step => `<li class="${step.ok ? '' : 'warn'}"><strong>${esc(applyStepLabel(step.name))}</strong>${step.detail ? ` <span class="muted">${esc(step.detail)}</span>` : ''}</li>`).join('')}</ol></details>` : '';
-  return `<section class="panel maintenance-panel" id="apply-panel"><div class="section-heading"><h2>Service profile</h2><span class="offline-badge ${health?'live-badge':''}">${health ? (choices.available ? 'Apply available' : 'Apply not installed') : 'Not connected'}</span></div>
-    <p class="fact-plain">${liveLine}</p>
-    <div class="log-controls">${field('Switch to', `<select id="apply-profile-choice" ${disabled(!choices.accepted.length || inFlight || applyBusy)}>${choices.accepted.length ? options(choices.accepted.map(row => [row.name, `${row.name}${row.dspPreset ? ' · preset' : ' · no preset'}`]), applyChoice) : '<option value="">No other accepted profile</option>'}</select>`)}<button class="primary" data-action="apply-profile" ${disabled(!canApply)} title="${choices.available ? 'Restart the AES67 service on the chosen profile' : esc(choices.reason)}">${applyBusy ? 'Queueing…' : inFlight ? 'Applying…' : 'Apply profile'}</button></div>
-    <p class="muted">${esc(choices.reason.replace(/[.\s]*$/, '.'))}${health ? ' A switch stops audio for about a minute, draws a new latency level, and is rolled back automatically if the stack does not come up clean. Stop playback first.' : ''}</p>
-    ${health ? (() => { const state = liveState(health, draftShapeKey); return state.previewing ? `<div class="apply-draft"><strong>Live preview running</strong><p class="muted">The bridge is running coefficients (${esc((state.liveSha256 || '').slice(0, 8))}) that are not the installed <code>${esc(state.profile)}</code> (${esc((state.installedSha256 || '').slice(0, 8))}). A restart returns to the installed file.</p><button data-action="live-commit" ${disabled(applyBusy || inFlight)}>Commit preview</button> <button class="quiet" data-action="live-discard" ${disabled(applyBusy || inFlight)}>Discard preview</button></div>` : ''; })() : ''}
-    ${health ? `<div class="apply-draft"><strong>This draft on the Pi</strong><p class="muted">Compiles <em>${esc(config.name)}</em> in this browser with the verified compiler and installs it as <code>user-${esc(presetSlug(config.name) || '…')}</code>: never soaked, loaded through the bridge's own loader, every section checked stable, at most ${8} user presets.${config.mode === 'direct' ? ' Switch the draft to DSP mode to compile it.' : ''}</p><button data-action="apply-draft" ${disabled(!choices.available || applyBusy || inFlight || config.mode === 'direct' || !presetSlug(config.name))}>Compile &amp; apply this draft</button></div>` : ''}
-    ${presetsOnPi.length ? `<div class="apply-presets"><strong>User presets on the Pi</strong><ul>${presetsOnPi.map(p => `<li><div class="apply-preset-text"><code>${esc(p.name)}</code>${p.live ? ' <span class="badge">live</span>' : ''}<span class="muted" title="${esc(p.description)}">${esc(p.description.replace(/^user preset: /, ''))}</span></div><button class="quiet" data-action="remove-preset" data-slug="${esc(p.slug)}" ${disabled(p.live || inFlight || applyBusy)} title="${p.live ? 'Switch away before removing the live preset' : 'Remove this preset and its block from the Pi'}">Remove</button></li>`).join('')}</ul></div>` : ''}
+  return `<section class="panel maintenance-panel" id="apply-panel"><div class="section-heading"><h2>Service profile</h2>${badge}</div>
+    ${running}${preview}${presets}${accepted}
+    <p class="muted apply-rule">${choices.available ? 'Every switch or install restarts the AES67 service: audio stops for about a minute, a new latency level is drawn, and the applier returns to the previous profile on its own if the stack does not come up clean. Stop playback first.' : esc(choices.reason.replace(/[.\s]*$/, '.'))}</p>
     <div class="note-box" role="status">${esc(applyLine(status))}</div>${steps}</section>`;
 }
 
@@ -692,6 +713,14 @@ function presetSlug(name) {
 async function applyDraft() {
   const choices = profileChoices(health);
   const live = choices.live?.name || null;
+  // The preset's name on the Pi is the draft's name; ask for it here so the
+  // step that installs it is also where it gets named.
+  const entered = prompt(`Name for this preset on the Pi.\n\nIt installs as user-<slug> and replaces a preset with the same slug; a new name adds a preset (at most 8).`, config.name);
+  if (entered === null) return;
+  const name = entered.trim();
+  if (!name || name.length > 64) { toast('Preset names are 1 to 64 characters.'); return; }
+  if (!presetSlug(name)) { toast('The name needs at least one letter or digit.'); return; }
+  if (name !== config.name) { config.name = name; markDraft(); renderSettings(); }
   let compiled;
   try { validateConfig(config); compiled = await compileDraft(config); }
   catch (e) { toast(`Cannot compile this draft: ${e.message}`); return; }
@@ -774,11 +803,26 @@ async function applyProfile() {
   refreshSettingsLive();
 }
 
+async function shutdownPi() {
+  const live = profileChoices(health).live?.name || null;
+  if (!confirm(`Shut down the Pi?\n\nThe AES67 service stops, then the Pi powers off and this page loses its connection. Audio stops for good until it is powered on again. Stop playback first.\n\nOnce activity stops, unplug the USB data cable, then PoE.`)) return;
+  applyBusy = true; refreshSettingsLive();
+  try {
+    const result = await requestShutdown(live);
+    shutdownRequested = true;
+    toast(result.note || 'Shutdown queued.');
+    applyStatus = {current: null, pending: true, inFlight: false};
+    startApplyPolling();
+  } catch (e) { toast(`Shutdown refused: ${e.message}`); }
+  applyBusy = false;
+  refreshSettingsLive();
+}
+
 function startApplyPolling() {
   if (applyPoll) return;
   const tick = async () => {
     try { applyStatus = await fetchApplyStatus(); }
-    catch (e) { toast(`Lost the Apply status: ${e.message}`); stopApplyPolling(); return; }
+    catch (e) { toast(shutdownRequested ? 'The Pi is powering off; this page has lost its connection.' : `Lost the Apply status: ${e.message}`); stopApplyPolling(); return; }
     refreshSettingsLive();
     if (applyFinished(applyStatus)) { stopApplyPolling(); toast(applyLine(applyStatus)); pollHealth(); }
   };
@@ -891,7 +935,7 @@ document.addEventListener('click', event => {
   if (action === 'bus-add-headphones') { try { const free=config.outputs.map((o,i)=>o.busId===null?i:null).filter(i=>i!==null); let n=0,id='headphones'; while(config.buses.some(v=>v.id===id)){n++;id=`headphones-${n+1}`;} config=createHeadphoneBus(config,id,free.slice(-2)); markDraft(); render(); toast('Headphones bus added on the last two free outputs. Set Left/Right output on its card to move it.'); } catch(e) { toast(e.message); } return; }
   if (action === 'bus-add-speakers') { try { const free=config.outputs.map((o,i)=>o.busId===null?i:null).filter(i=>i!==null); if(free.length<2) throw new Error('At least two free outputs are required'); let n=1,id='speakers-2'; while(config.buses.some(v=>v.id===id)){n++;id=`speakers-${n}`;} config=createSpeakerBus(config,id,free.slice(0,2),'stereo'); markDraft(); render(); toast('Speaker bus added on two free outputs.'); } catch(e) { toast(e.message); } return; }
   if (action === 'bus-remove') { try { config=removeBus(config,b.dataset.busId); busUndo=null; markDraft(); render(); toast('Bus removed; its outputs are available.'); } catch(e) { toast(e.message); } return; }
-  if (action === 'bus-apply') { try { const bus=getBus(config,b.dataset.busId), layoutId=document.querySelector(`[data-bus="${CSS.escape(bus.id)}"][data-bus-param="layout"]`).value, layout=LAYOUTS.find(v=>v.id===layoutId); if(!layout) throw new Error('Choose an output format'); const free=config.outputs.map((o,i)=>o.busId===null?i:null).filter(i=>i!==null), need=Math.max(0,layout.routing.length-bus.outputIds.length), ids=[...bus.outputIds,...free.slice(0,need)], touched=[...new Set([...bus.outputIds,...ids])], snapshot={busId:bus.id,bus:structuredClone(bus),outputs:Object.fromEntries(touched.map(i=>[i,structuredClone(config.outputs[i])])),sendColumns:Object.fromEntries(touched.map(i=>[i,config.sends.map(row=>row[i])]))}, next=applyBusLayout(config,bus.id,layoutId,ids); busUndo=snapshot; config=next; markDraft(); render(); toast(`${bus.label} format applied to its bus.`); } catch(e) { toast(e.message); } return; }
+  if (action === 'bus-apply') { try { const bus=getBus(config,b.dataset.busId), layoutId=document.querySelector(`[data-bus="${CSS.escape(bus.id)}"][data-bus-param="layout"]`).value, layout=LAYOUTS.find(v=>v.id===layoutId); if(!layout) throw new Error('Choose an output format'); const free=config.outputs.map((o,i)=>o.busId===null?i:null).filter(i=>i!==null), need=Math.max(0,layout.routing.length-bus.outputIds.length), ids=[...bus.outputIds,...free.slice(0,need)], touched=[...new Set([...bus.outputIds,...ids])], snapshot={busId:bus.id,bus:structuredClone(bus),outputs:Object.fromEntries(touched.map(i=>[i,structuredClone(config.outputs[i])])),sendColumns:Object.fromEntries(touched.map(i=>[i,config.sends.map(row=>row[i])]))}, next=applyBusLayout(config,bus.id,layoutId,ids); busUndo=snapshot; config=next; markDraft(); render(); toast(health && config.mode !== 'direct' ? `${bus.label} is ${layout.label} in this draft. The Pi still runs the installed preset: use Compile & apply this draft on System & presets to run it.` : `${bus.label} format applied to its bus.`); } catch(e) { toast(e.message); } return; }
   if (action === 'bus-undo' && busUndo) { try { const saved=busUndo,result=structuredClone(config),bus=getBus(result,saved.busId); for(const i of Object.keys(saved.outputs)){const owner=result.outputs[i].busId;if(owner!==saved.busId && owner!==null) throw new Error(`Output ${Number(i)+1} was claimed by another bus; undo skipped`);} Object.assign(bus,saved.bus); Object.keys(saved.outputs).forEach(i=>{result.outputs[i]=saved.outputs[i]; saved.sendColumns[i].forEach((v,row)=>{result.sends[row][i]=v;});}); validateConfig(result); config=result; busUndo=null; markDraft(); render(); toast('Last bus format undone; unrelated buses preserved.'); } catch(e) { toast(e.message); } return; }
   if (action === 'crossover-apply') {
     const input=$('#crossover-hz');
@@ -934,6 +978,8 @@ document.addEventListener('click', event => {
   }
   else if (action === 'refresh-logs') { loadLiveLogs(); return; }
   else if (action === 'apply-profile') { applyProfile(); return; }
+  else if (action === 'switch-profile') { applyChoice = b.dataset.name; applyProfile(); return; }
+  else if (action === 'shutdown-pi') { shutdownPi(); return; }
   else if (action === 'apply-draft') { applyDraft(); return; }
   else if (action === 'remove-preset') { removeUserPreset(b.dataset.slug); return; }
   else if (action === 'load') {
@@ -1192,7 +1238,8 @@ async function pollHealth() {
     await adoptStore(piStore());
     followLivePreset(next);
   } else if (wasConnected && !next) {
-    toast('Lost the Pi control service. Showing the local draft; presets are back in this browser.');
+    toast(shutdownRequested ? 'The Pi has powered off. Once activity stops, unplug the USB data cable, then PoE.' : 'Lost the Pi control service. Showing the local draft; presets are back in this browser.');
+    shutdownRequested = false;
     await adoptStore(browserStore(storageKey));
   }
   if (next?.apply && !applyPoll) {

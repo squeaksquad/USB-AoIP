@@ -310,7 +310,7 @@ export const applyFinished = status => Boolean(status?.current) && APPLY_TERMINA
 const stepWords = {
   validating: 'Validating the request', stopping: 'Stopping the AES67 service', switching: 'Switching the profile',
   starting: 'Starting the AES67 service', verifying: 'Waiting for the stack to run', settling: 'Settling with zero recoveries',
-  'rolling-back': 'Rolling back to the previous profile',
+  'rolling-back': 'Rolling back to the previous profile', 'powering-off': 'Powering off the Pi',
   done: 'Applied', 'rolled-back': 'Rolled back', failed: 'Failed', refused: 'Refused',
 };
 export const applyStepLabel = name => stepWords[name] || name;
@@ -323,6 +323,14 @@ export function applyLine(status) {
   if (!current) return 'No Apply operation recorded.';
   const who = current.request?.requestedBy ? ` by ${current.request.requestedBy}` : '';
   const target = current.profile || current.request?.profile || '?';
+  if (current.kind === 'shutdown') {
+    switch (current.state) {
+      case 'done': return `Shutdown issued${who} at ${current.finishedAt || '?'}: the Pi is powering off. Unplug USB data first, then PoE, once activity stops.`;
+      case 'failed': return `Shutdown failed: ${current.error || 'no detail'}. Check the Pi.`;
+      case 'refused': return `Refused: ${current.error || 'no detail'}`;
+      default: return `${applyStepLabel(current.state)} (shutdown)…`;
+    }
+  }
   switch (current.state) {
     case 'done': return `Applied ${target}${who} · live since ${current.finishedAt || '?'}.`;
     case 'rolled-back': return `Could not run ${target}; rolled back to ${current.previousProfile || '?'}. ${current.error || ''}`.trim();
@@ -481,6 +489,20 @@ export async function requestCommit(expectedProfile, expectedLiveSha256, fetchIm
   const result = await response.json().catch(() => null);
   if (!response.ok || !isObject(result) || result.ok !== true) {
     throw new Error(isObject(result) && result.error ? result.error : `Commit failed (${response.status})`);
+  }
+  return result;
+}
+
+/** Power the Pi off through the applier. The confirm word is the service's guard against a stray POST. */
+export async function requestShutdown(expectedProfile, fetchImpl = globalThis.fetch) {
+  const response = await fetchImpl('/api/apply/shutdown', {
+    method: 'POST',
+    headers: {'content-type': 'application/json', accept: 'application/json'},
+    body: JSON.stringify({confirm: 'shutdown', expectedProfile}),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !isObject(result) || result.ok !== true) {
+    throw new Error(isObject(result) && result.error ? result.error : `Shutdown request failed (${response.status})`);
   }
   return result;
 }
