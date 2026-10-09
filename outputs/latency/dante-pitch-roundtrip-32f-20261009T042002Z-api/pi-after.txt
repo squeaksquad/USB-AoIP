@@ -1,0 +1,7 @@
+aes67=inactive statime=1 endpoint=1 udc=configured
+log=/dev/shm/dante-alsaloop-20261009T040801Z.log
+START 20261009T040801Z seconds=1200 latency_usec=5000 inferno_latency_ns=2000000 sync=pitch period=alsaloop buffer=alsaloop
+xrun_lines=0 lag_lines=0 error_lines=8 lines=297
+pcm0c state: RUNNING delay : 36 
+pcm0p state: RUNNING delay : 239 
+pitch values=1000005 values=1000026

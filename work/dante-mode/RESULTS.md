@@ -787,6 +787,47 @@ latencies set to 2,000,000 ns through the wrapper's third argument (run from
   unmeasured. Staged wrapper sha256
   0899dca88b276cee618a5dda4c6cdd4f3e0df87e28ec95f3d54229097f076111.
 
+### No resampler, harness-measured: 705 samples at 32 frames, four runs (04:08-04:23 UTC)
+
+Prototype started by the operator as root at 04:08:01 UTC:
+`SYNC=pitch run-alsaloop-prototype.sh 1200 5000 2000000` (no converter,
+`alsaloop` 5 ms per direction, both Inferno latencies 2 ms). Measured from the
+Mac with `measure-candidate.sh`, label `dante-pitch`; RTL Utility closed.
+Evidence: `outputs/latency/dante-pitch-*-20261009T04*`.
+
+| Run (UTC) | Kind | Result | Spread | Discontinuities | Pi xrun / lag lines |
+|---|---|---|---|---|---|
+| 04:08:13 | noise probe, out 1 / in 2, 0.1 load, 32 frames | 0.0 % zeros, no zero run of 4 or more in 1,244,707 samples | | | 0 / 0 |
+| 04:09:05 | 800 impulses, 0.1 load, 32 frames | 705 samples, 14.688 ms, all 800 | 0 | 0 in, 0 out | 0 / 0 |
+| 04:12:51 | same | 705, all 800 | 0 | 0, 0 | 0 / 0 |
+| 04:16:26 | same | 705, all 800 | 0 | 0, 0 | 0 / 0 |
+| 04:20:02 | same | 705, all 800 | 0 | 0, 0 | 0 / 0 |
+
+- 3,200 impulses on one sample across fifteen minutes of one process, with
+  the pitch controls moving inside about +/-30 ppm (117 pitch updates logged)
+  and the queue toward the Mac between 228 and 253 frames.
+- The AES67 record's harness figure is 703 (bridge 947e8b4d; 725 and 746 on
+  other starts). 705 is in that family. By the standing rule RTL at 32 reads
+  the harness figure plus 188, which would be 893 samples, 18.604 ms; that is
+  derived and was not read on this run.
+- Against the resampling run's RTL reading (946) the pitch mode is about 53
+  samples shorter by that derivation, which is the size a converter's filter
+  delay in each direction would be; not separately measured.
+- What this is: the standard four loaded 800-impulse runs and a clean noise
+  probe, on one start of a prototype. What it is not: ACCEPTED. Missing are
+  the ten-minute sixteen-channel soak, a fresh-anchor discipline for this
+  transport (whether the level is a per-start draw here is unknown; all four
+  runs share one start), an RTL reading, bit transparency through `alsaloop`
+  in this mode, and any test of what happens when the Mac closes the device.
+- Controller, during these runs: the operator saw `RX 4-12` of the Pi shown
+  as "Unresolved, cannot find this channel on the network" a few minutes
+  after the start; they turned green when he had Controller reload device
+  information. So the subscriptions had resolved and Controller's view was
+  stale; how long the resolution itself took is not known.
+- The endpoint log's only errors in the run are the two start-time lines at
+  open and the `unknown opcode1 0x2204` pairs that appear while Controller is
+  talking to the device.
+
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
