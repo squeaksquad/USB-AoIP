@@ -629,6 +629,135 @@ d86dab3b3a4035f847714be4a6deb51b325bffa38a65a808da4a0bc3955a392a  run-alsaloop-p
 2f0e3941c5ac8822a034901f8c492c3f0e6529cebb7963f27e2b39bf2f61dd5a  config/asound-inferno-loop.conf
 ```
 
+### Prototype, first run and the fix (03:40-03:44 UTC)
+
+- First run as root (03:40:31 UTC, by the operator): the Mac's output reached
+  the Pi and the Ferrofish took the transmit flows, but the Dante -> USB
+  direction stopped (gadget playback in `XRUN` at 960 frames) and `alsaloop`
+  spun a core at SCHED_RR 99. Stopped by the operator. The job file's `-E` and
+  `-B` were rejected as invalid options, so the sizes were `alsaloop`'s own
+  (gadget period 320, buffer 3840). The two `Inferno main` threads inherited
+  RR 99 from `alsaloop`, as the source read predicted for a real-time opener.
+- Isolated unprivileged, 8 to 14 s each, the Mac streaming throughout:
+  Dante -> USB alone ran (gadget playback advancing, `alsaloop` at 10 % CPU);
+  USB -> Dante alone ran; both jobs on one `alsaloop` thread reproduced the
+  spin and the stuck return exactly; both jobs with `-T -1` (a thread each)
+  ran, both gadget streams advancing at 48 kHz with about 950 frames queued
+  toward the Mac, about 10 % CPU per thread.
+- So the fault is `alsaloop` serving two loops on the same Inferno device from
+  one thread, not the return direction. Cause inside `alsaloop` not traced.
+- Wrapper changed: `-T -1` on both jobs; period and buffer left to `alsaloop`
+  unless `PERIOD` / `BUFFER` are set, and then passed by their long names.
+  Staged: sha256 86eaa0246ae45f822f0dd8b82c92fa56d089d44724daad6dc2d62619aa679219
+  (supersedes d86dab3b above). Not yet run as root in this form, and no audio has
+  been confirmed at the Mac.
+
+### First USB-to-Dante round trip: 73.271 ms at 224 frames (03:44-03:47 UTC)
+
+The fixed wrapper, run as root by the operator from 03:44:35 UTC (log
+`/dev/shm/dante-alsaloop-20261009T034435Z.log` on the Pi), Statime as before,
+routes as left from the bit-transparency run (Pi -> Ferrofish -> MADI ->
+Metric Halo -> MADI -> Ferrofish -> Pi).
+
+- RTL Utility, `USB 16x16` in and out, channel 1 to channel 1, 48 kHz, buffer
+  224 frames: **3,517 samples, 73.271 ms**, of which 696 are CoreAudio's
+  reported latency; return level -21.6 dB. Screenshot:
+  `outputs/latency/dante-20261009T034435Z/rtl-utility-224f.png`. One reading.
+  224 was the smallest buffer the operator could run; what happened below it
+  was not recorded.
+- This is the first audio from the Mac through the USB gadget, out over native
+  Dante, around the loop and back. It answers the usability question: the Pi
+  is routable in Dante Controller as an ordinary device and the Mac's USB
+  interface passes audio through it.
+- At 03:47 UTC, three minutes in: both gadget streams running at 48 kHz, no
+  xrun in the log, `alsaloop` at 20 % CPU per thread at SCHED_RR 99 with no
+  spin, about 960 frames queued toward the Mac.
+- The figure is the prototype's configured buffering, not a floor: `alsaloop`
+  holds 20 ms in each direction (1,920 samples) and Inferno's receive latency
+  is at its 10 ms default (480). Those two alone are 2,400 of the 3,517; the
+  Mac's 696, the Ferrofish's receive latency for the Pi's flows (not read)
+  and the MADI loop make up the rest. Nothing here was measured stage by
+  stage.
+- Not comparable with the AES67 record (18.563 ms): different buffer size
+  (224 against 32), resampling in the path, no fresh-anchor or noise-probe
+  discipline, one reading.
+
+### alsaloop at 5 ms: 35.354 ms at 32 frames (03:49-03:52 UTC)
+
+Same prototype with `alsaloop` at 5,000 us per direction (run from 03:49:38
+UTC, log `/dev/shm/dante-alsaloop-20261009T034938Z.log`); Inferno latencies
+still 10 ms; routes unchanged.
+
+- RTL Utility at buffer 32, channel 1 to 1: the operator saw the figure rise
+  over consecutive readings and settle. The two recorded: 1,687 samples
+  (35.146 ms) and 1,697 samples (**35.354 ms**), CoreAudio reporting 312,
+  return level -21.6 dB. Screenshots in
+  `outputs/latency/dante-20261009T034938Z/`.
+- Below 224 frames on the 20 ms run RTL had answered "Couldn't reliably detect
+  test signal" (screenshot at 192 in the 034435Z directory). At 5 ms it
+  measures down to 32, so that was RTL's detection reach against a 73 ms round
+  trip, not a fault in the path.
+- No xrun in the log two minutes in; both gadget streams running; `alsaloop`
+  10-20 % CPU per thread. The queue toward the Mac read 167 frames four
+  seconds in and 235 two minutes in, which is the rise the operator saw:
+  `alsaloop` settling its own fill, about 70 frames.
+- The two runs agree on what is left when the configured terms are taken out:
+
+  | | 20 ms run, buffer 224 | 5 ms run, buffer 32 |
+  |---|---|---|
+  | RTL total | 3,517 | 1,697 |
+  | `alsaloop`, both directions (configured) | 1,920 | 480 |
+  | Inferno receive latency (configured) | 480 | 480 |
+  | CoreAudio reported | 696 | 312 |
+  | Remainder | 421 | 425 |
+
+  The remainder, about 8.8 ms, is everything not configured here: the
+  Ferrofish's receive latency for the Pi's flows, the MADI loop through the
+  Metric Halo, Inferno's transmit path and `alsaloop`'s settling. That it
+  comes out the same from two different settings supports the bookkeeping;
+  none of it was measured stage by stage.
+- Against the AES67 record at the same buffer (18.563 ms, 891 samples) the
+  prototype is 806 samples longer, with 960 of its own configured buffering
+  still in it. Not a like-for-like comparison: resampling in the path, no
+  fresh anchor, no noise probe, two readings.
+- The wrapper gained a third argument, `INFERNO_LATENCY_NS`, which sets both
+  Inferno latencies for one run through a copy of the config on tmpfs
+  (staged, sha256 52b2cad4242d916f2f165b283ae02dc22da77114c13a8c0b06175e1480675aa9,
+  not yet run with it).
+
+### Inferno latencies at 2 ms: 19.708 ms at 32 frames (03:54-03:56 UTC)
+
+Same prototype, `alsaloop` still 5,000 us per direction, both Inferno
+latencies set to 2,000,000 ns through the wrapper's third argument (run from
+03:53:59 UTC, log `/dev/shm/dante-alsaloop-20261009T035359Z.log`).
+
+- RTL Utility at buffer 32, channel 1 to 1: by the operator's account the
+  readings first rose past 27 ms and then came down and settled at **946
+  samples, 19.708 ms** (CoreAudio 312, return level -21.6 dB). Screenshot
+  `outputs/latency/dante-20261009T035359Z/rtl-utility-32f-946.png`. One
+  recorded reading.
+- That is 751 samples under the 10 ms run, close to twice the 384 that one
+  direction's 8 ms is worth. So the setting moved both ends: the Pi's own
+  receive latency and, through what the Pi advertises, the Ferrofish's
+  receive latency for the Pi's flows. A reading above 27 ms followed by this
+  one fits the Ferrofish taking the new figure a little after the Pi did;
+  that order of events was not observed, only the readings.
+- It also means the table above mis-assigned its parts: with both ends at 10
+  ms there were 960 samples of Dante latency in those runs, not 480, so
+  `alsaloop` holds less than its nominal 240 per direction and the
+  "remainder" was not what it was labelled. The totals stand; the split does
+  not.
+- Two minutes in: no xrun and no transmit-lag line in the log, both gadget
+  streams running, about 257 frames queued toward the Mac and 0 to 36 on the
+  capture side, `alsaloop` 10-20 % CPU per thread.
+- 946 is 55 samples (1.1 ms) above the AES67 record at the same buffer (891,
+  18.563 ms), from a resampling prototype. It is not an operating point and
+  not yet a comparison: one reading, no noise probe, no fresh anchor, no
+  loaded impulse runs, no soak. Above all, integrity is unchecked at this
+  setting. A packet that arrives later than 2 ms is dropped without a log
+  line and RTL would not notice; only a continuous-signal check will show
+  whether 2 ms holds on this network.
+
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
