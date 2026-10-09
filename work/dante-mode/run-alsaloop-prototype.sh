@@ -3,10 +3,9 @@
 #
 # What it is for: a first end-to-end answer (the Mac's USB 16x16 routed in Dante
 # Controller, audio both ways) and an upper bound on latency. What it is not: a
-# candidate. alsaloop resamples to follow the two clocks (not bit transparent),
+# candidate. alsaloop by default resamples to follow the two clocks (see SYNC),
 # adds its own buffering, and any xrun re-prepares the Inferno device, which
-# costs about six seconds of audio (RESULTS.md). The USB pitch controls are read
-# and left alone.
+# costs about six seconds of audio (RESULTS.md).
 #
 # Run on the Pi as root, with Statime already running and the AES67 service
 # stopped:
@@ -15,11 +14,23 @@
 # latencies as the config file has them (10 ms). INFERNO_LATENCY_NS sets both
 # RX_LATENCY_NS and TX_LATENCY_NS for this run only, through a copy on tmpfs. PERIOD and BUFFER
 # (frames, powers of two) can be set in the environment; unset, alsaloop chooses.
+# SYNC chooses how alsaloop follows the two clocks:
+#   SYNC=samplerate (default)  resamples each direction; the gadget's pitch
+#                              controls are read and left alone; not bit transparent.
+#   SYNC=pitch                 no resampler: alsaloop steers the gadget's Capture
+#                              Pitch / Playback Pitch controls, as the bridge's servo
+#                              does. Both are put back to 1000000 on exit.
 # Stop early with Ctrl+C. It starts and stops nothing but its own alsaloop.
 set -u
 seconds="${1:-600}"
 latency_usec="${2:-20000}"
 inferno_latency_ns="${3:-}"
+sync="${SYNC:-samplerate}"
+case "$sync" in
+    samplerate) sync_tx="-S samplerate -A sincfastest"; sync_rx="$sync_tx" ;;
+    pitch)      sync_tx="-S captshift"; sync_rx="-S playshift" ;;   # the gadget is the capture side going out, the playback side coming back
+    *) echo "REFUSED: SYNC must be samplerate or pitch"; exit 2 ;;
+esac
 period="${PERIOD:-}"
 buffer="${BUFFER:-}"
 base="$(cd "$(dirname "$0")" && pwd)"
@@ -62,21 +73,26 @@ jobs="/dev/shm/dante-alsaloop-$stamp.jobs"
 sizes=""
 [ -n "$period" ] && sizes="$sizes --period $period"
 [ -n "$buffer" ] && sizes="$sizes --buffer $buffer"
-common="-T -1 -r 48000 -c 16 -f S32_LE -S samplerate -A sincfastest -t $latency_usec$sizes -v"
+common="-T -1 -r 48000 -c 16 -f S32_LE -t $latency_usec$sizes -v"
 {
-    echo "-C $gadget -P inferno $common"     # Mac USB out -> Dante transmit
-    echo "-C inferno -P $gadget $common"     # Dante receive -> Mac USB in
+    echo "-C $gadget -P inferno $sync_tx $common"     # Mac USB out -> Dante transmit
+    echo "-C inferno -P $gadget $sync_rx $common"     # Dante receive -> Mac USB in
 } > "$jobs"
 
 cleanup() {
     # State written as root would lock the unprivileged probe out of its own directory.
     [ -n "${SUDO_USER:-}" ] && chown -R "$SUDO_USER":"$SUDO_USER" "$XDG_STATE_HOME" 2>/dev/null
     rm -f "$jobs" "${tmpconf:-}"
+    if [ "$sync" = pitch ]; then
+        # alsaloop restores these on a clean exit; do it again in case it was killed.
+        amixer -q -c UAC2Gadget cset numid=1 1000000
+        amixer -q -c UAC2Gadget cset numid=2 1000000
+    fi
 }
 trap cleanup EXIT
 
 {
-    echo "START $stamp seconds=$seconds latency_usec=$latency_usec inferno_latency_ns=${inferno_latency_ns:-config} period=${period:-alsaloop} buffer=${buffer:-alsaloop}"
+    echo "START $stamp seconds=$seconds latency_usec=$latency_usec inferno_latency_ns=${inferno_latency_ns:-config} sync=$sync period=${period:-alsaloop} buffer=${buffer:-alsaloop}"
     echo "PITCH before: $(amixer -c UAC2Gadget cget numid=1 | tail -1 | tr -s ' ') | $(amixer -c UAC2Gadget cget numid=2 | tail -1 | tr -s ' ')"
     echo "UDC state: $(cat /sys/class/udc/*/state 2>/dev/null)"
     sed 's/^/JOB /' "$jobs"

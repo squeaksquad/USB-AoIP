@@ -758,6 +758,35 @@ latencies set to 2,000,000 ns through the wrapper's third argument (run from
   line and RTL would not notice; only a continuous-signal check will show
   whether 2 ms holds on this network.
 
+### Direction change, harness wrapper and a no-resampling mode (04:04-04:10 UTC)
+
+- The operator's decision at about 04:05 UTC: the AES67 service is not being
+  started again; development continues on the Dante path unless a hard block
+  appears. `usb16x16-aes67.service` has been stopped since 03:40 UTC and the
+  Ferrofish and Metric Halo routing now serves the Dante loop.
+- The 2 ms run ended on its 600 s timer at 04:03:59 UTC with no xrun or
+  transmit-lag line in its whole log and the pitch controls untouched.
+- `measure-candidate.sh FRAMES IMPULSES [LABEL]` is the Dante counterpart of
+  `work/aes67-candidate/measure-under-service.sh`: the same harness and the
+  same signal gating, with Pi-side checks for the Dante stack (AES67 stopped,
+  Statime running, an endpoint process running) and the endpoint log read
+  before and after for xrun, lag and error lines. `measure-candidate.sh noise
+  FRAMES [LABEL]` is the hole probe as the handoff defines it (out 1, in 2,
+  0.1 load on the other channels, the capture analysed by `zeros.py`).
+  Checked: syntax, and that it refuses with no endpoint running. Not yet run
+  against a live endpoint.
+- `SYNC=pitch` on the prototype wrapper takes the resampler out: `alsaloop`
+  follows the clocks by steering the gadget's `Capture Pitch` and `Playback
+  Pitch` controls (`-S captshift` going out, `-S playshift` coming back), the
+  same lever the bridge's servo uses, and the wrapper sets both back to
+  1000000 on exit. Tried unprivileged for 40 s at 5 ms with the 10 ms Inferno
+  default: `alsaloop` reported "shared buffer" (no converter in the path) and
+  sync types CAPTRATESHIFT / PLAYRATESHIFT, both directions ran, the controls
+  moved to 1000010 and were back at 1000000 afterwards. Forty seconds does
+  not show that the steering converges, and bit transparency through it is
+  unmeasured. Staged wrapper sha256
+  0899dca88b276cee618a5dda4c6cdd4f3e0df87e28ec95f3d54229097f076111.
+
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
