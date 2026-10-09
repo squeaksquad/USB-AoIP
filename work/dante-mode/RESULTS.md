@@ -603,6 +603,32 @@ silence, not by restarting the network side.
 | Thread creation | Threads are created in `hw_params` and replaced at every `prepare`; none appeared while running or on route changes. Separate owner process, as decided. |
 | Not yet measured | Latency (the probe does not measure it), PTP lock quality, a run as root long enough to count xruns with the network threads at real-time priority, Controller restart and reconnect persistence. |
 
+### alsaloop prototype wrapper (written 2026-10-09 ~03:40 UTC, staged, not run)
+
+`run-alsaloop-prototype.sh [SECONDS] [LATENCY_USEC]` connects the USB gadget to
+the Inferno device in both directions through one `alsaloop` process (two jobs
+in one config, because Inferno allows one process per device), with
+`config/asound-inferno-loop.conf` adding the system ALSA configuration to the
+probe's device. It is for a first end-to-end answer from the Mac and an upper
+bound on latency, not a candidate: `alsaloop` resamples to follow the two
+clocks (`-S samplerate -A sincfastest`, as the 2026-08-31 AES67 prototype did,
+so not bit transparent), adds its own buffering, and re-prepares on xrun,
+which costs about six seconds each time. Defaults: 600 s, 20 ms inside
+`alsaloop` per direction, period 64, buffer 1024, Inferno latencies at 10 ms.
+
+It must be run as root on the Pi with Statime running and the AES67 service
+stopped, and refuses otherwise; it also refuses beside a running probe or
+another `alsaloop`. It reads the gadget's pitch controls before and after and
+does not write them, logs to tmpfs, and hands the state directory back to the
+invoking user. Checked so far: shell syntax, the refusal path, that both
+device names resolve under its ALSA config, and that the Pi's `alsaloop` is
+built with the sample-rate converter. Staged hashes:
+
+```
+d86dab3b3a4035f847714be4a6deb51b325bffa38a65a808da4a0bc3955a392a  run-alsaloop-prototype.sh
+2f0e3941c5ac8822a034901f8c492c3f0e6529cebb7963f27e2b39bf2f61dd5a  config/asound-inferno-loop.conf
+```
+
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
