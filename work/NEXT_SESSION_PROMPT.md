@@ -73,8 +73,11 @@ the patch and running as root by hand. On the Pi: probe 381f348c
 (`--free-run`, `--hold-forward`, `--zero-behind`), patched plugin 55dee5d8 in
 `plugins/xrun-option/` (select with `INFERNO_PLUGIN_DIR` and
 `INFERNO_CONFIG=.../config/asound-inferno-freerun.conf`), stock ca99efd7
-still in `inferno/target/release`. **Next is step 4: write
-`work/dante-mode/owner/` (network half first, `--no-usb`).** The resync must
+still in `inferno/target/release`. The network half is written and built (`owner/main.cpp`, binary 7eb9a584 on
+the Pi, `run-owner.sh`) and passed a 30 s unprivileged trial. **Next: step
+4's check, `sudo ~/usb-16x16-work/dante-mode/run-owner.sh 3600` by the
+operator (zero `NETRESYNC`, no thread change, flows held), then step 5, the
+USB half.** The resync must
 forward a margin past the deficit (the clock moved 4 to 5 frames in between).
 
 **Owed, in order.**

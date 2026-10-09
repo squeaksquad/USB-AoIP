@@ -11871,3 +11871,17 @@ run. This corrects the 2026-10-08 reading "missing samples are sent as zeros"
 by measurement and makes the zero-behind rule a requirement of the owner.
 Record and evidence as the previous entry. Design steps 1 to 3 are passed;
 step 4 is the owner's network half, not yet written.
+
+**IMPLEMENTED 2026-10-09 18:11 UTC: the Dante owner's network half (design
+step 4), tried unprivileged, not yet run as root.** `work/dante-mode/owner/
+main.cpp` built on the Pi as `usb16x16-dante-owner` 7eb9a584, run by
+`run-owner.sh` with plugin 55dee5d8 and `config/asound-inferno-owner.conf`.
+It opens the Inferno PCMs once, sends silence at a 128-frame lead, discards
+the capture, clears the ring behind the clock and never prepares. A 30 s
+trial at normal priority ran at 48,019 frames a second each way with no PCM
+error, and when the process lost the CPU for 7.2 ms it forwarded three times
+(409 frames), stayed `RUNNING` and kept its threads. Owed: the hour as root
+(`sudo ~/usb-16x16-work/dante-mode/run-owner.sh 3600`, zero resyncs, no
+thread change, the Ferrofish holding its flows), then step 5, the USB half.
+Nothing is installed; `usb16x16-aes67` inactive; Statime running in the
+operator's terminal since 17:57 UTC.

@@ -1026,3 +1026,46 @@ Evidence `outputs/latency/dante-20261009T175928Z/step3-stale-audio-summary.txt`.
   on every channel outside the hold.
 - Neither run recovered, resynchronised or changed a thread; the pointer was
   never behind, so the plugin had nothing to report.
+
+## Owner design step 4, first build: the network half runs (2026-10-09 18:11 UTC, unprivileged trial)
+
+`owner/main.cpp` is the owner's network half (`--no-usb`): memory lock, its
+telemetry thread, the Inferno PCMs opened without a second prepare, both
+buffers cleared, the lead written as silence, one `start` each, then a 1 ms
+loop that discards the capture, clears the playback ring behind the clock
+less the guard, resynchronises by forwarding (deficit plus 16 frames) and
+tops the lead up. It exits rather than prepare if the PCM ever reports an
+error. `run-owner.sh` wraps it (refusals as the prototype's, log on tmpfs,
+`plugins/xrun-option`, `config/asound-inferno-owner.conf`: the probe's device
+identity, both latencies 2 ms, `XRUN_REPORT "0"`, `DISABLE_POLLFD "1"`).
+Built on the Pi with `g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror`,
+no warnings. Staged and matching the repo:
+
+```
+7eb9a584  owner/usb16x16-dante-owner  (binary, Pi only)
+f914c8d9  owner/main.cpp
+2ca9730d  run-owner.sh
+924cfa99  config/asound-inferno-owner.conf
+```
+
+One 30 s run, `TRIAL=1` (no memory lock, every thread at normal priority), so
+it shows that the program works and nothing about stability. Log
+`/dev/shm/dante-owner-20261009T181106Z.log` on the Pi.
+
+- Start: `hw_params` 250 ms for capture as before; four Inferno threads after
+  the opens and no others created afterwards; both PCMs `RUNNING`.
+- Steady state: 1,000 wakes a second, 48,019 frames a second each way, the
+  depth before each top-up 78 to 82 (the lead of 128 less one millisecond),
+  the ring index never disagreeing with the owner's own count
+  (`offset_mismatches=0`), no PCM error.
+- At 26.4 s the whole process lost the CPU for 7.2 ms (normal priority). The
+  plugin logged the pointer 21, 171 and 217 frames behind and its transmit
+  thread `tx lag of 218-275 samples`; the owner forwarded three times (409
+  frames in all), both PCMs stayed `RUNNING`, the thread ids did not change,
+  and it carried on. That is an unplanned instance of step 2's result, in the
+  owner itself.
+- The Ferrofish asked for its flows at 16.9 s (`add flow request for already
+  existing flow`), as on every start.
+
+Not done, and what step 4's check asks for: an hour as root with the memory
+lock and real-time priority, routes up, zero resyncs, no thread change.

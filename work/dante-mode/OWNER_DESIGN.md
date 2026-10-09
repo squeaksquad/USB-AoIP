@@ -1,7 +1,7 @@
 # Dante endpoint owner: design
 
-Status 2026-10-09: design, with steps 1 to 3 passed; the owner itself is not
-written. The operator accepted the plugin patch and running as root by hand
+Status 2026-10-09: design, with steps 1 to 3 passed and the network half of the
+owner built (step 4, its hour as root owed); the USB half is not written. The operator accepted the plugin patch and running as root by hand
 (questions 1 and 4). It is the plan for item 3 of the owed list in
 [RESULTS.md](RESULTS.md) and replaces stage 4 of [PLAN.md](PLAN.md): the
 process that takes over from the `alsaloop` prototype. Figures quoted from
@@ -311,6 +311,9 @@ sequence.
    out, capture discarded. Check: an hour as root with routes up, zero
    `NETRESYNC`, no thread change, Controller shows the device and the
    Ferrofish holds its flows throughout.
+   *Built and tried 2026-10-09 18:11 UTC (`owner/main.cpp`, `run-owner.sh`; RESULTS.md):
+   30 s unprivileged, works, and rode out a 7 ms loss of the CPU by forwarding.
+   The hour as root is owed.*
 5. **The USB half.** Check first with the Mac: open and close the device ten
    times, quit and reopen a DAW, restart `usb-16x16.service` once (the
    operator's command), each a `USBLINK` pair and none a `NETRESYNC` or a
