@@ -1,0 +1,7 @@
+seconds 3598
+tx_mean 126.6..129.3 mean 128.04
+rx_mean 140.7..179.4 median 142.3 seconds_above_160 162
+pitch_c 14..16 pitch_p 14..33
+gap_us_max 1060
+tx_found 73..82
+rx_found 92..180

@@ -1234,3 +1234,35 @@ Evidence `outputs/latency/dante-owner-*-20261009T21*`.
   and restart checks of step 5, and the hour of extended qualification. The
   owner is hand-started as root with Statime in a terminal and nothing
   survives a reboot.
+
+## The same start, read whole: RTL 704, and an hour with no event (2026-10-09 21:13-22:13 UTC)
+
+The owner run of the battery above, read after it ended on its timer.
+Evidence `outputs/latency/dante-owner-usb-20261009T211300Z/` (`summary.txt`,
+`stats.txt` tracked; the log gitignored).
+
+- **RTL Utility at buffer 32, by the operator, after the battery on this
+  start: 14.667 ms, 704 samples.** That is the harness's 516 plus 188 to the
+  sample. Harness and RTL are now on one start.
+- The hour: 3,600.02 s, exit 0, 172.8 million frames each way. One link per
+  direction at 0.3 s and no other link event; no gadget fault, no reprime, no
+  detach, no overflow, no discard; zero `NETRESYNC`, zero PCM errors; no
+  `tx lag` or `XRUN` line from the plugin; no thread change; pitch controls at
+  1000000 afterwards.
+- Depths over the hour, seeded at -15 ppm: outgoing mean 126.6 to 129.3
+  (128.04 overall), found between 73 and 82 before each write; return mean
+  median 142.3. Capture Pitch stayed within 14 to 16 ppm. The longest gap
+  between wakes was 1.060 ms; none over 1.1 ms.
+- The return queue's reading artefact occurred in 162 of 3,598 seconds (mean
+  above 160, found up to 180) and pushed Playback Pitch as far as +33 against
+  a median of +15.
+- **The device being opened and closed on the Mac does not reach the Pi.**
+  Fifteen harness readiness probes, four impulse runs, the soak, RTL Utility
+  and the operator quitting and reopening RTL twice produced no link event at
+  all: the Mac kept both USB streams running throughout. So step 5's
+  open/close check has not exercised the owner's idle, prime or fault paths,
+  and will not by those means. What will: unplugging the USB cable, Mac sleep,
+  `sudo killall coreaudiod` on the Mac, and a restart of `usb-16x16.service`.
+- About twenty-five of the sixty minutes carried harness signal; the rest was
+  whatever the Mac sent idle. It is an hour without an event, not the
+  sixteen-channel loaded hour the plan's extended qualification asks for.

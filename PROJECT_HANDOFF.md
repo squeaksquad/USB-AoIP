@@ -11925,3 +11925,18 @@ the same start, three starts, bit transparency through the owner, the
 open/close and restart checks and the extended hour are owed, and nothing
 survives a reboot. Evidence `outputs/latency/dante-owner-*-20261009T21*`;
 record `work/dante-mode/RESULTS.md`, last section.
+
+**MEASURED 2026-10-09 21:40-22:13 UTC: RTL 14.667 ms (704 samples) at 32 on
+the battery's own start; that start ran its hour with no event.** RTL Utility
+by the operator after the harness runs: 704, which is 516 plus 188 exactly.
+The owner's log for the hour: one link each way at 0.3 s and nothing after,
+no fault, no resync, no plugin lag line, no thread change, longest wake gap
+1.060 ms, outgoing depth mean 128.04. Opening and closing the device on the
+Mac (harness probes, RTL quit and reopen twice) produced no link event: the
+Mac keeps both streams running, so the owner's idle, prime and fault paths
+are still unexercised and need a cable pull, Mac sleep, a coreaudiod kill or
+a `usb-16x16.service` restart. Standing figures for the owner at lead 128,
+return queue 144, Inferno 2 ms: **harness 516 (10.750 ms), RTL 704
+(14.667 ms), at 32 frames**, one start, plus the earlier start's RTL 703.
+Not ACCEPTED: three starts, the fault paths, bit transparency through the
+owner and a sixteen-channel loaded hour are owed.
