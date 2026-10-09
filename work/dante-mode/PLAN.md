@@ -1,6 +1,7 @@
 # Dante mode proof of concept
 
 Status: planned only. Written 2026-09-05 UTC (2026-09-04 local).
+Revised 2026-10-08: baseline refreshed to the 2026-09-14 point of record; bit-transparency and thread-creation gates added to stage 2 after a read of the upstream READMEs.
 No Dante software has been built, installed, or tested by this work.
 
 ## Goal
@@ -16,7 +17,7 @@ Give the Pi one persistent 16-transmit/16-receive endpoint in Dante Controller's
 - Claude's active AES67 experiments continue undisturbed. Local source research/build preparation can proceed independently; Pi tests and network routing changes require a coordinated test window after the current campaign.
 - Start with the existing Ferrofish and network. Record their actual firmware, addresses, routing and clock leader before testing; saved addresses are hints, not discovery.
 - This document is a future implementation plan, not authorization to start services or switch the live transport. The current task authorizes saving this plan and its repo-map pointer.
-- [PROJECT_HANDOFF.md](../../PROJECT_HANDOFF.md) remains authoritative for accepted hardware/software state. The latest accepted point recorded at drafting is `servo-aligned-both-240-rx120-sd144-tx192`: harness 1318 samples at 64 frames; RTL Utility 31.375 ms at 32 frames. Refresh this before comparison because target64 runs are underway.
+- [PROJECT_HANDOFF.md](../../PROJECT_HANDOFF.md) remains authoritative for accepted hardware/software state. The point of record as of this revision (ACCEPTED 2026-09-14 ~01:00 UTC) is profile `dsp-direct` on bridge 7e8f1064 with supervisor 8b42e4ec: harness 746 samples (15.542 ms) at 64 frames, four 800-impulse runs with spread 0, 600 s all-16 soak, zero RECOVERs, floors 85 / 96. The last RTL Utility read at 32 frames is 18.563 ms = 703 + 188, taken on bridge 947e8b4d (2026-09-11); by the same +188 rule 746 would read 19.458 ms, derived, not read. The harness level is a per-start draw on an unchanged transport (703, 725 and 746 on three bridges), so the comparison in stage 5 needs a fresh anchor and a fresh baseline read on the day, not these figures. The figure at drafting was 1318 / 31.375 ms on `servo-aligned-both-240-rx120-sd144-tx192`; it is superseded.
 
 ## Files
 
@@ -53,7 +54,7 @@ Exit gate: reproducible baseline, completed active measurements and a saved rest
 
 ### 2. Pin and inspect Inferno before integrating USB
 
-Upstream advertises native Dante send/receive, Controller routing, ALSA support and Pi 5 testing, but calls the implementation experimental. Its documented RX and TX latency defaults are each 10 ms; TX latency advertises a requirement to downstream receivers. Configure and record both explicitly rather than assuming a low Controller setting overrides them. The project documents PTPv1 through its Statime fork and a PHC clock option. These are upstream capabilities to verify, not results on this Pi. [Inferno upstream](https://github.com/teodly/inferno)
+Upstream advertises native Dante send/receive, Controller routing, ALSA support and Pi 5 testing, but calls the implementation experimental. Its documented RX and TX latency defaults are each 10 ms; TX latency advertises a requirement to downstream receivers. Configure and record both explicitly rather than assuming a low Controller setting overrides them. The project documents PTPv1 through its Statime fork and a PHC clock option. These are upstream capabilities to verify, not results on this Pi. [Inferno upstream](https://gitlab.com/lumifaza/inferno) ([GitHub copy](https://github.com/teodly/inferno))
 
 Pin full commits and submodule revisions, including the matching clock implementation. Build in an isolated directory with locked dependencies. Check licenses before distributing a derivative; no distribution is part of this experiment.
 
@@ -64,9 +65,14 @@ Inspect the ALSA plugin and test its contracts with a small probe:
 - Capture positions and playback positions refer to a consistent network-paced timeline, including when no incoming routes exist.
 - Persisted identity and subscription state can live in an isolated, durable directory rather than depending on a changing IP address or temporary home.
 
-The existing [Pcm class](../phase4-bridge/src/main.cpp) requires mmap-interleaved access and uses ALSA position/delay behavior in its controller. A successful `snd_pcm_open` alone does not establish compatibility.
+The existing [Pcm class](../phase4-bridge/src/main.cpp) requires mmap-interleaved access and uses ALSA position/delay behavior in its controller. A successful `snd_pcm_open` alone does not establish compatibility. Upstream also warns that an application which lets the capture buffer run nearly full may not work, and its README does not state mmap, poll or delay behavior at all; read the plugin source for these, do not infer them.
 
-Exit gate: pinned artifacts and a recorded compatibility matrix. If mmap/poll/delay semantics differ, resolve that boundary before live USB integration.
+Two gates added 2026-10-08. Both are decided here, without USB and before any test window is spent on the bridge:
+
+- **Transmit bit transparency.** Upstream lists a bit-perfect transmitter as a TODO and applies dither on transmit, set by `TX_SOURCE_BIT_DEPTH`. The project requires 24-bit samples to pass unchanged and 0 dBFS to pass clean. Find in the pinned source whether a setting disables the dither and any gain or rounding on the transmit path, then prove it: play a known 24-bit-in-S32 pattern including full-scale positive and negative samples into the plugin, capture it at a Dante receiver (or on the wire) and compare sample for sample. Check the receive direction the same way. If transmit cannot be made bit-exact by configuration, stop and record it; a source patch is a separate decision.
+- **Thread creation.** The plugin runs inside the process that opens it and Inferno is multi-threaded. The bridge runs under `mlockall(MCL_FUTURE)`, and a thread created after the captures are running locks its whole default stack and has cost RECOVERs (handoff, 2026-09-11, the meter-tap work). Establish from the source and from a traced probe (`strace -f -e clone,clone3` or equivalent) exactly when the plugin creates threads: at `snd_pcm_open`, at prepare/start, on a new subscription, on a clock event, or on demand from an async runtime. Record each thread's scheduling class and stack size. The requirement for stage 4 is that every thread exists before USB capture starts and none is created during steady-state transport, including when routes change in Controller.
+
+Exit gate: pinned artifacts and a recorded compatibility matrix; transmit and receive proven bit-exact at 24 bits including full scale; a thread inventory showing no creation after start. If mmap/poll/delay semantics differ, resolve that boundary before live USB integration. If threads appear after start, the endpoint belongs in a separate owner process (stage 4's bounded persistent owner) and the single-process attempt is skipped.
 
 ### 3. Prove Controller usability with an always-running endpoint
 
@@ -93,7 +99,7 @@ Mac USB OUT -> UAC2 capture -> bridge -> Inferno TX -> Ferrofish RX
 Mac USB IN  <- UAC2 playback <- bridge <- Inferno RX <- Ferrofish TX
 ```
 
-Try the existing single-process bridge against the qualified ALSA endpoint in a separate candidate build. Disable RAVENNA-specific aligned-start/trigger/prime assumptions initially; its 1 ms tick and reader phase are not Inferno contracts. Do not carry the RAVENNA skip margin or buffer settings across without measurement.
+Try the existing single-process bridge against the qualified ALSA endpoint in a separate candidate build. Open the Inferno PCMs before the USB captures start, so that every plugin thread found in stage 2 already exists (the thread-creation gate). Disable RAVENNA-specific aligned-start/trigger/prime assumptions initially; its 1 ms tick and reader phase are not Inferno contracts. Do not carry the RAVENNA skip margin or buffer settings across without measurement.
 
 Validate the shared USB pitch controller against the new position semantics. Keep both USB directions on one clock discipline. Use an explicit settling phase and verify long-term occupancy drift; avoid stacked automatic resamplers. Any temporary resampling must be recorded and tested for fidelity.
 
@@ -134,6 +140,8 @@ Record installation and acceptance in the authoritative handoff only when they h
 - A larger allocated buffer is not automatically a larger occupied delay. Conversely, copying old queue settings may quietly add latency.
 - Hardware timestamp availability does not prove the application uses it, or eliminate USB scheduling jitter.
 - Full Dante Controller feature parity, DDM/Director, redundant networking, higher sample rates, DSP mode and commercial certification are outside this proof of concept.
+- A plugin thread created mid-transport (a route change, a clock event) can look like an unrelated RECOVER; check the thread count before and after every Controller action during qualification.
+- Dither or rounding on transmit is inaudible and passes every impulse and latency test; only a sample-for-sample comparison finds it.
 - No claim of sub-10 ms round trip follows from native Dante discovery or a submillisecond network setting.
 
 ## Verification
@@ -147,6 +155,8 @@ For implementation, record exact build/test commands alongside the pinned source
 | USB invariant | One native 16x16 CoreAudio device at 48 kHz; labels 1-16; configured/high-speed; unchanged protected hashes. |
 | Controller QoL | One endpoint with 16 TX + 16 RX, matrix routing both ways, no manual external-session setup, screenshot and channel-by-channel signal verification. |
 | Persistence | Subscriptions restored across three process restarts, Controller restart and Ethernet reconnect; USB unplug/replug and Mac sleep/wake keep network identity present. Schedule three cold boots only after the active campaign, with recovery times recorded. |
+| Bit transparency | Known 24-bit pattern with full-scale positive and negative samples returned sample for sample in both directions, with the dither setting used recorded; no wrap or saturation at 0 dBFS. |
+| Thread inventory | Every plugin thread listed with when it is created, its scheduling class and stack size; thread count unchanged from before USB capture start through route changes, Controller restart and the soak. |
 | Initial integrity | Known continuous signal on every channel; no missing/repeated sections, unexpected zeros, clipping or crosstalk. Verify packed-24/S32 scaling. |
 | Latency candidate | Four 800-impulse runs at 64 frames, every impulse detected, per-impulse delays and discontinuities recorded; RTL Utility at 32 measured separately. No XRUNs, drops or recoveries in accepted runs. |
 | Required soak | At least 600 seconds with all 16 channels loaded, continuous-signal integrity plus impulse evidence, no unexplained holes, drops, restarts or clock unlocks. |
