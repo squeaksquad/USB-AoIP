@@ -17,7 +17,12 @@ statime (fork)   https://github.com/teodly/statime  branch inferno-dev  244f20a5
   timestamped-socket  submodule                                       beb690d7735d3bfea0e77fad771910cb1522054d
   Cargo.lock          sha256                                          9b658fa662fd4391a50f816d70c7fc86f503c4056e31aa4cde996ae2ac6e719d
 
+# Build toolchain on the Pi (rustup, minimal profile, in ~/.cargo and ~/.rustup; installed by the operator 2026-10-08 EDT)
+rustc            1.99.0 (b940084d7 2026-09-28)
+cargo            1.99.0 (5f94df478 2026-08-27)
+libasound2-dev   1.2.14-1+rpt1
+pkg-config       1.8.1-4
+
 # Pending, to be filled when stage 2's build step is reached:
-#   rustc / cargo versions (the Mac has no Rust toolchain; the Pi's is unrecorded)
 #   libasound_module_pcm_inferno.so sha256
 #   statime binary sha256

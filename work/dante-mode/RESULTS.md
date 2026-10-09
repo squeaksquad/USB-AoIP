@@ -286,9 +286,9 @@ own experiment.
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
-2. Install Rust on the Pi (still absent), then build both with `--locked`,
-   service stopped, and record toolchain and artifact hashes in
-   `SOURCES.lock`. Needs a test window.
+2. Rust is on the Pi since 2026-10-08 (rustc 1.99.0, in `SOURCES.lock`).
+   Build both with `--locked`, service stopped, and record the artifact
+   hashes. Needs a test window.
 3. The probe, without USB: mmap, poll, `avail`, `delay`, start, prepare,
    recovery and close as the bridge uses them, at periods 32 and 64 with
    buffers 1024 and 2048, logging every clock overlay update.
