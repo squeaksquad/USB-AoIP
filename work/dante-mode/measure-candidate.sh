@@ -10,6 +10,11 @@
 #   measure-candidate.sh noise FRAMES [LABEL]        hole probe: out 1 / in 2, 0.1
 #                                                    load on the other channels,
 #                                                    capture analysed by zeros.py
+#   measure-candidate.sh soak [SECONDS] [FRAMES] [LABEL]
+#                                                    all-16 continuous load (the
+#                                                    battery's soak): every channel
+#                                                    must return signal with no zero
+#                                                    run of 4 or more; default 600 s
 # USB16X16_OTHER_LOAD=0.1 loads the other 15 channels in the impulse run.
 # Close RTL Utility first: the harness and RTL never share the device.
 set -uo pipefail
@@ -17,9 +22,13 @@ set -uo pipefail
 script_dir=${0:A:h}
 repo_root=${script_dir:h:h}
 mode=impulse
-if [[ "${1:-}" == noise ]]; then mode=noise; shift; fi
-frames=${1:-32}
-if [[ $mode == noise ]]; then impulses=100; label=${2:-dante}; else impulses=${2:-800}; label=${3:-dante}; fi
+if [[ "${1:-}" == noise || "${1:-}" == soak ]]; then mode=$1; shift; fi
+if [[ $mode == soak ]]; then
+  soak_seconds=${1:-600}; frames=${2:-32}; label=${3:-dante}; impulses=0
+else
+  frames=${1:-32}
+  if [[ $mode == noise ]]; then impulses=100; label=${2:-dante}; else impulses=${2:-800}; label=${3:-dante}; fi
+fi
 maximum_lag_ms=${USB16X16_MAX_LAG_MS:-200}
 ready_max_spread=${USB16X16_READY_MAX_SPREAD_SAMPLES:-9}
 required_probes=${USB16X16_REQUIRED_SIGNAL_PROBES:-3}
@@ -33,6 +42,7 @@ timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 out_dir="$repo_root/outputs/latency"
 stem="${label}-roundtrip-${frames}f-${timestamp}"
 [[ $mode == noise ]] && stem="${label}-noise-ch2-${frames}f-${timestamp}"
+[[ $mode == soak ]] && stem="${label}-soak-${soak_seconds}s-${frames}f-${timestamp}"
 result_path="$out_dir/${stem}.json"
 api_dir="$out_dir/${stem}-api"
 mkdir -p "$api_dir"
@@ -49,7 +59,7 @@ for d in pcm0c pcm0p; do echo "$d $(grep -E "state|delay" /proc/asound/UAC2Gadge
 echo "pitch $(amixer -c UAC2Gadget cget numid=1 | tail -1 | tr -d " :") $(amixer -c UAC2Gadget cget numid=2 | tail -1 | tr -d " :")"'
 }
 
-print -r -- "=== measure Dante candidate ($mode): ${frames} frames, ${impulses} impulses ($timestamp)"
+print -r -- "=== measure Dante candidate ($mode): ${frames} frames, ${impulses} impulses${soak_seconds:+, ${soak_seconds} s} ($timestamp)"
 before=$(pi_state)
 print -r -- "$before" | tee "$api_dir/pi-before.txt" | sed 's/^/  before: /'
 gates=${before%%$'\n'*}
@@ -100,7 +110,39 @@ if [[ -z "$signal_ready" ]]; then
   exit 6
 fi
 
-if [[ $mode == noise ]]; then
+if [[ $mode == soak ]]; then
+  "$app_binary" continuous --device "USB 16x16" --buffer-frames "$frames" \
+    --seconds "$soak_seconds" --other-channel-load-amplitude 0.1 --output "$result_path" \
+    >/dev/null 2>"$api_dir/measure.log"
+  measure_exit=$?
+  print -r -- "measure_exit=$measure_exit result=$result_path"
+  if (( measure_exit == 0 )) && [[ -s "$result_path" ]]; then
+    # The battery's criteria (work/dsp-service/validate.py): full-length capture,
+    # signal on every channel, no zero run of 4 or more, nothing non-finite or at full scale.
+    /usr/bin/python3 - "$result_path" <<'PYEOF' || measure_exit=7
+import json, sys
+d = json.load(open(sys.argv[1])); bad = []
+for key in ("inputDiscontinuities", "outputDiscontinuities"):
+    if d.get(key): bad.append(f"{key}={d[key]}")
+for i, c in enumerate(d["channels"], 1):
+    why = []
+    if c["samples"] < (d["seconds"] - 3) * 48000: why.append("short")
+    if c["peak"] < 1e-8: why.append("silent")
+    if c["longestZeroRun"] >= 4: why.append(f"zero run {c['longestZeroRun']}")
+    if c.get("nonFinite"): why.append("non-finite")
+    if c.get("fullScaleSamples"): why.append("full scale")
+    if why: bad.append(f"ch{i}: " + ", ".join(why))
+runs = [c["longestZeroRun"] for c in d["channels"]]
+peaks = [c["peak"] for c in d["channels"]]
+print(f"channels={len(d['channels'])} seconds={d['seconds']} longest zero run max={max(runs)} peak min={min(peaks):.4f} max={max(peaks):.4f}")
+print(f"discontinuities in={d.get('inputDiscontinuities')} out={d.get('outputDiscontinuities')}")
+print("soak: PASS" if not bad else "soak: FAIL " + "; ".join(bad))
+raise SystemExit(1 if bad else 0)
+PYEOF
+  else
+    print -r -- "harness stderr: $(head -c 300 "$api_dir/measure.log")"
+  fi
+elif [[ $mode == noise ]]; then
   raw="$api_dir/capture.raw"
   USB16X16_DUMP="$raw" "$app_binary" measure --device "USB 16x16" --buffer-frames "$frames" \
     --output-channel 1 --input-channel 2 --other-channel-load-amplitude 0.1 \
