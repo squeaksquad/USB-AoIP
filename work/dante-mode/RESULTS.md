@@ -135,8 +135,7 @@ Created inside whichever process opens the PCM:
   shift, frequency scale) from the Statime fork over a Unix datagram socket,
   default `/tmp/ptp-usrvclock`, or the path in `CLOCK_PATH`
   (`media_clock.rs`, `usrvclock-rs/src/lib.rs` 274).
-- Which system clock the overlay sits on, and whether Statime steers
-  `CLOCK_REALTIME` on the Pi, is in the fork's configuration and was not read.
+- Which system clock the overlay sits on is answered in part 2 below.
 - The media clock has a commented-out guard against jumps
   (`media_clock.rs` 41-50), so an overlay jump reaches the pointer and the
   transmit timestamps directly. A jump beyond 192000 samples re-times the
@@ -163,17 +162,118 @@ TX_SOURCE_BIT_DEPTH=24  RX_LATENCY_NS=TX_LATENCY_NS  RUST_LOG=warn
 XDG_STATE_HOME=<durable directory under the work directory>
 ```
 
+## Stage 2, part 2: the Statime fork (2026-10-08, Mac only)
+
+Scope: `teodly/statime` `inferno-dev` at 244f20a5 cloned and read. Not built,
+not run. File references are relative to `upstream/statime/`. The fork's head
+is from 2025-07-18, fourteen months older than the Inferno pin, and sits on
+Statime 0.4.0.
+
+### What it does to the Pi's clocks
+
+With the shipped `inferno-ptpv1.toml` (`virtual-system-clock = true`,
+`virtual-system-clock-base = "monotonic_raw"`, `usrvclock-export = true`):
+
+- The clock PTP disciplines is an overlay, a shift and a frequency scale held
+  in the daemon, not a kernel clock. Steering changes those two numbers and
+  sends them to Inferno over the socket (`statime/src/overlay_clock.rs`
+  133-155, `statime-linux/src/main.rs` 370-458).
+- It is two overlays deep. An inner one sits on `CLOCK_TAI` and is held to
+  `CLOCK_MONOTONIC_RAW` by its own Kalman loop, measuring in user space every
+  250 ms and discarding any measurement that took over 1 ms (`main.rs`
+  267-325). PTP steers the outer one.
+- With software timestamps the daemon does not set, slew or step any system
+  clock: the port's clock is the overlay, and the overlay ignores the time
+  properties call (`overlay_clock.rs` 156-162). chrony or timesyncd need not
+  be stopped for it to run. They still matter: packet timestamps arrive on
+  `CLOCK_REALTIME`, so a step of system time during a run reaches the
+  measurements. The fork's export guard against that is only built when the
+  base is TAI (`main.rs` 377), not for `monotonic_raw`.
+- With a hardware clock it does write. `hardware-clock = "auto"` is the
+  shipped default; if `eth0` exposes a PHC the daemon opens it, may step it at
+  start (`clock/mod.rs` 43-56), makes it the port clock so the PTP servo
+  steers and steps the PHC itself, and couples it to the overlay with a second
+  250 ms loop (`main.rs` 144-262, 496-514). That port clock's time properties
+  call writes the TAI offset and leap flags to `CLOCK_REALTIME`
+  (`clock/mod.rs` 167-181, called from `statime/src/port/bmca.rs` 281). Those
+  are kernel-wide and outlive the process.
+
+So the first run should set `hardware-clock = "none"`: it leaves no state on
+the Pi beyond its socket file. Hardware timestamping is a second, separate
+variable, with the PHC state and the TAI offset recorded before and after.
+
+### Other readings
+
+- PTPv1 is follower only, which suits the Ferrofish leading. The daemon binds
+  the PTP event and general ports on the interface, the same ones the RAVENNA
+  stack's PTPv2 uses, so the two cannot share `eth0`. This confirms the plan's
+  rule to stop the AES67 stack first.
+- It is a separate process, so its threads are no concern for the bridge's
+  memory lock. It runs a multi-threaded runtime with one worker per core, at
+  normal priority, unpinned and with nothing locked (`statime-linux/Cargo.toml`
+  36, `main.rs` 336). Under the bridge's real-time threads its 250 ms
+  measurements can be delayed; the 1 ms rejection then drops them. Its CPU
+  affinity should be set from outside, off the bridge's core.
+- Overlay steps go straight to Inferno, whose own jump guard is commented out
+  (part 1). Upstream says the clock is unstable for a few seconds at start, so
+  the owner process should open the PCMs only after the daemon has settled,
+  and the probe should log every overlay update with its shift.
+- The shipped configs set `loglevel = "trace"` and name the interface
+  `enp0s31f6`. Both need changing: `warn`, and `eth0`.
+- Whether the Pi 5's `eth0` offers a PHC and accepts a PTPv1 hardware filter
+  is a fact about the Pi, not the source. `ethtool -T eth0` answers it and is
+  read-only.
+
+### First-run Statime config
+
+```
+loglevel = "warn"
+sdo-id = 0
+domain = 0
+priority1 = 251
+virtual-system-clock = true
+virtual-system-clock-base = "monotonic_raw"
+usrvclock-export = true
+
+[[port]]
+interface = "eth0"
+network-mode = "ipv4"
+hardware-clock = "none"
+protocol-version = "PTPv1"
+```
+
+### Pi read, 2026-10-08 (operator, read-only)
+
+- `ethtool -T eth0`: hardware transmit and receive timestamping with a raw
+  hardware clock, provider index 0, "Precise (IEEE 1588 quality)". Transmit
+  modes off / on / onestep-sync. Receive filter modes: `none` and `all` only.
+- The fork asks for the `PTP_V1_L4_EVENT` receive filter in PTPv1 mode
+  (`timestamped-socket/src/socket/linux.rs` 183), which `eth0` does not list.
+  Whether the driver widens that request to `all` or refuses it was not
+  established; it is seen only by trying it. If it refuses, hardware
+  timestamps under PTPv1 need a one-line change to request `all`, as the
+  fork's own layer-2 case already does (line 189).
+- `chrony` inactive, `systemd-timesyncd` active. timesyncd disciplines
+  `CLOCK_REALTIME`, which is where software packet timestamps come from, so
+  it is the collision upstream warns about. For software-timestamp runs it is
+  one more variable: record its state, and compare a run with it stopped
+  before trusting clock stability figures. Stopping it is a root change on the
+  Pi and needs its own go.
+
+Both readings point the same way as the source: first runs on software
+timestamps with `hardware-clock = "none"`, hardware timestamps later as their
+own experiment.
+
 ### Still owed for stage 2
 
-1. Read the Statime fork at its pin: which clock it disciplines, its PTPv1
-   configuration, hardware timestamping on the Pi 5's `eth0`.
-2. Build on the Pi with `--locked`, service stopped, and record toolchain and
-   artifact hashes in `SOURCES.lock`. Needs a test window.
+1. Done 2026-10-08, above.
+2. Build both on the Pi with `--locked`, service stopped, and record toolchain
+   and artifact hashes in `SOURCES.lock`. Needs a test window.
 3. The probe, without USB: mmap, poll, `avail`, `delay`, start, prepare,
    recovery and close as the bridge uses them, at periods 32 and 64 with
-   buffers 1024 and 2048.
+   buffers 1024 and 2048, logging every clock overlay update.
 4. Bit transparency measured in both directions with `TX_SOURCE_BIT_DEPTH=24`,
    full scale included.
 5. A thread trace across open, prepare, start, a route change, a forced xrun
-   and close, to confirm the table above and to settle the blocking-pool
+   and close, to confirm the part 1 table and to settle the blocking-pool
    question.
