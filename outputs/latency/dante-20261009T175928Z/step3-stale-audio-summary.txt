@@ -1,0 +1,86 @@
+=== extra=[] log /dev/shm/inferno-probe-20261009T180403Z.log
+t=83.0 locked=16/16 mismatch=5163 zeros=43521228
+t=84.0 locked=16/16 mismatch=5163 zeros=43521228
+t=85.0 locked=16/16 mismatch=5163 zeros=43521228
+t=86.0 locked=16/16 mismatch=5259 zeros=43521228
+t=87.0 locked=16/16 mismatch=5259 zeros=43521228
+t=88.0 locked=16/16 mismatch=5259 zeros=43521228
+t=89.0 locked=16/16 mismatch=5259 zeros=43521228
+t=90.0 locked=16/16 mismatch=5259 zeros=43521228
+t=91.0 locked=16/16 mismatch=5259 zeros=43521228
+t=92.0 locked=16/16 mismatch=5259 zeros=43521228
+t=93.0 locked=16/16 mismatch=5259 zeros=43521228
+t=94.0 locked=16/16 mismatch=5259 zeros=43521228
+t=95.0 locked=16/16 mismatch=5259 zeros=43521228
+t=96.0 locked=16/16 mismatch=5259 zeros=43521228
+t=97.0 locked=16/16 mismatch=5259 zeros=43521228
+t=98.0 locked=16/16 mismatch=5259 zeros=43521228
+t=99.0 locked=16/16 mismatch=5259 zeros=43521228
+t=100.0 locked=16/16 mismatch=5259 zeros=43521228
+XRUN-TEST begin t_us=85252881 hold_ms=100
+XRUN-TEST end held_us=100001
+SUMMARY seconds=100.00 cap_frames=4799946 play_frames=4800069 cap_rate=47999.410 play_rate=48000.640 cap_recovers=0 play_recovers=0 thread_changes=0 revents=1 mlock=0 free_run=0 cap_resyncs=0 cap_lost=0 play_resyncs=0 play_lost=0 hold_forward=1 unwritten=4800 zero_behind=0 zeroed=0
+     16 t_us=85275215
+     16 t_us=85296548
+      8 t_us=85317882
+MISMATCH ch=1 t_us=85275215 prev=f0b266 got=45d72f expected=43b32f low=00
+MISMATCH ch=1 t_us=85296548 prev=f0b266 got=45d72f expected=43b32f low=00
+MISMATCH ch=1 t_us=85317882 prev=f0b266 got=45d72f expected=43b32f low=00
+ch=1 mismatch=7 lock_losses=6 zero_runs=0 zeros=905251 neg_fs=0
+ch=2 mismatch=7 lock_losses=6 zero_runs=0 zeros=906851 neg_fs=0
+ch=3 mismatch=1487 lock_losses=6 zero_runs=0 zeros=1512034 neg_fs=0
+ch=4 mismatch=7 lock_losses=6 zero_runs=0 zeros=2004414 neg_fs=1
+ch=5 mismatch=7 lock_losses=6 zero_runs=0 zeros=2635886 neg_fs=0
+ch=6 mismatch=7 lock_losses=6 zero_runs=0 zeros=3267605 neg_fs=0
+ch=7 mismatch=7 lock_losses=6 zero_runs=0 zeros=3754749 neg_fs=0
+ch=8 mismatch=7 lock_losses=6 zero_runs=0 zeros=3754749 neg_fs=0
+ch=9 mismatch=7 lock_losses=6 zero_runs=0 zeros=3754749 neg_fs=0
+ch=10 mismatch=7 lock_losses=6 zero_runs=0 zeros=3754749 neg_fs=0
+ch=11 mismatch=3674 lock_losses=6 zero_runs=0 zeros=3747419 neg_fs=0
+ch=12 mismatch=7 lock_losses=6 zero_runs=0 zeros=3754757 neg_fs=0
+ch=13 mismatch=7 lock_losses=6 zero_runs=0 zeros=3754761 neg_fs=0
+ch=14 mismatch=7 lock_losses=6 zero_runs=0 zeros=2004414 neg_fs=0
+ch=15 mismatch=7 lock_losses=6 zero_runs=0 zeros=2004418 neg_fs=0
+ch=16 mismatch=7 lock_losses=6 zero_runs=0 zeros=2004422 neg_fs=0
+=== extra=[--zero-behind] log /dev/shm/inferno-probe-20261009T180555Z.log
+t=83.0 locked=16/16 mismatch=4685 zeros=35216682
+t=84.0 locked=16/16 mismatch=4685 zeros=35216682
+t=85.0 locked=16/16 mismatch=4685 zeros=35216682
+t=86.0 locked=16/16 mismatch=4717 zeros=35293466
+t=87.0 locked=16/16 mismatch=4717 zeros=35293466
+t=88.0 locked=16/16 mismatch=4717 zeros=35293466
+t=89.0 locked=16/16 mismatch=4717 zeros=35293466
+t=90.0 locked=16/16 mismatch=4717 zeros=35293466
+t=91.0 locked=16/16 mismatch=4717 zeros=35293466
+t=92.0 locked=16/16 mismatch=4717 zeros=35293466
+t=93.0 locked=16/16 mismatch=4717 zeros=35293466
+t=94.0 locked=16/16 mismatch=4717 zeros=35293466
+t=95.0 locked=16/16 mismatch=4717 zeros=35293466
+t=96.0 locked=16/16 mismatch=4717 zeros=35293466
+t=97.0 locked=16/16 mismatch=4717 zeros=35293466
+t=98.0 locked=16/16 mismatch=4717 zeros=35293466
+t=99.0 locked=16/16 mismatch=4717 zeros=35293466
+t=100.0 locked=16/16 mismatch=4717 zeros=35293466
+XRUN-TEST begin t_us=85252862 hold_ms=100
+XRUN-TEST end held_us=100005
+SUMMARY seconds=100.00 cap_frames=4799942 play_frames=4800065 cap_rate=47999.397 play_rate=48000.627 cap_recovers=0 play_recovers=0 thread_changes=0 revents=1 mlock=0 free_run=0 cap_resyncs=0 cap_lost=0 play_resyncs=0 play_lost=0 hold_forward=1 unwritten=4800 zero_behind=1 zeroed=4799937
+     16 t_us=85275183
+MISMATCH ch=1 t_us=85275183 prev=f0b266 got=000000 expected=43b32f low=00
+ch=1 mismatch=3 lock_losses=1 zero_runs=1 zeros=252745 neg_fs=0
+ch=2 mismatch=3 lock_losses=1 zero_runs=1 zeros=886689 neg_fs=0
+ch=3 mismatch=1482 lock_losses=1 zero_runs=1 zeros=1516235 neg_fs=0
+ch=4 mismatch=3 lock_losses=1 zero_runs=1 zeros=2150981 neg_fs=1
+ch=5 mismatch=3 lock_losses=1 zero_runs=1 zeros=2782644 neg_fs=0
+ch=6 mismatch=3 lock_losses=1 zero_runs=1 zeros=3271456 neg_fs=0
+ch=7 mismatch=3 lock_losses=1 zero_runs=1 zeros=3271456 neg_fs=0
+ch=8 mismatch=3 lock_losses=1 zero_runs=1 zeros=3271456 neg_fs=0
+ch=9 mismatch=3 lock_losses=1 zero_runs=1 zeros=3271456 neg_fs=0
+ch=10 mismatch=3 lock_losses=1 zero_runs=1 zeros=3271460 neg_fs=0
+ch=11 mismatch=3193 lock_losses=1 zero_runs=1 zeros=3265084 neg_fs=0
+ch=12 mismatch=3 lock_losses=1 zero_runs=1 zeros=3271464 neg_fs=0
+ch=13 mismatch=3 lock_losses=1 zero_runs=1 zeros=1519193 neg_fs=0
+ch=14 mismatch=3 lock_losses=1 zero_runs=1 zeros=1519197 neg_fs=0
+ch=15 mismatch=3 lock_losses=1 zero_runs=1 zeros=1519201 neg_fs=0
+ch=16 mismatch=3 lock_losses=1 zero_runs=1 zeros=252749 neg_fs=1
+
+[exited with code 0]

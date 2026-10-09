@@ -1,6 +1,6 @@
 # Dante endpoint owner: design
 
-Status 2026-10-09: design, with steps 1 and 2 passed; the owner itself is not
+Status 2026-10-09: design, with steps 1 to 3 passed; the owner itself is not
 written. The operator accepted the plugin patch and running as root by hand
 (questions 1 and 4). It is the plan for item 3 of the owed list in
 [RESULTS.md](RESULTS.md) and replaces stage 4 of [PLAN.md](PLAN.md): the
@@ -303,6 +303,10 @@ sequence.
    stops writing while still forwarding. Check: with the rule the loop
    returns zeros through the hold; without it the pattern's old lap comes
    back, which confirms reading 4 or retracts it.
+   *PASSED 2026-10-09 18:04-18:08 UTC (RESULTS.md): unwritten frames came back as
+   the old lap repeating every 1,024 frames and no zeros; with the rule, exactly
+   the hold's length of zeros and the pattern intact otherwise. Reading 4 is now
+   measured.*
 4. **The owner, network half only** (`--no-usb`): start order above, silence
    out, capture discarded. Check: an hour as root with routes up, zero
    `NETRESYNC`, no thread change, Controller shows the device and the

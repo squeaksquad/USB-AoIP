@@ -64,19 +64,18 @@ now has its design, `work/dante-mode/OWNER_DESIGN.md`: read it whole before
 touching the owner, and RESULTS.md's last section for what it rests on. Two
 readings changed the picture: an ioplug only xruns when the plugin's pointer
 says so, and the transmit thread sends whatever the mmap buffer holds, so a
-late write is an echo of the previous lap, not zeros. On the Pi and not yet
-run: the probe with `--free-run` (abeda2c0), and the patched plugin 55dee5d8
-in `plugins/xrun-option/` (stock ca99efd7 in `plugins/stock/` and still in
-`inferno/target/release`). With Statime up, unprivileged over ssh:
-
-- step 1: `~/usb-16x16-work/dante-mode/probe/run-probe.sh --seconds 10 --free-run --xrun-at 1 --xrun-ms 100`
-  (expect one `NETRESYNC` per direction, no `FREERUN-FAILED`, thread ids unchanged);
-- step 2: the same with `INFERNO_CONFIG=~/usb-16x16-work/dante-mode/config/asound-inferno-freerun.conf
-  INFERNO_PLUGIN_DIR=~/usb-16x16-work/dante-mode/plugins/xrun-option`, `--seconds 180 --xrun-at 120`,
-  loop routes up (expect the pattern locked again in milliseconds, not 5.7 s).
-
-The design's four open questions (the patch, silence with no host, no muting
-on a lost source, root) are unanswered.
+late write is an echo of the previous lap, not zeros. Steps 1 to 3 of
+the design PASSED the same day (17:58-18:08 UTC, RESULTS.md's last three
+sections): the free-run resync on the stock and the patched plugin (a 100 ms
+stall cost about 21 ms beyond itself against 5.7 s), and the stale-lap
+reading confirmed with the zero-behind rule as its fix. The operator accepted
+the patch and running as root by hand. On the Pi: probe 381f348c
+(`--free-run`, `--hold-forward`, `--zero-behind`), patched plugin 55dee5d8 in
+`plugins/xrun-option/` (select with `INFERNO_PLUGIN_DIR` and
+`INFERNO_CONFIG=.../config/asound-inferno-freerun.conf`), stock ca99efd7
+still in `inferno/target/release`. **Next is step 4: write
+`work/dante-mode/owner/` (network half first, `--no-usb`).** The resync must
+forward a margin past the deficit (the clock moved 4 to 5 frames in between).
 
 **Owed, in order.**
 

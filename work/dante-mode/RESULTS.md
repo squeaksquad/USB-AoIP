@@ -997,3 +997,32 @@ Metric Halo loop). Evidence `outputs/latency/dante-20261009T175928Z/`
   loop's figure, not the subscription's alone, and `RUST_LOG` was `warn`.
 - Step 1's first seconds show the cost of the flows arriving: wakes rose from
   2,450 to 13,000 a second at 6 s, as on 2026-10-09.
+
+## Owner design step 3: unwritten frames go out as the old lap; zero-behind fixes it (2026-10-09 18:04-18:08 UTC)
+
+Same conditions as steps 1 and 2, stock plugin ca99efd7, two 100 s runs. The
+probe gained `--hold-forward` (during the hold the capture is still read and
+the playback pointer still advances, but nothing is written: 4,800 frames
+committed unwritten) and `--zero-behind` (on every wake the playback buffer
+is cleared up to 256 frames behind the clock). Probe binary 381f348c, source
+2e0bcfb1, staged; the previous binary kept as `inferno-probe-abeda2c0`.
+Evidence `outputs/latency/dante-20261009T175928Z/step3-stale-audio-summary.txt`.
+
+| 100 ms unwritten at 85 s | without `--zero-behind` | with `--zero-behind` |
+|---|---|---|
+| Zero samples returned across the hold (16 channels) | 0 | 76,784, which is 16 x 4,799 |
+| Lock losses per channel | 6 | 1 |
+| Zero runs per channel | 0 | 1 |
+| Mismatch events | on all channels every 21.333 ms (1,024 frames), the same wrong sample each time | one, the first zero |
+| Rest of the run | locked, no further mismatch | locked, no further mismatch |
+
+- Reading 4 of the design is confirmed by measurement: frames the application
+  does not write are transmitted as the previous lap of the buffer, lap after
+  lap, at full level. Through an `alsaloop` or any owner that stalls with
+  audio in its buffer this is a 21 ms repeat, not a dropout.
+- With the buffer cleared behind the clock the same hold returns exactly the
+  hold's length of zeros and nothing else. The 256-frame guard did not touch
+  live audio: 4,799,937 frames were cleared in 100 s and the pattern matched
+  on every channel outside the hold.
+- Neither run recovered, resynchronised or changed a thread; the pointer was
+  never behind, so the plugin had nothing to report.

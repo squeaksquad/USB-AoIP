@@ -11859,3 +11859,15 @@ recovery. One hold per run. The operator accepted carrying the patch and
 running the owner as root by hand. Record: `work/dante-mode/RESULTS.md`, last
 section; evidence `outputs/latency/dante-20261009T175928Z/`. Next is design
 step 3 (the stale-audio check) and then the owner's network half.
+
+**MEASURED 2026-10-09 18:04-18:08 UTC: playback frames the application does
+not write are transmitted as the previous lap of the buffer (owner design
+step 3).** Stock plugin, probe with 100 ms committed unwritten at 85 s: the
+loop returned no zeros and a discontinuity on every channel every 1,024
+frames (21.333 ms), the same wrong sample each time. With the buffer cleared
+behind the clock less a 256-frame guard, the same hold returned 16 x 4,799
+zeros, one lock loss per channel, and the pattern intact for the rest of the
+run. This corrects the 2026-10-08 reading "missing samples are sent as zeros"
+by measurement and makes the zero-behind rule a requirement of the owner.
+Record and evidence as the previous entry. Design steps 1 to 3 are passed;
+step 4 is the owner's network half, not yet written.

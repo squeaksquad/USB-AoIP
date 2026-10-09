@@ -50,7 +50,7 @@ struct options {
     const char *pcm;
     unsigned channels, rate, seconds, linger;
     snd_pcm_uframes_t period, buffer, lead;
-    int use_capture, use_playback, use_revents, do_mlock, free_run;
+    int use_capture, use_playback, use_revents, do_mlock, free_run, hold_forward, zero_behind;
     unsigned xrun_at, xrun_ms;
     const char *dump;
 };
@@ -254,10 +254,16 @@ static void verify(const int32_t *src, snd_pcm_uframes_t frames, unsigned channe
 static void usage(void) {
     puts("inferno-probe [--pcm NAME] [--channels 16] [--period 64] [--buffer 1024] [--lead FRAMES]\n"
          "              [--seconds 30] [--no-capture] [--no-playback] [--no-revents] [--mlock] [--free-run]\n"
+         "              [--hold-forward] [--zero-behind]\n"
          "              [--xrun-at SECONDS] [--xrun-ms 100] [--linger 12] [--dump FILE]\n"
          "  --no-revents  poll without snd_pcm_poll_descriptors_revents, as the bridge does today\n"
          "  --mlock       mlockall(MCL_CURRENT|MCL_FUTURE) before opening, as the bridge runs\n"
          "  --xrun-at     stop servicing both streams once, then time the recovery\n"
+         "  --hold-forward  during the --xrun-at hold keep servicing capture and keep the playback\n"
+         "                pointer moving, but write nothing: shows what the transmitter sends\n"
+         "                for frames the application never wrote\n"
+         "  --zero-behind clear the playback buffer behind the clock (less a 256-frame guard) on\n"
+         "                every wake, so that only the lead ever holds audio\n"
          "  --free-run    never prepare after the first start: when avail exceeds the buffer,\n"
          "                forward the application pointer past the loss and carry on\n"
          "  --linger      seconds to wait after close before the last thread inventory");
@@ -266,7 +272,7 @@ static void usage(void) {
 int main(int argc, char **argv) {
     struct options o = {.pcm = "inferno", .channels = 16, .rate = 48000, .seconds = 30, .linger = 12,
                         .period = 64, .buffer = 1024, .lead = 0, .use_capture = 1, .use_playback = 1,
-                        .use_revents = 1, .do_mlock = 0, .free_run = 0, .xrun_at = 0, .xrun_ms = 100, .dump = NULL};
+                        .use_revents = 1, .do_mlock = 0, .free_run = 0, .hold_forward = 0, .zero_behind = 0, .xrun_at = 0, .xrun_ms = 100, .dump = NULL};
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         const char *n = i + 1 < argc ? argv[i + 1] : NULL;
@@ -285,6 +291,8 @@ int main(int argc, char **argv) {
         else if (!strcmp(a, "--no-revents")) o.use_revents = 0;
         else if (!strcmp(a, "--mlock")) o.do_mlock = 1;
         else if (!strcmp(a, "--free-run")) o.free_run = 1;
+        else if (!strcmp(a, "--hold-forward")) o.hold_forward = 1;
+        else if (!strcmp(a, "--zero-behind")) o.zero_behind = 1;
         else { usage(); return 2; }
     }
     if (o.channels == 0 || o.channels > MAX_CH) { usage(); return 2; }
@@ -323,6 +331,9 @@ int main(int argc, char **argv) {
     int64_t max_gap = 0, xrun_from = 0, xrun_until = 0;
     uint64_t wakes = 0, spins = 0, cap_frames = 0, play_frames = 0, cap_err = 0, play_err = 0;
     uint64_t tot_cap = 0, tot_play = 0, tot_cap_err = 0, tot_play_err = 0, thread_changes = 0;
+    uint64_t zeroed_frames = 0, unwritten_frames = 0;
+    snd_pcm_uframes_t zb_pos = 0;
+    int zb_have = 0;
     uint64_t cap_resyncs = 0, play_resyncs = 0, cap_lost = 0, play_lost = 0;
     snd_pcm_sframes_t cap_avail_min = 0, cap_avail_max = 0, play_delay_min = 0, play_delay_max = 0;
     int have_stats = 0, xrun_done = 0;
@@ -352,7 +363,7 @@ int main(int argc, char **argv) {
             xrun_until = 0;
             printf("XRUN-TEST end held_us=%" PRId64 "\n", t - xrun_from);
         }
-        if (holding) continue;
+        if (holding && !o.hold_forward) continue;
 
         if (cap) {
             snd_pcm_sframes_t avail = snd_pcm_avail_update(cap);
@@ -445,6 +456,26 @@ int main(int argc, char **argv) {
                     if (!have_stats || delay < play_delay_min) play_delay_min = delay;
                     if (!have_stats || delay > play_delay_max) play_delay_max = delay;
                 }
+                if (o.zero_behind && avail > 0) {
+                    // Everything older than the clock less a guard is cleared, so the only audio
+                    // in the ring is the guard and the lead. The buffer is one interleaved block.
+                    const snd_pcm_channel_area_t *areas;
+                    snd_pcm_uframes_t off, frames = 1;
+                    if (snd_pcm_mmap_begin(play, &areas, &off, &frames) == 0) {
+                        const snd_pcm_uframes_t guard = 256;
+                        size_t stride = areas[0].step / 8;
+                        char *base = (char *)areas[0].addr + areas[0].first / 8;
+                        snd_pcm_uframes_t hw_off = (off + (snd_pcm_uframes_t)avail) % play_buffer;
+                        snd_pcm_uframes_t target = (hw_off + play_buffer - guard) % play_buffer;
+                        if (!zb_have) { zb_pos = target; zb_have = 1; }
+                        snd_pcm_uframes_t n = (target + play_buffer - zb_pos) % play_buffer;
+                        if (n > play_buffer / 2) n = 0;   // a resync moved the clock; start again from here
+                        for (snd_pcm_uframes_t k = 0; k < n; k++)
+                            memset(base + ((zb_pos + k) % play_buffer) * stride, 0, stride);
+                        zeroed_frames += n;
+                        zb_pos = target;
+                    }
+                }
                 snd_pcm_sframes_t want = (snd_pcm_sframes_t)o.lead - queued;
                 if (want > avail) want = avail;
                 while (want > 0) {
@@ -452,7 +483,8 @@ int main(int argc, char **argv) {
                     snd_pcm_uframes_t off, frames = (snd_pcm_uframes_t)want;
                     if (snd_pcm_mmap_begin(play, &areas, &off, &frames) < 0 || frames == 0) break;
                     int32_t *p = (int32_t *)((char *)areas[0].addr + (areas[0].first / 8) + off * (areas[0].step / 8));
-                    fill(p, frames, o.channels, 0);
+                    if (holding) unwritten_frames += frames;   // --hold-forward: commit without writing
+                    else fill(p, frames, o.channels, 0);
                     snd_pcm_sframes_t done = snd_pcm_mmap_commit(play, off, frames);
                     if (done <= 0) break;
                     play_frames += (uint64_t)done;
@@ -510,10 +542,12 @@ int main(int argc, char **argv) {
     }
     printf("SUMMARY seconds=%.2f cap_frames=%" PRIu64 " play_frames=%" PRIu64 " cap_rate=%.3f play_rate=%.3f "
            "cap_recovers=%" PRIu64 " play_recovers=%" PRIu64 " thread_changes=%" PRIu64 " revents=%d mlock=%d "
-           "free_run=%d cap_resyncs=%" PRIu64 " cap_lost=%" PRIu64 " play_resyncs=%" PRIu64 " play_lost=%" PRIu64 "\n",
+           "free_run=%d cap_resyncs=%" PRIu64 " cap_lost=%" PRIu64 " play_resyncs=%" PRIu64 " play_lost=%" PRIu64
+           " hold_forward=%d unwritten=%" PRIu64 " zero_behind=%d zeroed=%" PRIu64 "\n",
            elapsed, tot_cap, tot_play, elapsed > 0 ? (double)tot_cap / elapsed : 0,
            elapsed > 0 ? (double)tot_play / elapsed : 0, tot_cap_err, tot_play_err, thread_changes, o.use_revents,
-           o.do_mlock, o.free_run, cap_resyncs, cap_lost, play_resyncs, play_lost);
+           o.do_mlock, o.free_run, cap_resyncs, cap_lost, play_resyncs, play_lost, o.hold_forward, unwritten_frames,
+           o.zero_behind, zeroed_frames);
 
     thread_inventory("before-close", 1);
     if (play) { int64_t t = now_us(); snd_pcm_drop(play); snd_pcm_close(play); printf("CLOSE dir=playback us=%" PRId64 "\n", now_us() - t); }
