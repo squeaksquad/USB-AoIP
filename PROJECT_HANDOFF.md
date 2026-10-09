@@ -11699,3 +11699,122 @@ reports service 1.4.0, tonight's receipts carry applier 1.3.0). The STAGED
 lead-in. Still owed: one real press of Shut down with playback stopped, then
 the receipt under `~/usb-16x16-work/web-apply/receipts/` and the journal
 order (AES67 stop before poweroff) once PoE brings the Pi back.
+
+**DONE 2026-10-08 / 09: Dante mode (Inferno) stage 2, and a USB-to-Dante
+prototype that reads level with the AES67 record.** One session, 2026-10-08
+evening EDT, 01:30 to 04:50 UTC on 2026-10-09. The full record, with every
+figure's conditions, is `work/dante-mode/RESULTS.md`; the plan with its two
+added gates and stage 3a is `work/dante-mode/PLAN.md`; pins and hashes are
+`work/dante-mode/SOURCES.lock`. This entry is the index and the state at close.
+Nothing was installed as a service and no protected USB artifact was touched.
+
+*Sources and builds.* Inferno `dev` 9767558e (v0.5.4-13) and the Statime fork
+`teodly/statime` `inferno-dev` 244f20a5, both read on the Mac and then built on
+the Pi with the AES67 service stopped (`build-candidate.sh`, `cargo build
+--release --locked -j2`, rustc 1.99.0): `statime` e1952224,
+`libasound_module_pcm_inferno.so` ca99efd7. Staged, with the sources, in
+`~/usb-16x16-work/dante-mode/` (945 MB). Root changes made by the operator for
+this: `apt install libasound2-dev` (1.2.14-1+rpt1). Rust is a `rustup` install
+in his home (`~/.cargo`, `~/.rustup`), no root.
+
+*Stage 2 gates, by `probe/inferno-probe.c` (the bridge's ALSA call set against
+the plugin, no USB).* (1) Contract: works at periods 32 and 64, buffers 1024
+and 2048; period 48 is silently raised to 64. Three things an owner must
+handle: the poll descriptor needs `snd_pcm_poll_descriptors_revents` (the
+bridge's loop would spin at 1.0 M wakes/s), capture overruns are not reported
+(`avail` read 4,833 on a 1,024 buffer), and unrouted or freshly allocated
+capture buffers are not silence. (2) Bit transparency: PASS with
+`TX_SOURCE_BIT_DEPTH=24`, 30 minutes, sixteen channels, about 936 million
+samples equal to what was sent outside two holes the probe made itself, both
+full-scale codes included, through the Ferrofish and the Metric Halo MADI loop
+(`outputs/latency/dante-20261009T022729Z/`). The default 32 dithers and was
+not run. (3) Threads: created in `hw_params`, replaced at every `prepare`,
+none while running or on route changes, so the endpoint belongs in a separate
+long-lived owner process and stage 4's single-process attempt is dropped.
+
+*The number that shapes the design.* With audio flowing, one playback xrun
+cost 5.66 s and 5.74 s of returned audio (two instances): `prepare` tears down
+the transmitter and the Ferrofish has to request its flows again. The owner
+must never re-prepare the Inferno PCM in steady state.
+
+*Statime.* With `config/statime-first-run.toml` (software timestamps,
+`hardware-clock = "none"`, overlay on `CLOCK_MONOTONIC_RAW`) it writes no
+system or hardware clock. It binds the PTP ports the RAVENNA stack uses, so
+the two never run together; on 2026-10-09 they overlapped for about a minute
+at 03:39 UTC by mistake, without visible effect. `eth0` has a PHC but offers
+receive filters `none` and `all` only; hardware timestamps are untried.
+`systemd-timesyncd` is active and was left alone. PTP lock was never shown
+directly, only a steady 13 ppm rate offset.
+
+*USB to Dante, prototype.* `run-alsaloop-prototype.sh` joins the gadget to the
+Inferno device with one `alsaloop` process (a thread per direction; on one
+thread it spins and the return stops). Run as root by the operator with
+Statime in a second terminal. RTL Utility, channel 1 to 1:
+
+| `alsaloop` per direction | Inferno latencies | Sync | Buffer | RTL |
+|---|---|---|---|---|
+| 20 ms | 10 ms | resample | 224 | 3,517 samples, 73.271 ms |
+| 5 ms | 10 ms | resample | 32 | 1,697, 35.354 ms |
+| 5 ms | 2 ms | resample | 32 | 946, 19.708 ms |
+| 5 ms | 2 ms | pitch controls, no resampler | 32 | 884, 18.417 ms |
+
+The last row, `SYNC=pitch`, steers the gadget's `Capture Pitch` / `Playback
+Pitch` controls the way the bridge's servo does. On it, with
+`measure-candidate.sh` (the Dante counterpart of `measure-under-service.sh`):
+noise probe at 32 frames 0.0 % zeros; four loaded 800-impulse runs at 32
+frames all 705 samples, 14.688 ms, spread 0 (one start, 04:08 UTC); 600 s
+sixteen-channel soak at 32 frames PASS, longest zero run 1, no discontinuity
+(second start, 04:30 UTC); no xrun or transmit-lag line on the Pi in any of
+it. Evidence `outputs/latency/dante-pitch-*`. For scale, the AES67 record is
+703 harness / 891 RTL (18.563 ms). **Not ACCEPTED and not an operating
+point:** the two halves of the battery are on different starts, RTL 884
+against harness 705 does not fit the plus-188 rule (696 expected) and no
+harness run was taken on the RTL start, bit transparency through `alsaloop`
+in pitch mode is unmeasured, `alsaloop` runs at SCHED_RR 99 and the Inferno
+control threads inherit it, and nothing survives a reboot or a closed DAW.
+
+*Controller.* The device appears as `USB-16x16-Inferno` (Dante names take no
+spaces; `DEVICE_ID` 5553423136783136). Routing as left by the operator: Pi
+`RX 1-16` from Ferrofish `Output 49-64`, Pi `TX 1-16` to Ferrofish
+`Input 49-64`, with the return running through the Metric Halo over MADI
+(MIOConsole3d had to route its MADI receive channels back out; the exact
+routing was not written down). After each endpoint start the Pi's receive
+subscriptions resolve slowly and Controller showed some as "Unresolved" until
+told to reload device information. PLAN stage 3a is the plan for both.
+
+**DECIDED 2026-10-09 ~04:05 UTC by the operator: Dante is the development
+line; the AES67 service is not being started again unless a hard block
+appears.** Consequences that a fresh session must not trip over:
+`usb16x16-aes67.service` has been stopped since 03:40 UTC but is still
+**enabled**, so a reboot of the Pi starts the AES67 stack, without Statime,
+against Ferrofish and Metric Halo routing that now serves the Dante loop (the
+Ferrofish's `Input 49-64` are subscribed to the Inferno transmit channels, not
+to the two AES67 flows): expect a silent return and a host-absent or RECOVER
+picture that is not a fault. Disabling the unit is a root change and was not
+made. Everything in the handoff above this entry about the point of record
+(bridge 7e8f1064, profile, figures) is the AES67 path and is unchanged as a
+rollback: start the service and re-subscribe the Ferrofish to the two flows.
+
+*State at close, 04:47 UTC.* Pi up 3 h 57 m (booted about 00:50 UTC).
+`usb-16x16.service` active and the gadget `configured`; `usb16x16-aes67`
+inactive; web, governor, avahi and timesyncd active. Statime (pid 30765, root,
+the operator's terminal) and the 04:29:59 prototype run were still up; that
+run ends on its 1,200 s timer at 04:49:59 and `alsaloop` puts the pitch
+controls back to 1000000 itself (the wrapper does it again). The Mac needed
+`sudo killall coreaudiod` once tonight before `USB 16x16` appeared in
+CoreAudio. Staged on the Pi and matching the repo: `run-alsaloop-prototype.sh`
+0899dca8, `probe/inferno-probe` 0ccef1e8, `probe/run-probe.sh` c4b79d46,
+`config/asound-inferno.conf` df821620, `asound-inferno-loop.conf` 2f0e3941,
+`statime-first-run.toml` 11b055df. Probe logs on the Pi's tmpfs
+(`/dev/shm/inferno-probe-*`, `dante-alsaloop-*`) do not survive a reboot; the
+30-minute bit-transparency log is copied.
+
+*Owed, in the order I would take them.* (1) Whether the level is a per-start
+draw on this transport: harness and RTL on the same start, over three starts.
+(2) PLAN stage 3a, the subscription baseline first. (3) The endpoint owner
+process, which is the real stage 4: long-lived, never re-prepares, clears its
+capture buffer, handles the three contract differences, and takes the pitch
+servo from the bridge. (4) Bit transparency end to end from the Mac through
+whatever replaces `alsaloop`. (5) PTP lock evidence (Statime at `info`),
+timesyncd on and off, and hardware timestamps as their own experiment.
+(6) Persistence: Controller restart, Ethernet reconnect, cold boot, Mac sleep.

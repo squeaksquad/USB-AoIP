@@ -91,7 +91,7 @@ The 2026-09-02-evening section onward uses bold lead-ins instead of headings.
 List those with:
 
 ```bash
-grep -n '^\*\*\(MEASURED\|ACCEPTED\|INSTALLED\|FOUND\|ROOT CAUSE\|CORRECTION\|DEFERRED\|SOAKED\|IMPLEMENTED\|STAGED\|DONE\)' PROJECT_HANDOFF.md
+grep -n '^\*\*\(MEASURED\|ACCEPTED\|INSTALLED\|FOUND\|ROOT CAUSE\|CORRECTION\|DEFERRED\|SOAKED\|IMPLEMENTED\|STAGED\|DONE\|DECIDED\)' PROJECT_HANDOFF.md
 ```
 
 Section map, in file order, with what each is for:
@@ -106,11 +106,14 @@ Section map, in file order, with what each is for:
 | 2026-08-31 sessions | Phase 1 and 2 results, self-loop boundary, Ferrofish return path. | Historical. |
 | 2026-09-01 session results | Stopgap operating point, scheduler latency, switch QoS, the ~4 min restart dead time, harness defects, tooling table, withdrawn claims. | Historical; the tooling table is still accurate. |
 | 2026-09-02 evening onward (one long section) | Crackle root cause and full-scale wrap fix; pitch servo; split servo; aligned start; aligned TX trigger and prime; the `servo-aligned*` profile lineage and each acceptance; the RTL-at-32 standard; USB drops at small IO sizes and `req_number`; the 41-sample holes. | Current. Read from the tail backwards to the last ACCEPTED. |
+| 2026-10-08 / 09 Dante entries (`DONE`, `DECIDED`, at the tail) | Inferno stage 2, the `alsaloop` prototype's figures, the decision to develop Dante and leave the AES67 service stopped, state at close. | Current. Start here; the detail is in `work/dante-mode/RESULTS.md`. |
 | Next-session checklist, Clean manual shutdown, Rollback rules | Operating rules. | Binding; the checklist's item 5 is stale, later items are patched in place. |
 
 Fastest orientation on a new session: read the Rollback rules, then the last
 ACCEPTED entry and everything after it, then the `aes67.conf` comment block for
-the profile in `PROFILE=`.
+the profile in `PROFILE=`. Since 2026-10-09 the work is the Dante path: read the
+tail's `DONE` and `DECIDED` entries and `work/NEXT_SESSION_PROMPT.md` first; the
+AES67 material is the rollback.
 
 ## `outputs/latency/` naming
 

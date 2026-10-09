@@ -1,6 +1,79 @@
 # Next-session pickup prompt
 
-## Current pickup — 2026-09-15: user-immersive-one-sub (7.1.4) live from the page; shutdown set installed, its press owed
+## Current pickup — 2026-10-09: Dante (Inferno) is the development line; the alsaloop prototype reads level with AES67
+
+Read the handoff's last two entries (`DONE 2026-10-08 / 09` and `DECIDED
+2026-10-09`), then `work/dante-mode/RESULTS.md` from "Stage 2 gates after the
+first night" to its end, then `work/dante-mode/PLAN.md` stage 3a. The sections
+below this one describe the AES67 service; they are the rollback, not the
+work.
+
+**Do not be misled by the Pi's state.** `usb16x16-aes67.service` is stopped on
+purpose and stays stopped. It is still enabled, so if the Pi has rebooted it
+will be running against routing that no longer feeds it: a silent return and
+host-absent cycling there are expected, not a fault to chase. Check uptime
+first. The operator has given standing permission for `sudo systemctl start`
+and `stop` of that one unit; every other root command on the Pi still needs
+his go, and Statime and the prototype are root processes he starts in his own
+terminals.
+
+**What exists.** On the Pi under `~/usb-16x16-work/dante-mode/`: the Statime
+fork and the Inferno ALSA plugin, built; the probe; the prototype wrapper;
+configs. In the repo under `work/dante-mode/`: the same scripts,
+`measure-candidate.sh` for the Mac harness (impulse runs, `noise`, `soak`),
+`SOURCES.lock`, `RESULTS.md`, `PLAN.md`. Nothing is a service and nothing
+starts at boot.
+
+**How to bring the Dante path up** (the operator runs the two sudo lines):
+
+1. `sudo systemctl stop usb16x16-aes67` if it is active. Never with Statime
+   already running: they use the same PTP ports.
+2. Terminal 1: `sudo ~/usb-16x16-work/dante-mode/statime/target/release/statime -c ~/usb-16x16-work/dante-mode/config/statime-first-run.toml`.
+   Its repeating `got DelayReq, master operation not implemented` warning is
+   noise.
+3. Terminal 2: `sudo SYNC=pitch ~/usb-16x16-work/dante-mode/run-alsaloop-prototype.sh 3600 5000 2000000`
+   (seconds, `alsaloop` microseconds per direction, Inferno latency in ns).
+4. In Dante Controller the device is `USB-16x16-Inferno`. If the Pi's receive
+   cells stay orange, reload device information before concluding anything.
+5. If `USB 16x16` is missing from the Mac's audio devices although USB shows
+   it, `sudo killall coreaudiod` on the Mac.
+
+**Figures to hold on to** (all from one night, prototype, conditions in
+RESULTS.md): RTL at 32 frames 884 samples, 18.417 ms; harness 705 samples,
+four loaded 800-impulse runs, spread 0; 600 s sixteen-channel soak PASS; noise
+probe clean. AES67 record for scale: 703 / 891 (18.563 ms). Bit transparency
+of the Inferno endpoint itself passed over 30 minutes with
+`TX_SOURCE_BIT_DEPTH=24`. An xrun with audio flowing costs about 5.7 s.
+
+**Rules the night produced.**
+
+- One process per Inferno device: stop the prototype before running the probe
+  and the reverse.
+- Never design a recovery that re-prepares the Inferno PCM; it is a
+  six-second dropout.
+- The harness and RTL Utility never share the device; ask for RTL to be
+  closed before `measure-candidate.sh`.
+- `dns-sd` browsing from the Mac is not a stand-in for what Controller sees.
+- Background measurement commands piped through `grep` show nothing until
+  they end; do not read silence as a hang.
+- A `sudo` over ssh from Claude Code was blocked once by the permission layer
+  and passed later; if it is blocked, hand him the command.
+
+**Owed, in order.**
+
+1. Per-start level: harness and RTL on the same start, three starts.
+2. PLAN stage 3a step 1: the subscription-resolution baseline with the probe
+   at `RUST_LOG=debug`, three cold starts, and what Controller shows unprompted.
+3. The endpoint owner process (design first): long-lived, never re-prepares,
+   clears its capture buffer, calls the poll revents function, detects capture
+   overruns itself, carries the bridge's pitch servo, opens Inferno before USB.
+4. Bit transparency from the Mac through that owner.
+5. PTP lock evidence, timesyncd on and off, hardware timestamps separately.
+6. Persistence: Controller restart, Ethernet reconnect, cold boot, Mac sleep.
+7. Decide what the Pi does at boot: the AES67 unit is enabled and the Dante
+   stack is hand-started.
+
+## Earlier pickup (AES67 service, now the rollback) — 2026-09-15: user-immersive-one-sub (7.1.4) live from the page; shutdown set installed, its press owed
 
 Read the handoff from `ACCEPTED 2026-09-14` to the tail (the fan curve, the
 STAGED shutdown entry and its CORRECTION, the 01:46 UTC install and the page
