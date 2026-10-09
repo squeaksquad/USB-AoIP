@@ -264,11 +264,31 @@ Both readings point the same way as the source: first runs on software
 timestamps with `hardware-clock = "none"`, hardware timestamps later as their
 own experiment.
 
+### Toolchain check on the Pi, 2026-10-08 / 09 (read-only over ssh)
+
+- Debian 13 (trixie), aarch64, 22 GB free on the root filesystem.
+- First check: no `rustc`, `cargo` or `rustup` on the path, no `~/.cargo`, no
+  Debian `rustc` or `cargo` package, and no `libasound2-dev`.
+- The operator then installed `libasound2-dev` 1.2.14-1+rpt1 (dpkg log
+  2026-10-08 21:30:39 EDT, 2026-10-09 01:30:39 UTC). `pkg-config` 1.8.1-4 is
+  present. Re-checked afterwards: the ALSA headers are there, Rust is still
+  absent (`~/.cargo/bin` included), and so are `clang` and `libclang-dev`.
+  Whether the `alsa-sys-all` bindings need libclang at build time was not
+  checked.
+- The Mac has no Rust toolchain either, so nothing can be built anywhere yet.
+- Service state at the time, for the record: `usb16x16-aes67.service` was up
+  but the USB host was absent. The supervisor's host-absent detector had been
+  cycling the bridge since the 20:00 EDT hour (episode 36 at 21:30:57 EDT,
+  about 335 RECOVER lines a minute, all `ravenna-to-usb capture-ring-full`),
+  which began before the install and before these checks. Nothing about
+  bridge stability can be read from this window, in either direction.
+
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
-2. Build both on the Pi with `--locked`, service stopped, and record toolchain
-   and artifact hashes in `SOURCES.lock`. Needs a test window.
+2. Install Rust on the Pi (still absent), then build both with `--locked`,
+   service stopped, and record toolchain and artifact hashes in
+   `SOURCES.lock`. Needs a test window.
 3. The probe, without USB: mmap, poll, `avail`, `delay`, start, prepare,
    recovery and close as the bridge uses them, at periods 32 and 64 with
    buffers 1024 and 2048, logging every clock overlay update.
