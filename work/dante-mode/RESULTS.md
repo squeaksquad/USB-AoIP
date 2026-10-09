@@ -1397,3 +1397,37 @@ same settings. The owner's transport results stand (spread 0, clean noise
 probes, the soak, the hour without an event). The size of the latency
 advantage does not, until it is read on a fresh anchor. The 3.9 ms stated in
 the entries above is withdrawn as a comparison.
+
+## PLAN 3a step 3, first patch: retry after 1 s (2026-10-09 23:30-23:34 UTC)
+
+`patches/0002-subscriber-retry-after-1s.patch` (one constant in
+`channels_subscriber.rs`, 9 s to 1 s), built by `build-patched.sh
+xrun-option-retry1 0001 0002` as a third artifact, the pinned source and the
+stock product restored and re-hashed. Three cold starts of the owner with it
+(unprivileged, 60 s each, the Mac idle), timed as the baseline was.
+
+| | Baseline (plugin 55dee5d8) | With 0002 (plugin 5c6b1c0a) |
+|---|---|---|
+| Seconds to sixteen receive channels | 69, 68, 55 | 24, 28, 29 |
+| Between rounds | 13.2 s | 5.0 to 5.2 s |
+| Rounds needed | 5 or 6 | 5 or 6 |
+| First channel | 5 to 6 s | 6 s |
+
+- The time to sixteen is cut to under half, as the constant would predict:
+  a round is now the query's own wait plus one second.
+- The number of rounds is unchanged, so the underlying fault is too: most of
+  the sixteen per-channel queries in a round still get no answer. That is the
+  next patch if this is to come down to one round (one query or one socket
+  for all channels of a device), and step 2 (avahi stopped for one start)
+  would say whether the shared port 5353 is why.
+- The first of the three starts took three `NETRESYNC` in its first eight
+  seconds (128 frames; an unprivileged run, and resolution rounds now come
+  five times as often during start-up). The other two took none. Worth
+  watching for under root before this plugin replaces 55dee5d8.
+- Not seen: Controller. `run-owner.sh` still uses `plugins/xrun-option`
+  unless `INFERNO_PLUGIN_DIR` names the new directory.
+
+```
+4fad88cf  patches/0002-subscriber-retry-after-1s.patch
+5c6b1c0a  plugins/xrun-option-retry1/libasound_module_pcm_inferno.so  (pinned + 0001 + 0002)
+```

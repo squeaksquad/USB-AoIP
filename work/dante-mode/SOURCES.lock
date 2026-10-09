@@ -40,3 +40,7 @@ inferno/target/release/libasound_module_pcm_inferno.so sha256  ca99efd703bbf1d0d
 patches/0001-alsa-plugin-xrun-report-option.patch          sha256  04c6832ef2f2276a7256e6a3c8461c8d53fec68df2d447b00fcc4e0d6b94ffbe
 plugins/stock/libasound_module_pcm_inferno.so              sha256  ca99efd703bbf1d0dbed531aefe60f5d97401050f0278bf05a8c56d933c9a570  (a copy of the pinned build)
 plugins/xrun-option/libasound_module_pcm_inferno.so        sha256  55dee5d817caecc9e51dba1f055fca2b949c5b7eb4782e30d8d64c9c36a7be53  (6,941,608 bytes; XRUN_REPORT "0" turns playback xrun reporting off, default unchanged)
+
+# Third plugin artifact, 2026-10-09 23:30 UTC, by `build-patched.sh xrun-option-retry1 0001 0002` (the script now takes a name and a patch list and checks two pinned source hashes before and after).
+patches/0002-subscriber-retry-after-1s.patch               sha256  4fad88cfb55bed80ed6c955af7eef1850b177839c858701a0185a1d020beacf4
+plugins/xrun-option-retry1/libasound_module_pcm_inferno.so sha256  5c6b1c0af184160a8b9b5b7905a42f5aca49cd80278fa1344d38eb0063af514e  (pinned + 0001 + 0002: unresolved subscriptions retried after 1 s)
