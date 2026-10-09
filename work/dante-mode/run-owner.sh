@@ -14,7 +14,8 @@ set -u
 seconds="${1:-3600}"
 [ $# -gt 0 ] && shift
 base="$(cd "$(dirname "$0")" && pwd)"
-owner="$base/owner/usb16x16-dante-owner"
+# OWNER_BIN names another build kept beside the current one (an A/B of two binaries).
+owner="$base/owner/${OWNER_BIN:-usb16x16-dante-owner}"
 plugin_dir="${INFERNO_PLUGIN_DIR:-$base/plugins/xrun-option}"
 
 refuse() { echo "REFUSED: $*"; exit 2; }

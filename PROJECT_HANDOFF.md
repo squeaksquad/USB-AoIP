@@ -11940,3 +11940,26 @@ return queue 144, Inferno 2 ms: **harness 516 (10.750 ms), RTL 704
 (14.667 ms), at 32 frames**, one start, plus the earlier start's RTL 703.
 Not ACCEPTED: three starts, the fault paths, bit transparency through the
 owner and a sixteen-channel loaded hour are owed.
+
+**FOUND 2026-10-09 22:19-23:28 UTC (unprivileged trials, operator away): two
+things about the Dante owner, one fixed, one open; and a CORRECTION to the two
+MEASURED entries above.** (1) Fixed: the return queue's periodic 37-frame
+reading was the owner reading a kernel PCM with `snd_pcm_avail_update`, whose
+mmap'd pointer only moves at period boundaries; with `snd_pcm_avail` the queue
+reads 93 to 98 in every second (owner f013b1fd). The learned clock offset is
+now kept in `state/usb16x16-dante-owner.ppm` and read at start. (2) Open: the
+harness level is steady inside an owner start (spread 0) and steps down 3 to 9
+samples at every owner start, 516 to 412 over seventeen starts, independent of
+the build, of the idle time between starts and of the two depths the owner
+sets, which read 128 and 144 to 145 throughout; a reprime inside a run moved
+it by 8. Cause not known; the USB legs and the Mac's anchor are what is left.
+**CORRECTION:** "187 to 189 samples (3.9 ms) shorter than the AES67 record"
+compared an aged anchor with a fresh one and is withdrawn as a comparison. The
+transport results stand. Also done: PLAN 3a step 1, three cold starts took 69,
+68 and 55 s to sixteen receive channels in rounds 13.2 s apart;
+`patches/0002` (retry after 1 s, not 9 s) is written and not built;
+`build-patched.sh` now takes a name and a list of patches. Record:
+`work/dante-mode/RESULTS.md`, last three sections. Owed first: three starts as
+root with the harness on each, then the same after a fresh anchor
+(`sudo systemctl restart usb-16x16.service`), to learn whether the step is the
+trials' or the transport's.

@@ -1,0 +1,16 @@
+diff --git a/inferno_aoip/src/device_server/channels_subscriber.rs b/inferno_aoip/src/device_server/channels_subscriber.rs
+index b7f4d91..9b03483 100644
+--- a/inferno_aoip/src/device_server/channels_subscriber.rs
++++ b/inferno_aoip/src/device_server/channels_subscriber.rs
+@@ -1249,7 +1249,10 @@ impl<P: ProxyToSamplesBuffer + Sync + Send + 'static, B: ChannelsBuffering<P>>
+         // received subscribe or unsubscribe command, which means that state needs to be saved
+         self.save_state();
+       }
+-      if (self.needs_resolving && last_resolving.elapsed() >= Duration::from_secs(9)) || self.resolve_now
++      // usb16x16 patch 0002: unresolved subscriptions are asked again after 1 s, not 9 s.
++      // Most of the sixteen per-channel queries of a round time out, so a start needed
++      // five or six rounds 13 s apart (55 to 69 s to sixteen channels, 2026-10-09).
++      if (self.needs_resolving && last_resolving.elapsed() >= Duration::from_secs(1)) || self.resolve_now
+       {
+         self.resolve_subscriptions().await;
+         last_resolving = Instant::now();

@@ -1,0 +1,36 @@
+##### start 1 22:35:34
+  before: START 20261009T223534Z seconds=320 owner=f013b1fd plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+   nonzero span 800..1245599 (1244800 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+during run: xrun lines +0, lag lines +0, error lines +0
+  before: START 20261009T223534Z seconds=320 owner=f013b1fd plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+median=10.167 ms (488) min=488 max=488 spread=0 score=1.000 count=400
+levels=488x400
+discontinuities in=0 out=0
+during run: xrun lines +0, lag lines +0, error lines +0
+USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=91 t=0.300
+SUMMARY seconds=320.01 exit=0 tx_frames=15360229 rx_frames=15360100 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=15359844 offset_mismatches=0 net_errors=0 last_error=0 capture=RUNNING playback=RUNNING
+USBSUMMARY usb_tx=15359615 usb_rx=15359710 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 tx_integral_ppm=-15.32 rx_integral_ppm=15.47
+##### start 2 22:41:12
+  before: START 20261009T224113Z seconds=320 owner=f013b1fd plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+   nonzero span 762..1245599 (1244838 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+during run: xrun lines +0, lag lines +0, error lines +0
+  before: START 20261009T224113Z seconds=320 owner=f013b1fd plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+median=10.104 ms (485) min=485 max=485 spread=0 score=1.000 count=400
+levels=485x400
+discontinuities in=0 out=0
+during run: xrun lines +0, lag lines +0, error lines +0
+USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=82 t=0.300
+SUMMARY seconds=320.01 exit=0 tx_frames=15360191 rx_frames=15360063 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=15359808 offset_mismatches=0 net_errors=0 last_error=0 capture=RUNNING playback=RUNNING
+USBSUMMARY usb_tx=15359577 usb_rx=15359673 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 tx_integral_ppm=-15.49 rx_integral_ppm=15.48
+##### start 3 22:46:51
+  before: START 20261009T224651Z seconds=320 owner=f013b1fd plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+   nonzero span 841..1245599 (1244759 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+during run: xrun lines +0, lag lines +0, error lines +0
+  before: START 20261009T224651Z seconds=320 owner=f013b1fd plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+median=9.938 ms (477) min=477 max=477 spread=0 score=1.000 count=400
+levels=477x400
+discontinuities in=0 out=0
+during run: xrun lines +0, lag lines +4, error lines +4
+USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=88 t=0.300
+SUMMARY seconds=320.02 exit=0 tx_frames=15360183 rx_frames=15360055 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=15359799 offset_mismatches=0 net_errors=0 last_error=0 capture=RUNNING playback=RUNNING
+USBSUMMARY usb_tx=15359569 usb_rx=15359665 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 tx_integral_ppm=-15.44 rx_integral_ppm=15.26

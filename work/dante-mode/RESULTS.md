@@ -1308,3 +1308,92 @@ kept beside it), `owner/main.cpp` a4ffb892, `owner/servo.hpp` f95a9af8,
 `run-owner.sh` e735ae37 (passes `--ppm-file`). The battery of 21:13 UTC was
 taken on 48d51783; the level on f013b1fd is expected to be the same 516 and
 has not been measured.
+
+## PLAN 3a step 1: subscription resolution baseline, three cold starts (2026-10-09 22:29-22:35 UTC)
+
+The owner (f013b1fd, unprivileged trial, the Mac idle), plugin 55dee5d8, with
+`RUST_LOG="warn,...channels_subscriber=debug,...flows_control_server=info"`,
+three starts of 100 s about 20 s apart, the sixteen saved subscriptions
+(Ferrofish `Output 49-64`). Seconds from the wrapper's start line to each
+"channel ... is receiving data (unicast)":
+
+| Start (UTC) | Channels by the second they began receiving | All sixteen |
+|---|---|---|
+| 22:29:32 | 6 s: 1, 16; 19 s: 2; 32 s: 3, 13, 14, 15; 45 s: 4; 58 s: 5; 69 s: 6-12 | 69 s |
+| 22:31:33 | 5 s: 1, 16; 18 s: 2; 31 s: 3, 13, 14, 15; 45 s: 4; 58 s: 5; 68 s: 6-12 | 68 s |
+| 22:33:33 | 5 s: 1, 15, 16; 19 s: 2, 12, 13, 14; 32 s: 3; 45 s: 4; 55 s: 5-11 | 55 s |
+
+- Resolution comes in rounds 13.2 s apart on every start, and a round brings
+  in as few as one channel. That is the retry interval read from the source
+  (9 s, `channels_subscriber.rs` 1252) plus a query's wait. One start's log
+  holds 21 `Err(IoError(Kind(TimedOut)))`, 16 `Err(Kind(NotFound))` and 16
+  successes, so most queries in a round fail and are simply asked again a
+  round later.
+- The Ferrofish's side is not the slow one: it requested the Pi's transmit
+  flows within a second of each start.
+- So for about a minute after the owner starts, part of the return is
+  silent. With a long-lived owner that is paid once per boot, as the plan
+  says; it is still the first thing a user would see after a restart.
+- Not recorded (nobody at Controller): what Controller showed without a
+  reload. `avahi-daemon` was running throughout; step 2 (the same with avahi
+  stopped) is a root change and was not made.
+- Evidence: the three logs on the Pi's tmpfs
+  (`/dev/shm/dante-owner-20261009T2229*`, `2231*`, `2233*`), not copied.
+
+## The level is a draw at each owner start, and it has only gone down (2026-10-09 22:35-23:28 UTC, unprivileged trials)
+
+Eleven `TRIAL=1` owner starts (no memory lock, no real-time priority), the
+operator away and the loop declared safe unattended. Each: start, 85 s for the
+subscriptions, then a loaded impulse run at 32 frames (0.1 on the other
+channels); the first three also a noise probe (0.0 % zeros each). Evidence
+`outputs/latency/dante-owner-{trial1,trial2,trial3,ab1..4,gap*}-*` and the
+condensed logs in `outputs/latency/dante-owner-starts-20261009/`.
+
+| Start (UTC) | Owner build | Idle before it | Impulses | Level | In-run spread |
+|---|---|---|---|---|---|
+| (21:13, root) | 48d51783 | | 3,200 | 516 | 0 |
+| 22:35 | f013b1fd | about 90 s | 400 | 488 | 0 |
+| 22:41 | f013b1fd | 18 s | 400 | 485 | 0 |
+| 22:46 | f013b1fd | 18 s | 400 | 477 | 0 |
+| 22:53 | 69d6eb60 | 60 s | 400 | 471 | 0 |
+| 22:57 | f013b1fd | 23 s | 400 | 465 | 0 |
+| 23:01 | 69d6eb60 | 23 s | 400 | 458 | 0 |
+| 23:06 | f013b1fd | 23 s | 400 | 451 | 0 |
+| 23:11 | f013b1fd | 104 s | 200 | 442 | 0 |
+| 23:15 | f013b1fd | 21 s | 200 | 435 | 0 |
+| 23:21 | f013b1fd | 121 s | 200 | 430 | 0 (after a stall and reprime at 86 s, before the run) |
+| 23:24 | f013b1fd | 20 s | 200 | 412 and 420 | 8 (a stall and an outgoing reprime during the run) |
+
+- Inside a start the level does not move: every run without a reprime in it
+  is on one sample. Between starts it steps down by 3 to 9 samples, every
+  time, 104 samples (2.2 ms) from 516 to 412 over seventeen owner starts
+  (six more, unmeasured, lie between 21:13 and 22:35).
+- It is not the build: 69d6eb60 (queue read with `avail_update`) and f013b1fd
+  (`snd_pcm_avail`) alternate on the same line. That A/B did confirm the
+  pointer fix again: 69d6eb60 read the queue high in 37 and 38 of its 175
+  seconds, f013b1fd in none.
+- It is not the idle time between starts: 20 s, 104 s and 121 s gaps gave
+  steps of 7, 9 and 5. A hypothesis that the Mac sends more than it receives
+  while the owner is stopped is refuted by that.
+- It is not the two depths the owner sets: outgoing mean 127.9 to 128.1 and
+  return mean 144.5 to 145.0 on every start.
+- A reprime inside a run moved the level by 8 samples. So a prime that lands
+  the pointer exactly `--tx-lead` ahead of the clock does not, by itself,
+  give the same round trip twice.
+- **Cause: not known.** What is left is on the USB legs: where the Mac's
+  input and output timelines sit against each other after the gadget's PCMs
+  restart (the AES67 record's "session draw at each gadget PCM restart",
+  where only a fresh `usbaudiod` anchor read a known figure), or something in
+  how the prime meets the gadget's packet phase. The steady downward
+  direction is not explained by either as stated. One root cycle earlier in
+  the day went the other way by one sample (RTL 703 at 20:32, harness 516 /
+  RTL 704 at 21:13), so whether this happens under root at all is open.
+
+**What this does to the day's headline.** 516 against the AES67 record's 703
+compares an aged anchor with a fresh one. The AES67 figure was taken under the
+rule that only a fresh anchor reads a known level; the Dante figures were not,
+and the level read here has ranged from 516 to 412 on one evening with the
+same settings. The owner's transport results stand (spread 0, clean noise
+probes, the soak, the hour without an event). The size of the latency
+advantage does not, until it is read on a fresh anchor. The 3.9 ms stated in
+the entries above is withdrawn as a comparison.

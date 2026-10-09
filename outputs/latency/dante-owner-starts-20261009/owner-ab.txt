@@ -1,0 +1,33 @@
+##### ab 1 bin=usb16x16-dante-owner-69d6eb60 22:53:23
+  before: START 20261009T225323Z seconds=235 owner=69d6eb60 plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+median=9.812 ms (471) min=471 max=471 spread=0 score=1.000 count=400
+levels=471x400
+discontinuities in=0 out=0
+during run: xrun lines +0, lag lines +0, error lines +0
+USBSUMMARY usb_tx=11279569 usb_rx=11279665 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=60 tx_integral_ppm=-15.35 rx_integral_ppm=14.27
+after 60 s: rx_mean avg 148.811 tx_mean avg 128.049 seconds rx>160: 37
+##### ab 2 bin=usb16x16-dante-owner 22:57:41
+  before: START 20261009T225741Z seconds=235 owner=f013b1fd plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+median=9.688 ms (465) min=465 max=465 spread=0 score=1.000 count=400
+levels=465x400
+discontinuities in=0 out=0
+during run: xrun lines +0, lag lines +0, error lines +0
+NETRESYNC dir=playback frames=37 t=201.302
+USBSUMMARY usb_tx=11279353 usb_rx=11277070 tx_links=2 tx_reprimes=1 rx_primes=2 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=1 detaches=0 pitch_write_errors=0 servo_rejected=0 tx_integral_ppm=-15.31 rx_integral_ppm=14.99
+after 60 s: rx_mean avg 144.51 tx_mean avg 128.108 seconds rx>160: 0
+##### ab 3 bin=usb16x16-dante-owner-69d6eb60 23:01:58
+  before: START 20261009T230159Z seconds=235 owner=69d6eb60 plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+median=9.542 ms (458) min=458 max=458 spread=0 score=1.000 count=400
+levels=458x400
+discontinuities in=0 out=0
+during run: xrun lines +0, lag lines +0, error lines +0
+USBSUMMARY usb_tx=11279473 usb_rx=11279569 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=68 tx_integral_ppm=-15.41 rx_integral_ppm=14.07
+after 60 s: rx_mean avg 148.351 tx_mean avg 127.983 seconds rx>160: 38
+##### ab 4 bin=usb16x16-dante-owner 23:06:16
+  before: START 20261009T230616Z seconds=235 owner=f013b1fd plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+median=9.396 ms (451) min=451 max=451 spread=0 score=1.000 count=400
+levels=451x400
+discontinuities in=0 out=0
+during run: xrun lines +0, lag lines +0, error lines +0
+USBSUMMARY usb_tx=11279517 usb_rx=11279613 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 tx_integral_ppm=-15.45 rx_integral_ppm=15.04
+after 60 s: rx_mean avg 144.963 tx_mean avg 127.932 seconds rx>160: 0

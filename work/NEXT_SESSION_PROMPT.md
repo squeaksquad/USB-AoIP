@@ -89,6 +89,18 @@ streams for the whole first run; (d) three starts, harness and RTL on each.
 The resync must
 forward a margin past the deficit (the clock moved 4 to 5 frames in between).
 
+**State 2026-10-09 23:30 UTC, read this before the lists above it.** Owner
+f013b1fd on the Pi (live gadget pointer, depth filter, ppm state file;
+`OWNER_BIN=` on `run-owner.sh` picks an older build kept beside it). The
+harness level steps DOWN 3 to 9 samples at every owner start (516 to 412 over
+seventeen starts on one evening), spread 0 inside a start, cause not known:
+RESULTS.md's last section. Every Dante level read so far is on an aged
+anchor, so no comparison with the AES67 record is valid yet. First job: three
+root starts with `measure-candidate.sh 32 400` on each; then a fresh anchor
+(`sudo systemctl restart usb-16x16.service`, the operator's) and three more.
+Also waiting: build `patches/0002` (`build-patched.sh xrun-option-retry1 0001
+0002`) and re-time the subscriptions; the fault-path checks; bit transparency.
+
 **Owed, in order.**
 
 1. Per-start level: harness and RTL on the same start, three starts.
