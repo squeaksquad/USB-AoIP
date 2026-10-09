@@ -11818,3 +11818,29 @@ servo from the bridge. (4) Bit transparency end to end from the Mac through
 whatever replaces `alsaloop`. (5) PTP lock evidence (Statime at `info`),
 timesyncd on and off, and hardware timestamps as their own experiment.
 (6) Persistence: Controller restart, Ethernet reconnect, cold boot, Mac sleep.
+
+**STAGED 2026-10-09 ~14:45 UTC (design and two enablers, nothing run): the
+Dante endpoint owner.** `work/dante-mode/OWNER_DESIGN.md` is the design for
+owed item 3: one long-lived process, `usb16x16-dante-owner`, its own
+executable linking the bridge core, that opens the Inferno device once and
+never prepares it again; a USB half that goes `absent` / `idle` / `priming` /
+`linked` without any call on the Inferno handles; no ring, the two depths
+held in the Inferno playback buffer and the gadget playback queue by the
+bridge's mode 2 servo; start depths set to the frame; seven steps with a
+check each. It rests on source readings made today (RESULTS.md, last
+section), two of which change earlier statements: alsa-lib 1.2.14 puts an
+ioplug in `XRUN` only when the plugin's pointer returns an error, so the
+5.7 s is the recovery's `prepare` and not the underrun; and the plugin's
+transmit thread reads its mmap buffer unconditionally, so an unwritten frame
+goes out as the previous lap's audio, not as zeros (RESULTS.md part 1
+corrected in place). Made and staged on the Pi, not run because Statime was
+down: the probe's `--free-run` (binary abeda2c0, source 06272cc8, the old
+pair kept beside it), `patches/0001` (a plugin option `XRUN_REPORT`, default
+unchanged, 04c6832e), and the patched plugin 55dee5d8 in
+`plugins/xrun-option/`, built at 14:42 UTC by `build-patched.sh` (b5cdb93e)
+with the pinned source and the stock plugin ca99efd7 restored and re-hashed.
+No root command was run; `usb16x16-aes67` stayed inactive; Pi up 13 h 53 m.
+The design's open questions are for the operator: whether carrying the patch
+is acceptable, silence toward Dante with no host, no muting on a lost source,
+and running as root by hand for now. Owed items 1 and 2 of the previous entry
+are untouched.

@@ -33,3 +33,10 @@ inferno-9767558e.tgz                                   sha256  aec0786dc1130aedc
 statime-244f20a5.tgz                                   sha256  c3f68ced68886b6b2e1c855e734ffc381a4306f72d45524d3ec6735f9f4987af
 statime/target/release/statime                         sha256  e195222403fc132f85de0e290580381488c211ff7744e4d10a1c7ff42d555800  (58,895,320 bytes, release with debuginfo)
 inferno/target/release/libasound_module_pcm_inferno.so sha256  ca99efd703bbf1d0dbed531aefe60f5d97401050f0278bf05a8c56d933c9a570  (6,940,848 bytes; links libasound.so.2, libgcc_s, libm, libc)
+
+# Patched plugin, 2026-10-09 14:42 UTC, by build-patched.sh (sha256 b5cdb93e7ade73554c63664fdffb7efe1dcc67e740a0f59fd07051bcea97fc78), usb16x16-aes67.service stopped, nothing Dante running.
+# The pinned tree plus patches/0001 only; the pinned lib.rs (sha256 903c8697d2254ff37416b3618d7135ac8b11b9095eba2d390d6e65df623106c8) and the stock product were restored and re-hashed after the build.
+#   cargo build --release --locked -j2 -p alsa_pcm_inferno   (25 s incremental, rc 0)
+patches/0001-alsa-plugin-xrun-report-option.patch          sha256  04c6832ef2f2276a7256e6a3c8461c8d53fec68df2d447b00fcc4e0d6b94ffbe
+plugins/stock/libasound_module_pcm_inferno.so              sha256  ca99efd703bbf1d0dbed531aefe60f5d97401050f0278bf05a8c56d933c9a570  (a copy of the pinned build)
+plugins/xrun-option/libasound_module_pcm_inferno.so        sha256  55dee5d817caecc9e51dba1f055fca2b949c5b7eb4782e30d8d64c9c36a7be53  (6,941,608 bytes; XRUN_REPORT "0" turns playback xrun reporting off, default unchanged)

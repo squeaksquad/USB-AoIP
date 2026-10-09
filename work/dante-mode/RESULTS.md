@@ -62,6 +62,14 @@ which stage 5 has to price.
 
 ### Transmit and receive sample path
 
+CORRECTION 2026-10-09 (source read for OWNER_DESIGN.md, not measured): the last
+bullet below is wrong for the ALSA plugin. Its buffer is an `ExternalBuffer`,
+read unconditionally (`inferno_aoip/src/ring_buffer.rs` 97-99, 393-396), so
+the zero-fill branch of `flows_tx.rs` never fires: a late write is sent as
+whatever the mmap ring holds at that timestamp, which is the audio of one
+buffer length earlier, not zeros. See "Source read for the owner design" at
+the end of this file.
+
 - The wire sample width is the receiver's choice, taken from its flow request
   (`inferno_aoip/src/device_server/flows_control_server.rs` 45, 114).
 - With the default `TX_SOURCE_BIT_DEPTH=32`, a 3-byte flow is dithered: two
@@ -879,3 +887,72 @@ Prototype restarted by the operator at 04:29:59 UTC with the same settings
 5. A thread trace across open, prepare, start, a route change, a forced xrun
    and close, to confirm the part 1 table and to settle the blocking-pool
    question.
+
+## Source read for the owner design (2026-10-09 ~14:00-14:45 UTC, no audio run)
+
+Written up in [OWNER_DESIGN.md](OWNER_DESIGN.md), which is the plan for the
+process that replaces `alsaloop`. Statime and the prototype were down
+throughout (Pi up 13 h 45 m, `usb16x16-aes67` inactive, nothing Dante
+running), so everything in this section is a reading of source or a build
+result. Nothing was run against the network.
+
+Readings, with where they come from:
+
+- alsa-lib 1.2.14 (`src/pcm/pcm_ioplug.c` 57-90, 752-765): an ioplug PCM
+  enters `XRUN` only when the plugin's `pointer` callback returns a negative
+  value. There is no stop-threshold comparison, and entering `XRUN` does not
+  call the plugin's `stop`. This explains the unreported capture overrun of
+  part 3 (the plugin's pointer never errors for capture) and means the 5.7 s
+  is the cost of the `prepare` a recovery calls, not of the underrun.
+- `alsa_pcm_inferno/src/lib.rs` 268-286: the plugin returns `-EPIPE` for a
+  playback pointer behind the clock, except in the first 100,000 frames after
+  start, where upstream already lets it run on unreported.
+- `inferno_aoip/src/ring_buffer.rs` 97-99, 393-396 with `flows_tx.rs`
+  154-173: the transmit thread reads the plugin's mmap buffer unconditionally.
+  Frames the application has not written go out as the previous lap's audio
+  (21.3 ms old at a 1024 buffer). Part 1's "sent as zeros" is corrected in
+  place above.
+- `flows_tx.rs` 147-201, 512-520: with send latency fixed at zero the thread
+  reads up to one packet (32 frames as the Ferrofish asked) ahead of the
+  clock, so that is the floor of any playback lead.
+- `flows_rx.rs` 229-230, 314-315: received samples are written at their
+  timestamp plus the receive latency.
+
+What was made, none of it run:
+
+- `probe/inferno-probe.c` gained `--free-run`: with `avail` above the buffer
+  size it forwards the application pointer past the loss and prints
+  `NETRESYNC` with a thread inventory, and it never prepares; an error from
+  `avail_update` prints `FREERUN-FAILED` once. Compiled on the Pi with
+  `gcc -O2 -Wall -Wextra`, no warnings. The previous binary and source are
+  kept beside it as `inferno-probe-0ccef1e8` and `inferno-probe-fd0c6b0d.c`.
+- `patches/0001-alsa-plugin-xrun-report-option.patch`: one config key,
+  `XRUN_REPORT`, default unchanged; `"0"` makes the playback pointer skip the
+  `-EPIPE` as the grace window does.
+- `build-patched.sh` built it on the Pi at 14:42 UTC (25 s, rc 0, the same
+  eight warnings as the stock crate) as a second artifact and put the pinned
+  source and the stock product back; both re-hashed afterwards and equal to
+  `SOURCES.lock`. `inferno/target/release` still holds ca99efd7, so the probe
+  and prototype wrappers run the stock plugin unless told otherwise.
+- `probe/run-probe.sh` takes `INFERNO_CONFIG` and `INFERNO_PLUGIN_DIR` for one
+  run and prints the plugin's hash; `config/asound-inferno-freerun.conf` is
+  the probe's device with `XRUN_REPORT "0"`.
+
+Staged on the Pi under `~/usb-16x16-work/dante-mode/` and matching the repo:
+
+```
+abeda2c0  probe/inferno-probe   (binary, Pi only)
+06272cc8  probe/inferno-probe.c
+a82bdbf1  probe/run-probe.sh
+225b2f17  config/asound-inferno-freerun.conf
+04c6832e  patches/0001-alsa-plugin-xrun-report-option.patch
+b5cdb93e  build-patched.sh
+ca99efd7  plugins/stock/libasound_module_pcm_inferno.so        (the pinned build)
+55dee5d8  plugins/xrun-option/libasound_module_pcm_inferno.so  (pinned tree + 0001; 6,941,608 bytes)
+```
+
+Owed next, in OWNER_DESIGN.md's order, each needing Statime up (root, the
+operator) and nothing else: step 1, the free-run hold inside the grace window
+on the stock plugin; step 2, the same hold at steady state on the patched
+plugin with the saved loop routes, read against the 5.7 s; step 3, the
+stale-audio check, which needs one more probe option.

@@ -50,7 +50,7 @@ struct options {
     const char *pcm;
     unsigned channels, rate, seconds, linger;
     snd_pcm_uframes_t period, buffer, lead;
-    int use_capture, use_playback, use_revents, do_mlock;
+    int use_capture, use_playback, use_revents, do_mlock, free_run;
     unsigned xrun_at, xrun_ms;
     const char *dump;
 };
@@ -253,18 +253,20 @@ static void verify(const int32_t *src, snd_pcm_uframes_t frames, unsigned channe
 
 static void usage(void) {
     puts("inferno-probe [--pcm NAME] [--channels 16] [--period 64] [--buffer 1024] [--lead FRAMES]\n"
-         "              [--seconds 30] [--no-capture] [--no-playback] [--no-revents] [--mlock]\n"
+         "              [--seconds 30] [--no-capture] [--no-playback] [--no-revents] [--mlock] [--free-run]\n"
          "              [--xrun-at SECONDS] [--xrun-ms 100] [--linger 12] [--dump FILE]\n"
          "  --no-revents  poll without snd_pcm_poll_descriptors_revents, as the bridge does today\n"
          "  --mlock       mlockall(MCL_CURRENT|MCL_FUTURE) before opening, as the bridge runs\n"
          "  --xrun-at     stop servicing both streams once, then time the recovery\n"
+         "  --free-run    never prepare after the first start: when avail exceeds the buffer,\n"
+         "                forward the application pointer past the loss and carry on\n"
          "  --linger      seconds to wait after close before the last thread inventory");
 }
 
 int main(int argc, char **argv) {
     struct options o = {.pcm = "inferno", .channels = 16, .rate = 48000, .seconds = 30, .linger = 12,
                         .period = 64, .buffer = 1024, .lead = 0, .use_capture = 1, .use_playback = 1,
-                        .use_revents = 1, .do_mlock = 0, .xrun_at = 0, .xrun_ms = 100, .dump = NULL};
+                        .use_revents = 1, .do_mlock = 0, .free_run = 0, .xrun_at = 0, .xrun_ms = 100, .dump = NULL};
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         const char *n = i + 1 < argc ? argv[i + 1] : NULL;
@@ -282,6 +284,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(a, "--no-playback")) o.use_playback = 0;
         else if (!strcmp(a, "--no-revents")) o.use_revents = 0;
         else if (!strcmp(a, "--mlock")) o.do_mlock = 1;
+        else if (!strcmp(a, "--free-run")) o.free_run = 1;
         else { usage(); return 2; }
     }
     if (o.channels == 0 || o.channels > MAX_CH) { usage(); return 2; }
@@ -320,6 +323,7 @@ int main(int argc, char **argv) {
     int64_t max_gap = 0, xrun_from = 0, xrun_until = 0;
     uint64_t wakes = 0, spins = 0, cap_frames = 0, play_frames = 0, cap_err = 0, play_err = 0;
     uint64_t tot_cap = 0, tot_play = 0, tot_cap_err = 0, tot_play_err = 0, thread_changes = 0;
+    uint64_t cap_resyncs = 0, play_resyncs = 0, cap_lost = 0, play_lost = 0;
     snd_pcm_sframes_t cap_avail_min = 0, cap_avail_max = 0, play_delay_min = 0, play_delay_max = 0;
     int have_stats = 0, xrun_done = 0;
 
@@ -352,7 +356,10 @@ int main(int argc, char **argv) {
 
         if (cap) {
             snd_pcm_sframes_t avail = snd_pcm_avail_update(cap);
-            if (avail < 0) {
+            if (avail < 0 && o.free_run) {
+                if (!cap_err++) printf("FREERUN-FAILED dir=capture code=%ld (%s) state=%s t_us=%" PRId64 "\n", (long)avail,
+                                       snd_strerror((int)avail), snd_pcm_state_name(snd_pcm_state(cap)), t - g_t0);
+            } else if (avail < 0) {
                 cap_err++;
                 printf("RECOVER dir=capture code=%ld (%s) state=%s t_us=%" PRId64 "\n", (long)avail,
                        snd_strerror((int)avail), snd_pcm_state_name(snd_pcm_state(cap)), t - g_t0);
@@ -367,6 +374,20 @@ int main(int argc, char **argv) {
                 g_thread_sig = thread_inventory("", 0);
                 for (unsigned c = 0; c < o.channels; c++) { g_v[c].have_prev = 0; g_v[c].locked = 0; g_v[c].run = 0; }
             } else {
+                if (o.free_run && (snd_pcm_uframes_t)avail > cap_buffer) {
+                    // The plugin does not report a capture overrun: the ring has been lapped and
+                    // only the newest frames are what they claim to be. Keep one period of them.
+                    snd_pcm_uframes_t skip = (snd_pcm_uframes_t)avail - cap_period;
+                    snd_pcm_sframes_t fw = snd_pcm_forward(cap, skip);
+                    cap_resyncs++;
+                    if (fw > 0) cap_lost += (uint64_t)fw;
+                    printf("NETRESYNC dir=capture avail=%ld buffer=%lu forward=%ld state=%s t_us=%" PRId64 "\n",
+                           (long)avail, (unsigned long)cap_buffer, (long)fw,
+                           snd_pcm_state_name(snd_pcm_state(cap)), t - g_t0);
+                    thread_inventory("after-resync-capture", 1);
+                    for (unsigned c = 0; c < o.channels; c++) { g_v[c].have_prev = 0; g_v[c].locked = 0; g_v[c].run = 0; }
+                    avail = fw >= 0 ? avail - fw : avail;
+                }
                 if (!have_stats || avail < cap_avail_min) cap_avail_min = avail;
                 if (!have_stats || avail > cap_avail_max) cap_avail_max = avail;
                 while (avail > 0) {
@@ -387,7 +408,12 @@ int main(int argc, char **argv) {
 
         if (play) {
             snd_pcm_sframes_t avail = snd_pcm_avail_update(play);
-            if (avail < 0) {
+            if (avail < 0 && o.free_run) {
+                // Free-run never prepares. With the stock plugin this is reached once the
+                // pointer callback has returned -EPIPE (outside its start-up grace window).
+                if (!play_err++) printf("FREERUN-FAILED dir=playback code=%ld (%s) state=%s t_us=%" PRId64 "\n", (long)avail,
+                                        snd_strerror((int)avail), snd_pcm_state_name(snd_pcm_state(play)), t - g_t0);
+            } else if (avail < 0) {
                 play_err++;
                 printf("RECOVER dir=playback code=%ld (%s) state=%s t_us=%" PRId64 "\n", (long)avail,
                        snd_strerror((int)avail), snd_pcm_state_name(snd_pcm_state(play)), t - g_t0);
@@ -398,6 +424,20 @@ int main(int argc, char **argv) {
                 thread_inventory("after-recover-playback", 1);
                 g_thread_sig = thread_inventory("", 0);
             } else {
+                if (o.free_run && (snd_pcm_uframes_t)avail > play_buffer) {
+                    // The clock has passed the application pointer by the excess. Move the
+                    // pointer up to the clock; the lead is written below as on any other wake.
+                    snd_pcm_uframes_t deficit = (snd_pcm_uframes_t)avail - play_buffer;
+                    snd_pcm_sframes_t fw = snd_pcm_forward(play, deficit);
+                    play_resyncs++;
+                    if (fw > 0) play_lost += (uint64_t)fw;
+                    printf("NETRESYNC dir=playback avail=%ld buffer=%lu forward=%ld state=%s t_us=%" PRId64 "\n",
+                           (long)avail, (unsigned long)play_buffer, (long)fw,
+                           snd_pcm_state_name(snd_pcm_state(play)), t - g_t0);
+                    thread_inventory("after-resync-playback", 1);
+                    avail = snd_pcm_avail_update(play);
+                    if (avail < 0) { printf("ERROR avail after resync: %ld\n", (long)avail); avail = 0; }
+                }
                 snd_pcm_sframes_t delay = 0;
                 int have_delay = snd_pcm_delay(play, &delay) == 0;
                 snd_pcm_sframes_t queued = (snd_pcm_sframes_t)play_buffer - avail;
@@ -469,10 +509,11 @@ int main(int argc, char **argv) {
                v->first_lock_us, v->other_ch < 0 ? 0 : v->other_ch + 1);
     }
     printf("SUMMARY seconds=%.2f cap_frames=%" PRIu64 " play_frames=%" PRIu64 " cap_rate=%.3f play_rate=%.3f "
-           "cap_recovers=%" PRIu64 " play_recovers=%" PRIu64 " thread_changes=%" PRIu64 " revents=%d mlock=%d\n",
+           "cap_recovers=%" PRIu64 " play_recovers=%" PRIu64 " thread_changes=%" PRIu64 " revents=%d mlock=%d "
+           "free_run=%d cap_resyncs=%" PRIu64 " cap_lost=%" PRIu64 " play_resyncs=%" PRIu64 " play_lost=%" PRIu64 "\n",
            elapsed, tot_cap, tot_play, elapsed > 0 ? (double)tot_cap / elapsed : 0,
            elapsed > 0 ? (double)tot_play / elapsed : 0, tot_cap_err, tot_play_err, thread_changes, o.use_revents,
-           o.do_mlock);
+           o.do_mlock, o.free_run, cap_resyncs, cap_lost, play_resyncs, play_lost);
 
     thread_inventory("before-close", 1);
     if (play) { int64_t t = now_us(); snd_pcm_drop(play); snd_pcm_close(play); printf("CLOSE dir=playback us=%" PRId64 "\n", now_us() - t); }

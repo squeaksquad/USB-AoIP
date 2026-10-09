@@ -59,6 +59,25 @@ of the Inferno endpoint itself passed over 30 minutes with
 - A `sudo` over ssh from Claude Code was blocked once by the permission layer
   and passed later; if it is blocked, hand him the command.
 
+**Added 2026-10-09 ~14:45 UTC (second session, no audio run).** Item 3 below
+now has its design, `work/dante-mode/OWNER_DESIGN.md`: read it whole before
+touching the owner, and RESULTS.md's last section for what it rests on. Two
+readings changed the picture: an ioplug only xruns when the plugin's pointer
+says so, and the transmit thread sends whatever the mmap buffer holds, so a
+late write is an echo of the previous lap, not zeros. On the Pi and not yet
+run: the probe with `--free-run` (abeda2c0), and the patched plugin 55dee5d8
+in `plugins/xrun-option/` (stock ca99efd7 in `plugins/stock/` and still in
+`inferno/target/release`). With Statime up, unprivileged over ssh:
+
+- step 1: `~/usb-16x16-work/dante-mode/probe/run-probe.sh --seconds 10 --free-run --xrun-at 1 --xrun-ms 100`
+  (expect one `NETRESYNC` per direction, no `FREERUN-FAILED`, thread ids unchanged);
+- step 2: the same with `INFERNO_CONFIG=~/usb-16x16-work/dante-mode/config/asound-inferno-freerun.conf
+  INFERNO_PLUGIN_DIR=~/usb-16x16-work/dante-mode/plugins/xrun-option`, `--seconds 180 --xrun-at 120`,
+  loop routes up (expect the pattern locked again in milliseconds, not 5.7 s).
+
+The design's four open questions (the patch, silence with no host, no muting
+on a lost source, root) are unanswered.
+
 **Owed, in order.**
 
 1. Per-start level: harness and RTL on the same start, three starts.

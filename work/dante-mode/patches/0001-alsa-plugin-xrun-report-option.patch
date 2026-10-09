@@ -1,0 +1,44 @@
+diff --git a/alsa_pcm_inferno/src/lib.rs b/alsa_pcm_inferno/src/lib.rs
+index 420d615..80b8658 100644
+--- a/alsa_pcm_inferno/src/lib.rs
++++ b/alsa_pcm_inferno/src/lib.rs
+@@ -166,6 +166,7 @@ struct MyIOPlug {
+     //config: BTreeMap<String, String>,
+     ref_time: Instant,
+     use_flows_clock: bool,
++    xrun_report: bool,
+     stream_info: Option<StreamInfo>,
+     buffers_valid: Arc<RwLock<bool>>,
+     media_clock: MediaClock,
+@@ -278,7 +279,11 @@ unsafe extern "C" fn plugin_pointer(io: *mut snd_pcm_ioplug_t) -> snd_pcm_sframe
+         }
+ 
+         // workaround for pipewire: grace period during startup:
+-        if ptr > 100000 || this.stream_info.as_ref().unwrap().boundary_add.0 != 0 {
++        // XRUN_REPORT "0": never report. The application sees avail above the buffer size
++        // and moves its own pointer; nothing is stopped, so the flows stay up.
++        if this.xrun_report
++            && (ptr > 100000 || this.stream_info.as_ref().unwrap().boundary_add.0 != 0)
++        {
+             return (-EPIPE).try_into().unwrap(); // report xrun
+                                                  // TODO check for xruns in ExternalRingBuffer because this function may be called too seldom
+                                                  // FIXME we're restarting the whole transmitter/receiver on xrun which results in a LONG break, unacceptable!
+@@ -698,12 +703,18 @@ unsafe extern "C" fn plugin_define(
+         .map(|v| v == "1")
+         .unwrap_or(false);
+ 
++    let xrun_report = config
++        .get("XRUN_REPORT")
++        .map(|v| v != "0")
++        .unwrap_or(true);
++
+     let myio = Box::into_raw(Box::new(MyIOPlug {
+         io: zeroed(),
+         callbacks,
+         settings,
+         ref_time: Instant::now(),
+         use_flows_clock,
++        xrun_report,
+         stream_info: None,
+         buffers_valid: Arc::new(RwLock::new(false)),
+         media_clock: MediaClock::new(false /* TODO */),
