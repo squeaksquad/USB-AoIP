@@ -19,7 +19,7 @@ so="$base/inferno/target/release/libasound_module_pcm_inferno.so"
 refuse() { echo "REFUSED: $*"; echo "BUILD_EXIT 99"; exit 99; }
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 systemctl is-active --quiet usb16x16-aes67.service && refuse "usb16x16-aes67.service is active (no builds beside it)"
-for name in alsaloop inferno-probe usb16x16-dante-owner; do
+for name in alsaloop inferno-probe usb16x16-dante-; do   # pgrep -x sees 15 characters of a name
     pgrep -x "$name" > /dev/null && refuse "$name is running"
 done
 [ -f "$patch_file" ] || refuse "no $patch_file"

@@ -8,6 +8,38 @@ process that takes over from the `alsaloop` prototype. Figures quoted from
 RESULTS.md keep the conditions they have there. Anything marked *read* comes
 from source and has not been measured.
 
+## Changes made while building the USB half (2026-10-09)
+
+Three places where `owner/main.cpp` departs from the text below, and why. The
+sections they amend are left as written.
+
+1. **Each direction links on its own.** The table of states below has one
+   `linked` state for both directions. A host that only plays never pulls
+   from the gadget, and one that only records never sends, so a single state
+   would leave one of those silent. As built: the gadget is `absent` or
+   `open`; out is `idle`, `armed` (first block seen and discarded) or `flow`;
+   back is `idle` or `flow` (the host is pulling). With no host pulling, the
+   gadget's queue is held at exactly `--rx-queue`, so the depth is the chosen
+   one at the instant a host starts.
+2. **The servo is a PI law per direction, not the bridge's estimator with two
+   level terms.** The estimator works on the difference of the two depths and
+   has nothing to work on when one direction is idle. Each direction now has
+   `owner/servo.hpp`'s `PitchPi` on its own one-second mean depth (kp 0.5 ppm
+   per frame, ki 0.003, about 83 s, critically damped); a direction that
+   starts while the other has settled takes the other's integral with the
+   sign reversed. Tested against a plant model on the Mac (`servo_test.cpp`):
+   a cold start against 30 ppm moves the depth 44 frames before it comes
+   back, which is more than the bridge's servo allowed itself, so `--seed-ppm`
+   exists and a state file for it is owed.
+3. **Samples stay integers.** 24 bits are shifted into the top of 32 and back,
+   with no float in between, so the path is exact by construction. `DspStage`
+   will convert at the point it is inserted.
+
+Also: a direction that finds its depth no longer where the prime put it (a
+resync, the outgoing depth under one packet or over the buffer's safe span)
+is primed again and counted (`tx_reprimes`); a gadget PCM error stops that
+direction for 50 ms and prepares that PCM only.
+
 ## What it is
 
 One long-lived process, `usb16x16-dante-owner`, that opens the Inferno device
@@ -314,7 +346,10 @@ sequence.
    *Built and tried 2026-10-09 18:11 UTC (`owner/main.cpp`, `run-owner.sh`; RESULTS.md):
    30 s unprivileged, works, and rode out a 7 ms loss of the CPU by forwarding.
    The hour as root is owed.*
-5. **The USB half.** Check first with the Mac: open and close the device ten
+   *NO_USB hour as root started by the operator 2026-10-09 ~18:20 UTC; result owed.*
+5. **The USB half.** *Written 2026-10-09 (`owner/main.cpp`, `owner/servo.hpp`), syntax-checked
+   on the Mac against alsa-lib 1.2.14 headers, servo test passing; not compiled on
+   the Pi and not run.* Check first with the Mac: open and close the device ten
    times, quit and reopen a DAW, restart `usb-16x16.service` once (the
    operator's command), each a `USBLINK` pair and none a `NETRESYNC` or a
    flow loss. Then `measure-candidate.sh`: noise probe, impulse level on

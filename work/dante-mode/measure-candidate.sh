@@ -51,8 +51,8 @@ pi() { ssh -o BatchMode=yes -o ConnectTimeout=8 bdimaio@192.168.1.201 "$@"; }
 
 # One line of gates, then the endpoint's own account of itself.
 pi_state() {
-  pi 'f=$(ls -t /dev/shm/dante-alsaloop-*.log 2>/dev/null | head -1)
-echo "aes67=$(systemctl is-active usb16x16-aes67) statime=$(pgrep -xc statime) endpoint=$(pgrep -xc alsaloop) udc=$(cat /sys/class/udc/*/state 2>/dev/null)"
+  pi 'f=$(ls -t /dev/shm/dante-alsaloop-*.log /dev/shm/dante-owner-*.log 2>/dev/null | head -1)
+echo "aes67=$(systemctl is-active usb16x16-aes67) statime=$(pgrep -xc statime) endpoint=$(( $(pgrep -xc alsaloop) + $(pgrep -xc usb16x16-dante-) )) udc=$(cat /sys/class/udc/*/state 2>/dev/null)"
 echo "log=$f"
 [ -n "$f" ] && { grep -m1 "^START" "$f"; echo "xrun_lines=$(grep -ciE "xrun|underrun" "$f") lag_lines=$(grep -ciE "lag of|dropout|clock jumped|media clock" "$f") error_lines=$(grep -c " ERROR " "$f") lines=$(wc -l < "$f")"; }
 for d in pcm0c pcm0p; do echo "$d $(grep -E "state|delay" /proc/asound/UAC2Gadget/$d/sub0/status 2>/dev/null | tr -s " " | tr "\n" " ")"; done
