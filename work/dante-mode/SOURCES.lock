@@ -1,0 +1,19 @@
+# Dante mode: pinned upstream sources
+# Recorded 2026-10-08 on the Mac. Source inspection only: nothing built, nothing on the Pi.
+# Checkout lives in work/dante-mode/upstream/ (gitignored); recreate with:
+#   git clone --recurse-submodules https://gitlab.com/lumifaza/inferno.git work/dante-mode/upstream/inferno
+#   git -C work/dante-mode/upstream/inferno checkout 9767558e0905c9e9c960f5a60e050fbdc38300b7
+#   git -C work/dante-mode/upstream/inferno submodule update --init --recursive
+
+inferno          https://gitlab.com/lumifaza/inferno.git  branch dev  9767558e0905c9e9c960f5a60e050fbdc38300b7  (v0.5.4-13, committed 2026-09-08; github.com/teodly/inferno dev is the same commit)
+  alsa-sys-all   submodule                                            83324fc89b831f3da107e6d704bc7149f08b4e0f
+  searchfire     submodule                                            ccb19023aaaae6e5cc7e812e32453e106814ea0c
+  usrvclock-rs   submodule                                            7d847750d5ddbe969d34dbc5875a03b95c2ce16e
+  Cargo.lock     sha256                                               e7648507cb2809eaf122bb51416122be0b7f03a849bd2f2aa6436bd02310274f
+
+statime (fork)   https://github.com/teodly/statime  branch inferno-dev  244f20a56c173b1881f2e5e83652bb8b8209b2ab  (branch head by ls-remote 2026-10-08; NOT cloned, NOT inspected)
+
+# Pending, to be filled when stage 2's build step is reached:
+#   rustc / cargo versions (the Mac has no Rust toolchain; the Pi's is unrecorded)
+#   libasound_module_pcm_inferno.so sha256
+#   statime binary sha256

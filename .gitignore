@@ -46,3 +46,6 @@ __pycache__/
 
 # Local preview launcher for the desktop app; not part of the project
 .claude/launch.json
+
+# Dante mode upstream checkouts; pinned revisions in work/dante-mode/SOURCES.lock
+work/dante-mode/upstream/
