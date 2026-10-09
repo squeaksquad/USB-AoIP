@@ -1142,3 +1142,51 @@ e3d560b3  owner/servo.hpp
   frames. Five-second lines cannot say what; the next run logs every second.
   Until this is understood the return direction's start depth is a draw, not
   a setting, which is the thing the design set out to remove.
+
+## Owner with the USB half, first run as root: RTL 14.646 ms at 32 frames (2026-10-09 20:32-20:42 UTC)
+
+`sudo run-owner.sh 600 --log-every 1` by the operator: owner 48d51783, plugin
+55dee5d8, memory lock, loop SCHED_FIFO 79, `--tx-lead 128`, `--rx-queue 144`,
+Inferno latencies 2 ms, gadget period 48 / buffer 480, servos from zero.
+Statime as started at 17:57 UTC; routes as left (the Ferrofish and Metric Halo
+loop). The Mac held both streams for the whole run. Evidence
+`outputs/latency/dante-owner-usb-20261009T203206Z/` (`summary.txt` and the
+per-second table `depths.txt` tracked; the log gitignored).
+
+- **RTL Utility at buffer 32, by the operator: 14.646 ms** (703 samples), and
+  just under 14 ms at 16. Audio came back through the loop. One reading each,
+  no screenshot, taken at an unrecorded moment of a run whose two depths were
+  still moving (below), with no noise probe and no harness run on this start.
+  For scale: the `alsaloop` prototype read 884 samples at 32 and the AES67
+  record is 891 (18.563 ms), so this is about 180 samples, 3.8 ms, under
+  both. It is a first reading, not an operating point.
+- The run: 600.01 s, exit 0. One link in each direction at 0.3 s and none
+  after; no gadget fault, no reprime, no detach, no overflow or discard; zero
+  `NETRESYNC`, zero PCM errors, no `tx lag` or `XRUN` line from the plugin; no
+  thread change; pitch controls back at 1000000 afterwards. The longest gap
+  between wakes in ten minutes was 1.031 ms.
+- The servos did what the model said. The Mac's USB clock is 15.3 ppm slow
+  against Dante on this start; both integrals reached it (out -15.28, back
+  +15.50, equal and opposite as they should be). From a cold start the
+  outgoing mean fell from 128 to 104.8 at 90 s and was back within 2 of 128
+  from 390 s; the lowest depth found on any wake was 56, above the 32-frame
+  packet floor, so nothing was primed again. The return mean rose from 144 to
+  165 and settled at 141 to 142. So for the first six minutes of a cold start
+  the round trip is not at its set depth, by up to about 20 frames each way
+  with opposite signs. `--seed-ppm -15` would start both where they ended.
+- **The open question from the trials, now with one-second lines.** The
+  return queue as found before each write sits at 93 to 94 once settled, and
+  about every 16 s (14 s while the pitch was still moving) it reads 37 to 38
+  frames higher for one to two seconds and then returns: forty times in the
+  run, never with a frame dropped or a fault. The wake cadence did not move
+  with it (no gap over 1.031 ms), and the outgoing depth found on the same
+  wakes is steady to a frame. So either the host's pulls are periodically 0.8
+  ms late against its own sends for a second, or the gadget's playback
+  pointer is reported late for a second; the second is a reading artefact,
+  the first is 0.8 ms of real delay coming and going. The trial's "15 s at
+  181" was a long instance of the same thing. Each episode also puts a
+  +35-frame error into the return servo for a second (Playback Pitch jumps
+  from +15 to about +30), which is small (0.7 frames) but not clean.
+  What decides it: 800 harness impulses span about thirteen episodes, and a
+  real delay change shows as impulses 37 or 38 samples apart, an artefact as
+  spread 0.

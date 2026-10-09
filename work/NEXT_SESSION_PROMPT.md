@@ -73,11 +73,20 @@ the patch and running as root by hand. On the Pi: probe 381f348c
 (`--free-run`, `--hold-forward`, `--zero-behind`), patched plugin 55dee5d8 in
 `plugins/xrun-option/` (select with `INFERNO_PLUGIN_DIR` and
 `INFERNO_CONFIG=.../config/asound-inferno-freerun.conf`), stock ca99efd7
-still in `inferno/target/release`. The network half is written and built (`owner/main.cpp`, binary 7eb9a584 on
-the Pi, `run-owner.sh`) and passed a 30 s unprivileged trial. **Next: step
-4's check, `sudo ~/usb-16x16-work/dante-mode/run-owner.sh 3600` by the
-operator (zero `NETRESYNC`, no thread change, flows held), then step 5, the
-USB half.** The resync must
+still in `inferno/target/release`. Steps 4 passed (an hour as root, zero resyncs) and the USB half is written and
+has run once as root: owner 48d51783 on the Pi, `sudo
+~/usb-16x16-work/dante-mode/run-owner.sh [SECONDS] --log-every 1` (`NO_USB=1`
+for the network half alone), RTL 14.646 ms at 32 by the operator on its first
+start (one reading, servo still settling). Read RESULTS.md's last three
+sections and the "Changes made while building the USB half" block at the top
+of OWNER_DESIGN.md. **Next, in order:** (a) `measure-candidate.sh noise 32`
+then `measure-candidate.sh 32 800` against a running owner, RTL closed: spread
+0 or impulses 37 apart settles the return-queue question; (b) start with
+`--seed-ppm -15` (the Mac read 15.3 ppm slow) and check both depths start and
+stay at 128 / 144; (c) the open/close, DAW quit and `usb-16x16.service`
+restart checks of step 5, none of which has been exercised: the Mac held both
+streams for the whole first run; (d) three starts, harness and RTL on each.
+The resync must
 forward a margin past the deficit (the clock moved 4 to 5 frames in between).
 
 **Owed, in order.**

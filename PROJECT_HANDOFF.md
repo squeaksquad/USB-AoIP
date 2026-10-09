@@ -11885,3 +11885,27 @@ error, and when the process lost the CPU for 7.2 ms it forwarded three times
 thread change, the Ferrofish holding its flows), then step 5, the USB half.
 Nothing is installed; `usb16x16-aes67` inactive; Statime running in the
 operator's terminal since 17:57 UTC.
+
+**MEASURED 2026-10-09 19:09-20:42 UTC: the Dante owner runs end to end; first
+RTL reading 14.646 ms at 32 frames.** (1) Design step 4 PASSED: the network
+half alone for one hour as root, zero resyncs, zero PCM errors, depth 79 to
+82. It showed the plugin's `flows TX` thread being created after the opens
+return under the memory lock; the owner now waits for both flow threads by
+name. (2) The USB half was written the same day (`owner/main.cpp`,
+`owner/servo.hpp`; each direction links on its own, a steward thread opens and
+pitches the gadget, a PI pitch law per direction, samples kept as integers;
+the departures from the design are listed at the top of `OWNER_DESIGN.md`).
+First run as root, 600 s, owner 48d51783 with plugin 55dee5d8, lead 128,
+return queue 144, Inferno 2 ms: one link each way, no fault, no resync, no
+plugin lag line, longest wake gap 1.031 ms; the servos found the Mac 15.3 ppm
+slow and settled in about six minutes from cold. **RTL Utility at 32 by the
+operator: 14.646 ms (703 samples), under 14 ms at 16**, against 884 for the
+`alsaloop` prototype and 891 for the AES67 record. One reading, during the
+servo's settling, no noise probe, no harness run: a first figure, not an
+operating point and not ACCEPTED. Open: the gadget's return queue reads 37 to
+38 frames high for a second about every 16 s with nothing dropped; whether
+that is 0.8 ms of real delay coming and going or a pointer-reporting artefact
+is what the 800-impulse harness runs will show. Record:
+`work/dante-mode/RESULTS.md`, last three sections; evidence
+`outputs/latency/dante-owner-*-20261009*/`. Nothing installed; `usb16x16-aes67`
+inactive; Statime in the operator's terminal since 17:57 UTC.

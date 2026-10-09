@@ -1,7 +1,7 @@
 # Dante endpoint owner: design
 
-Status 2026-10-09: design, with steps 1 to 3 passed and the network half of the
-owner built (step 4, its hour as root owed); the USB half is not written. The operator accepted the plugin patch and running as root by hand
+Status 2026-10-09: design, steps 1 to 4 passed; the USB half is written and has
+run once as root (step 5 in progress). The operator accepted the plugin patch and running as root by hand
 (questions 1 and 4). It is the plan for item 3 of the owed list in
 [RESULTS.md](RESULTS.md) and replaces stage 4 of [PLAN.md](PLAN.md): the
 process that takes over from the `alsaloop` prototype. Figures quoted from
@@ -346,10 +346,12 @@ sequence.
    *Built and tried 2026-10-09 18:11 UTC (`owner/main.cpp`, `run-owner.sh`; RESULTS.md):
    30 s unprivileged, works, and rode out a 7 ms loss of the CPU by forwarding.
    The hour as root is owed.*
-   *NO_USB hour as root started by the operator 2026-10-09 ~18:20 UTC; result owed.*
+   *PASSED 2026-10-09 19:09-20:09 UTC: 3,600 s as root, zero resyncs, zero PCM errors.*
 5. **The USB half.** *Written 2026-10-09 (`owner/main.cpp`, `owner/servo.hpp`), syntax-checked
-   on the Mac against alsa-lib 1.2.14 headers, servo test passing; not compiled on
-   the Pi and not run.* Check first with the Mac: open and close the device ten
+   on the Mac against alsa-lib 1.2.14 headers, servo test passing. First run as root
+   2026-10-09 20:32 UTC (RESULTS.md): 600 s clean, RTL 14.646 ms at 32 by the operator;
+   the open/close and restart checks and the harness runs are owed, and the return
+   queue reads 37 frames high for a second about every 16 s, cause open.* Check first with the Mac: open and close the device ten
    times, quit and reopen a DAW, restart `usb-16x16.service` once (the
    operator's command), each a `USBLINK` pair and none a `NETRESYNC` or a
    flow loss. Then `measure-candidate.sh`: noise probe, impulse level on
