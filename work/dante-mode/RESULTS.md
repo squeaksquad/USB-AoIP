@@ -956,3 +956,44 @@ operator) and nothing else: step 1, the free-run hold inside the grace window
 on the stock plugin; step 2, the same hold at steady state on the patched
 plugin with the saved loop routes, read against the 5.7 s; step 3, the
 stale-audio check, which needs one more probe option.
+
+## Owner design steps 1 and 2: the free-run resync works (2026-10-09 17:58-18:02 UTC)
+
+Statime started by the operator at 17:57 UTC with the first-run config; probe
+unprivileged over ssh, period 64, buffer 1024, all threads at normal priority;
+`usb16x16-aes67` inactive; routes as left on 2026-10-09 (the Ferrofish and
+Metric Halo loop). Evidence `outputs/latency/dante-20261009T175928Z/`
+(`step2-freerun-summary.txt` tracked; the two probe logs gitignored).
+
+| | Step 1: stock plugin ca99efd7 | Step 2: patched plugin 55dee5d8, `XRUN_REPORT "0"` |
+|---|---|---|
+| Run | 10 s, 100 ms hold at 1 s (inside upstream's grace window) | 180 s, 100 ms hold at 120 s (steady state, flows up) |
+| Playback after the hold | `avail` 5,709 on 1,024; forward 4,685; state `RUNNING` | `avail` 5,706; forward 4,682; state `RUNNING` |
+| Capture after the hold | `avail` 4,807; forward 4,743 | `avail` 4,804; forward 4,740 |
+| `prepare` / recoveries | none / 0 | none / 0 |
+| Thread ids | unchanged (`flows RX` 94067, `flows TX` 94069) | unchanged (94134, 94136), `thread_changes=0` |
+| Lead afterwards | playback delay 95-128 from the next second | same |
+
+- Step 2 against the 5.7 s: all sixteen channels were locked on the pattern
+  at every one-second report through and after the hold (119.0, 120.1, 121.0
+  and on). The mismatch lines show two discontinuities on all sixteen
+  channels, at 120.3607 s and 120.3735 s, 7.7 ms and 20.4 ms after the hold
+  ended at 120.3531 s; the pattern needs 16 matching samples to count as
+  locked, so the stream was whole again about 21 ms after the hold. So the cost of a 100 ms stall was the stall,
+  where the stock recovery cost 5.66 s and 5.74 s. One hold, one run.
+- The clock moved 4 to 5 frames between the probe reading the deficit and the
+  forward landing (the plugin logged `buffered -4` and `-5` straight after).
+  The owner's resync forwards by the deficit plus a margin, or to
+  clock + lead in one step.
+- Every channel shows those two lock losses and no zero run at the hold. A hole of
+  zeros would have counted as a zero run; old pattern laps would not. That is
+  what the stale-audio reading predicts, but the capture side had skipped
+  most of the window, so it is an indication only. Step 3 is the test.
+- Channels 3 and 11 carry 1,478 and 2,572 non-zero low bytes, all before
+  their subscriptions resolved: the unzeroed capture buffer again.
+- For PLAN 3a, one cold start with the saved sixteen subscriptions, read as
+  the time each channel first locked through the loop: two channels at 16.5
+  s, then 16.9, 18.6, 31.8, 44.9 and the last group at 55.1 s. That is the
+  loop's figure, not the subscription's alone, and `RUST_LOG` was `warn`.
+- Step 1's first seconds show the cost of the flows arriving: wakes rose from
+  2,450 to 13,000 a second at 6 s, as on 2026-10-09.

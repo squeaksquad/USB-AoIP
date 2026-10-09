@@ -1,0 +1,62 @@
+log /dev/shm/inferno-probe-20261009T175928Z.log
+THREADS stage=before-open t_us=76 count=1 vmlck_kb=0 vmrss_kb=1888 [94129 inferno-probe OTHER/0]
+0
+t=1.0 locked=0/16
+t=2.0 locked=0/16
+t=3.0 locked=0/16
+t=20.0 locked=6/16
+t=30.0 locked=6/16
+t=40.0 locked=7/16
+t=60.0 locked=16/16
+t=118.0 locked=16/16
+t=119.0 locked=16/16
+t=120.1 locked=16/16
+t=121.0 locked=16/16
+t=122.0 locked=16/16
+t=123.0 locked=16/16
+t=124.0 locked=16/16
+t=125.0 locked=16/16
+t=126.0 locked=16/16
+t=127.0 locked=16/16
+t=128.0 locked=16/16
+t=129.0 locked=16/16
+t=170.0 locked=16/16
+t=175.0 locked=16/16
+t=180.0 locked=16/16
+23:THREADS stage=after-start-playback t_us=253067 count=5 vmlck_kb=0 vmrss_kb=6448 [94129 inferno-probe OTHER/0] [94131 Inferno main OTHER/0] [94132 Inferno main OTHER/0] [94134 flows RX OTHER/0] [94136 flows TX OTHER/0]
+149:XRUN-TEST begin t_us=120253057 hold_ms=100
+150:XRUN-TEST end held_us=100002
+151:NETRESYNC dir=capture avail=4804 buffer=1024 forward=4740 state=RUNNING t_us=120353059
+152:THREADS stage=after-resync-capture t_us=120353164 count=5 vmlck_kb=0 vmrss_kb=7024 [94129 inferno-probe OTHER/0] [94131 Inferno main OTHER/0] [94132 Inferno main OTHER/0] [94134 flows RX OTHER/0] [94136 flows TX OTHER/0]
+153:[2026-10-09T18:01:28.766962Z WARN  asound_module_pcm_inferno] XRUN: buffered for playback: -4682 samples, avail 5706, hw_avail 0, hw_ptr 5764735, appl_ptr 5760053
+154:NETRESYNC dir=playback avail=5706 buffer=1024 forward=4682 state=RUNNING t_us=120353059
+155:THREADS stage=after-resync-playback t_us=120353266 count=5 vmlck_kb=0 vmrss_kb=7024 [94129 inferno-probe OTHER/0] [94131 Inferno main OTHER/0] [94132 Inferno main OTHER/0] [94134 flows RX OTHER/0] [94136 flows TX OTHER/0]
+156:[2026-10-09T18:01:28.767045Z WARN  asound_module_pcm_inferno] XRUN: buffered for playback: -4 samples, avail 1028, hw_avail 0, hw_ptr 5764739, appl_ptr 5764735
+157:[2026-10-09T18:01:28.767049Z WARN  asound_module_pcm_inferno] XRUN: buffered for playback: -5 samples, avail 1029, hw_avail 0, hw_ptr 5764740, appl_ptr 5764735
+267:SUMMARY seconds=180.00 cap_frames=8635153 play_frames=8635335 cap_rate=47973.055 play_rate=47974.067 cap_recovers=0 play_recovers=0 thread_changes=0 revents=1 mlock=0 free_run=1 cap_resyncs=1 cap_lost=4740 play_resyncs=1 play_lost=4682
+MISMATCH ch=1 t_us=120360725 prev=aae9ca got=233f43 expected=8e5b43 low=00
+MISMATCH ch=2 t_us=120360725 prev=4de924 got=d8fad7 expected=5d2ed7 low=00
+MISMATCH ch=3 t_us=120360725 prev=f0e87e got=8eb66b expected=2c026b low=00
+MISMATCH ch=4 t_us=120360725 prev=93e7d8 got=4471ff expected=fad5ff low=00
+MISMATCH ch=5 t_us=120360725 prev=36e732 got=fa2d93 expected=c9a993 low=00
+MISMATCH ch=6 t_us=120360725 prev=d9e68c got=afe927 expected=987d27 low=00
+MISMATCH ch=7 t_us=120360725 prev=7ce5e6 got=65a4bb expected=6750bb low=00
+MISMATCH ch=8 t_us=120360725 prev=1fe540 got=1b604f expected=36244f low=00
+VERIFY ch=1 match=7853374 mismatch=3 lock_losses=2 zero_runs=0 zeros=781774 lowbyte_nonzero=0 pos_fs=1 neg_fs=1 first_lock_us=16540454 other_channel=0
+VERIFY ch=2 match=7753680 mismatch=3 lock_losses=2 zero_runs=0 zeros=881468 lowbyte_nonzero=0 pos_fs=0 neg_fs=1 first_lock_us=18617497 other_channel=0
+VERIFY ch=3 match=7121596 mismatch=1481 lock_losses=2 zero_runs=0 zeros=1510596 lowbyte_nonzero=1478 pos_fs=0 neg_fs=1 first_lock_us=31786069 other_channel=0
+VERIFY ch=4 match=6489871 mismatch=3 lock_losses=2 zero_runs=0 zeros=2145277 lowbyte_nonzero=0 pos_fs=0 neg_fs=1 first_lock_us=44947162 other_channel=0
+VERIFY ch=5 match=6001527 mismatch=3 lock_losses=2 zero_runs=0 zeros=2633621 lowbyte_nonzero=0 pos_fs=0 neg_fs=0 first_lock_us=55121125 other_channel=0
+VERIFY ch=6 match=6001527 mismatch=3 lock_losses=2 zero_runs=0 zeros=2633621 lowbyte_nonzero=0 pos_fs=1 neg_fs=0 first_lock_us=55121125 other_channel=0
+VERIFY ch=7 match=6001527 mismatch=3 lock_losses=2 zero_runs=0 zeros=2633621 lowbyte_nonzero=0 pos_fs=1 neg_fs=1 first_lock_us=55121125 other_channel=0
+VERIFY ch=8 match=6001527 mismatch=3 lock_losses=2 zero_runs=0 zeros=2633621 lowbyte_nonzero=0 pos_fs=1 neg_fs=0 first_lock_us=55121125 other_channel=0
+VERIFY ch=9 match=6001523 mismatch=3 lock_losses=2 zero_runs=0 zeros=2633625 lowbyte_nonzero=0 pos_fs=0 neg_fs=0 first_lock_us=55121208 other_channel=0
+VERIFY ch=10 match=6001519 mismatch=3 lock_losses=2 zero_runs=0 zeros=2633629 lowbyte_nonzero=0 pos_fs=0 neg_fs=0 first_lock_us=55121291 other_channel=0
+VERIFY ch=11 match=6001519 mismatch=2575 lock_losses=2 zero_runs=0 zeros=2628485 lowbyte_nonzero=2572 pos_fs=0 neg_fs=0 first_lock_us=55121291 other_channel=0
+VERIFY ch=12 match=7753680 mismatch=3 lock_losses=2 zero_runs=0 zeros=881468 lowbyte_nonzero=0 pos_fs=1 neg_fs=1 first_lock_us=18617497 other_channel=0
+VERIFY ch=13 match=7753676 mismatch=3 lock_losses=2 zero_runs=0 zeros=881472 lowbyte_nonzero=0 pos_fs=0 neg_fs=0 first_lock_us=18617520 other_channel=0
+VERIFY ch=14 match=6489502 mismatch=3 lock_losses=2 zero_runs=0 zeros=2145646 lowbyte_nonzero=0 pos_fs=0 neg_fs=1 first_lock_us=44954828 other_channel=0
+VERIFY ch=15 match=7837278 mismatch=3 lock_losses=2 zero_runs=0 zeros=797870 lowbyte_nonzero=0 pos_fs=1 neg_fs=0 first_lock_us=16875796 other_channel=0
+VERIFY ch=16 match=7837278 mismatch=3 lock_losses=2 zero_runs=0 zeros=797870 lowbyte_nonzero=0 pos_fs=1 neg_fs=1 first_lock_us=16875796 other_channel=0
+
+[exited with code 0]

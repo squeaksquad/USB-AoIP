@@ -11844,3 +11844,18 @@ The design's open questions are for the operator: whether carrying the patch
 is acceptable, silence toward Dante with no host, no muting on a lost source,
 and running as root by hand for now. Owed items 1 and 2 of the previous entry
 are untouched.
+
+**MEASURED 2026-10-09 17:58-18:02 UTC: the Inferno device can be run without
+ever preparing it again (owner design steps 1 and 2).** Statime up (operator,
+17:57 UTC); probe unprivileged, period 64, buffer 1024, loop routes as left.
+A forced 100 ms hold of both streams, handled by forwarding the application
+pointers (`--free-run`): on the stock plugin ca99efd7 inside its start-up
+grace window, and at 120 s of steady state on the patched plugin 55dee5d8
+with `XRUN_REPORT "0"`. Both: one resync per direction, PCMs `RUNNING`, no
+`prepare`, thread ids unchanged. On the patched run the sixteen-channel
+pattern was locked at every one-second report through the hold and whole
+again about 21 ms after it ended, against 5.66 s and 5.74 s for the stock
+recovery. One hold per run. The operator accepted carrying the patch and
+running the owner as root by hand. Record: `work/dante-mode/RESULTS.md`, last
+section; evidence `outputs/latency/dante-20261009T175928Z/`. Next is design
+step 3 (the stale-audio check) and then the owner's network half.

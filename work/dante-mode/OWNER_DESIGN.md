@@ -1,7 +1,8 @@
 # Dante endpoint owner: design
 
-Status 2026-10-09: design only. Nothing here is built except what the "Steps"
-section marks as done. It is the plan for item 3 of the owed list in
+Status 2026-10-09: design, with steps 1 and 2 passed; the owner itself is not
+written. The operator accepted the plugin patch and running as root by hand
+(questions 1 and 4). It is the plan for item 3 of the owed list in
 [RESULTS.md](RESULTS.md) and replaces stage 4 of [PLAN.md](PLAN.md): the
 process that takes over from the `alsaloop` prototype. Figures quoted from
 RESULTS.md keep the conditions they have there. Anything marked *read* comes
@@ -287,15 +288,17 @@ sequence.
    the hold inside upstream's grace window. Check: no `-EPIPE`, state stays
    `RUNNING`, no `prepare`, thread ids unchanged, the playback delay back at
    the lead on the next wake.
-   *Done 2026-10-09: the option is written and compiled on the Pi; not run
-   (Statime is down).*
+   *PASSED 2026-10-09 17:58 UTC (RESULTS.md): one resync per direction, state
+   `RUNNING`, no prepare, thread ids unchanged.*
 2. **The patch**, built as a second plugin artifact with the pinned tree
    restored afterwards. Check with the probe and the saved loop routes: a
    forced 100 ms hold at 30 s with `--free-run`; the returned pattern locks
    again within tens of milliseconds, not 5.7 s; `flows TX` keeps its thread
    id; with `XRUN_REPORT` unset the stock behaviour is unchanged.
-   *Built 2026-10-09 14:42 UTC on the Pi (`patches/0001`, `build-patched.sh`,
-   plugin 55dee5d8 in `plugins/xrun-option/`, stock ca99efd7 restored); not run.*
+   *PASSED 2026-10-09 18:01 UTC on plugin 55dee5d8 (RESULTS.md): sixteen channels
+   locked at every report through the hold, whole again about 21 ms after it ended,
+   same thread ids. Not run: the patched plugin with `XRUN_REPORT` unset. The resync must forward a margin past the deficit: the clock
+   moved 4 to 5 frames in between.*
 3. **Stale-audio check.** The probe gains the zero-behind rule and a mode that
    stops writing while still forwarding. Check: with the rule the loop
    returns zeros through the hold; without it the pattern's old lap comes
