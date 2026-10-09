@@ -1,8 +1,8 @@
 # Dante mode proof of concept
 
-Status: stage 2 begun 2026-10-08 (sources pinned in SOURCES.lock and read on the Mac, findings in RESULTS.md); nothing built, installed or tested. Written 2026-09-05 UTC (2026-09-04 local).
+Status: stage 2 begun 2026-10-08 (sources pinned in SOURCES.lock and read on the Mac, findings in RESULTS.md; both built on the Pi 2026-10-09); nothing installed, run or tested. Written 2026-09-05 UTC (2026-09-04 local).
 Revised 2026-10-08: baseline refreshed to the 2026-09-14 point of record; bit-transparency and thread-creation gates added to stage 2 after a read of the upstream READMEs.
-No Dante software has been built, installed, or tested by this work. The source read found that the plugin creates threads at every prepare, so stage 4's single-process attempt is skipped in favour of the separate endpoint owner.
+No Dante software has been installed, run or tested by this work. The source read found that the plugin creates threads at every prepare, so stage 4's single-process attempt is skipped in favour of the separate endpoint owner.
 
 ## Goal
 

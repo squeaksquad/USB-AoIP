@@ -23,6 +23,13 @@ cargo            1.99.0 (5f94df478 2026-08-27)
 libasound2-dev   1.2.14-1+rpt1
 pkg-config       1.8.1-4
 
-# Pending, to be filled when stage 2's build step is reached:
-#   libasound_module_pcm_inferno.so sha256
-#   statime binary sha256
+# Build products on the Pi, 2026-10-09 01:38-01:43 UTC, usb16x16-aes67.service stopped by the operator.
+# Staged from the Mac as tarballs of the pinned trees (the Pi has no git), unpacked in ~/usb-16x16-work/dante-mode/.
+# build-candidate.sh (on the Pi as build.sh, sha256 73a91f349024125e120724ccb8daca5ab727437c9d2357d998da935b3e118e2e):
+#   cargo build --release --locked -j2 -p statime-linux      (2 m 16 s, rc 0)
+#   cargo build --release --locked -j2 -p alsa_pcm_inferno   (2 m 49 s, rc 0)
+# Both Cargo.lock hashes re-read on the Pi after the build and unchanged. Nothing installed, nothing run.
+inferno-9767558e.tgz                                   sha256  aec0786dc1130aedc2248b41d9f25a8c11a116843afb1b2d91136258f320ebe9
+statime-244f20a5.tgz                                   sha256  c3f68ced68886b6b2e1c855e734ffc381a4306f72d45524d3ec6735f9f4987af
+statime/target/release/statime                         sha256  e195222403fc132f85de0e290580381488c211ff7744e4d10a1c7ff42d555800  (58,895,320 bytes, release with debuginfo)
+inferno/target/release/libasound_module_pcm_inferno.so sha256  ca99efd703bbf1d0dbed531aefe60f5d97401050f0278bf05a8c56d933c9a570  (6,940,848 bytes; links libasound.so.2, libgcc_s, libm, libc)

@@ -286,9 +286,13 @@ own experiment.
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
-2. Rust is on the Pi since 2026-10-08 (rustc 1.99.0, in `SOURCES.lock`).
-   Build both with `--locked`, service stopped, and record the artifact
-   hashes. Needs a test window.
+2. Done 2026-10-09 01:38-01:43 UTC: both built on the Pi with
+   `--release --locked -j2` on rustc 1.99.0, service stopped, first attempt,
+   no source or lock changes (compiler warnings only). Hashes are in
+   `SOURCES.lock`; the script is `build-candidate.sh`. Two jobs because the Pi
+   has 990 MB of RAM; the one mid-build reading showed 518 MB available, the
+   peak was not watched. The staging directory is
+   945 MB and the crate cache 161 MB. Nothing was installed or run.
 3. The probe, without USB: mmap, poll, `avail`, `delay`, start, prepare,
    recovery and close as the bridge uses them, at periods 32 and 64 with
    buffers 1024 and 2048, logging every clock overlay update.
