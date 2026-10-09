@@ -1069,3 +1069,76 @@ it shows that the program works and nothing about stability. Log
 
 Not done, and what step 4's check asks for: an hour as root with the memory
 lock and real-time priority, routes up, zero resyncs, no thread change.
+
+## Owner design step 4: PASSED, one hour as root (2026-10-09 19:09-20:09 UTC)
+
+`sudo run-owner.sh 3600` by the operator (the network half alone; owner
+7eb9a584, plugin 55dee5d8, memory lock, loop thread SCHED_FIFO 79, Statime as
+started at 17:57 UTC). Evidence `outputs/latency/dante-owner-nousb-20261009T190925Z/`
+(`summary.txt` tracked, the log gitignored).
+
+- 3,600.05 s, exit 0. 172,799,896 frames out and 172,799,768 in, 48,000.0 a
+  second. **Zero resyncs in either direction, zero PCM errors**, the ring
+  index never off the owner's count, both PCMs `RUNNING` at the end.
+- No `tx lag`, `XRUN`, dropout or clock line from the plugin in the hour. Its
+  only lines are the Ferrofish's flow requests at 24 s and twelve
+  `unknown opcode` packets in the first two minutes (Controller).
+- Depth found on each wake 79 to 82 after the first ten seconds (50 to 112 in
+  them); the longest gap between wakes 1.57 ms in the first ten seconds and
+  1.00 to 1.02 ms afterwards.
+- Threads: the two `Inferno main` at normal priority, `flows RX` FIFO 80,
+  `flows TX` FIFO 81, as designed. **One finding:** `flows TX` was not there
+  when the opens returned. It is absent from the `after-open` and `running`
+  inventories and present at the end with a thread id six above the others,
+  so under the memory lock the plugin's runtime made it after the loop had
+  started. Harmless in this run (no gadget), but it is a thread created late,
+  which rule 3 exists to prevent. The owner now waits for both flow threads
+  by name before it starts (`NETTHREADS`), and refuses to run without them.
+- Not observed by me: what Controller showed during the hour.
+
+## Owner design step 5, first trials of the USB half (2026-10-09 20:24-20:26 UTC, unprivileged)
+
+`owner/main.cpp` with the USB half (the three departures from the design are
+listed at the top of OWNER_DESIGN.md), built on the Pi, two `TRIAL=1` runs of
+40 s and 30 s with the Mac streaming both ways. No memory lock and no
+real-time priority, so these show that it works, not how well. Text of both
+logs: `outputs/latency/dante-owner-usb-trials-20261009/trials.txt`.
+
+Staged and matching the repo:
+
+```
+48d51783  owner/usb16x16-dante-owner  (binary, Pi only; 7eb9a584 kept beside it)
+6d19e7ff  owner/main.cpp
+e3d560b3  owner/servo.hpp
+12074a7b  run-owner.sh
+761b46fa  build-patched.sh
+```
+
+- The gadget opened at period 48, buffer 480, and both directions linked
+  within 0.3 s of the start. 47,990 to 48,030 frames a second each way, no
+  gadget capture fault, no detach, pitch controls back at 1000000 after exit.
+- Out: the prime found the silent lead at 91 and landed a 48-frame block at
+  128; the one-second mean read 125.9 at 5 s.
+- The two clocks: the outgoing depth fell about 0.6 frames a second and the
+  return queue rose, so the Mac's USB clock runs roughly 10 ppm slow against
+  Dante here, and both servos were walking toward it as the model says they
+  would (pitch +9 and +6 after 30 s, integrals still under 2 ppm). Thirty
+  seconds is a third of the loop's time constant; convergence is not shown.
+- First run: at 24.9 s the unprivileged process lost the CPU, the plugin
+  logged the pointer 109 frames behind, one `NETRESYNC`, the gadget queue ran
+  dry (one playback fault, primed again) and the outgoing direction was
+  primed again from the block that followed the stall. That prime came out 37
+  frames deep (mean 165 against 128). Read as: after a stall the gadget
+  delivers its backlog over more than one wake, so a prime made on the first
+  block is deeper by what arrives next. Changed: a direction that has to be
+  primed again discards the block in hand, and a prime is only made on an
+  ordinary block (at most one and a half periods). Not re-tested, because the
+  second run had no stall.
+- **Open, second run:** the return queue sat at 181 after each write for the
+  first 15 s, 37 above its target of 144, and between 15 s and 20 s came down
+  to 146 in a step the servo cannot have made (19 ppm for 15 s is 14 frames).
+  No fault, no overflow, no reprime was counted. So the return prime does not
+  land where it is set, and something then moved the queue by about 35
+  frames. Five-second lines cannot say what; the next run logs every second.
+  Until this is understood the return direction's start depth is a draw, not
+  a setting, which is the thing the design set out to remove.

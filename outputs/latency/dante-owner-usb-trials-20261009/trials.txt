@@ -1,0 +1,66 @@
+=== /dev/shm/dante-owner-20261009T202422Z.log
+START 20261009T202422Z seconds=40 owner=61fc43a7 plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+START usb16x16-dante-owner mode=usb pcm=inferno period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=0 rt=0 seconds=40 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=144 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=0
+NETOPEN dir=capture period=64 buffer=1024 hw_params_us=250339 state=PREPARED
+NETOPEN dir=playback period=64 buffer=1024 hw_params_us=46 state=PREPARED
+NETTHREADS flows_rx=1 flows_tx=1 waited_ms=0
+NETSTART capture=RUNNING playback=RUNNING
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480
+USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 t=0.300
+OWNER t=5.0 wakes=4750 gap_us_max=1054 tx_depth=73..84 rx_avail_max=55 tx_frames=228131 rx_frames=228006 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=227750 offset_mismatches=0 net_errors=0
+USB t=5.0 usb=open tx=flow rx=flow tx_mean=125.4 rx_mean=142.5 rx_depth=92..141 pitch_c=1000001 pitch_p=999999 tx_i=-0.02 rx_i=0.09 usb_tx=227516 usb_rx=227616 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+OWNER t=10.0 wakes=5003 gap_us_max=1254 tx_depth=61..77 rx_avail_max=61 tx_frames=240144 rx_frames=240148 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=467898 offset_mismatches=0 net_errors=0
+USB t=10.0 usb=open tx=flow rx=flow tx_mean=121.5 rx_mean=146.4 rx_depth=95..111 pitch_c=1000003 pitch_p=1000001 tx_i=-0.09 rx_i=0.11 usb_tx=467660 usb_rx=467764 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+[2026-10-09T20:24:35.321523Z WARN  inferno_aoip::device_server::flows_tx] got add flow request for already existing flow, setting channels instead
+[2026-10-09T20:24:35.426697Z WARN  inferno_aoip::device_server::flows_tx] got add flow request for already existing flow, setting channels instead
+OWNER t=15.0 wakes=5002 gap_us_max=1026 tx_depth=69..73 rx_avail_max=49 tx_frames=240097 rx_frames=240100 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=707998 offset_mismatches=0 net_errors=0
+USB t=15.0 usb=open tx=flow rx=flow tx_mean=118.4 rx_mean=149.5 rx_depth=99..103 pitch_c=1000005 pitch_p=1000003 tx_i=-0.21 rx_i=0.17 usb_tx=707757 usb_rx=707864 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+OWNER t=20.0 wakes=5002 gap_us_max=1012 tx_depth=67..70 rx_avail_max=49 tx_frames=240098 rx_frames=240100 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=948098 offset_mismatches=0 net_errors=0
+USB t=20.0 usb=open tx=flow rx=flow tx_mean=115.9 rx_mean=152.5 rx_depth=102..106 pitch_c=1000006 pitch_p=1000005 tx_i=-0.38 rx_i=0.28 usb_tx=947855 usb_rx=947964 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+[2026-10-09T20:24:47.786086Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 147 samples detected, or media clock jumped, dropout occurs!
+[2026-10-09T20:24:47.786183Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 147 samples detected, or media clock jumped, dropout occurs!
+[2026-10-09T20:24:47.786194Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 147 samples detected, or media clock jumped, dropout occurs!
+[2026-10-09T20:24:47.786153Z WARN  asound_module_pcm_inferno] XRUN: buffered for playback: -109 samples, avail 1133, hw_avail 0, hw_ptr 1180180, appl_ptr 1180071
+NETRESYNC dir=playback frames=109 t=24.912
+OWNER t=25.0 wakes=4999 gap_us_max=4087 tx_depth=-109..124 rx_avail_max=219 tx_frames=240031 rx_frames=240100 tx_resyncs=1 tx_lost=109 rx_resyncs=0 rx_lost=0 cleared=1188198 offset_mismatches=0 net_errors=0
+USB t=25.0 usb=open tx=flow rx=flow tx_mean=113.9 rx_mean=155.0 rx_depth=96..117 pitch_c=1000001 pitch_p=1000000 tx_i=-0.58 rx_i=0.44 usb_tx=1187886 usb_rx=1185472 tx_links=2 tx_reprimes=1 rx_primes=2 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=1 detaches=0 pitch_write_errors=0
+OWNER t=30.0 wakes=5003 gap_us_max=1059 tx_depth=115..124 rx_avail_max=54 tx_frames=240140 rx_frames=240148 tx_resyncs=1 tx_lost=109 rx_resyncs=0 rx_lost=0 cleared=1428346 offset_mismatches=0 net_errors=0
+USB t=30.0 usb=open tx=flow rx=flow tx_mean=165.4 rx_mean=147.3 rx_depth=96..103 pitch_c=999981 pitch_p=1000002 tx_i=0.04 rx_i=0.46 usb_tx=1428026 usb_rx=1425620 tx_links=2 tx_reprimes=1 rx_primes=2 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=1 detaches=0 pitch_write_errors=0
+OWNER t=35.0 wakes=5002 gap_us_max=1059 tx_depth=103..116 rx_avail_max=51 tx_frames=240056 rx_frames=240064 tx_resyncs=1 tx_lost=109 rx_resyncs=0 rx_lost=0 cleared=1668411 offset_mismatches=0 net_errors=0
+USB t=35.0 usb=open tx=flow rx=flow tx_mean=157.1 rx_mean=162.0 rx_depth=100..151 pitch_c=999985 pitch_p=1000010 tx_i=0.53 rx_i=0.68 usb_tx=1668082 usb_rx=1665684 tx_links=2 tx_reprimes=1 rx_primes=2 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=1 detaches=0 pitch_write_errors=0
+OWNER t=40.0 wakes=5002 gap_us_max=1059 tx_depth=100..108 rx_avail_max=51 tx_frames=240093 rx_frames=240100 tx_resyncs=1 tx_lost=109 rx_resyncs=0 rx_lost=0 cleared=1908510 offset_mismatches=0 net_errors=0
+USB t=40.0 usb=open tx=flow rx=flow tx_mean=149.7 rx_mean=163.4 rx_depth=114..118 pitch_c=999988 pitch_p=1000011 tx_i=0.90 rx_i=0.96 usb_tx=1908175 usb_rx=1905784 tx_links=2 tx_reprimes=1 rx_primes=2 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=1 detaches=0 pitch_write_errors=0
+SUMMARY seconds=40.07 exit=0 tx_frames=1920069 rx_frames=1920047 tx_resyncs=1 tx_lost=109 rx_resyncs=0 rx_lost=0 cleared=1919791 offset_mismatches=0 net_errors=0 last_error=0 capture=RUNNING playback=RUNNING
+USBSUMMARY usb_tx=1919454 usb_rx=1917065 tx_links=2 tx_reprimes=1 rx_primes=2 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=1 detaches=0 pitch_write_errors=0 tx_integral_ppm=0.90 rx_integral_ppm=0.96
+[2026-10-09T20:25:03.266148Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for playback stream
+[2026-10-09T20:25:03.266178Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for capture stream
+=== /dev/shm/dante-owner-20261009T202620Z.log
+START 20261009T202620Z seconds=30 owner=48d51783 plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=--no-mlock --no-rt mode=usb
+START usb16x16-dante-owner mode=usb pcm=inferno period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=0 rt=0 seconds=30 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=144 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=0
+NETOPEN dir=capture period=64 buffer=1024 hw_params_us=250360 state=PREPARED
+NETOPEN dir=playback period=64 buffer=1024 hw_params_us=45 state=PREPARED
+NETTHREADS flows_rx=1 flows_tx=1 waited_ms=0
+NETSTART capture=RUNNING playback=RUNNING
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480
+USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=91 t=0.300
+OWNER t=5.0 wakes=4750 gap_us_max=1056 tx_depth=74..91 rx_avail_max=54 tx_frames=228124 rx_frames=227998 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=227742 offset_mismatches=0 net_errors=0
+USB t=5.0 usb=open tx=flow rx=flow tx_mean=125.9 rx_mean=181.5 rx_depth=96..144 pitch_c=1000001 pitch_p=1000019 tx_i=-0.01 rx_i=0.45 usb_tx=227510 usb_rx=227608 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+[2026-10-09T20:26:26.791973Z WARN  inferno_aoip::device_server::flows_tx] got add flow request for already existing flow, setting channels instead
+[2026-10-09T20:26:26.817389Z WARN  inferno_aoip::device_server::flows_tx] got add flow request for already existing flow, setting channels instead
+[2026-10-09T20:26:26.843921Z WARN  inferno_aoip::device_server::flows_tx] got add flow request for already existing flow, setting channels instead
+OWNER t=10.0 wakes=5003 gap_us_max=1011 tx_depth=74..78 rx_avail_max=49 tx_frames=240144 rx_frames=240148 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=467890 offset_mismatches=0 net_errors=0
+USB t=10.0 usb=open tx=flow rx=flow tx_mean=122.8 rx_mean=180.8 rx_depth=132..134 pitch_c=1000003 pitch_p=1000019 tx_i=-0.07 rx_i=1.01 usb_tx=467654 usb_rx=467756 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+OWNER t=15.0 wakes=5002 gap_us_max=1014 tx_depth=71..74 rx_avail_max=49 tx_frames=240097 rx_frames=240100 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=707990 offset_mismatches=0 net_errors=0
+USB t=15.0 usb=open tx=flow rx=flow tx_mean=119.9 rx_mean=178.2 rx_depth=95..133 pitch_c=1000004 pitch_p=1000019 tx_i=-0.18 rx_i=1.55 usb_tx=707751 usb_rx=707856 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+OWNER t=20.0 wakes=5003 gap_us_max=1012 tx_depth=68..71 rx_avail_max=49 tx_frames=240145 rx_frames=240148 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=948138 offset_mismatches=0 net_errors=0
+USB t=20.0 usb=open tx=flow rx=flow tx_mean=117.0 rx_mean=146.0 rx_depth=95..99 pitch_c=1000006 pitch_p=1000003 tx_i=-0.33 rx_i=1.56 usb_tx=947896 usb_rx=948004 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+OWNER t=25.0 wakes=5003 gap_us_max=1007 tx_depth=66..68 rx_avail_max=49 tx_frames=240146 rx_frames=240148 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=1188286 offset_mismatches=0 net_errors=0
+USB t=25.0 usb=open tx=flow rx=flow tx_mean=114.4 rx_mean=149.1 rx_depth=99..102 pitch_c=1000007 pitch_p=1000004 tx_i=-0.52 rx_i=1.62 usb_tx=1188042 usb_rx=1188152 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+OWNER t=30.0 wakes=5002 gap_us_max=1015 tx_depth=63..66 rx_avail_max=49 tx_frames=240098 rx_frames=240100 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=1428386 offset_mismatches=0 net_errors=0
+USB t=30.0 usb=open tx=flow rx=flow tx_mean=112.1 rx_mean=151.9 rx_depth=102..105 pitch_c=1000009 pitch_p=1000006 tx_i=-0.74 rx_i=1.73 usb_tx=1428140 usb_rx=1428252 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0
+SUMMARY seconds=30.06 exit=0 tx_frames=1440130 rx_frames=1440018 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=1439762 offset_mismatches=0 net_errors=0 last_error=0 capture=RUNNING playback=RUNNING
+USBSUMMARY usb_tx=1439516 usb_rx=1439628 tx_links=1 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=0 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 tx_integral_ppm=-0.74 rx_integral_ppm=1.73
+[2026-10-09T20:26:50.400064Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for playback stream
+[2026-10-09T20:26:50.400096Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for capture stream
+  : values=1000000
+  : values=1000000

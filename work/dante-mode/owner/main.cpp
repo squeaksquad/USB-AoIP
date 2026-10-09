@@ -224,6 +224,35 @@ unsigned thread_inventory(const char* stage, bool print) {
     return signature ^ (count << 24);
 }
 
+// True once a thread of this process carries the name. The plugin's transmit
+// thread is made by its runtime after the opens have returned: under the
+// memory lock it appeared after the loop had started (2026-10-09, the hour
+// run), so start-up waits for it rather than assume it.
+bool wait_for_thread(const char* wanted, int milliseconds) {
+    for (int waited = 0; waited <= milliseconds; waited += 10) {
+        if (DIR* directory = opendir("/proc/self/task")) {
+            bool found = false;
+            while (dirent* entry = readdir(directory)) {
+                if (entry->d_name[0] == '.') continue;
+                char path[96];
+                char name[64] = "";
+                const unsigned tid = static_cast<unsigned>(std::strtoul(entry->d_name, nullptr, 10));
+                std::snprintf(path, sizeof path, "/proc/self/task/%u/comm", tid);
+                if (FILE* f = std::fopen(path, "r")) {
+                    if (std::fgets(name, sizeof name, f) != nullptr) name[std::strcspn(name, "\n")] = '\0';
+                    std::fclose(f);
+                }
+                if (std::strcmp(name, wanted) == 0) found = true;
+            }
+            closedir(directory);
+            if (found) return true;
+        }
+        timespec nap{0, 10000000};
+        nanosleep(&nap, nullptr);
+    }
+    return false;
+}
+
 // ---- what the loop publishes --------------------------------------------------------
 
 enum class UsbOwner : int { steward_absent = 0, loop = 1, steward_closing = 2 };
@@ -267,6 +296,8 @@ struct Telemetry {
     std::atomic<std::uint64_t> usb_rx_frames{0};          // Dante frames queued to the gadget
     std::atomic<std::uint64_t> tx_links{0};               // times the outgoing direction was primed
     std::atomic<std::uint64_t> tx_reprimes{0};            // of those, forced while it was flowing
+    std::atomic<std::int64_t> tx_prime_block{0};          // the last prime: frames in the block it used
+    std::atomic<std::int64_t> tx_prime_found{0};          //   and the Inferno depth it found
     std::atomic<std::uint64_t> rx_primes{0};
     std::atomic<std::uint64_t> rx_overflow{0};            // Dante frames dropped with the host pulling
     std::atomic<std::uint64_t> rx_idle_discards{0};       // Dante frames dropped with no host pulling
@@ -335,12 +366,15 @@ void* telemetry_entry(void* argument) {
             link_tx = tx;
             link_rx = rx;
             std::printf("USBLINK usb=%s tx=%s rx=%s tx_links=%" PRIu64 " rx_primes=%" PRIu64 " capture_faults=%" PRIu64
-                        " playback_faults=%" PRIu64 " last_fault=%" PRId64 " t=%.3f\n",
+                        " playback_faults=%" PRIu64 " last_fault=%" PRId64 " tx_prime_block=%" PRId64 " tx_prime_found=%" PRId64
+                        " t=%.3f\n",
                         usb_owner_name(owner), tx_state_name(tx), rx != 0 ? "flow" : "idle",
                         t.tx_links.load(std::memory_order_relaxed), t.rx_primes.load(std::memory_order_relaxed),
                         t.usb_capture_faults.load(std::memory_order_relaxed),
                         t.usb_playback_faults.load(std::memory_order_relaxed),
-                        t.usb_last_fault.load(std::memory_order_relaxed), seconds);
+                        t.usb_last_fault.load(std::memory_order_relaxed),
+                        t.tx_prime_block.load(std::memory_order_relaxed),
+                        t.tx_prime_found.load(std::memory_order_relaxed), seconds);
             signature = thread_inventory("usblink", true);
         }
         if (signature == 0) signature = thread_inventory("", false);
@@ -1041,12 +1075,18 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
     if (usb.tx == TxState::flow && (resynced || depth < kPacketFrames || depth + frames > ceiling)) {
         // The pointer is no longer where the prime put it (a stall, or the
         // servo lost the depth): set it again rather than run on at a depth
-        // nobody chose.
+        // nobody chose. This block is discarded like the first after silence.
         t.tx_reprimes.fetch_add(1, std::memory_order_relaxed);
         set_tx_state(usb, TxState::armed, t);
+        return true;
     }
     if (usb.tx == TxState::armed) {
         if (depth >= lead) return true;   // still above the lead: let the clock take it down
+        // Prime only on an ordinary block. A larger one means frames the host
+        // sent earlier are still arriving (after a stall the gadget delivers
+        // its backlog over more than one wake), and a prime made then is deeper
+        // than the lead by whatever arrives next: 37 frames on 2026-10-09.
+        if (static_cast<snd_pcm_uframes_t>(frames) > handles.capture.period + handles.capture.period / 2) return true;
         // Land this block so that the pointer ends exactly `lead` ahead of the
         // clock: skip forward over silence, or drop the block's oldest frames.
         const std::int64_t room = lead - depth;
@@ -1059,6 +1099,8 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         depth = lead;
         t.usb_tx_frames.fetch_add(static_cast<std::uint64_t>(take), std::memory_order_relaxed);
         t.tx_links.fetch_add(1, std::memory_order_relaxed);
+        t.tx_prime_block.store(frames, std::memory_order_relaxed);
+        t.tx_prime_found.store(lead - room, std::memory_order_relaxed);
         // Both directions see the same two clocks with opposite sign.
         usb.tx_servo.restart(usb.rx_flowing && usb.rx_servo.settled() ? -usb.rx_servo.integral() : usb.tx_servo.integral());
         set_tx_state(usb, TxState::flow, t);
@@ -1264,6 +1306,15 @@ int main(int argc, char** argv) {
     net.playback = open_net(options, SND_PCM_STREAM_PLAYBACK);
     net.lead = options.tx_lead;
     net.guard = options.guard;
+    const std::int64_t opened = now_ns();
+    const bool have_rx = wait_for_thread("flows RX", 3000);
+    const bool have_tx = wait_for_thread("flows TX", 3000);
+    std::printf("NETTHREADS flows_rx=%d flows_tx=%d waited_ms=%" PRId64 "\n", have_rx ? 1 : 0, have_tx ? 1 : 0,
+                (now_ns() - opened) / 1000000);
+    if (!have_rx || !have_tx) {
+        std::printf("FATAL the plugin's network threads did not appear\n");
+        return 1;
+    }
     thread_inventory("after-open", true);
 
     // 4. The lead as silence, then the one start of each stream.

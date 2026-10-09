@@ -1,0 +1,14 @@
+START 20261009T190925Z seconds=3600 owner=7eb9a584 plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=no
+START usb16x16-dante-owner mode=no-usb pcm=inferno period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=3600
+THREADS stage=before-open count=2 [99342 usb16x16-dante- OTHER/0] [99343 usb16x16-dante- OTHER/0]
+THREADS stage=after-open count=5 [99342 usb16x16-dante- OTHER/0] [99343 usb16x16-dante- OTHER/0] [99344 Inferno main OTHER/0] [99345 Inferno main OTHER/0] [99346 flows RX FIFO/80]
+NETSTART capture=RUNNING playback=RUNNING
+THREADS stage=running count=5 [99342 usb16x16-dante- FIFO/79] [99343 usb16x16-dante- OTHER/0] [99344 Inferno main OTHER/0] [99345 Inferno main OTHER/0] [99346 flows RX FIFO/80]
+SUMMARY seconds=3600.05 exit=0 tx_frames=172799896 rx_frames=172799768 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=172799512 offset_mismatches=0 net_errors=0 last_error=0 capture=RUNNING playback=RUNNING
+THREADS stage=before-close count=5 [99342 usb16x16-dante- FIFO/79] [99344 Inferno main OTHER/0] [99345 Inferno main OTHER/0] [99346 flows RX FIFO/80] [99352 flows TX FIFO/81]
+OWNER t=10.0 state=no-usb wakes=9750 gap_us_max=1573 tx_depth=50..112 rx_avail_max=77 tx_frames=468132 rx_frames=468004 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=467748 offset_mismatches=0 net_errors=0
+OWNER t=20.0 state=no-usb wakes=10006 gap_us_max=1006 tx_depth=79..81 rx_avail_max=49 tx_frames=480285 rx_frames=480285 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=948033 offset_mismatches=0 net_errors=0
+OWNER t=900.0 state=no-usb wakes=10005 gap_us_max=1007 tx_depth=79..81 rx_avail_max=49 tx_frames=480239 rx_frames=480239 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=43189669 offset_mismatches=0 net_errors=0
+OWNER t=1800.0 state=no-usb wakes=10004 gap_us_max=1018 tx_depth=79..82 rx_avail_max=49 tx_frames=480193 rx_frames=480193 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=86389237 offset_mismatches=0 net_errors=0
+OWNER t=2700.0 state=no-usb wakes=10004 gap_us_max=1016 tx_depth=79..81 rx_avail_max=49 tx_frames=480192 rx_frames=480192 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=129588225 offset_mismatches=0 net_errors=0
+OWNER t=3600.1 state=no-usb wakes=10005 gap_us_max=1008 tx_depth=79..81 rx_avail_max=49 tx_frames=480239 rx_frames=480239 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=172792072 offset_mismatches=0 net_errors=0
