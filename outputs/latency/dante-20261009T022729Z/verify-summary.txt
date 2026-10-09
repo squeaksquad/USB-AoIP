@@ -1,0 +1,23 @@
+NEGOTIATED dir=capture rate=48000 requested_period=64 period=64 requested_buffer=1024 buffer=1024 boundary=4611686018427387904 hw_params_us=250380 poll_fds=1
+NEGOTIATED dir=playback rate=48000 requested_period=64 period=64 requested_buffer=1024 buffer=1024 boundary=4611686018427387904 hw_params_us=27 poll_fds=1
+RECOVER dir=playback code=-32 (Broken pipe) state=XRUN t_us=591278370
+RECOVERED dir=playback prepare_rc=0 prepare_us=15416
+RECOVER dir=playback code=-32 (Broken pipe) state=XRUN t_us=1410467368
+RECOVERED dir=playback prepare_rc=0 prepare_us=6613
+VERIFY ch=1 match=58503313 mismatch=25128686 lock_losses=5 zero_runs=3 zeros=2590450 lowbyte_nonzero=0 pos_fs=3 neg_fs=3 first_lock_us=569899994 other_channel=16
+VERIFY ch=2 match=58503193 mismatch=24499319 lock_losses=5 zero_runs=3 zeros=3224460 lowbyte_nonzero=0 pos_fs=3 neg_fs=3 first_lock_us=569900018 other_channel=16
+VERIFY ch=3 match=58503160 mismatch=23935659 lock_losses=5 zero_runs=3 zeros=3792261 lowbyte_nonzero=0 pos_fs=4 neg_fs=3 first_lock_us=569900108 other_channel=6
+VERIFY ch=4 match=58505035 mismatch=23448319 lock_losses=5 zero_runs=3 zeros=4281200 lowbyte_nonzero=0 pos_fs=4 neg_fs=4 first_lock_us=569900108 other_channel=6
+VERIFY ch=5 match=58484883 mismatch=9 lock_losses=5 zero_runs=3 zeros=27913972 lowbyte_nonzero=0 pos_fs=3 neg_fs=4 first_lock_us=569900108 other_channel=0
+VERIFY ch=6 match=58484881 mismatch=9 lock_losses=5 zero_runs=3 zeros=27913974 lowbyte_nonzero=0 pos_fs=3 neg_fs=3 first_lock_us=569900108 other_channel=0
+VERIFY ch=7 match=58484880 mismatch=3681 lock_losses=5 zero_runs=3 zeros=27906631 lowbyte_nonzero=3672 pos_fs=3 neg_fs=3 first_lock_us=569900127 other_channel=0
+VERIFY ch=8 match=58484879 mismatch=9 lock_losses=5 zero_runs=3 zeros=27913976 lowbyte_nonzero=0 pos_fs=3 neg_fs=3 first_lock_us=569900210 other_channel=0
+VERIFY ch=9 match=58518670 mismatch=9 lock_losses=5 zero_runs=3 zeros=27880185 lowbyte_nonzero=0 pos_fs=3 neg_fs=4 first_lock_us=569900210 other_channel=0
+VERIFY ch=10 match=58518669 mismatch=9 lock_losses=5 zero_runs=3 zeros=27880186 lowbyte_nonzero=0 pos_fs=4 neg_fs=4 first_lock_us=569900210 other_channel=0
+VERIFY ch=11 match=58518668 mismatch=3681 lock_losses=5 zero_runs=3 zeros=27872843 lowbyte_nonzero=3672 pos_fs=4 neg_fs=3 first_lock_us=569900210 other_channel=0
+VERIFY ch=12 match=58518666 mismatch=9 lock_losses=5 zero_runs=3 zeros=27880189 lowbyte_nonzero=0 pos_fs=3 neg_fs=3 first_lock_us=569900293 other_channel=0
+VERIFY ch=13 match=58529993 mismatch=9 lock_losses=5 zero_runs=3 zeros=27868862 lowbyte_nonzero=0 pos_fs=3 neg_fs=4 first_lock_us=569900293 other_channel=0
+VERIFY ch=14 match=58529993 mismatch=9 lock_losses=5 zero_runs=3 zeros=27868862 lowbyte_nonzero=0 pos_fs=3 neg_fs=3 first_lock_us=569900293 other_channel=0
+VERIFY ch=15 match=58529992 mismatch=9 lock_losses=5 zero_runs=3 zeros=27868863 lowbyte_nonzero=0 pos_fs=3 neg_fs=3 first_lock_us=569900376 other_channel=0
+VERIFY ch=16 match=58529990 mismatch=9 lock_losses=5 zero_runs=3 zeros=27868865 lowbyte_nonzero=0 pos_fs=3 neg_fs=4 first_lock_us=569900376 other_channel=0
+SUMMARY seconds=1800.00 cap_frames=86398865 play_frames=86397891 cap_rate=47999.367 play_rate=47998.826 cap_recovers=0 play_recovers=2 thread_changes=0 revents=1 mlock=0

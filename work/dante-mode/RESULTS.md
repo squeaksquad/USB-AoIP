@@ -466,6 +466,143 @@ Log `/dev/shm/inferno-probe-20261009T015515Z.log` on the Pi, read there.
   accident; the owner must still clear the buffer.
 - Logs on the Pi: `/dev/shm/inferno-probe-20261009T0205{45}Z.log`, `…0206{03,21,40}Z.log`.
 
+### Forced xrun as root under the lock (02:08:42 UTC, run by the operator)
+
+`sudo -E run-probe.sh --seconds 15 --mlock --xrun-at 5`: both streams left
+unserviced for 100 ms. Log `/dev/shm/inferno-probe-20261009T020842Z.log`.
+
+- Playback: `avail_update` returned -32 with the PCM in `XRUN`; the plugin
+  logged the underrun itself. `drop` + `prepare` took 8.4 ms, and the
+  transmit thread was replaced (20707 became 20716, back at SCHED_FIFO 81
+  once restarted). The longest wake gap in that second was 8.9 ms and about
+  5,100 playback frames were not sent. Upstream's "long break" on xrun is,
+  measured once, under 10 ms of blocking plus the missed audio.
+- Capture did not report the overrun at all. After the hold `avail` read
+  4,833 frames on a 1,024-frame buffer and no error came back, so the probe
+  read four laps of overwritten ring as if it were continuous audio. The
+  bridge treats an oversized `avail` as its own fault path; against this
+  plugin an owner has to detect `avail > buffer` itself and resynchronise.
+- Locked memory did not grow across the recovery (279.9 MB counted, 18.0 MB
+  resident before and after).
+- Per-second frame counts in this run moved by up to 17 around 48,000 where
+  the unprivileged runs moved by 1. Not explained; the clock overlay being
+  steered is the first thing to look at, with Statime at `info`.
+
+### Discovery from the Mac: not working yet (02:10-02:12 UTC)
+
+The operator reported the device missing from Dante Controller. Checked with
+a 15-minute unprivileged probe left running (started 02:10:56 UTC):
+
+- The ports are bound on `eth0` (4440, 4455, 8700, 8800) and 5353 is shared
+  with `avahi-daemon`, which is active on the Pi.
+- Queried on the Pi's own `eth0`, the plugin answers for `_netaudio-arc`,
+  `_netaudio-cmc` and `_netaudio-chan` with its name.
+- From the Mac (`dns-sd -B`), the 32 `_netaudio-chan` records for
+  `USB-16x16-Inferno` appear, but the device-level `_netaudio-arc` and
+  `_netaudio-cmc` records do not, in 4 to 9 s browses, while the Ferrofish
+  and the D2USB appear at once. Cause not found.
+- The device name was changed from `USB 16x16 Inferno` to `USB-16x16-Inferno`
+  in `config/asound-inferno.conf` during this (Dante names take letters,
+  digits and hyphens only). It was not established that the spaces mattered:
+  the channel records were only browsed after the change. The plan's proposed
+  network name needs the hyphens either way.
+- Not yet tried: the same browse with `avahi-daemon` stopped, a packet capture
+  of port 5353 on the Mac's audio interface, and Controller's own view.
+
+### Controller and first routes (02:14-02:27 UTC)
+
+- The device did appear in Dante Controller during the 15-minute run, with
+  `avahi-daemon` left running. The `dns-sd` browse that missed its device
+  records is therefore not a stand-in for Controller, and the discovery
+  section above is closed as a non-problem for now.
+- The operator routed in Controller. As logged by the plugin: Pi `RX 1-16`
+  subscribed to Ferrofish `Output 49-64` (02:14:52-02:15:02 UTC, each
+  "receiving data (unicast)"), and the Ferrofish requested the Pi's sixteen
+  transmit channels as four 4-channel flows at 24 bit, 32 frames per packet.
+  Which Ferrofish receive channels those feed is not in the Pi's log.
+- No thread-set change across all of that routing (`thread_changes=0` over
+  900 s), which is the first evidence on the blocking-pool question: route
+  changes did not create threads.
+- The plugin logged `received unknown opcode1 0x2204` repeatedly while
+  Controller was open; nothing visibly followed from it.
+- One playback xrun at 577 s of the unprivileged 900 s run (network threads
+  at normal priority), recovered in 1.9 ms of `prepare`.
+- With flows running the wake count rose from about 2,450 to about 17,500 a
+  second, 11,400 of them spins, so the per-packet notifications are far
+  denser than half a period once audio is flowing.
+- **The pattern did not come back.** In the 900 s run channels 1 to 4 held
+  non-zero audio that never locked and channels 5 to 16 were silent. A 25 s
+  run with a dump showed what it is: channels 1 and 2 carry the same low
+  noise (a few tens of 24-bit steps around zero, about -104 dBFS), not the
+  full-scale pattern. So either the Pi's transmit is not reaching Ferrofish
+  `Input 49-64`, which is what its matrix loops to `Output 49-64`, or the
+  Ferrofish is not accepting it. Bit transparency is therefore untested.
+- Persistence, seen in passing on that restart: the Ferrofish re-requested
+  all four transmit flows within 2 s of the device returning; the Pi's own
+  receive subscriptions came back one at a time, channel 1 after 5 s and
+  channel 2 after 18 s, and no more within the 25 s.
+
+### Bit transparency: PASS on this path (02:27:29-02:57:29 UTC)
+
+One 1800 s unprivileged run, period 64, buffer 1024, `TX_SOURCE_BIT_DEPTH=24`,
+24-bit flows at 32 frames per packet, path Pi `TX 1-16` -> Ferrofish ->
+(MADI -> Metric Halo -> MADI) -> Ferrofish `Output 49-64` -> Pi `RX 1-16`.
+Evidence:
+`outputs/latency/dante-20261009T022729Z/` (`verify-summary.txt` is tracked;
+`probe.log`, sha256 424f810a..., is gitignored and also kept on the Pi at
+`~/usb-16x16-work/dante-mode/probe-long-20261009T022729Z.log`).
+
+- The path was longer than the Ferrofish's own matrix loop. By the operator's
+  account afterwards, the return also runs through the Metric Halo over MADI:
+  what had been missing was MIOConsole3d routing its MADI receive channels
+  back out, together with Ferrofish routing changes and some housekeeping on
+  other devices in Controller. The exact routing was not recorded. The result
+  below therefore covers Inferno transmit and receive plus the Ferrofish and
+  the Metric Halo MADI loop, all bit-exact.
+- Nothing matched for the first 570 s. After those changes all sixteen
+  channels locked within half a millisecond of each
+  other at 02:36:59 UTC, each on its own number (no channel arrived on
+  another's).
+- From lock to the end, 58.5 million samples matched on every channel,
+  1,218.8 s of the 1,230 s. The other 11.4 s are two holes the probe made
+  itself (below). Outside them there was not one mismatch: the mismatch
+  counter stood still for 812 s and then for 381 s, about 936 million
+  samples across the sixteen channels, every one equal to the sample sent.
+- Both full-scale codes, 0x7FFFFF and 0x800000, came back intact at least
+  three times on every channel. No returned sample had a non-zero low byte.
+- So with the dither off, transmit and receive are bit-exact at 24 bits
+  through this path, full scale included. This is one run on one path at one
+  period; it says nothing about the default `TX_SOURCE_BIT_DEPTH=32`, which
+  was not run and by the source would fail.
+- No thread-set change in 1800 s, including across the operator's routing.
+- Rate against `CLOCK_MONOTONIC_RAW` over the whole run: 47,999.37 frames/s,
+  13 ppm under nominal. A steady offset like that is what a clock following
+  the network would show, and is the first indication that Statime is
+  steering; it is not a lock measurement.
+
+### The cost of an xrun with audio flowing: 5.7 s
+
+The same run had two playback xruns (at 591 s and 1,410 s; probe and network
+threads all at normal priority). `prepare` took 15.4 ms and 6.6 ms, but the
+returned audio was silent for 5.66 s and 5.74 s on every channel before the
+pattern locked again, the second time in two steps (8 channels, then 16).
+`prepare` tears down the transmitter, the flows go with it, and the Ferrofish
+has to ask for them again. This is upstream's "several seconds of sound are
+lost", measured. For this project it is the most important number so far: any
+design in which the bridge's recovery path re-prepares the Inferno PCM turns
+one RECOVER into a six-second dropout. The endpoint owner must never
+re-prepare in steady state; a late USB side has to be absorbed by feeding
+silence, not by restarting the network side.
+
+### Stage 2 gates after the first night
+
+| Gate | Status |
+|---|---|
+| ALSA contract | Works with the bridge's call set at periods 32 and 64, buffers 1024 and 2048. Three differences the owner must handle: the poll descriptor needs `snd_pcm_poll_descriptors_revents`; capture overruns are not reported; unrouted or freshly allocated capture buffers are not silence. Period 48 is not available. |
+| Transmit bit transparency | Passed with `TX_SOURCE_BIT_DEPTH=24`, full scale included (one 30-minute run). |
+| Thread creation | Threads are created in `hw_params` and replaced at every `prepare`; none appeared while running or on route changes. Separate owner process, as decided. |
+| Not yet measured | Latency (the probe does not measure it), PTP lock quality, a run as root long enough to count xruns with the network threads at real-time priority, Controller restart and reconnect persistence. |
+
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
@@ -478,8 +615,7 @@ Log `/dev/shm/inferno-probe-20261009T015515Z.log` on the Pi, read there.
    945 MB and the crate cache 161 MB. Nothing was installed or run.
 3. Part done (part 3): period 64 / buffer 1024 and the `--no-revents` spin.
    The root run with `--mlock` and the period / buffer sweep are done too.
-   Still to run: the forced xrun (as root, so recovery is timed under the
-   lock). Evidence
+   The forced xrun is done as well. Evidence
    of PTP lock needs Statime at `loglevel = "info"` for one start.
 4. Bit transparency measured in both directions with `TX_SOURCE_BIT_DEPTH=24`,
    full scale included.
