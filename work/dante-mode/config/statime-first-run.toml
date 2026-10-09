@@ -1,0 +1,16 @@
+# Statime fork 244f20a5, first-run config for the Dante stage 2 probe.
+# Software timestamps only: with hardware-clock = "none" the daemon steers an
+# overlay and writes no system or hardware clock (RESULTS.md, part 2).
+loglevel = "warn"
+sdo-id = 0
+domain = 0
+priority1 = 251
+virtual-system-clock = true
+virtual-system-clock-base = "monotonic_raw"
+usrvclock-export = true
+
+[[port]]
+interface = "eth0"
+network-mode = "ipv4"
+hardware-clock = "none"
+protocol-version = "PTPv1"

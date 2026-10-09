@@ -283,6 +283,168 @@ own experiment.
   which began before the install and before these checks. Nothing about
   bridge stability can be read from this window, in either direction.
 
+### The probe (written 2026-10-09 UTC, compiled on the Pi, not run)
+
+`probe/inferno-probe.c` drives the plugin with the bridge's own call set
+(nonblocking open, `MMAP_INTERLEAVED`, S32, the same hardware and software
+parameters, `poll`, `avail_update`, `delay`, `mmap_begin`/`commit`, `prepare`,
+`start`, `drop`) and no USB. One run answers the three open gates:
+
+- Contract: `NEGOTIATED` lines give what period and buffer were granted for
+  what was asked; `PROBE` lines give, per second, wake count, the longest gap
+  between wakes, capture `avail` and playback `delay` ranges, and frame counts
+  from which the rate against `CLOCK_MONOTONIC_RAW` follows.
+- Threads: a `THREADS` line at every lifecycle step (before open, after each
+  open, hardware params, prepare and start, after each recovery, before and
+  after each close, and again after a linger) lists every thread with its
+  name, policy and priority, plus locked and resident memory. The set is
+  re-read each second and any change while running is printed. `--mlock`
+  runs it under `mlockall(MCL_CURRENT|MCL_FUTURE)` as the bridge runs.
+- Bit transparency: each channel sends its own full-period 24-bit sequence in
+  which every sample predicts the next, so the capture is checked sample for
+  sample with no alignment. `VERIFY` lines give matches, mismatches, lost
+  locks, runs of zeros, non-zero low bytes, both full-scale codes seen, and
+  any channel that arrived on the wrong number. Full scale is covered after
+  350 s. It needs each Pi transmit channel routed back to the same-numbered
+  Pi receive channel through the Ferrofish's digital loop.
+- `--xrun-at N` stops servicing both streams once and times the recovery.
+
+`probe/run-probe.sh` wraps it on the Pi: application-scoped ALSA config
+(`config/asound-inferno.conf`), the staged plugin, `RUST_LOG=warn`, state under
+the work directory, log on tmpfs. It refuses while `usb16x16-aes67.service` is
+active or when no Statime socket exists; it starts no daemon and uses no sudo.
+`config/statime-first-run.toml` is the Statime config from part 2.
+
+Staged on the Pi at `~/usb-16x16-work/dante-mode/{probe,config}/`:
+
+```
+0ccef1e855c2d31ab9c455adb4c7c8e81b1e35501dabcc80db77606574f0792b  probe/inferno-probe  (gcc -O2 -Wall -Wextra, no warnings)
+fd0c6b0d1f0bc1dcca18447c6511e69debdd655049caf5a0fd4bcafd095b245d  probe/inferno-probe.c
+c4b79d46eb380e5bd5cd30a0d2b5379203034f01e1b7390f088de604e7c71054  probe/run-probe.sh
+eb9987f8f1a5d98d25211a1a585da7cedd337abf0ce04eecc4b2d38baac7ce9b  config/asound-inferno.conf
+11b055dfca80e9a31357eb40a6417916c9522b26ca9f821fb6a71132e7922d71  config/statime-first-run.toml
+```
+
+### A further contract finding from writing it: the poll descriptor
+
+The plugin's eventfd is only emptied inside its `poll_revents` callback
+(`alsa_pcm_inferno/src/lib.rs` 577-588), which ALSA runs when the application
+calls `snd_pcm_poll_descriptors_revents`. The bridge polls the raw descriptors
+and goes straight to `avail_update`; it never calls that function. Against
+this plugin its descriptor would stay readable after the first wake and the
+loop would spin. Either the bridge-side code adds the call or the plugin is
+opened with `DISABLE_POLLFD=1` and timed some other way. The probe's
+`--no-revents` reproduces the bridge's behaviour and counts the spins, so the
+reading can be confirmed.
+
+Also read while writing: `snd_pcm_hw_params` prepares an ioplug itself, so the
+network threads are first created inside the bridge's `configure()`, and its
+explicit `prepare()` right after is already a stop-and-recreate.
+
+## Stage 2, part 3: first probe runs (2026-10-09 01:50-01:53 UTC)
+
+Conditions: `usb16x16-aes67.service` stopped; Statime started by the operator
+as root with `config/statime-first-run.toml` at 01:50:19 UTC; probe run
+unprivileged over ssh by `run-probe.sh`; no Dante routes made; period 64,
+buffer 1024. Three runs: 20 s, 5 s with `--no-revents`, 5 s with a capture
+dump. Logs are on the Pi's tmpfs (`/dev/shm/inferno-probe-*.log`) and were not
+copied. These are short unprivileged runs: they settle the contract and the
+thread lifecycle, not stability or latency.
+
+Statime's terminal output, read against its source: `grandmaster unknown`
+once (a delay request attempted before the first Sync had named the
+grandmaster, `port/slave.rs` 700) and then `got DelayReq, master operation
+not implemented yet for PTPv1` every few seconds (`port/mod.rs` 544). The
+second is printed for every delay request any other PTPv1 follower multicasts,
+whatever state this port is in; it is noise at `warn`, not a fault. Neither
+line shows lock, and at this log level nothing does.
+
+| Question | Measured |
+|---|---|
+| Sizes | period 64 and buffer 1024 granted as asked, both directions |
+| Clock reaches the plugin | yes: `prepare` returned in under 1 ms, pointer ran at 48000 +/- 1 frames each second against `CLOCK_MONOTONIC_RAW` |
+| Is that a PTP lock | not shown by these runs; a free-running overlay would read the same |
+| Poll with the revents call | about 2,445 wakes/s, longest gap 0.72 ms, capture `avail` 0-35, playback `delay` 93-128 at a lead of 128 |
+| Poll as the bridge does it | 1,025,000 wakes/s, every one a spin. Reading confirmed: the bridge loop would burn a core |
+| Recoveries | none in any run |
+| Open cost | first `hw_params` 251 ms (the device starts there); later calls under 1 ms |
+
+Threads, as listed by the probe:
+
+- None after `open`. Three appear inside the first `hw_params` (two named
+  `Inferno main`, one `flows RX`), a fourth (`flows TX`) inside the playback
+  `hw_params`.
+- The explicit `prepare` that follows replaced `flows RX` (thread 19308 became
+  19309) and `flows TX` (19310 became 19311). Stop-and-recreate on every
+  prepare is confirmed.
+- No change in the thread set over 20 s of running. The blocking-pool question
+  is not settled by that: no route was made and no device came or went.
+- After `close` all four were still alive; after a 12 s linger they were gone.
+  Close returns before the device has shut down.
+- All four ran SCHED_OTHER priority 0. The unprivileged shell has
+  `ulimit -r 0`, so the plugin's request for SCHED_FIFO failed and, as read,
+  said nothing.
+
+Other observations:
+
+- `--mlock` could not be tested unprivileged: under `mlockall` the open failed
+  with -6. The shell's locked-memory limit is 8192 kB, 4256 kB was already
+  locked before the open and the plugin is 6.9 MB, so the likely cause is the
+  limit, not the plugin. It needs a run as root, as the bridge runs.
+- Unrouted receive channels are not guaranteed silence. The dump held 469
+  non-zero samples in 5 s, all on channel 11, two fixed values (0x00015981 and
+  0x00011081) alternating at 292 and 732 frames, which sum to the buffer
+  length: two fixed places in the ring, read once per lap. The 20 s run had
+  the same once-per-lap pattern on channels 11 and 15. That is consistent
+  with a capture buffer that is allocated unzeroed and never written where no
+  flow exists; it was not traced further. The level is about -88 dBFS. An
+  owner process should clear the capture areas itself before starting.
+- Every run logged `unable to receive start time, ring_buffer addressing will
+  be wrong!` and `unable to get start timestamp for ring buffer output` at the
+  moment of the second prepare. They coincide with the first instance being
+  torn down; whether they are only that was not established.
+- Capture and playback each delivered 48000 frames a second throughout; the
+  first second of playback carries the 128-frame lead.
+
+### The same probe as root with the memory lock (01:55:15 UTC, run by the operator)
+
+`sudo -E run-probe.sh --seconds 20 --mlock`, Statime unchanged, no routes.
+Log `/dev/shm/inferno-probe-20261009T015515Z.log` on the Pi, read there.
+
+- The open succeeded under `mlockall`, so the earlier -6 was the unprivileged
+  locked-memory limit, as supposed.
+- Real-time priority took effect: `flows RX` SCHED_FIFO 80 and `flows TX`
+  SCHED_FIFO 81; the two `Inferno main` threads stayed SCHED_OTHER. Thread
+  creation and the replacement at `prepare` were as in the unprivileged run.
+- Memory under the lock, by lifecycle step:
+
+  | Step | Locked (VmLck) | Resident (VmRSS) |
+  |---|---|---|
+  | before open | 4.3 MB | 4.1 MB |
+  | after open (plugin loaded) | 9.2 MB | 9.0 MB |
+  | after capture `hw_params` (3 threads) | 212.2 MB | 15.7 MB |
+  | after playback `prepare` (4 threads) | 279.9 MB | 18.0 MB |
+
+  Resident memory is what is occupied: about 2 MB per thread, which fits a
+  fully populated 2 MiB stack each. The locked figure is roughly 68 MB per
+  thread and is address space counted as locked, not memory in use; a
+  per-thread allocator arena reservation would look like this, but that was
+  not traced. On a 990 MB Pi the resident cost is small. The stack populate
+  is the per-`prepare` cost the bridge rule is about: the playback `prepare`
+  took 759 us here against 329 us unlocked.
+- Timing was unchanged with the network threads at real-time priority: about
+  2,490 wakes/s, longest gap 0.69 ms, capture `avail` 0-33, playback `delay`
+  95-128, no recoveries, no thread-set change in 20 s. One second read 47,991
+  frames and the next 48,009 where every other second was within 2 of 48,000;
+  not explained.
+- The unrouted capture channels held far more non-zero data than before:
+  64,716 mismatching samples and 89,110 non-zero low bytes in 20 s, spread
+  over at least channels 4 to 9 (up to 5,627 on one channel). The memory lock
+  changes what the heap holds, and the reading of part 3 stands with more
+  weight: unrouted receive channels return whatever the buffer was allocated
+  with. Clearing the capture areas before start is a requirement for the
+  owner process, not a nicety.
+
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
@@ -293,9 +455,11 @@ own experiment.
    has 990 MB of RAM; the one mid-build reading showed 518 MB available, the
    peak was not watched. The staging directory is
    945 MB and the crate cache 161 MB. Nothing was installed or run.
-3. The probe, without USB: mmap, poll, `avail`, `delay`, start, prepare,
-   recovery and close as the bridge uses them, at periods 32 and 64 with
-   buffers 1024 and 2048, logging every clock overlay update.
+3. Part done (part 3): period 64 / buffer 1024 and the `--no-revents` spin.
+   The root run with `--mlock` is done too. Still to run: period 32 and
+   buffer 2048, and the forced xrun (as root, so recovery is timed under the
+   lock). Evidence
+   of PTP lock needs Statime at `loglevel = "info"` for one start.
 4. Bit transparency measured in both directions with `TX_SOURCE_BIT_DEPTH=24`,
    full scale included.
 5. A thread trace across open, prepare, start, a route change, a forced xrun
