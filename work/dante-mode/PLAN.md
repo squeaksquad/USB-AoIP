@@ -131,6 +131,60 @@ Verify rollback after normal stop, failed startup and forced candidate crash. RA
 
 Record installation and acceptance in the authoritative handoff only when they happen. Audinate Embedded Platform remains the official fallback if Inferno cannot satisfy interoperability or lifecycle requirements; obtain Pi/platform support and licensing details before planning an SDK integration.
 
+### 3a. Subscription resolution and Controller status (added 2026-10-09)
+
+Observed on 2026-10-09 (RESULTS.md): after every endpoint start the Pi's own
+receive subscriptions come back one at a time over tens of seconds to minutes
+(channel 1 after 5 s, channel 2 after 18 s on one restart), and Dante
+Controller kept showing `RX 4-12` as "Unresolved" until it was told to reload
+device information. The Ferrofish's side re-requests the Pi's transmit flows
+within about 2 s. These are two separate faults and are handled separately.
+
+What the pinned source does (`inferno_aoip/src/device_server/channels_subscriber.rs`,
+`mdns_client.rs`), read not measured:
+
+- Each subscribed channel is resolved by its own mDNS query, sixteen of them
+  launched 8 ms apart, each on a newly created socket bound to port 5353,
+  each waiting up to 3 s (`mdns_client.rs` 164-166, `channels_subscriber.rs`
+  536-553; upstream's own TODO there is to resolve several channels in one
+  query).
+- Whatever does not answer is retried only after 9 s
+  (`channels_subscriber.rs` 1252). One or two channels resolving per round,
+  9 to 13 s apart, is what the restart on 2026-10-09 showed.
+- Port 5353 on the Pi is shared with `avahi-daemon`. A reply sent unicast to
+  port 5353 reaches only one of the sockets bound there, so some replies may
+  never reach the query that asked. Not established.
+- On a status change the device sends a channel-change notification
+  (`channels_subscriber.rs` 1136-1196, `protocol/mcast.rs` 50). Controller
+  staying stale means either that notification is not being sent in this
+  case, or it is not what Controller acts on. Not established.
+
+Order of work, one variable at a time, all without USB (the probe is enough):
+
+1. Baseline. Run the probe at `RUST_LOG=debug` from a cold start with the
+   saved sixteen subscriptions and record, per channel, the time from start to
+   "receiving data". Three starts. Record at the same time what Controller
+   shows without a reload, and when.
+2. `avahi-daemon` stopped for one start (root, needs a go; `audio-dev.local`
+   stops resolving while it is off). If the time to sixteen collapses, the fix
+   is a deployment one: the endpoint host runs without avahi on the AoIP
+   interface, or avahi is restricted to `wlan0`.
+3. If it does not: a source patch to the pinned tree, kept as a patch file
+   beside `SOURCES.lock` and built as a distinct artifact with its own hash.
+   Smallest first: the 9 s retry interval down to about 1 s. Then, only if
+   needed, one shared query socket or one query for all channels of a device.
+4. Controller status. Capture the Pi's multicast notifications on `eth0`
+   across a status change and compare with what the Ferrofish sends when one
+   of its own subscriptions changes. Fix in the same patch series if it is a
+   missing or malformed notification.
+5. Whatever the outcome, the structural answer stands: the endpoint owner is
+   a long-lived process that outlives USB activity, so resolution is paid at
+   boot and not at every DAW open.
+
+Exit gate: from a cold start, sixteen receive channels carrying audio and shown
+resolved in Controller without a manual reload, inside a stated time, on three
+starts; the same after a Controller restart and an Ethernet reconnect.
+
 ## Risks / edge cases
 
 - Endpoint visibility can pass while audio or subscription persistence fails; all three need separate checks.

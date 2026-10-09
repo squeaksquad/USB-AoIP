@@ -828,6 +828,38 @@ Evidence: `outputs/latency/dante-pitch-*-20261009T04*`.
   open and the `unknown opcode1 0x2204` pairs that appear while Controller is
   talking to the device.
 
+### Second start: RTL 884 samples and the sixteen-channel soak (04:30-04:44 UTC)
+
+Prototype restarted by the operator at 04:29:59 UTC with the same settings
+(`SYNC=pitch`, `alsaloop` 5 ms, Inferno 2 ms; a 1200 s run).
+
+- RTL Utility at buffer 32, channel 1 to 1, the settled reading: **884
+  samples, 18.417 ms** (CoreAudio 312, return level -21.6 dB). Screenshot
+  `outputs/latency/dante-pitch-rtl-20261009/rtl-utility-32f-884.png`; no xrun
+  or lag line on the Pi at 04:33:05 UTC. This is 7 samples under the AES67
+  record's RTL reading at the same buffer (891, 18.563 ms).
+- By the plus-188 rule the harness on this start would read 696, against 705
+  measured on the previous start. The harness was not run on this start
+  before the soak, so whether the level differs between starts by those 9
+  samples, or RTL's settled reading sits that far from the rule on this
+  transport, is open. It is the first sign that the level may be a per-start
+  draw here too.
+- Soak, `measure-candidate.sh soak 600 32 dante-pitch` from 04:33:10 UTC:
+  600 s of 0.1 load on all sixteen channels at 32 frames. **PASS**: sixteen
+  channels returned at peak 0.1000, longest zero run 1 sample on any channel
+  (the criterion fails at 4), 0 input and 0 output discontinuities, and on
+  the Pi no xrun and no lag line added, both gadget streams running before
+  and after, pitch controls within about 26 ppm. Evidence
+  `outputs/latency/dante-pitch-soak-600s-32f-20261009T043310Z.json` and its
+  `-api` directory.
+- With the four loaded 800-impulse runs of the previous start, the prototype
+  has now met the measurement half of the repo's acceptance rule, split over
+  two starts. It is still a prototype: `alsaloop` at SCHED_RR 99, started by
+  hand as root with Statime in a terminal, nothing that survives a reboot or
+  a closed DAW, bit transparency in this mode unmeasured.
+- A plan for the slow subscription resolution and the stale Controller status
+  is in `PLAN.md` as stage 3a.
+
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
