@@ -11909,3 +11909,19 @@ is what the 800-impulse harness runs will show. Record:
 `work/dante-mode/RESULTS.md`, last three sections; evidence
 `outputs/latency/dante-owner-*-20261009*/`. Nothing installed; `usb16x16-aes67`
 inactive; Statime in the operator's terminal since 17:57 UTC.
+
+**MEASURED 2026-10-09 21:13-21:39 UTC: the Dante owner's battery on one start:
+516 samples (10.750 ms) at 32 frames, spread 0; soak PASS.** Owner 48d51783 as
+root with `--seed-ppm -15`, lead 128, return queue 144, Inferno 2 ms; plugin
+55dee5d8. `measure-candidate.sh`, label `dante-owner`: noise probe 0.0 %
+zeros; four loaded 800-impulse runs all 516, spread 0, no discontinuity; 600 s
+sixteen-channel soak PASS, longest zero run 1; no xrun, lag or error line on
+the Pi in any of it. For scale: `alsaloop` prototype 705, AES67 record 703, so
+187 to 189 samples (3.9 ms) shorter; plus 188 gives RTL 704, and the operator
+read 703 (14.646 ms) on the previous start. The return queue's periodic
+37-frame reading is the gadget's pointer as reported, not delay: 3,200
+impulses across about fifty episodes, none displaced. **Not ACCEPTED:** RTL on
+the same start, three starts, bit transparency through the owner, the
+open/close and restart checks and the extended hour are owed, and nothing
+survives a reboot. Evidence `outputs/latency/dante-owner-*-20261009T21*`;
+record `work/dante-mode/RESULTS.md`, last section.

@@ -1190,3 +1190,47 @@ per-second table `depths.txt` tracked; the log gitignored).
   What decides it: 800 harness impulses span about thirteen episodes, and a
   real delay change shows as impulses 37 or 38 samples apart, an artefact as
   spread 0.
+
+## The owner's battery on one start: 516 samples at 32 frames, spread 0, soak PASS (2026-10-09 21:13-21:39 UTC)
+
+Owner started by the operator as root at 21:13:00 UTC:
+`run-owner.sh 3600 --log-every 1 --seed-ppm -15` (owner 48d51783, plugin
+55dee5d8, `--tx-lead 128`, `--rx-queue 144`, Inferno latencies 2 ms, gadget
+period 48 / buffer 480). RTL Utility closed. Measured from the Mac with
+`measure-candidate.sh`, label `dante-owner`, 32 CoreAudio frames throughout.
+Evidence `outputs/latency/dante-owner-*-20261009T21*`.
+
+| Run (UTC) | Kind | Result | Spread | Discontinuities | Pi xrun / lag / error lines |
+|---|---|---|---|---|---|
+| 21:13:16 | noise probe, out 1 / in 2, 0.1 load | 0.0 % zeros, no zero run of 4 or more in 1,244,829 samples | | | 0 / 0 / 0 |
+| 21:13:57 | 800 impulses, 0.1 load | 516 samples, 10.750 ms, all 800 | 0 | 0 in, 0 out | 0 / 0 / 0 |
+| 21:17:46 | same | 516, all 800 | 0 | 0, 0 | 0 / 0 / 0 |
+| 21:21:21 | same | 516, all 800 | 0 | 0, 0 | 0 / 0 / 0 |
+| 21:24:56 | same | 516, all 800 | 0 | 0, 0 | 0 / 0 / 0 |
+| 21:28:32 | 600 s soak, 0.1 on all sixteen | PASS: sixteen channels at peak 0.1000, longest zero run 1 | | 0, 0 | 0 / 0 / 0 |
+
+- 3,200 impulses on one sample over fifteen minutes, then ten minutes of
+  sixteen-channel load with no hole, on one start of one process. That is the
+  repo's measurement rule for an operating point (four loaded 800-impulse runs
+  and the soak, after a clean noise probe), met on a single start.
+- **516 against 705 for the `alsaloop` prototype and 703 for the AES67
+  record: 187 to 189 samples, 3.9 ms, shorter.** By the plus-188 rule RTL at
+  32 would read 704, 14.667 ms; the operator's reading on the previous start
+  was 703 (14.646 ms), so the rule holds here to a sample, where the
+  prototype's 884 against 705 had not fitted it.
+- The return-queue question is answered: 3,200 impulses span about fifty of
+  the sixteen-second episodes and none is displaced. The 37-frame reading is
+  the gadget's playback pointer as reported, not delay. It still disturbs the
+  return servo for a second each time (the pitch control read 1000029 once
+  against 1000014 to 1000016 otherwise) and is worth removing from the
+  servo's input, but it is not in the audio.
+- With `--seed-ppm -15` the pitch controls read 1000015 / 1000015 from the
+  first wrapper read, sixteen seconds in, and stayed within 1 of that.
+- Not yet read: the owner's own log for this start (it runs until 22:13 UTC
+  and is left alone until then), including what the harness's readiness
+  probes, which open and close the device, did to the two links.
+- What it is not: ACCEPTED. Missing are RTL on this same start, the three
+  starts of owed item 1, bit transparency through the owner, the open/close
+  and restart checks of step 5, and the hour of extended qualification. The
+  owner is hand-started as root with Statime in a terminal and nothing
+  survives a reboot.

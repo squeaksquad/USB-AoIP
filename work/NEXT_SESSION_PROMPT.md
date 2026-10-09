@@ -79,7 +79,7 @@ has run once as root: owner 48d51783 on the Pi, `sudo
 for the network half alone), RTL 14.646 ms at 32 by the operator on its first
 start (one reading, servo still settling). Read RESULTS.md's last three
 sections and the "Changes made while building the USB half" block at the top
-of OWNER_DESIGN.md. **Next, in order:** (a) `measure-candidate.sh noise 32`
+of OWNER_DESIGN.md. **Done 21:13-21:39 UTC on one start with `--seed-ppm -15`: noise probe clean, 4 x 800 loaded impulses all 516 samples (10.750 ms) spread 0, 600 s soak PASS; the return-queue reading is an artefact, not delay.** Still owed from the list that follows: RTL on a battery start, (c) and (d), bit transparency through the owner, the extended hour, and taking the artefact out of the return servo's input. The list as written before the battery: (a) `measure-candidate.sh noise 32`
 then `measure-candidate.sh 32 800` against a running owner, RTL closed: spread
 0 or impulses 37 apart settles the return-queue question; (b) start with
 `--seed-ppm -15` (the Mac read 15.3 ppm slow) and check both depths start and
