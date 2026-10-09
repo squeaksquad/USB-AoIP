@@ -56,7 +56,7 @@ trap cleanup EXIT
     echo "START $stamp seconds=$seconds owner=$(sha256sum "$owner" | cut -c1-8) plugin=$(sha256sum "$plugin_dir/libasound_module_pcm_inferno.so" | cut -c1-8) config=$ALSA_CONFIG_PATH trial=${trial:-no} mode=${mode:-usb}"
 } | tee "$log"
 echo "log: $log"
-"$owner" $mode --seconds "$seconds" $trial "$@" >> "$log" 2>&1 &
+"$owner" $mode --seconds "$seconds" --ppm-file "$XDG_STATE_HOME/usb16x16-dante-owner.ppm" $trial "$@" >> "$log" 2>&1 &
 pid=$!
 trap 'kill -INT $pid 2>/dev/null' INT TERM
 wait "$pid"; rc=$?

@@ -91,6 +91,8 @@ struct Options {
     double kp{0.5};
     double ki{0.003};
     double seed_ppm{0.0};
+    bool seed_given{false};
+    std::string ppm_file;
     bool mlock{true};
     bool realtime{true};
 };
@@ -103,12 +105,15 @@ struct Options {
                "                     [--guard 256] [--priority 79] [--seconds 0] [--log-every 10]\n"
                "                     [--usb hw:CARD=UAC2Gadget,DEV=0] [--usb-period 48] [--usb-buffer 480]\n"
                "                     [--rx-queue 144] [--rx-slack 96] [--kp 0.5] [--ki 0.003] [--seed-ppm 0]\n"
+               "                     [--ppm-file PATH]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
                "  --tx-lead   Inferno playback depth held after each gadget block (and the silent lead)\n"
                "  --rx-queue  gadget playback queue held after each write\n"
                "  --rx-slack  how far over --rx-queue the queue may go before incoming frames are dropped\n"
                "  --seed-ppm  the host's clock against Dante's, to start both servos from (0: learn it)\n"
+               "  --ppm-file  where the learned offset is kept between runs; read at start unless\n"
+               "              --seed-ppm is given, rewritten once a minute and at exit\n"
                "  --guard     frames behind the clock that are not cleared yet\n"
                "  --seconds   stop after this long; 0 runs until a signal\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
@@ -143,7 +148,8 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--rx-slack") o.rx_slack = parse_number(v, "--rx-slack");
         else if (a == "--kp") o.kp = std::strtod(v, nullptr);
         else if (a == "--ki") o.ki = std::strtod(v, nullptr);
-        else if (a == "--seed-ppm") o.seed_ppm = std::strtod(v, nullptr);
+        else if (a == "--seed-ppm") { o.seed_ppm = std::strtod(v, nullptr); o.seed_given = true; }
+        else if (a == "--ppm-file") o.ppm_file = v;
         else if (a == "--period") o.period = parse_number(v, "--period");
         else if (a == "--buffer") o.buffer = parse_number(v, "--buffer");
         else if (a == "--tx-lead") o.tx_lead = parse_number(v, "--tx-lead");
@@ -306,6 +312,9 @@ struct Telemetry {
     std::atomic<std::int64_t> usb_last_fault{0};
     std::atomic<std::uint64_t> usb_detaches{0};
     std::atomic<std::uint64_t> pitch_write_errors{0};
+    std::atomic<std::uint64_t> servo_rejected{0};         // seconds the depth filter held back
+    std::atomic<std::int64_t> ppm_estimate_milli{0};
+    std::atomic<bool> ppm_known{false};
 };
 
 void store_max(std::atomic<std::int64_t>& target, std::int64_t value) noexcept {
@@ -407,7 +416,7 @@ void* telemetry_entry(void* argument) {
                             " pitch_c=%d pitch_p=%d tx_i=%.2f rx_i=%.2f usb_tx=%" PRIu64 " usb_rx=%" PRIu64
                             " tx_links=%" PRIu64 " tx_reprimes=%" PRIu64 " rx_primes=%" PRIu64 " rx_overflow=%" PRIu64
                             " rx_idle_discards=%" PRIu64 " capture_faults=%" PRIu64 " playback_faults=%" PRIu64
-                            " detaches=%" PRIu64 " pitch_write_errors=%" PRIu64 "\n",
+                            " detaches=%" PRIu64 " pitch_write_errors=%" PRIu64 " servo_rejected=%" PRIu64 "\n",
                             seconds, usb_owner_name(owner), tx_state_name(tx), rx != 0 ? "flow" : "idle",
                             static_cast<double>(t.tx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
                             static_cast<double>(t.rx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
@@ -424,7 +433,8 @@ void* telemetry_entry(void* argument) {
                             t.usb_capture_faults.load(std::memory_order_relaxed),
                             t.usb_playback_faults.load(std::memory_order_relaxed),
                             t.usb_detaches.load(std::memory_order_relaxed),
-                            t.pitch_write_errors.load(std::memory_order_relaxed));
+                            t.pitch_write_errors.load(std::memory_order_relaxed),
+                            t.servo_rejected.load(std::memory_order_relaxed));
             }
             std::fflush(stdout);
             last_tx = txf;
@@ -811,6 +821,28 @@ struct PitchControl {
     }
 };
 
+// The learned clock offset between runs: one number in a small file, replaced
+// whole. Never called on the loop thread.
+bool read_ppm_file(const std::string& path, double& ppm) {
+    FILE* f = std::fopen(path.c_str(), "r");
+    if (f == nullptr) return false;
+    double value = 0.0;
+    const bool ok = std::fscanf(f, "%lf", &value) == 1 && value >= -250.0 && value <= 250.0;
+    std::fclose(f);
+    if (ok) ppm = value;
+    return ok;
+}
+
+void write_ppm_file(const std::string& path, const Telemetry& t) {
+    if (path.empty() || !t.ppm_known.load(std::memory_order_acquire)) return;
+    const std::string temporary = path + ".tmp";
+    FILE* f = std::fopen(temporary.c_str(), "w");
+    if (f == nullptr) return;
+    std::fprintf(f, "%.2f\n", static_cast<double>(t.ppm_estimate_milli.load(std::memory_order_relaxed)) / 1000.0);
+    std::fclose(f);
+    std::rename(temporary.c_str(), path.c_str());
+}
+
 struct StewardContext {
     const Options* options;
     Telemetry* telemetry;
@@ -828,6 +860,7 @@ void* steward_entry(void* argument) {
     PitchControl pitch;
     std::int64_t next_try = 0;
     int last_reported = 1;   // not an ALSA error, so the first failure is printed
+    std::int64_t next_ppm_write = now_ns() + 60000000000LL;
     const auto close_all = [&]() {
         pitch.close();
         if (usb.playback.handle != nullptr) { snd_pcm_close(usb.playback.handle); usb.playback.handle = nullptr; }
@@ -837,6 +870,10 @@ void* steward_entry(void* argument) {
         timespec nap{0, 20000000};
         nanosleep(&nap, nullptr);
         if (!t.running.load(std::memory_order_acquire)) continue;
+        if (now_ns() >= next_ppm_write) {
+            next_ppm_write = now_ns() + 60000000000LL;
+            write_ppm_file(o.ppm_file, t);
+        }
         const auto owner = static_cast<UsbOwner>(t.usb_owner.load(std::memory_order_acquire));
         if (owner == UsbOwner::loop) {
             const int rc = pitch.write(t.wanted_capture_pitch.load(std::memory_order_relaxed),
@@ -899,16 +936,14 @@ struct UsbHalf {
     TxState tx{TxState::idle};
     unsigned tx_idle_wakes{0};
     unsigned tx_holdoff{0};
-    double tx_sum{0.0};
-    unsigned tx_count{0};
+    usb16x16::owner::DepthFilter tx_filter;
     // Back: Dante to gadget playback.
     bool rx_primed{false};
     bool rx_flowing{false};
     unsigned rx_idle_wakes{0};
     unsigned rx_holdoff{0};
     std::int64_t rx_last_after{0};
-    double rx_sum{0.0};
-    unsigned rx_count{0};
+    usb16x16::owner::DepthFilter rx_filter;
     std::int64_t next_servo_ns{0};
     usb16x16::owner::PitchPi tx_servo;
     usb16x16::owner::PitchPi rx_servo;
@@ -919,18 +954,14 @@ struct UsbHalf {
 void set_tx_state(UsbHalf& usb, TxState state, Telemetry& t) noexcept {
     usb.tx = state;
     t.tx_state.store(static_cast<int>(state), std::memory_order_relaxed);
-    if (state != TxState::flow) {
-        t.wanted_capture_pitch.store(kNominalPitch, std::memory_order_relaxed);
-        usb.tx_sum = 0.0;
-        usb.tx_count = 0;
-    }
+    usb.tx_filter.restart();
+    if (state != TxState::flow) t.wanted_capture_pitch.store(kNominalPitch, std::memory_order_relaxed);
 }
 
 void set_rx_flowing(UsbHalf& usb, bool flowing, Telemetry& t) noexcept {
     usb.rx_flowing = flowing;
     t.rx_flowing.store(flowing, std::memory_order_relaxed);
-    usb.rx_sum = 0.0;
-    usb.rx_count = 0;
+    usb.rx_filter.restart();
     if (!flowing) t.wanted_playback_pitch.store(kNominalPitch, std::memory_order_relaxed);
 }
 
@@ -1110,8 +1141,7 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
     if (!commit_playback(net, usb.tx_scratch.data(), static_cast<snd_pcm_uframes_t>(frames), t)) return false;
     depth += frames;
     t.usb_tx_frames.fetch_add(static_cast<std::uint64_t>(frames), std::memory_order_relaxed);
-    usb.tx_sum += static_cast<double>(depth);
-    ++usb.tx_count;
+    usb.tx_filter.add(static_cast<int>(depth));
     return true;
 }
 
@@ -1122,7 +1152,12 @@ void service_rx(UsbHalf& usb, UsbHandles& handles, const Options& o, long frames
         return;
     }
     UsbPcm& pcm = handles.playback;
-    const snd_pcm_sframes_t available = snd_pcm_avail_update(pcm.handle);
+    // snd_pcm_avail, not avail_update: on a kernel PCM the mmap'd pointer only
+    // moves when the driver reports a period, so avail_update can be most of a
+    // period stale, by an amount that slides with the host's packet phase. That
+    // staleness is the queue that "read 37 frames high" for seconds at a time on
+    // 2026-10-09. snd_pcm_avail asks the driver where the pointer is now.
+    const snd_pcm_sframes_t available = snd_pcm_avail(pcm.handle);
     if (available < 0) {
         playback_fault(usb, handles, available, t);
         return;
@@ -1184,8 +1219,7 @@ void service_rx(UsbHalf& usb, UsbHandles& handles, const Options& o, long frames
     }
     usb.rx_last_after = queue + take;
     if (usb.rx_flowing) {
-        usb.rx_sum += static_cast<double>(usb.rx_last_after);
-        ++usb.rx_count;
+        usb.rx_filter.add(static_cast<int>(usb.rx_last_after));
     }
 }
 
@@ -1194,24 +1228,32 @@ void run_servos(UsbHalf& usb, const Options& o, std::int64_t now, Telemetry& t) 
     if (now < usb.next_servo_ns) return;
     const double interval = usb.next_servo_ns == 0 ? 1.0 : 1.0 + static_cast<double>(now - usb.next_servo_ns) / 1e9;
     usb.next_servo_ns = now + 1000000000LL;
-    if (usb.tx == TxState::flow && usb.tx_count >= 200) {
-        const double mean = usb.tx_sum / usb.tx_count;
-        const double offset = usb.tx_servo.update(mean - static_cast<double>(o.tx_lead), interval);
+    double figure = 0.0;
+    const bool tx_closed = usb.tx_filter.finish(figure);
+    if (usb.tx == TxState::flow && tx_closed) {
+        const double offset = usb.tx_servo.update(figure - static_cast<double>(o.tx_lead), interval);
         t.wanted_capture_pitch.store(usb16x16::owner::pitch_value(offset, -1), std::memory_order_relaxed);
-        t.tx_mean_milli.store(std::llround(mean * 1000.0), std::memory_order_relaxed);
         t.tx_integral_milli.store(std::llround(usb.tx_servo.integral() * 1000.0), std::memory_order_relaxed);
     }
-    usb.tx_sum = 0.0;
-    usb.tx_count = 0;
-    if (usb.rx_flowing && usb.rx_count >= 200) {
-        const double mean = usb.rx_sum / usb.rx_count;
-        const double offset = usb.rx_servo.update(mean - static_cast<double>(o.rx_queue), interval);
+    t.tx_mean_milli.store(std::llround(usb.tx_filter.last_figure() * 1000.0), std::memory_order_relaxed);
+    const bool rx_closed = usb.rx_filter.finish(figure);
+    if (usb.rx_flowing && rx_closed) {
+        const double offset = usb.rx_servo.update(figure - static_cast<double>(o.rx_queue), interval);
         t.wanted_playback_pitch.store(usb16x16::owner::pitch_value(offset, +1), std::memory_order_relaxed);
-        t.rx_mean_milli.store(std::llround(mean * 1000.0), std::memory_order_relaxed);
         t.rx_integral_milli.store(std::llround(usb.rx_servo.integral() * 1000.0), std::memory_order_relaxed);
     }
-    usb.rx_sum = 0.0;
-    usb.rx_count = 0;
+    t.rx_mean_milli.store(std::llround(usb.rx_filter.last_figure() * 1000.0), std::memory_order_relaxed);
+    t.servo_rejected.store(usb.tx_filter.rejected() + usb.rx_filter.rejected(), std::memory_order_relaxed);
+    // The host's clock against Dante's, as far as either loop has learned it:
+    // what the next start is seeded with.
+    const bool tx_knows = usb.tx == TxState::flow && usb.tx_servo.settled();
+    const bool rx_knows = usb.rx_flowing && usb.rx_servo.settled();
+    if (tx_knows || rx_knows) {
+        const double estimate = tx_knows && rx_knows ? 0.5 * (usb.tx_servo.integral() - usb.rx_servo.integral())
+                                : tx_knows ? usb.tx_servo.integral() : -usb.rx_servo.integral();
+        t.ppm_estimate_milli.store(std::llround(estimate * 1000.0), std::memory_order_relaxed);
+        t.ppm_known.store(true, std::memory_order_release);
+    }
 }
 
 // One wake of the whole owner. False on an Inferno error, which the design has
@@ -1263,21 +1305,23 @@ pthread_t start_thread(void* (*entry)(void*), void* argument, const char* what) 
 }  // namespace
 
 int main(int argc, char** argv) {
-    const Options options = parse_options(argc, argv);
+    Options options = parse_options(argc, argv);
+    bool seed_from_file = false;
+    if (!options.seed_given && !options.ppm_file.empty()) seed_from_file = read_ppm_file(options.ppm_file, options.seed_ppm);
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
     std::setvbuf(stdout, nullptr, _IOLBF, 0);
 
     std::printf("START usb16x16-dante-owner mode=%s pcm=%s period=%lu buffer=%lu tx_lead=%lu guard=%lu priority=%d "
                 "mlock=%d rt=%d seconds=%u usb=%s usb_period=%lu usb_buffer=%lu rx_queue=%lu rx_slack=%lu kp=%g ki=%g "
-                "seed_ppm=%g\n",
+                "seed_ppm=%g seed_from_file=%d\n",
                 options.no_usb ? "no-usb" : "usb", options.pcm.c_str(), static_cast<unsigned long>(options.period),
                 static_cast<unsigned long>(options.buffer), static_cast<unsigned long>(options.tx_lead),
                 static_cast<unsigned long>(options.guard), options.priority, options.mlock ? 1 : 0,
                 options.realtime ? 1 : 0, options.seconds, options.usb.c_str(),
                 static_cast<unsigned long>(options.usb_period), static_cast<unsigned long>(options.usb_buffer),
                 static_cast<unsigned long>(options.rx_queue), static_cast<unsigned long>(options.rx_slack), options.kp,
-                options.ki, options.seed_ppm);
+                options.ki, options.seed_ppm, seed_from_file ? 1 : 0);
 
     // 1. Memory lock first, so every stack made below is populated when it is made.
     if (options.mlock && mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
@@ -1374,6 +1418,7 @@ int main(int argc, char** argv) {
     stop_requested.store(true, std::memory_order_relaxed);
     loop_finished.store(true, std::memory_order_release);
     if (!options.no_usb) pthread_join(steward_thread, nullptr);   // closes the gadget and puts the pitch back
+    write_ppm_file(options.ppm_file, telemetry);
     pthread_join(telemetry_thread, nullptr);
 
     const double elapsed = static_cast<double>(now_ns() - started) / 1e9;
@@ -1389,12 +1434,13 @@ int main(int argc, char** argv) {
         std::printf("USBSUMMARY usb_tx=%" PRIu64 " usb_rx=%" PRIu64 " tx_links=%" PRIu64 " tx_reprimes=%" PRIu64
                     " rx_primes=%" PRIu64 " rx_overflow=%" PRIu64 " rx_idle_discards=%" PRIu64 " capture_faults=%" PRIu64
                     " playback_faults=%" PRIu64 " detaches=%" PRIu64 " pitch_write_errors=%" PRIu64
-                    " tx_integral_ppm=%.2f rx_integral_ppm=%.2f\n",
+                    " servo_rejected=%" PRIu64 " tx_integral_ppm=%.2f rx_integral_ppm=%.2f\n",
                     telemetry.usb_tx_frames.load(), telemetry.usb_rx_frames.load(), telemetry.tx_links.load(),
                     telemetry.tx_reprimes.load(), telemetry.rx_primes.load(), telemetry.rx_overflow.load(),
                     telemetry.rx_idle_discards.load(), telemetry.usb_capture_faults.load(),
                     telemetry.usb_playback_faults.load(), telemetry.usb_detaches.load(),
-                    telemetry.pitch_write_errors.load(), usb.tx_servo.integral(), usb.rx_servo.integral());
+                    telemetry.pitch_write_errors.load(), telemetry.servo_rejected.load(), usb.tx_servo.integral(),
+                    usb.rx_servo.integral());
     }
     if (exit_code == 3) {
         std::printf("FATAL the Inferno PCM reported an error; with the stock plugin this is an underrun "

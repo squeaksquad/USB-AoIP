@@ -13,6 +13,8 @@ using usb16x16::owner::pitch_value;
 
 namespace {
 
+int failures = 0;
+
 struct Outcome {
     double worst_error_after_settle{};
     double worst_error_ever{};
@@ -43,7 +45,6 @@ Outcome run(double clock_offset_ppm, int sign, double seed_integral, double star
     return outcome;
 }
 
-int failures = 0;
 void check(bool ok, const char* what, const Outcome& o) {
     std::printf("%s %s: worst %.1f frames, after 600 s %.1f, integral %.1f ppm\n", ok ? "ok  " : "FAIL", what,
                 o.worst_error_ever, o.worst_error_after_settle, o.final_integral);
@@ -52,7 +53,40 @@ void check(bool ok, const char* what, const Outcome& o) {
 
 }  // namespace
 
+// The filter against the artefact as it was logged: a queue that reads 37
+// frames deep for part of a second, then for whole seconds, then really moves.
+void filter_checks() {
+    using usb16x16::owner::DepthFilter;
+    DepthFilter filter;
+    double figure = 0.0;
+    const auto second = [&](int normal, int high, unsigned high_count) {
+        for (unsigned i = 0; i < 1000; ++i) filter.add(i < high_count ? high : normal + static_cast<int>(i % 2));
+        return filter.finish(figure);
+    };
+    bool ok = second(142, 0, 0) && std::abs(figure - 142.5) < 0.01;
+    std::printf("%s filter: a clean second gives %.2f\n", ok ? "ok  " : "FAIL", figure);
+    if (!ok) ++failures;
+    ok = second(142, 179, 200) && std::abs(figure - 142.5) < 0.6;
+    std::printf("%s filter: a fifth of a second reading high still gives %.2f\n", ok ? "ok  " : "FAIL", figure);
+    if (!ok) ++failures;
+    bool held = !second(142, 179, 1000) && !second(142, 179, 1000);
+    ok = held && second(142, 0, 0) && std::abs(figure - 142.5) < 0.01 && filter.rejected() == 2;
+    std::printf("%s filter: two whole seconds reading high are held back, then %.2f\n", ok ? "ok  " : "FAIL", figure);
+    if (!ok) ++failures;
+    unsigned refused = 0;
+    bool accepted = false;
+    for (int i = 0; i < 6 && !accepted; ++i) { accepted = second(180, 0, 0); if (!accepted) ++refused; }
+    ok = accepted && refused == 5 && std::abs(figure - 180.5) < 0.01;
+    std::printf("%s filter: a depth that really moved is believed after %u seconds (%.2f)\n", ok ? "ok  " : "FAIL", refused, figure);
+    if (!ok) ++failures;
+    for (unsigned i = 0; i < 50; ++i) filter.add(100);
+    ok = !filter.finish(figure);
+    std::printf("%s filter: too few readings give nothing\n", ok ? "ok  " : "FAIL");
+    if (!ok) ++failures;
+}
+
 int main() {
+    filter_checks();
     // A cold start against a 30 ppm crystal difference, each direction.
     Outcome out = run(30.0, -1, 0.0, 0.0, 1800);
     check(out.worst_error_ever < 48.0 && out.worst_error_after_settle < 6.0 && std::abs(out.final_integral - 30.0) < 3.0,

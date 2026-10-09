@@ -1266,3 +1266,45 @@ Evidence `outputs/latency/dante-owner-usb-20261009T211300Z/` (`summary.txt`,
 - About twenty-five of the sixty minutes carried harness signal; the rest was
   whatever the Mac sent idle. It is an hour without an event, not the
   sixteen-channel loaded hour the plan's extended qualification asks for.
+
+## The return queue's reading: a stale pointer, fixed (2026-10-09 22:19-22:29 UTC, unprivileged trials)
+
+Two `TRIAL=1` runs with the Mac idle (its streams running, carrying silence).
+Text: `outputs/latency/dante-owner-usb-trials-20261009/trials-servo-input.txt`.
+
+- First a filter was tried (`DepthFilter` in `owner/servo.hpp`: the mean of
+  the middle half of each second's readings, and a figure that steps more
+  than 16 frames held back for at most five seconds). On a 330 s run it held
+  back 159 seconds, the queue read above 160 in 110 of them, and Playback
+  Pitch still ranged over 10 to 31. On this start the high reading lasted for
+  long stretches, so after five seconds the servo would have believed it and
+  moved the real queue by 37 frames. A filter does not fix a reading that is
+  wrong for that long.
+- The cause: the owner read the gadget's playback queue with
+  `snd_pcm_avail_update`. On a kernel PCM that returns the mmap'd pointer,
+  which moves only when the driver reports a period boundary, so it can be
+  most of a period old, by an amount that depends on where the host's packets
+  fall against the period. `snd_pcm_avail` asks the driver for the pointer as
+  it is. (The bridge's depth telemetry has always used `snd_pcm_delay`, which
+  does the same.)
+- With that one call changed, 150 s: the queue found before each write read
+  93 to 98 in every second, never above; Playback Pitch 13 to 16; the filter
+  held back nothing. The lower of the two levels was the true one all along,
+  which is why the harness figure never moved.
+- The same run had one unprivileged stall (a 2.25 ms gap at 27 s): the
+  outgoing depth was found at 19, under the 32-frame packet floor, the
+  direction was primed again on the next ordinary block, and its mean read
+  128.3 the following second. That is the reprime rule changed after the
+  20:24 trial, now seen to land where it is set.
+- The learned offset is kept between runs: the 330 s run wrote -15.39 to
+  `state/usb16x16-dante-owner.ppm` and the next two starts read it
+  (`seed_from_file=1`).
+- The gadget *capture* is still read with `avail_update`, so what the owner
+  takes each wake stops at the last period boundary. Whether the live pointer
+  there would shorten the outgoing path is a separate variable, not changed.
+
+Staged and matching the repo: owner binary f013b1fd (69d6eb60 and 48d51783
+kept beside it), `owner/main.cpp` a4ffb892, `owner/servo.hpp` f95a9af8,
+`run-owner.sh` e735ae37 (passes `--ppm-file`). The battery of 21:13 UTC was
+taken on 48d51783; the level on f013b1fd is expected to be the same 516 and
+has not been measured.
