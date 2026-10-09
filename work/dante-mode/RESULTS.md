@@ -445,6 +445,27 @@ Log `/dev/shm/inferno-probe-20261009T015515Z.log` on the Pi, read there.
   with. Clearing the capture areas before start is a requirement for the
   owner process, not a nicety.
 
+### Period and buffer sweep (02:05-02:07 UTC, unprivileged, 15 s each, no routes)
+
+| Asked period / buffer | Granted | Wakes/s | Longest gap | Capture `avail` | Playback `delay` (lead) | Recoveries | Stray non-zero samples |
+|---|---|---|---|---|---|---|---|
+| 32 / 1024 | 32 / 1024 | 3,930 | 0.39 ms | 0-19 | 45-64 (64) | 0 | 1,406 |
+| 64 / 2048 | 64 / 2048 | 2,447 | 0.70 ms | 0-34 | 94-128 (128) | 0 | 0 |
+| 32 / 2048 | 32 / 2048 | 3,930 | 0.54 ms first second, 0.37 ms after | 0-26 | 46-64 (64) | 0 | 0 |
+| 48 / 1024 | 64 / 1024 | 2,446 | 0.69 ms | 0-33 | 95-128 (128) | 0 | 1,406 |
+
+- All four power-of-two requests were granted as asked. The bridge's own
+  period of 48 was silently raised to 64, as the source said it would be.
+- Period 32 halves the wake gap and the occupancy ranges; nothing recovered
+  at either period in these short runs.
+- The thread set did not change in any run. Each first `hw_params` took 250 ms.
+- The stray samples appear at buffer 1024 and not at 2048. A 2048-frame
+  buffer of sixteen 32-bit channels is 131,072 bytes, the size from which
+  the C library hands out fresh zeroed pages instead of reused heap. That
+  fits the unzeroed-buffer reading and means 2048 only looks clean by
+  accident; the owner must still clear the buffer.
+- Logs on the Pi: `/dev/shm/inferno-probe-20261009T0205{45}Z.log`, `…0206{03,21,40}Z.log`.
+
 ### Still owed for stage 2
 
 1. Done 2026-10-08, above.
@@ -456,8 +477,8 @@ Log `/dev/shm/inferno-probe-20261009T015515Z.log` on the Pi, read there.
    peak was not watched. The staging directory is
    945 MB and the crate cache 161 MB. Nothing was installed or run.
 3. Part done (part 3): period 64 / buffer 1024 and the `--no-revents` spin.
-   The root run with `--mlock` is done too. Still to run: period 32 and
-   buffer 2048, and the forced xrun (as root, so recovery is timed under the
+   The root run with `--mlock` and the period / buffer sweep are done too.
+   Still to run: the forced xrun (as root, so recovery is timed under the
    lock). Evidence
    of PTP lock needs Statime at `loglevel = "info"` for one start.
 4. Bit transparency measured in both directions with `TX_SOURCE_BIT_DEPTH=24`,
