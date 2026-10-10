@@ -11992,3 +11992,23 @@ terminal, since 2026-10-09 17:57 UTC) is running; `usb16x16-aes67` inactive
 and still enabled. Owner binaries kept on the Pi: d4ebd576 current, 94ecdc6c,
 f013b1fd, 69d6eb60, 48d51783, 7eb9a584; plugins stock ca99efd7, 55dee5d8
 (in use), 5c6b1c0a (retry after 1 s, unprivileged trials only).
+
+**MEASURED 2026-10-10 14:50-15:16 UTC: third fresh anchor on the Dante owner,
+drawn by the Mac's reboot: harness 482, RTL 670 (13.958 ms) at 32 frames.**
+Record `work/dante-mode/RESULTS.md`, last section. The Pi had not rebooted;
+the operator started Statime and owner d4ebd576 (plugin 55dee5d8) at 14:50:57
+UTC, after the Mac came back. Noise probe clean (0.0 % zeros, the Mac is
+healthy after the reboot); **800 loaded impulses 482 samples (10.042 ms),
+spread 0; RTL Utility by the operator on the same start 670 samples, 482 plus
+188 exactly.** One link each way at start and no event since. Fresh anchors
+on d4ebd576 are now 507 / 489 / 482 harness and 695 / 677 / 670 RTL (14.479 /
+14.104 / 13.958 ms): span 25 samples, mean 493 / 681 (14.18 ms), 196 to 221
+under the AES67 record's 703 / 891. This anchor was an owner start under a
+fresh Mac, the other two relinks of a running owner by coreaudiod restart;
+three draws do not separate method from scatter. The `error_lines` the
+wrapper counts on this endpoint are Inferno's control server refusing opcodes
+it does not implement, not audio faults. Not ACCEPTED: the battery on one
+fresh anchor, a `usb-16x16.service` restart under the owner, bit transparency
+and the loaded hour are owed. Evidence
+`outputs/latency/dante-noise-ch2-32f-20261010T145149Z*`,
+`dante-roundtrip-32f-20261010T145231Z*`.

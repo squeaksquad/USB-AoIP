@@ -89,6 +89,18 @@ streams for the whole first run; (d) three starts, harness and RTL on each.
 The resync must
 forward a margin past the deficit (the clock moved 4 to 5 frames in between).
 
+**Added 2026-10-10 15:16 UTC.** The Mac is healthy after the reboot (noise
+probe clean) and a third fresh anchor is in: owner d4ebd576 started after the
+reboot reads harness 482, RTL 670 (13.958 ms) at 32, plus 188 exactly. Fresh
+anchors are 507 / 489 / 482 harness, 695 / 677 / 670 RTL, span 25, mean 493 /
+681 (14.18 ms); quote the three, not one. The first two items of the owed
+list below are done, except that the `usb-16x16.service` restart under a
+running owner (the untested fault path) was not the way this anchor was
+drawn and is still owed, as is the battery on one fresh anchor. The
+`error_lines` in `measure-candidate.sh` output are Inferno refusing unknown
+control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
+`run-owner.sh` on the Pi.
+
 **State 2026-10-10 14:40 UTC (the Mac was rebooted here; this supersedes the
 23:30 block below it).** Owner d4ebd576 on the Pi (`run-owner.sh`; older
 builds kept beside it, `OWNER_BIN=`). Read RESULTS.md from "the harness finds

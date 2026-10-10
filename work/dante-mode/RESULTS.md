@@ -1596,3 +1596,50 @@ the AES67 record's 703 (196 and 214).
   Nothing on the Pi explains or shares in this. Four restarts of coreaudiod
   inside an hour is not a use anyone will make of it; it was the available
   way to draw a fresh anchor.
+
+## Third fresh anchor, by the Mac's reboot: 482 harness, 670 RTL (2026-10-10 14:50-15:16 UTC)
+
+The Mac was rebooted at about 14:40 UTC. The Pi was not (up 1 day 14 h, gadget
+service active, `usb16x16-aes67` inactive). Statime and then owner d4ebd576
+(plugin 55dee5d8) were started by the operator, the owner at 14:50:57 UTC with
+`run-owner.sh 3600 --log-every 1`. This anchor differs from the two above in
+how it was drawn: the Mac's audio stack was new from boot and the owner
+started after it, one link each way at start and none since, where the other
+two were coreaudiod restarts under a running owner. Evidence
+`outputs/latency/dante-noise-ch2-32f-20261010T145149Z*` and
+`dante-roundtrip-32f-20261010T145231Z*`.
+
+- The Mac is healthy after the reboot. Noise probe at 32 frames, 0.1 load on
+  the other channels: 0.0 % zeros in a 1,244,930-sample span, no zero run of
+  4 or more. All three readiness probes passed first time on both runs.
+- **800 loaded impulses at 32 frames: 482 samples (10.042 ms), spread 0**,
+  score 1.000, no discontinuity in or out, no xrun or lag line on the Pi.
+- **RTL Utility at buffer 32 by the operator on the same start: 13.958 ms,
+  670 samples**, 482 plus 188 exactly. Fourth RTL reading on the owner to
+  match the harness (703 on 515/516, 695 on 507, 677 on 489, 670 on 482).
+- The owner at 1,524 s: `tx_links=1 tx_reprimes=0 rx_primes=1`, no resync,
+  fault, detach or overflow, longest wake gap 1.0 ms, depths 128.0 / 144.0,
+  pitch 1000015 both ways. Opening and closing the device for the harness and
+  for RTL produced no link event.
+- The wrapper's `error_lines` count rose during both runs (172 by the end of
+  the impulse run). Every one is Inferno's control server logging `received
+  unknown opcode1` (0x00 and 0x2204) with the packet beside it: control
+  requests it does not implement, nothing on the audio path. The count is not
+  a fault count on this endpoint.
+
+Fresh anchors on the fixed owner:
+
+| Owner | Anchor | Drawn by | Harness at 32 | RTL at 32 |
+|---|---|---|---|---|
+| d4ebd576 | 13:38 | coreaudiod restart, owner running | 507 | 695 (14.479 ms) |
+| d4ebd576 | 13:49 | coreaudiod restart, owner running | 489 | 677 (14.104 ms) |
+| d4ebd576 | 14:50 | Mac reboot, owner started after | 482 | 670 (13.958 ms) |
+
+Three anchors span 25 samples (0.52 ms), against about plus or minus 10 on
+the AES67 path; their mean is 493 harness, 681 RTL (14.18 ms). All three sit
+196 to 221 under the AES67 record's 703 / 891. The lowest is the one where
+the owner was started under a fresh Mac and the two higher ones were relinks
+of a running owner; three draws do not say whether that is the method or the
+scatter. Not ACCEPTED: the battery (four loaded runs and the soak on one
+fresh anchor), a `usb-16x16.service` restart under the owner, bit
+transparency and the loaded hour are owed.
