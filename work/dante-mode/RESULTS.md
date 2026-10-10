@@ -1577,3 +1577,22 @@ Fresh anchors so far, one owner process each column:
 Two anchors on the fixed owner differ by 18 samples. That is wider than the
 plus or minus 10 the AES67 path drew, on two draws. Both sit about 200 under
 the AES67 record's 703 (196 and 214).
+
+## RTL on the third anchor: 677; a fourth restart left CoreAudio unresponsive (2026-10-10 ~14:00-14:30 UTC)
+
+- **RTL Utility at buffer 32 by the operator on the 489 anchor: 14.104 ms,
+  677 samples**, 489 plus 188 exactly. Three RTL readings on the owner have
+  now matched the harness to the sample or within one (703 on 515/516, 695 on
+  507, 677 on 489).
+- Fourth `sudo killall coreaudiod` by the operator at 2,725.6 s of the same
+  owner process. On the Pi it looks like the others: one reported `NETRESYNC`
+  of 33 frames, both directions idle, the return queue primed again at 144,
+  no gadget PCM error; a short burst from the host at 2,959.3 s and nothing
+  after.
+- No measurement: at 14:26 UTC the harness refused with "CoreAudio does not
+  expose USB 16x16", and both `usb16x16-latency list` and `system_profiler
+  SPAudioDataType` then hung for over a minute on the Mac, although the
+  operator saw the device listed. The Mac's audio daemon was not answering.
+  Nothing on the Pi explains or shares in this. Four restarts of coreaudiod
+  inside an hour is not a use anyone will make of it; it was the available
+  way to draw a fresh anchor.
