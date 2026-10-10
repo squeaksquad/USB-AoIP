@@ -1737,3 +1737,50 @@ and still owed: a `usb-16x16.service` restart under the running owner, bit
 transparency through the owner, the loaded hour, and everything about
 persistence (nothing is installed, nothing starts at boot, the AES67 unit is
 still enabled).
+
+## `usb-16x16.service` restarted under the running owner: 1.8 s to audio, Dante side untouched; new draw 476 / 664 (2026-10-10 16:43-16:50 UTC)
+
+The fault path that had never been exercised: the gadget itself going away.
+`sudo systemctl restart usb-16x16.service` by the operator at 16:43:58 UTC,
+3,296 s into owner d4ebd576 (started 15:49:01 UTC, the accepted battery's
+process). Evidence `outputs/latency/dante-noise-ch2-32f-20261010T164416Z*`,
+`dante-roundtrip-32f-20261010T164456Z*`.
+
+| Owner time | Log line |
+|---|---|
+| 3,296.331 s | `USBCLOSE reason=-19 (No such device)`; `USBLINK usb=absent tx=idle rx=idle`, `playback_faults=1` |
+| 3,297.331 s | `USBOPEN`, `USBLINK usb=open tx=idle rx=idle rx_primes=2` |
+| 3,298.132 s | `USBLINK usb=open tx=flow rx=flow tx_links=2`, `tx_prime_found=114` (80 at the first link) |
+
+- **The owner stayed up and relinked by itself: 1.8 s from the device
+  vanishing to both directions flowing.** `detaches=1`, one playback fault
+  (the -19), no capture fault. No Inferno prepare, no `NETRESYNC` line,
+  `tx_resyncs=0 rx_resyncs=0`, no lost frames, the same seven threads at the
+  same priorities. `rx_idle_discards=37632` is the return discarded while no
+  host was pulling.
+- **The Mac re-enumerated and resumed streaming without a coreaudiod kill**
+  or any action on it.
+- The servos were off their setpoints just after the relink (outgoing mean
+  117.0, pitch_c 1000020 at 3,307 s) and back by 3,577 s (129.2 / 144.0,
+  pitch 1000015 both ways), as on the earlier relinks.
+- Noise probe at 32 frames: 0.0 % zeros in 1,244,936 samples, no zero run of
+  4 or more. **800 loaded impulses: 476 samples (9.917 ms), spread 0**, score
+  1.000, no discontinuity, no xrun or lag line on the Pi.
+- **RTL Utility at buffer 32 by the operator on this draw: 13.833 ms, 664
+  samples**, 476 plus 188 exactly. Fifth RTL reading on the owner to match
+  the harness.
+
+Fresh draws on d4ebd576:
+
+| Anchor (UTC) | Drawn by | Harness at 32 | RTL at 32 |
+|---|---|---|---|
+| 13:38 | coreaudiod restart, owner running | 507 | 695 (14.479 ms) |
+| 13:49 | coreaudiod restart, owner running | 489 | 677 (14.104 ms) |
+| 14:50 | Mac reboot, owner started after (ACCEPTED on this one) | 482 | 670 (13.958 ms) |
+| 16:44 | `usb-16x16.service` restart, owner running | 476 | 664 (13.833 ms) |
+
+Four draws span 31 samples (0.65 ms), mean 488.5 harness, 676.5 RTL
+(14.09 ms). The gadget restart is the way to draw one from here on: it took
+the Mac two seconds, where a coreaudiod restart took it up to six minutes and
+four of them broke its audio. The accepted record stays 482 / 670; this draw
+had no battery.

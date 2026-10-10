@@ -12066,3 +12066,23 @@ and 489 / 677. Covered: level and stability (noise probe, 4 x 800 loaded,
 running owner, bit transparency through the owner, the loaded hour, and
 persistence: nothing is installed or starts at boot and `usb16x16-aes67` is
 still enabled. Record `work/dante-mode/RESULTS.md`, last two sections.
+
+**MEASURED 2026-10-10 16:43-16:50 UTC: `usb-16x16.service` restarted under
+the running Dante owner: audio back in 1.8 s with the Dante side untouched;
+the new draw reads harness 476, RTL 664 (13.833 ms) at 32 frames.** Record
+`work/dante-mode/RESULTS.md`, last section. Operator's restart at 16:43:58
+UTC, 3,296 s into the accepted battery's owner process (d4ebd576). The owner
+logged the gadget gone (-19, one playback fault, one detach), reopened it a
+second later and had both directions flowing 1.8 s after the loss: no
+Inferno prepare, no resync, no lost frame, no thread change. The Mac
+re-enumerated and resumed by itself, no coreaudiod kill. Noise probe clean;
+**800 loaded impulses 476 samples (9.917 ms), spread 0; RTL Utility by the
+operator 664, 476 plus 188 exactly.** Fresh draws on this owner are now 507
+/ 489 / 482 / 476 harness and 695 / 677 / 670 / 664 RTL: span 31 samples,
+mean 488.5 / 676.5 (14.09 ms). The accepted record stays 482 / 670 (this
+draw had no battery). The gadget restart is the way to draw a fresh anchor
+on this path from now on. This closes the last untested link fault of the
+owner design's step 5. Owed: top up with silence when the host stops, plugin
+5c6b1c0a as root, bit transparency through the owner, the loaded hour,
+persistence. Evidence `outputs/latency/dante-noise-ch2-32f-20261010T164416Z*`,
+`dante-roundtrip-32f-20261010T164456Z*`.

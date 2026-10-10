@@ -101,6 +101,16 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 16:50 UTC.** `sudo systemctl restart usb-16x16.service`
+under the running owner: gadget gone and back, audio in 1.8 s, no Inferno
+prepare, the Mac resumed without a coreaudiod kill. New draw 476 harness, 664
+RTL (13.833 ms). Fresh draws on d4ebd576: 507 / 489 / 482 / 476, span 31;
+the accepted record stays 482 / 670. Draw fresh anchors this way, not by
+killing coreaudiod. Owed, in order: top up with silence when the host stops
+(owner change); why a stop/start cost frames on aged anchors (it did not on
+a young one today); plugin 5c6b1c0a as root; bit transparency through the
+owner; the loaded hour; persistence.
+
 **ACCEPTED 2026-10-10 (after the 16:15 block below).** The operator read RTL
 13.958 ms (670) on the battery's start and accepted it: the Dante point of
 record is owner d4ebd576, plugin 55dee5d8, lead 128 / queue 144 / Inferno
