@@ -89,6 +89,30 @@ streams for the whole first run; (d) three starts, harness and RTL on each.
 The resync must
 forward a margin past the deficit (the clock moved 4 to 5 frames in between).
 
+**State 2026-10-10 14:40 UTC (the Mac was rebooted here; this supersedes the
+23:30 block below it).** Owner d4ebd576 on the Pi (`run-owner.sh`; older
+builds kept beside it, `OWNER_BIN=`). Read RESULTS.md from "the harness finds
+no return on most opens" to the end. What is established: (1) the level is a
+frame count fixed when a direction is primed; the pitch servos only move
+frames between the Pi's queues and the Mac's driver, so depths can move 15
+frames with the level unchanged. (2) Fresh anchors (coreaudiod restart with
+the owner running) at lead 128 / queue 144 / Inferno 2 ms, 32 frames: harness
+507 and 489, RTL 695 (14.479 ms) and 677 (14.104 ms), each harness + 188;
+AES67 record 703 / 891. Two anchors, 18 apart: a third is owed before a
+figure is quoted. (3) The fault path works: host stop and return with no
+Inferno prepare, no flow loss, return queue held at 144 while idle. (4)
+Yesterday's aged-anchor figures (516 down to 412) and "3.9 ms" are withdrawn.
+(5) After twenty-odd owner starts the Mac sent silence on most opens; after
+four coreaudiod restarts in an hour CoreAudio stopped listing the device and
+the operator rebooted the Mac. Do not draw anchors by killing coreaudiod
+repeatedly. **Owed, in order:** confirm the Mac is healthy after the reboot
+(noise probe); a third fresh anchor by `sudo systemctl restart
+usb-16x16.service` with the owner running (also the untested fault path);
+top up with silence instead of 98 resyncs in the 100 ms after the host stops;
+find why each owner stop/start costs the Mac's input a few frames against its
+output (read u_audio's behaviour at PCM close/open); plugin 5c6b1c0a (retry
+after 1 s) under root; bit transparency; the loaded hour.
+
 **State 2026-10-09 23:30 UTC, read this before the lists above it.** Owner
 f013b1fd on the Pi (live gadget pointer, depth filter, ppm state file;
 `OWNER_BIN=` on `run-owner.sh` picks an older build kept beside it). The

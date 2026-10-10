@@ -11963,3 +11963,32 @@ transport results stand. Also done: PLAN 3a step 1, three cold starts took 69,
 root with the harness on each, then the same after a fresh anchor
 (`sudo systemctl restart usb-16x16.service`), to learn whether the step is the
 trials' or the transport's.
+
+**MEASURED 2026-10-10 13:13-14:40 UTC: the Dante owner on fresh anchors; what
+the level is; state at the Mac's reboot.** Detail and conditions in
+`work/dante-mode/RESULTS.md`, last five sections. (1) The missing harness
+return of 2026-10-09 23:41 was the Mac sending silence on about three opens
+in four: the owner's new `out_peak` / `back_peak` readings showed the gadget
+receiving zeros on the failing probes and the impulse, returned intact, on
+the passing ones. `sudo killall coreaudiod` (operator) cured it. (2) Fresh
+anchors by coreaudiod restart with the owner running as root, lead 128,
+return queue 144, Inferno 2 ms, 32 frames: 563 on owner 94ecdc6c, whose
+return queue idled at 240; then on d4ebd576, which primes the queue afresh
+at 144 when the host stops, **507 and 489 harness (800 and 400 loaded
+impulses, spread 0, noise probe clean) and 695 and 677 by RTL Utility
+(14.479 and 14.104 ms), each harness plus 188 exactly.** AES67 record for
+scale: 703 / 891. Two anchors, 18 apart; not ACCEPTED, a third anchor and
+the rest of the battery on a fresh anchor are owed. (3) The level did not
+move while the Pi's two depths moved 15 frames under the servos: it is the
+number of frames in the loop when a direction is primed, and the pitch
+controls only move frames between the Pi and the Mac's driver. (4) The fault
+path was exercised four times: the host stops with no gadget PCM error, the
+owner idles both directions and sends silence, the host returns and both are
+primed again, with no Inferno prepare and no flow lost. (5) After the fourth
+coreaudiod restart in an hour CoreAudio stopped listing `USB 16x16` and
+Audio MIDI Setup misbehaved; the operator rebooted the Mac at about 14:40
+UTC. On the Pi nothing is installed and nothing but Statime (operator's
+terminal, since 2026-10-09 17:57 UTC) is running; `usb16x16-aes67` inactive
+and still enabled. Owner binaries kept on the Pi: d4ebd576 current, 94ecdc6c,
+f013b1fd, 69d6eb60, 48d51783, 7eb9a584; plugins stock ca99efd7, 55dee5d8
+(in use), 5c6b1c0a (retry after 1 s, unprivileged trials only).
