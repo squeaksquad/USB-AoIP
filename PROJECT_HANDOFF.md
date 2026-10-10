@@ -12167,3 +12167,26 @@ reported steady; a run whose offset `VARIED` does not qualify. RTL Utility
 remains the outside check and is read with `read-rtl-log.sh` when one is
 wanted. The decision was given for `daw_timeline`; RTL Utility readings
 pressed from the session were not separately ruled on.
+
+**MEASURED 2026-10-10 19:12-19:39 UTC: Dante owner 22fd2622 passed the full
+battery on a fresh anchor of its own: harness 506, `daw_timeline` 694
+(14.458 ms) at 32 frames.** Record `work/dante-mode/RESULTS.md`, last
+section. Run from the session end to end after the operator added
+`/etc/sudoers.d/usb16x16-dante` (NOPASSWD for `run-owner.sh`, Statime, the
+two `pkill -INT` lines and the `usb-16x16.service` restart; before that
+`sudo -n` only worked inside his own sudo window). Three more starts of
+22fd2622 showed no stall (largest wake gap 1.02 ms); with the 17:11 start,
+four clean since the 6 ms gap, which stays unexplained. Fresh anchor by
+gadget restart at 19:13:35 UTC under the running owner: audio back in 1.3 s,
+one 61-frame resync in a 3.9 ms wake gap while already idle (the same event
+on d4ebd576 had none; noted, not explained). Then on that one start: noise
+probe clean, **4 x 800 loaded impulses all 506 samples (10.542 ms) spread 0,
+`daw_timeline` 694 with the offset steady at 188, 600 s sixteen-channel soak
+PASS.** Fresh draws on the day are now 507 / 489 / 482 / 476 / 470 / 506: a
+band of 37 samples, not a decline, so the path's RTL-at-32 figure is about
+14.2 ms plus or minus 0.4 and a start's figure is its draw. **Not marked
+ACCEPTED: the operator decides whether 22fd2622 replaces d4ebd576 as the
+point of record.** Owed after that: plugin 5c6b1c0a as root, bit
+transparency through the owner, the loaded hour, persistence. The owner
+running on the Pi is this battery's process (22fd2622 from 19:12:57 UTC,
+detached); stop it with `sudo pkill -INT -x usb16x16-dante-`.

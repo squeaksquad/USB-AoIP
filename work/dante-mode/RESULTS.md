@@ -1956,3 +1956,73 @@ be an empirical constant but a number the harness was already handed.
 
 Whether `daw_timeline` may stand in for the RTL reading in an acceptance is
 the operator's decision.
+
+## Owner 22fd2622: three more clean starts, then a fresh anchor and the full battery: 506 harness, 694 on the DAW timeline (2026-10-10 19:12-19:39 UTC)
+
+Run from the session with no operator action after he added
+`/etc/sudoers.d/usb16x16-dante` (NOPASSWD for `run-owner.sh`, the Statime
+binary, the two `pkill -INT` lines and `systemctl restart usb-16x16.service`;
+he was told that both paths are writable by his account). Earlier the same
+`sudo -n` had only worked inside his own sudo window: the Pi has
+`timestamp_type=global`. The 17:11 owner was stopped at 7,227 s, clean, no
+resync or re-prime in two hours.
+
+**The 6 ms gap did not come back.** Three starts of 22fd2622 (19:12:04,
+19:12:31, 19:12:57 UTC), 25 s watched on each: one link each way at 0.3 s,
+no resync, no fault, largest wake gap 1.014, 1.020 and 1.021 ms. With the
+17:11 start that is four clean starts after the one that stalled at 4.2 s.
+It is still unexplained and is now a one-in-five event at most.
+
+**Fresh anchor.** `sudo systemctl restart usb-16x16.service` at 19:13:35 UTC,
+38 s into the third start. Gadget gone at 38.121 s (-19), back and primed at
+39.222 s, both directions flowing at 39.422 s: 1.3 s. One `NETRESYNC` of 61
+frames at 38.221 s inside a 3.943 ms wake gap, while the direction was
+already idle (silence only). The same event on d4ebd576 at 16:43 showed no
+resync, and this build's cable replug showed a 3.7 ms gap: two of two device
+arrivals or departures on 22fd2622 with a gap of nearly 4 ms, none recorded
+on d4ebd576 in one. The changed code is not on that path (the direction is
+idle or detached by then), but the pairing is noted and not explained.
+
+**Battery on that anchor, 32 frames, one owner process.** Evidence
+`outputs/latency/dante-22fd-*-20261010T19*`.
+
+| Step (UTC) | Result |
+|---|---|
+| Noise probe, 19:13 | 0.0 % zeros in 1,244,906 samples, no zero run of 4 or more |
+| 800 loaded impulses, 19:14 | 506 (10.542 ms), spread 0; `daw_timeline` 694 (14.458 ms), offset 188 steady |
+| 800 loaded impulses, 19:18 | 506, spread 0; 694, steady |
+| 800 loaded impulses, 19:21 | 506, spread 0; 694, steady |
+| 800 loaded impulses, 19:25 | 506, spread 0; 694, steady |
+| 600 s soak, all 16 channels at 0.1, 19:28 | PASS: every channel returned, longest zero run 1, no discontinuity |
+
+- **Battery passed: 3,200 loaded impulses at 506 samples spread 0, soak
+  PASS, noise probe clean; the RTL-equivalent figure is 694 samples,
+  14.458 ms** (`daw_timeline`, accepted by the operator as that figure
+  earlier the same day; RTL Utility was not opened).
+- The owner at 1,576 s: two links each way (start, and the gadget restart),
+  no re-prime, the one resync above, no fault but the -19, largest wake gap
+  since the relink 1.068 ms, depths 128.1 / 143.4, pitch 1000014 both ways.
+- The first impulse run began 60 s after the relink with the servos still
+  off their setpoints (return mean 165 at 58 s); its level is the same 506
+  as the three after it.
+
+Fresh draws on the day, both builds:
+
+| Anchor (UTC) | Drawn by | Owner | Harness | RTL or `daw_timeline` |
+|---|---|---|---|---|
+| 13:38 | coreaudiod restart | d4ebd576 | 507 | 695 |
+| 13:49 | coreaudiod restart | d4ebd576 | 489 | 677 |
+| 14:50 | Mac reboot, owner started after | d4ebd576 | 482 | 670 (ACCEPTED) |
+| 16:44 | gadget restart | d4ebd576 | 476 | 664 |
+| 16:57 | cable pull and replug | 22fd2622 | 470 | |
+| 19:13 | gadget restart | 22fd2622 | 506 | 694 |
+
+Six draws span 37 samples (0.77 ms), 470 to 507. The earlier ones looked like
+a slow decline through the day; this one is back at the top, so it was not a
+decline: a draw lands anywhere in a band about 0.8 ms wide, and a start's
+figure is its draw. The honest figure for the path is therefore the band,
+about 14.2 ms plus or minus 0.4 at 32 frames by RTL, not any one anchor.
+
+Not marked ACCEPTED: the operator decides. 22fd2622 has now had the battery
+that d4ebd576's acceptance rested on, on a fresh anchor of its own, plus the
+host-stop check it was built for.

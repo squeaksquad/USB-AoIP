@@ -101,6 +101,19 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 19:40 UTC.** 22fd2622 passed the full battery on a fresh
+anchor (gadget restart): harness 506, `daw_timeline` 694 (14.458 ms), soak
+PASS; four clean starts since its one 6 ms stall. Awaiting the operator's
+ACCEPTED. Fresh draws span 470 to 507: quote the band. The session can now
+run the Pi side alone: `/etc/sudoers.d/usb16x16-dante` allows, without a
+password, exactly `sudo -n /home/bdimaio/usb-16x16-work/dante-mode/run-owner.sh
+...`, the Statime binary, `sudo -n /usr/bin/pkill -INT -x usb16x16-dante-`,
+`/usr/bin/pkill -INT -x statime` and `/usr/bin/systemctl restart
+usb-16x16.service` (full paths, as written). Start the owner detached with
+`setsid -f sudo -n .../run-owner.sh 0 --log-every 1 </dev/null
+>/dev/shm/run-owner-ssh.log 2>&1`. Owed: plugin 5c6b1c0a as root, bit
+transparency, the loaded hour, persistence.
+
 **Added 2026-10-10 18:56 UTC.** The harness prints the RTL figure itself:
 `measure-candidate.sh 32 N` ends with `daw_timeline=<ms> (<samples>) = <lag>
 + io_offset 188 (steady)`. The 188 (252 at 64) is the IOProc's output minus
