@@ -1117,7 +1117,14 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         return true;
     }
     if (frames == 0) {
-        if (usb.tx != TxState::idle && ++usb.tx_idle_wakes >= kIdleWakes) set_tx_state(usb, TxState::idle, t);
+        // A flowing host that sends nothing while the pointer is within a wake
+        // of the clock has stopped (a block that is merely late leaves the
+        // depth a wake higher): it counts as stopped now, so the lead is kept
+        // up with silence from this wake on. Waiting out kIdleWakes here let
+        // the clock pass the pointer on every wake, 98 resyncs in 100 ms.
+        const bool starved = usb.tx == TxState::flow &&
+                             depth < static_cast<std::int64_t>(handles.capture.period + kResyncMargin);
+        if (starved || (usb.tx != TxState::idle && ++usb.tx_idle_wakes >= kIdleWakes)) set_tx_state(usb, TxState::idle, t);
         return true;
     }
     usb.tx_idle_wakes = 0;

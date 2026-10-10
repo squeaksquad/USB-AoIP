@@ -12086,3 +12086,29 @@ owner design's step 5. Owed: top up with silence when the host stops, plugin
 5c6b1c0a as root, bit transparency through the owner, the loaded hour,
 persistence. Evidence `outputs/latency/dante-noise-ch2-32f-20261010T164416Z*`,
 `dante-roundtrip-32f-20261010T164456Z*`.
+
+**IMPLEMENTED and MEASURED 2026-10-10 16:53-17:18 UTC: Dante owner 22fd2622,
+the host stop no longer resyncs.** Record `work/dante-mode/RESULTS.md`, last
+section. A flowing outgoing direction that receives nothing while the Inferno
+pointer is within 64 frames of the clock now goes idle on that wake, and the
+silence top-up holds the lead from there; before, it waited 100 wakes and
+resynced on about 98 of them. Source e53c8407, built on the Pi with the owner
+stopped, d4ebd576 kept beside it (`OWNER_BIN=usb16x16-dante-owner-d4ebd576`).
+Checked by the operator's cable pull at 81 s of the first start: **no resync
+and no `NETRESYNC` line at the stop**, lead and return queue held at 128 /
+144 while away, both directions back 0.8 s after the replug. On the same
+start, not on the changed path: a 6.0 ms gap in the loop's wakes at 4.2 s
+(two resyncs, a gadget playback underrun, two re-primes), unexplained, and a
+3.7 ms gap at the replug (one resync while idle). A second start (17:11:02
+UTC, started detached over ssh under the operator's new standing permission
+for owner and service starts and stops) had neither: one link each way and
+nothing after. Harness at 32 frames, noise probe clean each time: **470 after
+the replug, 466 on the second start, spread 0**; the level stepped down 4 at
+that owner restart, where the 15:49 restart on the reboot's anchor did not
+step. **Not ACCEPTED: 22fd2622 has no battery and no RTL; d4ebd576 at 482 /
+670 remains the point of record.** The owner now running on the Pi is
+22fd2622, detached from any terminal; stop it with
+`sudo pkill -INT -x usb16x16-dante-`. Owed: more starts of 22fd2622 to place
+the 6 ms gap, then its battery; plugin 5c6b1c0a as root; bit transparency
+through the owner; the loaded hour; persistence. Evidence
+`outputs/latency/dante-topup-*-20261010T16*`, `T17*`.

@@ -1784,3 +1784,70 @@ Four draws span 31 samples (0.65 ms), mean 488.5 harness, 676.5 RTL
 the Mac two seconds, where a coreaudiod restart took it up to six minutes and
 four of them broke its audio. The accepted record stays 482 / 670; this draw
 had no battery.
+
+## Owner 22fd2622: the host stop no longer resyncs; two stalls on its first start, none on its second (2026-10-10 16:53-17:18 UTC)
+
+**The change.** In `service_tx`, a flowing direction that receives nothing on
+a wake while the Inferno pointer is within `capture.period + kResyncMargin`
+(64) frames of the clock goes `idle` on that wake, and the existing top-up
+then holds the lead with silence. Before, it stayed in `flow` for
+`kIdleWakes` (100 wakes) and the clock passed the pointer on every one: the
+98 resyncs of the earlier host stops. One late block leaves the depth near 80
+and does not trip it; the second empty wake in a row (depth near 32) does,
+and that case already ended in a resync and a re-prime. The return to flow is
+the same idle, armed, prime sequence as before. Source e53c8407, built on the
+Pi with the owner stopped; d4ebd576 kept as `usb16x16-dante-owner-d4ebd576`
+(`OWNER_BIN=`). The owner it replaced exited clean at 3,981 s: no resync, the
+one detach from the gadget restart.
+
+**First start, 16:55:59 UTC (operator), cable pulled and replugged by him.**
+Evidence `outputs/latency/dante-topup-*-20261010T1658*`, `T165902Z*`.
+
+| Owner time | Event |
+|---|---|
+| 4.2 s | A 6.018 ms gap in the loop's wakes: 2 resyncs (255 frames), gadget playback -32, 2 re-primes, relinked inside the second |
+| 81.3 s | Cable pulled: outgoing depth 30 at its lowest, `tx=idle`, **no resync, no `NETRESYNC` line** |
+| 81.4 s | Return idle, queue primed again at 144 |
+| 81-90 s | Lead held with silence (depth 80 before each top-up), queue 144..144 |
+| 90.4 s | Cable back: a 3.675 ms gap, one resync of 49 frames while idle (silence only) |
+| 91.2 s | Both directions flowing, `tx_prime_found=108` |
+
+- **The host stop cost no resync** (`tx_resyncs` 2 before it, 2 after it).
+  That is the check the change was made for.
+- The 6 ms gap at 4.2 s is not explained. Nothing of the kind on the day's
+  two earlier starts or on this build's second start. The new code is one
+  comparison and cannot block; a link is not excluded by one clean start.
+- The 3.7 ms gap at the replug was not seen at the `usb-16x16.service`
+  restart on d4ebd576 (no resync there). A physical reconnect and a gadget
+  restart are different events on the Pi; whether the gap belongs to the
+  reconnect is not known from one of each.
+- After the return: noise probe 0.0 % zeros; **800 loaded impulses 470
+  samples (9.792 ms), spread 0**, largest wake gap since the replug 1.148 ms.
+
+**Second start, 17:11:02 UTC (stopped and started over ssh, detached; the
+operator gave standing permission for owner and service starts and stops at
+about 17:05 UTC).** The first start exited clean at 899 s. Evidence
+`outputs/latency/dante-topup-*-20261010T171320Z*`, `T171400Z*`.
+
+- One link each way at 0.3 s and nothing after: no resync, re-prime or
+  fault to 397 s, largest wake gap 1.063 ms.
+- Noise probe 0.0 % zeros; **800 loaded impulses 466 samples (9.708 ms),
+  spread 0**.
+- **The level stepped down 4 at this owner restart (470 to 466).** The
+  15:49 restart on the reboot's anchor did not step (482 to 482). Yesterday's
+  steps were 3 to 9 per start. So the step is real and not constant; the
+  anchor's age, or what happened on it since (here a gadget restart and a
+  cable pull), is what differs between the two cases.
+
+Levels on 2026-10-10 after the reboot, one Mac boot throughout:
+
+| Start / event (UTC) | Owner | Harness at 32 |
+|---|---|---|
+| 14:50 owner start after the reboot | d4ebd576 | 482 (RTL 670), ACCEPTED |
+| 15:49 owner restart | d4ebd576 | 482 |
+| 16:44 `usb-16x16.service` restart | d4ebd576 | 476 (RTL 664) |
+| 16:57 cable pull and replug, new owner start before it | 22fd2622 | 470 |
+| 17:11 owner restart | 22fd2622 | 466 |
+
+22fd2622 is the binary on the Pi and is not accepted: it has had no battery
+and no RTL reading. d4ebd576 remains the point of record.

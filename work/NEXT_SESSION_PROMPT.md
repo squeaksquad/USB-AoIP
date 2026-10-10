@@ -101,6 +101,20 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 17:18 UTC.** Owner 22fd2622 (source e53c8407) is the
+binary on the Pi: the host stop goes idle at once and tops up with silence,
+no resync (checked by a cable pull). Not accepted; d4ebd576 is kept beside
+it and is still the point of record (`OWNER_BIN=usb16x16-dante-owner-d4ebd576`).
+Its first start had an unexplained 6.0 ms loop gap at 4.2 s and a 3.7 ms gap
+at the cable replug; its second start had neither. Levels: 470 after the
+replug, 466 after an owner restart (a step of 4; the restart on the reboot's
+young anchor did not step). The operator now allows owner and service
+starts, stops and restarts without asking; an owner started over ssh is
+detached, stop it with `sudo pkill -INT -x usb16x16-dante-`. Owed, in order:
+a few more starts of 22fd2622 watching the first ten seconds, then a fresh
+anchor (`usb-16x16.service` restart) and its battery with RTL; plugin
+5c6b1c0a as root; bit transparency; the loaded hour; persistence.
+
 **Added 2026-10-10 16:50 UTC.** `sudo systemctl restart usb-16x16.service`
 under the running owner: gadget gone and back, audio in 1.8 s, no Inferno
 prepare, the Mac resumed without a coreaudiod kill. New draw 476 harness, 664
