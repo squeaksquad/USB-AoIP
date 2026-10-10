@@ -104,8 +104,8 @@ control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 **Added 2026-10-10 20:31 UTC.** Plugin 5c6b1c0a is in service (operator's
 decision) and passed the full battery on a fresh anchor: 473 / `daw_timeline`
 661 (13.771 ms), soak PASS. `run-owner.sh` defaults to it now. Running on the
-Pi: 22fd2622 on 5c6b1c0a from 20:04:22 UTC, detached. The operator's ACCEPTED
-for that pair is outstanding. Owed: bit transparency through the owner, the
+Pi: 22fd2622 on 5c6b1c0a from 20:04:22 UTC, detached. ACCEPTED by the operator:
+that pair is the point of record. Owed: bit transparency through the owner, the
 loaded hour, persistence. This supersedes the 19:58 block.
 
 **Added 2026-10-10 19:58 UTC.** Plugin 5c6b1c0a as root: sixteen receive

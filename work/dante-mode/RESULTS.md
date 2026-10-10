@@ -2137,3 +2137,24 @@ Evidence `outputs/latency/dante-5c6b-*-20261010T20*`.
 In service by the operator's decision, with the battery behind it. The word
 ACCEPTED for owner 22fd2622 on plugin 5c6b1c0a as the point of record is his
 to give; until then the record is 22fd2622 on 55dee5d8 at 506 / 694.
+
+## ACCEPTED 2026-10-10: owner 22fd2622 on plugin 5c6b1c0a is the point of record
+
+Accepted by the operator after the 20:04-20:31 UTC battery. Point of record
+for the Dante path, at 32 frames: **harness 473 samples (9.854 ms),
+`daw_timeline` 661 (13.771 ms) on its battery's anchor**; owner 22fd2622
+(source e53c8407), plugin 5c6b1c0a (patches 0001 `XRUN_REPORT` and 0002 retry
+after 1 s), `config/asound-inferno-owner.conf`, lead 128, return queue 144,
+Inferno latency 2 ms, Statime as the clock, started by `run-owner.sh`
+(2bd5dde1), which defaults to this plugin. The figure is one anchor's: fresh
+draws on the day span 470 to 507, RTL-at-32 about 14.2 ms plus or minus 0.4;
+the AES67 record for scale is 703 / 891 (18.563 ms).
+
+Fallbacks kept on the Pi: plugin 55dee5d8 (`INFERNO_PLUGIN_DIR=.../plugins/xrun-option`,
+accepted with 22fd2622 at 506 / 694) and owner d4ebd576
+(`OWNER_BIN=usb16x16-dante-owner-d4ebd576`, accepted at 482 / 670).
+
+Carried open: the one 6 ms loop gap in the first seconds of a start (one
+start in about a dozen of 22fd2622 by now), and a wake gap of nearly 4 ms at
+two of three device arrivals or departures. Owed: bit transparency through
+the owner, the loaded hour, persistence.

@@ -12239,3 +12239,18 @@ now defaults to `plugins/xrun-option-retry1`; 55dee5d8 remains in
 after an owner start instead of 69 s. **The word ACCEPTED for 22fd2622 on
 5c6b1c0a as the point of record is the operator's to give.** Owed: bit
 transparency through the owner, the loaded hour, persistence.
+
+**ACCEPTED 2026-10-10 (operator, after the 20:04-20:31 UTC battery): Dante
+owner 22fd2622 on plugin 5c6b1c0a is the point of record. Harness 473
+samples (9.854 ms), `daw_timeline` 661 (13.771 ms) at 32 frames on its
+battery's anchor.** Owner 22fd2622 (source e53c8407), plugin 5c6b1c0a
+(patches 0001 and 0002), lead 128 / return queue 144 / Inferno 2 ms, Statime,
+`run-owner.sh` 2bd5dde1 (defaults to this plugin). One anchor's figure: fresh
+draws span 470 to 507, RTL-at-32 about 14.2 ms plus or minus 0.4; AES67
+record 703 / 891. Fallbacks on the Pi: plugin 55dee5d8 in
+`plugins/xrun-option`, owner d4ebd576 by `OWNER_BIN=`. Carried open: one 6 ms
+loop gap early in one start, and a wake gap of nearly 4 ms at two of three
+gadget departures or arrivals. Owed: bit transparency through the owner, the
+loaded hour, persistence (nothing installed as a service, nothing at boot,
+`usb16x16-aes67` still enabled). Record `work/dante-mode/RESULTS.md`, last
+two sections.
