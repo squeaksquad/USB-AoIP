@@ -1469,3 +1469,51 @@ last night's twenty-odd owner starts, each a gadget PCM restart under a Mac
 that never closed its streams, put the Mac in this state is not known; the
 level stepping down at every one of them fits a Mac whose stream bookkeeping
 was drifting.
+
+## After `killall coreaudiod`: the Mac sends again, 563 at 32 frames, and what the level actually is (2026-10-10 13:27-13:33 UTC)
+
+Owner 94ecdc6c as root from 13:27:10 UTC (`run-owner.sh 3600 --log-every 1`),
+then `sudo killall coreaudiod` on the Mac by the operator about ten seconds
+in. Evidence `outputs/latency/dante-owner-fresh1-*`; the owner's log was read
+on the Pi while the run continued and is not copied yet.
+
+- The Mac's silent opens are gone: both wrapper runs passed their first three
+  readiness probes. Noise probe 0.0 % zeros. **800 loaded impulses at 32
+  frames: 563 samples (11.729 ms), spread 0**, no discontinuity.
+- **The owner's fault path, first real exercise.** The host stopped at 9.9 s:
+  two `NETRESYNC` of 32 frames as the outgoing depth ran out, then out and
+  back both `idle` at 10.0 s. No gadget PCM error was raised at any point (the
+  host simply stops; nothing xruns). The host came back at 42.9 s: outgoing
+  primed again (found 99, block 48), both `flow`. In between the Inferno side
+  sent silence and was otherwise untouched: no prepare, no thread change, no
+  flow lost, longest wake gap 1.029 ms. That is the design's central claim,
+  seen once.
+- **A fault in it:** while the return was idle the gadget queue sat at 240,
+  not at the 144 target. In the hundred wakes it takes to decide the host has
+  stopped, the queue fills to the slack limit, and nothing removes it. The
+  host resumed with the return 84 frames deep (mean 228 at 47 s) and the
+  servo spent two minutes steering it down, Playback Pitch as high as +58.
+  Changed after this run: on going idle the queue is dropped and primed
+  afresh at the target (not built yet).
+- **The observation that reframes the level.** The impulse run covered 115 s
+  to 316 s of the owner's run. Over that time the return mean went from about
+  152 down to 133 and back to 137 and the outgoing mean from 125 to 129, a
+  net change of some 15 frames in what the Pi was holding. All 800 impulses
+  read 563. So moving the depths with the pitch controls does not move the
+  level. In hindsight it cannot: the owner neither makes nor destroys frames
+  while a direction flows, so every frame the Mac sends comes back a fixed
+  number of frames later in the Mac's own count, whatever the queues are
+  doing. A pitch setting only moves frames between the Pi's queue and the
+  Mac's driver. The level is fixed at the moment a direction is primed, by
+  how many frames are then in the loop, and changes only when frames are
+  dropped or inserted (a prime, a reprime, a resync, the Mac re-anchoring).
+- What follows, as reading and not yet tested: (1) the 84 surplus frames in
+  the return queue at the relink are in this 563, so the same start with the
+  idle fault fixed should read near 479; (2) `--tx-lead` and `--rx-queue`
+  decide where frames sit and how safe the Pi's queues are, and the level
+  moves with them only through what a prime puts in the loop; (3) the level
+  stepping down at every owner start yesterday means each stop and start cost
+  the Mac's input seven frames or so against its output, and the Mac's output
+  going silent after twenty-odd of them may be where that ends; (4) the
+  "settling" of the depths after a cold start is the servo finding where the
+  Mac wants the frames, not the latency changing.

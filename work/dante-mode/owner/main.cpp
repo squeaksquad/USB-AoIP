@@ -1223,7 +1223,19 @@ void service_rx(UsbHalf& usb, UsbHandles& handles, const Options& o, long frames
             t.wanted_playback_pitch.store(usb16x16::owner::pitch_value(usb.rx_servo.output(), +1), std::memory_order_relaxed);
         }
     } else if (usb.rx_flowing && ++usb.rx_idle_wakes >= kIdleWakes) {
+        // The host has stopped pulling. In the hundred wakes it took to be sure,
+        // the queue filled to the slack limit (240 on 2026-10-10), and a queue
+        // cannot be emptied from this side: left alone, the host would resume
+        // 96 frames deeper than the target, and no pitch setting takes frames
+        // out of the round trip again. So the queue is thrown away and primed
+        // afresh, to sit at exactly the target until a host pulls.
         set_rx_flowing(usb, false, t);
+        usb.rx_primed = false;
+        usb.rx_idle_wakes = 0;
+        snd_pcm_drop(pcm.handle);
+        const int rc = snd_pcm_prepare(pcm.handle);
+        if (rc < 0) detach_usb(usb, rc, t);
+        return;
     }
     // With the host pulling, the queue may run over the target by the slack
     // before anything is dropped. With no host it is held at the target, so
