@@ -12190,3 +12190,18 @@ point of record.** Owed after that: plugin 5c6b1c0a as root, bit
 transparency through the owner, the loaded hour, persistence. The owner
 running on the Pi is this battery's process (22fd2622 from 19:12:57 UTC,
 detached); stop it with `sudo pkill -INT -x usb16x16-dante-`.
+
+**ACCEPTED 2026-10-10 (operator, after the 19:12-19:39 UTC battery): Dante
+owner 22fd2622 replaces d4ebd576 as the point of record. Harness 506 samples
+(10.542 ms), `daw_timeline` 694 (14.458 ms) at 32 frames on its battery's
+anchor.** Owner 22fd2622 (source e53c8407), plugin 55dee5d8, lead 128 /
+return queue 144 / Inferno 2 ms, Statime, `run-owner.sh`. The only change
+from d4ebd576 is the host stop (idle at once and silence, no resync). The
+figure is one anchor's: fresh draws span 470 to 507, RTL-at-32 about 14.2 ms
+plus or minus 0.4; AES67 record 703 / 891. d4ebd576 stays on the Pi as the
+fallback (`OWNER_BIN=usb16x16-dante-owner-d4ebd576`). Open and carried, not
+conditions: a 6 ms loop gap at 4.2 s on one start in five, and a wake gap of
+nearly 4 ms each time the gadget left or returned under this build; neither
+explained, neither counted like for like on d4ebd576. Owed: plugin 5c6b1c0a
+as root, bit transparency through the owner, the loaded hour, persistence.
+Record `work/dante-mode/RESULTS.md`, last two sections.

@@ -103,8 +103,8 @@ control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 
 **Added 2026-10-10 19:40 UTC.** 22fd2622 passed the full battery on a fresh
 anchor (gadget restart): harness 506, `daw_timeline` 694 (14.458 ms), soak
-PASS; four clean starts since its one 6 ms stall. Awaiting the operator's
-ACCEPTED. Fresh draws span 470 to 507: quote the band. The session can now
+PASS; four clean starts since its one 6 ms stall. ACCEPTED by the operator
+the same evening: 22fd2622 is the point of record, d4ebd576 the fallback. Fresh draws span 470 to 507: quote the band. The session can now
 run the Pi side alone: `/etc/sudoers.d/usb16x16-dante` allows, without a
 password, exactly `sudo -n /home/bdimaio/usb-16x16-work/dante-mode/run-owner.sh
 ...`, the Statime binary, `sudo -n /usr/bin/pkill -INT -x usb16x16-dante-`,

@@ -2026,3 +2026,33 @@ about 14.2 ms plus or minus 0.4 at 32 frames by RTL, not any one anchor.
 Not marked ACCEPTED: the operator decides. 22fd2622 has now had the battery
 that d4ebd576's acceptance rested on, on a fresh anchor of its own, plus the
 host-stop check it was built for.
+
+## ACCEPTED 2026-10-10: owner 22fd2622 replaces d4ebd576 as the point of record
+
+Accepted by the operator after the 19:12-19:39 UTC battery, with the RTL
+figure taken from the harness's `daw_timeline` under his decision of the same
+day.
+
+Point of record for the Dante path, at 32 frames: **harness 506 samples
+(10.542 ms), `daw_timeline` 694 (14.458 ms) on its battery's anchor**; owner
+22fd2622 (source e53c8407), plugin 55dee5d8 (`XRUN_REPORT "0"`),
+`config/asound-inferno-owner.conf`, lead 128, return queue 144, Inferno
+latency 2 ms, Statime as the clock, started by `run-owner.sh`. The figure is
+that anchor's: fresh draws on the day span 470 to 507 (RTL 658 to 695, about
+14.2 ms plus or minus 0.4), and the AES67 record for scale is 703 / 891
+(18.563 ms).
+
+Against d4ebd576 the only change is the host stop: idle on the second empty
+wake and silence from there, no resync, where d4ebd576 resynced about 98
+times in 100 ms. d4ebd576 stays on the Pi as the fallback
+(`OWNER_BIN=usb16x16-dante-owner-d4ebd576`), with its own acceptance at
+482 / 670.
+
+Carried into the acceptance as open, not as conditions: one start in five of
+22fd2622 had a 6 ms loop gap at 4.2 s; both times the gadget left or returned
+under it there was a wake gap of nearly 4 ms. Neither is explained and
+neither has a like-for-like count on d4ebd576.
+
+Not covered and still owed: plugin 5c6b1c0a as root, bit transparency
+through the owner, the loaded hour, persistence (nothing installed, nothing
+at boot, the AES67 unit still enabled).
