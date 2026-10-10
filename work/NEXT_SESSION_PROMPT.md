@@ -101,6 +101,15 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 19:58 UTC.** Plugin 5c6b1c0a as root: sixteen receive
+channels in 28 to 31 s against 69 s, no resync. Not in service: no audio
+measurement on it yet; select it with `run-owner.sh 0
+INFERNO_PLUGIN_DIR=.../plugins/xrun-option-retry1 --log-every 1` (the script
+now takes NAME=value arguments). In service: 22fd2622 on 55dee5d8 from
+19:53:25 UTC, level 492 / 680 on that start. Owed: decide on 5c6b1c0a and
+battery it; bit transparency through the owner; the loaded hour;
+persistence.
+
 **Added 2026-10-10 19:40 UTC.** 22fd2622 passed the full battery on a fresh
 anchor (gadget restart): harness 506, `daw_timeline` 694 (14.458 ms), soak
 PASS; four clean starts since its one 6 ms stall. ACCEPTED by the operator

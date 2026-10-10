@@ -10,9 +10,18 @@
 # SECONDS defaults to 3600; 0 runs until Ctrl+C. Unprivileged it refuses unless
 # TRIAL=1, which runs without the memory lock and real-time priority (a smoke
 # test, not a measurement). It starts and stops nothing but the owner.
+# The settings below may also follow SECONDS as NAME=value arguments, for a
+# sudo rule that does not pass the caller's environment:
+#   sudo -n .../run-owner.sh 0 INFERNO_PLUGIN_DIR=.../plugins/xrun-option-retry1 --log-every 1
 set -u
 seconds="${1:-3600}"
 [ $# -gt 0 ] && shift
+while [ $# -gt 0 ]; do
+    case "$1" in
+        NO_USB=*|OWNER_BIN=*|INFERNO_PLUGIN_DIR=*|INFERNO_CONFIG=*|RUST_LOG=*) export "$1"; shift ;;
+        *) break ;;
+    esac
+done
 base="$(cd "$(dirname "$0")" && pwd)"
 # OWNER_BIN names another build kept beside the current one (an A/B of two binaries).
 owner="$base/owner/${OWNER_BIN:-usb16x16-dante-owner}"

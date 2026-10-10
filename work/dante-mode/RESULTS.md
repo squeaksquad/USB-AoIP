@@ -2056,3 +2056,47 @@ neither has a like-for-like count on d4ebd576.
 Not covered and still owed: plugin 5c6b1c0a as root, bit transparency
 through the owner, the loaded hour, persistence (nothing installed, nothing
 at boot, the AES67 unit still enabled).
+
+## Plugin 5c6b1c0a (retry after 1 s) as root: 31, 28 and 28 s to sixteen receive channels against 69 s; no resync (2026-10-10 19:49-19:58 UTC)
+
+Owner 22fd2622 as root with memory lock and real-time priority, the Mac
+streaming, cold starts 15 s after the previous owner's exit, timed as the
+unprivileged baseline was (seconds from the wrapper's START line to each
+`is receiving data (unicast)`), with
+`RUST_LOG=warn,inferno_aoip::device_server::channels_subscriber=info`.
+`run-owner.sh` (cbdebab4) now takes `INFERNO_PLUGIN_DIR=`, `INFERNO_CONFIG=`,
+`RUST_LOG=`, `OWNER_BIN=` and `NO_USB=` as arguments after SECONDS, because
+the sudo rule does not pass the caller's environment.
+
+| Start (UTC) | Plugin | Channels by the second they began receiving | All sixteen |
+|---|---|---|---|
+| 19:49:25 | 55dee5d8 (in service) | 6 s: 1, 16; 19 s: 2; 32 s: 3, 13-15; 45 s: 4; 58 s: 5; 69 s: 6-12 | 69 s |
+| 19:50:53 | 5c6b1c0a | 6 s: 1; 11 s: 2; 16 s: 3; 18 s: 4, 14-16; 24 s: 5; 29 s: 6; 31 s: 7-13 | 31 s |
+| 19:51:43 | 5c6b1c0a | 5 s: 1, 16; 10 s: 2; 15 s: 12-15; 21 s: 3; 26 s: 4; 28 s: 5-11 | 28 s |
+| 19:52:29 | 5c6b1c0a | 5 s: 1, 15, 16; 11 s: 2, 12-14; 16 s: 3; 21 s: 4; 28 s: 5-11 | 28 s |
+
+- **Under root the patch does what it did unprivileged: 28 to 31 s against
+  69 s**, rounds about 5 s apart instead of 13 s. The root baseline is the
+  unprivileged one to the second (69 against 69, 68, 55), so privilege was
+  never the variable.
+- **The worry from the unprivileged trial did not materialise:** no
+  `NETRESYNC` on any of the three starts, one link each way, no re-prime,
+  largest wake gap 1.02 to 1.13 ms. The three resyncs seen on one
+  unprivileged start belonged to running without real-time priority.
+- Unchanged, as before: five or six rounds are still needed, because most
+  per-channel queries in a round get no answer. Getting to one round is a
+  different patch (one query per device) or the avahi question (PLAN 3a
+  step 2), neither attempted.
+- Not judged here: audio through 5c6b1c0a. The patch is one constant in the
+  subscriber's retry timer and nothing on the audio path, but the plugin is
+  a different binary and has had no noise probe, harness run or soak.
+
+Afterwards the accepted configuration was put back: owner 22fd2622 on plugin
+55dee5d8, started 19:53:25 UTC, detached. On it, 75 s in: noise probe 0.0 %
+zeros; 200 loaded impulses 492 samples spread 0, `daw_timeline` 680
+(14.167 ms), offset steady. So the Mac is healthy after five more owner
+starts, and the level went from 506 to 492 across those five restarts, about
+3 a start, the size of yesterday's steps. Evidence
+`outputs/latency/dante-after-retry-*-20261010T19*`; the four timing logs are
+on the Pi's tmpfs (`/dev/shm/dante-owner-20261010T1949*` to `T1952*`), not
+copied.

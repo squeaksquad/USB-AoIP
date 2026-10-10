@@ -12205,3 +12205,21 @@ nearly 4 ms each time the gadget left or returned under this build; neither
 explained, neither counted like for like on d4ebd576. Owed: plugin 5c6b1c0a
 as root, bit transparency through the owner, the loaded hour, persistence.
 Record `work/dante-mode/RESULTS.md`, last two sections.
+
+**MEASURED 2026-10-10 19:49-19:58 UTC: plugin 5c6b1c0a (subscriptions
+retried after 1 s) as root: sixteen receive channels in 31, 28 and 28 s
+against 69 s on 55dee5d8, with no resync.** Record
+`work/dante-mode/RESULTS.md`, last section. Owner 22fd2622 as root, cold
+starts, the Mac streaming. The root baseline equals the unprivileged one
+(69 s), the patched plugin halves it as it did unprivileged, and the three
+`NETRESYNC` of the unprivileged trial did not appear under real-time
+priority (one link each way, largest wake gap 1.13 ms). Still five or six
+resolution rounds; one round needs a different patch. **5c6b1c0a is not in
+service and not accepted: it has had no audio measurement.** `run-owner.sh`
+(cbdebab4, staged on the Pi) takes its settings as `NAME=value` arguments
+after SECONDS so the passwordless sudo rule can select a plugin. The
+accepted configuration was restored: 22fd2622 on 55dee5d8 from 19:53:25 UTC,
+detached; noise probe clean, 492 / `daw_timeline` 680 on that start (the
+level stepped about 3 per owner restart over five restarts, 506 to 492).
+Owed: the operator's decision on putting 5c6b1c0a in service (then its
+battery), bit transparency through the owner, the loaded hour, persistence.
