@@ -1431,3 +1431,41 @@ stock product restored and re-hashed. Three cold starts of the owner with it
 4fad88cf  patches/0002-subscriber-retry-after-1s.patch
 5c6b1c0a  plugins/xrun-option-retry1/libasound_module_pcm_inferno.so  (pinned + 0001 + 0002)
 ```
+
+## 2026-10-09 23:41 UTC and 2026-10-10 13:13-13:26 UTC: the harness finds no return on most opens; it is the Mac not sending
+
+Two root starts of the owner (f013b1fd, plugin 55dee5d8) by the operator,
+neither measured: `measure-candidate.sh` never got three consecutive readiness
+probes. About a quarter of the 8-impulse probes passed at full level and the
+rest returned exact silence (`rawInputPeak=0.0`), 10 of 40, 5 of 40, 9 of 40
+and 11 of 40 across four attempts. Every unattended run up to 23:28 UTC had
+passed its first three probes. The operator changed nothing in between; DVS,
+Dante Via and Dante Controller were running throughout the two days; all
+subscriptions green in Controller; `USB 16x16` at 48 kHz on the Mac.
+
+On the Pi both runs were clean: one link at 0.3 s, both directions at 48,000
+frames a second, depths 128 and 144, no resync, no fault, 600 s each.
+
+To separate the Mac from the loop the owner gained two peak readings on its
+one-second `USB` line: `out_peak` (what the gadget capture delivered on
+channels 1 and 2) and `back_peak` (what the Inferno capture returned), in
+24-bit units, reset each line (owner 94ecdc6c, `owner/main.cpp` 4b1e849d;
+f013b1fd kept beside it). One unprivileged 150 s run with twenty probes, three
+of which passed (numbers 3, 14 and 16, at 13:24:15, 13:25:05 and 13:25:14):
+
+- `out_peak` was 2,097,148 (0.25 of full scale, the harness's impulse) in
+  exactly the seconds of those three probes, 43 to 44 s, 94 to 95 s and 102
+  to 103 s into the run, and 0 in every other second.
+- `back_peak` was the same 2,097,148 in the same seconds and 0 otherwise.
+
+So whenever the Mac sent the impulses they came back, and on the seventeen
+failing probes nothing left the Mac: the gadget received digital silence. The
+owner, the Dante loop and the return are not the fault. This is a Mac-side
+output state of the kind recorded on 2026-09-05/06 (AppleUSBAudio zeroing
+samples), in a stronger form: whole opens silent. The remedy then was `sudo
+killall coreaudiod` on the Mac, which is the operator's to run; it is also a
+fresh anchor and the first real exercise of the owner's fault path. Whether
+last night's twenty-odd owner starts, each a gadget PCM restart under a Mac
+that never closed its streams, put the Mac in this state is not known; the
+level stepping down at every one of them fits a Mac whose stream bookkeeping
+was drifting.

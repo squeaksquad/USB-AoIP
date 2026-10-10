@@ -313,6 +313,12 @@ struct Telemetry {
     std::atomic<std::uint64_t> usb_detaches{0};
     std::atomic<std::uint64_t> pitch_write_errors{0};
     std::atomic<std::uint64_t> servo_rejected{0};         // seconds the depth filter held back
+    // Largest |sample| (24-bit units) on channels 1 and 2 since the last USB line:
+    // what the host sent, and what Dante returned. Tells a silent host from a silent loop.
+    std::atomic<std::int32_t> out_peak_1{0};
+    std::atomic<std::int32_t> out_peak_2{0};
+    std::atomic<std::int32_t> back_peak_1{0};
+    std::atomic<std::int32_t> back_peak_2{0};
     std::atomic<std::int64_t> ppm_estimate_milli{0};
     std::atomic<bool> ppm_known{false};
 };
@@ -416,7 +422,8 @@ void* telemetry_entry(void* argument) {
                             " pitch_c=%d pitch_p=%d tx_i=%.2f rx_i=%.2f usb_tx=%" PRIu64 " usb_rx=%" PRIu64
                             " tx_links=%" PRIu64 " tx_reprimes=%" PRIu64 " rx_primes=%" PRIu64 " rx_overflow=%" PRIu64
                             " rx_idle_discards=%" PRIu64 " capture_faults=%" PRIu64 " playback_faults=%" PRIu64
-                            " detaches=%" PRIu64 " pitch_write_errors=%" PRIu64 " servo_rejected=%" PRIu64 "\n",
+                            " detaches=%" PRIu64 " pitch_write_errors=%" PRIu64 " servo_rejected=%" PRIu64
+                            " out_peak=%d,%d back_peak=%d,%d\n",
                             seconds, usb_owner_name(owner), tx_state_name(tx), rx != 0 ? "flow" : "idle",
                             static_cast<double>(t.tx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
                             static_cast<double>(t.rx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
@@ -434,7 +441,11 @@ void* telemetry_entry(void* argument) {
                             t.usb_playback_faults.load(std::memory_order_relaxed),
                             t.usb_detaches.load(std::memory_order_relaxed),
                             t.pitch_write_errors.load(std::memory_order_relaxed),
-                            t.servo_rejected.load(std::memory_order_relaxed));
+                            t.servo_rejected.load(std::memory_order_relaxed),
+                            t.out_peak_1.exchange(0, std::memory_order_relaxed),
+                            t.out_peak_2.exchange(0, std::memory_order_relaxed),
+                            t.back_peak_1.exchange(0, std::memory_order_relaxed),
+                            t.back_peak_2.exchange(0, std::memory_order_relaxed));
             }
             std::fflush(stdout);
             last_tx = txf;
@@ -1077,6 +1088,21 @@ long write_gadget(UsbPcm& pcm, const std::int32_t* source, snd_pcm_uframes_t fra
     return total;
 }
 
+// Peak of channels 1 and 2 over a block of interleaved S32, into two atomics.
+void observe_peaks(const std::int32_t* block, long frames, std::atomic<std::int32_t>& first,
+                   std::atomic<std::int32_t>& second) noexcept {
+    std::int32_t peak_1 = 0;
+    std::int32_t peak_2 = 0;
+    for (long frame = 0; frame < frames; ++frame) {
+        const std::int32_t a = block[static_cast<std::size_t>(frame) * kChannels] >> 8;
+        const std::int32_t b = block[static_cast<std::size_t>(frame) * kChannels + 1] >> 8;
+        peak_1 = std::max(peak_1, a < 0 ? -a : a);
+        peak_2 = std::max(peak_2, b < 0 ? -b : b);
+    }
+    if (peak_1 > first.load(std::memory_order_relaxed)) first.store(peak_1, std::memory_order_relaxed);
+    if (peak_2 > second.load(std::memory_order_relaxed)) second.store(peak_2, std::memory_order_relaxed);
+}
+
 // Out, one wake. `depth` is the Inferno playback depth as observed this wake
 // and is updated by what is written. False only on an Inferno error.
 bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& depth, bool resynced,
@@ -1095,6 +1121,7 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         return true;
     }
     usb.tx_idle_wakes = 0;
+    observe_peaks(usb.tx_scratch.data(), frames, t.out_peak_1, t.out_peak_2);
     const auto lead = static_cast<std::int64_t>(net.lead);
     const std::int64_t ceiling = static_cast<std::int64_t>(net.playback.buffer) - static_cast<std::int64_t>(net.guard) -
                                  static_cast<std::int64_t>(net.playback.period);
@@ -1278,7 +1305,10 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
     if (!observe_playback(net, depth, resynced, t)) return false;
 
     if (usb.attached && !service_tx(usb, handles, net, depth, resynced, t)) return false;
-    if (usb.attached) service_rx(usb, handles, o, received, t);
+    if (usb.attached) {
+        observe_peaks(usb.rx_scratch.data(), received, t.back_peak_1, t.back_peak_2);
+        service_rx(usb, handles, o, received, t);
+    }
     if (usb.attached) run_servos(usb, o, now, t);
 
     // With nothing flowing out, the lead is kept up with silence.
