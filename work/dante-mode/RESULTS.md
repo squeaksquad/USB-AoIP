@@ -2245,3 +2245,55 @@ ten minutes on all sixteen channels. With the Pi probe's earlier result for
 the endpoint alone (true full scale included) nothing on the Pi side is
 left unproven except true full scale through the owner's integer copy, which
 cannot be driven from this Mac. What is not bit-exact is the Mac.
+
+## The loaded hour: FAIL, two holes of whole 32-frame units on all sixteen channels; and a CORRECTION to the section above (2026-10-10 22:25-23:26 UTC)
+
+`measure-candidate.sh soak 3600 32` (the harness's `continuous` mode, its
+limit raised from 600 to 3600 s; sixteen channels at 0.1, one unbroken run),
+on owner 22fd2622 / plugin 5c6b1c0a, the 20:04:22 UTC process. Evidence
+`outputs/latency/dante-hour-soak-3600s-32f-20261010T222555Z*`.
+
+- **FAIL by the soak's own rule (no zero run of 4 or more): two runs of
+  zeros, on all sixteen channels at once.** 224 samples at 1,901.8 s (about
+  22:57:40 UTC) and 352 samples at 3,597.5 s (about 23:25:56 UTC). Everything
+  else in 172.8 million frames a channel returned; peak 0.1000 on every
+  channel; no timestamp discontinuity in or out on the Mac.
+- **Nothing on the Pi at either time.** The owner over the hour: no resync,
+  no re-prime, no link change (`tx_links=2` before and after), no overflow,
+  largest wake gap 1.05 ms, depth means 126.0 to 129.9 and 142.0 to 146.0.
+  The journal has no entry within 20 s of any of the events; eth0 shows no
+  errors (its `dropped` counter is cumulative since boot and was not read
+  before).
+- **CORRECTION to the bit-transparency section: the two holes there were not
+  the checker's allocation.** The same thing happened here with a different
+  IOProc that allocates nothing. Four holes in about 100 minutes of
+  all-channel observation this evening: 224, 416, 224, 352 samples, at an
+  unknown time in the 21:43 run, 22:01:35, 22:57:40 and 23:25:56 UTC. The
+  third bit-exact run was simply ten minutes without one. Its result (460.8
+  million samples matched) stands; the attribution does not.
+- **What the holes look like.** Each is a whole number of 32-sample units
+  (7, 13, 7, 11). They do not start on a Mac buffer boundary on either side
+  (the first zero is at input frame 10 modulo 32, and 661 frames earlier on
+  the output side, 21 modulo 32). 32 frames is also the size of a Dante
+  packet on these flows. The Mac did not stop sending: a stopped host makes
+  the owner go idle and relink, and it did not. So either the Mac sent
+  zeros for those buffers with its buffers offset from where this arithmetic
+  puts them, or 7 to 13 consecutive Dante packets on every flow went
+  missing or late in one direction (Pi to Ferrofish, the Ferrofish and
+  Metric Halo loop, or Ferrofish to Pi). **Not located.**
+- **What it is not known to depend on.** All four were on plugin 5c6b1c0a,
+  which has been in service since 20:04 UTC, but the all-channel observation
+  on 55dee5d8 today is only twenty minutes (two soaks), and at this evening's
+  rate twenty clean minutes would happen nearly half the time. The four
+  ten-minute soaks of the day that passed (16:04, 19:28, 20:20 and the third
+  bit-exact run) are 40 minutes without a hole. Impulse runs cannot see a
+  hole of this size.
+
+**Consequences.** The loaded hour is not passed. The acceptances of the day
+rest on ten-minute soaks, each of which is honest for its ten minutes and
+too short to see an event that comes about once in 25 minutes. Next is to
+locate it: the owner counts all-channel zero runs on the stream it reads
+from the gadget and on the stream it reads from Dante, as a diagnostic
+build, and a soak is run until a hole occurs. Zeros in the gadget stream put
+it on the Mac or USB; zeros only in the Dante stream put it on the network
+or the loop; neither puts it after the Pi on the way back.

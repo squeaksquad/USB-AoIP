@@ -103,7 +103,7 @@ private enum CLIError: Error, CustomStringConvertible {
               usb16x16-latency inspect [--device NAME] [--output FILE]
               usb16x16-latency list [--output FILE]
               usb16x16-latency continuous [--device NAME] [--buffer-frames 32|64]
-                  [--seconds 5...600] --other-channel-load-amplitude 0.1 [--output FILE]
+                  [--seconds 5...3600] --other-channel-load-amplitude 0.1 [--output FILE]
               usb16x16-latency bitexact [--device NAME] [--buffer-frames 32|64]
                   [--seconds 5...3600] [--output FILE]
               usb16x16-latency measure [--device NAME] [--buffer-frames N]

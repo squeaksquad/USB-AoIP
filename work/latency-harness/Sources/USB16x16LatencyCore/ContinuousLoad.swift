@@ -144,7 +144,7 @@ final class ContinuousState: @unchecked Sendable {
 public enum ContinuousLoad {
     public static func run(deviceName: String, bufferFrames: UInt32,
                            seconds: Int, amplitude: Float) throws -> ContinuousLoadReport {
-        guard (5...600).contains(seconds), amplitude.isFinite, amplitude > 0, amplitude <= 0.1,
+        guard (5...3600).contains(seconds), amplitude.isFinite, amplitude > 0, amplitude <= 0.1,
               bufferFrames == 32 || bufferFrames == 64 else {
             throw CoreAudioInspectionError.invalidProperty("continuous load settings")
         }

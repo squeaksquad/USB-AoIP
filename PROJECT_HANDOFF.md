@@ -12280,3 +12280,26 @@ capture to gadget playback through the owner, Inferno, the Ferrofish and
 the Metric Halo loop is bit-exact for those codes in both directions. Owed:
 the loaded hour, persistence. Monitors were muted by the operator for these
 runs.
+
+**MEASURED 2026-10-10 22:25-23:26 UTC: the loaded hour FAILED: two holes of
+224 and 352 zero samples on all sixteen channels at once. CORRECTION to the
+entry above: its two holes were not the checker's allocation.** Record
+`work/dante-mode/RESULTS.md`, last section. One unbroken 3,600 s
+sixteen-channel soak at 0.1 on owner 22fd2622 / plugin 5c6b1c0a (harness
+`continuous` limit raised to 3600). Holes at 1,901.8 s and 3,597.5 s; the
+rest returned, peak 0.1000 everywhere, no timestamp discontinuity. With the
+two in the bit-exact runs that is four this evening in about 100 minutes of
+all-channel observation (224, 416, 224, 352 samples), each a whole number
+of 32-sample units, not aligned to the Mac's buffers by the round-trip
+arithmetic; 32 frames is also a Dante packet on these flows. On the Pi
+nothing: no resync, re-prime, link change or overflow in the owner, largest
+wake gap 1.05 ms, nothing in the journal, no eth0 errors. The Mac did not
+stop sending (the owner would have gone idle). **Not located: the Mac's
+output, or 7 to 13 consecutive Dante packets in one direction.** All four
+were on plugin 5c6b1c0a, but the day's all-channel time on 55dee5d8 is only
+twenty minutes, so that is not evidence against the plugin yet. **The
+loaded hour is not passed, and the day's acceptances rest on ten-minute
+soaks that are too short to see an event about every 25 minutes.** Next: a
+diagnostic owner build that counts all-channel zero runs on the gadget
+stream and on the Dante stream, and a soak until a hole occurs. Owed after
+that: the loaded hour again, persistence.

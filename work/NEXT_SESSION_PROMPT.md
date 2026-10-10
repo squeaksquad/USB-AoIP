@@ -101,6 +101,17 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 23:30 UTC. Read this first.** The loaded hour FAILED: two
+holes of 224 and 352 zeros on all sixteen channels in 3,600 s, nothing on
+the Pi. Two more of the same in the bit-exact runs (the 22:15 block's
+"checker's allocation" attribution is withdrawn). Four in about 100 minutes,
+each a multiple of 32 samples, not located: Mac output, or consecutive Dante
+packets lost or late in one direction. All on plugin 5c6b1c0a, with too
+little all-channel time on 55dee5d8 to compare. Ten-minute soaks cannot see
+this. First job: a diagnostic owner build counting all-channel zero runs on
+the gadget stream and the Dante stream, then a soak until a hole occurs;
+then an hour on 55dee5d8 if the hole is on the Dante side.
+
 **Added 2026-10-10 22:15 UTC.** Bit transparency through the owner: PASS for
 every code a Mac can send (`usb16x16-latency bitexact --seconds 600`, 460.8 M
 samples, 16 channels). FOUND on the way: macOS multiplies by 0.999998 on
