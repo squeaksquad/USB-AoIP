@@ -1548,3 +1548,32 @@ killall coreaudiod` on the Mac by the operator 79 s in. Evidence
   196 samples, 4.1 ms. It is the first comparison made under the same anchor
   rule, and it is one anchor: RTL on it and at least two more anchors are
   owed before it is a figure.
+
+## RTL on the second fresh anchor, and a third anchor: 695 RTL, then 489 (2026-10-10 13:47-13:58 UTC)
+
+Same owner process as the section above (d4ebd576, started 13:36:53 UTC).
+
+- **RTL Utility at buffer 32 by the operator on the 507 anchor: 14.479 ms,
+  695 samples**, which is 507 plus 188 exactly. The rule holds on a fresh
+  anchor too.
+- Third `sudo killall coreaudiod` by the operator at 767 s. The host was away
+  far longer this time, about six minutes: the gadget's streams only came
+  back when the harness opened the device (a first burst at 1,063.9 s, both
+  directions flowing from 1,138.1 s). The operator saw the Mac "taking a
+  while to reconnect". Throughout, the owner sat idle with the return queue
+  at 144 and the Dante side untouched; no gadget PCM error.
+- **400 loaded impulses at 32 frames on that anchor: 489 samples (10.188 ms),
+  spread 0**, first three readiness probes passed, no discontinuity, nothing
+  on the Pi.
+
+Fresh anchors so far, one owner process each column:
+
+| Owner | Anchor | Harness at 32 | RTL at 32 |
+|---|---|---|---|
+| 94ecdc6c (return queue left at 240 while idle) | 13:27 | 563 | |
+| d4ebd576 (queue primed afresh at 144) | 13:38 | 507 | 695 (14.479 ms) |
+| d4ebd576 | 13:49 | 489 | |
+
+Two anchors on the fixed owner differ by 18 samples. That is wider than the
+plus or minus 10 the AES67 path drew, on two draws. Both sit about 200 under
+the AES67 record's 703 (196 and 214).
