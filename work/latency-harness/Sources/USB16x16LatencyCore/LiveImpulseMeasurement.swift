@@ -87,6 +87,12 @@ public struct LiveMeasurementReport: Codable, Equatable, Sendable {
     public let outputDiscontinuities: Int
     public let capturedPeak: Float
     public let correlation: CorrelationResult
+    /// Output buffer sample time less input buffer sample time in the same
+    /// IOProc callback, smallest and largest over the run. A program that
+    /// counts latency in the frames it is handed (a DAW, RTL Utility) sees the
+    /// device-timeline lag plus this: 188 at 32 frames, 252 at 64 on the gadget.
+    public let ioOffsetMinimumSamples: Int
+    public let ioOffsetMaximumSamples: Int
 }
 
 private final class MeasurementState: @unchecked Sendable {
@@ -118,6 +124,8 @@ private final class MeasurementState: @unchecked Sendable {
     private(set) var firstInputSampleTime: Double?
     private(set) var lastInputSampleTime: Double?
     private(set) var firstInputByteSize: UInt32 = 0
+    private(set) var ioOffsetMinimum = Double.infinity
+    private(set) var ioOffsetMaximum = -Double.infinity
     private var expectedInputSampleTime: Double?
     private var expectedOutputSampleTime: Double?
     private var completionSignaled = false
@@ -228,6 +236,9 @@ private final class MeasurementState: @unchecked Sendable {
             firstInputByteSize = inputBuffers.first?.mDataByteSize ?? 0
         }
         lastInputSampleTime = inputSampleTime
+        let ioOffset = outputSampleTime - inputSampleTime
+        if ioOffset < ioOffsetMinimum { ioOffsetMinimum = ioOffset }
+        if ioOffset > ioOffsetMaximum { ioOffsetMaximum = ioOffset }
         if inputBaseSampleTime == nil { inputBaseSampleTime = inputSampleTime }
         if let expectedInputSampleTime,
            abs(inputSampleTime - expectedInputSampleTime) > 0.5 {
@@ -459,7 +470,9 @@ public enum LiveImpulseMeasurement {
             inputDiscontinuities: state.inputDiscontinuities,
             outputDiscontinuities: state.outputDiscontinuities,
             capturedPeak: state.capture.map(abs).max() ?? 0,
-            correlation: correlation
+            correlation: correlation,
+            ioOffsetMinimumSamples: Int(state.ioOffsetMinimum.rounded()),
+            ioOffsetMaximumSamples: Int(state.ioOffsetMaximum.rounded())
         )
     }
 

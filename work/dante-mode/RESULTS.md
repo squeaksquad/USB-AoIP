@@ -1905,3 +1905,54 @@ line is written by RTL Utility, so a misread screen cannot enter the record;
 and the harness on the same start supplies an independent check to the
 sample. What it does not replace is his eye on the app when the Mac's audio
 is misbehaving. Whether these stand as acceptance readings is his decision.
+
+## The RTL figure from the command line: the harness now reports the DAW timeline itself (2026-10-10 18:50-18:56 UTC)
+
+The operator asked whether the RTL figure can be had from a command, without
+RTL Utility or computer use. It can, and the plus-188 rule turns out not to
+be an empirical constant but a number the harness was already handed.
+
+- **Where the 188 comes from.** In every IOProc callback CoreAudio gives the
+  harness an input buffer and an output buffer, each with its device sample
+  time. The harness measures on the device timeline (when the impulse's
+  sample left against when it came back). A program that counts in the
+  frames it is handed, which is what RTL Utility and a DAW do, sees that lag
+  plus the distance between the two buffers of one callback: output sample
+  time less input sample time. On the gadget that distance is 188 at 32
+  frames and 252 at 64 (two buffers plus 124 of safety offsets and device
+  latency). The saved runs already had it: `firstOut` less `firstIn` in
+  every `settle.log` of the day is 188.
+- **The change.** `LiveImpulseMeasurement.swift` tracks that offset on every
+  callback and the report carries `ioOffsetMinimumSamples` /
+  `ioOffsetMaximumSamples`; `measure-candidate.sh` prints
+  `daw_timeline=<ms> (<samples>) = <median> + io_offset <n> (steady)`, or
+  `VARIED lo..hi` if it moved inside the run. The harness's 11 tests pass;
+  the signed app was rebuilt with `build-app.sh`.
+- **Checked against RTL Utility at two buffer sizes on one owner start**
+  (22fd2622 from 17:11:02 UTC, 102 minutes in, one link each way and no
+  event since its start; RTL Utility quit before the harness ran):
+
+| CoreAudio buffer | RTL Utility (its log) | Harness lag | io offset | Harness `daw_timeline` |
+|---:|---:|---:|---:|---:|
+| 32 | 654, 13.625 ms (17:28:59 and 17:29:19 UTC) | 466 | 188, steady | 654, 13.625 ms |
+| 64 | 718, 14.958 ms (18:53:31 UTC) | 466 | 252, steady | 718, 14.958 ms |
+
+  200 impulses each, spread 0, no discontinuity. Evidence
+  `outputs/latency/dante-dawtl-roundtrip-32f-20261010T185351Z*`,
+  `dante-dawtl-roundtrip-64f-20261010T185456Z*`,
+  `rtl-utility-64f-20261010T185338Z.txt`,
+  `rtl-utility-32f-20261010T172949Z.txt`.
+- **What this gives:** `measure-candidate.sh 32 800` now yields the figure
+  RTL Utility would show, measured over 800 impulses with their spread, with
+  the Pi's counters read before and after, and with the offset checked on
+  every callback instead of assumed. RTL Utility takes one correlation per
+  press. The two agree to the sample at both sizes here and the plus-188
+  relation had held on every pair since 2026-09-06.
+- **What it does not give:** an instrument independent of the harness. If
+  the harness's own timestamps were wrong, both of its lines would be wrong
+  together; RTL Utility remains the outside check, and
+  `read-rtl-log.sh` the way to read it. `measure-under-service.sh` (the
+  AES67 wrapper) does not print the line yet.
+
+Whether `daw_timeline` may stand in for the RTL reading in an acceptance is
+the operator's decision.

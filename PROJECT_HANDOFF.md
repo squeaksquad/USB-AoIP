@@ -12137,3 +12137,21 @@ Whether session-taken readings count for acceptance is the operator's
 decision. The operator widened the standing permission at about 17:25 UTC
 to cover installs and Statime as well as owner and service starts and
 stops.
+
+**IMPLEMENTED and MEASURED 2026-10-10 18:50-18:56 UTC: the harness reports
+the RTL figure itself (`daw_timeline`), checked against RTL Utility at 32 and
+64 frames.** Record `work/dante-mode/RESULTS.md`, last section. The plus-188
+between the harness and RTL Utility is the IOProc's own output-buffer sample
+time less its input-buffer sample time (188 at 32 frames, 252 at 64 on the
+gadget): the harness measures on the device timeline, RTL Utility and a DAW
+in the frames they are handed. The harness now records that offset on every
+callback (`ioOffsetMinimumSamples` / `ioOffsetMaximumSamples` in the JSON)
+and `work/dante-mode/measure-candidate.sh` prints `daw_timeline=` as the
+median lag plus the offset, flagged if the offset varied. On one owner start
+(22fd2622, harness 466): **RTL Utility 654 at 32 and 718 at 64; harness
+`daw_timeline` 654 (13.625 ms) and 718 (14.958 ms)**, offsets steady, spread
+0. So the RTL-at-32 figure can be produced by `measure-candidate.sh 32 N`
+with no RTL Utility and no screen control. It is not an independent
+instrument: RTL Utility stays the outside check (`read-rtl-log.sh`). Whether
+`daw_timeline` may stand in for the RTL reading in an acceptance is the
+operator's decision. `measure-under-service.sh` does not print it yet.

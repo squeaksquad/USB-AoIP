@@ -101,6 +101,14 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 18:56 UTC.** The harness prints the RTL figure itself:
+`measure-candidate.sh 32 N` ends with `daw_timeline=<ms> (<samples>) = <lag>
++ io_offset 188 (steady)`. The 188 (252 at 64) is the IOProc's output minus
+input buffer sample time, now measured every callback. Checked against RTL
+Utility on one start: 654 / 654 at 32, 718 / 718 at 64. The operator has not
+yet said whether it replaces his RTL reading for acceptance. RTL Utility was
+quit afterwards.
+
 **Added 2026-10-10 17:30 UTC.** RTL readings can be taken from the session:
 RTL Utility logs every measurement to `~/Library/Logs/RTL Utility/RTL Utility
 measurements log.txt`. Set Input USB 16x16 FIRST, then Output, then buffer 32

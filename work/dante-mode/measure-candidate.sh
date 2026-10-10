@@ -172,6 +172,11 @@ levels = collections.Counter(per).most_common(4)
 print(f"median={st.get('medianMilliseconds', 0):.3f} ms ({st.get('medianSamples')}) min={st.get('minimumSamples')} max={st.get('maximumSamples')} spread={(st.get('maximumSamples') or 0)-(st.get('minimumSamples') or 0)} score={c.get('score', 0):.3f} count={st.get('count')}")
 print("levels=" + " ".join(f"{s}x{n}" for s, n in levels))
 print(f"discontinuities in={d.get('inputDiscontinuities')} out={d.get('outputDiscontinuities')}")
+lo, hi, med = d.get('ioOffsetMinimumSamples'), d.get('ioOffsetMaximumSamples'), st.get('medianSamples')
+if lo is not None and med is not None:
+    # What RTL Utility and a DAW read: the device-timeline lag plus the IOProc's output-minus-input offset.
+    steady = "steady" if lo == hi else f"VARIED {lo}..{hi}"
+    print(f"daw_timeline={(med + lo) / 48:.3f} ms ({med + lo}) = {med} + io_offset {lo} ({steady})")
 PYEOF
   else
     print -r -- "harness stderr: $(head -c 300 "$api_dir/measure.log")"
