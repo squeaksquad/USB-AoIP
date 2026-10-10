@@ -12155,3 +12155,15 @@ with no RTL Utility and no screen control. It is not an independent
 instrument: RTL Utility stays the outside check (`read-rtl-log.sh`). Whether
 `daw_timeline` may stand in for the RTL reading in an acceptance is the
 operator's decision. `measure-under-service.sh` does not print it yet.
+
+**DECIDED 2026-10-10 (operator, after the 18:56 UTC entry): the harness's
+`daw_timeline` figure counts for an acceptance.** Asked whether
+`daw_timeline` (median device-timeline lag plus the IOProc's measured
+output-minus-input offset, printed by `work/dante-mode/measure-candidate.sh`)
+may stand in for his RTL Utility reading, the operator answered that this
+type of measurement can count. From here an acceptance's RTL-at-32 figure may
+be the `daw_timeline` of a loaded run on the accepted start, with the offset
+reported steady; a run whose offset `VARIED` does not qualify. RTL Utility
+remains the outside check and is read with `read-rtl-log.sh` when one is
+wanted. The decision was given for `daw_timeline`; RTL Utility readings
+pressed from the session were not separately ruled on.

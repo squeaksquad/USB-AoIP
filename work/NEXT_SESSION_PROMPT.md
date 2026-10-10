@@ -105,8 +105,8 @@ control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `measure-candidate.sh 32 N` ends with `daw_timeline=<ms> (<samples>) = <lag>
 + io_offset 188 (steady)`. The 188 (252 at 64) is the IOProc's output minus
 input buffer sample time, now measured every callback. Checked against RTL
-Utility on one start: 654 / 654 at 32, 718 / 718 at 64. The operator has not
-yet said whether it replaces his RTL reading for acceptance. RTL Utility was
+Utility on one start: 654 / 654 at 32, 718 / 718 at 64. DECIDED by the operator the
+same day: `daw_timeline` with a steady offset counts for an acceptance. RTL Utility was
 quit afterwards.
 
 **Added 2026-10-10 17:30 UTC.** RTL readings can be taken from the session:

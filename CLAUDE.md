@@ -134,6 +134,6 @@ Timestamps in the handoff (`143219Z`, `180438Z`) are the UTC time part of these 
 - The USB gadget module, `setup-usb-16x16`, and `usb-16x16.service` are the protected baseline. Experiments use distinct names and carry restore commands.
 - Installers verify pinned SHA-256 hashes and refuse otherwise. When a script or bridge changes, its hash is recorded in the handoff and in the installer.
 - Change one variable at a time; record hashes, commands, logs, and results for every accepted point.
-- Measurements gate on a detected return signal, never on sink flags. The standard figure is RTL Utility at 32 CoreAudio frames; the harness level is independent of buffer size.
+- Measurements gate on a detected return signal, never on sink flags. The standard figure is RTL Utility at 32 CoreAudio frames; the harness level is independent of buffer size. Since 2026-10-10 the harness's `daw_timeline` line (lag plus the measured IOProc offset, steady) is accepted by the operator as that figure.
 - Any new operating point needs four loaded 800-impulse runs and a ten-minute sixteen-channel soak before ACCEPTED.
 - Long measurement runs are launched detached and polled; a bridge RECOVER during a service measurement is counted, not fatal.
