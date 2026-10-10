@@ -12112,3 +12112,28 @@ step. **Not ACCEPTED: 22fd2622 has no battery and no RTL; d4ebd576 at 482 /
 the 6 ms gap, then its battery; plugin 5c6b1c0a as root; bit transparency
 through the owner; the loaded hour; persistence. Evidence
 `outputs/latency/dante-topup-*-20261010T16*`, `T17*`.
+
+**IMPLEMENTED 2026-10-10 17:23-17:30 UTC: RTL Utility readings taken from the
+session and read from RTL Utility's own measurements log.** Record
+`work/dante-mode/RESULTS.md`, last section. RTL Utility appends every
+measurement to `~/Library/Logs/RTL Utility/RTL Utility measurements log.txt`
+(time, device, channel, rate, buffer, reported, measured samples and ms,
+return level, correlation, Valid); the operator's readings of the day are in
+it and match the handoff. Procedure: Input to USB 16x16 first, then Output,
+then buffer 32 (these three menus need the screen), confirm both sides
+`Opened: USB 16x16` in the application log, press Measure RTL (pressable in
+the background from then on), then `work/latency-harness/read-rtl-log.sh
+[COUNT] [HARNESS] [BUFFER]`, which validates the lines, checks harness plus
+188 and saves them to `outputs/latency/rtl-utility-32f-<UTC>.txt`. **First
+readings this way, on the 17:11 start of owner 22fd2622 (harness 466): 654
+samples, 13.625 ms, twice, 466 plus 188 exactly**, reported 312, return
+-21.6 dB, correlation 50.1 as on every reading the operator took. One
+mistake on the way: output chosen before input left the output on the
+laptop speakers, and the test signal went to them twice and once to MHLink
+output 1 after a device reset; no reading from those. The log also holds
+three operator presses at 16:56:49 UTC reading 664 on 22fd2622's first
+start: harness 476 there, so that owner restart did not step the level.
+Whether session-taken readings count for acceptance is the operator's
+decision. The operator widened the standing permission at about 17:25 UTC
+to cover installs and Statime as well as owner and service starts and
+stops.

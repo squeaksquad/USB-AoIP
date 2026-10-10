@@ -101,6 +101,15 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 17:30 UTC.** RTL readings can be taken from the session:
+RTL Utility logs every measurement to `~/Library/Logs/RTL Utility/RTL Utility
+measurements log.txt`. Set Input USB 16x16 FIRST, then Output, then buffer 32
+(needs screen control), check the application log says both sides `Opened:
+USB 16x16`, press Measure RTL, run `work/latency-harness/read-rtl-log.sh 1
+<harness>`. First such reading: 654 (13.625 ms) on harness 466. The operator
+decides whether these count for acceptance. Standing permission now covers
+owner, services, Statime and installs on the Pi.
+
 **Added 2026-10-10 17:18 UTC.** Owner 22fd2622 (source e53c8407) is the
 binary on the Pi: the host stop goes idle at once and tops up with silence,
 no resync (checked by a cable pull). Not accepted; d4ebd576 is kept beside

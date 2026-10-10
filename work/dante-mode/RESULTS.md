@@ -1851,3 +1851,57 @@ Levels on 2026-10-10 after the reboot, one Mac boot throughout:
 
 22fd2622 is the binary on the Pi and is not accepted: it has had no battery
 and no RTL reading. d4ebd576 remains the point of record.
+
+## RTL Utility readings without the operator: driven from the session, read from its own log (2026-10-10 17:23-17:30 UTC)
+
+The operator asked for a way to take RTL readings that can be accepted as his
+are. It is the same instrument with the same settings, pressed from the
+session, and the figure is taken from the file RTL Utility itself writes, not
+from a screenshot.
+
+- **RTL Utility keeps a record of every measurement**:
+  `~/Library/Logs/RTL Utility/RTL Utility measurements log.txt`, one line per
+  press of Measure RTL with local time, device, input channel, sample rate,
+  buffer, reported latency, measured samples and ms, return level,
+  correlation and its own Valid flag. `RTL Utility application log.txt`
+  beside it names the devices each side opened. The operator's readings of
+  the day are all there and match what he reported: 695 at 13:49 UTC, 677 at
+  14:20, 670 at 15:16 and again four times at 16:41 (the battery's start),
+  664 at 16:49.
+- **One reading the record adds:** three presses at 16:56:49-51 UTC read
+  664, on owner 22fd2622's first start, after its 6 ms gap and before the
+  cable pull. That is harness 476: the level did not move at the d4ebd576 to
+  22fd2622 owner restart, nor at the two re-primes the gap forced. With
+  15:49 that is two owner restarts without a step and one (17:11) with a
+  step of 4.
+- **Procedure.** RTL Utility opens on the default device (MHLink, 512). Set
+  Input to USB 16x16 first, then Output to USB 16x16, then the buffer to 32;
+  output 1 and input 1 are ticked by default. The three menus need the
+  screen (computer use, full control); after that Measure RTL is an ordinary
+  button and can be pressed in the background while the app stays open.
+  Before pressing, the application log must show `CoreAudio: Opened: USB
+  16x16` for both sides. `work/latency-harness/read-rtl-log.sh [COUNT]
+  [HARNESS] [BUFFER]` then reads the newest lines, refuses anything that is
+  not the standard reading or that the app marked invalid, checks harness
+  plus 188 when the harness level is given, and saves the lines under
+  `outputs/latency/rtl-utility-32f-<UTC>.txt`.
+- **The mistake to avoid, made once here:** choosing the output first and
+  the input second left the output on the MacBook Pro speakers while the
+  menu read USB 16x16 (two channels listed, reported latency 1078). Two
+  presses sent the test signal to the laptop speakers and, after Reset audio
+  device put everything back on MHLink, one press sent it to MHLink output 1
+  at 512 frames. All three returned no reading. Nothing reached the gadget.
+- **Result on the 17:11 start of 22fd2622 (harness 466): RTL 654 samples,
+  13.625 ms, twice** (17:28:59 by a screen click, 17:29:19 by a background
+  press), reported 312, return -21.6 dB, correlation 50.1, Valid: the same
+  reported latency, level and correlation as every reading the operator
+  took, and 466 plus 188 exactly. Evidence
+  `outputs/latency/rtl-utility-32f-20261010T172949Z.txt`. The owner showed
+  no link event while RTL opened the device.
+
+What makes such a reading equivalent to his: the instrument, device,
+channels, rate and buffer are the same and are in the app's own line; the
+line is written by RTL Utility, so a misread screen cannot enter the record;
+and the harness on the same start supplies an independent check to the
+sample. What it does not replace is his eye on the app when the Mac's audio
+is misbehaving. Whether these stand as acceptance readings is his decision.
