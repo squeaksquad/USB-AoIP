@@ -12223,3 +12223,19 @@ detached; noise probe clean, 492 / `daw_timeline` 680 on that start (the
 level stepped about 3 per owner restart over five restarts, 506 to 492).
 Owed: the operator's decision on putting 5c6b1c0a in service (then its
 battery), bit transparency through the owner, the loaded hour, persistence.
+
+**INSTALLED and MEASURED 2026-10-10 20:04-20:31 UTC: plugin 5c6b1c0a
+(subscriptions retried after 1 s) is in service by the operator's decision,
+and passed the full battery on a fresh anchor: harness 473, `daw_timeline`
+661 (13.771 ms) at 32 frames.** Record `work/dante-mode/RESULTS.md`, last
+section. Owner 22fd2622 on 5c6b1c0a from 20:04:22 UTC (root, detached, still
+running), gadget restart at 20:05:07 UTC (1.3 s to audio, no resync and no
+wake gap this time), then on that one process: noise probe clean, **4 x 800
+loaded impulses all 473 samples (9.854 ms) spread 0, offset steady, 600 s
+sixteen-channel soak PASS**, no resync in the whole run. 473 sits inside the
+day's band of fresh draws (470 to 507). `run-owner.sh` (hash in the commit)
+now defaults to `plugins/xrun-option-retry1`; 55dee5d8 remains in
+`plugins/xrun-option`. Effect in use: sixteen receive channels 28 to 31 s
+after an owner start instead of 69 s. **The word ACCEPTED for 22fd2622 on
+5c6b1c0a as the point of record is the operator's to give.** Owed: bit
+transparency through the owner, the loaded hour, persistence.

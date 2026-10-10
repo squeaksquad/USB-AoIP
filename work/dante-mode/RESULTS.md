@@ -2100,3 +2100,40 @@ starts, and the level went from 506 to 492 across those five restarts, about
 `outputs/latency/dante-after-retry-*-20261010T19*`; the four timing logs are
 on the Pi's tmpfs (`/dev/shm/dante-owner-20261010T1949*` to `T1952*`), not
 copied.
+
+## Plugin 5c6b1c0a in service: full battery on a fresh anchor, 473 harness, 661 on the DAW timeline (2026-10-10 20:04-20:31 UTC)
+
+The operator said 5c6b1c0a can go in service and asked for its battery.
+Owner 22fd2622 started on it at 20:04:22 UTC (root, detached), gadget restart
+at 20:05:07 UTC for a fresh anchor, then the battery on that one process.
+Evidence `outputs/latency/dante-5c6b-*-20261010T20*`.
+
+- The gadget restart, 45 s in: gone at 45.0 s, both directions flowing at
+  46.3 s, **no resync and no wake gap this time** (largest in the run's first
+  minute 1.022 ms). So the gap of nearly 4 ms seen at the two earlier device
+  events on 22fd2622 is not something every such event produces.
+
+| Step (UTC) | Result |
+|---|---|
+| Noise probe, 20:05 | 0.0 % zeros in 1,244,939 samples, no zero run of 4 or more |
+| 800 loaded impulses, 20:06 | 473 (9.854 ms), spread 0; `daw_timeline` 661 (13.771 ms), offset 188 steady |
+| 800 loaded impulses, 20:09 | 473, spread 0; 661, steady |
+| 800 loaded impulses, 20:13 | 473, spread 0; 661, steady |
+| 800 loaded impulses, 20:16 | 473, spread 0; 661, steady |
+| 600 s soak, all 16 channels at 0.1, 20:20 | PASS: every channel returned, longest zero run 1, no discontinuity |
+
+- **Battery passed on 5c6b1c0a: 3,200 loaded impulses at 473 spread 0, soak
+  PASS, noise probe clean; RTL-equivalent 661 samples, 13.771 ms.** No xrun
+  or lag line on the Pi during any step.
+- The owner at 1,586 s: no resync at all in the run (`tx_resyncs=0`), two
+  links each way (start and the gadget restart), no re-prime, largest wake
+  gap since the relink 1.073 ms, depths 128.0 / 144.0, pitch 1000015.
+- 473 is inside the day's band of fresh draws (470 to 507), as expected: the
+  patch is one constant in the subscriber's retry timer.
+- `run-owner.sh` now defaults to `plugins/xrun-option-retry1`; 55dee5d8
+  stays in `plugins/xrun-option` and is selected with
+  `INFERNO_PLUGIN_DIR=.../plugins/xrun-option`.
+
+In service by the operator's decision, with the battery behind it. The word
+ACCEPTED for owner 22fd2622 on plugin 5c6b1c0a as the point of record is his
+to give; until then the record is 22fd2622 on 55dee5d8 at 506 / 694.

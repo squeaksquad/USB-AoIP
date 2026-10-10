@@ -101,6 +101,13 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 20:31 UTC.** Plugin 5c6b1c0a is in service (operator's
+decision) and passed the full battery on a fresh anchor: 473 / `daw_timeline`
+661 (13.771 ms), soak PASS. `run-owner.sh` defaults to it now. Running on the
+Pi: 22fd2622 on 5c6b1c0a from 20:04:22 UTC, detached. The operator's ACCEPTED
+for that pair is outstanding. Owed: bit transparency through the owner, the
+loaded hour, persistence. This supersedes the 19:58 block.
+
 **Added 2026-10-10 19:58 UTC.** Plugin 5c6b1c0a as root: sixteen receive
 channels in 28 to 31 s against 69 s, no resync. Not in service: no audio
 measurement on it yet; select it with `run-owner.sh 0
