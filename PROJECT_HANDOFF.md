@@ -12049,3 +12049,20 @@ through the owner, the loaded hour; nothing is installed or survives a
 reboot. Evidence `outputs/latency/dante-noise-ch2-32f-20261010T154920Z*`,
 `dante-roundtrip-32f-20261010T15{5000,5335,5710}Z*`, `T160045Z*`,
 `dante-soak-600s-32f-20261010T160420Z*`.
+
+**ACCEPTED 2026-10-10 (operator, after the 15:49-16:14 UTC battery): the
+Dante owner at lead 128 / return queue 144 / Inferno 2 ms. Harness 482
+samples (10.042 ms), RTL 670 (13.958 ms) at 32 frames.** The operator read
+RTL Utility on the battery's own start: 13.958 ms again, 482 plus 188
+exactly, and accepted the battery as run (the reboot's anchor carried through
+one owner restart). Point of record for the Dante path: owner d4ebd576,
+plugin 55dee5d8 (`XRUN_REPORT "0"`), `config/asound-inferno-owner.conf`,
+Statime as the clock, started by hand as root with
+`~/usb-16x16-work/dante-mode/run-owner.sh`. Against the AES67 record's 703 /
+891 (18.563 ms) that is 221 samples, 4.6 ms, lower. The figure belongs to
+this anchor: the two other fresh anchors on the same owner read 507 / 695
+and 489 / 677. Covered: level and stability (noise probe, 4 x 800 loaded,
+600 s soak, RTL). Not covered, owed: a `usb-16x16.service` restart under the
+running owner, bit transparency through the owner, the loaded hour, and
+persistence: nothing is installed or starts at boot and `usb16x16-aes67` is
+still enabled. Record `work/dante-mode/RESULTS.md`, last two sections.

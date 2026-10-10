@@ -1715,3 +1715,25 @@ through one owner stop and start. RTL Utility closed throughout. Evidence
   operator's decision. Still owed whatever that decision is: a
   `usb-16x16.service` restart under the running owner, bit transparency
   through the owner, the loaded hour.
+
+## ACCEPTED 2026-10-10: the owner at lead 128 / return queue 144 / Inferno 2 ms
+
+After the battery the operator read RTL Utility at buffer 32 on the battery's
+own start (owner d4ebd576, 15:49:01 UTC): **13.958 ms, 670 samples**, the same
+as on the start before and 482 plus 188 exactly. He accepted the battery as
+run, on the reboot's anchor carried through one owner restart.
+
+Point of record for the Dante path, at 32 frames: **harness 482 samples
+(10.042 ms), RTL 670 (13.958 ms)**, owner d4ebd576, plugin 55dee5d8
+(`XRUN_REPORT "0"`), `config/asound-inferno-owner.conf`, lead 128, return
+queue 144, Inferno latency 2 ms, Statime as the clock, run by hand as root
+with `run-owner.sh`. The AES67 record for scale is 703 / 891 (18.563 ms):
+221 samples, 4.6 ms, lower on this anchor. The figure is this anchor's; the
+two earlier fresh anchors on the same owner read 507 / 695 and 489 / 677, so
+a start can sit up to 25 samples higher.
+
+The acceptance covers the operating point's level and stability. Not covered
+and still owed: a `usb-16x16.service` restart under the running owner, bit
+transparency through the owner, the loaded hour, and everything about
+persistence (nothing is installed, nothing starts at boot, the AES67 unit is
+still enabled).

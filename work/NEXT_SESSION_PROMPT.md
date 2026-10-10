@@ -101,6 +101,13 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**ACCEPTED 2026-10-10 (after the 16:15 block below).** The operator read RTL
+13.958 ms (670) on the battery's start and accepted it: the Dante point of
+record is owner d4ebd576, plugin 55dee5d8, lead 128 / queue 144 / Inferno
+2 ms, **harness 482, RTL 670 (13.958 ms) at 32 frames**, 221 samples under
+the AES67 record. Owed: the `usb-16x16.service` restart under the running
+owner; bit transparency through the owner; the loaded hour; persistence.
+
 **Added 2026-10-10 16:15 UTC.** The battery passed on one owner start
 (d4ebd576, 15:49:01 UTC, `run-owner.sh 0`): noise clean, 4 x 800 loaded at
 482 spread 0, 600 s soak PASS. That start was an owner restart on the
