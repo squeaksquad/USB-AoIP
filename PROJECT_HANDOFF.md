@@ -12012,3 +12012,17 @@ fresh anchor, a `usb-16x16.service` restart under the owner, bit transparency
 and the loaded hour are owed. Evidence
 `outputs/latency/dante-noise-ch2-32f-20261010T145149Z*`,
 `dante-roundtrip-32f-20261010T145231Z*`.
+
+**MEASURED 2026-10-10 15:35-15:46 UTC: four loaded 800-impulse runs on the
+482 anchor, all 482 spread 0; the soak is owed.** Same owner start as the
+entry above (d4ebd576, 14:50:57 UTC). Runs at 14:52, 15:35, 15:38 and 15:42
+UTC, 32 frames, 0.1 load on the other channels: **3,200 impulses at 482
+samples (10.042 ms), spread 0, score 1.000**, no discontinuity, nothing on
+the Pi; the owner at 3,296 s had one link each way from its start and no
+resync, re-prime, fault or detach, longest wake gap 1.098 ms. The ten-minute
+sixteen-channel soak was not run: the owner was on a 3,600 s timer that
+ended at about 15:51 UTC, and a new owner start is a different draw. Not
+ACCEPTED. Owed for the battery: the soak together with the four runs on one
+fresh anchor, on an owner started with `run-owner.sh 0`. Record
+`work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/dante-roundtrip-32f-20261010T15{3504,3839,4214}Z*`.

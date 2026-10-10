@@ -101,6 +101,14 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 15:47 UTC.** Four loaded 800-impulse runs on the 482
+anchor all read 482, spread 0 (3,200 impulses over 53 minutes of one owner
+start). The soak was not run: the owner's 3,600 s timer ran out. Start the
+owner with `run-owner.sh 0 --log-every 1` when a battery is intended, draw
+the fresh anchor (`sudo systemctl restart usb-16x16.service` under the
+running owner, which is also the untested fault path), then noise probe,
+four loaded runs and `measure-candidate.sh soak` on that one start.
+
 **State 2026-10-10 14:40 UTC (the Mac was rebooted here; this supersedes the
 23:30 block below it).** Owner d4ebd576 on the Pi (`run-owner.sh`; older
 builds kept beside it, `OWNER_BIN=`). Read RESULTS.md from "the harness finds

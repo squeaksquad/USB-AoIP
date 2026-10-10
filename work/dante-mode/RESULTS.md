@@ -1643,3 +1643,31 @@ of a running owner; three draws do not say whether that is the method or the
 scatter. Not ACCEPTED: the battery (four loaded runs and the soak on one
 fresh anchor), a `usb-16x16.service` restart under the owner, bit
 transparency and the loaded hour are owed.
+
+## Four loaded runs on the 482 anchor; the soak did not fit the owner's hour (2026-10-10 15:35-15:46 UTC)
+
+Same owner process as the section above (d4ebd576, started 14:50:57 UTC with
+a 3,600 s timer), RTL Utility closed. Three more loaded 800-impulse runs at
+32 frames back to back, 0.1 load on the other fifteen channels. Evidence
+`outputs/latency/dante-roundtrip-32f-20261010T153504Z*`, `T153839Z*`,
+`T154214Z*`, with `T145231Z*` from the section above as the first of four.
+
+| Run (UTC) | Impulses | Level | Spread | Score |
+|---|---|---|---|---|
+| 14:52 | 800 | 482 (10.042 ms) | 0 | 1.000 |
+| 15:35 | 800 | 482 | 0 | 1.000 |
+| 15:38 | 800 | 482 | 0 | 1.000 |
+| 15:42 | 800 | 482 | 0 | 1.000 |
+
+- **3,200 loaded impulses at 482 samples, spread 0, across 53 minutes of one
+  owner start**, with RTL Utility opened and closed in between. No
+  discontinuity in or out, readiness probes passed first time on every run,
+  no xrun or lag line on the Pi.
+- The owner at 3,296 s: `tx_links=1 tx_reprimes=0 rx_primes=1`, no resync,
+  fault, detach or overflow, no `NETRESYNC` line, longest wake gap in the
+  hour 1.098 ms, depths 127.0 / 144.4.
+- **The ten-minute sixteen-channel soak was not run.** The owner's timer
+  ended at about 15:51 UTC and the soak needs the anchor it is judged on: a
+  new owner start primes both directions again and is a different draw. The
+  battery is therefore four of four loaded runs with the soak owed, on a
+  start made with `run-owner.sh 0` so the timer cannot cut it.
