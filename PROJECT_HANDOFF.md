@@ -12254,3 +12254,29 @@ gadget departures or arrivals. Owed: bit transparency through the owner, the
 loaded hour, persistence (nothing installed as a service, nothing at boot,
 `usb16x16-aes67` still enabled). Record `work/dante-mode/RESULTS.md`, last
 two sections.
+
+**MEASURED and FOUND 2026-10-10 21:20-22:15 UTC: bit transparency from the
+Mac through the Dante owner passes for every code a Mac can send; macOS
+itself applies a gain of 0.999998 in each direction on this device.** Record
+`work/dante-mode/RESULTS.md`, last section. New harness mode
+`usb16x16-latency bitexact` (a self-predicting 24-bit sequence per channel,
+checked sample for sample; four unit tests). (1) FOUND: constant levels read
+back on the Pi show the Mac sending 8388607 as 8388590, 2^21 as 2097148,
+2^17 and below unchanged, -8388608 as -8388591: a gain of 0.999998 rounded
+to nearest, and the same gain again on input (a 0.25 impulse returns as
+0.24999902, the same value in every saved run since 2026-09-03). It is the
+Mac's float conversion for this device (macOS 26.5.2), not the Pi, not the
+Dante path, not a volume setting. No CoreAudio float client on this Mac can
+send beyond +/-8388590, so full scale cannot be driven from it. (2) MEASURED
+on owner 22fd2622 / plugin 5c6b1c0a, sixteen channels, 600 s, with the
+sequence defined on the codes that reach the wire: **460,788,384 samples,
+all matched, each channel on its own number, nothing off the 24-bit grid,
+the largest sendable codes of both signs returned on every channel.** Two
+earlier runs each had one hole of 224 and 416 zeros on all channels at once
+(7 and 13 Mac buffers, nothing on the Pi): the checker was allocating memory
+inside the audio callback; with that removed the third run was clean. One
+clean run is suggestive, not proof, of that cause. Established: gadget
+capture to gadget playback through the owner, Inferno, the Ferrofish and
+the Metric Halo loop is bit-exact for those codes in both directions. Owed:
+the loaded hour, persistence. Monitors were muted by the operator for these
+runs.

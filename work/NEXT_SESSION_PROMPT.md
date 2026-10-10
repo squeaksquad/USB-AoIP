@@ -101,6 +101,15 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 22:15 UTC.** Bit transparency through the owner: PASS for
+every code a Mac can send (`usb16x16-latency bitexact --seconds 600`, 460.8 M
+samples, 16 channels). FOUND on the way: macOS multiplies by 0.999998 on
+output and again on input for this device, so nothing from a CoreAudio float
+client is bit-exact and codes beyond +/-8388590 cannot be sent; the returned
+0.25 impulse has read 0.24999902 since 2026-09-03 for this reason. The
+`bitexact` signal is full-scale noise on all sixteen outputs: have the
+monitors muted. Owed: the loaded hour, persistence.
+
 **Added 2026-10-10 20:31 UTC.** Plugin 5c6b1c0a is in service (operator's
 decision) and passed the full battery on a fresh anchor: 473 / `daw_timeline`
 661 (13.771 ms), soak PASS. `run-owner.sh` defaults to it now. Running on the

@@ -30,7 +30,7 @@ private struct Arguments {
             switch values[index] {
             case "--seconds":
                 guard index + 1 < values.count, let parsed = Int(values[index + 1]),
-                      (5...600).contains(parsed) else { throw CLIError.usage }
+                      (5...3600).contains(parsed) else { throw CLIError.usage }
                 seconds = parsed
                 index += 2
             case "--device":
@@ -104,6 +104,8 @@ private enum CLIError: Error, CustomStringConvertible {
               usb16x16-latency list [--output FILE]
               usb16x16-latency continuous [--device NAME] [--buffer-frames 32|64]
                   [--seconds 5...600] --other-channel-load-amplitude 0.1 [--output FILE]
+              usb16x16-latency bitexact [--device NAME] [--buffer-frames 32|64]
+                  [--seconds 5...3600] [--output FILE]
               usb16x16-latency measure [--device NAME] [--buffer-frames N]
                   [--input-channel N] [--output-channel N] [--impulses N]
                   [--maximum-lag-ms N] [--other-channel-load-amplitude 0...0.25]
@@ -161,6 +163,9 @@ do {
         try emit(encoded(ContinuousLoad.run(deviceName: arguments.deviceName,
             bufferFrames: arguments.bufferFrames, seconds: arguments.seconds,
             amplitude: arguments.otherChannelLoadAmplitude)), to: arguments.outputPath)
+    case "bitexact":
+        try emit(encoded(BitExact.run(deviceName: arguments.deviceName,
+            bufferFrames: arguments.bufferFrames, seconds: arguments.seconds)), to: arguments.outputPath)
     default:
         throw CLIError.usage
     }

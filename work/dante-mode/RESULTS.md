@@ -2158,3 +2158,90 @@ Carried open: the one 6 ms loop gap in the first seconds of a start (one
 start in about a dozen of 22fd2622 by now), and a wake gap of nearly 4 ms at
 two of three device arrivals or departures. Owed: bit transparency through
 the owner, the loaded hour, persistence.
+
+## Bit transparency from the Mac through the owner: PASS on what a Mac can send; macOS itself applies a gain of 0.999998 each way (2026-10-10 21:20-22:15 UTC)
+
+Owner 22fd2622 on plugin 5c6b1c0a, the 20:04:22 UTC process, untouched
+throughout (no resync, re-prime or fault from before the first run to after
+the last, largest wake gap 1.04 ms). Path: Mac -> gadget -> owner -> Dante ->
+Ferrofish -> (MADI, Metric Halo) -> Ferrofish -> Dante -> owner -> gadget ->
+Mac, sixteen channels, 32 CoreAudio frames. The operator muted the monitors
+first: the signal is full-scale noise on every channel.
+
+**The instrument.** `usb16x16-latency bitexact [--seconds N]`, new
+(`BitExact.swift`, four unit tests): every output channel carries its own
+24-bit sequence of period 2^24 in which each sample predicts the next, and
+each input is checked sample for sample for the sequence, the channel it
+belongs to, values off the 24-bit grid, and the largest codes. No alignment,
+no recording.
+
+**Finding 1: macOS is not bit-exact on this device, in either direction.**
+The first trial locked on nothing. Constant levels on output 1, read on the
+Pi as the owner's `out_peak` (the raw gadget capture, integer all the way):
+
+| Float sent, as a 24-bit code | Code the gadget received |
+|---:|---:|
+| 8388607 | 8388590 |
+| 8388600 | 8388583 |
+| 4194304 | 4194296 |
+| 2097152 | 2097148 |
+| 1048576 | 1048574 |
+| 524288 | 524287 |
+| 262144 | 262143 |
+| 131072, 65536, 1000, 100, 10, 3, 1 | unchanged |
+| -8388608 | -8388591 |
+
+  That is a gain of 0.999998 (between 1 - 2.03e-6 and 1 - 1.97e-6 by these
+  points), rounded to nearest. The input side does the same: the harness's
+  0.25 impulse arrives at the gadget as 2097148 and comes back to the IOProc
+  as 0.24999902, which is 2097148 x 0.999998 / 2^23 and not a whole code.
+  Every saved harness run since 2026-09-03 has that same returned peak, so
+  it is not new and not the Dante path: it is the Mac's float conversion for
+  this device, macOS 26.5.2 today. The device's volume controls read 0 dB
+  out (and -10 dB in, which is not applied to the audio). Consequences: a
+  program on this Mac cannot send a code beyond +/-8388590 (-0.0000174 dB),
+  so "full scale included" cannot be tested, or reached, from the Mac; and
+  anything played or recorded through CoreAudio floats is off by that gain
+  whatever the Pi does. Whether an integer-format or hog-mode client escapes
+  it was not tried.
+- For every level in the table the Pi's `back_peak` equalled its `out_peak`:
+  what the owner sent to Dante came back the same code, 1 LSB and 8388591
+  included.
+
+**The test as run.** The sequence is defined on the codes that reach the
+wire: each float is chosen so the host's gain lands it on its code, each
+returned float is divided by the gain to recover its code; values beyond
++/-8388590 are held there and the sample after one is passed over, not
+judged (about 60 to 70 a channel in ten minutes). The unit tests pass every
+sendable code through a model of the host both ways, in float and in double
+arithmetic.
+
+| Run (UTC) | Samples matched | Mismatches | Events |
+|---|---:|---:|---|
+| 21:43, 600 s | 460,784,784 | 225 a channel | one run of 224 zeros on all sixteen channels at once |
+| 21:54, 600 s | 460,781,712 | 417 a channel | one run of 416 zeros on all sixteen at once, 451.7 s in |
+| 22:04, 600 s, checker fixed | 460,788,384 | 0 | none |
+
+- **Third run: PASS. 460.8 million samples, every one the code that was
+  sent, each channel on its own number, nothing off the grid, no zero run
+  longer than 1, the largest codes of both signs returned at least 27 times
+  on every channel**, no timestamp discontinuity either way. Evidence
+  `outputs/latency/dante-bitexact-600s-32f-20261010T220449Z.json`.
+- **The two holes in the first two runs were the checker's own doing, as far
+  as one clean run can say.** 224 and 416 are 7 and 13 of the Mac's 32-frame
+  buffers; all channels went to zero together and came back in sequence;
+  nothing happened on the Pi. The first version built a three-element array
+  for every sample it generated, 512 heap allocations inside each audio
+  callback, which is how an IOProc misses its deadline. With the allocation
+  removed the third run had none. One clean run after two with an event each
+  is suggestive, not proof; outside the holes those two runs also had no
+  mismatch. Evidence `...T214327Z.json`, `...T215403Z.json`.
+
+**What is established.** From gadget capture to gadget playback (owner out,
+Inferno transmit and receive on the patched plugin, the Ferrofish and the
+Metric Halo loop, owner back) the path is bit-exact at 24 bits for every
+code a Mac can produce, up to +/-8388590, in both directions at once, over
+ten minutes on all sixteen channels. With the Pi probe's earlier result for
+the endpoint alone (true full scale included) nothing on the Pi side is
+left unproven except true full scale through the owner's integer copy, which
+cannot be driven from this Mac. What is not bit-exact is the Mac.
