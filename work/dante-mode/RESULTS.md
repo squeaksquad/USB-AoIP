@@ -1671,3 +1671,47 @@ a 3,600 s timer), RTL Utility closed. Three more loaded 800-impulse runs at
   new owner start primes both directions again and is a different draw. The
   battery is therefore four of four loaded runs with the soak owed, on a
   start made with `run-owner.sh 0` so the timer cannot cut it.
+
+## Full battery on one owner start: 4 x 800 at 482, soak PASS; the level did not step at the owner restart (2026-10-10 15:49-16:14 UTC)
+
+The 14:50:57 owner was stopped by the operator at 3,476 s (`exit=0`, one link
+each way for its whole run, no resync, fault or detach) and d4ebd576 started
+again at 15:49:01 UTC with `run-owner.sh 0 --log-every 1`, plugin 55dee5d8.
+The Mac was not touched: its anchor is the one from the 14:40 reboot, carried
+through one owner stop and start. RTL Utility closed throughout. Evidence
+`outputs/latency/dante-noise-ch2-32f-20261010T154920Z*`,
+`dante-roundtrip-32f-20261010T15{5000,5335,5710}Z*`, `T160045Z*`,
+`dante-soak-600s-32f-20261010T160420Z*`.
+
+| Step (UTC) | Result |
+|---|---|
+| Noise probe, 15:49 | 0.0 % zeros in 1,244,930 samples, no zero run of 4 or more |
+| 800 loaded impulses, 15:50 | 482 (10.042 ms), spread 0, score 1.000 |
+| 800 loaded impulses, 15:53 | 482, spread 0, score 1.000 |
+| 800 loaded impulses, 15:57 | 482, spread 0, score 1.000 |
+| 800 loaded impulses, 16:00 | 482, spread 0, score 1.000 |
+| 600 s soak, all 16 channels at 0.1, 16:04 | PASS: every channel returned, longest zero run 1, no discontinuity |
+
+- **The battery passed on one start: noise probe clean, 3,200 loaded
+  impulses at 482 samples spread 0, ten-minute sixteen-channel soak PASS.**
+  All at 32 frames; readiness probes passed first time on every step; no
+  xrun or lag line on the Pi.
+- The owner at 1,543 s: `tx_links=1 tx_reprimes=0 rx_primes=1`, no resync,
+  fault, detach or overflow, no `NETRESYNC` line, longest wake gap 1.095 ms,
+  depths 128.0 / 144.2, pitch 1000015 both ways.
+- **The level did not move at the owner restart: 482 before, 482 after.** On
+  2026-10-09 every owner start stepped it down 3 to 9 samples (516 to 412
+  over seventeen starts). One restart is one counter-example, not a
+  retraction: it was a single clean stop and start under a Mac booted an hour
+  earlier, where the seventeen were on an anchor already aged and several
+  were unprivileged trials. It does say the step is not a property of every
+  owner start.
+- With the previous section this anchor now carries 6,400 loaded impulses at
+  482 across two owner starts and 84 minutes, and RTL 670 (13.958 ms) taken
+  on the first of the two.
+- Not marked ACCEPTED here. What the battery was run on is an owner restart
+  on the reboot's anchor, not a draw of its own, and RTL was read on the
+  start before; whether that stands as the fresh-anchor battery is the
+  operator's decision. Still owed whatever that decision is: a
+  `usb-16x16.service` restart under the running owner, bit transparency
+  through the owner, the loaded hour.

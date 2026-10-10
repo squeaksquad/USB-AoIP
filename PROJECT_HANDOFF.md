@@ -12026,3 +12026,26 @@ ACCEPTED. Owed for the battery: the soak together with the four runs on one
 fresh anchor, on an owner started with `run-owner.sh 0`. Record
 `work/dante-mode/RESULTS.md`, last section; evidence
 `outputs/latency/dante-roundtrip-32f-20261010T15{3504,3839,4214}Z*`.
+
+**MEASURED 2026-10-10 15:49-16:14 UTC: the full battery passed on one Dante
+owner start: 4 x 800 loaded impulses at 482 spread 0, 600 s sixteen-channel
+soak PASS, noise probe clean; the level did not step at the owner restart.**
+Record `work/dante-mode/RESULTS.md`, last section. The operator stopped the
+14:50:57 owner at 3,476 s (clean, no event in its run) and started d4ebd576
+again at 15:49:01 UTC with `run-owner.sh 0`; the Mac was not touched, so the
+anchor is the reboot's, carried through one owner stop and start. At 32
+frames: noise probe 0.0 % zeros; **3,200 loaded impulses 482 samples
+(10.042 ms), spread 0; soak PASS** (16 channels, longest zero run 1, no
+discontinuity); nothing on the Pi, owner at 1,543 s with one link each way
+and no resync, re-prime, fault or detach, longest wake gap 1.095 ms. The
+level read 482 on both sides of the restart, against a 3 to 9 sample step
+down at every start on 2026-10-09: one counter-example on a young anchor,
+not a retraction. This anchor now carries 6,400 loaded impulses at 482 over
+two owner starts, and RTL 670 (13.958 ms) from the first. **Not marked
+ACCEPTED: the operator decides whether an owner restart on the reboot's
+anchor stands as the fresh-anchor battery.** Owed either way: a
+`usb-16x16.service` restart under the running owner, bit transparency
+through the owner, the loaded hour; nothing is installed or survives a
+reboot. Evidence `outputs/latency/dante-noise-ch2-32f-20261010T154920Z*`,
+`dante-roundtrip-32f-20261010T15{5000,5335,5710}Z*`, `T160045Z*`,
+`dante-soak-600s-32f-20261010T160420Z*`.

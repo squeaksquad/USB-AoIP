@@ -101,6 +101,15 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-10 16:15 UTC.** The battery passed on one owner start
+(d4ebd576, 15:49:01 UTC, `run-owner.sh 0`): noise clean, 4 x 800 loaded at
+482 spread 0, 600 s soak PASS. That start was an owner restart on the
+reboot's anchor and read 482 like the start before it: no step at the
+restart this time. Not marked ACCEPTED, the operator's call. Owed: his
+decision; the `usb-16x16.service` restart under the running owner; bit
+transparency; the loaded hour. This supersedes the 15:47 block's last
+sentence.
+
 **Added 2026-10-10 15:47 UTC.** Four loaded 800-impulse runs on the 482
 anchor all read 482, spread 0 (3,200 impulses over 53 minutes of one owner
 start). The soak was not run: the owner's 3,600 s timer ran out. Start the
