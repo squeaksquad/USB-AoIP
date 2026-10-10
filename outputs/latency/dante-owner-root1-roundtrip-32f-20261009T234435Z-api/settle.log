@@ -1,0 +1,40 @@
+probe 1 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 2 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 3 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 4 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 5 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 6 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 7 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 8 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 9 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 10 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 11 PASS consecutive=1
+probe 12 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 13 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 14 PASS consecutive=1
+probe 15 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 16 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 17 PASS consecutive=1
+probe 18 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 19 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 20 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 21 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 22 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 23 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 24 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 25 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 26 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 27 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 28 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 29 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 30 PASS consecutive=1
+probe 31 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 32 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 33 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 34 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 35 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 36 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 37 PASS consecutive=1
+probe 38 PASS consecutive=2
+probe 39 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 40 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0

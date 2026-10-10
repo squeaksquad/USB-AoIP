@@ -1,0 +1,14 @@
+START 20261010T132710Z seconds=3600 owner=94ecdc6c plugin=55dee5d8 config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=no mode=usb
+START usb16x16-dante-owner mode=usb pcm=inferno period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=3600 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=144 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-14.69 seed_from_file=1
+NETTHREADS flows_rx=1 flows_tx=1 waited_ms=10
+NETSTART capture=RUNNING playback=RUNNING
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480
+USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=89 t=0.300
+NETRESYNC dir=playback frames=32 t=9.905
+NETRESYNC dir=playback frames=32 t=10.005
+USBLINK usb=open tx=idle rx=idle tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=89 t=10.005
+USBLINK usb=open tx=idle rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=89 t=16.509
+USBLINK usb=open tx=idle rx=idle tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=89 t=16.609
+USBLINK usb=open tx=flow rx=flow tx_links=2 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=99 t=42.921
+SUMMARY seconds=459.35 exit=0 tx_frames=22040722 rx_frames=22045340 tx_resyncs=98 tx_lost=3166 rx_resyncs=0 rx_lost=0 cleared=22045084 offset_mismatches=0 net_errors=0 last_error=0 capture=RUNNING playback=RUNNING
+USBSUMMARY usb_tx=20460702 usb_rx=20462234 tx_links=2 tx_reprimes=0 rx_primes=1 rx_overflow=9472 rx_idle_discards=1572814 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 tx_integral_ppm=-15.55 rx_integral_ppm=16.22

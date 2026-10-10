@@ -1517,3 +1517,34 @@ on the Pi while the run continued and is not copied yet.
   going silent after twenty-odd of them may be where that ends; (4) the
   "settling" of the depths after a cold start is the servo finding where the
   Mac wants the frames, not the latency changing.
+
+## Second fresh anchor, idle fault fixed: 507 at 32 frames (2026-10-10 13:36-13:46 UTC)
+
+Owner d4ebd576 as root from 13:36:53 UTC (the return queue is dropped and
+primed afresh when the host stops pulling; otherwise as 94ecdc6c), `sudo
+killall coreaudiod` on the Mac by the operator 79 s in. Evidence
+`outputs/latency/dante-owner-fresh2-*`.
+
+- Noise probe 0.0 % zeros. **800 loaded impulses at 32 frames: 507 samples
+  (10.562 ms), spread 0**, no discontinuity, no xrun, lag or error line on the
+  Pi during either run.
+- The stop and return again cost the Dante side nothing: host gone at 78.9 s
+  (two `NETRESYNC` lines of 32 and 33 frames reported, as before), back at
+  180.3 s, no gadget PCM error, no prepare. The fix did what it was for: the
+  return queue read 144..144 for the whole idle stretch and the return was
+  primed three times in all (start, on going idle, and once more when the
+  host pulled for a tenth of a second at 85 s).
+- Against the first fresh anchor's 563 this is 56 lower. The reading above
+  predicted about 84 lower, from the 84 surplus frames the unfixed queue held
+  at that relink. Direction right, size two thirds of it. Two anchors cannot
+  separate "the prediction is off by 28" from "anchors differ by that much":
+  on the AES67 path fresh anchors drew about plus or minus 10.
+- After the host returned, the depths were again off their setpoints for two
+  minutes (return mean 165.7 at 200 s, outgoing 120.1) and were steered back
+  with the level unchanged through all of it (the impulse run covers 300 s to
+  515 s; the noise probe before it 258 s to 295 s).
+- **Fresh anchor against fresh anchor, one draw each way:** the owner at lead
+  128 / queue 144 / Inferno 2 ms reads 507; the AES67 record is 703. That is
+  196 samples, 4.1 ms. It is the first comparison made under the same anchor
+  rule, and it is one anchor: RTL on it and at least two more anchors are
+  owed before it is a figure.
