@@ -12514,3 +12514,19 @@ its copies, is mounted `noexec`. e20b9874 stages under
 stay up, with the journal's reason (installer 772b6da0). Staged; the
 operator's reinstall and a trial are owed. The service was stopped for
 about 45 s for the attempt and is active again (aged anchor).
+
+**DONE 2026-10-11 13:00 UTC: the candidate launcher works; first owner
+started through it.** Launcher e20b9874, reinstalled by the operator (the
+Mac was also restarted beforehand). With the service stopped,
+`sudo -n usb16x16-dante-candidate start .../owner/usb16x16-dante-owner
+--log-every 5` staged under `/var/lib/usb16x16-dante-candidate/` and started
+the accepted owner 22fd2622 on the installed plugin 0ee61f2f as user
+`usb16x16-dante`: the two capabilities only (`CapEff` 0x804000), memory
+locked, threads FIFO 79 / 80 / 81, USB open with both directions flowing, no
+resync, fault or re-prime in 40 s, the Ferrofish's neighbour entry
+REACHABLE, log `/dev/shm/dante-owner-20261011T130014Z.log`. `stop` ended it
+cleanly and `status` read inactive. Not exercised: `PLUGIN_DIR=`, `CONFIG=`,
+`CPUS=` and the file-copying of owner options. The service was down from
+13:00:13 to about 13:01 UTC and is active again with Statime; no fresh
+anchor has been drawn since, so no figure is known for this start. Nothing
+is owed on the launcher. Next: DSP for the Dante owner.
