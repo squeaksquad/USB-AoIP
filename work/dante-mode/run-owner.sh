@@ -27,8 +27,10 @@ done
 base="$(cd "$(dirname "$0")" && pwd)"
 # OWNER_BIN names another build kept beside the current one (an A/B of two binaries).
 owner="$base/owner/${OWNER_BIN:-usb16x16-dante-owner}"
-# In service since 2026-10-10: 5c6b1c0a (patches 0001 + 0002). 55dee5d8 is plugins/xrun-option.
-plugin_dir="${INFERNO_PLUGIN_DIR:-$base/plugins/xrun-option-retry1}"
+# In service since 2026-10-11: 0ee61f2f (patches 0001 + 0002 + 0003). The two before it,
+# 5c6b1c0a in plugins/xrun-option-retry1 and 55dee5d8 in plugins/xrun-option, lack 0003 and
+# drop 5 to 10 ms of audio about twice an hour to a receiver that ignores unicast ARP probes.
+plugin_dir="${INFERNO_PLUGIN_DIR:-$base/plugins/xrun-option-retry1-confirm}"
 
 refuse() { echo "REFUSED: $*"; exit 2; }
 trial=""
