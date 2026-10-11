@@ -3213,3 +3213,39 @@ configuration, direct with meters, which this binary has not had: noise,
 still describes the service before DSP and is to be brought up to date once
 this form is accepted. Still to build: the applier's Dante backend and the
 page.
+
+## The DSP service installed: battery and the loaded hour PASS in the boot configuration, 465 / 653 (2026-10-11 18:58-20:15 UTC)
+
+Installed by the operator's `sudo install-dante-dsp.sh` at 18:58:25 UTC; it
+came up first time and the installer's rollback was not used. On the
+installed form: owner 62879558 started by `usb16x16-dante-start` (1f83825b)
+under unit 9f5289dd, command line the old one plus `--meter-file
+/run/usb16x16-dante/meters.txt` (`owner.conf` is `METERS=1`), user
+`usb16x16-dante` with the two capabilities only, memory locked, threads
+FIFO 79 / 80 / 81 and the meter publisher at normal priority, the meter
+file written by the service user, the neighbour entry REACHABLE. Replaced
+owner e392dd71 and unit 4c27c544 kept in
+`/usr/local/libexec/usb16x16-dante/before-dsp/`.
+
+**Battery on the installed service, direct with meters, one start and one
+fresh anchor** (gadget restart 18:58:49 UTC under the running service,
+label `dante-dsp-service-direct`):
+
+| Check | Result |
+|---|---|
+| Noise probe at 32 | clean, no zero run of 4 or more |
+| 4 x 800 loaded impulses at 32 | 465 samples (9.688 ms) every run, spread 0 |
+| `daw_timeline` | 653 (13.604 ms), offset 188 steady |
+| 3,600 s sixteen-channel soak | PASS, longest zero run 1, no discontinuity |
+| Service over 76 minutes | no restart, no re-prime, overflow or capture fault; loop gap at most 1.05 ms apart from the gadget restart |
+| Meters | 134,035 files written; `meter_us_max` 67 |
+| Ferrofish neighbour entry | REACHABLE at the end |
+
+The same 465 / 653 as e392dd71's battery and the first accepted record's.
+The gadget restart that drew the anchor cost a 40-frame resync and a 3.5 ms
+loop gap, the one-in-three behaviour of the section before last.
+
+**Not covered in service:** a preset or a live update through the service
+form (the preset arm's hour was through the launcher, on this binary); the
+wrapper's refusals under the unit (tested as a script only); a reboot on
+this form; the applier and the page, which do not exist for Dante yet.

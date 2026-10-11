@@ -41,15 +41,20 @@ if [ "${1:-}" = remove ]; then
   exit 0
 fi
 
-# source, sha256, destination, mode. The owner is e392dd71 since 2026-10-11 (22fd2622 with the
-# capture-fault fix); an existing install takes it from install-owner-update.sh instead.
-manifest="$base/owner/usb16x16-dante-owner-fix|e392dd7198e18a09dcd8d16b159a8c87d6536fd6e7e22d4dd643c043070dcf6d|$libexec/usb16x16-dante-owner|755
+# source, sha256, destination, mode. Since 2026-10-11 this is the service with DSP: owner
+# 62879558 started by usb16x16-dante-start under the unit in usb16x16-dante-dsp.service (an
+# existing install got there through install-owner-update.sh and install-dante-dsp.sh).
+manifest="$base/owner/usb16x16-dante-owner-dspmeter|6287955840f747cdb70f3bc43b1ee26e79ca229f930e4a2534e85d91a4cb41a0|$libexec/usb16x16-dante-owner|755
+$script_dir/usb16x16-dante-start|1f83825b9a1b98671e10f75f5a80a1d0f4676e5e5792997a5b2e1d7d2927e4e7|$libexec/usb16x16-dante-start|755
 $base/statime/target/release/statime|e195222403fc132f85de0e290580381488c211ff7744e4d10a1c7ff42d555800|$libexec/statime|755
 $base/plugins/xrun-option-retry1-confirm/libasound_module_pcm_inferno.so|0ee61f2ff798abf772a0026b7a37e06da7a5cb80d454559cc2e0355fb1001330|$plugin_dir/libasound_module_pcm_inferno.so|644
 $base/config/asound-inferno-owner.conf|924cfa99f69c6ab1a34488417cb9f92d30b61da4dc29fb37ca785f9d4d1feaae|$conf_dir/asound-inferno-owner.conf|644
 $base/config/statime-first-run.toml|11b055dfca80e9a31357eb40a6417916c9522b26ca9f821fb6a71132e7922d71|$conf_dir/statime.toml|644
 $script_dir/usb16x16-statime.service|01f1bebb07d5e9b5a7e38db628229a0d93e422b0ee388c50bd76b3168926a596|/etc/systemd/system/usb16x16-statime.service|644
-$script_dir/usb16x16-dante.service|4c27c544e08f5ac49ab365852f8600f96fe488df48b85f7a39c390c98a4e87b0|/etc/systemd/system/usb16x16-dante.service|644"
+$script_dir/usb16x16-dante-dsp.service|9f5289dd3fbbdd84611c3186d46851c398e925faf0bebd928a0a4a8d441643a9|/etc/systemd/system/usb16x16-dante.service|644"
+# The owner's configuration is installed only when there is none: it is the applier's to change.
+owner_conf_source=$script_dir/owner.conf.default
+owner_conf_sha=cb022708e108f2cd1c86acdaeccf743a32a43e0364c128734fd9286baf7bb364
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
 
@@ -63,6 +68,10 @@ while IFS='|' read -r source expected destination mode; do
     exit 4
   fi
 done <<< "$manifest"
+if [ ! -r "$owner_conf_source" ] || [ "$(sha256_of "$owner_conf_source")" != "$owner_conf_sha" ]; then
+  echo "missing or changed: $owner_conf_source" >&2
+  exit 4
+fi
 
 for unit in $units; do
   if [ "$(systemctl is-active "$unit" 2>/dev/null)" = active ]; then
@@ -116,6 +125,13 @@ while IFS='|' read -r source expected destination mode; do
   install -o root -g root -m "$mode" "$source" "$destination"
   echo "installed $destination"
 done <<< "$manifest"
+
+if [ -e "$conf_dir/owner.conf" ]; then
+  echo "kept the $conf_dir/owner.conf already there"
+else
+  install -o root -g root -m 644 "$owner_conf_source" "$conf_dir/owner.conf"
+  echo "installed $conf_dir/owner.conf (direct, meters on)"
+fi
 
 # The device's identity and its saved subscriptions, and the learned clock
 # offset: carried over once, never overwritten.

@@ -12695,3 +12695,40 @@ times a second; linked both ways in 0.3 s; the Ferrofish's neighbour entry
 REACHABLE. **Not ACCEPTED: the battery in this configuration (direct,
 meters) on a fresh anchor is owed and follows.** Statime e1952224 and
 plugin 0ee61f2f unchanged.
+
+**MEASURED 2026-10-11 18:58-20:15 UTC: the installed Dante service with DSP
+(owner 62879558, direct with meters) passed the battery and the loaded hour
+on a fresh anchor: harness 465, `daw_timeline` 653 (13.604 ms) at 32
+frames.** Record `work/dante-mode/RESULTS.md`, last section. Gadget restart
+18:58:49 UTC under the running service; noise probe clean; 4 x 800 loaded
+all 465 (9.688 ms) spread 0, offset 188 steady; 3,600 s sixteen-channel soak
+PASS; no restart, re-prime, overflow or capture fault in 76 minutes; 134,035
+meter files written, meter cost at most 67 us. The same figure as the
+accepted record. **Not marked ACCEPTED: the operator's to say.** Not covered
+in service: a preset or live update through the service form, the wrapper's
+refusals under the unit, a reboot on this form. Next: the applier's Dante
+backend, then the page; `install-dante-service.sh` to be brought up to date
+on acceptance.
+
+**ACCEPTED 2026-10-11 (operator, after the 18:58-20:15 UTC battery): the
+installed Dante service with DSP is the point of record. Harness 465
+samples (9.688 ms), `daw_timeline` 653 (13.604 ms) at 32 frames on the
+battery's anchor, running direct with the level meters on.**
+`usb16x16-dante.service` (unit 9f5289dd) starts owner **62879558** through
+`usb16x16-dante-start` (1f83825b) from `/etc/usb16x16/dante/owner.conf`
+(`METERS=1`); plugin 0ee61f2f, Statime e1952224 and
+`usb16x16-statime.service` unchanged. The owner carries the DSP stage
+(`--dsp-preset`), live coefficients, the meter tap and the capture-fault
+fix; none of the first two is in use until a preset is applied. Covered:
+noise probe, 4 x 800 loaded, a 3,600 s sixteen-channel soak on the
+installed form; on the same binary through the launcher, the same battery
+with `transparent.dsp`, meters and live following (493 / 681 on its
+anchor), bit transparency through the float stage, live updates under
+audio, an injected stall. Not covered: a preset or live update through the
+service form, the wrapper's refusals under the unit, a reboot on this form.
+Fresh draws still span 465 to 507. Rollback to e392dd71 and unit 4c27c544:
+`sudo ~/usb-16x16-work/dante-mode/service/install-dante-dsp.sh rollback`.
+`install-dante-service.sh` (3bd24b36, staged) now installs this form from
+nothing. Carried open: the early-start loop gap; the gadget restart's 3 to
+4 ms gap one time in three. Next: the applier's Dante backend, then the
+page.
