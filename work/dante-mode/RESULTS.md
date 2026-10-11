@@ -3058,3 +3058,114 @@ Not covered: the fix has been exercised by an injected 20 ms stall, twice
 longer stall, or one that also detaches the gadget, is untried. Service
 active on 22fd2622 since 15:29:18 UTC (stopped from 14:10:30 for the build
 and the battery; aged anchor).
+
+## ACCEPTED 2026-10-11: owner e392dd71 installed and accepted (16:13 UTC)
+
+Installed by the operator's `sudo install-owner-update.sh` at 16:13:30 UTC,
+22fd2622 kept as `usb16x16-dante-owner.previous`. On the installed form,
+fresh anchor 16:14:04 UTC: noise probe clean, 800 loaded impulses all 466
+(9.708 ms) spread 0, `daw_timeline` 654 (13.625 ms), offset 188 steady; the
+two capabilities, locked memory, FIFO 79 / 80 / 81, neighbour entry
+REACHABLE. Accepted by the operator on that and on the launcher battery of
+the section above (465 / 653, the loaded hour).
+
+## The meter tap in the owner: built, tried under audio (2026-10-11 16:46-16:50 UTC)
+
+**What was added.** `owner/meter_tap.hpp`: the bridge core's `LevelMeter`
+on three points, and a publisher that writes them in the bridge's file
+format (`METERS v=1`, one `TAP` line per stage, 50 ms windows), from a
+thread made before the device is opened like the others. `--meter-file
+PATH`, with or without a preset.
+
+| Tap | What it sees |
+|---|---|
+| `usb-capture` | what the host sent, before the stage |
+| `dante-playback` | what goes to Dante, after the stage; its clip count is of the floats before the converter saturates them |
+| `dante-capture` | what Dante returned; it goes to the host unchanged, so there is no fourth tap |
+
+The outgoing taps see the blocks that go out, so they stand still while the
+outgoing direction is idle or priming. With a preset the taps read the
+stage's own float block before and after the filters (`OutDsp` now exposes
+its three steps); without one a block is converted for the meters only and
+the integer path is untouched. `atomic_file.hpp` is the write-by-rename both
+publishers share. A `METER` line follows the `DSP` line: `meter_us_max`,
+`meter_us_mean`, calls (two a wake: the outgoing pair, the return).
+
+```
+62879558  owner/usb16x16-dante-owner-dspmeter   (binary, Pi only: preset, live, meters, the capture-fault fix, --stall-at)
+bd7bb957  owner/main.cpp
+fd0a3714  owner/meter_tap.hpp
+3776245d  owner/dsp_path.hpp
+506ed603  owner/dsp_live.hpp
+01cacef1  owner/atomic_file.hpp
+```
+
+Tested off the audio path (`meter_tap_test.cpp`, Mac and Pi): half and
+quarter scale read -6.0 and -12.0 dBFS peak and RMS, a window is written
+once and only when closed, the return tap publishes on its own, through a
++12 dB stage the output tap reads +6.0 / 0.0 and counts every clamped
+sample while the input tap counts none, an unwritable file is counted and
+not fatal. The other two owner tests still pass.
+
+**Under sixteen channels at 0.1 from the Mac, through the launcher:**
+
+| Run | Meter file | `meter_us` mean / max | `dsp_us` mean / max | Loop gap max |
+|---|---|---|---|---|
+| direct, meters | all three taps -20.0 dBFS on sixteen channels | 4.4 / 9.5 us | no stage | 1.04 ms |
+| `loaded.dsp`, meters, live following | `usb-capture` -20.0; `dante-playback` -26.8 to -56.3 by channel; `dante-capture` the same to 0.1 dB except channel 13 (-56.3 sent, -60.3 back, in different 50 ms windows) | 3.8 / 6.0 us | 77.9 / 88.3 us in the lines read, which follow the audio; not read during it | 1.19 ms |
+
+About twenty writes a second, none failed; one prime, no resync or fault
+either run; a same-shape live file applied under the meters. Files in
+`/dev/shm` for the trial.
+
+**Not done at that point:** the battery (next section) and a service form.
+
+## DSP candidate 62879558: battery and the loaded hour PASS with a preset, meters and live following, 493 / 681 (2026-10-11 16:50-18:07 UTC)
+
+Through the launcher: `--dsp-preset /etc/usb16x16/dsp/transparent.dsp
+--meter-file --dsp-live-file` (256 biquads; meter and live files in
+`/dev/shm`, no live file written), plugin 0ee61f2f. One start (16:50:33
+UTC), one fresh anchor (gadget restart 16:50:38), label
+`dante-dsp-transparent`.
+
+| Check | Result |
+|---|---|
+| Noise probe at 32 | clean, no zero run of 4 or more |
+| 4 x 800 loaded impulses at 32 | 493 samples (10.271 ms) every run, spread 0 |
+| `daw_timeline` | 681 (14.188 ms), offset 188 steady |
+| 3,600 s sixteen-channel soak | PASS, longest zero run 1, no discontinuity |
+| Stage cost over 76 minutes | `dsp_us_mean` about 65 over the whole run (idle stretches included), `dsp_us_max` 134 |
+| Meter cost | `meter_us_max` 46; 132,880 meter files written, none failed |
+| Owner | one link each way after the gadget restart, no re-prime, overflow or capture fault; loop gap at most 1.10 ms apart from the gadget restart |
+| Ferrofish neighbour entry | REACHABLE at the end |
+
+493 is inside the band of fresh draws (465 to 507); the accepted owner drew
+465 and 466 on its two anchors today, so this says the stage adds nothing
+the draw does not cover, not that it adds nothing. A like-for-like figure
+needs the two builds on one anchor, which a restart of either does not
+give.
+
+**A gadget restart costs a 3 to 4 ms loop gap and a small resync about one
+time in three, on every build including the accepted one.** The restart
+under this battery cost one 23-frame playback resync and a 3.15 ms loop gap
+at the moment the gadget went away, as the transparent arm did at 13:22 UTC
+(32 frames, 3.3 ms). Counted afterwards, six restarts each with the Mac
+holding the device open:
+
+| Owner | Arguments | Resyncs in 6 restarts | Loop gap at those |
+|---|---|---|---|
+| 62879558 | transparent, meters, live | 1 (23 frames) | 3.15 ms |
+| 62879558 | no preset, meters | 4 (34 to 47 frames) | 3.4 to 3.7 ms |
+| 62879558 | transparent only | 2 (56, 66 frames) | 3.8, 4.0 ms |
+| e392dd71, the installed service | as installed | 2 (39, 41 frames) | 3.5 ms both |
+
+So it is not the stage, the meters or the live thread; it belongs to the
+gadget going away under a running owner (the loop is held for 3 to 4 ms and
+the Inferno pointer is forwarded by the frames it lost). Every restart
+re-linked both directions with no capture fault. A gadget restart is an
+outage of about a second anyway; this adds a 1 ms hole on the Dante side of
+it. Not pursued.
+
+**Not covered on 62879558:** `loaded.dsp` for an hour; a live file written
+during the soak; the direct arm's own four runs; the `take()` path on the
+Pi; any service form.

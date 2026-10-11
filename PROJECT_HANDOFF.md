@@ -12626,3 +12626,36 @@ through the launcher (14:13-15:29 UTC, 465 / 653), not on the installed
 form. **Not marked ACCEPTED: the operator's to say.** Units, plugin 0ee61f2f,
 Statime e1952224 and configs are unchanged. Next: the DSP line (candidate
 8e0513fa has the same fix): battery, the meter tap, a service form.
+
+**ACCEPTED 2026-10-11 (operator, after the install check): owner e392dd71
+is the Dante point of record's owner.** `usb16x16-dante.service` runs it
+with plugin 0ee61f2f and Statime e1952224, units unchanged. It is
+22fd2622's source with the capture-fault fix and a test-only `--stall-at`
+(source 437b14fd, `service/owner-capture-fault.patch`). Battery through the
+launcher on a fresh anchor: noise clean, 4 x 800 loaded all 465 (9.688 ms)
+spread 0, `daw_timeline` 653 (13.604 ms), 3,600 s sixteen-channel soak PASS.
+On the installed form, fresh anchor: 466 / 654 (13.625 ms), noise clean.
+Fresh draws still span 465 to 507. Previous binary kept as
+`usb16x16-dante-owner.previous`; rollback `install-owner-update.sh
+rollback`. Carried open: the early-start loop gap, now with a 15.6 ms
+occurrence at 27.6 s of a candidate start.
+
+**MEASURED 2026-10-11 16:46-18:07 UTC: DSP candidate 62879558 (preset, live
+coefficients, meter tap, the capture-fault fix) passed the battery and the
+loaded hour with `transparent.dsp`, meters and live following on: harness
+493, `daw_timeline` 681 (14.188 ms) at 32 frames on its anchor. Not
+installed, not ACCEPTED; no service form yet.** Record
+`work/dante-mode/RESULTS.md`, last two sections. The meter tap
+(`owner/meter_tap.hpp`, `--meter-file`): three taps in the bridge's file
+format (`usb-capture`, `dante-playback` after the stage, `dante-capture`),
+4 us a wake, 46 us worst in the hour. Fresh anchor 16:50:38 UTC: noise probe
+clean; 4 x 800 loaded all 493 (10.271 ms) spread 0, offset 188 steady;
+3,600 s sixteen-channel soak PASS; `dsp_us_max` 134; no re-prime, overflow
+or capture fault. 493 is inside the band of fresh draws (465 to 507); the
+accepted owner drew 465 and 466 today. **Found, on every build including
+the installed one: a gadget restart under a running owner costs a 3 to 4 ms
+loop gap and a 23 to 66 frame resync about one time in three** (6 restarts
+each: 1, 4, 2 on the candidate in three configurations, 2 on e392dd71); not
+the DSP's, not pursued. Next: the service form (the operator's choices
+first), then the page. The installed service (e392dd71) is active since
+18:14 UTC; its last gadget restart was about 18:20 UTC.

@@ -47,10 +47,25 @@ public:
 
     // `frames` of 16 interleaved channels, in place. Does nothing unloaded.
     void process(std::int32_t* interleaved, std::size_t frames) noexcept {
-        if (!stage_.loaded() || frames == 0 || frames > kMaxFrames) return;
+        if (!ready(frames)) return;
+        to_float(interleaved, frames);
+        filter(frames);
+        from_float(interleaved, frames);
+    }
+
+    // process() in its three steps, for a caller that meters the floats
+    // between them (meter_tap.hpp) and times the steps apart. Only when
+    // ready(frames) is true.
+    [[nodiscard]] bool ready(std::size_t frames) const noexcept {
+        return stage_.loaded() && frames != 0 && frames <= kMaxFrames;
+    }
+    void to_float(const std::int32_t* interleaved, std::size_t frames) noexcept {
         const std::size_t samples = frames * kChannels;
         for (std::size_t i = 0; i < samples; ++i) float_[i] = s32_to_float(interleaved[i]);
-        stage_.process(float_.data(), frames);
+    }
+    void filter(std::size_t frames) noexcept { stage_.process(float_.data(), frames); }
+    void from_float(std::int32_t* interleaved, std::size_t frames) noexcept {
+        const std::size_t samples = frames * kChannels;
         for (std::size_t i = 0; i < samples; ++i) {
             std::uint8_t packed[3];
             float_to_s24(float_[i], packed);
@@ -59,6 +74,8 @@ public:
                                                        (static_cast<std::uint32_t>(packed[2]) << 24));
         }
     }
+    // The block between the steps: the input after to_float, the output after filter.
+    [[nodiscard]] const float* floats() const noexcept { return float_.data(); }
 
 private:
     DspStage stage_;

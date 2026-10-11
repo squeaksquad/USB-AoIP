@@ -27,18 +27,22 @@
 // integer copy it always was. With --dsp-live-file as well, a thread made
 // before the device is opened (rule 3) follows that file and publishes each
 // same-shape artifact written to it into the running stage (dsp_live.hpp).
+// With --meter-file, three level meters (what the host sent, what goes to
+// Dante, what Dante returned) are published to that file by another such
+// thread (meter_tap.hpp); with or without a preset.
 //
 // Build on the Pi (the bridge core is the one source file DspStage lives in):
 //   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
 // (one line)
-// (servo.hpp and dsp_path.hpp beside it; servo_test.cpp and dsp_path_test.cpp
-// are their tests and build anywhere)
+// (the headers beside it; servo_test.cpp, dsp_path_test.cpp, dsp_live_test.cpp
+// and meter_tap_test.cpp are their tests and build anywhere)
 
 #include <alsa/asoundlib.h>
 
 #include "dsp_live.hpp"
 #include "dsp_path.hpp"
+#include "meter_tap.hpp"
 #include "servo.hpp"
 
 #include <dirent.h>
@@ -115,6 +119,8 @@ struct Options {
     // running stage. Empty means the stage's numbers never change. Needs --dsp-preset.
     std::string dsp_live_file;
     std::string dsp_live_status;
+    // Level meter snapshot file. Empty means no tap: nothing is converted or measured for it.
+    std::string meter_file;
     // Test only: the loop sleeps once for stall_ms at stall_at seconds, to
     // exercise the paths a stall takes (resync, gadget overrun, re-prime).
     unsigned stall_at{0};
@@ -133,7 +139,7 @@ struct Options {
                "                     [--rx-queue 144] [--rx-slack 96] [--kp 0.5] [--ki 0.003] [--seed-ppm 0]\n"
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
-               "                     [--stall-at SECONDS --stall-ms MS]\n"
+               "                     [--meter-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
                "  --tx-lead   Inferno playback depth held after each gadget block (and the silent lead)\n"
@@ -147,6 +153,8 @@ struct Options {
                "                     into the running stage; needs --dsp-preset\n"
                "  --dsp-live-status  where the outcome of each live file is written (default: the\n"
                "                     live file with .status appended)\n"
+               "  --meter-file       publish per-channel levels (usb-capture, dante-playback, dante-capture)\n"
+               "                     to PATH, about twenty times a second while audio moves\n"
                "  --guard     frames behind the clock that are not cleared yet\n"
                "  --seconds   stop after this long; 0 runs until a signal\n"
                "  --stall-at, --stall-ms   test only: stall the loop once, MS long, SECONDS after it starts\n"
@@ -187,6 +195,7 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--dsp-preset") o.dsp_preset = v;
         else if (a == "--dsp-live-file") o.dsp_live_file = v;
         else if (a == "--dsp-live-status") o.dsp_live_status = v;
+        else if (a == "--meter-file") o.meter_file = v;
         else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
         else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
         else if (a == "--period") o.period = parse_number(v, "--period");
@@ -382,6 +391,10 @@ struct Telemetry {
     std::atomic<std::uint64_t> dsp_live_generation{0};
     std::atomic<std::uint64_t> dsp_live_applied{0};
     std::atomic<std::uint64_t> dsp_live_refused{0};
+    // The meter taps' cost on the loop thread, conversions for them included.
+    std::atomic<std::int64_t> meter_ns_max{0};
+    std::atomic<std::uint64_t> meter_ns_total{0};
+    std::atomic<std::uint64_t> meter_calls{0};
     std::atomic<unsigned> stall_injected_ms{0};   // --stall-at fired; reported once
 };
 
@@ -525,6 +538,13 @@ void* telemetry_entry(void* argument) {
                             t.dsp_live_applied.load(std::memory_order_relaxed),
                             t.dsp_live_refused.load(std::memory_order_relaxed));
             }
+            if (const std::uint64_t calls = t.meter_calls.exchange(0, std::memory_order_relaxed); calls != 0) {
+                std::printf("METER t=%.1f meter_us_max=%.1f meter_us_mean=%.1f meter_calls=%" PRIu64 "\n", seconds,
+                            static_cast<double>(t.meter_ns_max.exchange(0, std::memory_order_relaxed)) / 1000.0,
+                            static_cast<double>(t.meter_ns_total.exchange(0, std::memory_order_relaxed)) / 1000.0 /
+                                static_cast<double>(calls),
+                            calls);
+            }
             std::fflush(stdout);
             last_tx = txf;
             last_rx = rxf;
@@ -573,6 +593,27 @@ void* dsp_live_entry(void* argument) {
                 " last=%s\n",
                 live.applied(), live.refused(), live.ignored(), live.status_failures(),
                 live.last_sha().empty() ? "none" : live.last_sha().c_str());
+    return nullptr;
+}
+
+// ---- level meters ----------------------------------------------------------------------
+
+struct MeterContext {
+    usb16x16::owner::MeterPublisher* publisher;
+    Telemetry* telemetry;
+};
+
+// Never the loop thread and never real-time: it formats text and writes a file.
+void* meter_entry(void* argument) {
+    const MeterContext context = *static_cast<MeterContext*>(argument);
+    while (!stop_requested.load(std::memory_order_relaxed)) {
+        timespec nap{0, 25000000};
+        nanosleep(&nap, nullptr);
+        if (!context.telemetry->running.load(std::memory_order_acquire)) continue;
+        context.publisher->poll();
+    }
+    std::printf("METERS stopped writes=%" PRIu64 " failures=%" PRIu64 "\n", context.publisher->writes(),
+                context.publisher->failures());
     return nullptr;
 }
 
@@ -1086,6 +1127,8 @@ struct UsbHalf {
     std::uint32_t back_zero_run{0};
     // The DSP stage on the outgoing direction; null without --dsp-preset.
     usb16x16::owner::OutDsp* dsp{nullptr};
+    // The level meters; null without --meter-file.
+    usb16x16::owner::OwnerMeters* meters{nullptr};
 };
 
 void set_tx_state(UsbHalf& usb, TxState state, Telemetry& t) noexcept {
@@ -1234,15 +1277,40 @@ void observe_peaks(const std::int32_t* block, long frames, std::atomic<std::int3
     if (peak_2 > second.load(std::memory_order_relaxed)) second.store(peak_2, std::memory_order_relaxed);
 }
 
-// The outgoing block through the DSP stage, in place, with what it cost.
+void add_meter_cost(Telemetry& t, std::int64_t spent) noexcept {
+    store_max(t.meter_ns_max, spent);
+    t.meter_ns_total.fetch_add(static_cast<std::uint64_t>(spent), std::memory_order_relaxed);
+    t.meter_calls.fetch_add(1, std::memory_order_relaxed);
+}
+
+// The outgoing block through the DSP stage, in place, and past the two
+// outgoing meters, each with what it cost. Without a preset the block is not
+// changed and both meters see the same samples.
 void run_dsp(UsbHalf& usb, std::int32_t* block, std::int64_t frames, Telemetry& t) noexcept {
-    if (usb.dsp == nullptr) return;
-    const std::int64_t before = now_ns();
-    usb.dsp->process(block, static_cast<std::size_t>(frames));
-    const std::int64_t spent = now_ns() - before;
+    const auto count = static_cast<std::size_t>(frames);
+    if (usb.dsp == nullptr || !usb.dsp->ready(count)) {
+        if (usb.meters != nullptr) {
+            const std::int64_t before = now_ns();
+            usb.meters->observe(block, count, usb.meters->usb_capture, &usb.meters->dante_playback);
+            add_meter_cost(t, now_ns() - before);
+        }
+        return;
+    }
+    const std::int64_t t0 = now_ns();
+    usb.dsp->to_float(block, count);
+    const std::int64_t t1 = now_ns();
+    if (usb.meters != nullptr) usb.meters->usb_capture.observe(usb.dsp->floats(), count);
+    const std::int64_t t2 = now_ns();
+    usb.dsp->filter(count);
+    const std::int64_t t3 = now_ns();
+    if (usb.meters != nullptr) usb.meters->dante_playback.observe(usb.dsp->floats(), count);
+    const std::int64_t t4 = now_ns();
+    usb.dsp->from_float(block, count);
+    const std::int64_t spent = (t1 - t0) + (t3 - t2) + (now_ns() - t4);
     store_max(t.dsp_ns_max, spent);
     t.dsp_ns_total.fetch_add(static_cast<std::uint64_t>(spent), std::memory_order_relaxed);
     t.dsp_calls.fetch_add(1, std::memory_order_relaxed);
+    if (usb.meters != nullptr) add_meter_cost(t, (t2 - t1) + (t4 - t3));
 }
 
 constexpr std::uint32_t kHoleMinFrames = 8;
@@ -1333,8 +1401,8 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
             // A prime follows a gap: the filters start from silence, not from the tail of what played before it.
             usb.dsp->reset();
             t.dsp_resets.fetch_add(1, std::memory_order_relaxed);
-            run_dsp(usb, primed, take, t);
         }
+        run_dsp(usb, primed, take, t);
         if (!commit_playback(net, primed, static_cast<snd_pcm_uframes_t>(take), t)) {
             return false;
         }
@@ -1506,6 +1574,11 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
     if (usb.attached) {
         observe_peaks(usb.rx_scratch.data(), received, t.back_peak_1, t.back_peak_2);
         observe_holes(usb.rx_scratch.data(), received, usb.back_zero_run, t.back_holes, t.back_hole_max);
+        if (usb.meters != nullptr && received > 0) {
+            const std::int64_t before = now_ns();
+            usb.meters->observe(usb.rx_scratch.data(), static_cast<std::size_t>(received), usb.meters->dante_capture);
+            add_meter_cost(t, now_ns() - before);
+        }
         service_rx(usb, handles, o, received, t);
     }
     if (usb.attached) run_servos(usb, o, now, t);
@@ -1611,6 +1684,17 @@ int main(int argc, char** argv) {
     pthread_t dsp_live_thread{};
     const bool live_enabled = dsp.enabled() && !options.dsp_live_file.empty();
     if (live_enabled) dsp_live_thread = start_thread(dsp_live_entry, &dsp_live_context, "dsp live");
+    static usb16x16::owner::OwnerMeters meters;
+    usb16x16::owner::MeterPublisher meter_publisher(meters, options.meter_file);
+    MeterContext meter_context{&meter_publisher, &telemetry};
+    pthread_t meter_thread{};
+    const bool meters_enabled = !options.meter_file.empty() && !options.no_usb;
+    if (meters_enabled) {
+        usb.meters = &meters;
+        meter_thread = start_thread(meter_entry, &meter_context, "meters");
+        std::printf("METERS publishing file=%s window_frames=%zu\n", options.meter_file.c_str(),
+                    meters.usb_capture.window_frames());
+    }
     thread_inventory("before-open", true);
 
     // 3. The Inferno device, at normal priority: its control threads inherit the opener's policy.
@@ -1696,6 +1780,7 @@ int main(int argc, char** argv) {
     if (!options.no_usb) pthread_join(steward_thread, nullptr);   // closes the gadget and puts the pitch back
     write_ppm_file(options.ppm_file, telemetry);
     if (live_enabled) pthread_join(dsp_live_thread, nullptr);
+    if (meters_enabled) pthread_join(meter_thread, nullptr);
     pthread_join(telemetry_thread, nullptr);
 
     const double elapsed = static_cast<double>(now_ns() - started) / 1e9;

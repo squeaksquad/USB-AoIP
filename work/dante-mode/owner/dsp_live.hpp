@@ -25,16 +25,13 @@
 // No ALSA here, so dsp_live_test.cpp builds and runs on the Mac.
 #pragma once
 
+#include "atomic_file.hpp"
 #include "usb16x16/bridge_core.hpp"
 
-#include <fcntl.h>
 #include <sys/stat.h>
 #include <time.h>
-#include <unistd.h>
 
-#include <cerrno>
 #include <cstdint>
-#include <cstdio>
 #include <exception>
 #include <fstream>
 #include <optional>
@@ -131,30 +128,9 @@ private:
         timespec now{};
         clock_gettime(CLOCK_MONOTONIC, &now);
         const long long elapsed_us = (now.tv_sec - born_.tv_sec) * 1000000LL + (now.tv_nsec - born_.tv_nsec) / 1000;
-        std::string line = "DSPLIVE gen=" + std::to_string(stage_.generation()) + " sha256=" + (sha.empty() ? "none" : sha) +
+        const std::string line = "DSPLIVE gen=" + std::to_string(stage_.generation()) + " sha256=" + (sha.empty() ? "none" : sha) +
                            " state=" + state + " reason=\"" + reason + "\" t_us=" + std::to_string(elapsed_us) + "\n";
-        const std::string temporary = status_path_ + ".tmp";
-        const int descriptor = ::open(temporary.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-        if (descriptor < 0) {
-            ++status_failures_;
-            return;
-        }
-        std::size_t written = 0;
-        bool ok = true;
-        while (written < line.size()) {
-            const ssize_t result = ::write(descriptor, line.data() + written, line.size() - written);
-            if (result < 0) {
-                if (errno == EINTR) continue;
-                ok = false;
-                break;
-            }
-            written += static_cast<std::size_t>(result);
-        }
-        ::close(descriptor);
-        if (!ok || std::rename(temporary.c_str(), status_path_.c_str()) != 0) {
-            ++status_failures_;
-            ::unlink(temporary.c_str());
-        }
+        if (!write_file_atomically(status_path_, line)) ++status_failures_;
     }
 
     DspStage& stage_;
