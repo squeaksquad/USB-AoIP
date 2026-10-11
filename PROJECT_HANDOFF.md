@@ -12484,3 +12484,23 @@ because it takes itself for a running owner; the fix (8b4b5d92, installer
 4d601131) is staged for the operator's reinstall and then a trial. Next, in
 a new session: DSP for the Dante owner. Open: the early-start loop gap; the
 web page reads the AES67 service's state.
+
+**ACCEPTED 2026-10-11 (operator, after the reboot test and the 07:49-09:05
+UTC battery): the installed Dante services are the point of record.
+Harness 465 samples (9.688 ms), `daw_timeline` 653 (13.604 ms) at 32 frames
+on the battery's anchor.** `usb16x16-statime.service` (01f1bebb, Statime
+e1952224) and `usb16x16-dante.service` (4c27c544: owner 22fd2622, plugin
+0ee61f2f, user `usb16x16-dante` with two capabilities), enabled at boot,
+installer 798ff158. Fresh draws span 465 to 507, RTL-at-32 about 14.1 ms
+plus or minus 0.45; AES67 record 703 / 891. Covered: cold boot unaided,
+noise probe, 4 x 800 loaded, a 3,600 s sixteen-channel soak, bit
+transparency for Mac-sendable codes, the host-stop and gadget-restart fault
+paths. Not covered: Mac sleep, Controller restart and Ethernet reconnect
+under the service; DSP; the web page. Carried open: the early-start loop
+gap. **The candidate launcher on the Pi (8b4b5d92) still refuses every
+start; the second fix 8afe885c (installer b50395ca) is staged for the
+operator's reinstall and has never started an owner yet.** State at close
+of this session: both services active on the Pi, the endpoint restarted at
+about 09:10 UTC after a launcher trial (aged anchor, no fresh draw since);
+the Mac's RTL Utility closed; nothing else running. Next, in a new session:
+DSP for the Dante owner. Record `work/dante-mode/RESULTS.md`, last section.

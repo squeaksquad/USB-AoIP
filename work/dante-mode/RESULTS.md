@@ -2721,3 +2721,35 @@ name and the launcher's begins with the owner's). Fixed in 8b4b5d92
 are owed.
 
 Not marked ACCEPTED in the installed form: the operator's to say.
+
+## ACCEPTED 2026-10-11: the installed services are the point of record
+
+Accepted by the operator after the reboot test and the 07:49-09:05 UTC
+battery and loaded hour. Point of record for the Dante path: **the two
+services as installed, `usb16x16-statime.service` (01f1bebb, Statime
+e1952224) and `usb16x16-dante.service` (4c27c544: owner 22fd2622, plugin
+0ee61f2f, user `usb16x16-dante` with `CAP_SYS_NICE` and `CAP_IPC_LOCK`),
+enabled at boot; harness 465 samples (9.688 ms), `daw_timeline` 653
+(13.604 ms) at 32 frames on the battery's anchor.** Lead 128, return queue
+144, Inferno 2 ms, no pinning. Fresh draws span 465 to 507: RTL-at-32 about
+14.1 ms plus or minus 0.45. AES67 record for scale: 703 / 891 (18.563 ms).
+
+Covered: a cold boot coming up unaided; noise probe, 4 x 800 loaded
+impulses and a 3,600 s sixteen-channel soak on one start and one fresh
+anchor; bit transparency for every code a Mac can send (the same owner
+code, the evening before); the host-stop, gadget-restart and cable-pull
+fault paths (by hand, before the install). Not covered: Mac sleep, a
+Controller restart, an Ethernet reconnect under the service; DSP (none on
+this path yet); the web page (it reads the AES67 service).
+
+Carried open: the early-start loop gap (four appearances, none on the three
+service starts since the unit fix). Rollbacks as in the INSTALLED entry.
+
+**The candidate launcher** needed a second fix: 8b4b5d92 still refused,
+because the subshell that runs its `pgrep` carries the launcher's name too.
+8afe885c finds a running owner by what the process executes
+(`/proc/*/exe`), not by name. Staged with installer b50395ca; on the Pi the
+installed copy is still 8b4b5d92, which refuses every start. Never yet run
+to the point of starting an owner: the first job of the session that needs
+it is to have the operator reinstall it and to try it with the accepted
+binary.

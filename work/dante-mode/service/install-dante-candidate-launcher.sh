@@ -18,7 +18,7 @@ script_dir=$(cd "$(dirname "$0")" && pwd)
 source="$script_dir/usb16x16-dante-candidate"
 destination=/usr/local/sbin/usb16x16-dante-candidate
 sudoers_destination=/etc/sudoers.d/usb16x16-dante-candidate
-expected_sha256=8b4b5d92ebc0af2217cf254f412d4c9d2c68a8a548dbf81f42fc3a4fad81b289
+expected_sha256=8afe885c75a2863421b82239a31bbc58a0f278289c90ccfc94bb6f6639bb95ff
 
 if [ "${1:-}" = remove ]; then
   systemctl stop usb16x16-dante-candidate 2>/dev/null || true

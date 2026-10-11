@@ -101,6 +101,21 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**ACCEPTED 2026-10-11 09:15 UTC: the installed services are the Dante point
+of record (465 / `daw_timeline` 653, 13.604 ms; band 465 to 507). Start
+here.** Both services are running and enabled at boot. The next work is DSP
+for the Dante owner (`work/phase4-bridge/DSP_MODE_DESIGN.md` and
+`LIVE_COEFFICIENTS_DESIGN.md` describe the stage in the AES67 bridge;
+`OWNER_DESIGN.md` says where it would sit in the owner, which today copies
+integers and has no float stage). Before relying on the candidate launcher:
+the copy on the Pi (8b4b5d92) refuses every start; ask the operator to run
+`sudo ~/usb-16x16-work/dante-mode/service/install-dante-candidate-launcher.sh`
+(installs 8afe885c), then try it once with the accepted binary as in the
+09:05 block below. Rules that this day produced: an acceptance needs a
+3,600 s soak; check `ip -s neigh` stays REACHABLE for any Dante receiver;
+the Mac cannot send true full scale; `daw_timeline` is the accepted RTL
+figure; the session cannot reboot the Pi or add sudo rules by itself.
+
 **Added 2026-10-11 09:05 UTC.** The installed services passed everything
 owed on them: a reboot coming up on Dante unaided, then on a fresh anchor
 noise + 4 x 800 (465 / `daw_timeline` 653, 13.604 ms) + a 3,600 s soak PASS.

@@ -90,12 +90,17 @@ done
 for other in usb16x16-dante.service usb16x16-aes67.service "$unit.service"; do
   [ "$(systemctl is-active "$other" 2>/dev/null)" = active ] && refuse "$other is active"
 done
-# pgrep -x sees 15 characters of a name, and this script's own name begins
-# with the same fifteen as the owner's: leave this process out.
-for name in alsaloop inferno-probe usb16x16-dante-; do
-  for pid in $(pgrep -x "$name" || true); do
-    [ "$pid" = "$$" ] || refuse "$name is running (pid $pid; one process per Inferno device)"
-  done
+for name in alsaloop inferno-probe; do
+  pgrep -x "$name" >/dev/null && refuse "$name is running (one process per Inferno device)"
+done
+# An owner is found by what it executes, not by its name: pgrep -x sees 15
+# characters, and this script and every subshell it forks carry a name that
+# begins with the owner's (two refusals for nothing on 2026-10-11).
+for link in /proc/[0-9]*/exe; do
+  target=$(readlink "$link" 2>/dev/null) || continue
+  case "$target" in
+    */usb16x16-dante-owner*|"$stage"/owner*) refuse "an owner is running ($target, pid $(basename "$(dirname "$link")"))" ;;
+  esac
 done
 systemctl start usb16x16-statime.service
 n=0
