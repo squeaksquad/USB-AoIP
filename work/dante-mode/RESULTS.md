@@ -2753,3 +2753,90 @@ installed copy is still 8b4b5d92, which refuses every start. Never yet run
 to the point of starting an owner: the first job of the session that needs
 it is to have the operator reinstall it and to try it with the accepted
 binary.
+
+## DSP in the owner, first step: `--dsp-preset` on the outgoing direction, built and run with no signal (2026-10-11 13:00-13:11 UTC)
+
+**The launcher first.** e20b9874, reinstalled by the operator, started the
+accepted owner 22fd2622 at 13:00:14 UTC as `usb16x16-dante` with the two
+capabilities, locked memory and FIFO 79 / 80 / 81, and stopped it cleanly.
+Nothing is owed on the launcher; `PLUGIN_DIR=`, `CONFIG=` and `CPUS=` are
+untried.
+
+**What was added.** `owner/dsp_path.hpp` (`OutDsp`): the bridge core's
+`DspStage` behind an integer boundary. With `--dsp-preset FILE` each block
+the outgoing direction (gadget capture to Dante) is about to hand to Inferno
+goes S32 -> float -> `DspStage::process` -> 24-bit -> S32, with the core's
+`s32_to_float` (exact for a 24-bit value) and `float_to_s24` (round to
+nearest, saturating). The stage is reset at each prime and runs on the prime
+block and every block after it; discarded blocks (idle, armed) are not
+filtered. The preset is loaded before anything is opened and a preset that
+does not load is a refusal (exit 2), never a direct run. Without the option
+no sample is converted and the path is the integer copy it was. Nothing on
+the return direction; no new thread. A `DSP` line follows the `USB` line
+when the stage has run: `dsp_us_max`, `dsp_us_mean` (conversions included),
+calls, resets.
+
+The owner now links the bridge core: one more source file on the build line
+(`main.cpp`'s header). On the Pi the core is staged at
+`~/usb-16x16-work/phase4-bridge/` and the candidate's source at
+`~/usb-16x16-work/dante-mode/owner/dsp/`; `owner/main.cpp` there is still
+the accepted e53c8407.
+
+**The base is the diagnostic source, not the accepted one.** The repo's
+`main.cpp` was 7aa12be8 (the hole counters, binary 0d13ee3c, which has a
+loaded hour of its own); the accepted 22fd2622 is e53c8407, 42 lines
+earlier. The candidate therefore differs from the record by the hole
+counters as well as the stage, and its direct run is the control for both.
+
+```
+fbff2269  owner/usb16x16-dante-owner-dsp   (binary, Pi only)
+8b2b8cf4  owner/main.cpp
+82dea738  owner/dsp_path.hpp
+5237452b  owner/dsp_path_test.cpp
+01dd07e9  phase4-bridge/src/bridge_core.cpp      (as in bridge 7e8f1064's tree)
+1443dc03  phase4-bridge/include/usb16x16/bridge_core.hpp
+```
+
+**Tested off the audio path** (`dsp_path_test.cpp`, Mac and Pi, all passed):
+unloaded is inert; a unity artifact returns every 24-bit code unchanged,
+extremes included, at block sizes 1 to 1024; a gain rounds to nearest, keeps
+the low byte zero and saturates rather than wraps past either full scale;
+reset empties a delay line; a block longer than the scratch is left alone.
+The four artifacts in `/etc/usb16x16/dsp/` load.
+
+**Three runs through the launcher, the Mac holding the device open and
+sending silence** (service stopped 13:06:50 to 13:10:26 UTC):
+
+| Run | Preset | Biquads | `dsp_us_mean` | `dsp_us_max` | `gap_us_max` | Depth found | Faults |
+|---|---|---|---|---|---|---|---|
+| direct, 34 s | none | 0 | no line | no line | 1009-1018 | 78-81 | none |
+| transparent, 64 s | `transparent.dsp` ad695984 | 256 | 66.0 | 73.8 | 1014-1076 | 76-80 | none |
+| loaded, 64 s | `loaded.dsp` 2b6baa04 | 308 | 79.5 | 91.4 | 1008-1089 | 75-81 | none |
+
+Each linked both ways in 0.3 s with one prime, one stage reset, no resync,
+re-prime, overflow or PCM fault, and the mean outgoing depth after the write
+stayed at 128. The depth as found sits 2 to 4 frames lower with a preset:
+the write lands 70 to 90 us later in the wake, at the same pointer, so this
+is slack spent, not latency added. A file that is not an artifact was
+refused with exit 2 and the launcher reported it. Logs
+`/dev/shm/dante-owner-20261011T13{0735,0811,0917}Z.log` on the Pi (tmpfs).
+
+**What this does not show.** Every sample was zero. No filter has carried
+audio through the owner, the cost is the cost of filtering silence (the
+bridge's figure for a comparable preset with audio was about 130 us), and
+no latency figure was taken. Runs were a minute.
+
+**Owed, in order.** (1) Direct on the candidate against the record: noise
+probe and an impulse run on a fresh anchor, to show the new build reads as
+22fd2622 does. (2) The same with `transparent.dsp`, then `bitexact` through
+it (full-scale noise on sixteen outputs: monitors muted, the operator's go).
+(3) `loaded.dsp` under load for `dsp_us_max` with audio, then the battery
+and the 3,600 s soak before any ACCEPTED. (4) Live coefficients: the control
+thread polling a live file, created with the telemetry and steward threads
+before the device is opened (rule 3), `publish()` as in the bridge. (5) The
+meter tap. (6) A service form: the unit's command line carries the preset,
+and an applier the web page can drive; the page still reads the AES67
+service's state.
+
+The service is active again since 13:10:26 UTC (22fd2622, aged anchor, no
+figure known for this start).

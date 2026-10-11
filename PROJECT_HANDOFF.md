@@ -12530,3 +12530,23 @@ cleanly and `status` read inactive. Not exercised: `PLUGIN_DIR=`, `CONFIG=`,
 13:00:13 to about 13:01 UTC and is active again with Statime; no fresh
 anchor has been drawn since, so no figure is known for this start. Nothing
 is owed on the launcher. Next: DSP for the Dante owner.
+
+**IMPLEMENTED 2026-10-11 13:11 UTC: the Dante owner has a DSP stage on the
+outgoing direction (`--dsp-preset`), built on the Pi and run for a minute
+per preset with no signal. Not installed, not measured, not accepted.**
+Record `work/dante-mode/RESULTS.md`, last section. `owner/dsp_path.hpp`
+puts the bridge core's `DspStage` behind an integer boundary (S32 -> float
+-> stage -> 24-bit, rounding and saturating as the bridge's converters do);
+the owner links `bridge_core.cpp`; without the option the path is the
+integer copy it was. Candidate **fbff2269**
+(`owner/usb16x16-dante-owner-dsp`, source 8b2b8cf4, built from the
+diagnostic source with the hole counters, so it differs from the accepted
+22fd2622 by those too). Through the launcher, the Mac sending silence:
+direct, `transparent.dsp` (256 biquads, mean 66 us, max 74) and `loaded.dsp`
+(308 biquads, mean 80 us, max 91) each linked with one prime and no fault,
+loop gap at most 1.09 ms, depth held at 128; a bad preset is refused. Owed:
+direct and transparent against the record on a fresh anchor, `bitexact`
+through the transparent preset, the loaded preset with audio, then live
+coefficients, the meter tap and a service form. The installed services are
+unchanged and active (stopped 13:06:50 to 13:10:26 UTC for the build and
+the runs).

@@ -21,12 +21,21 @@
 //      opened before the loop thread turns real-time, so the plugin's control
 //      threads do not inherit that.
 //
-// Build on the Pi:
-//   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -o usb16x16-dante-owner main.cpp -lasound -lpthread
-// (servo.hpp beside it; servo_test.cpp is its test and builds anywhere)
+// With --dsp-preset the outgoing direction (gadget capture to Dante) passes
+// through the bridge core's DspStage on its way to the Inferno buffer
+// (dsp_path.hpp). Without it no sample is converted and the path is the
+// integer copy it always was.
+//
+// Build on the Pi (the bridge core is the one source file DspStage lives in):
+//   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
+//       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
+// (one line)
+// (servo.hpp and dsp_path.hpp beside it; servo_test.cpp and dsp_path_test.cpp
+// are their tests and build anywhere)
 
 #include <alsa/asoundlib.h>
 
+#include "dsp_path.hpp"
 #include "servo.hpp"
 
 #include <dirent.h>
@@ -47,6 +56,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -93,6 +105,9 @@ struct Options {
     double seed_ppm{0.0};
     bool seed_given{false};
     std::string ppm_file;
+    // Coefficient artifact from `usb16x16-dsp-compile --bridge`. Empty means no
+    // DSP stage at all: the outgoing direction stays an integer copy.
+    std::string dsp_preset;
     bool mlock{true};
     bool realtime{true};
 };
@@ -105,7 +120,7 @@ struct Options {
                "                     [--guard 256] [--priority 79] [--seconds 0] [--log-every 10]\n"
                "                     [--usb hw:CARD=UAC2Gadget,DEV=0] [--usb-period 48] [--usb-buffer 480]\n"
                "                     [--rx-queue 144] [--rx-slack 96] [--kp 0.5] [--ki 0.003] [--seed-ppm 0]\n"
-               "                     [--ppm-file PATH]\n"
+               "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
                "  --tx-lead   Inferno playback depth held after each gadget block (and the silent lead)\n"
@@ -114,6 +129,7 @@ struct Options {
                "  --seed-ppm  the host's clock against Dante's, to start both servos from (0: learn it)\n"
                "  --ppm-file  where the learned offset is kept between runs; read at start unless\n"
                "              --seed-ppm is given, rewritten once a minute and at exit\n"
+               "  --dsp-preset  DSP coefficients on the outgoing direction, gadget to Dante (default: no DSP)\n"
                "  --guard     frames behind the clock that are not cleared yet\n"
                "  --seconds   stop after this long; 0 runs until a signal\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
@@ -150,6 +166,7 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--ki") o.ki = std::strtod(v, nullptr);
         else if (a == "--seed-ppm") { o.seed_ppm = std::strtod(v, nullptr); o.seed_given = true; }
         else if (a == "--ppm-file") o.ppm_file = v;
+        else if (a == "--dsp-preset") o.dsp_preset = v;
         else if (a == "--period") o.period = parse_number(v, "--period");
         else if (a == "--buffer") o.buffer = parse_number(v, "--buffer");
         else if (a == "--tx-lead") o.tx_lead = parse_number(v, "--tx-lead");
@@ -328,6 +345,11 @@ struct Telemetry {
     std::atomic<std::uint32_t> back_hole_max{0};
     std::atomic<std::int64_t> ppm_estimate_milli{0};
     std::atomic<bool> ppm_known{false};
+    // The DSP stage's cost on the loop thread, conversions included. Zero calls without a preset.
+    std::atomic<std::int64_t> dsp_ns_max{0};
+    std::atomic<std::uint64_t> dsp_ns_total{0};
+    std::atomic<std::uint64_t> dsp_calls{0};
+    std::atomic<std::uint64_t> dsp_resets{0};
 };
 
 void store_max(std::atomic<std::int64_t>& target, std::int64_t value) noexcept {
@@ -455,6 +477,13 @@ void* telemetry_entry(void* argument) {
                             t.back_peak_2.exchange(0, std::memory_order_relaxed),
                             t.out_holes.load(std::memory_order_relaxed), t.out_hole_max.load(std::memory_order_relaxed),
                             t.back_holes.load(std::memory_order_relaxed), t.back_hole_max.load(std::memory_order_relaxed));
+            }
+            if (const std::uint64_t calls = t.dsp_calls.exchange(0, std::memory_order_relaxed); calls != 0) {
+                std::printf("DSP t=%.1f dsp_us_max=%.1f dsp_us_mean=%.1f dsp_calls=%" PRIu64 " dsp_resets=%" PRIu64 "\n",
+                            seconds, static_cast<double>(t.dsp_ns_max.exchange(0, std::memory_order_relaxed)) / 1000.0,
+                            static_cast<double>(t.dsp_ns_total.exchange(0, std::memory_order_relaxed)) / 1000.0 /
+                                static_cast<double>(calls),
+                            calls, t.dsp_resets.load(std::memory_order_relaxed));
             }
             std::fflush(stdout);
             last_tx = txf;
@@ -971,6 +1000,8 @@ struct UsbHalf {
     Scratch rx_scratch{};
     std::uint32_t out_zero_run{0};
     std::uint32_t back_zero_run{0};
+    // The DSP stage on the outgoing direction; null without --dsp-preset.
+    usb16x16::owner::OutDsp* dsp{nullptr};
 };
 
 void set_tx_state(UsbHalf& usb, TxState state, Telemetry& t) noexcept {
@@ -1114,6 +1145,17 @@ void observe_peaks(const std::int32_t* block, long frames, std::atomic<std::int3
     if (peak_2 > second.load(std::memory_order_relaxed)) second.store(peak_2, std::memory_order_relaxed);
 }
 
+// The outgoing block through the DSP stage, in place, with what it cost.
+void run_dsp(UsbHalf& usb, std::int32_t* block, std::int64_t frames, Telemetry& t) noexcept {
+    if (usb.dsp == nullptr) return;
+    const std::int64_t before = now_ns();
+    usb.dsp->process(block, static_cast<std::size_t>(frames));
+    const std::int64_t spent = now_ns() - before;
+    store_max(t.dsp_ns_max, spent);
+    t.dsp_ns_total.fetch_add(static_cast<std::uint64_t>(spent), std::memory_order_relaxed);
+    t.dsp_calls.fetch_add(1, std::memory_order_relaxed);
+}
+
 constexpr std::uint32_t kHoleMinFrames = 8;
 constexpr std::uint32_t kHoleMaxFrames = 4800;
 
@@ -1192,8 +1234,14 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         const std::int64_t room = lead - depth;
         const std::int64_t take = std::min<std::int64_t>(frames, room);
         skip_playback(net, static_cast<snd_pcm_uframes_t>(room - take));
-        if (!commit_playback(net, usb.tx_scratch.data() + static_cast<std::size_t>(frames - take) * kChannels,
-                             static_cast<snd_pcm_uframes_t>(take), t)) {
+        std::int32_t* const primed = usb.tx_scratch.data() + static_cast<std::size_t>(frames - take) * kChannels;
+        if (usb.dsp != nullptr) {
+            // A prime follows a gap: the filters start from silence, not from the tail of what played before it.
+            usb.dsp->reset();
+            t.dsp_resets.fetch_add(1, std::memory_order_relaxed);
+            run_dsp(usb, primed, take, t);
+        }
+        if (!commit_playback(net, primed, static_cast<snd_pcm_uframes_t>(take), t)) {
             return false;
         }
         depth = lead;
@@ -1207,6 +1255,7 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         t.wanted_capture_pitch.store(usb16x16::owner::pitch_value(usb.tx_servo.output(), -1), std::memory_order_relaxed);
         return true;
     }
+    run_dsp(usb, usb.tx_scratch.data(), frames, t);
     if (!commit_playback(net, usb.tx_scratch.data(), static_cast<snd_pcm_uframes_t>(frames), t)) return false;
     depth += frames;
     t.usb_tx_frames.fetch_add(static_cast<std::uint64_t>(frames), std::memory_order_relaxed);
@@ -1408,6 +1457,29 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long>(options.rx_queue), static_cast<unsigned long>(options.rx_slack), options.kp,
                 options.ki, options.seed_ppm, seed_from_file ? 1 : 0);
 
+    // 0. The preset, before anything is opened: an owner asked for DSP that ran
+    // without it would be measured as if it had filtered.
+    static usb16x16::owner::OutDsp dsp;
+    if (!options.dsp_preset.empty()) {
+        if (options.no_usb) usage("--dsp-preset needs the USB half: the stage is on the gadget-to-Dante direction");
+        std::ifstream preset_file(options.dsp_preset, std::ios::binary);
+        std::stringstream preset_text;
+        preset_text << preset_file.rdbuf();
+        if (!preset_file) {
+            std::printf("FATAL DSP preset %s cannot be read\n", options.dsp_preset.c_str());
+            return 2;
+        }
+        try {
+            dsp.load(preset_text.str());
+        } catch (const std::exception& error) {
+            std::printf("FATAL DSP preset %s: %s\n", options.dsp_preset.c_str(), error.what());
+            return 2;
+        }
+        std::printf("DSP loaded file=%s preset=\"%s\" internal=%zu biquads=%zu delay_frames=%zu shape=%s\n",
+                    options.dsp_preset.c_str(), dsp.stage().preset().c_str(), dsp.stage().internal_channels(),
+                    dsp.stage().biquad_count(), dsp.stage().delay_samples(), dsp.stage().shape_key().c_str());
+    }
+
     // 1. Memory lock first, so every stack made below is populated when it is made.
     if (options.mlock && mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
         std::printf("FATAL mlockall: %s\n", std::strerror(errno));
@@ -1422,6 +1494,7 @@ int main(int argc, char** argv) {
     usb.rx_servo = usb16x16::owner::PitchPi({options.kp, options.ki, 250.0});
     usb.tx_servo.restart(options.seed_ppm);
     usb.rx_servo.restart(-options.seed_ppm);
+    if (dsp.enabled()) usb.dsp = &dsp;
     TelemetryContext telemetry_context{&telemetry, options.log_every, options.no_usb};
     StewardContext steward_context{&options, &telemetry, &handles};
     const pthread_t telemetry_thread = start_thread(telemetry_entry, &telemetry_context, "telemetry");
