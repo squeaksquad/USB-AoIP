@@ -90,8 +90,12 @@ done
 for other in usb16x16-dante.service usb16x16-aes67.service "$unit.service"; do
   [ "$(systemctl is-active "$other" 2>/dev/null)" = active ] && refuse "$other is active"
 done
+# pgrep -x sees 15 characters of a name, and this script's own name begins
+# with the same fifteen as the owner's: leave this process out.
 for name in alsaloop inferno-probe usb16x16-dante-; do
-  pgrep -x "$name" >/dev/null && refuse "$name is running (one process per Inferno device)"
+  for pid in $(pgrep -x "$name" || true); do
+    [ "$pid" = "$$" ] || refuse "$name is running (pid $pid; one process per Inferno device)"
+  done
 done
 systemctl start usb16x16-statime.service
 n=0

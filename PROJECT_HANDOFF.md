@@ -12466,3 +12466,21 @@ Rollbacks: `install-dante-service.sh remove`; for AES67, `sudo systemctl
 disable --now usb16x16-dante usb16x16-statime` then `sudo systemctl enable
 --now usb16x16-aes67`. Hand-runs with `run-owner.sh` now need the operator's
 password and the service stopped.
+
+**MEASURED 2026-10-11 07:46-09:05 UTC: the installed Dante services came up
+unaided after a reboot and passed the battery and the loaded hour on a fresh
+anchor: harness 465, `daw_timeline` 653 (13.604 ms) at 32 frames.** Record
+`work/dante-mode/RESULTS.md`, last section. After the operator's reboot:
+Statime at 18 s, the endpoint 8 s later on its first attempt, priorities,
+locked memory and the two capabilities as designed, the neighbour entry
+REACHABLE. Gadget restart at 07:49:09 UTC under the running service; noise
+probe clean; **4 x 800 loaded impulses all 465 samples (9.688 ms) spread 0,
+offset 188 steady; 3,600 s sixteen-channel soak PASS**; the service had no
+resync, re-prime, overflow or restart in 76 minutes. Third loaded hour
+without a hole on plugin 0ee61f2f. The band of fresh draws is now 465 to
+507. **Not marked ACCEPTED in the installed form: the operator's to say.**
+The candidate launcher is installed (252c07d8) but refuses every start
+because it takes itself for a running owner; the fix (8b4b5d92, installer
+4d601131) is staged for the operator's reinstall and then a trial. Next, in
+a new session: DSP for the Dante owner. Open: the early-start loop gap; the
+web page reads the AES67 service's state.

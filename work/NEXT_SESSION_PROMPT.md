@@ -101,6 +101,20 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-11 09:05 UTC.** The installed services passed everything
+owed on them: a reboot coming up on Dante unaided, then on a fresh anchor
+noise + 4 x 800 (465 / `daw_timeline` 653, 13.604 ms) + a 3,600 s soak PASS.
+Awaiting only the operator's ACCEPTED for the installed form. Fresh draws
+now span 465 to 507. The candidate launcher on the Pi is the buggy 252c07d8
+(refuses every start); the fixed 8b4b5d92 is staged in
+`~/usb-16x16-work/dante-mode/service/` for his `sudo
+./install-dante-candidate-launcher.sh`, then try it: stop the service,
+`sudo -n /usr/local/sbin/usb16x16-dante-candidate start
+/home/bdimaio/usb-16x16-work/dante-mode/owner/usb16x16-dante-owner
+--log-every 1`, check it runs as `usb16x16-dante` with FIFO threads, `...
+stop`, start the service. This supersedes the "owed" list of the block
+below.
+
 **INSTALLED 2026-10-11 07:45 UTC. Read this first.** ACCEPTED by the
 operator the same morning: owner 22fd2622 on plugin 0ee61f2f is the Dante
 point of record, 472 / `daw_timeline` 660 (13.750 ms) at 32 frames, with a

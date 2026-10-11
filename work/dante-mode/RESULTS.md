@@ -2676,3 +2676,48 @@ as the service user with the same two capabilities, through `systemd-run`,
 from root-owned copies in `/run/usb16x16-dante-candidate/`; a password-free
 rule for that one script lets a session try builds unaided without anything
 it runs having root. It refuses while the service is active.
+
+## The installed services: reboot, then battery and the loaded hour on a fresh anchor, all PASS; 465 harness, 653 on the DAW timeline (2026-10-11 07:46-09:05 UTC)
+
+**Reboot** (the operator's `sudo reboot`; up at 07:46:43 UTC). Unaided:
+`usb16x16-statime` active at 07:47:01, `usb16x16-dante` at 07:47:09 on its
+first attempt (`NRestarts=0`), the Mac linked 0.4 s into the owner, threads
+at FIFO 79 / 80 / 81, 414 MB locked, capabilities `CAP_IPC_LOCK` and
+`CAP_SYS_NICE` only, the neighbour entry REACHABLE, `usb16x16-aes67`
+inactive, the gadget and the governor units active.
+
+**Battery on the installed form.** One short service stop and start for the
+launcher trial (below), then a fresh anchor by `systemctl restart
+usb-16x16.service` at 07:49:09 UTC under the running service (gone and back,
+relinked, no resync), then on that one process at 32 frames. Evidence
+`outputs/latency/dante-service-*-20261011T07*`, `T08*`.
+
+| Step (UTC) | Result |
+|---|---|
+| Noise probe, 07:49 | 0.0 % zeros in 1,244,947 samples, no zero run of 4 or more |
+| 800 loaded impulses, 07:50 | 465 (9.688 ms), spread 0; `daw_timeline` 653 (13.604 ms), offset 188 steady |
+| 800 loaded impulses, 07:53 | 465, spread 0; 653, steady |
+| 800 loaded impulses, 07:57 | 465, spread 0; 653, steady |
+| 800 loaded impulses, 08:00 | 465, spread 0; 653, steady |
+| **3,600 s soak**, all 16 channels at 0.1, 08:04 | **PASS: longest zero run 1 on every channel, no discontinuity** |
+
+- **The installed form passes what the accepted pair passed by hand:** 3,200
+  loaded impulses at 465 spread 0, RTL-equivalent 653 samples (13.604 ms), a
+  loaded hour with no hole.
+- The service over the 76 minutes, from its journal: no resync, two links
+  each way (start and the gadget restart), no re-prime, no overflow, largest
+  wake gap 1.04 ms, no restart. No early-start event on this start.
+- The neighbour entry REACHABLE throughout; `res_failed` since boot: 1.
+- **Three loaded hours on plugin 0ee61f2f now without a hole.**
+- 465 is 5 below the lowest earlier fresh draw: the band of fresh draws is
+  now 465 to 507 (RTL 653 to 695, 13.6 to 14.5 ms).
+
+**The candidate launcher**, installed by the operator at 07:47 UTC
+(252c07d8). Tried once: it refused correctly with the service active and
+for a binary outside the owner directory, and then refused wrongly, taking
+its own process for a running owner (`pgrep -x` sees 15 characters of a
+name and the launcher's begins with the owner's). Fixed in 8b4b5d92
+(installer 4d601131), staged; the operator's reinstall and a proper trial
+are owed.
+
+Not marked ACCEPTED in the installed form: the operator's to say.
