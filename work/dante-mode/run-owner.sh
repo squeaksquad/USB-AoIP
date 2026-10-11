@@ -13,12 +13,14 @@
 # The settings below may also follow SECONDS as NAME=value arguments, for a
 # sudo rule that does not pass the caller's environment:
 #   sudo -n .../run-owner.sh 0 INFERNO_PLUGIN_DIR=.../plugins/xrun-option-retry1 --log-every 1
+# OWNER_CPUS=2,3 confines every thread of the owner (Inferno's included) to those cores,
+# for use with `usb16x16-stall-tuning irqs pin`, which puts the eth0 and gadget interrupts on CPU 1.
 set -u
 seconds="${1:-3600}"
 [ $# -gt 0 ] && shift
 while [ $# -gt 0 ]; do
     case "$1" in
-        NO_USB=*|OWNER_BIN=*|INFERNO_PLUGIN_DIR=*|INFERNO_CONFIG=*|RUST_LOG=*) export "$1"; shift ;;
+        NO_USB=*|OWNER_BIN=*|OWNER_CPUS=*|INFERNO_PLUGIN_DIR=*|INFERNO_CONFIG=*|RUST_LOG=*) export "$1"; shift ;;
         *) break ;;
     esac
 done
@@ -64,10 +66,12 @@ cleanup() {
 }
 trap cleanup EXIT
 {
-    echo "START $stamp seconds=$seconds owner=$(sha256sum "$owner" | cut -c1-8) plugin=$(sha256sum "$plugin_dir/libasound_module_pcm_inferno.so" | cut -c1-8) config=$ALSA_CONFIG_PATH trial=${trial:-no} mode=${mode:-usb}"
+    echo "START $stamp seconds=$seconds owner=$(sha256sum "$owner" | cut -c1-8) plugin=$(sha256sum "$plugin_dir/libasound_module_pcm_inferno.so" | cut -c1-8) config=$ALSA_CONFIG_PATH trial=${trial:-no} mode=${mode:-usb} cpus=${OWNER_CPUS:-all}"
 } | tee "$log"
 echo "log: $log"
-"$owner" $mode --seconds "$seconds" --ppm-file "$XDG_STATE_HOME/usb16x16-dante-owner.ppm" $trial "$@" >> "$log" 2>&1 &
+pin=()
+[ -n "${OWNER_CPUS:-}" ] && pin=(taskset -c "$OWNER_CPUS")
+"${pin[@]}" "$owner" $mode --seconds "$seconds" --ppm-file "$XDG_STATE_HOME/usb16x16-dante-owner.ppm" $trial "$@" >> "$log" 2>&1 &
 pid=$!
 trap 'kill -INT $pid 2>/dev/null' INT TERM
 wait "$pid"; rc=$?

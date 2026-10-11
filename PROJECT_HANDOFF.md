@@ -12345,3 +12345,26 @@ packet capture on eth0 across a hole (needs root beyond the Dante sudoers
 rule), or an unprivileged starvation monitor per core, then pinning as the
 fix to try. The owner on the Pi is the diagnostic build 0d13ee3c on plugin
 55dee5d8.
+
+**MEASURED and FOUND 2026-10-11 01:43-02:48 UTC: pinning did not stop the
+holes; the Pi's Ethernet controller has a known transmit-stall fault that
+would explain them.** Record `work/dante-mode/RESULTS.md`, last section.
+(1) With the eth0 and gadget interrupts on CPU 1 (`usb16x16-stall-tuning
+irqs pin`, runtime only, still in place) and the owner confined to CPUs 2-3
+(`run-owner.sh` 55e7d65b, `OWNER_CPUS=2,3`), a loaded hour had one hole (352
+zeros, Dante side only). Eight holes in about 280 minutes of load. (2) The
+Pi's Ethernet counters are clean in every respect read (no pause frames, EEE
+inactive, no errors, empty queue, no real-time throttling). (3) The kernel
+log holds one `macb ... eth0: TX stall detected on queue 0 ...; re-kicking
+TSTART` from 2026-10-09: the fault of the 2026-09-12 entry, and a known one
+(a June 2026 linux-arm-kernel patch: the RP1's MACB "suffers from sporadic
+stalls on the TX queue", probably a missed TSTART write). Hypothesis: a hole
+is the short form of it, packets waiting 5 to 10 ms in the controller's
+ring. (4) Running from 02:48 UTC: an unprivileged watcher of eth0's
+in-flight bytes and transmit counter at 2 kHz
+(`work/dante-mode/diag/eth-tx-watch.py`) beside another loaded hour, to see
+whether a hole coincides with packets held in the controller. **The loaded
+hour remains failed.** If the controller is confirmed, the candidates are a
+driver-level fix or workaround in the kernel, a different network interface
+for Dante on the Pi, or accepting the path for uses that tolerate a hole of
+5 to 10 ms about every half hour.

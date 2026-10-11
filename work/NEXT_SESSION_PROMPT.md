@@ -101,6 +101,17 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-11 02:50 UTC. Read this first.** Pinning (IRQs to CPU 1,
+owner to CPUs 2-3) did not stop the holes: one in its hour. The suspect is
+now the Pi 5's Ethernet controller: a known RP1 MACB transmit stall (missed
+TSTART), one `TX stall detected ... re-kicking TSTART` in this boot's kernel
+log, upstream patch thread June 2026. `work/dante-mode/diag/eth-tx-watch.py`
+watches eth0's in-flight bytes and tx counter at 2 kHz without root; run it
+on CPU 0 beside a soak and match its EVENT lines to the owner's `back_holes`
+times. State on the Pi: IRQ pinning in place (`sudo -n
+/usr/local/sbin/usb16x16-stall-tuning irqs unpin` reverts), diagnostic owner
+0d13ee3c with `OWNER_CPUS=2,3` on plugin 5c6b1c0a.
+
 **Added 2026-10-11 01:40 UTC. Read this first.** A hole is a burst of the
 Pi's transmit packets reaching the Ferrofish up to 10 ms late (Dante
 Controller, Ferrofish Latency tab: peak 10.1 ms, Late 52 = 13 packets x 4

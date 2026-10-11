@@ -2399,3 +2399,53 @@ operator's two Dante Controller screenshots in
 
 Holes observed in all-channel load, 2026-10-10 evening to 2026-10-11: seven
 in about 220 minutes (224, 416, 224, 352, 288, 448, 416 samples).
+
+## Pinning did not stop the holes; the Pi's Ethernet controller has a known transmit-stall fault (2026-10-11 01:43-02:48 UTC)
+
+**The pinned hour: one hole.** `usb16x16-stall-tuning irqs pin` (eth0 and the
+gadget interrupt to CPU 1, runtime only) and the whole owner confined to CPUs
+2 and 3 (`run-owner.sh` 55e7d65b takes `OWNER_CPUS=`; all seven threads read
+back `2-3`, both interrupts `1`). Diagnostic owner 0d13ee3c on plugin
+5c6b1c0a from 01:43:10 UTC, 3,600 s loaded soak from 01:44:20 UTC: one hole
+of 352 zeros (11 packets) at 534.9 s, on the stream back from Dante only
+(`back_holes=1/352`, `out_holes=0/0`); nothing else in the hour, largest wake
+gap 1.04 ms. So real-time threads sharing a core with the Ethernet interrupt
+is not the cause, or not all of it. The pinning is still in place. Evidence
+`outputs/latency/dante-pinned-hour-soak-3600s-32f-20261011T014420Z*`. Eight
+holes now in about 280 minutes of all-channel load.
+
+**What the Pi's Ethernet side shows, read without root.**
+
+- No pause frames (the link partner does not advertise them), EEE enabled
+  but inactive, no transmit errors or collisions in `ethtool -S`, the queue
+  discipline (`fq_codel`) with no drops and an empty backlog, softnet drops
+  zero, real-time throttling not triggered (the three FIFO threads use 7, 3
+  and 1 % of a core and are never preempted).
+- **The kernel log has one line from the driver, from 2026-10-09 18:14 UTC:
+  `macb 1f00100000.ethernet eth0: TX stall detected on queue 0 (tail=39899221
+  head=39899222); re-kicking TSTART`.** This is the fault recorded on
+  2026-09-12 (the handoff's eth0 transmit stall after a link flap).
+- It is a known fault of this controller. A patch posted to linux-arm-kernel
+  in June 2026 ("net: macb: add TX stall timeout callback") says the MACB in
+  the Raspberry Pi's RP1 "suffers from sporadic stalls on the TX queue",
+  root cause not fully understood, "likely related to a hardware issue where
+  a TSTART write to the NCR register is missed"; its authors reproduce it
+  with bulk traffic within hours, and a Talos Linux report counts about 70
+  such messages an hour on Pi 5 nodes. The Raspberry Pi kernel's driver
+  carries workarounds for a dropped TSTART (a pending flag re-read from the
+  interrupt, a read-back to flush the write). The logged message is the
+  slow case, caught by a watchdog after seconds.
+- **Hypothesis, not yet shown: a hole is the short case of the same fault.**
+  A transmit start is missed, packets wait in the controller's ring for 5 to
+  10 ms until something starts it again, and they then leave together and
+  late. That would be invisible to every counter read so far and would
+  match: transmit only, all flows at once, no trace in Inferno.
+
+**The test now running** (from 02:48 UTC): `work/dante-mode/diag/eth-tx-watch.py`
+on the Pi, unprivileged on CPU 0, reading eth0's byte-queue `inflight`
+(bytes handed to the driver and not yet completed) and `tx_packets` about
+2,000 times a second, with another loaded hour. In its first minute:
+inflight peak 1,906 bytes, transmit never still for more than 0.64 ms. At a
+hole, inflight climbing with `tx_packets` standing still puts the stall in
+the controller; `tx_packets` still with nothing in flight puts it before the
+driver; nothing at all puts it after the Pi, in the cable or the switch.
