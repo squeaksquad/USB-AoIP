@@ -559,3 +559,12 @@ test('Dante: apply steps and receipts are worded for the endpoint', () => {
   }
   assert.equal(applyLine({current: {stack: 'dante', kind: 'profile', state: 'starting', profile: 'dante-room-a'}}), 'Starting the Dante service (dante-room-a)…');
 });
+
+test('Dante: the DSP row says ready or running, never under development', () => {
+  const direct = systemFacts(danteLive);
+  assert.equal(direct.find(r => r.label === 'DSP processor').value, 'Ready · direct is live, no preset running');
+  assert.equal(direct.find(r => r.label === 'DSP processor').state, 'ok');
+  assert.ok(!direct.some(r => r.label === 'Added DSP latency / CPU load'));
+  const running = systemFacts({...danteLive, mode: {actual: 'dsp', running: true}, profile: {...danteLive.profile, selected: 'dante-room-a'}});
+  assert.equal(running.find(r => r.label === 'DSP processor').value, 'Running dante-room-a');
+});

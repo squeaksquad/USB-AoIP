@@ -709,7 +709,7 @@ function applyPanel() {
   const steps = current?.steps?.length ? `<details class="apply-steps-details" ${inFlight ? 'open' : ''}><summary>${current.steps.length} step${current.steps.length === 1 ? '' : 's'}${current.finishedAt ? ` · finished ${esc(current.finishedAt)}` : ' · in progress'}</summary><ol class="apply-steps">${current.steps.map(step => `<li class="${step.ok ? '' : 'warn'}"><strong>${esc(applyStepLabel(step.name, current.stack || terms().stack))}</strong>${step.detail ? ` <span class="muted">${esc(step.detail)}</span>` : ''}</li>`).join('')}</ol></details>` : '';
   return `<section class="panel maintenance-panel" id="apply-panel"><div class="section-heading"><h2>Service profile</h2>${badge}</div>
     ${running}${preview}${presets}${accepted}
-    <p class="muted apply-rule">${choices.available ? `Every switch or install restarts the ${esc(terms().service)}: ${esc(terms().outage)}, a new latency level is drawn, and the applier returns to the previous profile on its own if the stack does not come up clean. Stop playback first.` : esc(choices.reason.replace(/[.\s]*$/, '.'))}</p>
+    <p class="muted apply-rule">${choices.available ? `Every switch or install restarts the ${esc(terms().service)}: ${esc(terms().outage)}. A new latency level is drawn, and the applier returns to the previous profile on its own if the stack does not come up clean. Stop playback first.` : esc(choices.reason.replace(/[.\s]*$/, '.'))}</p>
     <div class="note-box" role="status">${esc(applyLine(status))}</div>${steps}</section>`;
 }
 
@@ -801,7 +801,7 @@ async function applyProfile() {
   if (!target) { toast('Choose a profile first.'); return; }
   const live = choices.live?.name || null;
   const outage = terms().outage.charAt(0).toUpperCase() + terms().outage.slice(1);
-  if (!confirm(`Switch the ${terms().service} from ${live || '?'} to ${target.name}?\n\n${outage} while the stack restarts, and the latency level is drawn afresh. If the stack does not come up clean the applier returns to ${live || 'the previous profile'} on its own. Stop playback before continuing.`)) return;
+  if (!confirm(`Switch the ${terms().service} from ${live || '?'} to ${target.name}?\n\n${outage}. The latency level is drawn afresh. If the stack does not come up clean the applier returns to ${live || 'the previous profile'} on its own. Stop playback before continuing.`)) return;
   applyBusy = true; refreshSettingsLive();
   try {
     const result = await requestProfile(target.name, live);

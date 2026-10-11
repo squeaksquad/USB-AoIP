@@ -247,8 +247,14 @@ export function systemFacts(health) {
 
   push('Audio format', `${(health.audio?.sampleRate ?? 48000) / 1000} kHz · ${health.audio?.inputs ?? 16} in / ${health.audio?.outputs ?? 16} out`, '');
   push('Metering', health.meters?.available ? 'Live' : 'Simulated display activity', health.meters?.available ? 'ok' : 'warn', health.meters?.reason || '');
-  push('DSP processor', health.dsp?.available ? 'Available' : 'Under development', health.dsp?.available ? 'ok' : 'warn', health.dsp?.reason || '');
-  push('Added DSP latency / CPU load', 'Not measured', '');
+  if (dante) {
+    // The endpoint's stage is in service: say whether a preset is using it, not that it is unfinished.
+    const preset = health.mode?.actual === 'dsp' ? health.profile?.selected : null;
+    push('DSP processor', preset ? `Running ${preset}` : 'Ready · direct is live, no preset running', 'ok', health.dsp?.reason || '');
+  } else {
+    push('DSP processor', health.dsp?.available ? 'Available' : 'Under development', health.dsp?.available ? 'ok' : 'warn', health.dsp?.reason || '');
+    push('Added DSP latency / CPU load', 'Not measured', '');
+  }
   return rows;
 }
 

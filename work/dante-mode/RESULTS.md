@@ -3396,3 +3396,35 @@ sudo systemctl restart usb16x16-web.service
 Not done: the page itself has not been used against the Pi (it sits behind
 the operator's login); meters, a Compile & apply and a live edit from his
 browser are the test. The page's own README is not yet brought up to date.
+
+## The page against the Pi: the whole cycle from a browser (2026-10-11 22:55-23:03 UTC)
+
+`usb16x16-web` 1.5.0 installed by the operator at 22:41 UTC and the page's
+files copied into `web-ui/`. The session has no login and does not make
+one; the operator started a second copy of the service on the Pi's loopback
+with `--no-auth` in his own terminal, and the page was driven through an
+ssh tunnel from the session's browser, dialogs answered by script. Sixteen
+channels at 0.1 from the Mac during the live step.
+
+| Step, from the page | Result |
+|---|---|
+| Both pages on load | "Connected · audio-dev · Dante endpoint running · direct · Live meters"; no AES67, bridge, PTP, supervisor or RAVENNA in any text or tooltip; the Direct button without "bridge"; the AoIP source disabled |
+| System overview | Dante service, Dante clock service, Dante network (1000 Mbit/s), endpoint telemetry 41 s old, USB host link flowing both ways, clock servo -14.51 / 14.62 ppm, depth 128 / 144, no resync or fault, loop gap 1.04 ms, metering live |
+| Compile & apply (the example draft, named "Claude page trial") | prompt and confirm worded for Dante; 302 biquads, 23 internal channels; receipt done through checking, installing, stopping, switching, starting, verifying, settling; live `dante-claude-page-trial`; "your preset · since 22:58:12Z" |
+| Live edit: output 1 gain 0 to -6 dB | "Applied (63d1e410)"; meters: output 1 and its return -36.6 to -42.8 dBFS, output 2 unchanged at about -36, input -20.0; no restart |
+| Commit preview | done, changed; the pin and the running coefficients both 63d1e410 |
+| Switch to `direct` (under "Without DSP") | done; live `direct`, previous `dante-claude-page-trial` |
+| Remove the trial preset | done; the list back to `direct` alone |
+
+Three wording points seen and fixed afterwards (app.mjs 1a8e4e11,
+backend.mjs de5eb119, in place on the Pi): the System overview said "DSP
+processor: Under development" on a Pi whose stage is accepted (now "Ready ·
+direct is live, no preset running" or "Running <preset>", and the "Not
+measured" latency row is dropped there, the stage's cost having its own
+row); the switch confirm and the rule under the list ran the outage and the
+latency draw into one sentence.
+
+The service was restarted twice by this (the preset, direct), each first
+time; it is `direct` with meters, aged anchor. The loopback copy is the
+operator's to stop. Not done: `loaded`-sized presets for an hour, a reboot
+on this form, the page's README.

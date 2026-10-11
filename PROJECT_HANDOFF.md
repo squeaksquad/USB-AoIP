@@ -12796,3 +12796,16 @@ which sits behind the operator's login.** Owed, from his browser: that it
 says Dante and shows live meters and the endpoint's telemetry; a Compile &
 apply; a live edit and a commit; a switch back to direct. Also owed: the
 page's README, an hour at 308 biquads, a reboot on this form.
+
+**DONE 2026-10-11 22:55-23:03 UTC: the page drove the Dante service through
+a whole cycle from a browser.** Record `work/dante-mode/RESULTS.md`, last
+section. Through a no-login loopback copy of `usb16x16-web` the operator
+started for the purpose (the session makes no login): the page says Dante
+throughout and shows the endpoint's telemetry and live meters; Compile &
+apply installed a 302-biquad draft as `dante-claude-page-trial` and started
+it; a live edit of one output's gain (0 to -6 dB) moved that output's meter
+6 dB with no restart; Commit kept it; Switch returned to `direct`; Remove
+cleared the preset. Three wording points found and fixed (page files
+1a8e4e11 / de5eb119 on the Pi). Service `direct` with meters, aged anchor.
+Owed: the page's README, an hour at about 300 biquads through the service,
+a reboot on this form.
