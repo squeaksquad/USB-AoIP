@@ -101,6 +101,24 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**INSTALLED 2026-10-11 07:45 UTC. Read this first.** ACCEPTED by the
+operator the same morning: owner 22fd2622 on plugin 0ee61f2f is the Dante
+point of record, 472 / `daw_timeline` 660 (13.750 ms) at 32 frames, with a
+loaded hour behind it. It now runs as two services on the Pi, enabled at
+boot: `usb16x16-statime.service` and `usb16x16-dante.service` (user
+`usb16x16-dante` with two capabilities; `work/dante-mode/service/`). Operate
+with `sudo -n /usr/bin/systemctl start|stop|restart usb16x16-dante` (and
+`usb16x16-statime`); fresh anchor: `sudo -n /usr/bin/systemctl restart
+usb-16x16.service`; logs: `journalctl -u usb16x16-dante`. The old
+`run-owner.sh` sudo rule is gone. Owed on the installed form: a reboot test
+(operator's), then noise + 4 x 800 + 3,600 s soak on a fresh anchor, then
+his ACCEPTED. Candidate builds: once the operator has run
+`install-dante-candidate-launcher.sh`, stop the service and use `sudo -n
+/usr/local/sbin/usb16x16-dante-candidate start <binary under
+dante-mode/owner/> [PLUGIN_DIR=...] [CONFIG=...] [options]`, `... stop`,
+then start the service again. Next work: DSP for the Dante owner; the web
+page still reads the AES67 service's state. Open: the early-start loop gap.
+
 **Added 2026-10-11 06:15 UTC. Read this first.** Fixed, as far as two hours
 show. Owner 22fd2622 on plugin 0ee61f2f (patch 0003), unpinned, passed the
 battery and a 3,600 s loaded soak on one fresh anchor: 472 / `daw_timeline`
