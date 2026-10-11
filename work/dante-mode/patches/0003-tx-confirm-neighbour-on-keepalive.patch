@@ -1,0 +1,76 @@
+diff --git a/inferno_aoip/src/device_server/flows_tx.rs b/inferno_aoip/src/device_server/flows_tx.rs
+index 9d8cec3..7ed6768 100644
+--- a/inferno_aoip/src/device_server/flows_tx.rs
++++ b/inferno_aoip/src/device_server/flows_tx.rs
+@@ -1,4 +1,5 @@
+ use std::net::{IpAddr, Ipv4Addr, UdpSocket};
++use std::os::fd::AsRawFd;
+ use std::num::Wrapping;
+ use std::sync::atomic::{AtomicBool, AtomicUsize};
+ use std::sync::{Arc, RwLock};
+@@ -54,6 +55,7 @@ struct Flow {
+   bytes_per_sample: usize,
+   expires: Option<Clock>,
+   expired: Arc<AtomicBool>,
++  confirm_neighbour: bool,
+ }
+ 
+ impl Flow {
+@@ -68,6 +70,26 @@ impl Flow {
+   }
+ }
+ 
++// usb16x16 patch 0003: tell the kernel the receiver is reachable when it has just proved it.
++// A receiver's keepalive is that proof. Without it the neighbour entry of a receiver that
++// does not answer unicast ARP probes (a Ferrofish Pulse 16 DX, 2026-10-11) fails every few
++// seconds and is resolved again by broadcast, and every packet of every flow to it waits for
++// the reply: usually a fraction of a millisecond, now and then 5 to 10 ms, which the receiver
++// discards as late. MSG_CONFIRM on a send keeps the entry reachable, so it is never probed.
++extern "C" {
++  fn send(socket: i32, buffer: *const u8, length: usize, flags: i32) -> isize;
++}
++const MSG_CONFIRM: i32 = 0x800;
++
++fn send_confirming(socket: &UdpSocket, packet: &[u8]) -> std::io::Result<usize> {
++  let sent = unsafe { send(socket.as_raw_fd(), packet.as_ptr(), packet.len(), MSG_CONFIRM) };
++  if sent < 0 {
++    Err(std::io::Error::last_os_error())
++  } else {
++    Ok(sent as usize)
++  }
++}
++
+ #[derive(Debug)]
+ enum Command {
+   NoOp,
+@@ -196,7 +218,13 @@ impl<P: ProxyToSamplesBuffer> FlowsTransmitterInternal<P> {
+           }
+         }
+         let to_send = 9 + stride * flow.fpp;
+-        if let Ok(written) = flow.socket.send(&pbuff[0..to_send]) {
++        let sent = if flow.confirm_neighbour {
++          flow.confirm_neighbour = false;
++          send_confirming(&flow.socket, &pbuff[0..to_send])
++        } else {
++          flow.socket.send(&pbuff[0..to_send])
++        };
++        if let Ok(written) = sent {
+           if written == to_send {
+             flow.next_ts = flow.next_ts.wrapping_add(flow.fpp.try_into().unwrap());
+           } else {
+@@ -220,6 +248,7 @@ impl<P: ProxyToSamplesBuffer> FlowsTransmitterInternal<P> {
+       if process_events && flow.expires.is_some() {
+         if let Ok(_) = flow.socket.recv(&mut pbuff) {
+           flow.keep_alive(now as Clock, sample_rate);
++          flow.confirm_neighbour = true;
+         } else if wrapped_diff(flow.expires.unwrap(), now as Clock) < 0 {
+           flow.expired.store(true, Ordering::Release);
+           info!("flow dst {:?} expired (no keepalives received)", flow.socket.peer_addr().ok());
+@@ -395,6 +424,7 @@ impl<P: ProxyToSamplesBuffer> FlowsTransmitterInternal<P> {
+             bytes_per_sample,
+             expires: if needs_keepalives { Some(0) } else { None },
+             expired,
++            confirm_neighbour: false,
+           };
+           if let Some(now) = self.now() {
+             flow.bootstrap_next_ts(now);

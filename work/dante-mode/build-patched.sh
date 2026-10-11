@@ -5,6 +5,7 @@
 #   build-patched.sh                                   plugins/xrun-option/  = pinned + 0001
 #   build-patched.sh NAME PATCH [PATCH...]             plugins/NAME/         = pinned + those, in order
 #   e.g. build-patched.sh xrun-option-retry1 0001 0002
+#        build-patched.sh xrun-option-retry1-confirm 0001 0002 0003
 # PATCH is the number a file in patches/ begins with. plugins/stock/ holds a copy
 # of the pinned build (SOURCES.lock). Select one with ALSA_PLUGIN_DIR.
 # inferno/target/release keeps the stock file, so the probe and prototype
@@ -21,7 +22,8 @@ so="$base/inferno/target/release/libasound_module_pcm_inferno.so"
 # The pinned source files a patch here may touch, with their hashes: checked
 # before the build and again after the patches are taken back out.
 pinned="903c8697d2254ff37416b3618d7135ac8b11b9095eba2d390d6e65df623106c8  alsa_pcm_inferno/src/lib.rs
-c1bb711373b9e371d0e4729269878d763782c02b822e3f227412c0914e2640de  inferno_aoip/src/device_server/channels_subscriber.rs"
+c1bb711373b9e371d0e4729269878d763782c02b822e3f227412c0914e2640de  inferno_aoip/src/device_server/channels_subscriber.rs
+c7af0c2c926bd4259f283b857465a4613c62ac91d48f2141b26730dd79b6467d  inferno_aoip/src/device_server/flows_tx.rs"
 
 refuse() { echo "REFUSED: $*"; echo "BUILD_EXIT 99"; exit 99; }
 sha() { sha256sum "$1" | cut -d' ' -f1; }

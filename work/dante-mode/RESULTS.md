@@ -2449,3 +2449,77 @@ inflight peak 1,906 bytes, transmit never still for more than 0.64 ms. At a
 hole, inflight climbing with `tx_packets` standing still puts the stall in
 the controller; `tx_packets` still with nothing in flight puts it before the
 driver; nothing at all puts it after the Pi, in the cable or the switch.
+
+## Root cause of the holes: the Ferrofish does not answer the Pi's unicast ARP probes; fixed in the plugin by confirming the neighbour on send (2026-10-11 02:48-03:55 UTC)
+
+**The watched hour** (diagnostic owner 0d13ee3c on 5c6b1c0a, pinned;
+`eth-tx-watch.py` on CPU 0; soak from 02:48:03 UTC; evidence
+`outputs/latency/dante-txwatch-hour-soak-3600s-32f-20261011T024803Z*` and
+`outputs/latency/dante-holes-20261010/eth-tx-watch-20261011T0248Z.log`):
+
+| | Hole 1 | Hole 2 |
+|---|---|---|
+| Mac (soak) | 416 zeros at 1,676.5 s | 352 zeros at 2,241.7 s |
+| Owner `back_holes` | 416 frames, by 03:16:14 UTC | 352 frames, by 03:25:39 UTC |
+| Watcher | 03:16:13.096: transmit counter still 9.36 ms, **0 bytes in flight** | 03:25:38.345: still 7.97 ms, **0 bytes in flight** |
+
+- The watcher logged exactly two events in the hour and they are the two
+  holes. For 8 to 9 ms no frame left eth0 and nothing was waiting in the
+  controller; its own polls were 0.47 ms apart, so it was not asleep. In
+  every other minute the counter was never still for more than 0.6 ms.
+- **So the controller is cleared**: with a stalled controller the bytes in
+  flight would have climbed. The packets were being held above the driver,
+  after Inferno's `send` had returned. The transmit-stall hypothesis of the
+  section above is withdrawn for the holes (the fault itself is real and was
+  logged once this boot; it is not what this is).
+
+**What holds them: the neighbour entry.** `ip -s neigh show` for the
+Ferrofish (169.254.248.189, 00:1d:c1:1d:27:dc) on eth0, once a second:
+
+```
+DELAY (5 s) -> PROBE, probes 1, 2, 3 (one a second) -> DELAY -> PROBE ...
+```
+
+  never REACHABLE, an eight-second cycle, and `res_failed` in
+  `/proc/net/stat/arp_cache` at about 8,800. Linux confirms a neighbour by
+  unicast ARP probes when nothing else tells it the neighbour is alive, and
+  UDP tells it nothing. **The Ferrofish does not answer those unicast
+  probes.** After the third the entry fails, the next audio packet starts a
+  broadcast resolution, and every packet to the Ferrofish, all four flows,
+  waits in the neighbour's queue for the reply and then leaves together.
+  Usually the reply takes a fraction of a millisecond: that is the second
+  bar in the Ferrofish's latency histogram near 0.9 ms, about 200 counts in
+  27 minutes, one per eight seconds. Now and then it takes 5 to 10 ms, the
+  packets arrive past the Ferrofish's 2 ms and are discarded: a hole.
+- This explains every observation: transmit only; all flows at once; whole
+  packets; nothing in Inferno's log, the driver's counters, the queue or the
+  controller; the other direction clean (the Ferrofish's stack resolves the
+  Pi its own way); the AES67 path never showing it (multicast, no ARP);
+  both plugins; pinning irrelevant.
+
+**The fix: patch 0003** (`patches/0003-tx-confirm-neighbour-on-keepalive.patch`,
+02f420e4): Inferno's transmit thread already reads each receiver's keepalive
+(four a second); the first packet it sends on that flow afterwards now goes
+with `MSG_CONFIRM`, which tells the kernel the neighbour has just proved
+itself, so the entry stays reachable and is never probed. One `extern`
+declaration of `send`, no new dependency, flows without keepalives
+(multicast) untouched. Built on the Pi by `build-patched.sh
+xrun-option-retry1-confirm 0001 0002 0003` with the owner stopped; the
+script's pin check now covers `flows_tx.rs`; pinned source and stock product
+restored.
+
+```
+0ee61f2f  plugins/xrun-option-retry1-confirm/libasound_module_pcm_inferno.so  (pinned + 0001 + 0002 + 0003)
+```
+
+- **With it the entry reads REACHABLE, confirmed 0 s ago, every second for
+  twenty seconds** (diagnostic owner on it from 03:53:17 UTC, pinning
+  unchanged), where it had cycled through failure every eight.
+- A loaded hour on it started at 03:54:38 UTC. The mechanism being gone is
+  established; that the holes are gone needs that hour and more.
+- Other ways to the same end, not used: a permanent neighbour entry for the
+  Ferrofish on the Pi (root, and tied to one address), or
+  `net.ipv4.neigh.eth0` settings that make re-probes broadcast.
+- The diagnostic owner's start on this plugin took two resyncs in its first
+  five seconds (267 and 176 frames): the early-start stall again, on its
+  third appearance.

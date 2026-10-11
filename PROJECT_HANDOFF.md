@@ -12368,3 +12368,29 @@ hour remains failed.** If the controller is confirmed, the candidates are a
 driver-level fix or workaround in the kernel, a different network interface
 for Dante on the Pi, or accepting the path for uses that tolerate a hole of
 5 to 10 ms about every half hour.
+
+**ROOT CAUSE and IMPLEMENTED 2026-10-11 03:55 UTC: the Dante holes are ARP.
+The Ferrofish does not answer the Pi's unicast ARP probes; patch 0003 keeps
+the neighbour entry confirmed. CORRECTION: the Ethernet controller's
+transmit stall is not the cause.** Record `work/dante-mode/RESULTS.md`, last
+section. (1) An unprivileged watcher of eth0 (`diag/eth-tx-watch.py`)
+logged exactly two events in a loaded hour, at the hour's two holes: no
+frame left eth0 for 9.36 and 7.97 ms **with zero bytes in flight in the
+controller**, so the packets were held above the driver. (2) The Pi's
+neighbour entry for the Ferrofish cycled DELAY, PROBE x3, fail, every eight
+seconds and was never REACHABLE (`res_failed` about 8,800): the Ferrofish
+ignores unicast ARP probes, so the entry fails and is re-resolved by
+broadcast every eight seconds, with all four flows' packets queued until
+the reply. Mostly that costs a fraction of a millisecond (the second bar
+near 0.9 ms in the Ferrofish's latency histogram); now and then 5 to 10 ms,
+which the Ferrofish discards as late. The AES67 path is multicast and never
+had it. (3) `patches/0003` (02f420e4): the transmit thread sends with
+`MSG_CONFIRM` after each receiver keepalive. Plugin **0ee61f2f**
+(`plugins/xrun-option-retry1-confirm/`, 0001+0002+0003) built on the Pi;
+with it the entry reads REACHABLE continuously. (4) A loaded hour on it
+began 03:54:38 UTC (diagnostic owner 0d13ee3c, pinning still in place).
+**Nothing is accepted on this plugin; the earlier acceptances stand as
+ten-minute results on plugins that had the fault.** Owed: this hour's
+result, a second hour, then the battery and the loaded hour on the accepted
+owner 22fd2622 with the new plugin, the pinning removed unless shown to
+matter; then persistence.

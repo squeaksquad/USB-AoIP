@@ -101,6 +101,21 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-11 03:55 UTC. Read this first; it supersedes the 02:50
+block's suspect.** The holes are ARP, not the Ethernet controller: the
+Ferrofish ignores the Pi's unicast ARP probes, the neighbour entry failed
+every 8 s and each re-resolution queued all flows' packets (now and then
+for 5-10 ms). Shown by `eth-tx-watch.py` (zero bytes in flight during a
+hole) and `ip -s neigh show 169.254.248.189 dev eth0` (DELAY/PROBE cycle).
+Fix: `patches/0003` (MSG_CONFIRM after each keepalive), plugin 0ee61f2f in
+`plugins/xrun-option-retry1-confirm/`; the entry now stays REACHABLE. A
+loaded hour on it started 03:54:38 UTC on the diagnostic owner (pinned,
+`OWNER_CPUS=2,3`, IRQs on CPU 1). To do: read that hour; a second hour;
+then accepted owner 22fd2622 + 0ee61f2f unpinned: battery and loaded hour;
+make it the `run-owner.sh` default only after that; undo the IRQ pinning
+(`sudo -n /usr/local/sbin/usb16x16-stall-tuning irqs unpin`) unless needed.
+Check the neighbour state first whenever a Dante receiver changes.
+
 **Added 2026-10-11 02:50 UTC. Read this first.** Pinning (IRQs to CPU 1,
 owner to CPUs 2-3) did not stop the holes: one in its hour. The suspect is
 now the Pi 5's Ethernet controller: a known RP1 MACB transmit stall (missed
