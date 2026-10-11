@@ -3249,3 +3249,57 @@ loop gap, the one-in-three behaviour of the section before last.
 form (the preset arm's hour was through the launcher, on this binary); the
 wrapper's refusals under the unit (tested as a script only); a reboot on
 this form; the applier and the page, which do not exist for Dante yet.
+
+## The applier's Dante backend: written, tested, staged (2026-10-11, about 21:00 UTC)
+
+`work/web-control/usb16x16-apply` 1.4.0 (e453d50f) serves whichever stack is
+installed: `DanteApplier` when `usb16x16-dante.service` is the unit enabled
+at boot (or `USB16X16_STACK=dante`), the AES67 `Applier` otherwise. The
+AES67 class is untouched apart from one word in three messages; its 43 tests
+pass unchanged.
+
+For Dante there is no supervisor and no profile table. A profile is
+`direct` or `dante-<slug>`, the latter being a file
+`/etc/usb16x16/dsp/dante-<slug>.dsp` installed by a `preset` request; the
+prefix keeps a Dante `remove` from ever taking a file an AES67 block pins.
+
+| Request | What it does on the Dante stack |
+|---|---|
+| `profile` | rewrites `/etc/usb16x16/dante/owner.conf` (`METERS` kept; a preset gets its path, hash and `DSP_LIVE=1`), having `usb16x16-dante-start --print` accept the new text on a copy first; stop, write, start; verify; on failure the previous file goes back by the same steps |
+| `preset` | the bridge's guards (bounds, every section stable, gains sane, at most 308 biquads), the load check through `usb16x16-dsp-offline`, install as `dante-<slug>.dsp`, then the switch; re-applying the live slug restarts onto the new file |
+| `remove` | deletes an installed preset that is not live |
+| `live`, `commit` | the bridge's, against `/run/usb16x16-dante/dsp-live.dsp` and its status; commit rewrites the installed file and the pin in `owner.conf`, no restart |
+| `shutdown` | stops the Dante unit, leaves the receipt, powers off |
+
+Verification of a start: the unit active on one invocation, no `FATAL`,
+`NETERROR` or wrapper refusal in that invocation's journal, the `DSP loaded
+file=` line the profile calls for (or none), `DSPLIVE following` with a
+preset, `NETSTART capture=RUNNING playback=RUNNING`, then a 15 s settle on
+the same checks. A host is not required to be streaming.
+
+`test_dante_apply.py`, 27 tests, with systemd and the owner scripted and
+the configuration checked by the real `usb16x16-dante-start`: switches both
+ways, refusals that change nothing, rollback on a failed start, on a fatal
+line, on a restart by itself and on streams that never start, a rollback
+that also fails, a file changed between validation and the switch, preset
+install and replacement, the cap, remove, live, revert, commit (and that
+the committed pair is one the wrapper starts), an owner that does not
+answer or refuses, shutdown. All 90 web-control tests pass.
+
+Staged on the Pi in `~/usb-16x16-work/web-control/` with
+`install-web-control.sh` repinned (07e9cb61). Read-only there: the staged
+program detects `dante`, reads `direct` as live, lists `direct`, unit
+active. **Not installed** (`/usr/local/bin/usb16x16-apply` is still
+e6e7e844, which knows only AES67 and would refuse every request now, the
+AES67 service being disabled). **Never run as root against the real unit.**
+
+The 308-biquad ceiling is the bridge's. On the owner an hour has been run
+at 256 (`transparent.dsp`); 308 (`loaded.dsp`) has had about five minutes
+with audio at 95 us mean, 172 max. An hour at 308 is owed before the
+ceiling is called proven here.
+
+Operator: `sudo ~/usb-16x16-work/web-control/install-web-control.sh`
+(installs the applier; the web service and units are unchanged, hashes
+equal). Then, with his go, a trial by request files in the spool: a preset,
+a live update, a commit, back to direct. The page itself still speaks to
+the AES67 service: `usb16x16-web` is the next piece.

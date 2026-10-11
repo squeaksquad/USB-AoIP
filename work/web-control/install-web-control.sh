@@ -10,6 +10,9 @@
 # usb16x16-apply (root, run by the path unit on that file) is the privileged
 # half: it switches usb16x16-aes67.service between ACCEPTED profiles with the
 # supervisor's own switch-profile, verifies, rolls back, and leaves a receipt.
+# Since 1.4.0 (2026-10-11) the same program serves the Dante service when
+# usb16x16-dante.service is the unit enabled at boot: it rewrites
+# /etc/usb16x16/dante/owner.conf and restarts that unit instead (its header).
 # Installing either does not restart, reload or otherwise disturb the audio
 # stack; enabling the path unit arms Apply, and the web service must be
 # restarted to see the spool (its unit gained a ReadWritePaths entry).
@@ -45,7 +48,7 @@ auth_file=/home/bdimaio/usb-16x16-work/web-auth
 
 expected_service_sha256=207ff5cb5e368615c60c9094f9e0945049a7740a931eb37ab290a0869a93158e
 expected_unit_sha256=f7c7d48cab8b12b9b7ed9f5a920efc497e9874760cc9434c979c25ee68b59761
-expected_apply_sha256=e6e7e844f402a0ad972ea818ffe3b34cf7543dfbfcb1bac851593070ea93e574
+expected_apply_sha256=e453d50fedc58f2b4da852def417f1ad17fb93b6b68ead021239f368e06ecd49
 expected_apply_unit_sha256=e11f0fc97ffac7b2f2fa4b0db81018320f702c41bf6e843e0a2ec90c5dc28a63
 expected_offline_sha256=8469c2e83b617b7c39918ecf7a86f3032cda91de48eb926569cc061c416c6641
 expected_apply_path_sha256=6d53b053014a3cb7203de36f9e7472d370ccced6aee2c1d9a6d309b2d35bec61

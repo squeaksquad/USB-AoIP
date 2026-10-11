@@ -12732,3 +12732,20 @@ Fresh draws still span 465 to 507. Rollback to e392dd71 and unit 4c27c544:
 nothing. Carried open: the early-start loop gap; the gadget restart's 3 to
 4 ms gap one time in three. Next: the applier's Dante backend, then the
 page.
+
+**STAGED 2026-10-11 ~21:00 UTC: `usb16x16-apply` 1.4.0 (e453d50f) with a
+Dante backend; not installed.** Record `work/dante-mode/RESULTS.md`, last
+section. One program for both stacks, chosen by which unit is enabled at
+boot. On Dante a profile is `direct` or `dante-<slug>`
+(`/etc/usb16x16/dsp/dante-<slug>.dsp`); a switch rewrites
+`/etc/usb16x16/dante/owner.conf` (checked by `usb16x16-dante-start` on a
+copy first), restarts `usb16x16-dante.service`, verifies from the journal
+and rolls back on failure; `preset`, `remove`, `live`, `commit`, `shutdown`
+as for the bridge. 27 new tests against the real wrapper, the AES67 class
+and its 43 tests unchanged. Install: `sudo
+~/usb-16x16-work/web-control/install-web-control.sh` (07e9cb61; only the
+applier's hash differs from what is installed). Owed: his install, a trial
+by request files with his go (preset, live, commit, back to direct), an
+hour at 308 biquads, then `usb16x16-web` and the page for Dante. The
+installed applier e6e7e844 refuses everything while the AES67 service is
+disabled, so the page's Apply does nothing at present.

@@ -93,7 +93,7 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 SPOOL_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
 CONF_PATH = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
@@ -535,6 +535,8 @@ def with_user_block(conf_text: str, slug: str, block: str | None) -> str:
 
 
 class Applier:
+    ENGINE = "bridge"   # what follows the live file, for messages
+
     def __init__(self, spool: Path = SPOOL_DIR, conf_path: Path = CONF_PATH, run_dir: Path = RUN_DIR,
                  runner: Runner | None = None, supervisor: str = SUPERVISOR,
                  bridge_binary: Path = BRIDGE_BINARY, start_timeout: float = START_TIMEOUT_S,
@@ -920,7 +922,7 @@ class Applier:
             handle.flush()
         os.chmod(temporary, 0o644)
         os.replace(temporary, self.live_file)
-        self.step("verifying", f"waiting up to {LIVE_TIMEOUT_S:.0f} s for the bridge to report {spec['digest'][:12]}")
+        self.step("verifying", f"waiting up to {LIVE_TIMEOUT_S:.0f} s for the {self.ENGINE} to report {spec['digest'][:12]}")
         deadline = self.runner.now() + LIVE_TIMEOUT_S
         while True:
             text = read_text(self.live_status_path, 4096)
@@ -929,9 +931,9 @@ class Applier:
                 if status.get("state") == "applied":
                     self.state["liveUpdate"] = {"gen": status.get("gen"), "sha256": spec["digest"], "line": status}
                     return
-                raise Failed(f"the bridge {status.get('state')} the artifact: {status.get('reason') or 'no reason'}")
+                raise Failed(f"the {self.ENGINE} {status.get('state')} the artifact: {status.get('reason') or 'no reason'}")
             if self.runner.now() >= deadline:
-                raise Failed(f"the bridge did not report {spec['digest'][:12]} within {LIVE_TIMEOUT_S:.0f} s "
+                raise Failed(f"the {self.ENGINE} did not report {spec['digest'][:12]} within {LIVE_TIMEOUT_S:.0f} s "
                              f"(status: {status.get('state') if status else 'none'}); the file is left for it")
             self.runner.sleep(LIVE_POLL_S)
 
@@ -1191,15 +1193,495 @@ class Applier:
                 (self.spool / "presets" / artifact).unlink(missing_ok=True)
 
 
+# ------------------------------------------------------------------ the Dante stack
+#
+# The same requests against usb16x16-dante.service (2026-10-11). There is no
+# supervisor and no table of profiles: the owner's configuration is the few
+# lines of /etc/usb16x16/dante/owner.conf that usb16x16-dante-start turns into
+# a command line, and a "profile" is one of
+#
+#   direct          no preset: the owner copies integers
+#   dante-<slug>    the artifact /etc/usb16x16/dsp/dante-<slug>.dsp, installed
+#                   by a "preset" request; started with live following on
+#
+# A switch rewrites owner.conf (the wrapper's own parser checks the new text
+# on a copy first), restarts the unit and verifies it: the unit stays active
+# on one start, the owner's log carries the DSP loaded line the profile calls
+# for (or none) and both Inferno streams running, and nothing fatal follows in
+# the settle window. On failure the previous owner.conf goes back by the same
+# steps. "live" and "commit" are the bridge's, against /run/usb16x16-dante/.
+# The artifact guards and the load check (usb16x16-dsp-offline, the same
+# loader the owner links) are shared. Dante presets carry their own prefix so
+# that removing one can never take a file an AES67 profile block pins.
+
+DANTE_UNIT = "usb16x16-dante.service"
+DANTE_CONF_PATH = Path(os.environ.get("USB16X16_DANTE_CONF", "/etc/usb16x16/dante/owner.conf"))
+DANTE_RUN_DIR = Path(os.environ.get("USB16X16_DANTE_RUN_DIR", "/run/usb16x16-dante"))
+DANTE_OWNER = Path(os.environ.get("USB16X16_DANTE_OWNER", "/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner"))
+DANTE_START = os.environ.get("USB16X16_DANTE_START", "/usr/local/libexec/usb16x16-dante/usb16x16-dante-start")
+DANTE_DIRECT = "direct"
+DANTE_PREFIX = "dante-"
+DANTE_CONF_KEYS = ("METERS", "DSP_PRESET", "DSP_SHA256", "DSP_LIVE")
+# The unit waits up to 40 s for the clock before it starts the owner.
+DANTE_START_TIMEOUT_S = 75.0
+DANTE_SETTLE_S = 15.0
+
+
+def parse_owner_conf(text: str) -> dict[str, str]:
+    """owner.conf as usb16x16-dante-start reads it: KEY=value, nothing else."""
+    values: dict[str, str] = {}
+    for raw in text.splitlines():
+        if not raw or raw.startswith("#"):
+            continue
+        match = re.match(r"^([A-Z0-9_]+)=(.*)$", raw)
+        if not match or match.group(1) not in DANTE_CONF_KEYS:
+            raise Refused(f"owner.conf: unexpected line: {raw[:60]}")
+        values[match.group(1)] = match.group(2)
+    return values
+
+
+def render_owner_conf(meters: str, preset: Path | None, digest: str | None) -> str:
+    lines = ["# /etc/usb16x16/dante/owner.conf: how usb16x16-dante.service starts the owner.",
+             f"# Written by usb16x16-apply {utc()}; read by usb16x16-dante-start.",
+             f"METERS={meters}"]
+    if preset is not None:
+        lines += [f"DSP_PRESET={preset}", f"DSP_SHA256={digest}", "DSP_LIVE=1"]
+    return "\n".join(lines) + "\n"
+
+
+def dante_profile_of(conf: dict[str, str]) -> str:
+    preset = conf.get("DSP_PRESET") or ""
+    if not preset:
+        return DANTE_DIRECT
+    return Path(preset).name.removesuffix(".dsp")
+
+
+class DanteApplier(Applier):
+    ENGINE = "owner"
+
+    def __init__(self, spool: Path = SPOOL_DIR, conf_path: Path = DANTE_CONF_PATH, run_dir: Path = DANTE_RUN_DIR,
+                 runner: Runner | None = None, start_timeout: float = DANTE_START_TIMEOUT_S,
+                 settle: float = DANTE_SETTLE_S, poll: float = POLL_S) -> None:
+        super().__init__(spool=spool, conf_path=conf_path, run_dir=run_dir, runner=runner,
+                         start_timeout=start_timeout, settle=settle, poll=poll)
+
+    # ---- reads
+
+    def conf(self) -> dict[str, str]:
+        text = read_text(self.conf_path)
+        if text is None:
+            raise Refused(f"cannot read {self.conf_path}; the Dante service with DSP is not installed")
+        return parse_owner_conf(text)
+
+    def live_profile(self) -> str | None:
+        try:
+            return dante_profile_of(self.conf())
+        except Refused:
+            return None
+
+    def identity(self) -> dict:
+        return {
+            "ownerSha256": sha256_of(DANTE_OWNER),
+            "startSha256": sha256_of(Path(DANTE_START)),
+            "confSha256": sha256_of(self.conf_path),
+        }
+
+    def unit_state(self) -> str:
+        code, out = self.runner.run(["systemctl", "show", "-p", "ActiveState", "--value", DANTE_UNIT], timeout=10)
+        return out.strip() if code == 0 else "unknown"
+
+    def invocation(self) -> str:
+        code, out = self.runner.run(["systemctl", "show", "-p", "InvocationID", "--value", DANTE_UNIT], timeout=10)
+        return out.strip() if code == 0 else ""
+
+    def owner_log(self, invocation: str) -> list[str]:
+        """This start of the owner, from the journal."""
+        if not invocation:
+            return []
+        code, out = self.runner.run(["journalctl", "-u", DANTE_UNIT, "--no-pager", "-o", "cat",
+                                     f"_SYSTEMD_INVOCATION_ID={invocation}"], timeout=20)
+        return out.splitlines() if code == 0 else []
+
+    def table(self) -> dict[str, dict]:
+        """direct, and every installed dante-<slug>.dsp."""
+        found = {DANTE_DIRECT: {"name": DANTE_DIRECT, "dspPreset": None, "dspSha256": None, "dspLive": False}}
+        try:
+            files = sorted(DSP_DIR.glob(f"{DANTE_PREFIX}*.dsp"))
+        except OSError:
+            files = []
+        for path in files:
+            slug = path.name[len(DANTE_PREFIX):-len(".dsp")]
+            if USER_SLUG.match(slug):
+                found[DANTE_PREFIX + slug] = {"name": DANTE_PREFIX + slug, "dspPreset": str(path),
+                                             "dspSha256": sha256_of(path), "dspLive": True}
+        return found
+
+    def check_expected(self, request: dict, live: str) -> None:
+        expected = request.get("expectedProfile")
+        if expected is not None and expected != live:
+            raise Refused(f"the page expected {expected} to be live but {live} is; reload and retry")
+
+    # ---- validation
+
+    def validate(self, request: dict, conf: dict[str, str], reapply: bool = False) -> dict:
+        self.validate_envelope(request)
+        name = request.get("profile")
+        if not isinstance(name, str) or not PROFILE_NAME.match(name):
+            raise Refused("profile name must be lower-case letters, digits and dashes")
+        table = self.table()
+        if name not in table:
+            raise Refused(f"{name} is not installed; the Dante service has {', '.join(sorted(table))}")
+        row = table[name]
+        if row["dspPreset"]:
+            text = read_text(Path(row["dspPreset"]), MAX_ARTIFACT_BYTES + 1)
+            if text is None:
+                raise Refused(f"{row['dspPreset']} cannot be read")
+            parse_artifact(text)   # an installed file is still held to the guards
+        live = dante_profile_of(conf)
+        self.check_expected(request, live)
+        if name == live and not reapply:
+            raise Refused(f"{name} is already the live profile")
+        unit = self.unit_state()
+        if unit not in ("active", "inactive", "failed"):
+            raise Refused(f"{DANTE_UNIT} is {unit}; retry when it has settled")
+        return row
+
+    def validate_preset(self, request: dict, conf: dict[str, str]) -> dict:
+        name = request.get("name")
+        if not isinstance(name, str) or not PRESET_NAME.match(name):
+            raise Refused("preset name must be 1-64 letters, digits, spaces, dots or dashes")
+        slug = request.get("slug")
+        if not isinstance(slug, str) or not USER_SLUG.match(slug) or "--" in slug or slug.endswith("-"):
+            raise Refused("preset slug must be 1-24 lower-case letters, digits and single dashes")
+        digest = request.get("artifactSha256")
+        if not isinstance(digest, str) or not re.match(r"^[0-9a-f]{64}$", digest):
+            raise Refused("artifactSha256 must be 64 hex characters")
+        file_name = request.get("artifactFile")
+        if not isinstance(file_name, str) or not re.match(r"^[a-f0-9]{8,32}\.dsp$", file_name):
+            raise Refused("artifactFile must be <request id>.dsp in the spool's presets directory")
+        try:
+            data = (self.spool / "presets" / file_name).read_bytes()
+        except OSError:
+            raise Refused(f"artifact {file_name} is missing from the spool")
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise Refused("artifact hash does not match artifactSha256")
+        stats = parse_artifact(data.decode("utf-8", errors="replace"))
+        installed = [n for n in self.table() if n != DANTE_DIRECT]
+        replacing = DANTE_PREFIX + slug in installed
+        if not replacing and len(installed) >= USER_PROFILE_CAP:
+            raise Refused(f"{USER_PROFILE_CAP} presets are installed; remove one first")
+        self.check_expected(request, dante_profile_of(conf))
+        unit = self.unit_state()
+        if unit not in ("active", "inactive", "failed"):
+            raise Refused(f"{DANTE_UNIT} is {unit}; retry when it has settled")
+        if not Path(OFFLINE_RUNNER).is_file():
+            raise Refused(f"{OFFLINE_RUNNER} is not installed; presets cannot be load-checked")
+        return {"name": name, "slug": slug, "digest": digest, "data": data, "stats": stats, "replacing": replacing}
+
+    def load_check(self, data: bytes, biquads: int) -> None:
+        self.step("checking", f"{OFFLINE_RUNNER} --bench 1 on the artifact ({biquads} biquads)")
+        staged = self.spool / "presets" / f"check-{self.state['id']}.dsp"
+        staged.write_bytes(data)
+        try:
+            code, out = self.runner.run([OFFLINE_RUNNER, str(staged), "--bench", "1"], timeout=60)
+        finally:
+            staged.unlink(missing_ok=True)
+        if code != 0:
+            raise Refused(f"the loader refused the artifact: {out[:300]}")
+        self.state["loaderLine"] = out.splitlines()[0][:200] if out else ""
+
+    @staticmethod
+    def write_root_file(target: Path, data: bytes, suffix: str) -> None:
+        temporary = target.with_name(f".{target.name}.{suffix}")
+        with open(temporary, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o644)
+        try:
+            os.chown(temporary, 0, 0)
+        except PermissionError:
+            pass
+        os.replace(temporary, target)
+
+    def install_preset(self, spec: dict, conf_text: str = "") -> str:
+        self.load_check(spec["data"], spec["stats"]["biquads"])
+        target = DSP_DIR / f"{DANTE_PREFIX}{spec['slug']}.dsp"
+        self.step("installing", str(target))
+        DSP_DIR.mkdir(mode=0o755, exist_ok=True)
+        self.write_root_file(target, spec["data"], "tmp")
+        return DANTE_PREFIX + spec["slug"]
+
+    def remove_preset(self, request: dict, conf: dict[str, str], conf_text: str = "") -> str:
+        slug = request.get("slug")
+        if not isinstance(slug, str) or not USER_SLUG.match(slug):
+            raise Refused("slug must name a preset")
+        name = DANTE_PREFIX + slug
+        if name not in self.table():
+            raise Refused(f"{name} is not installed")
+        if dante_profile_of(conf) == name:
+            raise Refused(f"{name} is the live profile; switch away before removing it")
+        self.step("removing", f"{DSP_DIR}/{name}.dsp")
+        (DSP_DIR / f"{name}.dsp").unlink(missing_ok=True)
+        return name
+
+    # ---- live coefficient updates (no restart); validate_live and push_live are the bridge's
+
+    def live_target(self, request: dict, conf: dict[str, str]) -> dict:
+        live = dante_profile_of(conf)
+        self.check_expected(request, live)
+        row = self.table().get(live)
+        if row is None or not live.startswith(DANTE_PREFIX):
+            raise Refused(f"{live} is not an installed preset; there is nothing to update live")
+        if conf.get("DSP_LIVE") != "1":
+            raise Refused(f"{live} runs without DSP_LIVE=1: the owner is not following a live file; re-apply the preset")
+        if row["dspSha256"] != conf.get("DSP_SHA256"):
+            raise Refused(f"{row['dspPreset']} does not hash to the pin in {self.conf_path}")
+        if self.unit_state() != "active":
+            raise Refused(f"{DANTE_UNIT} is {self.unit_state()}; nothing is running to update")
+        expected_sha = request.get("expectedLiveSha256")
+        if expected_sha is not None:
+            current = (self.live_status() or {}).get("sha256", "none")
+            if not isinstance(expected_sha, str) or expected_sha != current:
+                raise Refused(f"the page expected live coefficients {expected_sha} but the owner reports {current}; reload and retry")
+        return row
+
+    def commit_live(self, request: dict, conf: dict[str, str], conf_text: str) -> dict:
+        row = self.live_target(request, conf)
+        status = self.live_status()
+        if not status or status.get("state") != "applied":
+            raise Refused(f"nothing applied to commit (owner status: {status.get('state') if status else 'none'})")
+        digest = status.get("sha256") or ""
+        try:
+            data = self.live_file.read_bytes()
+        except OSError:
+            data = None
+        if data is None or hashlib.sha256(data).hexdigest() != digest:
+            raise Refused("the live file no longer matches what the owner applied; push it again")
+        text = data.decode("utf-8", errors="replace")
+        stats = parse_artifact(text)
+        installed_path = Path(row["dspPreset"])
+        if shape_key(read_text(installed_path, MAX_ARTIFACT_BYTES + 1) or "") != shape_key(text):
+            raise Refused("the live file's shape differs from the installed preset; it cannot be committed")
+        if digest == row["dspSha256"]:
+            self.step("committing", "the live coefficients already equal the installed file")
+            return {"profile": row["name"], "digest": digest, "stats": stats, "changed": False}
+        self.step("committing", f"{installed_path} <- live {digest[:12]}, pin rewritten, no restart")
+        # File first, then its pin: between the two the wrapper would refuse a
+        # start (the file no longer hashes to the old pin), which is the safe
+        # side of a crash here. The running owner is not touched by either.
+        self.write_root_file(installed_path, data, "commit")
+        self.replace_conf(render_owner_conf(conf.get("METERS", "0"), installed_path, digest))
+        return {"profile": row["name"], "digest": digest, "stats": stats, "changed": True}
+
+    # ---- the configuration file
+
+    def check_conf_text(self, text: str) -> None:
+        """usb16x16-dante-start's own parser on a temporary copy, as the
+        supervisor's is for the AES67 configuration."""
+        temporary = self.conf_path.with_name(f".{self.conf_path.name}.apply-{os.getpid()}")
+        temporary.write_text(text, encoding="utf-8")
+        try:
+            code, out = self.runner.run([DANTE_START, "--print"], timeout=30,
+                                        env={"USB16X16_DANTE_CONF": str(temporary)})
+        finally:
+            temporary.unlink(missing_ok=True)
+        if code != 0:
+            raise Refused(f"usb16x16-dante-start rejects the configuration: {out[:300]}")
+
+    # ---- the operation
+
+    def switch_to(self, text: str, target: dict) -> str | None:
+        """Stop, write owner.conf, start, verify. Returns None or the reason."""
+        self.step("stopping", f"systemctl stop {DANTE_UNIT}")
+        code, out = self.runner.run(["systemctl", "stop", DANTE_UNIT], timeout=60)
+        if code != 0:
+            return f"stop failed: {out}"
+        self.step("switching", f"{self.conf_path} -> {target['name']}")
+        try:
+            self.check_conf_text(text)
+        except Refused as error:
+            return str(error)
+        self.replace_conf(text)
+        self.step("starting", f"systemctl start {DANTE_UNIT}")
+        self.runner.run(["systemctl", "reset-failed", DANTE_UNIT], timeout=10)
+        code, out = self.runner.run(["systemctl", "start", DANTE_UNIT], timeout=90)
+        if code != 0:
+            return f"start failed: {out}"
+        self.step("verifying", f"waiting up to {self.start_timeout:.0f} s for the owner to start both streams")
+        return self.verify(target)
+
+    def check_owner(self, target: dict, invocation: str) -> str | None:
+        """None when this start is what the profile calls for; else the reason.
+        'not yet' reasons begin with 'waiting'."""
+        unit = self.unit_state()
+        if unit in ("failed", "inactive"):
+            return f"{DANTE_UNIT} is {unit}"
+        if self.invocation() != invocation:
+            return f"{DANTE_UNIT} restarted by itself"
+        log = self.owner_log(invocation)
+        fatal = [v for v in log if v.startswith(("FATAL", "NETERROR", "usb16x16-dante-start: REFUSED"))]
+        if fatal:
+            return fatal[0][:200]
+        loaded = [v for v in log if v.startswith("DSP loaded ")]
+        preset = target.get("dspPreset")
+        if preset and loaded and f"file={preset} " not in loaded[0]:
+            return f"the owner loaded another preset: {loaded[0][:120]}"
+        if not preset and loaded:
+            return "a preset was loaded on a profile without one"
+        if not any(v.startswith("NETSTART capture=RUNNING playback=RUNNING") for v in log):
+            return "waiting for the owner to start both streams"
+        if preset and not loaded:
+            return f"the owner's log has no 'DSP loaded file={preset}' line"
+        if preset and not any(v.startswith("DSPLIVE following ") for v in log):
+            return "the owner is not following a live file"
+        return None
+
+    def verify(self, target: dict) -> str | None:
+        deadline = self.runner.now() + self.start_timeout
+        invocation = ""
+        while True:
+            invocation = invocation or (self.invocation() if self.unit_state() == "active" else "")
+            reason = self.check_owner(target, invocation) if invocation else (
+                f"{DANTE_UNIT} is {self.unit_state()}" if self.unit_state() in ("failed", "inactive") else "waiting for the unit")
+            if reason is None:
+                break
+            if not reason.startswith("waiting"):
+                return reason
+            if self.runner.now() >= deadline:
+                return f"not up within {self.start_timeout:.0f} s ({reason})"
+            self.runner.sleep(self.poll)
+        self.step("settling", f"{self.settle:.0f} s on one start with nothing fatal")
+        settle_end = self.runner.now() + self.settle
+        while self.runner.now() < settle_end:
+            self.runner.sleep(self.poll)
+            reason = self.check_owner(target, invocation)
+            if reason:
+                return reason
+        self.state.setdefault("startLines", {})[target["name"]] = [
+            v[:400] for v in self.owner_log(invocation) if v.startswith(("START ", "DSP loaded ", "DSPLIVE following ", "METERS publishing ", "NETSTART ", "USBLINK "))][:12]
+        return None
+
+    def apply(self, request: dict) -> dict:
+        self.spool.mkdir(mode=0o755, exist_ok=True)
+        ident = request.get("id") if isinstance(request.get("id"), str) and REQUEST_ID.match(request.get("id", "")) else "invalid"
+        kind = request.get("kind") or "profile"
+        self.state = {
+            "version": VERSION,
+            "stack": "dante",
+            "id": ident,
+            "kind": kind,
+            "request": {k: request.get(k) for k in ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
+                                                     "name", "slug", "artifactSha256", "expectedLiveSha256", "revert")},
+            "startedAt": utc(self.runner.now()),
+            "steps": [],
+            "previousProfile": None,
+            "profile": None,
+            "state": "validating",
+            "error": None,
+        }
+        try:
+            conf = self.conf()
+            previous_text = read_text(self.conf_path) or ""
+            if kind == "preset":
+                self.validate_envelope(request)
+                spec = self.validate_preset(request, conf)
+                self.step("validating", f"{spec['stats']['biquads']} biquads, internal {spec['stats']['internal']}, "
+                                        f"{'replacing' if spec['replacing'] else 'new'} {DANTE_PREFIX}{spec['slug']}")
+                name = self.install_preset(spec)
+                self.state["stats"] = spec["stats"]
+                # Re-applying the live preset's slug is a restart onto the new file.
+                target = self.validate({**request, "profile": name}, conf, reapply=True)
+            elif kind == "remove":
+                self.validate_envelope(request)
+                self.state["profile"] = self.remove_preset(request, conf)
+                return self.finish("done")
+            elif kind == "live":
+                self.validate_envelope(request)
+                spec = self.validate_live(request, conf)
+                self.state["profile"] = spec["profile"]
+                self.state["stats"] = spec["stats"]
+                self.state["shape"] = spec["shape"]
+                self.step("validating", f"{spec['stats']['biquads']} biquads, shape {spec['shape'][:12]} matches {spec['profile']}")
+                try:
+                    self.push_live(spec)
+                except Failed as error:
+                    self.state["steps"].append({"name": "verifying", "at": utc(self.runner.now()), "ok": False, "detail": str(error)})
+                    return self.finish("failed", str(error))
+                return self.finish("done")
+            elif kind == "commit":
+                self.validate_envelope(request)
+                outcome = self.commit_live(request, conf, previous_text)
+                self.state["profile"] = outcome["profile"]
+                self.state["stats"] = outcome["stats"]
+                self.state["committed"] = {"sha256": outcome["digest"], "changed": outcome["changed"]}
+                return self.finish("done")
+            elif kind == "shutdown":
+                self.validate_envelope(request)
+                return self.shutdown(conf)
+            elif kind == "profile":
+                target = self.validate(request, conf)
+            else:
+                raise Refused(f"unknown request kind {kind!r}")
+        except Refused as error:
+            self.state["steps"].append({"name": "validating", "at": utc(self.runner.now()), "ok": False, "detail": str(error)})
+            return self.finish("refused", str(error))
+        previous = dante_profile_of(conf)
+        self.state["previousProfile"] = previous
+        self.state["profile"] = target["name"]
+        self.step("validating", f"{target['name']} is installed; live profile {previous}")
+        new_text = render_owner_conf(conf.get("METERS", "0"),
+                                     Path(target["dspPreset"]) if target["dspPreset"] else None, target["dspSha256"])
+        reason = self.switch_to(new_text, target)
+        if reason is None:
+            return self.finish("done")
+        self.step("rolling-back", f"{reason}; returning to {previous}", ok=False)
+        rollback_target = {"name": previous, "dspPreset": conf.get("DSP_PRESET") or None}
+        rollback_reason = self.switch_to(previous_text, rollback_target)
+        if rollback_reason is None:
+            return self.finish("rolled-back", reason)
+        return self.finish("failed", f"{reason}; rollback to {previous} also failed: {rollback_reason}")
+
+    def shutdown(self, conf: dict[str, str]) -> dict:
+        """As the AES67 one: stop the endpoint in order, leave the receipt, power off."""
+        self.state["profile"] = dante_profile_of(conf)
+        self.step("validating", f"shutdown requested; live profile {self.state['profile']}")
+        self.step("stopping", f"systemctl stop {DANTE_UNIT}")
+        code, out = self.runner.run(["systemctl", "stop", DANTE_UNIT], timeout=90)
+        if code != 0:
+            self.state["steps"].append({"name": "stopping", "at": utc(self.runner.now()), "ok": False,
+                                        "detail": f"stop exited {code}: {out.strip()[:200]}; powering off regardless"})
+        self.step("powering-off", "systemctl poweroff --no-block")
+        self.finish("done")
+        code, out = self.runner.run(["systemctl", "poweroff", "--no-block"], timeout=30)
+        if code != 0:
+            self.state["steps"].append({"name": "powering-off", "at": utc(self.runner.now()), "ok": False,
+                                        "detail": f"poweroff exited {code}: {out.strip()[:200]}"})
+            return self.finish("failed", f"systemctl poweroff exited {code}: {out.strip()[:200]}")
+        return self.state
+
+
+def detect_stack(runner: Runner | None = None) -> str:
+    """Which service the requests are for: USB16X16_STACK, else the Dante
+    stack when its unit is the one enabled at boot, else AES67."""
+    forced = os.environ.get("USB16X16_STACK", "")
+    if forced in ("dante", "aes67"):
+        return forced
+    code, out = (runner or Runner()).run(["systemctl", "is-enabled", DANTE_UNIT], timeout=10)
+    return "dante" if code == 0 and out.strip() == "enabled" else "aes67"
+
+
 # ------------------------------------------------------------------ main
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Apply an accepted AES67 profile on request from the web UI")
+    parser = argparse.ArgumentParser(description="Apply a profile or preset on request from the web UI, "
+                                                 "to whichever of the AES67 and Dante services is the installed one")
     parser.add_argument("--check", action="store_true",
                         help="validate the pending request against the live configuration and exit; no changes")
     parser.add_argument("--spool", default=str(SPOOL_DIR))
     arguments = parser.parse_args(argv)
-    applier = Applier(spool=Path(arguments.spool))
+    stack = detect_stack()
+    applier = (DanteApplier if stack == "dante" else Applier)(spool=Path(arguments.spool))
     if arguments.check:
         try:
             request = applier.load_request()
@@ -1207,7 +1689,7 @@ def main(argv: list[str] | None = None) -> int:
         except Refused as error:
             print(f"refused: {error}")
             return 1
-        print(f"ok: would switch {applier.live_profile()} -> {target['name']} "
+        print(f"ok ({stack}): would switch {applier.live_profile()} -> {target['name']} "
               f"(preset {target['dspPreset'] or 'none'})")
         return 0
     if os.geteuid() != 0:
