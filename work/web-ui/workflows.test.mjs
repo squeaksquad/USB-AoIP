@@ -154,3 +154,18 @@ test('REW import fails rather than dropping active filters or changing values',(
   assert.throws(()=>parseRew(row+'\nFilter two: ON HP Fc 500 Hz Q 1'));
   assert.equal(parseRew('Equalizer: CamillaDSP\n'+row).count,1);
 });
+
+test('Dante: commands and the journal command name the Dante units only', async () => {
+  const {serviceCommands, journalCommand, SERVICE_COMMANDS} = await import('./workflows.mjs');
+  assert.equal(serviceCommands('aes67'), SERVICE_COMMANDS);
+  assert.equal(serviceCommands(undefined), SERVICE_COMMANDS);
+  const dante = serviceCommands('dante');
+  assert.equal(dante.length, 4);
+  assert.doesNotMatch(JSON.stringify(dante), /aes67|AES67|supervisor/);
+  assert.equal(new Set(dante.map(c => c.id)).size, 4);
+  assert.match(journalCommand('all', 'dante'), /-u usb16x16-dante\.service -u usb16x16-statime\.service -u usb-16x16\.service/);
+  assert.match(journalCommand('stack', 'dante'), /^sudo journalctl -u usb16x16-dante\.service -u usb16x16-statime\.service -n 200/);
+  assert.match(journalCommand('stack'), /usb16x16-aes67\.service/);
+  assert.match(journalCommand('aes67'), /usb16x16-aes67\.service/);
+  assert.throws(() => journalCommand('aes67', 'dante'), /known log service/);
+});

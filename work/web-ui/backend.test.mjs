@@ -68,7 +68,7 @@ test('connectionLine distinguishes offline, running and stopped', () => {
 test('systemFacts offline says unavailable, never zero or healthy', () => {
   const rows = systemFacts(null);
   assert.equal(rows.find(r => r.label === 'Connection').value, 'Not connected');
-  assert.equal(rows.find(r => r.label === 'PTP / USB / queue health').value, 'Unavailable offline');
+  assert.equal(rows.find(r => r.label === 'Clock / USB / queue health').value, 'Unavailable offline');
   assert.ok(!rows.some(r => r.state === 'ok'), 'nothing reads healthy while disconnected');
 });
 
@@ -457,4 +457,105 @@ test('awaitReceipt waits for the terminal receipt of its own id and surfaces ref
   await assert.rejects(awaitReceipt('abc1234567', refused, {pollMs: 1, sleep: async () => {}}), /shape differs/);
   const never = async () => ok({ok: true, current: {id: 'other00000', state: 'done'}, pending: false, inFlight: false});
   await assert.rejects(awaitReceipt('abc1234567', never, {pollMs: 1, timeoutMs: 5, sleep: async () => {}}), /no receipt/);
+});
+
+// ------------------------------------------------------------- the Dante stack
+// The Pi says which stack it runs (health.stack). On Dante the page must not
+// say AES67, bridge, PTP or supervisor anywhere it describes what is running.
+
+const danteLive = {
+  ok: true, stack: 'dante', host: 'audio-dev', generated: '2026-10-11T22:00:00Z',
+  service: {name: 'usb16x16-web', version: '1.5.0', uptimeSeconds: 100},
+  mode: {actual: 'direct', running: true, detail: 'USB ↔ Dante endpoint, direct'},
+  services: {gadget: {unit: 'usb-16x16.service', state: 'active'}, dante: {unit: 'usb16x16-dante.service', state: 'active'},
+             statime: {unit: 'usb16x16-statime.service', state: 'active'}, governor: {unit: 'usb16x16-governor.service', state: 'active'}},
+  usb: {present: true, state: 'configured', speed: 'high-speed'},
+  network: {interface: 'eth0', carrier: true, speedMbit: 1000, address: '169.254.92.97'},
+  owner: {present: true, ageSeconds: 12, uptimeSeconds: 1320, loopGapUsMax: 1018, usb: 'open', usbOut: 'flow', usbBack: 'flow',
+          txMean: 128, rxMean: 144, ppmOut: -14.54, ppmBack: 14.52, txResyncs: 0, rxResyncs: 0, txReprimes: 0,
+          captureFaults: 0, playbackFaults: 0, detaches: 0, netErrors: 0},
+  profile: {selected: 'direct', profiles: [
+    {name: 'direct', accepted: true, user: false, status: 'accepted', description: 'Direct: no DSP stage, samples pass through unchanged'},
+    {name: 'dante-room-a', accepted: false, user: true, status: 'preset', description: 'user preset: Room A', dspLive: true, dspShape: 'f'.repeat(64)},
+  ]},
+  control: {apply: {available: true, scope: 'direct and your installed presets; a switch restarts the Dante service and draws a new latency level'}},
+  meters: {available: true}, dsp: {available: false, reason: "The Dante endpoint's DSP stage is accepted and its meters are live."},
+  system: {uptimeSeconds: 5000}, audio: {sampleRate: 48000, inputs: 16, outputs: 16}, dspLive: {available: false},
+};
+const forbidden = /AES67|bridge|PTP|[Ss]upervisor|RAVENNA/;
+
+test('stackTerms follows the stack and defaults to AES67 with no Pi', async () => {
+  const {stackTerms} = await import('./backend.mjs');
+  assert.equal(stackTerms(null).stack, 'aes67');
+  assert.equal(stackTerms({stack: 'aes67'}).service, 'AES67 service');
+  const dante = stackTerms(danteLive);
+  assert.equal(dante.service, 'Dante service');
+  assert.equal(dante.presetPrefix, 'dante-');
+  assert.equal(dante.aoipSource, false);
+  const text = Object.values(dante).map(v => typeof v === 'function' ? v('direct') : JSON.stringify(v)).join(' ');
+  assert.doesNotMatch(text, forbidden);
+});
+
+test('Dante: the connection line and the system facts speak Dante', () => {
+  assert.equal(connectionLine(danteLive), 'Connected · audio-dev · Dante endpoint running · direct · Live meters');
+  assert.match(connectionLine({...danteLive, mode: {actual: 'dsp', running: true}, profile: {...danteLive.profile, selected: 'dante-room-a'}}), /Dante endpoint running · dante-room-a/);
+  const rows = systemFacts(danteLive);
+  const labels = rows.map(r => r.label);
+  for (const label of ['Dante service', 'Dante clock service', 'Dante network', 'Endpoint telemetry', 'USB host link', 'Clock servo', 'Resyncs / re-primes']) assert.ok(labels.includes(label), label);
+  assert.doesNotMatch(rows.map(r => `${r.label} ${r.value} ${r.title}`).join('\n'), forbidden);
+  assert.equal(rows.find(r => r.label === 'USB host link').state, 'ok');
+  assert.equal(rows.find(r => r.label === 'Resyncs / re-primes').state, 'ok');
+  assert.match(rows.find(r => r.label === 'Loop gap (last minute)').value, /^1\.02 ms$/);
+});
+
+test('Dante: telemetry that is missing, stale or faulted reads as such', () => {
+  const none = systemFacts({...danteLive, owner: {present: false}});
+  assert.equal(none.find(r => r.label === 'Endpoint telemetry').state, 'warn');
+  const stale = systemFacts({...danteLive, owner: {...danteLive.owner, ageSeconds: 400}});
+  assert.equal(stale.find(r => r.label === 'Endpoint telemetry').state, 'bad');
+  const idle = systemFacts({...danteLive, owner: {...danteLive.owner, usbOut: 'idle', captureFaults: 1, txResyncs: 2}});
+  assert.equal(idle.find(r => r.label === 'USB host link').state, 'warn');
+  assert.equal(idle.find(r => r.label === 'USB faults / detaches').state, 'warn');
+  assert.equal(idle.find(r => r.label === 'Resyncs / re-primes').state, 'warn');
+  const dsp = systemFacts({...danteLive, owner: {...danteLive.owner, dspUsMax: 91.4, dspUsMean: 79.5}});
+  assert.match(dsp.find(r => r.label === 'DSP stage cost').value, /79.5 µs mean · 91.4 µs max/);
+});
+
+test('Dante: meters read the endpoint taps', () => {
+  const tap = () => ({peakDb: Array(16).fill(-20), rmsDb: Array(16).fill(-23), clipped: Array(16).fill(0), sequence: 4});
+  const levels = meterLevels({taps: {'usb-capture': tap(), 'dante-playback': tap(), 'dante-capture': tap()}, windowMs: 50});
+  assert.equal(levels.outputs.length, 16);
+  assert.equal(levels.outputs[0].peak, -20);
+});
+
+test('Dante: presets, live state and the confirm text', async () => {
+  const {stackTerms} = await import('./backend.mjs');
+  assert.deepEqual(userPresets(danteLive).map(p => [p.name, p.slug, p.live]), [['dante-room-a', 'room-a', false]]);
+  const choices = profileChoices(danteLive);
+  assert.equal(choices.live.name, 'direct');
+  assert.deepEqual(choices.accepted.map(r => r.name), ['dante-room-a']);
+  const direct = liveState(danteLive, 'a'.repeat(64));
+  assert.equal(direct.state, 'not-previewable');
+  assert.match(direct.reason, /direct is live; live edits need one of your presets running/);
+  const onPreset = {...danteLive, profile: {...danteLive.profile, selected: 'dante-room-a'}};
+  assert.equal(liveState(onPreset, 'f'.repeat(64)).state, 'live');
+  assert.match(liveState(onPreset, 'f'.repeat(64)).reason, /running Dante endpoint/);
+  assert.equal(liveState(onPreset, 'e'.repeat(64)).state, 'needs-apply');
+  const summary = presetSummary({report: {biquadCount: 3, crossoverCount: 2, internalChannels: 18, headroomDb: 0, warnings: []}, sections: 5, delay: {samples: 0}}, 'Room A', danteLive);
+  assert.match(summary, /restart the Dante service on it/);
+  assert.match(summary, /the endpoint's own loader/);
+  assert.match(summary, /Audio stops for a few seconds/);
+  assert.doesNotMatch(summary, forbidden);
+  assert.match(presetSummary({report: {biquadCount: 0, crossoverCount: 0, internalChannels: 16, headroomDb: 0}, sections: 0, delay: {samples: 0}}, 'x'), /AES67 service/, 'no Pi: as before');
+  assert.equal(stackTerms(danteLive).acceptedSummary(1), 'Without DSP');
+});
+
+test('Dante: apply steps and receipts are worded for the endpoint', () => {
+  assert.equal(applyStepLabel('stopping', 'dante'), 'Stopping the Dante service');
+  assert.equal(applyStepLabel('stopping'), 'Stopping the AES67 service');
+  assert.equal(applyStepLabel('pushing', 'dante'), 'Handing the coefficients to the endpoint');
+  for (const step of ['validating', 'checking', 'installing', 'stopping', 'switching', 'starting', 'verifying', 'settling', 'rolling-back', 'pushing', 'committing', 'removing']) {
+    assert.doesNotMatch(applyStepLabel(step, 'dante'), forbidden, step);
+  }
+  assert.equal(applyLine({current: {stack: 'dante', kind: 'profile', state: 'starting', profile: 'dante-room-a'}}), 'Starting the Dante service (dante-room-a)…');
 });

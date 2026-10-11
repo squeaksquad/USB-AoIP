@@ -12764,3 +12764,35 @@ time. Not exercised: a rollback on the real unit, the wrapper's refusal
 under the unit, a reboot on this form, an hour at 308 biquads. The service
 is `direct` with meters, aged anchor. Next: `usb16x16-web` and the page for
 Dante (they still read the AES67 service).
+
+**STAGED 2026-10-11 ~22:45 UTC: `usb16x16-web` 1.5.0 (28ba4501) and the
+page for the Dante stack; not installed.** Record
+`work/dante-mode/RESULTS.md`, last section; `work/web-control/README.md`,
+"Two stacks, one service". The web service reads the stack in service: on
+Dante, `owner.conf` and the installed `dante-<slug>` presets as the
+profile table, the endpoint's telemetry lines from the journal, its meter
+and live files, the Dante units for state and logs; `/api/health` says
+`"stack": "dante"`. The page takes every stack-naming word from that
+(`stackTerms`): on Dante it says Dante service, Dante endpoint,
+`dante-<slug>`, and nowhere AES67, bridge, PTP or supervisor; its System
+overview shows the endpoint's telemetry; the AoIP DSP source is disabled.
+100 Python and 113 node tests pass; rendered in a browser against the real
+service in Dante mode; the new collector read the Pi's real state
+correctly. Install: `sudo ~/usb-16x16-work/web-control/install-web-control.sh`
+then `sudo systemctl restart usb16x16-web.service`; the page's files are in
+`~/usb-16x16-work/web-ui-next/`, to be copied into `web-ui/` after that.
+Owed: his install, then meters, a Compile & apply and a live edit from his
+browser; the page's README; an hour at 308 biquads; a reboot on this form.
+
+**INSTALLED 2026-10-11 22:41 UTC: `usb16x16-web` 1.5.0 (28ba4501) and the
+page for the Dante stack are in service.** By the operator's `sudo
+install-web-control.sh` (8c5b4200) and a restart of `usb16x16-web`; the
+page's files (app.mjs f043f733, backend.mjs cb33fc8e, workflows.mjs
+927ff0d7) copied into `~/usb-16x16-work/web-ui/` afterwards. The service
+reports 1.5.0 and answers (401 without the login, as it should); the
+applier is 1.4.0 (e453d50f), its unit 23cb5b2e. The Dante endpoint was not
+restarted by any of it. **Not verified by this session: the page itself,
+which sits behind the operator's login.** Owed, from his browser: that it
+says Dante and shows live meters and the endpoint's telemetry; a Compile &
+apply; a live edit and a commit; a switch back to direct. Also owed: the
+page's README, an hour at 308 biquads, a reboot on this form.

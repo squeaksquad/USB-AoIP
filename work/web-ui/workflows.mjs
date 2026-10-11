@@ -11,6 +11,16 @@ export function dragEqBand(band, dx, dy, adjustQ = false) {
   return {...band,frequency:dx===0?band.frequency:round(clamp(band.frequency * 1000 ** dx,20,20000),1),gainDb:dy===0?band.gainDb:round(clamp(band.gainDb - dy * (EQ_RANGE_DB * 2),-18,18),2)};
 }
 
+export const DANTE_SERVICE_COMMANDS = [
+  {id:'dante-status',label:'Dante status',command:'systemctl --no-pager status usb16x16-dante usb16x16-statime',detail:'Show the endpoint and its clock service.'},
+  {id:'usb-status',label:'USB status',command:'systemctl --no-pager status usb-16x16.service',detail:'Show USB service state.'},
+  {id:'dante-restart',label:'Restart Dante',command:'sudo systemctl restart usb16x16-dante',detail:'Interrupts audio for a few seconds while the endpoint restarts; the latency level is drawn afresh.'},
+  {id:'usb-restart',label:'Restart USB',command:'sudo systemctl restart usb-16x16.service',detail:'Disconnects USB audio and restarts the gadget; the endpoint keeps running and re-links by itself.'}
+];
+
+/** The commands for the stack this Pi runs ('dante' or 'aes67'). */
+export const serviceCommands = stack => stack === 'dante' ? DANTE_SERVICE_COMMANDS : SERVICE_COMMANDS;
+
 export const SERVICE_COMMANDS = [
   {id:'aes67-status',label:'AES67 status',command:'usb16x16-aes67-supervisor status',detail:'Show transport, clock and bridge status.'},
   {id:'usb-status',label:'USB status',command:'systemctl --no-pager status usb-16x16.service',detail:'Show USB service state.'},
@@ -18,8 +28,10 @@ export const SERVICE_COMMANDS = [
   {id:'usb-restart',label:'Restart USB + AES67',command:'sudo systemctl stop usb16x16-aes67 && sudo systemctl restart usb-16x16.service && sudo systemctl start usb16x16-aes67',detail:'Disconnects USB audio, restarts the gadget, then starts AES67. Stops on failure.'}
 ];
 
-export function journalCommand(service) {
-  const units = {all:['usb16x16-aes67.service','usb-16x16.service'],aes67:['usb16x16-aes67.service'],usb:['usb-16x16.service']};
+export function journalCommand(service, stack = 'aes67') {
+  const units = stack === 'dante'
+    ? {all:['usb16x16-dante.service','usb16x16-statime.service','usb-16x16.service'],stack:['usb16x16-dante.service','usb16x16-statime.service'],usb:['usb-16x16.service']}
+    : {all:['usb16x16-aes67.service','usb-16x16.service'],aes67:['usb16x16-aes67.service'],stack:['usb16x16-aes67.service'],usb:['usb-16x16.service']};
   if (!Object.hasOwn(units,service)) throw new Error('Choose a known log service');
   return `sudo journalctl ${units[service].map(unit=>`-u ${unit}`).join(' ')} -n 200 --no-pager -o short-iso`;
 }

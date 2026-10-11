@@ -31,6 +31,32 @@ and the latency level is drawn afresh (the record's standing rule). The UI
 says so before it asks, and the applier's receipt records the bridge's start
 lines so the draw can be read afterwards.
 
+## Two stacks, one service (2026-10-11)
+
+The Pi runs either the AES67 service or the Dante service, and both programs
+here serve whichever it is. The rule is the same in each: `USB16X16_STACK`
+(`dante` or `aes67`) if set, else Dante when `usb16x16-dante.service` is the
+unit enabled at boot, else AES67. Everything below was written for AES67 and
+still describes it; on the Dante stack the differences are these.
+
+| | AES67 | Dante |
+|---|---|---|
+| What a profile is | a block in `/etc/usb16x16/aes67.conf` | `direct`, or `dante-<slug>` = `/etc/usb16x16/dsp/dante-<slug>.dsp` |
+| What a switch does | the supervisor's `switch-profile`, restart of `usb16x16-aes67` | rewrites `/etc/usb16x16/dante/owner.conf` (checked by `usb16x16-dante-start --print` on a copy), restart of `usb16x16-dante` |
+| Verified by | `/run/usb16x16/stage`, the BRIDGE line, RECOVERs, the bridge log | the unit staying up on one start and that start's journal: `DSP loaded`, `DSPLIVE following`, `NETSTART`, nothing fatal, 15 s settle |
+| User presets | `user-<slug>`, a profile block each | `dante-<slug>`, the file alone; any installed preset can be switched to |
+| Live file and status | `/run/usb16x16/dsp-live.dsp`, `.status` | `/run/usb16x16-dante/dsp-live.dsp`, `dsp-live.status` |
+| Meters | `/run/usb16x16/meters`, four taps | `/run/usb16x16-dante/meters.txt`, three taps (`usb-capture`, `dante-playback`, `dante-capture`) |
+| Telemetry in `/api/health` | `bridge`, `stage`, `recovers`, `ptp`, `streams` | `owner` (the endpoint's once-a-minute `OWNER` / `USB` / `DSP` / `METER` lines, read from the journal every 10 s); no clock or stream table: routing is Dante Controller's |
+| Logs | `usb16x16-aes67`, `usb-16x16` | `usb16x16-dante`, `usb16x16-statime`, `usb-16x16` (`service=stack` names the network service on either) |
+
+`/api/health` carries `"stack"`, and the page takes every stack-naming word
+from it (`stackTerms` in `work/web-ui/backend.mjs`): on a Dante Pi it does
+not say AES67, bridge, PTP or supervisor. An AoIP DSP source is not offered
+there; the endpoint filters what the USB host sends. Tests:
+`test_dante_apply.py`, `test_dante_web.py`, and the Dante cases in
+`work/web-ui/backend.test.mjs` and `workflows.test.mjs`.
+
 ## User presets (browser-compiled)
 
 Since 2026-09-11 evening the page can send its own draft. The compiler is the

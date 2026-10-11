@@ -3337,3 +3337,62 @@ hour at 308 biquads.
 
 The unit's description still reads "switch the AES67 service": cosmetic,
 left for the web step, which touches those files.
+
+## The web service and the page on the Dante stack: written, tested, staged (2026-10-11, about 22:45 UTC)
+
+**`usb16x16-web` 1.5.0 (28ba4501)** serves the stack in service, by the
+applier's rule (`USB16X16_STACK`, else Dante when its unit is enabled at
+boot). On Dante `/api/health` carries `"stack": "dante"` and:
+
+| Field | From |
+|---|---|
+| `services` | `usb-16x16`, `usb16x16-dante`, `usb16x16-statime`, the governor |
+| `profile` | `owner.conf`: `direct` (the one accepted row) and a user row per `/etc/usb16x16/dsp/dante-<slug>.dsp`, titled from the artifact's `preset` line, with its shape key |
+| `owner` | the endpoint's newest `OWNER`, `USB`, `DSP` and `METER` lines, one `journalctl -n 80` every 10 s in the tier the AES67 daemon reads used; a `DSP` or `METER` line older than the `OWNER` line is not reported |
+| `meters`, `dspLive` | `/run/usb16x16-dante/meters.txt` (three taps), `dsp-live.status` |
+| `mode` | running when the Dante unit is active; `direct` or `dsp` by the configuration |
+
+No `bridge`, `stage`, `recovers`, `ptp` or `streams` on this stack. The
+request routes name presets `dante-<slug>`, allow a switch to an installed
+preset, and word their answers for the stack; logs read the Dante units
+(`service=stack`). The unit file is unchanged: its sandbox already allows
+every read this adds.
+
+**The page.** Every word that names the stack comes from `stackTerms(health)`
+in `work/web-ui/backend.mjs`. On a Dante Pi: "Dante service", "Dante
+endpoint", "Dante network", `dante-<slug>`, the Direct button without
+"bridge", the outage as a few seconds with return channels up to about 20 s,
+the endpoint's loader, Dante log choices and commands, an Operating-modes
+text that says routing is Dante Controller's, and System overview rows from
+the endpoint's telemetry (USB host link, clock servo, depth, resyncs and
+re-primes, USB faults and detaches, loop gap, DSP stage cost) in place of
+the bridge's. The AoIP DSP source is disabled there and a draft set to it is
+not offered for install. With no backend, or on AES67, the page reads as
+before; the one change there is the offline row "Clock / USB / queue
+health" (was "PTP / ...").
+
+Tests: `test_dante_web.py` (10), Dante cases in `backend.test.mjs` and
+`workflows.test.mjs` (7 more, each asserting the text carries none of
+AES67, bridge, PTP, supervisor, RAVENNA); 100 Python and 113 node tests
+pass. Seen in a browser against the real service run locally in Dante mode
+with a mock configuration: both pages render, no console error, none of
+those words anywhere on either page or in a tooltip. Run read-only on the
+Pi, the new collector reports the real state: `dante`, `direct`, all four
+units active, the owner's telemetry 1 s old, three meter stages, Apply
+available.
+
+**Staged, not installed:** `~/usb-16x16-work/web-control/` holds
+`usb16x16-web` 28ba4501, `usb16x16-apply.service` 23cb5b2e (description
+only), `install-web-control.sh` 8c5b4200. The page's files wait in
+`~/usb-16x16-work/web-ui-next/` and are copied into `web-ui/` once the
+service is installed (the new page's Dante log choice needs the new
+service). Operator:
+
+```
+sudo ~/usb-16x16-work/web-control/install-web-control.sh
+sudo systemctl restart usb16x16-web.service
+```
+
+Not done: the page itself has not been used against the Pi (it sits behind
+the operator's login); meters, a Compile & apply and a live edit from his
+browser are the test. The page's own README is not yet brought up to date.

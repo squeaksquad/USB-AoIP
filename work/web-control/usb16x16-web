@@ -57,7 +57,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -88,11 +88,66 @@ UNITS = {
     "governor": "usb16x16-governor.service",
 }
 
+# The Dante stack (2026-10-11): usb16x16-dante.service runs the owner, whose
+# configuration is /etc/usb16x16/dante/owner.conf and whose meter and live
+# files are under /run/usb16x16-dante/. Which stack this Pi runs is decided
+# the way usb16x16-apply decides it: USB16X16_STACK, else Dante when its unit
+# is the one enabled at boot, else AES67. Everything below that differs
+# between the two asks stack().
+DANTE_UNIT = "usb16x16-dante.service"
+DANTE_CONF = Path(os.environ.get("USB16X16_DANTE_CONF", "/etc/usb16x16/dante/owner.conf"))
+DANTE_RUN_DIR = Path(os.environ.get("USB16X16_DANTE_RUN_DIR", "/run/usb16x16-dante"))
+DSP_DIR = Path(os.environ.get("USB16X16_DSP_DIR", "/etc/usb16x16/dsp"))
+DANTE_PREFIX = "dante-"
+DANTE_DIRECT = "direct"
+DANTE_UNITS = {
+    "gadget": "usb-16x16.service",
+    "dante": DANTE_UNIT,
+    "statime": "usb16x16-statime.service",
+    "governor": "usb16x16-governor.service",
+}
+DANTE_LOG_UNITS = {
+    "all": [DANTE_UNIT, "usb16x16-statime.service", "usb-16x16.service"],
+    "stack": [DANTE_UNIT, "usb16x16-statime.service"],
+    "usb": ["usb-16x16.service"],
+}
+# The owner writes its telemetry lines once a minute.
+OWNER_LINE_FRESH_S = 150.0
+
+_stack: dict = {"name": None}
+
+
+def detect_stack() -> str:
+    forced = os.environ.get("USB16X16_STACK", "")
+    if forced in ("dante", "aes67"):
+        return forced
+    return "dante" if (run(["systemctl", "is-enabled", DANTE_UNIT]) or "").strip() == "enabled" else "aes67"
+
+
+def stack() -> str:
+    if _stack["name"] is None:
+        _stack["name"] = detect_stack()
+    return _stack["name"]
+
+
+def preset_prefix() -> str:
+    return DANTE_PREFIX if stack() == "dante" else "user-"
+
+
+def words() -> dict:
+    """The few nouns the answers below need, for the stack in service."""
+    if stack() == "dante":
+        return {"service": "Dante service", "engine": "Dante endpoint",
+                "outage": "audio stops for a few seconds and the latency level is drawn afresh"}
+    return {"service": "AES67 service", "engine": "bridge",
+            "outage": "audio stops for about a minute and the latency level is drawn afresh"}
+
 # Log services the UI may ask for, mapped to the units they read. Nothing
 # outside this table reaches journalctl.
 LOG_UNITS = {
     "all": ["usb16x16-aes67.service", "usb-16x16.service"],
     "aes67": ["usb16x16-aes67.service"],
+    "stack": ["usb16x16-aes67.service"],
     "usb": ["usb-16x16.service"],
 }
 
@@ -185,6 +240,9 @@ METER_STAGES = {
     "ravenna-playback": "AES67 out, after the DSP stage: what the wire carries",
     "ravenna-capture": "AES67 in from the wire",
     "usb-playback": "USB to the host",
+    # The Dante owner's three taps; what Dante returns goes to the host unchanged.
+    "dante-playback": "Dante out, after the DSP stage: what the wire carries",
+    "dante-capture": "Dante in from the wire, as it goes to the host",
 }
 
 
@@ -244,15 +302,18 @@ def read_meters(now: float | None = None) -> dict:
     stale file (the bridge stopped, or runs untapped) reads as unavailable;
     the reason says which."""
     now = time.time() if now is None else now
+    dante = stack() == "dante"
+    meters_file = DANTE_RUN_DIR / "meters.txt" if dante else METERS_FILE
+    engine = words()["engine"]
     try:
-        stat = METERS_FILE.stat()
+        stat = meters_file.stat()
     except OSError:
         return {"ok": True, "available": False,
-                "reason": "No meter snapshot: the bridge is not running or runs with METERS=0."}
+                "reason": f"No meter snapshot: the {engine} is not running or runs with METERS=0."}
     age = now - stat.st_mtime
     with _meters_lock:
         if _meters_cache["mtime"] != stat.st_mtime:
-            parsed = parse_meters(read_text(METERS_FILE, 16384) or "")
+            parsed = parse_meters(read_text(meters_file, 16384) or "")
             _meters_cache["mtime"] = stat.st_mtime
             _meters_cache["body"] = parsed
         body = _meters_cache["body"]
@@ -260,8 +321,11 @@ def read_meters(now: float | None = None) -> dict:
         return {"ok": True, "available": False, "reason": "The meter snapshot could not be parsed."}
     if age > METERS_FRESH_S:
         return {"ok": True, "available": False, "ageSeconds": round(age, 1),
-                "reason": f"The meter snapshot is {age:.0f} s old: the bridge has stopped publishing."}
-    return {"ok": True, "available": True, "ageSeconds": round(age, 2), "source": "bridge-tap",
+                "reason": f"The meter snapshot is {age:.0f} s old: the {engine} has stopped publishing, "
+                          "or no audio is moving through it." if dante else
+                          f"The meter snapshot is {age:.0f} s old: the bridge has stopped publishing."}
+    return {"ok": True, "available": True, "ageSeconds": round(age, 2),
+            "source": "owner-tap" if dante else "bridge-tap",
             "windowMs": round((body.get("windowFrames") or 0) / 48.0, 1), **body}
 
 
@@ -327,6 +391,104 @@ def interface_address(name: str) -> str | None:
     return match.group(1) if match else None
 
 
+# ---------------------------------------------------------------- the Dante stack
+
+def parse_owner_conf(text: str) -> dict[str, str]:
+    """owner.conf as usb16x16-dante-start reads it: KEY=value lines."""
+    values: dict[str, str] = {}
+    for raw in text.splitlines():
+        match = re.match(r"^([A-Z0-9_]+)=(.*)$", raw)
+        if match:
+            values[match.group(1)] = match.group(2)
+    return values
+
+
+def artifact_title(path: Path) -> str:
+    """The name on an artifact's `preset` line, for the list."""
+    head = read_text(path, 512) or ""
+    for line in head.splitlines()[:3]:
+        if line.startswith("preset "):
+            return line[len("preset "):].strip()[:64]
+    return ""
+
+
+def dante_profiles(conf: dict[str, str]) -> tuple[str, list[dict]]:
+    """What the Dante applier switches between: direct, and every installed
+    dante-<slug>.dsp. The same row shape as conf_profiles, so the page's
+    panel is one panel."""
+    preset = conf.get("DSP_PRESET") or ""
+    selected = Path(preset).name.removesuffix(".dsp") if preset else DANTE_DIRECT
+    rows = [{
+        "name": DANTE_DIRECT, "status": "accepted", "accepted": True,
+        "description": "Direct: no DSP stage, samples pass through unchanged",
+        "measured": "", "cover": "", "dspPreset": None, "user": False, "dspLive": False,
+        "dspSha256": None, "dspShape": None,
+    }]
+    try:
+        files = sorted(DSP_DIR.glob(f"{DANTE_PREFIX}*.dsp"))
+    except OSError:
+        files = []
+    for path in files:
+        slug = path.name[len(DANTE_PREFIX):-len(".dsp")]
+        if not USER_SLUG.match(slug):
+            continue
+        name = DANTE_PREFIX + slug
+        live = name == selected
+        title = artifact_title(path)
+        rows.append({
+            "name": name, "status": "preset", "accepted": False,
+            "description": f"user preset: {title}" if title else "user preset",
+            "measured": "", "cover": "", "dspPreset": str(path), "user": True,
+            # A preset always starts with live following on; for the running
+            # one, what the configuration actually says.
+            "dspLive": conf.get("DSP_LIVE") == "1" if live else True,
+            "dspSha256": conf.get("DSP_SHA256") if live else None,
+            "dspShape": installed_shape(str(path)),
+        })
+    return selected, rows
+
+
+def parse_owner_lines(text: str, now: float | None = None) -> dict:
+    """The newest OWNER, USB, DSP and METER lines of the owner's journal
+    (journalctl -o short-unix): what the endpoint last said about itself."""
+    now = time.time() if now is None else now
+    latest: dict = {}
+    for raw in text.splitlines():
+        match = re.match(r"^([0-9]+\.[0-9]+) \S+ \S+: (OWNER|USB|DSP|METER) (.*)$", raw)
+        if match:
+            latest[match.group(2)] = (float(match.group(1)), parse_bridge_line(match.group(3)))
+    if "OWNER" not in latest:
+        return {"present": False}
+    stamp, owner = latest["OWNER"]
+    usb = latest.get("USB", (0, {}))[1]
+    dsp = latest.get("DSP", (0, {}))
+    meter = latest.get("METER", (0, {}))
+    # A DSP or METER line older than the OWNER line belongs to an earlier
+    # minute in which audio moved; it says nothing about now.
+    dsp_fields = dsp[1] if dsp[0] >= stamp - 1 else {}
+    meter_fields = meter[1] if meter[0] >= stamp - 1 else {}
+    return {
+        "present": True,
+        "ageSeconds": round(now - stamp, 1),
+        "uptimeSeconds": owner.get("t"),
+        "loopGapUsMax": owner.get("gap_us_max"),
+        "txDepth": owner.get("tx_depth"),
+        "txResyncs": owner.get("tx_resyncs"),
+        "rxResyncs": owner.get("rx_resyncs"),
+        "netErrors": owner.get("net_errors"),
+        "usb": usb.get("usb"), "usbOut": usb.get("tx"), "usbBack": usb.get("rx"),
+        "txMean": usb.get("tx_mean"), "rxMean": usb.get("rx_mean"),
+        "ppmOut": usb.get("tx_i"), "ppmBack": usb.get("rx_i"),
+        "txLinks": usb.get("tx_links"), "txReprimes": usb.get("tx_reprimes"),
+        "rxOverflow": usb.get("rx_overflow"),
+        "captureFaults": usb.get("capture_faults"), "playbackFaults": usb.get("playback_faults"),
+        "detaches": usb.get("detaches"),
+        "dspUsMax": dsp_fields.get("dsp_us_max"), "dspUsMean": dsp_fields.get("dsp_us_mean"),
+        "dspLiveGen": dsp_fields.get("dsp_live_gen"), "dspLiveRefused": dsp_fields.get("dsp_live_refused"),
+        "meterUsMax": meter_fields.get("meter_us_max"),
+    }
+
+
 # ---------------------------------------------------------------- collector
 
 class Collector:
@@ -352,6 +514,15 @@ class Collector:
     # ---- tiers
 
     def collect_fast(self) -> dict:
+        if stack() == "dante":
+            # No /run telemetry files on this stack: the owner speaks through
+            # its journal (the 10 s tier) and its meter and live files.
+            state = {"apply": apply_state(), "dspLive": read_live_status()}
+            meters = read_meters()
+            state["meters"] = {"available": meters["available"], "endpoint": "/api/meters",
+                               "pollMsMin": 100, "reason": meters.get("reason", ""),
+                               "windowMs": meters.get("windowMs"), "stages": sorted(meters.get("taps", {}))}
+            return state
         state: dict = {"bridge": {"present": False}}
         line = read_text(RUN_DIR / "last-bridge")
         if line and line.startswith("BRIDGE"):
@@ -406,12 +577,17 @@ class Collector:
 
     def collect_slow(self) -> dict:
         state: dict = {}
-        names = list(UNITS.values())
+        self._slow_ticks = getattr(self, "_slow_ticks", 0) + 1
+        if self._slow_ticks % 12 == 1:   # once a minute: the stack does not change under a running page
+            _stack["name"] = detect_stack()
+        dante = stack() == "dante"
+        units = DANTE_UNITS if dante else UNITS
+        names = list(units.values())
         active = (run(["systemctl", "is-active", *names]) or "").split()
         # systemctl prints one line per unit, in order, even when some are dead.
         state["services"] = {
             key: {"unit": unit, "state": active[index] if index < len(active) else "unknown"}
-            for index, (key, unit) in enumerate(UNITS.items())
+            for index, (key, unit) in enumerate(units.items())
         }
 
         carrier = read_text(Path(f"/sys/class/net/{AOIP_INTERFACE}/carrier"), 16)
@@ -439,12 +615,20 @@ class Collector:
             }
         state["usb"] = udc
 
-        conf_text = read_text(AES67_CONF, 1 << 20)
-        if conf_text is not None:
-            conf = parse_conf(conf_text)
-            state["profile"] = {"selected": conf.get("PROFILE") or None, "profiles": conf_profiles(conf)}
+        if dante:
+            conf_text = read_text(DANTE_CONF, 1 << 16)
+            if conf_text is not None:
+                selected, rows = dante_profiles(parse_owner_conf(conf_text))
+                state["profile"] = {"selected": selected, "profiles": rows}
+            else:
+                state["profile"] = {"selected": None, "profiles": [], "reason": f"{DANTE_CONF} unreadable"}
         else:
-            state["profile"] = {"selected": None, "profiles": [], "reason": f"{AES67_CONF} unreadable"}
+            conf_text = read_text(AES67_CONF, 1 << 20)
+            if conf_text is not None:
+                conf = parse_conf(conf_text)
+                state["profile"] = {"selected": conf.get("PROFILE") or None, "profiles": conf_profiles(conf)}
+            else:
+                state["profile"] = {"selected": None, "profiles": [], "reason": f"{AES67_CONF} unreadable"}
         applier = (run(["systemctl", "is-active", APPLY_UNIT]) or "unknown").strip()
         state["control"] = {
             "apply": {
@@ -453,7 +637,9 @@ class Collector:
                 "state": applier,
                 "reason": None if applier == "active" else
                           f"{APPLY_UNIT} is {applier}: install and enable it to switch profiles from here",
-                "scope": "accepted profiles only; a switch restarts the AES67 service and draws a new latency level",
+                "scope": "direct and your installed presets; a switch restarts the Dante service and draws a new latency level"
+                         if dante else
+                         "accepted profiles only; a switch restarts the AES67 service and draws a new latency level",
             }
         }
 
@@ -485,6 +671,8 @@ class Collector:
         # Deliberately limited to idempotent reads. /api/sink/status/N is not
         # among them: reading it clears the arrival-lead minimum that the
         # latency harness owns.
+        if stack() == "dante":
+            return self.collect_owner()
         state: dict = {}
         ptp = http_json("/api/ptp/status")
         state["ptp"] = ptp if isinstance(ptp, dict) else {"status": "unavailable"}
@@ -520,6 +708,12 @@ class Collector:
         state["streams"] = streams
         return state
 
+    def collect_owner(self) -> dict:
+        """The Dante tier: the owner's last telemetry lines. There is no
+        daemon to ask and no stream table; routing lives in Dante Controller."""
+        text = run(["journalctl", "-u", DANTE_UNIT, "-n", "80", "--no-pager", "-o", "short-unix"], timeout=8.0)
+        return {"owner": parse_owner_lines(text or "")}
+
     def collect_dsp(self) -> dict:
         """What the DSP processor mode would need, and what is actually there.
 
@@ -530,6 +724,15 @@ class Collector:
         engine = None
         if CAMILLA_BIN.is_file() and os.access(CAMILLA_BIN, os.X_OK):
             engine = (run([str(CAMILLA_BIN), "--version"]) or "").strip() or "present"
+        if stack() == "dante":
+            return {
+                "available": False,
+                "engine": None,
+                "missing": ["an AoIP-only source (the endpoint filters what the USB host sends)"],
+                "reason": "The Dante endpoint's DSP stage is accepted and its meters are live. Settings "
+                          "installs this editor's draft as a preset (compiled here, validated by the "
+                          "Pi's own loader, never soaked) and switches between your presets and direct.",
+            }
         missing = ["metering (a benchmarked tap in the bridge)", "AoIP-only mode"]
         return {
             # The stage runs in the bridge; the draft reaches it through Apply.
@@ -553,6 +756,8 @@ class Collector:
         running = aes67 == "active" and bridge.get("present") and (
             bridge.get("ageSeconds") is not None and bridge["ageSeconds"] < 15
         )
+        if stack() == "dante":
+            return self.build_dante(services, gadget)
         snapshot = {
             "ok": True,
             "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -561,6 +766,7 @@ class Collector:
             "host": socket.gethostname(),
             "audio": {"sampleRate": self._daemon.get("daemon", {}).get("sampleRate", 48000),
                       "inputs": 16, "outputs": 16},
+            "stack": "aes67",
             "mode": {
                 "actual": "direct",
                 "running": bool(running),
@@ -576,7 +782,40 @@ class Collector:
         snapshot.update(self._daemon)
         return snapshot
 
+    def build_dante(self, services: dict, gadget) -> dict:
+        dante = services.get("dante", {}).get("state")
+        statime = services.get("statime", {}).get("state")
+        running = dante == "active"
+        selected = (self._slow.get("profile") or {}).get("selected")
+        if running:
+            detail = ("USB ↔ Dante endpoint, direct" if selected in (None, DANTE_DIRECT)
+                      else f"USB ↔ Dante endpoint with DSP preset {selected}")
+        else:
+            detail = f"Dante service {dante or 'unknown'}, clock {statime or 'unknown'}, USB gadget {gadget or 'unknown'}"
+        snapshot = {
+            "ok": True,
+            "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "service": {"name": "usb16x16-web", "version": VERSION,
+                        "uptimeSeconds": int(time.time() - self._started)},
+            "host": socket.gethostname(),
+            "audio": {"sampleRate": 48000, "inputs": 16, "outputs": 16},
+            "stack": "dante",
+            "mode": {
+                "actual": "direct" if selected in (None, DANTE_DIRECT) else "dsp",
+                "running": bool(running),
+                "detail": detail,
+            },
+            "meters": {"available": False, "reason": "not yet read"},
+            "dsp": self._dsp,
+            "owner": {"present": False},
+        }
+        snapshot.update(self._fast)
+        snapshot.update(self._slow)
+        snapshot.update(self._daemon)
+        return snapshot
+
     def loop(self) -> None:
+        _stack["name"] = detect_stack()
         self._dsp = self.collect_dsp()
         next_slow = 0.0
         next_daemon = 0.0
@@ -718,10 +957,13 @@ def installed_shape(path: str) -> str | None:
 def read_live_status(now: float | None = None) -> dict:
     """The bridge's one-line answer to the last live file, under RUN_DIR:
     DSPLIVE gen= sha256= state=applied|refused|ignored|idle reason="" t_us=."""
-    path = RUN_DIR / "dsp-live.status"
+    dante = stack() == "dante"
+    path = (DANTE_RUN_DIR if dante else RUN_DIR) / "dsp-live.status"
     text = read_text(path, 4096)
     if not text or not text.startswith("DSPLIVE "):
-        return {"available": False, "reason": "the bridge has no live file (the profile does not set DSP_LIVE=1)"}
+        return {"available": False,
+                "reason": "the Dante endpoint follows no live file (no preset is running)" if dante else
+                          "the bridge has no live file (the profile does not set DSP_LIVE=1)"}
     fields: dict = {}
     for match in re.finditer(r'(\w+)=("([^"]*)"|\S+)', text[len("DSPLIVE "):]):
         fields[match.group(1)] = match.group(3) if match.group(3) is not None else match.group(2)
@@ -737,7 +979,7 @@ def read_live_status(now: float | None = None) -> dict:
 
 
 def preset_slug(name: str) -> str:
-    """user-<slug> from a preset name: lower-case letters, digits and single
+    """The <slug> of user-<slug> / dante-<slug> from a preset name: lower-case letters, digits and single
     dashes, at most 24 characters, the same rule the applier enforces."""
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:24].rstrip("-")
     return slug if USER_SLUG.match(slug) else ""
@@ -1306,20 +1548,21 @@ class Handler(BaseHTTPRequestHandler):
             return
         snapshot, _ = gate
         users = [row["name"] for row in (snapshot.get("profile") or {}).get("profiles", []) if row.get("user")]
-        if f"user-{slug}" not in users and len(users) >= USER_PRESET_CAP:
+        target = preset_prefix() + slug
+        if target not in users and len(users) >= USER_PRESET_CAP:
             self.send_error_json(HTTPStatus.CONFLICT, f"{USER_PRESET_CAP} user presets are installed; remove one first")
             return
         try:
-            ident = write_apply_request(f"user-{slug}", expected, self.current_user(),
+            ident = write_apply_request(target, expected, self.current_user(),
                                         extra={"kind": "preset", "name": name, "slug": slug, "artifactSha256": computed},
                                         artifact=data)
         except OSError as error:
             self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
             return
-        self.send_json({"ok": True, "id": ident, "profile": f"user-{slug}", "slug": slug, "artifactSha256": computed,
-                        "replacing": f"user-{slug}" in users,
-                        "note": "Queued. The applier checks the artifact, installs it, and restarts the AES67 "
-                                "service on it; audio stops for about a minute."}, HTTPStatus.ACCEPTED)
+        self.send_json({"ok": True, "id": ident, "profile": target, "slug": slug, "artifactSha256": computed,
+                        "replacing": target in users,
+                        "note": f"Queued. The applier checks the artifact, installs it, and restarts the "
+                                f"{words()['service']} on it; {words()['outage']}."}, HTTPStatus.ACCEPTED)
 
     def live_gate(self, expected, expected_sha):
         """The live and commit kinds share the preset gate plus: the live
@@ -1339,6 +1582,8 @@ class Handler(BaseHTTPRequestHandler):
         row = table.get(live or "")
         if row is None or not row.get("user"):
             self.send_error_json(HTTPStatus.CONFLICT,
+                                 f"{live or 'no profile'} is live; live updates need one of your presets running"
+                                 if stack() == "dante" else
                                  f"{live or 'no profile'} is live; live updates apply only to a user preset, "
                                  "never to an accepted profile")
             return None
@@ -1349,7 +1594,7 @@ class Handler(BaseHTTPRequestHandler):
         status = read_live_status()
         if expected_sha is not None and expected_sha != (status.get("sha256") or ""):
             self.send_error_json(HTTPStatus.CONFLICT,
-                                 f"This page expected live coefficients {expected_sha[:12]} but the bridge "
+                                 f"This page expected live coefficients {expected_sha[:12]} but the {words()['engine']} "
                                  f"reports {(status.get('sha256') or 'none')[:12]}; reload and retry")
             return None
         return snapshot, live, status
@@ -1381,7 +1626,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
                 return
             self.send_json({"ok": True, "id": ident, "profile": live, "revert": True,
-                            "note": "Queued. The applier hands the installed preset back to the bridge; no restart."},
+                            "note": f"Queued. The applier hands the installed preset back to the {words()['engine']}; no restart."},
                            HTTPStatus.ACCEPTED)
             return
         artifact = body.get("artifact")
@@ -1411,7 +1656,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json({"ok": True, "id": ident, "profile": live, "artifactSha256": computed,
                         "note": "Queued. The applier checks the artifact against the running preset's shape "
-                                "and hands it to the bridge; no restart. Not kept across a restart until committed."},
+                                f"and hands it to the {words()['engine']}; no restart. Not kept across a restart until committed."},
                        HTTPStatus.ACCEPTED)
 
     def api_apply_commit(self) -> None:
@@ -1427,7 +1672,7 @@ class Handler(BaseHTTPRequestHandler):
         _, live, status = gate
         if status.get("state") != "applied":
             self.send_error_json(HTTPStatus.CONFLICT,
-                                 f"Nothing to commit: the bridge's last live answer is {status.get('state') or 'none'}")
+                                 f"Nothing to commit: the {words()['engine']}'s last live answer is {status.get('state') or 'none'}")
             return
         try:
             ident = write_apply_request(live, body.get("expectedProfile"), self.current_user(),
@@ -1437,7 +1682,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json({"ok": True, "id": ident, "profile": live, "sha256": status.get("sha256"),
                         "note": "Queued. The applier copies the live coefficients over the installed preset "
-                                "and re-pins its block; no restart."}, HTTPStatus.ACCEPTED)
+                                "and re-pins it; no restart."}, HTTPStatus.ACCEPTED)
 
     def api_remove_preset(self, slug: str) -> None:
         if not USER_SLUG.match(slug):
@@ -1448,14 +1693,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         snapshot, live = gate
         users = [row["name"] for row in (snapshot.get("profile") or {}).get("profiles", []) if row.get("user")]
-        if f"user-{slug}" not in users:
-            self.send_error_json(HTTPStatus.NOT_FOUND, f"user-{slug} is not installed")
+        target = preset_prefix() + slug
+        if target not in users:
+            self.send_error_json(HTTPStatus.NOT_FOUND, f"{target} is not installed")
             return
-        if live == f"user-{slug}":
-            self.send_error_json(HTTPStatus.CONFLICT, f"user-{slug} is the live profile; switch away first")
+        if live == target:
+            self.send_error_json(HTTPStatus.CONFLICT, f"{target} is the live profile; switch away first")
             return
         try:
-            ident = write_apply_request(f"user-{slug}", None, self.current_user(), extra={"kind": "remove", "slug": slug})
+            ident = write_apply_request(target, None, self.current_user(), extra={"kind": "remove", "slug": slug})
         except OSError as error:
             self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
             return
@@ -1489,9 +1735,11 @@ class Handler(BaseHTTPRequestHandler):
         live = (snapshot.get("profile") or {}).get("selected")
         table = {row["name"]: row for row in (snapshot.get("profile") or {}).get("profiles", [])}
         if profile not in table:
-            self.send_error_json(HTTPStatus.BAD_REQUEST, f"No profile block named {profile}")
+            self.send_error_json(HTTPStatus.BAD_REQUEST, f"No profile named {profile}")
             return
-        if not table[profile]["accepted"]:
+        # On the Dante stack an installed preset is something to switch to;
+        # the applier holds it to its guards again before it does.
+        if not table[profile]["accepted"] and not (stack() == "dante" and table[profile].get("user")):
             self.send_error_json(HTTPStatus.BAD_REQUEST,
                                  f"{profile} is {table[profile]['status'] or 'unmarked'}, not accepted; "
                                  "Apply switches between accepted profiles only")
@@ -1513,8 +1761,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
             return
         self.send_json({"ok": True, "id": ident, "profile": profile, "expectedProfile": expected,
-                        "note": "Queued. The AES67 service restarts; audio stops for about a minute "
-                                "and the latency level is drawn afresh."}, HTTPStatus.ACCEPTED)
+                        "note": f"Queued. The {words()['service']} restarts; {words()['outage']}."},
+                       HTTPStatus.ACCEPTED)
 
     def api_apply_shutdown(self) -> None:
         """Queue a power-off of the Pi for the privileged applier.
@@ -1545,7 +1793,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
             return
         self.send_json({"ok": True, "id": ident, "profile": live,
-                        "note": "Queued. The AES67 service stops, then the Pi powers off; this page loses its "
+                        "note": f"Queued. The {words()['service']} stops, then the Pi powers off; this page loses its "
                                 "connection. Once activity stops, unplug the USB data cable, then PoE."},
                        HTTPStatus.ACCEPTED)
 
@@ -1582,7 +1830,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def api_logs(self, query: dict) -> None:
         service = (query.get("service") or ["all"])[0]
-        if service not in LOG_UNITS:
+        table = DANTE_LOG_UNITS if stack() == "dante" else LOG_UNITS
+        if service == "aes67" and stack() == "dante":
+            service = "stack"   # an older page asking for "the network service"
+        if service not in table:
             self.send_error_json(HTTPStatus.BAD_REQUEST, "Choose a known log service")
             return
         try:
@@ -1591,7 +1842,7 @@ class Handler(BaseHTTPRequestHandler):
             lines = 200
         lines = max(1, min(lines, 2000))
         argv = ["journalctl", "--no-pager", "-o", "short-iso", "-n", str(lines)]
-        for unit in LOG_UNITS[service]:
+        for unit in table[service]:
             argv += ["-u", unit]
         output = run(argv, timeout=15.0)
         if output is None:

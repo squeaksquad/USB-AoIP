@@ -1,11 +1,11 @@
 import { CHANNELS, createConfig, validateConfig, parsePreset, setOutputRole, bandResponse, eqResponse, subSumBoundDb } from './model.mjs';
-import { LAYOUTS, currentLayout, applyLayout, swapOutputs, applyCrossover, copyChannel, pasteChannel, parseRew, dragEqBand, EQ_RANGE_DB, SERVICE_COMMANDS, journalCommand } from './workflows.mjs';
+import { LAYOUTS, currentLayout, applyLayout, swapOutputs, applyCrossover, copyChannel, pasteChannel, parseRew, dragEqBand, EQ_RANGE_DB, serviceCommands, journalCommand } from './workflows.mjs';
 import { resetBand } from './reset-band.mjs';
 import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, createSpeakerBus, removeBus, setBusEqLink, setBusOutputs, outputRoleLabel, speakerGroupSourceIds } from './buses.mjs';
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, stackTerms } from './backend.mjs';
 import { LiveQueue } from './live.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
@@ -69,14 +69,16 @@ const liveQueue = new LiveQueue({
     if (outcome.ok) startApplyPolling();
   },
 });
-const logLive = {all:'',aes67:'',usb:''};
+const logLive = {all:'',stack:'',usb:''};
+/** The words for the stack this Pi runs (AES67 or Dante); see stackTerms. */
+const terms = () => stackTerms(health);
 let profileState = null;
 // Each slot remembers whether its draft was saved, so recalling one does not read as edited.
 const slotDirty = { A: true, B: true };
 // Collapsible page sections: open on desktop, collapsed on narrow screens, then user-controlled.
 const sectionOpen = { buses: true, bass: true };
 const sectionAttr = name => sectionOpen[name] ? 'open' : '';
-const logSnapshots = {all:'',aes67:'',usb:''};
+const logSnapshots = {all:'',stack:'',usb:''};
 const bandColors = ['#f39364','#e6b35c','#d9d464','#add875','#6bdaa3','#65d5c8','#68b8eb','#849af3','#aa92ec','#cd8ee0','#e486b9','#ed8694','#c6ac83','#95b9aa','#a6add5','#b6c878'];
 const storageKey = 'usb16x16-design-presets-v1';
 const $ = selector => document.querySelector(selector);
@@ -113,7 +115,7 @@ function markDraft() { dirty = true; editedSinceLoad = true; $('#draft-status').
 function presetForLiveProfile(next) {
   const live = profileChoices(next).live;
   if (!live?.user) return null;
-  const slug = live.name.replace(/^user-/, '');
+  const slug = live.name.replace(/^(user|dante)-/, '');
   const entry = Object.entries(presetStore.cache || {}).find(([name]) => presetSlug(name) === slug);
   return entry ? {name: entry[0], document: entry[1]} : null;
 }
@@ -186,9 +188,15 @@ function render() {
   for (const name of ['outputs', 'settings']) $(`#${name}-page`).hidden = name !== tab;
   for (const button of document.querySelectorAll('[data-mode]')) { const active = button.dataset.mode === config.mode; button.classList.toggle('active', active); button.setAttribute('aria-pressed', active); }
   for (const button of document.querySelectorAll('[data-source]')) { const active = button.dataset.source === config.source; button.classList.toggle('active', active); button.setAttribute('aria-pressed', active); button.disabled = isDirect; }
-  $('#flow-middle').textContent = isDirect ? 'USB ↔ AoIP transport' : 'Bass management + output DSP';
-  $('#flow-detail').textContent = isDirect ? 'Existing duplex bridge · DSP bypassed' : '16-band PEQ · alignment · level';
-  $('#flow-output').textContent = isDirect ? '16 × 16 duplex' : '16 AoIP outputs';
+  const words = terms();
+  // The static page says "Direct bridge" and offers an AoIP source; a Dante Pi has no bridge, and its
+  // endpoint filters only what the USB host sends.
+  const directButton = document.querySelector('[data-mode="direct"]'); if (directButton) directButton.textContent = words.directButton;
+  const aoipButton = document.querySelector('[data-source="aoip"]');
+  if (aoipButton) { aoipButton.disabled = isDirect || !words.aoipSource; aoipButton.title = words.aoipSource ? '' : 'The Dante endpoint filters the USB source only'; }
+  $('#flow-middle').textContent = isDirect ? `USB ↔ ${words.stack === 'dante' ? 'Dante' : 'AoIP'} transport` : 'Bass management + output DSP';
+  $('#flow-detail').textContent = isDirect ? words.flowDetail : '16-band PEQ · alignment · level';
+  $('#flow-output').textContent = isDirect ? '16 × 16 duplex' : `16 ${words.stack === 'dante' ? 'Dante' : 'AoIP'} outputs`;
   $('#mode-note').textContent = modeNote(isDirect);
   renderConnection();
   $('#draft-status').textContent = dirty ? 'Draft · unsaved' : `Saved on ${presetStore.label}`;
@@ -202,7 +210,7 @@ function modeNote(isDirect) {
     : 'Previewing DSP mode.';
   if (!health) return `${draft} No device has been switched.`;
   const profile = health.profile?.selected ? ` on profile ${health.profile.selected}` : '';
-  const running = health.mode?.running ? `The Pi is running the USB ↔ AoIP bridge${profile}.` : `The Pi stack is not running: ${health.mode?.detail || 'state unknown'}.`;
+  const running = health.mode?.running ? `The Pi is running the ${terms().transport}${profile}.` : `The Pi stack is not running: ${health.mode?.detail || 'state unknown'}.`;
   const dsp = isDirect ? '' : ` ${dspNote(health)}`;
   return `${draft} ${running} Browser edits change nothing on the Pi; profile switches go through Apply on the Settings page.${dsp}`;
 }
@@ -259,7 +267,7 @@ function renderBuses() {
   const allocated = config.outputs.filter(o=>o.busId!==null).length;
   const action = (label, content) => `<div class="field"><span class="field-spacer" aria-hidden="true">${label}</span>${content}</div>`;
   $('#bus-controls').innerHTML = `<details class="panel bus-panel page-section" data-section="buses" ${sectionAttr('buses')}><summary class="section-summary">Output buses <small>${allocated}/16 outputs allocated · ${buses.length} bus${buses.length===1?'':'es'}</small></summary>
-    <div class="section-heading"><div><p>Each physical output belongs to one bus. Formats apply only to the selected bus; unrelated buses keep their routing. Bus level sits above each output's own gain.${health && !off ? ' A format change edits this draft; it runs on the Pi only after <strong>Compile &amp; apply this draft</strong> on System &amp; presets, which restarts the AES67 service.' : ''}</p></div><div class="toolbar"><button data-action="bus-add-speakers" ${disabled(off||freeCount<2)}>Add speaker bus</button><button data-action="bus-add-headphones" ${disabled(off||freeCount<2)}>Add headphones</button></div></div>
+    <div class="section-heading"><div><p>Each physical output belongs to one bus. Formats apply only to the selected bus; unrelated buses keep their routing. Bus level sits above each output's own gain.${health && !off ? ' A format change edits this draft; it runs on the Pi only after <strong>Compile &amp; apply this draft</strong> on System &amp; presets, which restarts the ' + esc(terms().service) + '.' : ''}</p></div><div class="toolbar"><button data-action="bus-add-speakers" ${disabled(off||freeCount<2)}>Add speaker bus</button><button data-action="bus-add-headphones" ${disabled(off||freeCount<2)}>Add headphones</button></div></div>
     <fieldset ${disabled(off)} style="border:0;padding:0;margin:0;min-width:0">
     <div class="bus-list">${buses.map(bus => {
       const headphone = bus.kind === 'headphones';
@@ -610,16 +618,16 @@ function renderSettings() {
     ${applyPanel()}
     <section class="panel maintenance-panel"><div class="section-heading"><h2>Logs</h2><span class="offline-badge ${health?'live-badge':''}">${health?'Live journal':'Not connected'}</span></div>
     <p>${health?'Read the journal through the Pi control service, or paste a snapshot below. Reading logs does not touch the audio path.':'Live service logs require the Pi connection. Copy a journal command to run on the Pi, then paste its output to inspect a snapshot here.'}</p>
-    <div class="log-controls">${field('Service',`<select id="log-service">${options([['all','AES67 + USB'],['aes67','AES67'],['usb','USB']],logService)}</select>`)}${field('Filter snapshot',`<input id="log-filter" type="search" placeholder="Search log text…" value="${esc(logQuery)}">`)}<button data-action="refresh-logs" ${disabled(!health||logBusy)} title="${health?'Read the last 200 journal lines from the Pi':'Requires a Pi control backend'}">${logBusy?'Reading…':'Refresh live logs'}</button></div>
-    <div class="command-line"><code id="journal-command">${esc(journalCommand(logService))}</code><button data-action="copy-journal">Copy command</button></div>
+    <div class="log-controls">${field('Service',`<select id="log-service">${options(terms().logs,logService)}</select>`)}${field('Filter snapshot',`<input id="log-filter" type="search" placeholder="Search log text…" value="${esc(logQuery)}">`)}<button data-action="refresh-logs" ${disabled(!health||logBusy)} title="${health?'Read the last 200 journal lines from the Pi':'Requires a Pi control backend'}">${logBusy?'Reading…':'Refresh live logs'}</button></div>
+    <div class="command-line"><code id="journal-command">${esc(journalCommand(logService, terms().stack))}</code><button data-action="copy-journal">Copy command</button></div>
     <details class="log-paste"><summary>Paste a log snapshot</summary><label class="field"><span>Journal output · local to this page</span><textarea id="log-paste" rows="4" maxlength="200000" spellcheck="false" placeholder="Paste command output from the Pi here">${esc(logSnapshots[logService])}</textarea></label></details>
     <div class="log-view" tabindex="0" role="region" aria-label="Service log snapshot"><pre id="log-output"></pre></div><p id="log-count" role="status"></p></section>
     ${systemPanel()}
     <section class="panel maintenance-panel"><div class="section-heading"><h2>Common commands</h2><span class="offline-badge">Run on the Pi</span></div>
     <p>Copy a command for a Pi terminal. ${health?'The control service is read-only apart from Apply and the Shut down button above: it cannot restart a service, because owning a PCM device belongs to the privileged applier, which takes only those requests.':'Run buttons become available when device control is connected.'} Restart commands interrupt audio.</p>
-    <div class="service-commands">${SERVICE_COMMANDS.map(c=>`<article class="service-command"><h3>${esc(c.label)}</h3><p>${esc(c.detail)}</p><code>${esc(c.command)}</code><div class="toolbar"><button data-copy-command="${c.id}" aria-label="Copy ${esc(c.label)} command">Copy command</button><button disabled title="${health?'The control service is read-only; run this in a Pi terminal':'Requires a Pi control backend'}" aria-label="Run ${esc(c.label)} on Pi">Run on Pi</button></div></article>`).join('')}</div></section>
+    <div class="service-commands">${serviceCommands(terms().stack).map(c=>`<article class="service-command"><h3>${esc(c.label)}</h3><p>${esc(c.detail)}</p><code>${esc(c.command)}</code><div class="toolbar"><button data-copy-command="${c.id}" aria-label="Copy ${esc(c.label)} command">Copy command</button><button disabled title="${health?'The control service is read-only; run this in a Pi terminal':'Requires a Pi control backend'}" aria-label="Run ${esc(c.label)} on Pi">Run on Pi</button></div></article>`).join('')}</div></section>
     <section class="panel"><h2>Input labels</h2><p>Labels belong to this preset. Computer-facing USB channel names remain 1–16.</p><div class="table-scroll"><table><thead><tr><th>Input</th><th>Label</th></tr></thead><tbody>${config.inputs.map((v,i)=>`<tr><td>${pad(i)}</td><td><input data-input="${i}" data-param="label" aria-label="Input ${i+1} label" maxlength="64" value="${esc(v.label)}" required></td></tr>`).join('')}</tbody></table></div></section>
-    <section class="panel"><h2>Operating modes</h2><p><strong>Direct bridge</strong> retains the existing bidirectional USB ↔ AoIP path. Its timing profile stays independent of DSP presets.</p><p><strong>DSP processor</strong> takes one 16-channel source bank, redirects bass, applies output correction, and sends 16 channels to AoIP.</p><p>In AoIP source mode, USB is not part of the signal path. The eventual processor must be able to run without a connected USB host.</p><p>Network stream subscriptions and device settings require the future backend. Native Dante control is outside this UI; the current transport uses AES67 interoperability.</p></section></div>`;
+    <section class="panel"><h2>Operating modes</h2><p><strong>${esc(terms().directHeading)}</strong> ${terms().stack === 'dante' ? 'passes sixteen channels each way between USB and Dante unchanged, sample for sample.' : 'retains the existing bidirectional USB ↔ AoIP path. Its timing profile stays independent of DSP presets.'}</p><p><strong>DSP processor</strong> takes one 16-channel source bank, redirects bass, applies output correction, and sends 16 channels to ${terms().stack === 'dante' ? 'Dante. What Dante returns goes to the host unchanged.' : 'AoIP.'}</p>${terms().aoipSource ? '<p>In AoIP source mode, USB is not part of the signal path. The eventual processor must be able to run without a connected USB host.</p>' : '<p>The source is the USB host. An AoIP source is not available on the Dante endpoint.</p>'}<p>${esc(terms().routing)}</p></section></div>`;
   renderLogView();
 }
 
@@ -629,9 +637,9 @@ function systemPanel() {
   return `<section class="panel" id="system-panel"><div class="section-heading"><h2>System overview</h2><span class="offline-badge ${health?'live-badge':''}">${health?'Live · '+esc(health.generated):'Not connected'}</span></div>
     <p>${health?'Read live from the Pi control service. Values the service cannot read say so; none is defaulted to zero.':'No control service answered on this origin. Serve the UI from the Pi to see live state.'}</p>
     <dl class="fact-list">${systemFacts(health).map(row=>`<div><dt>${esc(row.label)}</dt><dd class="fact-${row.state||'plain'}"${row.title?` title="${esc(row.title)}"`:''}>${esc(row.value)}</dd></div>`).join('')}
-      <div><dt>Output allocation</dt><dd class="fact-plain">${count('speaker')} speakers · ${count('sub')} subs · ${count('unused')} spare</dd></div><div><dt>DSP source draft</dt><dd class="fact-plain">${config.source==='usb'?'USB':'AoIP / AES67'}</dd></div><div><dt>Alignment range</dt><dd class="fact-plain">0–10 ms per output</dd></div></dl>
+      <div><dt>Output allocation</dt><dd class="fact-plain">${count('speaker')} speakers · ${count('sub')} subs · ${count('unused')} spare</dd></div><div><dt>DSP source draft</dt><dd class="fact-plain">${config.source==='usb'?'USB':esc(terms().sourceLabel)}</dd></div><div><dt>Alignment range</dt><dd class="fact-plain">0–10 ms per output</dd></div></dl>
     <div class="note-box">${esc(dspNote(health))}</div>
-    ${health ? `<div class="apply-draft power-box"><strong>Power</strong><p class="muted">Stops the AES67 service in order, then powers the Pi off through the same privileged applier as Apply. This page loses its connection. Once activity stops, unplug the USB data cable first, then PoE; reconnecting PoE starts it again.</p><button class="danger" data-action="shutdown-pi" ${disabled(applyBusy || shutdownRequested || !(health.control?.apply?.available))} title="${health.control?.apply?.available ? 'Stop the AES67 service and power the Pi off' : esc(health.control?.apply?.reason || 'Apply is not installed')}">${shutdownRequested ? 'Shutting down…' : 'Shut down the Pi'}</button></div>` : ''}</section>`;
+    ${health ? `<div class="apply-draft power-box"><strong>Power</strong><p class="muted">Stops the ${esc(terms().service)} in order, then powers the Pi off through the same privileged applier as Apply. This page loses its connection. Once activity stops, unplug the USB data cable first, then PoE; reconnecting PoE starts it again.</p><button class="danger" data-action="shutdown-pi" ${disabled(applyBusy || shutdownRequested || !(health.control?.apply?.available))} title="${health.control?.apply?.available ? `Stop the ${esc(terms().service)} and power the Pi off` : esc(health.control?.apply?.reason || 'Apply is not installed')}">${shutdownRequested ? 'Shutting down…' : 'Shut down the Pi'}</button></div>` : ''}</section>`;
 }
 
 /** Replace only the live panels on a poll, and not while the user is inside a control on this page:
@@ -675,7 +683,7 @@ function applyPanel() {
   const current = status?.current;
   const since = current?.state === 'done' && current.kind !== 'shutdown' && current.profile === live?.name ? current.finishedAt : null;
   const describe = text => String(text || '').replace(/^user preset: /, '');
-  const switchButton = name => `<button class="quiet" data-action="switch-profile" data-name="${esc(name)}" ${disabled(!choices.available || busy)} title="${choices.available ? `Restart the AES67 service on ${esc(name)}` : esc(choices.reason)}">Switch</button>`;
+  const switchButton = name => `<button class="quiet" data-action="switch-profile" data-name="${esc(name)}" ${disabled(!choices.available || busy)} title="${choices.available ? `Restart the ${esc(terms().service)} on ${esc(name)}` : esc(choices.reason)}">Switch</button>`;
   const badge = `<span class="offline-badge ${health ? 'live-badge' : ''}">${health ? (choices.available ? 'Apply available' : 'Apply not installed') : 'Not connected'}</span>`;
   if (!health) return `<section class="panel maintenance-panel" id="apply-panel"><div class="section-heading"><h2>Service profile</h2>${badge}</div><p class="fact-plain">Requires the Pi connection.</p><div class="note-box" role="status">${esc(applyLine(status))}</div></section>`;
 
@@ -683,28 +691,29 @@ function applyPanel() {
     ? `<div class="running-now"><span class="overline">Running now</span><div class="running-name"><strong>${esc(live.name)}</strong><span class="muted">${live.user ? 'your preset' : esc(live.status || 'profile')}${live.measured ? ` · ${esc(live.measured)}` : ''}${since ? ` · since ${esc(since)}` : ''}</span></div>${live.description ? `<p class="muted">${esc(describe(live.description))}</p>` : ''}</div>`
     : `<p class="fact-plain">Profile unknown (configuration unreadable).</p>`;
 
-  const preview = (() => { const state = liveState(health, draftShapeKey); return state.previewing ? `<div class="apply-draft"><strong>Live preview running</strong><p class="muted">The bridge is running coefficients (${esc((state.liveSha256 || '').slice(0, 8))}) that are not the installed <code>${esc(state.profile)}</code> (${esc((state.installedSha256 || '').slice(0, 8))}). A restart returns to the installed file.</p><button data-action="live-commit" ${disabled(busy)}>Commit preview</button> <button class="quiet" data-action="live-discard" ${disabled(busy)}>Discard preview</button></div>` : ''; })();
+  const preview = (() => { const state = liveState(health, draftShapeKey); return state.previewing ? `<div class="apply-draft"><strong>Live preview running</strong><p class="muted">The ${esc(terms().engine)} is running coefficients (${esc((state.liveSha256 || '').slice(0, 8))}) that are not the installed <code>${esc(state.profile)}</code> (${esc((state.installedSha256 || '').slice(0, 8))}). A restart returns to the installed file.</p><button data-action="live-commit" ${disabled(busy)}>Commit preview</button> <button class="quiet" data-action="live-discard" ${disabled(busy)}>Discard preview</button></div>` : ''; })();
 
   const draftSlug = presetSlug(config.name);
-  const draftTarget = draftSlug ? `user-${draftSlug}` : '';
+  const draftTarget = draftSlug ? `${terms().presetPrefix}${draftSlug}` : '';
   const draftReplaces = presetsOnPi.some(p => p.name === draftTarget);
-  const draftBlocked = config.mode === 'direct' ? 'Switch the draft to DSP mode to install it.' : !draftSlug ? 'Give the draft a name first.' : '';
-  const presetRows = presetsOnPi.map(p => `<li class="profile-row ${p.live ? 'is-live' : ''}"><div class="profile-text"><code>${esc(p.name)}</code>${p.live ? ' <span class="badge">live</span>' : ''}<span class="muted" title="${esc(p.description)}">${esc(describe(p.description))}</span></div><div class="profile-actions">${p.live ? '' : switchButton(p.name)}<button class="quiet" data-action="remove-preset" data-slug="${esc(p.slug)}" ${disabled(p.live || busy)} title="${p.live ? 'Switch away before removing the live preset' : 'Remove this preset and its block from the Pi'}">Remove</button></div></li>`).join('');
-  const draftRow = `<li class="profile-row draft-row"><div class="profile-text"><span>This draft · <em>${esc(config.name)}</em></span><span class="muted">${draftBlocked || (draftReplaces ? `Compiles here and replaces <code>${esc(draftTarget)}</code>, then restarts on it.` : `Compiles here and installs as <code>${esc(draftTarget)}</code>, then restarts on it.`)}</span></div><div class="profile-actions"><button class="primary" data-action="apply-draft" ${disabled(!choices.available || busy || Boolean(draftBlocked))} title="${choices.available ? 'Compile this draft in the browser, install it on the Pi and restart the AES67 service on it' : esc(choices.reason)}">Compile &amp; apply</button></div></li>`;
-  const presets = `<div class="apply-presets"><strong>Your presets on the Pi</strong><span class="muted"> · ${presetsOnPi.length} of 8 · never soaked, loaded through the bridge's own loader, every section checked stable</span><ul>${presetRows}${draftRow}</ul></div>`;
+  const draftBlocked = config.mode === 'direct' ? 'Switch the draft to DSP mode to install it.' : !draftSlug ? 'Give the draft a name first.'
+    : config.source === 'aoip' && !terms().aoipSource ? 'Set the DSP source to USB: the Dante endpoint filters what the USB host sends.' : '';
+  const presetRows = presetsOnPi.map(p => `<li class="profile-row ${p.live ? 'is-live' : ''}"><div class="profile-text"><code>${esc(p.name)}</code>${p.live ? ' <span class="badge">live</span>' : ''}<span class="muted" title="${esc(p.description)}">${esc(describe(p.description))}</span></div><div class="profile-actions">${p.live ? '' : switchButton(p.name)}<button class="quiet" data-action="remove-preset" data-slug="${esc(p.slug)}" ${disabled(p.live || busy)} title="${p.live ? 'Switch away before removing the live preset' : 'Remove this preset from the Pi'}">Remove</button></div></li>`).join('');
+  const draftRow = `<li class="profile-row draft-row"><div class="profile-text"><span>This draft · <em>${esc(config.name)}</em></span><span class="muted">${draftBlocked || (draftReplaces ? `Compiles here and replaces <code>${esc(draftTarget)}</code>, then restarts on it.` : `Compiles here and installs as <code>${esc(draftTarget)}</code>, then restarts on it.`)}</span></div><div class="profile-actions"><button class="primary" data-action="apply-draft" ${disabled(!choices.available || busy || Boolean(draftBlocked))} title="${choices.available ? `Compile this draft in the browser, install it on the Pi and restart the ${esc(terms().service)} on it` : esc(choices.reason)}">Compile &amp; apply</button></div></li>`;
+  const presets = `<div class="apply-presets"><strong>Your presets on the Pi</strong><span class="muted"> · ${presetsOnPi.length} of 8 · never soaked, loaded through ${esc(terms().loader)}, every section checked stable</span><ul>${presetRows}${draftRow}</ul></div>`;
 
   const standardRows = standard.map(row => `<li class="profile-row"><div class="profile-text"><code>${esc(row.name)}</code><span class="muted">${esc(row.description || (row.dspPreset ? 'preset' : 'no preset'))}</span></div><div class="profile-actions">${switchButton(row.name)}</div></li>`).join('');
-  const researchBlock = research.length ? `<div class="log-controls research-lineage">${field(`Research lineage · ${research.length} servo-aligned profiles`, `<select id="apply-profile-choice" ${disabled(busy)}>${options(research.map(row => [row.name, row.name.replace(/^servo-aligned-?/, '') || 'servo-aligned']), applyChoice)}</select>`)}<button data-action="apply-profile" ${disabled(!choices.available || busy || !applyChoice)} title="${choices.available ? 'Restart the AES67 service on the chosen profile' : esc(choices.reason)}">${applyBusy ? 'Queueing…' : inFlight ? 'Applying…' : 'Switch'}</button></div>` : '';
-  const accepted = choices.accepted.some(row => !row.user) ? `<details class="apply-more"><summary>Accepted profiles · ${standard.length + research.length} measured points of record, no user DSP</summary>${standardRows ? `<ul>${standardRows}</ul>` : ''}${researchBlock}</details>` : '';
+  const researchBlock = research.length ? `<div class="log-controls research-lineage">${field(`Research lineage · ${research.length} servo-aligned profiles`, `<select id="apply-profile-choice" ${disabled(busy)}>${options(research.map(row => [row.name, row.name.replace(/^servo-aligned-?/, '') || 'servo-aligned']), applyChoice)}</select>`)}<button data-action="apply-profile" ${disabled(!choices.available || busy || !applyChoice)} title="${choices.available ? `Restart the ${esc(terms().service)} on the chosen profile` : esc(choices.reason)}">${applyBusy ? 'Queueing…' : inFlight ? 'Applying…' : 'Switch'}</button></div>` : '';
+  const accepted = choices.accepted.some(row => !row.user) ? `<details class="apply-more"><summary>${esc(terms().acceptedSummary(standard.length + research.length))}</summary>${standardRows ? `<ul>${standardRows}</ul>` : ''}${researchBlock}</details>` : '';
 
-  const steps = current?.steps?.length ? `<details class="apply-steps-details" ${inFlight ? 'open' : ''}><summary>${current.steps.length} step${current.steps.length === 1 ? '' : 's'}${current.finishedAt ? ` · finished ${esc(current.finishedAt)}` : ' · in progress'}</summary><ol class="apply-steps">${current.steps.map(step => `<li class="${step.ok ? '' : 'warn'}"><strong>${esc(applyStepLabel(step.name))}</strong>${step.detail ? ` <span class="muted">${esc(step.detail)}</span>` : ''}</li>`).join('')}</ol></details>` : '';
+  const steps = current?.steps?.length ? `<details class="apply-steps-details" ${inFlight ? 'open' : ''}><summary>${current.steps.length} step${current.steps.length === 1 ? '' : 's'}${current.finishedAt ? ` · finished ${esc(current.finishedAt)}` : ' · in progress'}</summary><ol class="apply-steps">${current.steps.map(step => `<li class="${step.ok ? '' : 'warn'}"><strong>${esc(applyStepLabel(step.name, current.stack || terms().stack))}</strong>${step.detail ? ` <span class="muted">${esc(step.detail)}</span>` : ''}</li>`).join('')}</ol></details>` : '';
   return `<section class="panel maintenance-panel" id="apply-panel"><div class="section-heading"><h2>Service profile</h2>${badge}</div>
     ${running}${preview}${presets}${accepted}
-    <p class="muted apply-rule">${choices.available ? 'Every switch or install restarts the AES67 service: audio stops for about a minute, a new latency level is drawn, and the applier returns to the previous profile on its own if the stack does not come up clean. Stop playback first.' : esc(choices.reason.replace(/[.\s]*$/, '.'))}</p>
+    <p class="muted apply-rule">${choices.available ? `Every switch or install restarts the ${esc(terms().service)}: ${esc(terms().outage)}, a new latency level is drawn, and the applier returns to the previous profile on its own if the stack does not come up clean. Stop playback first.` : esc(choices.reason.replace(/[.\s]*$/, '.'))}</p>
     <div class="note-box" role="status">${esc(applyLine(status))}</div>${steps}</section>`;
 }
 
-/** The same rule the service and the applier use for user-<slug>. */
+/** The same rule the service and the applier use for user-<slug> (dante-<slug> on a Dante Pi). */
 function presetSlug(name) {
   const slug = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24).replace(/-+$/, '');
   return /^[a-z0-9][a-z0-9-]{0,23}$/.test(slug) ? slug : '';
@@ -715,7 +724,7 @@ async function applyDraft() {
   const live = choices.live?.name || null;
   // The preset's name on the Pi is the draft's name; ask for it here so the
   // step that installs it is also where it gets named.
-  const entered = prompt(`Name for this preset on the Pi.\n\nIt installs as user-<slug> and replaces a preset with the same slug; a new name adds a preset (at most 8).`, config.name);
+  const entered = prompt(`Name for this preset on the Pi.\n\nIt installs as ${terms().presetPrefix}<slug> and replaces a preset with the same slug; a new name adds a preset (at most 8).`, config.name);
   if (entered === null) return;
   const name = entered.trim();
   if (!name || name.length > 64) { toast('Preset names are 1 to 64 characters.'); return; }
@@ -724,7 +733,7 @@ async function applyDraft() {
   let compiled;
   try { validateConfig(config); compiled = await compileDraft(config); }
   catch (e) { toast(`Cannot compile this draft: ${e.message}`); return; }
-  if (!confirm(presetSummary(compiled, config.name))) return;
+  if (!confirm(presetSummary(compiled, config.name, health))) return;
   applyBusy = true; refreshSettingsLive();
   try {
     const result = await requestPreset(config.name, compiled.artifact, live);
@@ -739,8 +748,8 @@ async function applyDraft() {
 
 async function commitLive() {
   const state = liveState(health, draftShapeKey);
-  if (!state.previewing) { toast('Nothing to commit: the bridge is running the installed preset.'); return; }
-  if (!confirm(`Make the coefficients the bridge is running the installed ${state.profile}? No restart.`)) return;
+  if (!state.previewing) { toast(`Nothing to commit: the ${terms().engine} is running the installed preset.`); return; }
+  if (!confirm(`Make the coefficients the ${terms().engine} is running the installed ${state.profile}? No restart.`)) return;
   applyBusy = true; refreshSettingsLive();
   try {
     const result = await requestCommit(state.profile, state.liveSha256);
@@ -775,7 +784,7 @@ async function discardLive() {
 }
 
 async function removeUserPreset(slug) {
-  if (!confirm(`Remove user-${slug} and its artifact from the Pi? No restart; the live profile is untouched.`)) return;
+  if (!confirm(`Remove ${terms().presetPrefix}${slug} and its artifact from the Pi? No restart; the live profile is untouched.`)) return;
   applyBusy = true; refreshSettingsLive();
   try {
     await removePreset(slug);
@@ -789,9 +798,10 @@ async function removeUserPreset(slug) {
 async function applyProfile() {
   const choices = profileChoices(health);
   const target = choices.accepted.find(row => row.name === applyChoice);
-  if (!target) { toast('Choose an accepted profile first.'); return; }
+  if (!target) { toast('Choose a profile first.'); return; }
   const live = choices.live?.name || null;
-  if (!confirm(`Switch the AES67 service from ${live || '?'} to ${target.name}?\n\nAudio stops for about a minute while the stack restarts, and the latency level is drawn afresh. If the stack does not come up clean the applier returns to ${live || 'the previous profile'} on its own. Stop playback before continuing.`)) return;
+  const outage = terms().outage.charAt(0).toUpperCase() + terms().outage.slice(1);
+  if (!confirm(`Switch the ${terms().service} from ${live || '?'} to ${target.name}?\n\n${outage} while the stack restarts, and the latency level is drawn afresh. If the stack does not come up clean the applier returns to ${live || 'the previous profile'} on its own. Stop playback before continuing.`)) return;
   applyBusy = true; refreshSettingsLive();
   try {
     const result = await requestProfile(target.name, live);
@@ -805,7 +815,7 @@ async function applyProfile() {
 
 async function shutdownPi() {
   const live = profileChoices(health).live?.name || null;
-  if (!confirm(`Shut down the Pi?\n\nThe AES67 service stops, then the Pi powers off and this page loses its connection. Audio stops for good until it is powered on again. Stop playback first.\n\nOnce activity stops, unplug the USB data cable, then PoE.`)) return;
+  if (!confirm(`Shut down the Pi?\n\nThe ${terms().service} stops, then the Pi powers off and this page loses its connection. Audio stops for good until it is powered on again. Stop playback first.\n\nOnce activity stops, unplug the USB data cable, then PoE.`)) return;
   applyBusy = true; refreshSettingsLive();
   try {
     const result = await requestShutdown(live);
@@ -851,7 +861,7 @@ async function loadLiveLogs() {
   const service = logService;
   try {
     logLive[service] = await fetchLogs(service, 200);
-    toast(`Read the last 200 journal lines for ${service === 'all' ? 'AES67 + USB' : service.toUpperCase()}.`);
+    toast(`Read the last 200 journal lines for ${(terms().logs.find(([key]) => key === service) || [service, service])[1]}.`);
   } catch (e) { toast(`Could not read logs: ${e.message}`); }
   finally { logBusy = false; renderSettings(); }
 }
@@ -884,8 +894,8 @@ document.addEventListener('click', event => {
   }
   if (b.dataset.eqNode!==undefined) {selectedBand=Number(b.dataset.eqNode);renderSelectedBand();drawEq();return;}
   if (b.dataset.bandSelect!==undefined) {selectedBand=Number(b.dataset.bandSelect);renderSelectedBand();drawEq();return;}
-  if (b.dataset.copyCommand) {const command=SERVICE_COMMANDS.find(c=>c.id===b.dataset.copyCommand);if(command)copyCommand(command.command);return;}
-  if (b.dataset.action==='copy-journal') {copyCommand(journalCommand(logService));return;}
+  if (b.dataset.copyCommand) {const command=serviceCommands(terms().stack).find(c=>c.id===b.dataset.copyCommand);if(command)copyCommand(command.command);return;}
+  if (b.dataset.action==='copy-journal') {copyCommand(journalCommand(logService, terms().stack));return;}
   if (b.dataset.action==='live-commit') {commitLive();return;}
   if (b.dataset.action==='live-discard') {discardLive();return;}
   if (b.dataset.tab) { tab = b.dataset.tab; render(); return; }
@@ -1008,7 +1018,7 @@ let rewFileRead=0;
 
 document.addEventListener('change', async event => {
   const el = event.target;
-  if(el.id==='log-service'){logService=el.value;$('#journal-command').textContent=journalCommand(logService);$('#log-paste').value=logSnapshots[logService];renderLogView();return;}
+  if(el.id==='log-service'){logService=el.value;$('#journal-command').textContent=journalCommand(logService, terms().stack);$('#log-paste').value=logSnapshots[logService];renderLogView();return;}
   if(el.id==='apply-profile-choice'){applyChoice=el.value;return;}
   if(el.id==='log-filter'||el.id==='log-paste')return;
   if (el.id === 'saved-preset'||el.id==='rew-text') return;
@@ -1259,7 +1269,7 @@ async function pollHealth() {
       && !liveQueue.busy && !next.apply?.pending && !next.apply?.inFlight && liveState(next, draftShapeKey).state === 'live') {
     liveAnsweredForeign = foreign;
     liveLastSent = null;
-    liveLine = 'The bridge is not on this page\'s last edit; sending it again…';
+    liveLine = `The ${terms().engine} is not on this page's last edit; sending it again…`;
     scheduleLive();
   }
   refreshSettingsLive();

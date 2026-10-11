@@ -3,8 +3,10 @@
 # flight at a time, about one a second); systemd's default burst limit (5
 # starts in 10 s) marked the watcher failed on 2026-09-13.
 StartLimitIntervalSec=0
-Description=USB 16x16 web Apply: switch the AES67 service to an accepted profile on request
+Description=USB 16x16 web Apply: profile, preset and power requests for the installed audio service
 Documentation=file:///home/bdimaio/usb-16x16-work/web-control/README.md
+# Serves whichever stack is installed (usb16x16-apply decides: the Dante
+# service when its unit is the one enabled at boot, else AES67).
 # Started by usb16x16-apply.path when the web service writes a request. One
 # operation at a time: a request that arrives while this runs re-triggers the
 # path unit afterwards, and the applier refuses anything it has already seen.

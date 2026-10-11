@@ -17,6 +17,60 @@ export const METER_POLL_MS = 100;
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
+// ------------------------------------------------------------- vocabulary
+//
+// The Pi runs one of two network stacks and the service says which
+// (health.stack). Every word on the page that names the stack comes from
+// here, so a Dante Pi never reads "AES67" or "bridge". With no backend the
+// page speaks as it always did.
+const TERMS = {
+  aes67: {
+    stack: 'aes67',
+    network: 'AES67',
+    service: 'AES67 service',
+    engine: 'bridge',
+    directButton: 'Direct bridge',
+    directHeading: 'Direct bridge',
+    transport: 'USB ↔ AoIP bridge',
+    flowDetail: 'Existing duplex bridge · DSP bypassed',
+    presetPrefix: 'user-',
+    outage: 'audio stops for about a minute',
+    loader: 'the bridge\'s own loader',
+    presetNoun: 'user preset',
+    logs: [['all', 'AES67 + USB'], ['stack', 'AES67'], ['usb', 'USB']],
+    sourceLabel: 'AoIP / AES67',
+    routing: 'Network stream subscriptions and device settings require the future backend. Native Dante control is outside this UI; the current transport uses AES67 interoperability.',
+    notPreviewable: name => `${name} is live; live edits apply only to a user preset, never to an accepted profile.`,
+    acceptedSummary: count => `Accepted profiles · ${count} measured points of record, no user DSP`,
+    aoipSource: true,
+  },
+  dante: {
+    stack: 'dante',
+    network: 'Dante',
+    service: 'Dante service',
+    engine: 'Dante endpoint',
+    directButton: 'Direct',
+    directHeading: 'Direct',
+    transport: 'USB ↔ Dante endpoint',
+    flowDetail: 'Dante endpoint · DSP bypassed',
+    presetPrefix: 'dante-',
+    outage: 'audio stops for a few seconds, and some return channels can take about 20 seconds to come back',
+    loader: 'the endpoint\'s own loader',
+    presetNoun: 'preset',
+    logs: [['all', 'Dante + USB'], ['stack', 'Dante'], ['usb', 'USB']],
+    sourceLabel: 'AoIP / Dante',
+    routing: 'The Pi is a Dante endpoint: subscriptions and device settings are made in Dante Controller, where it appears as its own device. This page sets what the endpoint does to the audio, not where it goes.',
+    notPreviewable: name => `${name} is live; live edits need one of your presets running. Compile & apply this draft first.`,
+    acceptedSummary: () => 'Without DSP',
+    aoipSource: false,
+  },
+};
+
+/** The vocabulary for the stack this Pi runs; AES67's when there is no Pi. */
+export function stackTerms(health) {
+  return TERMS[health?.stack] || TERMS.aes67;
+}
+
 /** Read a health snapshot, or null when no backend is reachable. */
 export async function probeHealth(fetchImpl = globalThis.fetch, signal) {
   try {
@@ -40,11 +94,12 @@ export async function fetchMeters(fetchImpl = globalThis.fetch, signal) {
 /**
  * The two banks the Outputs page draws, from the four stage taps: inputs are
  * what the host sends over USB, before the DSP stage; outputs are what leaves
- * on AES67, after it. Null unless both stages are present with 16 channels.
+ * on the network (AES67 or Dante), after it. Null unless both stages are
+ * present with 16 channels.
  */
 export function meterLevels(meters) {
   const taps = meters?.taps;
-  const inputs = taps?.['usb-capture'], outputs = taps?.['ravenna-playback'];
+  const inputs = taps?.['usb-capture'], outputs = taps?.['ravenna-playback'] ?? taps?.['dante-playback'];
   const bank = tap => Array.isArray(tap?.peakDb) && tap.peakDb.length === 16
     ? tap.peakDb.map((peak, i) => ({peak, rms: tap.rmsDb?.[i] ?? null, clipped: tap.clipped?.[i] ?? 0}))
     : null;
@@ -83,7 +138,12 @@ export const serviceLabel = state => serviceWords[state] || state || 'unknown';
 export function connectionLine(health) {
   if (!health) return 'Not connected · Local draft · Simulated meters';
   const parts = [`Connected · ${health.host || 'Pi'}`];
-  parts.push(health.mode?.running ? 'Direct bridge running' : (health.mode?.detail || 'Stack state unknown'));
+  if (health.stack === 'dante') {
+    const preset = health.mode?.actual === 'dsp' && health.profile?.selected ? ` · ${health.profile.selected}` : ' · direct';
+    parts.push(health.mode?.running ? `Dante endpoint running${preset}` : (health.mode?.detail || 'Stack state unknown'));
+  } else {
+    parts.push(health.mode?.running ? 'Direct bridge running' : (health.mode?.detail || 'Stack state unknown'));
+  }
   const ptp = health.ptp?.status;
   if (ptp && ptp !== 'unavailable') parts.push(`PTP ${ptp}${Number.isFinite(health.ptp?.jitter) ? ` · jitter ${health.ptp.jitter}` : ''}`);
   parts.push(health.meters?.available ? 'Live meters' : 'Simulated meters');
@@ -106,7 +166,7 @@ export function systemFacts(health) {
     return [
       {label: 'Connection', value: 'Not connected', state: 'warn'},
       {label: 'Control service', value: 'No backend answering on this origin'},
-      {label: 'PTP / USB / queue health', value: 'Unavailable offline'},
+      {label: 'Clock / USB / queue health', value: 'Unavailable offline'},
       {label: 'Added DSP latency / CPU load', value: 'Not measured'},
     ];
   }
@@ -116,7 +176,11 @@ export function systemFacts(health) {
   push('Connection', `${health.host || 'Pi'} · service ${health.service?.version || '?'} · up ${formatDuration(health.system?.uptimeSeconds)}`, 'ok');
   push('Running mode', health.mode?.detail || 'Unknown', health.mode?.running ? 'ok' : 'warn');
 
-  for (const [key, label] of [['gadget', 'USB gadget service'], ['aes67', 'AES67 service'], ['governor', 'Governor service']]) {
+  const dante = health.stack === 'dante';
+  const serviceRows = dante
+    ? [['gadget', 'USB gadget service'], ['dante', 'Dante service'], ['statime', 'Dante clock service'], ['governor', 'Governor service']]
+    : [['gadget', 'USB gadget service'], ['aes67', 'AES67 service'], ['governor', 'Governor service']];
+  for (const [key, label] of serviceRows) {
     const entry = health.services?.[key];
     if (!entry) continue;
     push(label, `${entry.unit} · ${serviceLabel(entry.state)}`, entry.state === 'active' ? 'ok' : entry.state === 'unknown' ? '' : 'bad');
@@ -142,13 +206,15 @@ export function systemFacts(health) {
     // A 100 Mbit fallback on this link has previously shown up as audio trouble,
     // so the expected speed is called out rather than merely displayed.
     const speed = Number.isFinite(net.speedMbit) ? `${net.speedMbit} Mbit/s` : 'unknown speed';
-    push('AoIP network', net.carrier ? `${net.interface} up · ${speed}${net.address ? ` · ${net.address}` : ''}` : `${net.interface} link down`,
+    push(dante ? 'Dante network' : 'AoIP network', net.carrier ? `${net.interface} up · ${speed}${net.address ? ` · ${net.address}` : ''}` : `${net.interface} link down`,
       !net.carrier ? 'bad' : net.speedMbit === 1000 ? 'ok' : 'warn',
       net.speedMbit !== 1000 && net.carrier ? 'Expected 1000 Mbit/s on this link' : '');
   }
 
   const bridge = health.bridge;
-  if (bridge?.present) {
+  if (dante) {
+    ownerFacts(health.owner, push);
+  } else if (bridge?.present) {
     const stale = Number.isFinite(bridge.ageSeconds) && bridge.ageSeconds > 15;
     push('Bridge telemetry', stale ? `Last line ${formatDuration(bridge.ageSeconds)} ago` : `Live · ${formatDuration(bridge.ageSeconds)} old`, stale ? 'bad' : 'ok');
     push('Clock servo', `${bridge.ppm ?? '—'} ppm · phase ${bridge.phaseErrorUs ?? '—'} µs`, '');
@@ -184,6 +250,25 @@ export function systemFacts(health) {
   push('DSP processor', health.dsp?.available ? 'Available' : 'Under development', health.dsp?.available ? 'ok' : 'warn', health.dsp?.reason || '');
   push('Added DSP latency / CPU load', 'Not measured', '');
   return rows;
+}
+
+/** The Dante endpoint's own account of itself: its once-a-minute telemetry. */
+function ownerFacts(owner, push) {
+  if (!owner?.present) { push('Endpoint telemetry', 'No telemetry line yet (the endpoint reports once a minute)', 'warn'); return; }
+  const stale = Number.isFinite(owner.ageSeconds) && owner.ageSeconds > 150;
+  push('Endpoint telemetry', stale ? `Last line ${formatDuration(owner.ageSeconds)} ago` : `Live · ${formatDuration(owner.ageSeconds)} old · up ${formatDuration(owner.uptimeSeconds)}`, stale ? 'bad' : 'ok');
+  const flowing = owner.usb === 'open' && owner.usbOut === 'flow' && owner.usbBack === 'flow';
+  push('USB host link', owner.usb === 'open' ? `to Dante ${owner.usbOut || '—'} · from Dante ${owner.usbBack || '—'}` : `gadget ${owner.usb || 'unknown'}`,
+    flowing ? 'ok' : 'warn', flowing ? '' : 'idle means no host is sending or pulling audio in that direction');
+  push('Clock servo', `${owner.ppmOut ?? '—'} ppm out · ${owner.ppmBack ?? '—'} ppm back`, '', 'The host\'s clock against the Dante clock, as each direction has learned it');
+  push('Depth', `${owner.txMean ?? '—'} frames to Dante · ${owner.rxMean ?? '—'} frames to the host`, '');
+  const resyncs = (owner.txResyncs ?? 0) + (owner.rxResyncs ?? 0), reprimes = owner.txReprimes ?? 0;
+  push('Resyncs / re-primes', `${resyncs} / ${reprimes} since the endpoint started`, resyncs + reprimes ? 'warn' : 'ok');
+  const faults = (owner.captureFaults ?? 0) + (owner.playbackFaults ?? 0), detaches = owner.detaches ?? 0;
+  push('USB faults / detaches', `${faults} / ${detaches}`, faults + detaches ? 'warn' : 'ok', 'A restart of the USB gadget counts one of each');
+  if (Number.isFinite(owner.loopGapUsMax)) push('Loop gap (last minute)', `${(owner.loopGapUsMax / 1000).toFixed(2)} ms`, owner.loopGapUsMax < 2000 ? 'ok' : 'warn');
+  if (Number.isFinite(owner.dspUsMax)) push('DSP stage cost', `${owner.dspUsMean ?? '—'} µs mean · ${owner.dspUsMax} µs max per block`, owner.dspUsMax < 500 ? 'ok' : 'warn');
+  if (Number.isFinite(owner.netErrors) && owner.netErrors) push('Network errors', String(owner.netErrors), 'bad');
 }
 
 /** What to say about DSP mode, connected or not. */
@@ -313,7 +398,15 @@ const stepWords = {
   'rolling-back': 'Rolling back to the previous profile', 'powering-off': 'Powering off the Pi',
   done: 'Applied', 'rolled-back': 'Rolled back', failed: 'Failed', refused: 'Refused',
 };
-export const applyStepLabel = name => stepWords[name] || name;
+const danteStepWords = {
+  ...stepWords,
+  stopping: 'Stopping the Dante service', starting: 'Starting the Dante service',
+  verifying: 'Waiting for the endpoint to start', settling: 'Settling on one clean start',
+  checking: 'Loading the preset through the endpoint\'s loader', installing: 'Installing the preset',
+  removing: 'Removing the preset', pushing: 'Handing the coefficients to the endpoint', committing: 'Committing the preview',
+};
+/** A step of an Apply receipt in words. `stack` is the receipt's own (current.stack), or the Pi's. */
+export const applyStepLabel = (name, stack) => (stack === 'dante' ? danteStepWords : stepWords)[name] || name;
 
 /** One line describing an Apply status for the panel and the toast. */
 export function applyLine(status) {
@@ -328,7 +421,7 @@ export function applyLine(status) {
       case 'done': return `Shutdown issued${who} at ${current.finishedAt || '?'}: the Pi is powering off. Unplug USB data first, then PoE, once activity stops.`;
       case 'failed': return `Shutdown failed: ${current.error || 'no detail'}. Check the Pi.`;
       case 'refused': return `Refused: ${current.error || 'no detail'}`;
-      default: return `${applyStepLabel(current.state)} (shutdown)…`;
+      default: return `${applyStepLabel(current.state, current.stack)} (shutdown)…`;
     }
   }
   switch (current.state) {
@@ -336,7 +429,7 @@ export function applyLine(status) {
     case 'rolled-back': return `Could not run ${target}; rolled back to ${current.previousProfile || '?'}. ${current.error || ''}`.trim();
     case 'failed': return `Apply of ${target} failed and the rollback failed too: ${current.error || 'no detail'}. Check the Pi.`;
     case 'refused': return `Refused: ${current.error || 'no detail'}`;
-    default: return `${applyStepLabel(current.state)} (${target})…`;
+    default: return `${applyStepLabel(current.state, current.stack)} (${target})…`;
   }
 }
 
@@ -391,16 +484,17 @@ export async function compileDraft(config, importImpl, {shape = 'fixed'} = {}) {
 }
 
 /** The confirm text for a compiled draft: what will run and what the compiler warns about. */
-export function presetSummary(compiled, name) {
-  const r = compiled.report;
+export function presetSummary(compiled, name, health = null) {
+  const r = compiled.report, terms = stackTerms(health);
   const lines = [
-    `Install "${name}" on the Pi and restart the AES67 service on it?`,
+    `Install "${name}" on the Pi and restart the ${terms.service} on it?`,
     '',
     `${compiled.sections} biquad sections (${r.biquadCount} EQ bands shaping, ${r.placeholderCount ?? 0} held at unity, ${r.crossoverCount} crossover filters) across ${r.internalChannels} internal channels; headroom ${r.headroomDb} dB.`,
     compiled.delay.samples ? `Alignment delay adds ${compiled.delay.ms} ms (${compiled.delay.samples} samples) of latency.` : 'No alignment delay.',
   ];
   if (r.warnings?.length) lines.push('', ...r.warnings.map(w => `• ${w}`));
-  lines.push('', 'The preset has not been soaked: the Pi loads it through the bridge\'s own loader, checks every section is stable, and rolls back if the stack does not come up clean. Audio stops for about a minute. Stop playback first.');
+  const outage = terms.outage.charAt(0).toUpperCase() + terms.outage.slice(1);
+  lines.push('', `The preset has not been soaked: the Pi loads it through ${terms.loader}, checks every section is stable, and rolls back if the stack does not come up clean. ${outage}. Stop playback first.`);
   return lines.join('\n');
 }
 
@@ -430,7 +524,7 @@ export async function removePreset(slug, fetchImpl = globalThis.fetch) {
 export function userPresets(health) {
   const rows = Array.isArray(health?.profile?.profiles) ? health.profile.profiles : [];
   return rows.filter(row => row.user).map(row => ({
-    name: row.name, slug: row.name.replace(/^user-/, ''), description: row.description || '',
+    name: row.name, slug: row.name.replace(/^(user|dante)-/, ''), description: row.description || '',
     live: row.name === health?.profile?.selected,
   }));
 }
@@ -453,15 +547,16 @@ export function liveState(health, draftShapeKey) {
   const choices = profileChoices(health);
   if (!choices.available) return {state: 'not-previewable', reason: choices.reason || 'Apply is not installed.', profile: null};
   const live = choices.live;
-  if (!live?.user) return {state: 'not-previewable', reason: `${live?.name || 'No profile'} is live; live edits apply only to a user preset, never to an accepted profile.`, profile: live?.name || null};
+  const terms = stackTerms(health);
+  if (!live?.user) return {state: 'not-previewable', reason: terms.notPreviewable(live?.name || 'No profile'), profile: live?.name || null};
   if (!live.dspLive) return {state: 'not-previewable', reason: `${live.name} was installed before live updates existed. Compile & apply it again.`, profile: live.name};
   if (!live.dspShape) return {state: 'not-previewable', reason: `${live.name}'s installed file could not be read for its shape.`, profile: live.name};
   const dspLive = health.dspLive || {};
   const base = {profile: live.name, liveSha256: dspLive.sha256 || null, installedSha256: live.dspSha256 || null,
                 previewing: Boolean(dspLive.sha256) && dspLive.sha256 !== live.dspSha256, liveShape: live.dspShape};
-  if (!draftShapeKey) return {...base, state: 'live', reason: 'Edits go to the running bridge as you make them.'};
+  if (!draftShapeKey) return {...base, state: 'live', reason: `Edits go to the running ${terms.engine} as you make them.`};
   if (draftShapeKey !== live.dspShape) return {...base, state: 'needs-apply', reason: 'This edit changes the pipeline\'s shape (routing, a bus format, a 48 dB/oct slope, or an input\'s first send). Compile & apply to run it.'};
-  return {...base, state: 'live', reason: 'Edits go to the running bridge as you make them; not kept across a restart until committed.'};
+  return {...base, state: 'live', reason: `Edits go to the running ${terms.engine} as you make them; not kept across a restart until committed.`};
 }
 
 export async function requestLive(artifact, expectedProfile, expectedLiveSha256, fetchImpl = globalThis.fetch) {
