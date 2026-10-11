@@ -57,7 +57,8 @@ if [ "$(systemctl is-active usb16x16-dante 2>/dev/null)" = active ]; then
   f=/dev/shm/dante-service-journal.txt
   journalctl -u usb16x16-dante --no-pager -o cat _SYSTEMD_INVOCATION_ID="$(systemctl show usb16x16-dante -p InvocationID --value)" > $f 2>/dev/null
 fi
-echo "aes67=$(systemctl is-active usb16x16-aes67) statime=$(pgrep -xc statime) endpoint=$(( $(pgrep -xc alsaloop) + $(pgrep -xc usb16x16-dante-) )) udc=$(cat /sys/class/udc/*/state 2>/dev/null)"
+# A candidate started by the launcher runs as "owner" from its staged copy and logs to /dev/shm.
+echo "aes67=$(systemctl is-active usb16x16-aes67) statime=$(pgrep -xc statime) endpoint=$(( $(pgrep -xc alsaloop) + $(pgrep -xc usb16x16-dante-) + $(systemctl is-active --quiet usb16x16-dante-candidate && echo 1 || echo 0) )) udc=$(cat /sys/class/udc/*/state 2>/dev/null)"
 echo "log=$f"
 [ -n "$f" ] && { grep -m1 "^START" "$f"; echo "xrun_lines=$(grep -ciE "xrun|underrun" "$f") lag_lines=$(grep -ciE "lag of|dropout|clock jumped|media clock" "$f") error_lines=$(grep -c " ERROR " "$f") lines=$(wc -l < "$f")"; }
 for d in pcm0c pcm0p; do echo "$d $(grep -E "state|delay" /proc/asound/UAC2Gadget/$d/sub0/status 2>/dev/null | tr -s " " | tr "\n" " ")"; done

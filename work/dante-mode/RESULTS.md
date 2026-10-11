@@ -2840,3 +2840,62 @@ service's state.
 
 The service is active again since 13:10:26 UTC (22fd2622, aged anchor, no
 figure known for this start).
+
+## DSP candidate fbff2269 with signal: direct, transparent, unity and loaded, short runs (2026-10-11 13:17-13:37 UTC)
+
+Outputs muted by the operator. Candidate through the launcher, Mac harness
+at 32 frames; `measure-candidate.sh` now counts a launcher candidate as an
+endpoint (it runs as `owner`, which the name test did not see). Each of the
+first two arms had its own gadget restart, so its own anchor.
+
+| Arm | Preset | Noise probe | 800 loaded impulses | `daw_timeline` | `dsp_us` mean / max | Loop gap max |
+|---|---|---|---|---|---|---|
+| direct | none | clean | 497, spread 0 | 685 (14.271 ms) | no stage | 1.04 ms |
+| transparent | `transparent.dsp`, 256 biquads | clean | 471, spread 0 | 659 (13.729 ms) | 81 / 258 us | 1.11 ms after the restart |
+
+Both levels are inside the band of fresh draws on the record (465 to 507),
+offset 188 steady, no discontinuity. Two anchors cannot say the stage adds
+nothing to the level, only that it adds nothing the draw does not cover; the
+preset has no delay and the block is written at the same pointer.
+
+**Bit transparency through the stage: PASS.** With
+`config/dsp-unity.dsp` (ae58e86f: sixteen straight channels at gain 1, no
+biquads) every sample goes through float and back, and
+`usb16x16-latency bitexact` at 32 frames read 120 s, 5,760,000 frames, pass,
+largest code 8388590, no discontinuity
+(`outputs/latency/dante-dsp-unity-bitexact-32f-20261011T132823Z.json`). The
+conversion alone costs 12 us a block. This was also the first use of the
+launcher's copying of a file option from the operator's tree.
+`transparent.dsp` is not a candidate for this test and was never meant to
+be: its bands are +/-0.01 dB bells, transparent to an impulse, not to a bit
+(the return peak read 2097414 against 2097148 sent).
+
+**The loaded preset with audio.** `loaded.dsp` (308 biquads), sixteen
+channels at 0.1 for 180 s: `dsp_us_mean` 92 to 97, `dsp_us_max` 169, loop
+gap at most 1.13 ms, depth held at 128, no resync, re-prime, overflow or
+fault. A second start, 2 x 60 s: the same, longest zero run 1 on all
+sixteen return channels.
+
+**Seen on the way, none of it the stage's.**
+- The gadget restart under the transparent arm cost one 32-frame playback
+  resync and a 3.3 ms loop gap at the moment the gadget went away; under the
+  direct arm the same restart cost neither. One each: not a comparison.
+- `back_holes` counted 145 on the transparent arm and `out_holes` none. They
+  came only while the harness sent bare impulses (the readiness probes), and
+  are the filters' tails crossing zero at 24 bits, not gaps: the counter
+  reads the return after the stage and means nothing for an impulse through
+  filters. Under noise and under load it stayed still. The direct arm
+  counted one hole of 52 frames on both streams, so sent by the Mac.
+- A capture begun 12 s after an owner start had return channels 3 to 10
+  silent for up to 5.8 s (the first 180 s loaded run); begun 45 s after, none.
+  Some return channels take about 18 s to come back after an owner start.
+  The wrapper's readiness probes watch channel 1 only: leave 30 s after a
+  start before a sixteen-channel capture.
+
+**Where this leaves the candidate.** Steps 1 to 3 of the owed list are done
+in their short form. Not done: four runs per arm, a ten-minute or one-hour
+soak, any run on the accepted (non-diagnostic) base. Those belong to the
+build that is meant to be accepted, which still lacks live coefficients,
+the meter tap and a service form.
+
+Service active again at 13:37 UTC (22fd2622, aged anchor).

@@ -12550,3 +12550,19 @@ through the transparent preset, the loaded preset with audio, then live
 coefficients, the meter tap and a service form. The installed services are
 unchanged and active (stopped 13:06:50 to 13:10:26 UTC for the build and
 the runs).
+
+**MEASURED 2026-10-11 13:17-13:37 UTC: DSP candidate fbff2269 with signal,
+short runs; nothing accepted.** Record `work/dante-mode/RESULTS.md`, last
+section. Direct on its anchor 497 / `daw_timeline` 685 (14.271 ms); with
+`transparent.dsp` (256 biquads) on its anchor 471 / 659 (13.729 ms); 800
+loaded impulses each, spread 0, noise probes clean, both inside the record's
+band of 465 to 507. **Bit transparency through the float stage PASS**
+(`config/dsp-unity.dsp` ae58e86f, `bitexact` 120 s at 32 frames). Cost with
+audio: transparent mean 81 us, max 258; `loaded.dsp` (308 biquads) mean 95,
+max 169 over 180 s; loop gap at most 1.13 ms, no resync or fault under
+either. Found: some return channels take about 18 s to come back after an
+owner start (leave 30 s before a sixteen-channel capture); the owner's
+`back_holes` counter is meaningless for bare impulses through filters.
+`measure-candidate.sh` now sees a launcher candidate. Next: live
+coefficients, the meter tap, a service form; the battery and soak belong to
+that build. Services active (stopped 13:17 to 13:34 and 13:34 to 13:37 UTC).
