@@ -2542,3 +2542,42 @@ UTC; 3,600 s sixteen-channel soak at 0.1 from 03:54:38 UTC. Evidence
   five without one) an hour with no hole would come up by chance about one
   time in seven. With the mechanism shown gone that is strong, and it is
   still one hour.
+
+## Owner 22fd2622 on plugin 0ee61f2f, unpinned: full battery and the loaded hour, all PASS; 472 harness, 660 on the DAW timeline (2026-10-11 04:55-06:12 UTC)
+
+The accepted owner binary on the new plugin (0001+0002+0003), the pinning
+taken out (`usb16x16-stall-tuning irqs unpin`, no `OWNER_CPUS`): started
+04:55:33 UTC, root, detached. Fresh anchor by gadget restart at 04:56:18 UTC
+(audio back in about 1.3 s, no resync; the neighbour entry stayed REACHABLE
+through it). Then on that one process, 32 frames. Evidence
+`outputs/latency/dante-0ee6-*-20261011T04*`, `T05*`.
+
+| Step (UTC) | Result |
+|---|---|
+| Noise probe, 04:57 | 0.0 % zeros in 1,244,940 samples, no zero run of 4 or more |
+| 800 loaded impulses, 04:57 | 472 (9.833 ms), spread 0; `daw_timeline` 660 (13.750 ms), offset 188 steady |
+| 800 loaded impulses, 05:01 | 472, spread 0; 660, steady |
+| 800 loaded impulses, 05:04 | 472, spread 0; 660, steady |
+| 800 loaded impulses, 05:08 | 472, spread 0; 660, steady |
+| **3,600 s soak**, all 16 channels at 0.1, 05:12 | **PASS: longest zero run 1 on every channel, no discontinuity** |
+
+- **The loaded hour is passed, on the configuration that would be the point
+  of record, with the battery on the same start and the same fresh anchor.**
+  3,200 loaded impulses at 472 samples spread 0; RTL-equivalent 660 samples,
+  13.750 ms; 172.8 million frames a channel returned in the hour.
+- The owner over the 77 minutes: no resync at all, two links each way
+  (start and the gadget restart), no re-prime, no overflow, largest wake gap
+  after the relink 1.05 ms. No early-start stall on this start.
+- The neighbour entry at the end: REACHABLE, confirmed 0 s ago, in use
+  8,347 s (continuously since the plugin first ran at 03:53 UTC, across two
+  owner processes). `res_failed` has not moved since then.
+- **Two loaded hours on plugin 0ee61f2f now, both without a hole** (pinned
+  on the diagnostic owner, unpinned on 22fd2622), after five hours on the
+  earlier plugins with one to three holes each. So the pinning is not
+  needed, and it is out.
+- 472 is inside the band of fresh draws (470 to 507).
+
+Not marked ACCEPTED and not yet the `run-owner.sh` default (which is still
+`plugins/xrun-option-retry1`, 5c6b1c0a, a plugin now known to have the
+fault): both are the operator's to say. Running on the Pi at the end of this
+section: 22fd2622 on 0ee61f2f, this battery's process.

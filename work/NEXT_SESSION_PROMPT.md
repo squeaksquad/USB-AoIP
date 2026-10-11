@@ -101,6 +101,17 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-11 06:15 UTC. Read this first.** Fixed, as far as two hours
+show. Owner 22fd2622 on plugin 0ee61f2f (patch 0003), unpinned, passed the
+battery and a 3,600 s loaded soak on one fresh anchor: 472 / `daw_timeline`
+660 (13.750 ms), soak PASS; an hour on the diagnostic owner before it also
+clean. Awaiting the operator: ACCEPTED for 22fd2622 + 0ee61f2f, and making
+`plugins/xrun-option-retry1-confirm` the `run-owner.sh` default (today it
+still defaults to 5c6b1c0a, which has the ARP fault, so start the owner with
+`INFERNO_PLUGIN_DIR=/home/bdimaio/usb-16x16-work/dante-mode/plugins/xrun-option-retry1-confirm`).
+IRQ pinning is removed. Open: the early-start stall (a loop gap of some ms
+in the first 30 s of some starts); persistence.
+
 **Added 2026-10-11 03:55 UTC. Read this first; it supersedes the 02:50
 block's suspect.** The holes are ARP, not the Ethernet controller: the
 Ferrofish ignores the Pi's unicast ARP probes, the neighbour entry failed

@@ -12404,3 +12404,22 @@ the plugin is the one thing changed. The five loaded hours before it each
 had one to three holes. One hour; a second follows on the accepted owner
 22fd2622 with this plugin and the pinning removed, with a battery on a
 fresh anchor. Record `work/dante-mode/RESULTS.md`, last section.
+
+**MEASURED 2026-10-11 04:55-06:12 UTC: owner 22fd2622 on plugin 0ee61f2f,
+unpinned, passed the full battery and the loaded hour on one start and one
+fresh anchor: harness 472, `daw_timeline` 660 (13.750 ms) at 32 frames.**
+Record `work/dante-mode/RESULTS.md`, last section. Gadget restart at
+04:56:18 UTC; noise probe clean; **4 x 800 loaded impulses all 472 samples
+(9.833 ms) spread 0, offset 188 steady; 3,600 s sixteen-channel soak PASS,
+longest zero run 1**; the owner had no resync, re-prime or overflow in 77
+minutes; the Ferrofish's neighbour entry REACHABLE throughout and
+`res_failed` unmoved since the plugin first ran. Two loaded hours on
+0ee61f2f without a hole (one pinned, one not), after five on the earlier
+plugins with one to three each: the ARP fix holds as far as two hours can
+say, and the interrupt and core pinning is not needed and has been removed.
+**Not marked ACCEPTED, and `run-owner.sh` still defaults to 5c6b1c0a, which
+has the fault: both changes are the operator's to approve.** The owner
+running on the Pi is 22fd2622 on 0ee61f2f (started with
+`INFERNO_PLUGIN_DIR=.../plugins/xrun-option-retry1-confirm`). Owed after
+that: persistence; the early-start stall (three appearances) is still
+unexplained.
