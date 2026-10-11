@@ -19,7 +19,7 @@
 # Owner options are passed through; one that names a file under
 # ~bdimaio/usb-16x16-work/ is given a copy of that file instead, because the
 # service user cannot read the operator's home directory. Everything is run
-# from copies in /run/usb16x16-dante-candidate/, with their hashes in the log.
+# from copies in /var/lib/usb16x16-dante-candidate/, with their hashes in the log.
 #
 # It refuses while usb16x16-dante.service or the AES67 service is active (one
 # process per Inferno device, one owner of the PTP ports): stop the service
@@ -30,7 +30,8 @@ set -euo pipefail
 
 work=/home/bdimaio/usb-16x16-work
 base=$work/dante-mode
-stage=/run/usb16x16-dante-candidate
+# Not under /run: it is mounted noexec, and the owner could not be started from it (2026-10-11).
+stage=/var/lib/usb16x16-dante-candidate
 unit=usb16x16-dante-candidate
 service_user=usb16x16-dante
 operator=bdimaio
@@ -159,4 +160,9 @@ systemd-run --quiet --unit="$unit" --collect \
   --setenv=ALSA_CONFIG_PATH="$stage/asound.conf" --setenv=ALSA_PLUGIN_DIR="$stage/plugin" \
   --setenv=RUST_LOG="$rust_log" \
   "${command[@]}"
+sleep 2
+if [ "$(systemctl is-active "$unit" 2>/dev/null)" != active ]; then
+  journalctl -u "$unit" --no-pager -o cat --since "-1min" | tail -5 >&2
+  refuse "the candidate did not stay up; see above and $log"
+fi
 echo "started $unit: log $log"

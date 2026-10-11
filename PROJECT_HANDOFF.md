@@ -12504,3 +12504,13 @@ of this session: both services active on the Pi, the endpoint restarted at
 about 09:10 UTC after a launcher trial (aged anchor, no fresh draw since);
 the Mac's RTL Utility closed; nothing else running. Next, in a new session:
 DSP for the Dante owner. Record `work/dante-mode/RESULTS.md`, last section.
+
+**FOUND 2026-10-11 12:47 UTC: the candidate launcher's third fault, fixed
+and restaged.** With 8afe885c installed it passed its checks, refused
+correctly while the service was active, staged the binary and started its
+transient unit, which exited at once with 203/EXEC: `/run`, where it staged
+its copies, is mounted `noexec`. e20b9874 stages under
+`/var/lib/usb16x16-dante-candidate/` and reports a candidate that does not
+stay up, with the journal's reason (installer 772b6da0). Staged; the
+operator's reinstall and a trial are owed. The service was stopped for
+about 45 s for the attempt and is active again (aged anchor).

@@ -18,11 +18,12 @@ script_dir=$(cd "$(dirname "$0")" && pwd)
 source="$script_dir/usb16x16-dante-candidate"
 destination=/usr/local/sbin/usb16x16-dante-candidate
 sudoers_destination=/etc/sudoers.d/usb16x16-dante-candidate
-expected_sha256=8afe885c75a2863421b82239a31bbc58a0f278289c90ccfc94bb6f6639bb95ff
+expected_sha256=e20b98748c99f44f3e663df5349dd89c340c69563a7ccc31095851d596e02927
 
 if [ "${1:-}" = remove ]; then
   systemctl stop usb16x16-dante-candidate 2>/dev/null || true
   rm -f "$destination" "$sudoers_destination"
+  rm -rf /var/lib/usb16x16-dante-candidate
   echo "removed $destination and $sudoers_destination"
   exit 0
 fi

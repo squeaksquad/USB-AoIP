@@ -108,9 +108,8 @@ for the Dante owner (`work/phase4-bridge/DSP_MODE_DESIGN.md` and
 `LIVE_COEFFICIENTS_DESIGN.md` describe the stage in the AES67 bridge;
 `OWNER_DESIGN.md` says where it would sit in the owner, which today copies
 integers and has no float stage). Before relying on the candidate launcher:
-the copy on the Pi (8b4b5d92) refuses every start; ask the operator to run
-`sudo ~/usb-16x16-work/dante-mode/service/install-dante-candidate-launcher.sh`
-(installs 8afe885c), then try it once with the accepted binary as in the
+check which copy is on the Pi (`sha256sum /usr/local/sbin/usb16x16-dante-candidate`): 8afe885c and earlier cannot start an owner (the last of three faults: `/run` is noexec); if it is not e20b9874 ask the operator to run
+`sudo ~/usb-16x16-work/dante-mode/service/install-dante-candidate-launcher.sh`, then try it once with the accepted binary as in the
 09:05 block below. Rules that this day produced: an acceptance needs a
 3,600 s soak; check `ip -s neigh` stays REACHABLE for any Dante receiver;
 the Mac cannot send true full scale; `daw_timeline` is the accepted RTL
