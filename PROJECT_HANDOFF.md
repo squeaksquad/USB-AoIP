@@ -12749,3 +12749,18 @@ by request files with his go (preset, live, commit, back to direct), an
 hour at 308 biquads, then `usb16x16-web` and the page for Dante. The
 installed applier e6e7e844 refuses everything while the AES67 service is
 disabled, so the page's Apply does nothing at present.
+
+**DONE 2026-10-11 22:04-22:07 UTC: `usb16x16-apply` 1.4.0 (e453d50f) is
+installed and drove the Dante service through a full cycle from the
+spool.** Record `work/dante-mode/RESULTS.md`, last section. Installed by
+the operator; trial with his go, by request files as the web service
+writes them. A unity preset installed and switched to (owner restarted with
+`--dsp-preset` and live following, verified from the journal); a half-gain
+live update applied under audio (meters: output and return -20.0 to -26.0
+dBFS); another shape refused; commit without a restart; a manual restart
+came up on the committed file; revert; back to `direct`; the trial preset
+removed, the AES67 presets beside it untouched. Three restarts, each first
+time. Not exercised: a rollback on the real unit, the wrapper's refusal
+under the unit, a reboot on this form, an hour at 308 biquads. The service
+is `direct` with meters, aged anchor. Next: `usb16x16-web` and the page for
+Dante (they still read the AES67 service).

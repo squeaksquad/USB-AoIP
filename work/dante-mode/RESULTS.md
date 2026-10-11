@@ -3303,3 +3303,37 @@ Operator: `sudo ~/usb-16x16-work/web-control/install-web-control.sh`
 equal). Then, with his go, a trial by request files in the spool: a preset,
 a live update, a commit, back to direct. The page itself still speaks to
 the AES67 service: `usb16x16-web` is the next piece.
+
+## The applier on the installed Dante service: a full trial through the spool (2026-10-11 22:04-22:07 UTC)
+
+`usb16x16-apply` e453d50f installed by the operator
+(`install-web-control.sh` 07e9cb61). With his go, requests were written to
+`~/usb-16x16-work/web-apply/request.json` as the web service writes them,
+the path unit ran the applier as root, and each receipt was read back.
+Sixteen channels at 0.1 from the Mac during the live steps; the meter file
+gives the levels (channels 1 and 2 shown, all sixteen alike).
+
+| Request | Outcome | Seen on the Pi |
+|---|---|---|
+| `preset` `trial`, `dsp-unity.dsp`, expecting `direct` | done: validating, checking, installing, stopping, switching, starting, verifying, settling | `/etc/usb16x16/dsp/dante-trial.dsp` root-owned; `owner.conf` with path, hash, `DSP_LIVE=1`; owner restarted with `--dsp-preset`, the live file and its status; `DSP loaded`, `DSPLIVE following`, both streams running, linked in 0.3 s |
+| `live`, `dsp-unity-half.dsp` | done, applied | meters: in -20.0, out -26.0, back -26.0 (before: -20.0 all three) |
+| `live`, `transparent.dsp` | refused: shape differs | nothing changed |
+| `commit` | done, changed | installed file and the pin in `owner.conf` both 7fd7f047; no restart |
+| `live`, `dsp-unity.dsp` | done, applied | out -20.0 |
+| `live` with `revert` | done, applied | out -26.0: the committed file |
+| `systemctl restart usb16x16-dante` | active | came up on the committed file (`preset="verify-unity-half"`): the wrapper accepts the committed pair |
+| `remove` `trial` while live | refused: it is the live profile | |
+| `profile` `direct`, expecting `dante-trial` | done | `owner.conf` back to `METERS=1`; the old command line plus the meter file; no live file left in `/run/usb16x16-dante/` |
+| `remove` `trial` | done | file gone; the AES67 presets in the same directory untouched |
+| `profile` `direct` again | refused: already live | |
+
+The service was restarted three times by this (preset, the manual restart,
+direct), each on its first attempt with `NRestarts` 0; it is `direct` with
+meters again since about 22:06 UTC, on an aged anchor, the neighbour entry
+REACHABLE. With this the service form has carried a preset, live updates
+and a commit. Still not exercised: a rollback on the real unit (no start
+failed), the wrapper's refusal under the unit, a reboot on this form, an
+hour at 308 biquads.
+
+The unit's description still reads "switch the AES67 service": cosmetic,
+left for the web step, which touches those files.
