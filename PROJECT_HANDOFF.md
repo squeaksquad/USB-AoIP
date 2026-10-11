@@ -12442,3 +12442,27 @@ already disabled. Rollback: `install-dante-service.sh remove`, or for AES67
 `sudo systemctl disable --now usb16x16-dante usb16x16-statime` and `sudo
 systemctl enable --now usb16x16-aes67`. Next after this, in a new session:
 DSP for the Dante owner; the web page still reads the AES67 service's state.
+
+**INSTALLED 2026-10-11 07:30-07:45 UTC: the Dante path runs as two services
+on the Pi, enabled at boot.** Record `work/dante-mode/RESULTS.md`, last
+section. By the operator's `sudo install-dante-service.sh` (installer
+798ff158): owner 22fd2622, Statime e1952224, plugin 0ee61f2f, configs, units
+`usb16x16-statime.service` 01f1bebb and `usb16x16-dante.service` 4c27c544,
+user `usb16x16-dante`, state in `/var/lib/usb16x16-dante/`, sudo rule for
+the units and the gadget restart in place of the hand-run rule. Both units
+enabled and active. The owner runs with `CAP_SYS_NICE` and `CAP_IPC_LOCK`
+only, memory locked, threads at FIFO 79 / 80 / 81, the Dante device back as
+itself with its routes, the neighbour entry REACHABLE. The first unit
+version started before Statime had a clock and failed once; 4c27c544 waits
+8 s for the clock and starts first time. First service run: noise probe
+clean, 473 / `daw_timeline` 661 (13.771 ms), spread 0 (aged anchor). **Not
+ACCEPTED in this form yet: owed are a Pi reboot coming up on Dante unaided
+(the session's reboot over ssh was refused by its safety layer; operator's)
+and the battery with a loaded hour on the installed form.** Staged, not
+installed, at the operator's request: `usb16x16-dante-candidate` (252c07d8)
+with `install-dante-candidate-launcher.sh` (aa320ba1), for password-free
+hand-runs of candidate owner builds as the service user, never as root.
+Rollbacks: `install-dante-service.sh remove`; for AES67, `sudo systemctl
+disable --now usb16x16-dante usb16x16-statime` then `sudo systemctl enable
+--now usb16x16-aes67`. Hand-runs with `run-owner.sh` now need the operator's
+password and the service stopped.

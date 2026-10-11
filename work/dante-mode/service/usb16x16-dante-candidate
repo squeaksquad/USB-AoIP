@@ -1,0 +1,153 @@
+#!/bin/bash
+# Run a candidate build of usb16x16-dante-owner by hand, the way the service
+# runs the accepted one: as user usb16x16-dante with real-time priority and
+# memory locking and nothing else. Installed root-owned in /usr/local/sbin
+# and allowed without a password (asked for by the operator 2026-10-11), so a
+# session can try a new owner or plugin build without him; what it runs never
+# has root.
+#
+#   sudo -n /usr/local/sbin/usb16x16-dante-candidate start OWNER_BINARY [NAME=value...] [owner options...]
+#   sudo -n /usr/local/sbin/usb16x16-dante-candidate stop
+#   /usr/local/sbin/usb16x16-dante-candidate status          (no sudo needed)
+#
+# OWNER_BINARY must lie under ~bdimaio/usb-16x16-work/dante-mode/owner/.
+# NAME=value settings, all optional:
+#   PLUGIN_DIR=DIR   an Inferno plugin directory under .../dante-mode/plugins/   (default: the installed plugin)
+#   CONFIG=FILE      an ALSA config under .../dante-mode/config/                  (default: the installed config)
+#   RUST_LOG=...     passed through                                               (default: warn)
+#   CPUS=2,3         confine every thread to these cores
+# Owner options are passed through; one that names a file under
+# ~bdimaio/usb-16x16-work/ is given a copy of that file instead, because the
+# service user cannot read the operator's home directory. Everything is run
+# from copies in /run/usb16x16-dante-candidate/, with their hashes in the log.
+#
+# It refuses while usb16x16-dante.service or the AES67 service is active (one
+# process per Inferno device, one owner of the PTP ports): stop the service
+# first, and start it again afterwards. It starts the clock unit if that is
+# not running. Log: /dev/shm/dante-owner-<UTC>.log, the name the measurement
+# wrapper already looks for. --seconds 0 unless given.
+set -euo pipefail
+
+work=/home/bdimaio/usb-16x16-work
+base=$work/dante-mode
+stage=/run/usb16x16-dante-candidate
+unit=usb16x16-dante-candidate
+service_user=usb16x16-dante
+operator=bdimaio
+refuse() { echo "REFUSED: $*" >&2; exit 2; }
+
+case "${1:-status}" in
+  status)
+    systemctl is-active "$unit" 2>/dev/null || true
+    ls -t /dev/shm/dante-owner-*.log 2>/dev/null | head -1
+    exit 0 ;;
+  stop)
+    [ "$(id -u)" -eq 0 ] || refuse "run with sudo"
+    systemctl stop "$unit" 2>/dev/null || true
+    exit 0 ;;
+  start) shift ;;
+  *) refuse "usage: $0 start OWNER_BINARY [NAME=value...] [owner options...] | stop | status" ;;
+esac
+[ "$(id -u)" -eq 0 ] || refuse "run with sudo"
+
+inside() {   # the canonical path of $1 if it is a regular file under $2
+  local path
+  path=$(realpath -e -- "$1" 2>/dev/null) || return 1
+  [ -f "$path" ] || return 1
+  case "$path" in "$2"/*) printf '%s\n' "$path" ;; *) return 1 ;; esac
+}
+
+# Files from the operator's tree are read as the operator, never as root: a
+# path swapped for a link after it was checked can then only reach what he
+# could read anyway.
+operator_copy() {   # source, destination, mode
+  runuser -u "$operator" -- cat -- "$1" > "$2"
+  chown root:root "$2"
+  chmod "$3" "$2"
+}
+
+binary=$(inside "${1:-}" "$base/owner") || refuse "the owner binary must be a file under $base/owner/"
+shift
+plugin=/usr/local/lib/usb16x16-dante/alsa-plugins/libasound_module_pcm_inferno.so
+config=/etc/usb16x16/dante/asound-inferno-owner.conf
+plugin_from_operator=0
+config_from_operator=0
+rust_log=warn
+cpus=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    PLUGIN_DIR=*) plugin=$(inside "${1#*=}/libasound_module_pcm_inferno.so" "$base/plugins") || refuse "no plugin under $base/plugins/ in ${1#*=}"
+                  plugin_from_operator=1 ;;
+    CONFIG=*) config=$(inside "${1#*=}" "$base/config") || refuse "the config must be a file under $base/config/"
+              config_from_operator=1 ;;
+    RUST_LOG=*) rust_log=${1#*=} ;;
+    CPUS=*) cpus=${1#*=}; [[ $cpus =~ ^[0-3](,[0-3])*$ ]] || refuse "CPUS is a list of cores, e.g. 2,3" ;;
+    *) break ;;
+  esac
+  shift
+done
+
+for other in usb16x16-dante.service usb16x16-aes67.service "$unit.service"; do
+  [ "$(systemctl is-active "$other" 2>/dev/null)" = active ] && refuse "$other is active"
+done
+for name in alsaloop inferno-probe usb16x16-dante-; do
+  pgrep -x "$name" >/dev/null && refuse "$name is running (one process per Inferno device)"
+done
+systemctl start usb16x16-statime.service
+n=0
+until [ -S /tmp/ptp-usrvclock ] && [ $(( $(date +%s) - $(stat -c %Y /tmp/ptp-usrvclock) )) -ge 8 ]; do
+  n=$((n + 1)); [ "$n" -gt 80 ] && refuse "the clock did not come up"; sleep 0.5
+done
+
+rm -rf -- "${stage:?}"
+install -d -o root -g root -m 755 "$stage" "$stage/plugin" "$stage/files"
+operator_copy "$binary" "$stage/owner" 755
+if [ "$plugin_from_operator" -eq 1 ]; then
+  operator_copy "$plugin" "$stage/plugin/libasound_module_pcm_inferno.so" 644
+else
+  install -o root -g root -m 644 "$plugin" "$stage/plugin/"
+fi
+if [ "$config_from_operator" -eq 1 ]; then
+  operator_copy "$config" "$stage/asound.conf" 644
+else
+  install -o root -g root -m 644 "$config" "$stage/asound.conf"
+fi
+
+arguments=()
+have_seconds=0
+index=0
+for argument in "$@"; do
+  [ "$argument" = --seconds ] && have_seconds=1
+  if copy=$(inside "$argument" "$work"); then
+    index=$((index + 1))
+    operator_copy "$copy" "$stage/files/$index-$(basename "$copy")" 644
+    arguments+=("$stage/files/$index-$(basename "$copy")")
+  else
+    arguments+=("$argument")
+  fi
+done
+[ "$have_seconds" -eq 1 ] || arguments=(--seconds 0 "${arguments[@]}")
+
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+log=/dev/shm/dante-owner-$stamp.log
+{
+  echo "START $stamp seconds=candidate owner=$(sha256sum "$stage/owner" | cut -c1-8) plugin=$(sha256sum "$stage/plugin/libasound_module_pcm_inferno.so" | cut -c1-8) config=$config trial=no mode=usb cpus=${cpus:-all} user=$service_user"
+  echo "ARGS ${arguments[*]}"
+} > "$log"
+chmod 644 "$log"
+
+command=("$stage/owner" --ppm-file /var/lib/usb16x16-dante/usb16x16-dante-owner.ppm "${arguments[@]}")
+[ -n "$cpus" ] && command=(/usr/bin/taskset -c "$cpus" "${command[@]}")
+systemctl reset-failed "$unit" 2>/dev/null || true
+systemd-run --quiet --unit="$unit" --collect \
+  --property=User="$service_user" --property=Group="$service_user" --property=SupplementaryGroups=audio \
+  --property=AmbientCapabilities="CAP_SYS_NICE CAP_IPC_LOCK" \
+  --property=CapabilityBoundingSet="CAP_SYS_NICE CAP_IPC_LOCK" \
+  --property=NoNewPrivileges=yes --property=LimitRTPRIO=95 --property=LimitMEMLOCK=infinity \
+  --property=KillSignal=SIGINT --property=TimeoutStopSec=15 \
+  --property=StandardOutput=append:"$log" --property=StandardError=append:"$log" \
+  --setenv=HOME=/var/lib/usb16x16-dante --setenv=XDG_STATE_HOME=/var/lib/usb16x16-dante \
+  --setenv=ALSA_CONFIG_PATH="$stage/asound.conf" --setenv=ALSA_PLUGIN_DIR="$stage/plugin" \
+  --setenv=RUST_LOG="$rust_log" \
+  "${command[@]}"
+echo "started $unit: log $log"

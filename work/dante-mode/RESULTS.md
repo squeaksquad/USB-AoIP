@@ -2629,3 +2629,50 @@ ACCEPTED.
 Found while staging: `usb16x16-aes67.service` is already disabled on the Pi
 (`is-enabled` reads `disabled`), so the notes saying a reboot brings AES67
 up are out of date.
+
+## Persistence: installed and running as services; first checks (2026-10-11 07:30-07:45 UTC)
+
+The operator ran `install-dante-service.sh` twice (the second time for the
+unit fix below). Installed: owner 22fd2622 and Statime e1952224 in
+`/usr/local/libexec/usb16x16-dante/`, plugin 0ee61f2f in
+`/usr/local/lib/usb16x16-dante/alsa-plugins/`, the two configs in
+`/etc/usb16x16/dante/`, units `usb16x16-statime.service` (01f1bebb) and
+`usb16x16-dante.service` (4c27c544), user `usb16x16-dante`, state carried
+into `/var/lib/usb16x16-dante/`, `/etc/sudoers.d/usb16x16-dante` replaced.
+Both units enabled by the session (`sudo -n systemctl enable`).
+
+- **First start, first unit version: failed once, then ran.** The owner
+  started as soon as Statime's socket existed and the plugin gave up with
+  `no clock available (timeout waiting for overlay update)`: Statime has no
+  clock to give until it has heard the Ferrofish. systemd restarted it 5 s
+  later and it ran. Unit 4c27c544 waits until the socket is 8 s old; with it
+  the next start came up on the first attempt (`NRestarts=0`).
+- **As a service it has what it had as root:** user `usb16x16-dante`,
+  effective capabilities `CAP_IPC_LOCK` and `CAP_SYS_NICE` only, no new
+  privileges, 414 MB locked, threads at FIFO 79 (loop), 80 (flows RX) and 81
+  (flows TX). The Dante device came back as itself with its subscriptions
+  (state carried over), the Mac linked at 0.3 s, the neighbour entry
+  REACHABLE.
+- **Measured on the first service run** (the one that had restarted once;
+  aged anchor): noise probe 0.0 % zeros; 800 loaded impulses 473 spread 0,
+  `daw_timeline` 661 (13.771 ms), offset steady. Evidence
+  `outputs/latency/dante-svc-*-20261011T0732*`. That run also had the
+  early-start event again at 14.3 s (`tx lag of 122 samples`, one resync of
+  157 frames, a relink): fourth appearance, this time 25 s after Statime
+  itself had started.
+- Stopping the unit ends the owner cleanly (SIGINT, `exit=0`, summary
+  lines in the journal).
+- `measure-candidate.sh` reads the endpoint's log from the journal when the
+  service is active.
+
+Not yet done: the reboot (a `sudo reboot` over ssh from the session was
+refused by the session's own safety layer, so it is the operator's to do or
+allow), then the battery with the loaded hour on the installed form.
+
+Also staged at the operator's request, not installed: `usb16x16-dante-candidate`
+(252c07d8) and `install-dante-candidate-launcher.sh` (aa320ba1). The
+launcher runs a candidate owner build from `~/usb-16x16-work/dante-mode/owner/`
+as the service user with the same two capabilities, through `systemd-run`,
+from root-owned copies in `/run/usb16x16-dante-candidate/`; a password-free
+rule for that one script lets a session try builds unaided without anything
+it runs having root. It refuses while the service is active.
