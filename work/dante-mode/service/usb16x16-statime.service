@@ -1,0 +1,27 @@
+# The Dante path's clock: the pinned Statime fork as a PTPv1 follower on eth0,
+# exporting its virtual clock on /tmp/ptp-usrvclock for the Inferno plugin.
+# It uses the PTP ports the AES67 stack's daemon uses, so the two never run
+# together: starting either stops the other (Conflicts=).
+# Rollback to AES67:
+#   sudo systemctl disable --now usb16x16-dante usb16x16-statime
+#   sudo systemctl enable --now usb16x16-aes67
+[Unit]
+Description=USB 16x16 Dante clock (Statime, PTPv1 follower on eth0)
+After=network-online.target
+Wants=network-online.target
+Conflicts=usb16x16-aes67.service
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/rm -f /tmp/ptp-usrvclock
+ExecStart=/usr/local/libexec/usb16x16-dante/statime -c /etc/usb16x16/dante/statime.toml
+Restart=always
+RestartSec=2
+SyslogIdentifier=usb16x16-statime
+# At "warn" it prints a line for every delay request another PTPv1 follower
+# multicasts. Keep the first few of each half minute out of the SD card's way.
+LogRateLimitIntervalSec=30
+LogRateLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

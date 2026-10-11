@@ -2581,3 +2581,51 @@ Not marked ACCEPTED and not yet the `run-owner.sh` default (which is still
 `plugins/xrun-option-retry1`, 5c6b1c0a, a plugin now known to have the
 fault): both are the operator's to say. Running on the Pi at the end of this
 section: 22fd2622 on 0ee61f2f, this battery's process.
+
+## Persistence: the Dante path as two services, staged (2026-10-11)
+
+The operator chose, for each decision put to him: Dante at boot with the
+AES67 unit kept installed as the rollback; root-owned copies under
+`/usr/local` with a hash-pinned installer; the owner under its own user with
+only real-time priority and memory locking; restart on failure with a limit;
+DSP and the web page left as they are for now (both belong to the AES67
+bridge; DSP for the Dante owner is the next piece of work, in a new
+session); the password-free rule for the hand-run scripts replaced by one
+for the units.
+
+`work/dante-mode/service/`:
+
+- `usb16x16-statime.service`: the pinned Statime (e1952224) as root, with
+  the measured config, `Conflicts=usb16x16-aes67.service` (the same PTP
+  ports), restart always, journal rate-limited.
+- `usb16x16-dante.service`: owner 22fd2622 with plugin 0ee61f2f and the
+  measured ALSA config, as user `usb16x16-dante` in group `audio` with
+  `CAP_SYS_NICE` and `CAP_IPC_LOCK` and nothing else; requires and follows
+  the clock unit (a restarted clock restarts the endpoint); no `Requires=`
+  on the gadget; three failures in five minutes and it stays down; state in
+  `/var/lib/usb16x16-dante`; `--log-every 60` to the journal with Inferno's
+  unknown-opcode lines switched off; stopped with SIGINT, pitch controls
+  put back afterwards.
+- `install-dante-service.sh`: verifies seven sources by hash, stops a
+  hand-started owner and Statime, creates the user, installs to
+  `/usr/local/libexec/usb16x16-dante/`,
+  `/usr/local/lib/usb16x16-dante/alsa-plugins/` and `/etc/usb16x16/dante/`,
+  carries the Dante device's saved identity and subscriptions over once,
+  replaces `/etc/sudoers.d/usb16x16-dante` with start, stop, restart, enable
+  and disable of the two units plus the gadget restart, reloads systemd.
+  Enables and starts nothing. `install-dante-service.sh remove` takes it all
+  out except the state and the user.
+
+What differs from the accepted conditions and so has to be measured after
+the install: the owner not running as root (same binary, same priorities
+asked for, through capabilities), its log lines once a minute, the plugin
+and binaries read from new paths, the state directory moved. Checks owed in
+order: threads at FIFO 79 / 80 / 81 and memory locked; the device back in
+Controller with its sixteen subscriptions; the neighbour entry REACHABLE;
+noise probe and a loaded run; a Pi reboot coming up on Dante by itself; then
+the battery with the loaded hour on the installed form before it is called
+ACCEPTED.
+
+Found while staging: `usb16x16-aes67.service` is already disabled on the Pi
+(`is-enabled` reads `disabled`), so the notes saying a reboot brings AES67
+up are out of date.

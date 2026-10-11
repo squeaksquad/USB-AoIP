@@ -12423,3 +12423,22 @@ running on the Pi is 22fd2622 on 0ee61f2f (started with
 `INFERNO_PLUGIN_DIR=.../plugins/xrun-option-retry1-confirm`). Owed after
 that: persistence; the early-start stall (three appearances) is still
 unexplained.
+
+**STAGED 2026-10-11: the Dante path as two services, to the operator's
+choices; not installed.** Record `work/dante-mode/RESULTS.md`, last section;
+files in `work/dante-mode/service/` and on the Pi in
+`~/usb-16x16-work/dante-mode/service/`. `usb16x16-statime.service` (Statime
+e1952224, root, conflicts with the AES67 unit) and `usb16x16-dante.service`
+(owner 22fd2622, plugin 0ee61f2f, user `usb16x16-dante` with `CAP_SYS_NICE`
+and `CAP_IPC_LOCK` only, follows the clock unit, three failures in five
+minutes and it stays down, state in `/var/lib/usb16x16-dante`), installed by
+the hash-pinned `install-dante-service.sh` (one sudo command by the
+operator; it also replaces the password-free rule for the hand-run scripts
+with one for the two units and the gadget restart). After the install:
+enable both, start, check priorities, subscriptions and the neighbour entry,
+noise probe and a loaded run, a reboot, then the battery with a loaded hour
+on the installed form before ACCEPTED. `usb16x16-aes67.service` was found
+already disabled. Rollback: `install-dante-service.sh remove`, or for AES67
+`sudo systemctl disable --now usb16x16-dante usb16x16-statime` and `sudo
+systemctl enable --now usb16x16-aes67`. Next after this, in a new session:
+DSP for the Dante owner; the web page still reads the AES67 service's state.

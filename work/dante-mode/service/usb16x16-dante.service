@@ -1,0 +1,55 @@
+# The Dante endpoint: usb16x16-dante-owner with the Inferno ALSA plugin
+# (work/dante-mode/OWNER_DESIGN.md). The Dante device stays up for as long as
+# this runs; the USB gadget is joined to it whenever a host is streaming.
+# Not root: its own user, with the two privileges the owner needs (real-time
+# priority, locked memory) and the audio group for the gadget's PCM and pitch
+# controls.
+[Unit]
+Description=USB 16x16 Dante endpoint (usb16x16-dante-owner)
+After=usb16x16-statime.service usb-16x16.service network-online.target
+# No clock, no endpoint; and a restarted clock restarts the endpoint with it.
+Requires=usb16x16-statime.service
+PartOf=usb16x16-statime.service
+# Deliberately no Requires= on usb-16x16.service: the owner finds the gadget
+# when it appears and survives its restart (measured 2026-10-10).
+Conflicts=usb16x16-aes67.service
+# Three failures in five minutes and it stays down: every start is a new
+# latency draw, and restart loops under a streaming Mac broke the Mac's audio
+# on 2026-10-09 and 10.
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=usb16x16-dante
+Group=usb16x16-dante
+SupplementaryGroups=audio
+AmbientCapabilities=CAP_SYS_NICE CAP_IPC_LOCK
+CapabilityBoundingSet=CAP_SYS_NICE CAP_IPC_LOCK
+NoNewPrivileges=yes
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+# Inferno keeps the device's identity and its saved subscriptions here, and
+# the owner its learned clock offset.
+StateDirectory=usb16x16-dante
+Environment=HOME=/var/lib/usb16x16-dante
+Environment=XDG_STATE_HOME=/var/lib/usb16x16-dante
+Environment=ALSA_CONFIG_PATH=/etc/usb16x16/dante/asound-inferno-owner.conf
+Environment=ALSA_PLUGIN_DIR=/usr/local/lib/usb16x16-dante/alsa-plugins
+# Inferno logs an error for every control request it does not implement, most
+# of a line a second with Dante Controller open. They are not faults.
+Environment=RUST_LOG=warn,inferno_aoip::device_server::arc_server=off,inferno_aoip::device_server::info_mcast_server=off
+# Wait up to 20 s for the clock's socket ($$ is systemd's escape for $).
+ExecStartPre=/bin/sh -c 'n=0; until [ -S /tmp/ptp-usrvclock ]; do n=$$((n+1)); [ $$n -gt 100 ] && exit 1; sleep 0.2; done'
+ExecStart=/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner --seconds 0 --ppm-file /var/lib/usb16x16-dante/usb16x16-dante-owner.ppm --log-every 60
+# The owner puts both pitch controls back itself on a clean exit; again in case it was killed.
+ExecStopPost=-/usr/bin/amixer -q -c UAC2Gadget cset numid=1 1000000
+ExecStopPost=-/usr/bin/amixer -q -c UAC2Gadget cset numid=2 1000000
+KillSignal=SIGINT
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=5
+SyslogIdentifier=usb16x16-dante
+
+[Install]
+WantedBy=multi-user.target
