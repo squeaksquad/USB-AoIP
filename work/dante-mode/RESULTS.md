@@ -3169,3 +3169,47 @@ it. Not pursued.
 **Not covered on 62879558:** `loaded.dsp` for an hour; a live file written
 during the soak; the direct arm's own four runs; the `take()` path on the
 Pi; any service form.
+
+## The service form with DSP: wrapper, unit and installer staged (2026-10-11, about 18:45 UTC)
+
+To the operator's choices: the service runs direct with the meters on at
+boot, a preset and live following only once one is applied; the unit takes
+its options from a configuration file; and the DSP owner is installed once,
+together with this form, not ahead of it.
+
+| File (`work/dante-mode/service/`) | Hash | What it is |
+|---|---|---|
+| `usb16x16-dante-start` | 1f83825b | the unit's `ExecStart`: reads `/etc/usb16x16/dante/owner.conf` (KEY=value, read, never sourced: `METERS`, `DSP_PRESET`, `DSP_SHA256`, `DSP_LIVE`), builds the owner's command line and execs it |
+| `usb16x16-dante-dsp.service` | 9f5289dd | the unit, installed as `usb16x16-dante.service`: as 4c27c544 with the wrapper as `ExecStart`, `RuntimeDirectory=usb16x16-dante` (meter file, live file, live status in `/run/usb16x16-dante/`) and `RestartPreventExitStatus=2` |
+| `owner.conf.default` | cb022708 | `METERS=1` and nothing else |
+| `install-dante-dsp.sh` | 6b5683f6 | swaps owner (e392dd71 to 62879558), wrapper and unit; installs the configuration only if there is none; keeps the replaced owner and unit in `before-dsp/`; starts the service and, if it is not up with both Inferno streams running within 30 s, puts the previous owner and unit back and starts those; `rollback` does the same by hand |
+| `test-dante-start.sh` | | the wrapper's test, Mac and Pi: all passed |
+
+The wrapper's rules: with no configuration file the command line is the old
+unit's, to the argument; a preset must be a `.dsp` file directly under
+`/etc/usb16x16/dsp/` and hash to `DSP_SHA256`; `DSP_LIVE=1` needs a preset;
+anything it cannot honour is a refusal with exit 2, which the unit does not
+restart on. A system configured with crossovers does not come up without
+them; the cost is no Dante audio until the configuration is mended.
+
+Checked without root on the Pi: hashes as above, the wrapper's test, its
+`--print` with no file (the old command line) and with the default
+(`... --log-every 60 --meter-file /run/usb16x16-dante/meters.txt`),
+`systemd-analyze verify` on the unit (its one complaint is the wrapper not
+being installed yet). **Not exercised: the unit itself, the wrapper as the
+service user, the installer.** Those run for the first time at the
+operator's install; the installer's own rollback is the guard.
+
+Operator:
+
+```
+sudo ~/usb-16x16-work/dante-mode/service/install-dante-dsp.sh
+```
+
+After it: check the installed form (capabilities, priorities, the meter file
+in `/run/usb16x16-dante/`), then the battery on a fresh anchor in the boot
+configuration, direct with meters, which this binary has not had: noise,
+4 x 800, the hour. `install-dante-service.sh` (the from-nothing installer)
+still describes the service before DSP and is to be brought up to date once
+this form is accepted. Still to build: the applier's Dante backend and the
+page.

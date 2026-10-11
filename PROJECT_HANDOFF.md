@@ -12659,3 +12659,39 @@ each: 1, 4, 2 on the candidate in three configurations, 2 on e392dd71); not
 the DSP's, not pursued. Next: the service form (the operator's choices
 first), then the page. The installed service (e392dd71) is active since
 18:14 UTC; its last gadget restart was about 18:20 UTC.
+
+**STAGED 2026-10-11 ~18:45 UTC: the Dante service with DSP, for the
+operator's install; not installed.** Record `work/dante-mode/RESULTS.md`,
+last section. To his choices: direct with meters at boot, a preset and live
+following only once applied, options from `/etc/usb16x16/dante/owner.conf`,
+and one install of owner and service form together.
+`service/usb16x16-dante-start` (1f83825b) turns the configuration into the
+owner's command line and refuses one it cannot honour;
+`service/usb16x16-dante-dsp.service` (9f5289dd) runs it, with
+`/run/usb16x16-dante/` for the meter and live files;
+`service/install-dante-dsp.sh` (6b5683f6) swaps owner e392dd71 for 62879558,
+wrapper and unit, keeps what it replaced, and puts it back by itself if the
+endpoint is not up in 30 s (`rollback` by hand). Checked without root only;
+the unit, the wrapper as the service user and the installer run for the
+first time at the install. Install: `sudo
+~/usb-16x16-work/dante-mode/service/install-dante-dsp.sh`. Owed after it:
+the battery in the boot configuration (direct, meters), then ACCEPTED; then
+the applier's Dante backend and the page. The installed service is
+e392dd71, untouched.
+
+**INSTALLED 2026-10-11 18:58:25 UTC: the Dante service with DSP. Owner
+62879558 through `usb16x16-dante-start`, unit 9f5289dd, running direct with
+the level meters on.** By the operator's `sudo install-dante-dsp.sh`
+(6b5683f6); it came up first time, no rollback. Replaced owner e392dd71 and
+unit 4c27c544 are kept in `/usr/local/libexec/usb16x16-dante/before-dsp/`;
+rollback `sudo ~/usb-16x16-work/dante-mode/service/install-dante-dsp.sh
+rollback`. Checked on the installed form: both units active, no restart;
+the command line is the old one plus `--meter-file
+/run/usb16x16-dante/meters.txt` (`owner.conf` is `METERS=1`); user
+`usb16x16-dante`, the two capabilities only, memory locked, threads FIFO 79
+/ 80 / 81 and one more normal thread (the meter publisher);
+`/run/usb16x16-dante/meters.txt` written by the service user about twenty
+times a second; linked both ways in 0.3 s; the Ferrofish's neighbour entry
+REACHABLE. **Not ACCEPTED: the battery in this configuration (direct,
+meters) on a fresh anchor is owed and follows.** Statime e1952224 and
+plugin 0ee61f2f unchanged.

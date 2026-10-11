@@ -1,0 +1,75 @@
+# The Dante endpoint: usb16x16-dante-owner with the Inferno ALSA plugin
+# (work/dante-mode/OWNER_DESIGN.md). The Dante device stays up for as long as
+# this runs; the USB gadget is joined to it whenever a host is streaming.
+# Not root: its own user, with the two privileges the owner needs (real-time
+# priority, locked memory) and the audio group for the gadget's PCM and pitch
+# controls.
+#
+# This is the unit with DSP (2026-10-11), installed as usb16x16-dante.service
+# by install-dante-dsp.sh in place of the one in usb16x16-dante.service here:
+# the owner is started through usb16x16-dante-start, which turns
+# /etc/usb16x16/dante/owner.conf (meters, preset, live following) into its
+# command line, and the meter and live files live in /run/usb16x16-dante/.
+[Unit]
+Description=USB 16x16 Dante endpoint (usb16x16-dante-owner)
+After=usb16x16-statime.service usb-16x16.service network-online.target
+# No clock, no endpoint; and a restarted clock restarts the endpoint with it.
+Requires=usb16x16-statime.service
+PartOf=usb16x16-statime.service
+# Deliberately no Requires= on usb-16x16.service: the owner finds the gadget
+# when it appears and survives its restart (measured 2026-10-10).
+Conflicts=usb16x16-aes67.service
+# Three failures in five minutes and it stays down: every start is a new
+# latency draw, and restart loops under a streaming Mac broke the Mac's audio
+# on 2026-10-09 and 10.
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=usb16x16-dante
+Group=usb16x16-dante
+SupplementaryGroups=audio
+AmbientCapabilities=CAP_SYS_NICE CAP_IPC_LOCK
+CapabilityBoundingSet=CAP_SYS_NICE CAP_IPC_LOCK
+NoNewPrivileges=yes
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+# Inferno keeps the device's identity and its saved subscriptions here, and
+# the owner its learned clock offset.
+StateDirectory=usb16x16-dante
+# The meter file, the live coefficient file (written by root, read by the
+# owner) and its status line. Made at each start and removed at each stop, so
+# a preview left behind never outlives the process it was made for.
+RuntimeDirectory=usb16x16-dante
+RuntimeDirectoryMode=0755
+Environment=HOME=/var/lib/usb16x16-dante
+Environment=XDG_STATE_HOME=/var/lib/usb16x16-dante
+Environment=ALSA_CONFIG_PATH=/etc/usb16x16/dante/asound-inferno-owner.conf
+Environment=ALSA_PLUGIN_DIR=/usr/local/lib/usb16x16-dante/alsa-plugins
+# Inferno logs an error for every control request it does not implement, most
+# of a line a second with Dante Controller open. They are not faults.
+Environment=RUST_LOG=warn,inferno_aoip::device_server::arc_server=off,inferno_aoip::device_server::info_mcast_server=off
+# Wait for the clock, not just its socket: Statime makes the socket at once
+# and has no clock to give until it has heard the Ferrofish, and the plugin
+# then fails with "no clock available" (the first start on 2026-10-11, which
+# cost one of the three restarts). The socket is made fresh at each Statime
+# start, so its age is how long the clock has been up; 8 s was enough twice
+# over. Gives up after 40 s. ($$ is systemd's escape for $.)
+ExecStartPre=/bin/sh -c 'n=0; until [ -S /tmp/ptp-usrvclock ] && [ $$(( $$(date +%%s) - $$(stat -c %%Y /tmp/ptp-usrvclock) )) -ge 8 ]; do n=$$((n+1)); [ $$n -gt 80 ] && exit 1; sleep 0.5; done'
+# The wrapper execs the owner, so the owner is the main process as before.
+ExecStart=/usr/local/libexec/usb16x16-dante/usb16x16-dante-start
+# The owner puts both pitch controls back itself on a clean exit; again in case it was killed.
+ExecStopPost=-/usr/bin/amixer -q -c UAC2Gadget cset numid=1 1000000
+ExecStopPost=-/usr/bin/amixer -q -c UAC2Gadget cset numid=2 1000000
+KillSignal=SIGINT
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=5
+# Exit 2 is a configuration the wrapper or the owner refused (a preset that is
+# missing, does not hash or does not load): starting again cannot mend it.
+RestartPreventExitStatus=2
+SyslogIdentifier=usb16x16-dante
+
+[Install]
+WantedBy=multi-user.target

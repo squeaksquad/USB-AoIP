@@ -1,0 +1,4 @@
+# /etc/usb16x16/dante/owner.conf: how usb16x16-dante.service starts the owner.
+# Read by usb16x16-dante-start (KEY=value, nothing is executed); its header
+# has the keys. As installed: direct (no DSP stage), level meters on.
+METERS=1
