@@ -2346,3 +2346,56 @@ start). Not connected to the holes by anything seen.
 
 Running on the Pi at the end of this section: the diagnostic owner
 0d13ee3c, not the accepted 22fd2622 (same audio code).
+
+## The holes are packets from the Pi reaching the Ferrofish late; plugin 55dee5d8 has them too (2026-10-11 00:37-01:39 UTC)
+
+Diagnostic owner 0d13ee3c on plugin 55dee5d8 from 00:37:25 UTC, one 3,600 s
+loaded soak from 00:38:55 UTC. Evidence
+`outputs/latency/dante-diag55-hour-soak-3600s-32f-20261011T003855Z*` and the
+operator's two Dante Controller screenshots in
+`outputs/latency/dante-holes-20261010/`.
+
+- **The older plugin is not free of it: one hole in the hour**, 416 zeros
+  (13 packets) on all sixteen channels at 786 s (about 00:52:04 UTC), counted
+  by the owner on the stream back from Dante (`back_holes=1/416`,
+  `out_holes=0/0`). The retry patch (0002) is cleared. No hole after
+  01:12 UTC, when the operator cleared the Ferrofish's latency statistics;
+  his Late count for 01:12 to 01:39 was not yet read when this was written.
+- **Dante Controller, Latency tabs, read by the operator at about 01:04 UTC,
+  27 minutes into this owner process:**
+
+| Receiver | From | Setting | Peak | Average | Late |
+|---|---|---|---|---|---|
+| USB-16x16-Inferno | FF-PULSE-16-DX | 2 ms | 375 us | 166 us | 0 |
+| FF-PULSE-16-DX | USB-16x16-Inferno | 2 ms | 10.1 ms | 567 us | 52 |
+
+  **The Ferrofish received 52 packets from the Pi late, the latest 10.1 ms
+  after its time, and none the other way.** 52 is the one hole of that
+  period exactly: 13 packets on each of four flows. So a hole is a burst of
+  the Pi's transmit packets arriving several milliseconds late at the
+  Ferrofish, which discards them. The return leg, the Metric Halo loop and
+  Inferno receive are cleared.
+- **What it is not.** Not Inferno's transmit thread falling behind by its
+  own account: no `tx lag` line at any hole (it logs one at the early-start
+  stalls). Not the Pi's clock moving: the owner's outgoing depth, which is
+  the pointer against that clock, read 79..80 through every hole. Not the
+  receive side: `UdpRcvbufErrors` unchanged at 132 through three hours.
+- **What is left:** between the transmit thread's `send` and the Ferrofish:
+  the Pi's kernel transmit path, its Ethernet controller, or the switch.
+  Read without root: eth0's one interrupt is serviced on CPU 0 only
+  (714 million there, none elsewhere, affinity 0-3); `ksoftirqd` and Statime
+  are ordinary-priority tasks; the owner's loop and Inferno's two flow
+  threads are FIFO 79, 80 and 81 and float over all four cores; governor
+  `performance`; kernel 6.18.34+rpt-rpi-2712. A real-time thread sitting on
+  CPU 0 while transmit completions wait for softirq there would produce
+  exactly a burst of late transmits. That is a hypothesis; nothing measured
+  yet says it.
+- The operator asked whether the Ferrofish still being in AES67 mode
+  matters. Not expected to: these are unicast Dante flows, the Pi follows
+  the Ferrofish's PTPv1, which stays up in either mode, and a clock problem
+  would show in both directions. Turning it off is a valid single-variable
+  test held back for now (a Ferrofish reboot, and it removes the AES67
+  rollback while off).
+
+Holes observed in all-channel load, 2026-10-10 evening to 2026-10-11: seven
+in about 220 minutes (224, 416, 224, 352, 288, 448, 416 samples).

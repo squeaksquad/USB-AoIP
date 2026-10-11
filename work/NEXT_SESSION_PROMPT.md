@@ -101,6 +101,17 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-11 01:40 UTC. Read this first.** A hole is a burst of the
+Pi's transmit packets reaching the Ferrofish up to 10 ms late (Dante
+Controller, Ferrofish Latency tab: peak 10.1 ms, Late 52 = 13 packets x 4
+flows for one hole; the other direction 0 late). Plugin 55dee5d8 has it too
+(one hole in its hour), so the retry patch is cleared. Inferno's TX thread
+reports no lag and the clock did not move: the delay is after `send` (Pi
+kernel TX path, NIC, or switch). Unmeasured hypothesis: eth0's IRQ lives on
+CPU 0 with ordinary-priority softirq work while FIFO 79-81 threads float.
+Next: eth0 capture across a hole (root), or a per-core starvation monitor,
+then try pinning (IRQ and threads) as the fix, an hour each.
+
 **Added 2026-10-11 00:35 UTC. Read this first.** The holes are located to
 the Dante side: diagnostic owner 0d13ee3c (`OWNER_BIN=usb16x16-dante-owner-diag`,
 prints `out_holes=N/max back_holes=N/max`) counted none on the stream from

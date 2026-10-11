@@ -12323,3 +12323,25 @@ Controller (Pi to Ferrofish leg), an hour on plugin 55dee5d8, an hour with
 the Ferrofish looping internally without the Metric Halo. **The loaded hour
 remains failed; the accepted pair's stability claim covers ten minutes, not
 an hour.** The owner running on the Pi is the diagnostic build.
+
+**FOUND 2026-10-11 01:39 UTC: a hole is a burst of the Pi's Dante transmit
+packets reaching the Ferrofish several milliseconds late; plugin 55dee5d8
+has it too.** Record `work/dante-mode/RESULTS.md`, last section. (1) A
+diagnostic hour on plugin 55dee5d8 had one hole (416 zeros, 13 packets, on
+the stream back from Dante only): the retry patch is cleared. (2) The
+operator's Dante Controller Latency tabs, 27 minutes into that run:
+Ferrofish receiving from the Pi at 2 ms, **peak 10.1 ms, 52 late**; the Pi
+receiving from the Ferrofish, peak 375 us, 0 late. 52 is that period's one
+hole exactly (13 packets on four flows). So the Pi's transmit packets leave
+or arrive late in bursts and the Ferrofish discards them; the return leg,
+the Metric Halo loop and Inferno receive are cleared. (3) Inferno's transmit
+thread reports no lag and the Pi's media clock did not move at any hole, so
+the delay is after `send`: the Pi's kernel transmit path, its Ethernet
+controller, or the switch. Hypothesis, unmeasured: eth0's interrupt is
+serviced only on CPU 0 and softirq work there is ordinary-priority, while
+three FIFO 79-81 threads float over all cores. Seven holes in about 220
+minutes of all-channel load. **The loaded hour remains failed.** Next: a
+packet capture on eth0 across a hole (needs root beyond the Dante sudoers
+rule), or an unprivileged starvation monitor per core, then pinning as the
+fix to try. The owner on the Pi is the diagnostic build 0d13ee3c on plugin
+55dee5d8.
