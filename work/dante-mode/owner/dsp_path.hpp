@@ -40,6 +40,11 @@ public:
     // carries the tail of whatever was playing before the gap.
     void reset() noexcept { stage_.reset(); }
 
+    // Take a published coefficient set without filtering anything: for the
+    // wakes on which no block goes out, so a live update is not left waiting
+    // for audio (dsp_live.hpp). As cheap as the two atomic loads it is.
+    void take() noexcept { stage_.process(float_.data(), 0); }
+
     // `frames` of 16 interleaved channels, in place. Does nothing unloaded.
     void process(std::int32_t* interleaved, std::size_t frames) noexcept {
         if (!stage_.loaded() || frames == 0 || frames > kMaxFrames) return;

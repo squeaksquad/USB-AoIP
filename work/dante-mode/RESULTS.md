@@ -2899,3 +2899,162 @@ build that is meant to be accepted, which still lacks live coefficients,
 the meter tap and a service form.
 
 Service active again at 13:37 UTC (22fd2622, aged anchor).
+
+## Live coefficients in the owner, and a capture fault that never recovered, found and fixed (2026-10-11 13:47-13:54 UTC)
+
+**What was added.** `owner/dsp_live.hpp` (`DspLive`): the bridge's live
+control thread (`work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md`, step 3) as
+an object with a `poll()`, same file protocol and the same `DSPLIVE` status
+line, so what writes a live file for the bridge writes one for the owner.
+`--dsp-live-file PATH` (and `--dsp-live-status`, default the file with
+`.status`) starts a thread that polls the file every 50 ms, loads a changed
+file and publishes its numbers into the running stage; another shape or a
+malformed file is refused and changes nothing; a file older than the process
+is ignored. The thread is made with the telemetry and steward threads,
+before the device is opened and before the loop turns real-time (rule 3), at
+normal priority: eight threads instead of seven. `DSPLIVE applied|refused|
+ignored` lines in the log, `dsp_live_gen`, `dsp_live_applied`,
+`dsp_live_refused` on the `DSP` line.
+
+One difference from the bridge. Its stage runs on every wake; the owner's
+runs only while a host is sending, and a publish waits until the loop has
+taken the one before. So on every wake that filters nothing the loop calls
+`OutDsp::take()`, two atomic loads, or a second update would wait for audio.
+
+Tested off the audio path (`dsp_live_test.cpp`, Mac and Pi, against real
+files): applied on the poll that finds the file, an unchanged file not read
+again, a third update held while the second is untaken and let through by
+`take()`, another shape and a malformed file refused with nothing changed, a
+stale file ignored, an unwritable status file counted and not fatal.
+
+```
+8e0513fa  owner/usb16x16-dante-owner-dsplive   (binary, Pi only; a62cc882 was the build before the fix below)
+78a997f8  owner/main.cpp
+5a5a044e  owner/dsp_live.hpp
+b2cfcfc4  owner/dsp_path.hpp
+ce6745e0  owner/dsp_live_test.cpp
+7fd7f047  config/dsp-unity-half.dsp            (dsp-unity at gain 0.5, same shape)
+```
+
+**FOUND: after a gadget capture overrun the outgoing direction never came
+back. In the accepted owner too.** On the first live build (a62cc882) the
+loop stalled once for 15.6 ms, 27.6 s after its start (cause below). Both
+gadget PCMs overran (-32). The return direction re-primed and flowed again;
+the outgoing one stayed idle with `capture_faults` rising 20 a second, 2,500
+in two minutes, the gadget capture in XRUN, the Mac sending throughout and a
+sixteen-channel capture reading silence for 68 s. `capture_fault` dropped,
+prepared and started the capture at once and then left it unread for the
+50-wake holdoff: 50 ms against a 480-frame buffer, so it overran inside the
+holdoff and faulted at the first read, every time. The code is unchanged
+since before 22fd2622, so the installed service has it: with a host sending,
+any loop stall longer than the capture buffer's slack ends the outgoing
+audio until the owner or the gadget is restarted. It had not been seen
+because no capture fault had occurred with a host sending (the host-stop and
+gadget-restart paths leave by other doors).
+
+Fix (in 8e0513fa): the capture is dropped at the fault and prepared and
+started when the holdoff ends, so it is read from the wake it starts on; a
+gadget that has gone (-19) is still handed back at once.
+
+**Shown with an injected stall.** `--stall-at SECONDS --stall-ms MS` (test
+only) stalls the loop once. 8e0513fa, `dsp-unity.dsp`, sixteen channels at
+0.1 from the Mac, 20 ms at 60 s:
+
+| | |
+|---|---|
+| Loop gap | 20.0 ms |
+| Inferno playback | one resync, 833 frames |
+| Gadget | one capture fault, one playback fault |
+| Both directions flowing again | 100 ms after the stall (the holdoff), `tx_links` 2, stage reset |
+| Mac capture | one zero run of 3,726 frames (77.6 ms) on all sixteen channels, no other |
+
+**Live updates under audio, same run.** Return peak against sent peak
+838,857:
+
+| Time | Written to the live file | Outcome | Return peak |
+|---|---|---|---|
+| 73.0 s | `dsp-unity-half.dsp` | applied | 419,428 |
+| 87.2 s | `dsp-unity.dsp` | applied | 838,857 |
+| 96.5 s | `transparent.dsp` | refused, shape differs | unchanged |
+| 101.7 s, 102.0 s | half, then unity 0.3 s later | both applied | 838,857 |
+
+`dsp_live_gen` 4, applied 4, refused 1, no status write failed; loop gap
+1.02 ms at most across every publish, `dsp_us_max` unmoved, no resync or
+fault after the injected one. A stray file (`.bashrc`) was refused with the
+loader's reason on the earlier run.
+
+**Not explained: the 15.6 ms stall itself.** One occurrence, 13:48:01 UTC,
+with nothing of this session running on the Pi at that second (the launcher
+had staged the binary 28 s earlier and the build had finished about 40 s
+earlier; `dirty_expire_centisecs` is 3000, so a write-back of those to the
+SD card is a candidate, not a finding). It is the same family as the open
+early-start loop gap. The run after it had none in 140 s apart from the
+injected one, and a 1.96 ms gap at the moment the harness opened the device.
+
+**Not done.** No latency figure, noise probe or soak on 8e0513fa. The
+`take()` path has run on the Mac only: on the Pi the Mac held the device
+open and the outgoing direction never went idle. The status and live files
+were in `/dev/shm` for the trial; a service form needs a directory the
+service user can write and the applier can reach.
+
+**Owed.** (1) The operator's decision on the capture-fault fix for the
+installed service: it is a fault-path change to the accepted owner and can
+be built on the accepted source alone (e53c8407 plus the fix) if it is to go
+in ahead of DSP. (2) Battery on the candidate: noise, 4 x 800, the hour.
+(3) The meter tap. (4) The service form and the applier.
+
+Service active again at 13:53:37 UTC (22fd2622, aged anchor).
+
+## The capture-fault fix on the accepted source: owner e392dd71, battery and the loaded hour PASS, 465 / 653; staged for install (2026-10-11 14:10-15:29 UTC)
+
+At the operator's word ("let's apply the fix"). **e392dd71** is the accepted
+owner's source (e53c8407, binary 22fd2622) with two changes and nothing
+else, no DSP and no hole counters: the capture-fault fix of the section
+above, and the test-only `--stall-at` / `--stall-ms`, kept in so that the
+fix can be shown on the binary that is installed. Source 437b14fd; the diff
+is `service/owner-capture-fault.patch` (2e1638d1). Built on the Pi with the
+service stopped, the accepted one-line build, as
+`owner/usb16x16-dante-owner-fix`; `owner/fix/` holds its source there. All
+runs through the launcher, as the service user, plugin 0ee61f2f.
+
+**The fix, on this binary.** `--stall-at 60 --stall-ms 20` under sixteen
+channels at 0.1: loop gap 20.0 ms, one 833-frame playback resync, one
+capture fault and one playback fault, both directions flowing again 100 ms
+later (`tx_links` 2), one zero run of 3,714 frames (77.4 ms) on all sixteen
+channels at the Mac and no other
+(`outputs/latency/dante-fix-stall-continuous-60s-32f-20261011T141144Z.json`).
+On 22fd2622 the same fault ended the outgoing audio.
+
+**Battery on one start and one fresh anchor** (started 14:12:59 UTC without
+the stall option, gadget restart 14:13:04, label `dante-fix`):
+
+| Check | Result |
+|---|---|
+| Noise probe at 32 | clean, no zero run of 4 or more |
+| 4 x 800 loaded impulses at 32 | 465 samples (9.688 ms) every run, spread 0 |
+| `daw_timeline` | 653 (13.604 ms), offset 188 steady |
+| 3,600 s sixteen-channel soak | PASS, longest zero run 1, no discontinuity |
+| Owner over 4,577 s | no resync, re-prime, overflow or capture fault; loop gap at most 1.05 ms; one link each way after the gadget restart |
+| Ferrofish neighbour entry | REACHABLE at the end |
+
+The same 465 / 653 as the record's battery. The gadget restart under this
+start took the -19 path as before (one playback fault, one detach, no
+capture fault, no resync).
+
+**Staged on the Pi, not installed:**
+`service/install-owner-update.sh` (77c30e05) replaces the installed owner
+binary and nothing else: it checks the new binary is e392dd71 and the
+installed one is 22fd2622, stops `usb16x16-dante.service`, keeps the old
+binary as `usb16x16-dante-owner.previous`, and starts the service;
+`rollback` puts the old one back. `install-dante-service.sh` is repinned to
+e392dd71 for a full reinstall (d50c44ac, was 798ff158). Operator:
+
+```
+sudo ~/usb-16x16-work/dante-mode/service/install-owner-update.sh
+```
+
+Not covered: the fix has been exercised by an injected 20 ms stall, twice
+(here and on the DSP candidate), not by a stall that arose by itself; a
+longer stall, or one that also detaches the gadget, is untried. Service
+active on 22fd2622 since 15:29:18 UTC (stopped from 14:10:30 for the build
+and the battery; aged anchor).

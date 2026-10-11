@@ -12566,3 +12566,63 @@ owner start (leave 30 s before a sixteen-channel capture); the owner's
 `measure-candidate.sh` now sees a launcher candidate. Next: live
 coefficients, the meter tap, a service form; the battery and soak belong to
 that build. Services active (stopped 13:17 to 13:34 and 13:34 to 13:37 UTC).
+
+**FOUND 2026-10-11 13:48 UTC: in the accepted owner, a gadget capture
+overrun with a host sending ends the outgoing audio until a restart.**
+Record `work/dante-mode/RESULTS.md`, last section. `capture_fault` restarted
+the capture and then left it unread for a 50 ms holdoff against a 10 ms
+buffer, so it overran again at every attempt: after one 15.6 ms loop stall
+on a candidate, 2,500 capture faults in two minutes and silence to Dante.
+The code is the same in the installed 22fd2622. It needs a loop stall longer
+than the capture buffer's slack, which the service has not had in its
+loaded hours. **Fixed in the candidate only** (the capture is started when
+the holdoff ends); with an injected 20 ms stall under sixteen-channel audio
+both directions were flowing again 100 ms later, one 77.6 ms gap at the Mac.
+The 15.6 ms stall itself is unexplained (one occurrence, 27.6 s after a
+candidate start). **The operator's to decide: whether the fix goes into the
+installed service ahead of DSP.**
+
+**IMPLEMENTED 2026-10-11 13:54 UTC: live coefficients in the Dante owner
+(`--dsp-live-file`), built and tried under audio. Not installed, not
+accepted.** `owner/dsp_live.hpp`, the bridge's protocol and status line;
+the thread exists before the device is opened. Candidate **8e0513fa**
+(`owner/usb16x16-dante-owner-dsplive`, source 78a997f8; also carries the
+capture-fault fix and a test-only `--stall-at`). Under sixteen channels: a
+half-gain file applied (return peak 838,857 to 419,428), unity applied back,
+another shape refused, two files 0.3 s apart both applied; loop gap at most
+1.02 ms across the publishes. Owed: battery and soak on the candidate, the
+meter tap, a service form. Services active (stopped 13:47:16 to 13:50:28 and
+13:51:07 to 13:53:37 UTC).
+
+**MEASURED 2026-10-11 14:10-15:29 UTC: owner e392dd71 (the accepted source
+with the capture-fault fix) passed the battery and the loaded hour on one
+start and one fresh anchor: harness 465, `daw_timeline` 653 (13.604 ms) at
+32 frames. STAGED for the operator's install; not installed, not ACCEPTED.**
+Record `work/dante-mode/RESULTS.md`, last section. Source 437b14fd =
+e53c8407 plus the fix and a test-only `--stall-at`
+(`service/owner-capture-fault.patch`); no DSP. An injected 20 ms stall under
+sixteen-channel audio: one capture fault, both directions flowing 100 ms
+later, one 77 ms gap at the Mac (22fd2622 never recovered from the same
+fault). Fresh anchor 14:13:04 UTC: noise probe clean; 4 x 800 loaded all 465
+(9.688 ms) spread 0, offset 188 steady; 3,600 s sixteen-channel soak PASS;
+the owner had no resync, re-prime, overflow or capture fault in 76 minutes.
+Install: `sudo ~/usb-16x16-work/dante-mode/service/install-owner-update.sh`
+(77c30e05; swaps the binary only, keeps 22fd2622 as `.previous`, `rollback`
+restores it). `install-dante-service.sh` repinned (d50c44ac). The installed
+service is still 22fd2622, active since 15:29:18 UTC.
+
+**INSTALLED 2026-10-11 16:13:30 UTC: owner e392dd71 (the capture-fault fix)
+is the binary `usb16x16-dante.service` runs.** By the operator's `sudo
+install-owner-update.sh` (77c30e05); 22fd2622 kept beside it as
+`usb16x16-dante-owner.previous`, rollback `sudo
+~/usb-16x16-work/dante-mode/service/install-owner-update.sh rollback`.
+Checked on the installed form: both units active, the two capabilities
+only, memory locked, threads FIFO 79 / 80 / 81, the Ferrofish's neighbour
+entry REACHABLE. Fresh anchor 16:14:04 UTC under the running service: noise
+probe clean; 800 loaded impulses at 32 all 466 samples (9.708 ms) spread 0,
+`daw_timeline` 654 (13.625 ms), offset 188 steady; no resync, re-prime or
+capture fault. The battery and the loaded hour were on the same binary
+through the launcher (14:13-15:29 UTC, 465 / 653), not on the installed
+form. **Not marked ACCEPTED: the operator's to say.** Units, plugin 0ee61f2f,
+Statime e1952224 and configs are unchanged. Next: the DSP line (candidate
+8e0513fa has the same fix): battery, the meter tap, a service form.

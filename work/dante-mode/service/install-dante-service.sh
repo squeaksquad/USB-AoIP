@@ -41,8 +41,9 @@ if [ "${1:-}" = remove ]; then
   exit 0
 fi
 
-# source, sha256, destination, mode
-manifest="$base/owner/usb16x16-dante-owner|22fd262211fe2d3b8961d7e268efef35e0d2f5c52f43b0a7c72a992d792a4698|$libexec/usb16x16-dante-owner|755
+# source, sha256, destination, mode. The owner is e392dd71 since 2026-10-11 (22fd2622 with the
+# capture-fault fix); an existing install takes it from install-owner-update.sh instead.
+manifest="$base/owner/usb16x16-dante-owner-fix|e392dd7198e18a09dcd8d16b159a8c87d6536fd6e7e22d4dd643c043070dcf6d|$libexec/usb16x16-dante-owner|755
 $base/statime/target/release/statime|e195222403fc132f85de0e290580381488c211ff7744e4d10a1c7ff42d555800|$libexec/statime|755
 $base/plugins/xrun-option-retry1-confirm/libasound_module_pcm_inferno.so|0ee61f2ff798abf772a0026b7a37e06da7a5cb80d454559cc2e0355fb1001330|$plugin_dir/libasound_module_pcm_inferno.so|644
 $base/config/asound-inferno-owner.conf|924cfa99f69c6ab1a34488417cb9f92d30b61da4dc29fb37ca785f9d4d1feaae|$conf_dir/asound-inferno-owner.conf|644

@@ -24,7 +24,9 @@
 // With --dsp-preset the outgoing direction (gadget capture to Dante) passes
 // through the bridge core's DspStage on its way to the Inferno buffer
 // (dsp_path.hpp). Without it no sample is converted and the path is the
-// integer copy it always was.
+// integer copy it always was. With --dsp-live-file as well, a thread made
+// before the device is opened (rule 3) follows that file and publishes each
+// same-shape artifact written to it into the running stage (dsp_live.hpp).
 //
 // Build on the Pi (the bridge core is the one source file DspStage lives in):
 //   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
@@ -35,6 +37,7 @@
 
 #include <alsa/asoundlib.h>
 
+#include "dsp_live.hpp"
 #include "dsp_path.hpp"
 #include "servo.hpp"
 
@@ -108,6 +111,14 @@ struct Options {
     // Coefficient artifact from `usb16x16-dsp-compile --bridge`. Empty means no
     // DSP stage at all: the outgoing direction stays an integer copy.
     std::string dsp_preset;
+    // A file polled every 50 ms for a same-shape artifact to publish into the
+    // running stage. Empty means the stage's numbers never change. Needs --dsp-preset.
+    std::string dsp_live_file;
+    std::string dsp_live_status;
+    // Test only: the loop sleeps once for stall_ms at stall_at seconds, to
+    // exercise the paths a stall takes (resync, gadget overrun, re-prime).
+    unsigned stall_at{0};
+    unsigned stall_ms{0};
     bool mlock{true};
     bool realtime{true};
 };
@@ -121,6 +132,8 @@ struct Options {
                "                     [--usb hw:CARD=UAC2Gadget,DEV=0] [--usb-period 48] [--usb-buffer 480]\n"
                "                     [--rx-queue 144] [--rx-slack 96] [--kp 0.5] [--ki 0.003] [--seed-ppm 0]\n"
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
+               "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
+               "                     [--stall-at SECONDS --stall-ms MS]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
                "  --tx-lead   Inferno playback depth held after each gadget block (and the silent lead)\n"
@@ -130,8 +143,13 @@ struct Options {
                "  --ppm-file  where the learned offset is kept between runs; read at start unless\n"
                "              --seed-ppm is given, rewritten once a minute and at exit\n"
                "  --dsp-preset  DSP coefficients on the outgoing direction, gadget to Dante (default: no DSP)\n"
+               "  --dsp-live-file    poll PATH (50 ms) for a same-shape artifact and publish its numbers\n"
+               "                     into the running stage; needs --dsp-preset\n"
+               "  --dsp-live-status  where the outcome of each live file is written (default: the\n"
+               "                     live file with .status appended)\n"
                "  --guard     frames behind the clock that are not cleared yet\n"
                "  --seconds   stop after this long; 0 runs until a signal\n"
+               "  --stall-at, --stall-ms   test only: stall the loop once, MS long, SECONDS after it starts\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
     std::exit(2);
@@ -167,6 +185,10 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--seed-ppm") { o.seed_ppm = std::strtod(v, nullptr); o.seed_given = true; }
         else if (a == "--ppm-file") o.ppm_file = v;
         else if (a == "--dsp-preset") o.dsp_preset = v;
+        else if (a == "--dsp-live-file") o.dsp_live_file = v;
+        else if (a == "--dsp-live-status") o.dsp_live_status = v;
+        else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
+        else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
         else if (a == "--period") o.period = parse_number(v, "--period");
         else if (a == "--buffer") o.buffer = parse_number(v, "--buffer");
         else if (a == "--tx-lead") o.tx_lead = parse_number(v, "--tx-lead");
@@ -189,6 +211,12 @@ Options parse_options(int argc, char** argv) {
     if (o.tx_lead < 48 || o.tx_lead + o.guard + o.period > o.buffer) usage("--tx-lead and --guard do not fit the buffer");
     if (o.priority < 1 || o.priority > 98) usage("--priority must be 1 to 98");
     if (o.log_every < 1) usage("--log-every must be at least 1");
+    if ((o.stall_at == 0) != (o.stall_ms == 0) || o.stall_ms > 500) usage("--stall-at and --stall-ms go together; at most 500 ms");
+    if (o.dsp_preset.empty() && (!o.dsp_live_file.empty() || !o.dsp_live_status.empty())) {
+        usage("--dsp-live-file needs --dsp-preset: there is no stage to update");
+    }
+    if (o.dsp_live_file.empty() && !o.dsp_live_status.empty()) usage("--dsp-live-status needs --dsp-live-file");
+    if (o.dsp_live_status.empty() && !o.dsp_live_file.empty()) o.dsp_live_status = o.dsp_live_file + ".status";
     return o;
 }
 
@@ -350,6 +378,11 @@ struct Telemetry {
     std::atomic<std::uint64_t> dsp_ns_total{0};
     std::atomic<std::uint64_t> dsp_calls{0};
     std::atomic<std::uint64_t> dsp_resets{0};
+    // Live coefficients: publishes the loop has taken, and the control thread's counts.
+    std::atomic<std::uint64_t> dsp_live_generation{0};
+    std::atomic<std::uint64_t> dsp_live_applied{0};
+    std::atomic<std::uint64_t> dsp_live_refused{0};
+    std::atomic<unsigned> stall_injected_ms{0};   // --stall-at fired; reported once
 };
 
 void store_max(std::atomic<std::int64_t>& target, std::int64_t value) noexcept {
@@ -395,6 +428,9 @@ void* telemetry_entry(void* argument) {
             std::printf("NETRESYNC dir=%s frames=%" PRId64 " t=%.3f\n", report < 0 ? "capture" : "playback",
                         report < 0 ? -report : report, seconds);
             signature = thread_inventory("after-resync", true);
+        }
+        if (const unsigned stall = t.stall_injected_ms.exchange(0, std::memory_order_relaxed); stall != 0) {
+            std::printf("STALL injected ms=%u t=%.3f\n", stall, seconds);
         }
         if (const std::uint64_t errors = t.net_errors.load(std::memory_order_relaxed); errors != reported_errors) {
             const auto code = static_cast<int>(t.last_error.load(std::memory_order_relaxed));
@@ -479,17 +515,64 @@ void* telemetry_entry(void* argument) {
                             t.back_holes.load(std::memory_order_relaxed), t.back_hole_max.load(std::memory_order_relaxed));
             }
             if (const std::uint64_t calls = t.dsp_calls.exchange(0, std::memory_order_relaxed); calls != 0) {
-                std::printf("DSP t=%.1f dsp_us_max=%.1f dsp_us_mean=%.1f dsp_calls=%" PRIu64 " dsp_resets=%" PRIu64 "\n",
+                std::printf("DSP t=%.1f dsp_us_max=%.1f dsp_us_mean=%.1f dsp_calls=%" PRIu64 " dsp_resets=%" PRIu64
+                            " dsp_live_gen=%" PRIu64 " dsp_live_applied=%" PRIu64 " dsp_live_refused=%" PRIu64 "\n",
                             seconds, static_cast<double>(t.dsp_ns_max.exchange(0, std::memory_order_relaxed)) / 1000.0,
                             static_cast<double>(t.dsp_ns_total.exchange(0, std::memory_order_relaxed)) / 1000.0 /
                                 static_cast<double>(calls),
-                            calls, t.dsp_resets.load(std::memory_order_relaxed));
+                            calls, t.dsp_resets.load(std::memory_order_relaxed),
+                            t.dsp_live_generation.load(std::memory_order_relaxed),
+                            t.dsp_live_applied.load(std::memory_order_relaxed),
+                            t.dsp_live_refused.load(std::memory_order_relaxed));
             }
             std::fflush(stdout);
             last_tx = txf;
             last_rx = rxf;
         }
     }
+    return nullptr;
+}
+
+// ---- live coefficients -----------------------------------------------------------------
+
+struct DspLiveContext {
+    usb16x16::owner::DspLive* live;
+    const usb16x16::DspStage* stage;
+    Telemetry* telemetry;
+};
+
+// Never the loop thread and never real-time: it reads files and allocates.
+void* dsp_live_entry(void* argument) {
+    const DspLiveContext context = *static_cast<DspLiveContext*>(argument);
+    usb16x16::owner::DspLive& live = *context.live;
+    Telemetry& t = *context.telemetry;
+    bool announced = false;
+    while (!stop_requested.load(std::memory_order_relaxed)) {
+        timespec nap{0, 50000000};
+        nanosleep(&nap, nullptr);
+        if (!t.running.load(std::memory_order_acquire)) continue;
+        if (!announced) {
+            announced = true;
+            live.announce();
+        }
+        const usb16x16::owner::DspLive::Event event = live.poll();
+        t.dsp_live_generation.store(context.stage->generation(), std::memory_order_relaxed);
+        using Outcome = usb16x16::owner::DspLive::Outcome;
+        if (event.outcome == Outcome::none) continue;
+        if (event.outcome == Outcome::applied) {
+            t.dsp_live_applied.fetch_add(1, std::memory_order_relaxed);
+            std::printf("DSPLIVE applied sha256=%s\n", event.sha.c_str());
+        } else {
+            if (event.outcome == Outcome::refused) t.dsp_live_refused.fetch_add(1, std::memory_order_relaxed);
+            std::printf("DSPLIVE %s sha256=%s reason=\"%s\"\n", event.outcome == Outcome::refused ? "refused" : "ignored",
+                        event.sha.c_str(), event.reason.c_str());
+        }
+        std::fflush(stdout);
+    }
+    std::printf("DSPLIVE stopped applied=%" PRIu64 " refused=%" PRIu64 " ignored=%" PRIu64 " status_failures=%" PRIu64
+                " last=%s\n",
+                live.applied(), live.refused(), live.ignored(), live.status_failures(),
+                live.last_sha().empty() ? "none" : live.last_sha().c_str());
     return nullptr;
 }
 
@@ -985,6 +1068,7 @@ struct UsbHalf {
     TxState tx{TxState::idle};
     unsigned tx_idle_wakes{0};
     unsigned tx_holdoff{0};
+    bool tx_restart_due{false};   // the gadget capture is stopped and is started again when the holdoff ends
     usb16x16::owner::DepthFilter tx_filter;
     // Back: Dante to gadget playback.
     bool rx_primed{false};
@@ -1029,18 +1113,23 @@ void detach_usb(UsbHalf& usb, std::int64_t code, Telemetry& t) noexcept {
     t.usb_owner.store(static_cast<int>(UsbOwner::steward_closing), std::memory_order_release);
 }
 
-// A gadget capture error: the outgoing direction stops and the PCM is made
-// ready again. Nothing here touches an Inferno handle.
+// A gadget capture error: the outgoing direction stops, and the PCM is
+// stopped now and started again when the holdoff ends (service_tx). Started
+// here, as it was until 2026-10-11, it ran unread through a holdoff five
+// times as long as its buffer, overran, and faulted again at the first read,
+// for ever: one loop stall with a host sending and the outgoing direction
+// never came back (2,500 faults in two minutes, RESULTS.md). Nothing here
+// touches an Inferno handle.
 void capture_fault(UsbHalf& usb, UsbHandles& handles, std::int64_t code, Telemetry& t) noexcept {
     t.usb_capture_faults.fetch_add(1, std::memory_order_relaxed);
     t.usb_last_fault.store(code, std::memory_order_relaxed);
     set_tx_state(usb, TxState::idle, t);
     usb.tx_idle_wakes = 0;
     usb.tx_holdoff = kFaultHoldoffWakes;
+    usb.tx_restart_due = true;
     snd_pcm_drop(handles.capture.handle);
-    int rc = snd_pcm_prepare(handles.capture.handle);
-    if (rc == 0) rc = snd_pcm_start(handles.capture.handle);
-    if (rc < 0) detach_usb(usb, rc, t);
+    // A gadget that has gone is handed back at once, as before, not after the holdoff.
+    if (code == -ENODEV) detach_usb(usb, code, t);
 }
 
 void playback_fault(UsbHalf& usb, UsbHandles& handles, std::int64_t code, Telemetry& t) noexcept {
@@ -1184,7 +1273,12 @@ void observe_holes(const std::int32_t* block, long frames, std::uint32_t& run, s
 bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& depth, bool resynced,
                 Telemetry& t) noexcept {
     if (usb.tx_holdoff > 0) {
-        --usb.tx_holdoff;
+        if (--usb.tx_holdoff == 0 && usb.tx_restart_due) {
+            usb.tx_restart_due = false;
+            int rc = snd_pcm_prepare(handles.capture.handle);
+            if (rc == 0) rc = snd_pcm_start(handles.capture.handle);
+            if (rc < 0) detach_usb(usb, rc, t);
+        }
         return true;
     }
     const long frames = read_gadget(handles.capture, usb.tx_scratch.data());
@@ -1395,6 +1489,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
         usb.attached = true;
         usb.rx_primed = false;
         usb.tx_holdoff = 0;
+        usb.tx_restart_due = false;
         usb.rx_holdoff = 0;
         const int rc = snd_pcm_start(handles.capture.handle);
         if (rc < 0) detach_usb(usb, rc, t);
@@ -1414,6 +1509,10 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
         service_rx(usb, handles, o, received, t);
     }
     if (usb.attached) run_servos(usb, o, now, t);
+
+    // No block went through the stage on this wake: take any coefficient set
+    // published meanwhile, so the next live update is not left waiting for a host.
+    if (usb.dsp != nullptr && usb.tx != TxState::flow) usb.dsp->take();
 
     // With nothing flowing out, the lead is kept up with silence.
     if (usb.tx != TxState::flow && depth < static_cast<std::int64_t>(net.lead)) {
@@ -1439,6 +1538,9 @@ pthread_t start_thread(void* (*entry)(void*), void* argument, const char* what) 
 }  // namespace
 
 int main(int argc, char** argv) {
+    // The wall clock this process began at: a live file older than this is a preview left behind.
+    timespec process_started{};
+    clock_gettime(CLOCK_REALTIME, &process_started);
     Options options = parse_options(argc, argv);
     bool seed_from_file = false;
     if (!options.seed_given && !options.ppm_file.empty()) seed_from_file = read_ppm_file(options.ppm_file, options.seed_ppm);
@@ -1478,6 +1580,10 @@ int main(int argc, char** argv) {
         std::printf("DSP loaded file=%s preset=\"%s\" internal=%zu biquads=%zu delay_frames=%zu shape=%s\n",
                     options.dsp_preset.c_str(), dsp.stage().preset().c_str(), dsp.stage().internal_channels(),
                     dsp.stage().biquad_count(), dsp.stage().delay_samples(), dsp.stage().shape_key().c_str());
+        if (!options.dsp_live_file.empty()) {
+            std::printf("DSPLIVE following file=%s status=%s\n", options.dsp_live_file.c_str(),
+                        options.dsp_live_status.c_str());
+        }
     }
 
     // 1. Memory lock first, so every stack made below is populated when it is made.
@@ -1500,6 +1606,11 @@ int main(int argc, char** argv) {
     const pthread_t telemetry_thread = start_thread(telemetry_entry, &telemetry_context, "telemetry");
     pthread_t steward_thread{};
     if (!options.no_usb) steward_thread = start_thread(steward_entry, &steward_context, "steward");
+    usb16x16::owner::DspLive dsp_live(dsp.stage(), options.dsp_live_file, options.dsp_live_status, process_started);
+    DspLiveContext dsp_live_context{&dsp_live, &dsp.stage(), &telemetry};
+    pthread_t dsp_live_thread{};
+    const bool live_enabled = dsp.enabled() && !options.dsp_live_file.empty();
+    if (live_enabled) dsp_live_thread = start_thread(dsp_live_entry, &dsp_live_context, "dsp live");
     thread_inventory("before-open", true);
 
     // 3. The Inferno device, at normal priority: its control threads inherit the opener's policy.
@@ -1548,6 +1659,7 @@ int main(int argc, char** argv) {
     std::int64_t next = started + kTickNs;
     std::int64_t last_wake = started;
     int exit_code = 0;
+    bool stalled = false;
     while (!stop_requested.load(std::memory_order_relaxed)) {
         // While a host is sending, its frames time the loop; otherwise a 1 ms grid does.
         if (usb.attached && usb.tx != TxState::idle && usb.tx_holdoff == 0) {
@@ -1570,6 +1682,12 @@ int main(int argc, char** argv) {
             exit_code = 3;
             break;
         }
+        if (options.stall_at != 0 && !stalled && now - started >= static_cast<std::int64_t>(options.stall_at) * 1000000000LL) {
+            stalled = true;
+            timespec stall{0, static_cast<long>(options.stall_ms) * 1000000L};
+            nanosleep(&stall, nullptr);
+            telemetry.stall_injected_ms.store(options.stall_ms, std::memory_order_relaxed);
+        }
         if (next < now) next = now + kTickNs;   // a stall: do not run a burst of catch-up wakes
         if (options.seconds != 0 && now - started >= static_cast<std::int64_t>(options.seconds) * 1000000000LL) break;
     }
@@ -1577,6 +1695,7 @@ int main(int argc, char** argv) {
     loop_finished.store(true, std::memory_order_release);
     if (!options.no_usb) pthread_join(steward_thread, nullptr);   // closes the gadget and puts the pitch back
     write_ppm_file(options.ppm_file, telemetry);
+    if (live_enabled) pthread_join(dsp_live_thread, nullptr);
     pthread_join(telemetry_thread, nullptr);
 
     const double elapsed = static_cast<double>(now_ns() - started) / 1e9;

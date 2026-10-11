@@ -1,0 +1,144 @@
+--- a/owner/main.cpp  (e53c8407, the source of owner 22fd2622)
++++ b/owner/main.cpp
+@@ -93,6 +93,10 @@
+     double seed_ppm{0.0};
+     bool seed_given{false};
+     std::string ppm_file;
++    // Test only: the loop sleeps once for stall_ms at stall_at seconds, to
++    // exercise the paths a stall takes (resync, gadget overrun, re-prime).
++    unsigned stall_at{0};
++    unsigned stall_ms{0};
+     bool mlock{true};
+     bool realtime{true};
+ };
+@@ -106,6 +110,7 @@
+                "                     [--usb hw:CARD=UAC2Gadget,DEV=0] [--usb-period 48] [--usb-buffer 480]\n"
+                "                     [--rx-queue 144] [--rx-slack 96] [--kp 0.5] [--ki 0.003] [--seed-ppm 0]\n"
+                "                     [--ppm-file PATH]\n"
++               "                     [--stall-at SECONDS --stall-ms MS]\n"
+                "                     [--no-mlock] [--no-rt]\n"
+                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
+                "  --tx-lead   Inferno playback depth held after each gadget block (and the silent lead)\n"
+@@ -116,6 +121,7 @@
+                "              --seed-ppm is given, rewritten once a minute and at exit\n"
+                "  --guard     frames behind the clock that are not cleared yet\n"
+                "  --seconds   stop after this long; 0 runs until a signal\n"
++               "  --stall-at, --stall-ms   test only: stall the loop once, MS long, SECONDS after it starts\n"
+                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
+                stderr);
+     std::exit(2);
+@@ -150,6 +156,8 @@
+         else if (a == "--ki") o.ki = std::strtod(v, nullptr);
+         else if (a == "--seed-ppm") { o.seed_ppm = std::strtod(v, nullptr); o.seed_given = true; }
+         else if (a == "--ppm-file") o.ppm_file = v;
++        else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
++        else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
+         else if (a == "--period") o.period = parse_number(v, "--period");
+         else if (a == "--buffer") o.buffer = parse_number(v, "--buffer");
+         else if (a == "--tx-lead") o.tx_lead = parse_number(v, "--tx-lead");
+@@ -172,6 +180,7 @@
+     if (o.tx_lead < 48 || o.tx_lead + o.guard + o.period > o.buffer) usage("--tx-lead and --guard do not fit the buffer");
+     if (o.priority < 1 || o.priority > 98) usage("--priority must be 1 to 98");
+     if (o.log_every < 1) usage("--log-every must be at least 1");
++    if ((o.stall_at == 0) != (o.stall_ms == 0) || o.stall_ms > 500) usage("--stall-at and --stall-ms go together; at most 500 ms");
+     return o;
+ }
+ 
+@@ -321,6 +330,7 @@
+     std::atomic<std::int32_t> back_peak_2{0};
+     std::atomic<std::int64_t> ppm_estimate_milli{0};
+     std::atomic<bool> ppm_known{false};
++    std::atomic<unsigned> stall_injected_ms{0};   // --stall-at fired; reported once
+ };
+ 
+ void store_max(std::atomic<std::int64_t>& target, std::int64_t value) noexcept {
+@@ -366,6 +376,9 @@
+             std::printf("NETRESYNC dir=%s frames=%" PRId64 " t=%.3f\n", report < 0 ? "capture" : "playback",
+                         report < 0 ? -report : report, seconds);
+             signature = thread_inventory("after-resync", true);
++        }
++        if (const unsigned stall = t.stall_injected_ms.exchange(0, std::memory_order_relaxed); stall != 0) {
++            std::printf("STALL injected ms=%u t=%.3f\n", stall, seconds);
+         }
+         if (const std::uint64_t errors = t.net_errors.load(std::memory_order_relaxed); errors != reported_errors) {
+             const auto code = static_cast<int>(t.last_error.load(std::memory_order_relaxed));
+@@ -947,6 +960,7 @@
+     TxState tx{TxState::idle};
+     unsigned tx_idle_wakes{0};
+     unsigned tx_holdoff{0};
++    bool tx_restart_due{false};   // the gadget capture is stopped and is started again when the holdoff ends
+     usb16x16::owner::DepthFilter tx_filter;
+     // Back: Dante to gadget playback.
+     bool rx_primed{false};
+@@ -987,18 +1001,23 @@
+     t.usb_owner.store(static_cast<int>(UsbOwner::steward_closing), std::memory_order_release);
+ }
+ 
+-// A gadget capture error: the outgoing direction stops and the PCM is made
+-// ready again. Nothing here touches an Inferno handle.
++// A gadget capture error: the outgoing direction stops, and the PCM is
++// stopped now and started again when the holdoff ends (service_tx). Started
++// here, as it was until 2026-10-11, it ran unread through a holdoff five
++// times as long as its buffer, overran, and faulted again at the first read,
++// for ever: one loop stall with a host sending and the outgoing direction
++// never came back (2,500 faults in two minutes, RESULTS.md). Nothing here
++// touches an Inferno handle.
+ void capture_fault(UsbHalf& usb, UsbHandles& handles, std::int64_t code, Telemetry& t) noexcept {
+     t.usb_capture_faults.fetch_add(1, std::memory_order_relaxed);
+     t.usb_last_fault.store(code, std::memory_order_relaxed);
+     set_tx_state(usb, TxState::idle, t);
+     usb.tx_idle_wakes = 0;
+     usb.tx_holdoff = kFaultHoldoffWakes;
++    usb.tx_restart_due = true;
+     snd_pcm_drop(handles.capture.handle);
+-    int rc = snd_pcm_prepare(handles.capture.handle);
+-    if (rc == 0) rc = snd_pcm_start(handles.capture.handle);
+-    if (rc < 0) detach_usb(usb, rc, t);
++    // A gadget that has gone is handed back at once, as before, not after the holdoff.
++    if (code == -ENODEV) detach_usb(usb, code, t);
+ }
+ 
+ void playback_fault(UsbHalf& usb, UsbHandles& handles, std::int64_t code, Telemetry& t) noexcept {
+@@ -1108,7 +1127,12 @@
+ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& depth, bool resynced,
+                 Telemetry& t) noexcept {
+     if (usb.tx_holdoff > 0) {
+-        --usb.tx_holdoff;
++        if (--usb.tx_holdoff == 0 && usb.tx_restart_due) {
++            usb.tx_restart_due = false;
++            int rc = snd_pcm_prepare(handles.capture.handle);
++            if (rc == 0) rc = snd_pcm_start(handles.capture.handle);
++            if (rc < 0) detach_usb(usb, rc, t);
++        }
+         return true;
+     }
+     const long frames = read_gadget(handles.capture, usb.tx_scratch.data());
+@@ -1311,6 +1335,7 @@
+         usb.attached = true;
+         usb.rx_primed = false;
+         usb.tx_holdoff = 0;
++        usb.tx_restart_due = false;
+         usb.rx_holdoff = 0;
+         const int rc = snd_pcm_start(handles.capture.handle);
+         if (rc < 0) detach_usb(usb, rc, t);
+@@ -1439,6 +1464,7 @@
+     std::int64_t next = started + kTickNs;
+     std::int64_t last_wake = started;
+     int exit_code = 0;
++    bool stalled = false;
+     while (!stop_requested.load(std::memory_order_relaxed)) {
+         // While a host is sending, its frames time the loop; otherwise a 1 ms grid does.
+         if (usb.attached && usb.tx != TxState::idle && usb.tx_holdoff == 0) {
+@@ -1460,6 +1486,12 @@
+             // Not recoverable by design: a prepare here is the six-second dropout.
+             exit_code = 3;
+             break;
++        }
++        if (options.stall_at != 0 && !stalled && now - started >= static_cast<std::int64_t>(options.stall_at) * 1000000000LL) {
++            stalled = true;
++            timespec stall{0, static_cast<long>(options.stall_ms) * 1000000L};
++            nanosleep(&stall, nullptr);
++            telemetry.stall_injected_ms.store(options.stall_ms, std::memory_order_relaxed);
+         }
+         if (next < now) next = now + kTickNs;   // a stall: do not run a burst of catch-up wakes
+         if (options.seconds != 0 && now - started >= static_cast<std::int64_t>(options.seconds) * 1000000000LL) break;
