@@ -12394,3 +12394,13 @@ ten-minute results on plugins that had the fault.** Owed: this hour's
 result, a second hour, then the battery and the loaded hour on the accepted
 owner 22fd2622 with the new plugin, the pinning removed unless shown to
 matter; then persistence.
+
+**MEASURED 2026-10-11 03:54-04:55 UTC: the first loaded hour on plugin
+0ee61f2f PASSED: no hole.** 3,600 s, sixteen channels at 0.1, longest zero
+run 1 on every channel; the owner counted no hole on either stream; the
+Ferrofish's neighbour entry stayed REACHABLE and `res_failed` did not move.
+Diagnostic owner 0d13ee3c, pinning as in the two failed hours before it, so
+the plugin is the one thing changed. The five loaded hours before it each
+had one to three holes. One hour; a second follows on the accepted owner
+22fd2622 with this plugin and the pinning removed, with a battery on a
+fresh anchor. Record `work/dante-mode/RESULTS.md`, last section.

@@ -2523,3 +2523,22 @@ restored.
 - The diagnostic owner's start on this plugin took two resyncs in its first
   five seconds (267 and 176 frames): the early-start stall again, on its
   third appearance.
+
+## First loaded hour on plugin 0ee61f2f: PASS, no hole (2026-10-11 03:54-04:55 UTC)
+
+Diagnostic owner 0d13ee3c on plugin 0ee61f2f (0001+0002+0003), pinned as in
+the two hours before it (IRQs on CPU 1, owner on CPUs 2-3), started 03:53:17
+UTC; 3,600 s sixteen-channel soak at 0.1 from 03:54:38 UTC. Evidence
+`outputs/latency/dante-confirm-hour-soak-3600s-32f-20261011T035438Z*`.
+
+- **soak: PASS. Longest zero run 1 on every channel in 172.8 million frames
+  each, peak 0.1000, no discontinuity.** The owner: `out_holes=0/0
+  back_holes=0/0` for the hour, no resync after its first five seconds, no
+  re-prime, largest wake gap 1.03 ms.
+- The neighbour entry at the end: REACHABLE, last confirmed 0 s ago, in use
+  for 3,694 s. `res_failed` did not move in the hour (it had been rising by
+  one every eight seconds).
+- At the rate of the evening (ten holes in five loaded hours, none of the
+  five without one) an hour with no hole would come up by chance about one
+  time in seven. With the mechanism shown gone that is strong, and it is
+  still one hour.
