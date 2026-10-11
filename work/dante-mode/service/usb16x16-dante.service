@@ -39,8 +39,13 @@ Environment=ALSA_PLUGIN_DIR=/usr/local/lib/usb16x16-dante/alsa-plugins
 # Inferno logs an error for every control request it does not implement, most
 # of a line a second with Dante Controller open. They are not faults.
 Environment=RUST_LOG=warn,inferno_aoip::device_server::arc_server=off,inferno_aoip::device_server::info_mcast_server=off
-# Wait up to 20 s for the clock's socket ($$ is systemd's escape for $).
-ExecStartPre=/bin/sh -c 'n=0; until [ -S /tmp/ptp-usrvclock ]; do n=$$((n+1)); [ $$n -gt 100 ] && exit 1; sleep 0.2; done'
+# Wait for the clock, not just its socket: Statime makes the socket at once
+# and has no clock to give until it has heard the Ferrofish, and the plugin
+# then fails with "no clock available" (the first start on 2026-10-11, which
+# cost one of the three restarts). The socket is made fresh at each Statime
+# start, so its age is how long the clock has been up; 8 s was enough twice
+# over. Gives up after 40 s. ($$ is systemd's escape for $.)
+ExecStartPre=/bin/sh -c 'n=0; until [ -S /tmp/ptp-usrvclock ] && [ $$(( $$(date +%%s) - $$(stat -c %%Y /tmp/ptp-usrvclock) )) -ge 8 ]; do n=$$((n+1)); [ $$n -gt 80 ] && exit 1; sleep 0.5; done'
 ExecStart=/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner --seconds 0 --ppm-file /var/lib/usb16x16-dante/usb16x16-dante-owner.ppm --log-every 60
 # The owner puts both pitch controls back itself on a clean exit; again in case it was killed.
 ExecStopPost=-/usr/bin/amixer -q -c UAC2Gadget cset numid=1 1000000

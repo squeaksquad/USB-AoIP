@@ -52,6 +52,11 @@ pi() { ssh -o BatchMode=yes -o ConnectTimeout=8 bdimaio@192.168.1.201 "$@"; }
 # One line of gates, then the endpoint's own account of itself.
 pi_state() {
   pi 'f=$(ls -t /dev/shm/dante-alsaloop-*.log /dev/shm/dante-owner-*.log 2>/dev/null | head -1)
+# Under usb16x16-dante.service the endpoint logs to the journal: read this start of it from there.
+if [ "$(systemctl is-active usb16x16-dante 2>/dev/null)" = active ]; then
+  f=/dev/shm/dante-service-journal.txt
+  journalctl -u usb16x16-dante --no-pager -o cat _SYSTEMD_INVOCATION_ID="$(systemctl show usb16x16-dante -p InvocationID --value)" > $f 2>/dev/null
+fi
 echo "aes67=$(systemctl is-active usb16x16-aes67) statime=$(pgrep -xc statime) endpoint=$(( $(pgrep -xc alsaloop) + $(pgrep -xc usb16x16-dante-) )) udc=$(cat /sys/class/udc/*/state 2>/dev/null)"
 echo "log=$f"
 [ -n "$f" ] && { grep -m1 "^START" "$f"; echo "xrun_lines=$(grep -ciE "xrun|underrun" "$f") lag_lines=$(grep -ciE "lag of|dropout|clock jumped|media clock" "$f") error_lines=$(grep -c " ERROR " "$f") lines=$(wc -l < "$f")"; }

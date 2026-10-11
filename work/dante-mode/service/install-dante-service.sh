@@ -48,7 +48,7 @@ $base/plugins/xrun-option-retry1-confirm/libasound_module_pcm_inferno.so|0ee61f2
 $base/config/asound-inferno-owner.conf|924cfa99f69c6ab1a34488417cb9f92d30b61da4dc29fb37ca785f9d4d1feaae|$conf_dir/asound-inferno-owner.conf|644
 $base/config/statime-first-run.toml|11b055dfca80e9a31357eb40a6417916c9522b26ca9f821fb6a71132e7922d71|$conf_dir/statime.toml|644
 $script_dir/usb16x16-statime.service|01f1bebb07d5e9b5a7e38db628229a0d93e422b0ee388c50bd76b3168926a596|/etc/systemd/system/usb16x16-statime.service|644
-$script_dir/usb16x16-dante.service|8d348f28f700c3da1c6938a593b8730a7598042faaacf398ecb9fcda4ce40a57|/etc/systemd/system/usb16x16-dante.service|644"
+$script_dir/usb16x16-dante.service|4c27c544e08f5ac49ab365852f8600f96fe488df48b85f7a39c390c98a4e87b0|/etc/systemd/system/usb16x16-dante.service|644"
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
 
