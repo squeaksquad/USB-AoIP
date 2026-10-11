@@ -1,0 +1,7 @@
+aes67=inactive statime=1 endpoint=1 udc=configured
+log=/dev/shm/dante-owner-20261010T232909Z.log
+START 20261010T232909Z seconds=0 owner=0d13ee3c plugin=5c6b1c0a config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner.conf trial=no mode=usb
+xrun_lines=1 lag_lines=4 error_lines=1912 lines=9259
+pcm0c state: RUNNING delay : 0 
+pcm0p state: RUNNING delay : 144 
+pitch values=1000014 values=1000014

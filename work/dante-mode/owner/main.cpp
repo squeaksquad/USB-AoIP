@@ -319,6 +319,13 @@ struct Telemetry {
     std::atomic<std::int32_t> out_peak_2{0};
     std::atomic<std::int32_t> back_peak_1{0};
     std::atomic<std::int32_t> back_peak_2{0};
+    // Holes: runs of frames with all sixteen channels zero, between frames that carry signal,
+    // 8 frames to 100 ms long. Count and longest, on what the host sent and on what Dante
+    // returned. A hole in the first is the host's or USB's; in the second only, the network's.
+    std::atomic<std::uint64_t> out_holes{0};
+    std::atomic<std::uint32_t> out_hole_max{0};
+    std::atomic<std::uint64_t> back_holes{0};
+    std::atomic<std::uint32_t> back_hole_max{0};
     std::atomic<std::int64_t> ppm_estimate_milli{0};
     std::atomic<bool> ppm_known{false};
 };
@@ -423,7 +430,7 @@ void* telemetry_entry(void* argument) {
                             " tx_links=%" PRIu64 " tx_reprimes=%" PRIu64 " rx_primes=%" PRIu64 " rx_overflow=%" PRIu64
                             " rx_idle_discards=%" PRIu64 " capture_faults=%" PRIu64 " playback_faults=%" PRIu64
                             " detaches=%" PRIu64 " pitch_write_errors=%" PRIu64 " servo_rejected=%" PRIu64
-                            " out_peak=%d,%d back_peak=%d,%d\n",
+                            " out_peak=%d,%d back_peak=%d,%d out_holes=%" PRIu64 "/%u back_holes=%" PRIu64 "/%u\n",
                             seconds, usb_owner_name(owner), tx_state_name(tx), rx != 0 ? "flow" : "idle",
                             static_cast<double>(t.tx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
                             static_cast<double>(t.rx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
@@ -445,7 +452,9 @@ void* telemetry_entry(void* argument) {
                             t.out_peak_1.exchange(0, std::memory_order_relaxed),
                             t.out_peak_2.exchange(0, std::memory_order_relaxed),
                             t.back_peak_1.exchange(0, std::memory_order_relaxed),
-                            t.back_peak_2.exchange(0, std::memory_order_relaxed));
+                            t.back_peak_2.exchange(0, std::memory_order_relaxed),
+                            t.out_holes.load(std::memory_order_relaxed), t.out_hole_max.load(std::memory_order_relaxed),
+                            t.back_holes.load(std::memory_order_relaxed), t.back_hole_max.load(std::memory_order_relaxed));
             }
             std::fflush(stdout);
             last_tx = txf;
@@ -960,6 +969,8 @@ struct UsbHalf {
     usb16x16::owner::PitchPi rx_servo;
     Scratch tx_scratch{};
     Scratch rx_scratch{};
+    std::uint32_t out_zero_run{0};
+    std::uint32_t back_zero_run{0};
 };
 
 void set_tx_state(UsbHalf& usb, TxState state, Telemetry& t) noexcept {
@@ -1103,6 +1114,29 @@ void observe_peaks(const std::int32_t* block, long frames, std::atomic<std::int3
     if (peak_2 > second.load(std::memory_order_relaxed)) second.store(peak_2, std::memory_order_relaxed);
 }
 
+constexpr std::uint32_t kHoleMinFrames = 8;
+constexpr std::uint32_t kHoleMaxFrames = 4800;
+
+// Count runs of all-zero frames that end in signal (see Telemetry::out_holes). `run` carries
+// the open run from block to block; a run longer than kHoleMaxFrames is silence, not a hole.
+void observe_holes(const std::int32_t* block, long frames, std::uint32_t& run, std::atomic<std::uint64_t>& count,
+                   std::atomic<std::uint32_t>& longest) noexcept {
+    for (long frame = 0; frame < frames; ++frame) {
+        const std::int32_t* samples = block + static_cast<std::size_t>(frame) * kChannels;
+        std::int32_t any = 0;
+        for (unsigned channel = 0; channel < kChannels; ++channel) any |= samples[channel];
+        if (any == 0) {
+            if (run <= kHoleMaxFrames) ++run;
+            continue;
+        }
+        if (run >= kHoleMinFrames && run <= kHoleMaxFrames) {
+            count.fetch_add(1, std::memory_order_relaxed);
+            if (run > longest.load(std::memory_order_relaxed)) longest.store(run, std::memory_order_relaxed);
+        }
+        run = 0;
+    }
+}
+
 // Out, one wake. `depth` is the Inferno playback depth as observed this wake
 // and is updated by what is written. False only on an Inferno error.
 bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& depth, bool resynced,
@@ -1129,6 +1163,7 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
     }
     usb.tx_idle_wakes = 0;
     observe_peaks(usb.tx_scratch.data(), frames, t.out_peak_1, t.out_peak_2);
+    observe_holes(usb.tx_scratch.data(), frames, usb.out_zero_run, t.out_holes, t.out_hole_max);
     const auto lead = static_cast<std::int64_t>(net.lead);
     const std::int64_t ceiling = static_cast<std::int64_t>(net.playback.buffer) - static_cast<std::int64_t>(net.guard) -
                                  static_cast<std::int64_t>(net.playback.period);
@@ -1326,6 +1361,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
     if (usb.attached && !service_tx(usb, handles, net, depth, resynced, t)) return false;
     if (usb.attached) {
         observe_peaks(usb.rx_scratch.data(), received, t.back_peak_1, t.back_peak_2);
+        observe_holes(usb.rx_scratch.data(), received, usb.back_zero_run, t.back_holes, t.back_hole_max);
         service_rx(usb, handles, o, received, t);
     }
     if (usb.attached) run_servos(usb, o, now, t);
@@ -1483,13 +1519,15 @@ int main(int argc, char** argv) {
         std::printf("USBSUMMARY usb_tx=%" PRIu64 " usb_rx=%" PRIu64 " tx_links=%" PRIu64 " tx_reprimes=%" PRIu64
                     " rx_primes=%" PRIu64 " rx_overflow=%" PRIu64 " rx_idle_discards=%" PRIu64 " capture_faults=%" PRIu64
                     " playback_faults=%" PRIu64 " detaches=%" PRIu64 " pitch_write_errors=%" PRIu64
-                    " servo_rejected=%" PRIu64 " tx_integral_ppm=%.2f rx_integral_ppm=%.2f\n",
+                    " servo_rejected=%" PRIu64 " tx_integral_ppm=%.2f rx_integral_ppm=%.2f out_holes=%" PRIu64
+                    "/%u back_holes=%" PRIu64 "/%u\n",
                     telemetry.usb_tx_frames.load(), telemetry.usb_rx_frames.load(), telemetry.tx_links.load(),
                     telemetry.tx_reprimes.load(), telemetry.rx_primes.load(), telemetry.rx_overflow.load(),
                     telemetry.rx_idle_discards.load(), telemetry.usb_capture_faults.load(),
                     telemetry.usb_playback_faults.load(), telemetry.usb_detaches.load(),
                     telemetry.pitch_write_errors.load(), telemetry.servo_rejected.load(), usb.tx_servo.integral(),
-                    usb.rx_servo.integral());
+                    usb.rx_servo.integral(), telemetry.out_holes.load(), telemetry.out_hole_max.load(),
+                    telemetry.back_holes.load(), telemetry.back_hole_max.load());
     }
     if (exit_code == 3) {
         std::printf("FATAL the Inferno PCM reported an error; with the stock plugin this is an underrun "

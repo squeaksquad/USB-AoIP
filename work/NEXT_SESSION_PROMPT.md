@@ -101,6 +101,17 @@ drawn and is still owed, as is the battery on one fresh anchor. The
 control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 `run-owner.sh` on the Pi.
 
+**Added 2026-10-11 00:35 UTC. Read this first.** The holes are located to
+the Dante side: diagnostic owner 0d13ee3c (`OWNER_BIN=usb16x16-dante-owner-diag`,
+prints `out_holes=N/max back_holes=N/max`) counted none on the stream from
+the Mac and both of an hour's two holes on the stream back from Inferno.
+Mac, USB and the owner's copy are cleared. Left: Inferno TX, network to the
+Ferrofish, Ferrofish + Metric Halo loop, network back, Inferno RX. Inferno
+logs nothing when it happens. To separate next, one variable at a time, an
+hour each: plugin 55dee5d8; the Ferrofish looping without the Metric Halo
+(operator's routing); and read the Ferrofish's late-packet counts in Dante
+Controller. The diagnostic owner is what is running on the Pi.
+
 **Added 2026-10-10 23:30 UTC. Read this first.** The loaded hour FAILED: two
 holes of 224 and 352 zeros on all sixteen channels in 3,600 s, nothing on
 the Pi. Two more of the same in the bit-exact runs (the 22:15 block's

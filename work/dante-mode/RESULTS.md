@@ -2297,3 +2297,52 @@ from the gadget and on the stream it reads from Dante, as a diagnostic
 build, and a soak is run until a hole occurs. Zeros in the gadget stream put
 it on the Mac or USB; zeros only in the Dante stream put it on the network
 or the loop; neither puts it after the Pi on the way back.
+
+## The holes are on the Dante side of the owner, not on the Mac or USB (2026-10-10 23:29 to 2026-10-11 00:31 UTC)
+
+Diagnostic owner 0d13ee3c (source 7aa12be8: 22fd2622's code plus counters,
+built on the Pi with the owner stopped, kept as
+`owner/usb16x16-dante-owner-diag` beside the accepted binary, selected with
+`OWNER_BIN=`). On the loop thread it counts runs of frames with all sixteen
+channels zero, 8 frames to 100 ms long and ending in signal, separately on
+what it reads from the gadget (`out_holes`, what the Mac sent) and on what
+it reads from the Inferno capture (`back_holes`, what Dante returned);
+count and longest are on the `USB` line and in `USBSUMMARY`. Plugin
+5c6b1c0a, started 23:29:09 UTC; one 3,600 s loaded soak from 23:29:58 UTC.
+Evidence `outputs/latency/dante-diag-hour-soak-3600s-32f-20261010T232958Z*`.
+
+| | Hole 1 | Hole 2 |
+|---|---|---|
+| Seen by the Mac (soak) | 288 zeros at 2,012.5 s, all 16 channels | 448 zeros at 2,168.1 s, all 16 |
+| Owner, stream from the gadget | none | none |
+| Owner, stream back from Dante | 288 frames, by 2,075.1 s of the owner | 448 frames, by 2,231.1 s |
+
+- **`out_holes=0/0`, `back_holes=2/448` for the hour.** The Mac's audio
+  arrived at the Pi whole. The zeros are already in what the Inferno capture
+  hands the owner, the same lengths to the sample as the Mac then sees. So
+  the Mac's output, the USB legs, the gadget and the owner's copy out are
+  cleared, and so is everything after the Inferno capture on the way back.
+- The hole is therefore somewhere in: Inferno transmit, the network from the
+  Pi to the Ferrofish, the Ferrofish and Metric Halo MADI loop, the network
+  back, Inferno receive.
+- **Inferno said nothing.** No `tx lag` line, no `Lost ... samples`, no flow
+  timeout at either time; the capture kept delivering its usual 48 frames a
+  wake with zeros in them, which is what the plugin does with samples it
+  never received. The owner's loop was on time (wake gap 1.0 ms), outgoing
+  depth 79..80 as always.
+- The Pi's receive counters do not account for it: `UdpRcvbufErrors` is 132
+  in two days of uptime, fewer than this evening's holes would need; softnet
+  drops are zero on all four cores. eth0's `dropped` rose by 1,924 in the
+  64 minutes between two reads, a steady half a frame a second that does
+  not look like bursts of audio packets, but it was not broken down.
+- Six holes now, in about 160 minutes of all-channel observation: 224, 416,
+  224, 352, 288, 448 samples (7, 13, 7, 11, 9, 14 packets of 32), at
+  irregular times.
+
+Also on this start: at 26.1 s a `tx lag of 137 samples` from Inferno, one
+resync of 62 frames, a gadget playback underrun and a relink; the second
+early-start stall of the day on this code (the other at 4.2 s of a 22fd2622
+start). Not connected to the holes by anything seen.
+
+Running on the Pi at the end of this section: the diagnostic owner
+0d13ee3c, not the accepted 22fd2622 (same audio code).

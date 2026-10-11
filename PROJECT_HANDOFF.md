@@ -12303,3 +12303,23 @@ soaks that are too short to see an event about every 25 minutes.** Next: a
 diagnostic owner build that counts all-channel zero runs on the gadget
 stream and on the Dante stream, and a soak until a hole occurs. Owed after
 that: the loaded hour again, persistence.
+
+**FOUND 2026-10-11 00:31 UTC: the holes are on the Dante side of the owner.
+The Mac and the USB legs are cleared.** Record `work/dante-mode/RESULTS.md`,
+last section. Diagnostic owner 0d13ee3c (22fd2622's code plus all-channel
+hole counters on both streams; `owner/usb16x16-dante-owner-diag` on the Pi,
+`OWNER_BIN=` selects it; source in the repo's `owner/main.cpp`) under a
+3,600 s loaded soak: the Mac saw two holes, 288 and 448 zeros on all
+sixteen channels; the owner counted **none on the stream from the gadget and
+the same two, 288 and 448 frames, on the stream back from the Inferno
+capture.** So the loss is in Inferno transmit, the network to the Ferrofish,
+the Ferrofish and Metric Halo loop, the network back, or Inferno receive.
+Inferno logged nothing at either time, the owner's loop was on time, and the
+Pi's UDP receive-buffer and softnet drop counters do not account for it. Six
+holes in about 160 minutes of all-channel observation this evening, 7 to 14
+packets of 32 samples each, at irregular times. Not yet narrowed further.
+Candidates to separate next: the Ferrofish's late-packet statistics in Dante
+Controller (Pi to Ferrofish leg), an hour on plugin 55dee5d8, an hour with
+the Ferrofish looping internally without the Metric Halo. **The loaded hour
+remains failed; the accepted pair's stability claim covers ten minutes, not
+an hour.** The owner running on the Pi is the diagnostic build.
