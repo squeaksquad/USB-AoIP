@@ -3980,6 +3980,15 @@ the kind exists.
 
 ## Inferno latency at 1 ms: both knobs together pass the battery and a loaded hour at 388, `daw_timeline` 576 (12.000 ms); the advertised knob alone makes holes (2026-10-12 12:00-14:56 UTC)
 
+**CORRECTION 2026-10-12 15:20 UTC (next section).** The reading "the holes
+belong to the two knobs being unequal" is RETRACTED, and so is "keep them
+equal" as its explanation. Installed with both knobs at 1 ms, the service
+had the same holes on two of five starts. The holes are a draw made at
+each start of the endpoint whenever the advertised latency is 1 ms; the
+`-rxlat1ms` start drew them and the `-both1ms` start did not. The
+measurements below stand; the battery and the hour describe one start
+that drew well, not the setting.
+
 The experiment chosen for this session. Owner 62879558 and plugin 0ee61f2f
 throughout, unchanged; only the ALSA config differs between arms. The
 control is the installed service; each test arm is the same owner binary
@@ -4109,3 +4118,69 @@ it (fifteen gadget restarts in under three hours by then); a second
 gadget restart at 14:54:02 brought it back in seven seconds, with no
 coreaudiod kill. On that anchor: noise probe clean, 400 loaded impulses
 all 474, `daw_timeline` 662 (13.792 ms). `NRestarts` 0.
+
+## Installed at 1 ms, the service has the holes on two starts of five: they are a draw at each start, not a matter of unequal knobs (2026-10-12 15:09-15:20 UTC)
+
+The operator ran `install-dante-latency.sh` (config a91f5766 installed,
+924cfa99 kept as `.previous`), restarted `usb16x16-dante` at 15:09:12 UTC
+and the gadget at 15:09:17. The battery was not run: the first noise probe
+on the installed form failed. The session then restarted the service four
+times, a noise probe 65 s after each. Owner 62879558, plugin 0ee61f2f,
+both knobs 1 ms on every one. Evidence `outputs/latency/lat1ms-installed-*`.
+
+| Start (UTC) | Zero runs of 4 in a 26 s probe | Zeros | Grid position (start mod 32) |
+|---|---|---|---|
+| 15:09:12 | 17,505 | 5.7 % | 23 |
+| 15:12:43 | 17,341 | 5.7 % | 17 |
+| 15:14:29 | 0 | 0 | |
+| 15:16:15 | 0 | 0 | |
+| 15:18:01 | 0 | 0 | |
+
+With the two candidate starts of the section above that advertised 1 ms
+(`-rxlat1ms` with holes, `-both1ms` clean for 100 minutes), that is three
+starts of seven with holes. Within a start the state did not change: five
+probes over 25 minutes all had them on `-rxlat1ms`, and none appeared in
+the hour on `-both1ms`. On the first installed start the owner's
+`back_holes` counted them (11 with a longest of 936 at two minutes) and
+`out_holes` was 0, as before.
+
+**What the holes are, as far as it is read.** Every run is exactly four
+samples and every run in a capture starts at the same position modulo 32:
+17,400 or so runs in 1.245 M samples is about 45 % of 32-sample blocks
+losing four samples each. The Ferrofish reports none of the Pi's packets
+late (0 late, peak 645 us, in 27 minutes of the `-rxlat1ms` start). So
+this is not late packets in Dante's sense; it looks like a fixed phase,
+set when the flows start, between where the Pi's 32-sample blocks land
+and where the Ferrofish reads them at a 1 ms window, with a start drawing
+either a phase that clears it or one that clips the end of some blocks.
+That is an inference from the pattern, not a measurement: nothing here
+shows which end of the block is lost or on which device.
+
+**The Mac-sleep episode of 02:02 UTC has the same signature** (four-sample
+zero runs on a 32-sample grid on the return, at 2 ms, after the first
+wake, gone after later ones). If it is the same thing, the phase draw
+exists at 2 ms too and is only rare there; one start with holes at 2 ms
+in the whole record against three of seven at 1 ms.
+
+**Consequences.** 1 ms advertised is not fit for service: a restart, a
+reboot or an Ethernet-loss endpoint restart has something like two
+chances in five of coming up with 5 % of samples missing, silently, with
+every counter except `back_holes` clean. The 388 / 576 figures are what
+the path reads on a start that draws well. `TX_LATENCY_NS` alone at 1 ms
+(the Pi's own receive, about 40 samples) was clean on its one start,
+which is one start. Standing check from now on: a noise probe after every
+endpoint start at any latency setting, before any figure is read.
+
+**State at 15:20 UTC.** The service runs the 15:18:01 start, config
+a91f5766 (1 ms / 1 ms), noise probe clean on it. Recommended and asked of
+the operator: `sudo ./install-dante-latency.sh rollback`, then restart
+the endpoint and the gadget, then a noise probe. Until then any restart
+is a new draw.
+
+**Next, if 1 ms is wanted.** Find the phase: an eth0 capture of the Pi's
+transmit on a start with holes and one without (are the samples in the
+packets, and what are the timestamps against the packet boundaries), and
+`flows_tx.rs` for how the first packet's timestamp is chosen. If the
+phase is the Pi's to choose, the owner or the plugin can choose it; if it
+is not, 1 ms needs a start-time probe and re-draw, which is not a
+service.

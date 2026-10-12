@@ -13177,6 +13177,11 @@ audio whole throughout. In service: the accepted form, the Ferrofish with
 AES67 mode off (the AES67 rollback needs it back on and a Ferrofish
 reboot), level 507 on the 11:50:22 anchor.
 
+**CORRECTION 2026-10-12 15:20 UTC to the entry below:** "the two knobs
+must be equal" is RETRACTED. The holes are a draw at each endpoint start
+when the advertised latency is 1 ms (three starts of seven); the battery
+and hour below are one start that drew well. See the FOUND entry of 15:20.
+
 **MEASURED 2026-10-12 12:00-14:50 UTC: Inferno latency at 1 ms. Both knobs
 at 1 ms pass the battery and a loaded hour at 388, `daw_timeline` 576
 (12.000 ms), about 100 samples under the same day's control; the
@@ -13220,3 +13225,25 @@ meanwhile: the accepted form at 2 ms, restarted 14:51:15 UTC, 474 /
 after the fifteenth gadget restart in under three hours the Mac's
 CoreAudio did not list `USB 16x16` though USB showed it; one more gadget
 restart brought it back in seven seconds, no coreaudiod kill.
+
+**FOUND 2026-10-12 15:09-15:20 UTC: installed at 1 ms / 1 ms, the service
+came up with the holes on two starts of five. 1 ms advertised is not fit
+for service; rollback asked of the operator.** Record
+`work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/lat1ms-installed-*`. The operator installed config
+a91f5766 with `install-dante-latency.sh` and restarted the endpoint and
+the gadget at 15:09. The first noise probe read four-sample zero runs on
+5.7 % of samples, all at one position modulo 32; the battery was not run.
+Four more service restarts by the session: holes again at 15:12:43, clean
+at 15:14:29, 15:16:15 and 15:18:01. With the two candidate starts of the
+entry above, three starts of seven that advertised 1 ms have the holes,
+fixed for the life of the start, the Ferrofish reporting nothing late.
+The 02:02 UTC Mac-sleep episode at 2 ms has the same signature and may be
+the same draw, rare at 2 ms. Mechanism not read (a phase between the
+Pi's 32-sample blocks and the Ferrofish's read at the 1 ms window is an
+inference). Standing check: a noise probe after every endpoint start
+before any figure is read. In service at 15:20: the 15:18:01 start on
+a91f5766, probe clean, a new draw at any restart. To go back to the point
+of record: `sudo ./install-dante-latency.sh rollback` in
+`~/usb-16x16-work/dante-mode/service/`, `sudo systemctl restart
+usb16x16-dante`, `sudo systemctl restart usb-16x16.service`, noise probe.

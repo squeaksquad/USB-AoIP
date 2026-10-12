@@ -43,6 +43,21 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
+**FOUND 2026-10-12 15:20 UTC, read before the DONE block: 1 ms is NOT fit
+for service.** Installed at 1 ms / 1 ms the service had four-sample holes
+(5.7 % of samples, one position modulo 32, Ferrofish 0 late) on two starts
+of five; with the candidates, three starts of seven. It is a draw at each
+endpoint start, not unequal knobs: that reading in the DONE block is
+retracted. RESULTS.md's last section. First thing: `sha256sum
+/etc/usb16x16/dante/asound-inferno-owner.conf` (a91f5766 is 1 ms and
+means the rollback has not been run: `sudo ./install-dante-latency.sh
+rollback`, his; 924cfa99 is the point of record) and a noise probe on
+whatever start is running. A noise probe after EVERY endpoint start from
+now on. Next if 1 ms is wanted: locate the phase (eth0 capture on a start
+with holes and one without; `flows_tx.rs`, how the first timestamp is
+chosen). `TX_LATENCY_NS` alone at 1 ms (about 40 samples) was clean on
+one start only. The 02:02 UTC sleep episode has the same signature.
+
 **DONE 2026-10-12 12:00-14:56 UTC: the 1 ms experiment below was run; its
 result is STAGED, not installed. Read this before the CHOSEN block.**
 RESULTS.md's last section and the handoff's last two entries. Both knobs
