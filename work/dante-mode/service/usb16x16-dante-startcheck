@@ -1,0 +1,166 @@
+#!/bin/bash
+# After each start of usb16x16-dante.service: is a return flow losing packets?
+# If it is, restart the endpoint, a bounded number of times. Started by
+# usb16x16-dante-startcheck.service whenever the endpoint starts.
+#
+#   usb16x16-dante-startcheck               judge this start; restart on a short one (root)
+#   usb16x16-dante-startcheck --dry-run     judge and say what it would do; needs no root
+#   usb16x16-dante-startcheck --classify N  whole | short | idle for a rate of N frames a second
+#
+# Why (2026-10-12, RESULTS.md, "The holes are packets from the Ferrofish that
+# never reach the Pi" and the section after it): about one endpoint start in
+# three comes up with one return flow missing the packet that falls just
+# after the Pi's own transmit burst, about 800 packets a second, for the life
+# of that start. Every counter the owner has stays clean. Not explained, and
+# not located between the Ferrofish, the switch and the Pi's port; this is a
+# stopgap that makes a start come up whole by trying again, not a fix.
+#
+# How it judges, with no audio and no capture: eth0's MAC counts received
+# frames by size (ethtool -S). Dante audio is the only steady traffic of 128
+# bytes and over, and every whole flow makes a multiple of 1,500 packets a
+# second (48,000 / frames a packet, for the 4, 8, 16 or 32 frames a sender
+# may use towards Inferno). A start that is losing packets is about 800
+# short of the multiple, or about 115 with two flows losing. So: the rate of
+# such frames, twice over ten seconds, and its distance from the nearest
+# multiple of 1,500. Whole starts have measured 5 over; the limit is 60.
+# This rests on the loss having the size it has had; a fault that removed
+# exactly 1,500 a second would pass.
+#
+# What it will not do: judge before the flows are up (it waits, and with no
+# audio arriving at all it says so and leaves the endpoint alone); restart
+# more than MAX_RESTARTS times in an EPISODE; restart a start it did not
+# measure (the unit's InvocationID must still be the one it began with).
+# After the last allowed restart a short start is left running and logged at
+# error priority: sound with holes is still sound.
+#
+# The endpoint's own start limit (three starts in five minutes, there against
+# restart loops under a streaming Mac) would refuse the third retry, so each
+# restart here is preceded by reset-failed. This loop is bounded by its own
+# count instead.
+set -uo pipefail
+
+interface=${USB16X16_STARTCHECK_IFACE:-eth0}
+unit=usb16x16-dante.service
+state_dir=${USB16X16_STARTCHECK_DIR:-/run/usb16x16-dante-startcheck}
+# ethtool lives in /usr/sbin, which is not on every PATH this is run with (an ssh session, for one).
+ethtool=${USB16X16_STARTCHECK_ETHTOOL:-$(command -v ethtool || echo /usr/sbin/ethtool)}
+systemctl=${USB16X16_STARTCHECK_SYSTEMCTL:-systemctl}
+grid=1500           # packets a second a whole flow is a multiple of
+tolerance=60        # distance from the multiple that still counts as whole
+floor=1000          # under this no audio flow is up
+window=${USB16X16_STARTCHECK_WINDOW:-10}          # seconds a reading
+settle=${USB16X16_STARTCHECK_SETTLE:-45}          # seconds after the start before the first reading
+flows_timeout=${USB16X16_STARTCHECK_FLOWS:-180}   # seconds to wait for audio to arrive at all
+max_restarts=${USB16X16_STARTCHECK_MAX:-4}
+episode=900         # seconds after which the restart count starts again
+
+say() { echo "startcheck: $*"; }
+
+classify() {
+  local rate=$1 over distance
+  if [ "$rate" -lt "$floor" ]; then echo idle; return; fi
+  over=$(( rate % grid ))
+  distance=$over
+  [ $(( grid - over )) -lt "$distance" ] && distance=$(( grid - over ))
+  if [ "$distance" -le "$tolerance" ]; then echo whole; else echo short; fi
+}
+
+audio_frames() {   # received frames of 128 bytes and over, so far
+  "$ethtool" -S "$interface" 2>/dev/null | awk '
+    /rx_128_255_byte_frames|rx_256_511_byte_frames|rx_512_1023_byte_frames|rx_1024_1518_byte_frames/ { n += $2; seen = 1 }
+    END { if (seen) print n; else exit 1 }'
+}
+
+rate() {   # frames a second over one window
+  local before after
+  before=$(audio_frames) || return 1
+  sleep "$window"
+  after=$(audio_frames) || return 1
+  echo $(( (after - before) / window ))
+}
+
+invocation() { "$systemctl" show -p InvocationID --value "$unit" 2>/dev/null; }
+
+mode=run
+case "${1:-}" in
+  --classify) [[ ${2:-} =~ ^[0-9]+$ ]] || { echo "usage: $0 --classify RATE" >&2; exit 2; }; classify "$2"; exit 0 ;;
+  --dry-run) mode=dry ;;
+  "") ;;
+  *) echo "usage: $0 [--dry-run | --classify RATE]" >&2; exit 2 ;;
+esac
+
+status() {   # one line for whoever wants to know: scripts, the page
+  [ "$mode" = run ] || return 0
+  mkdir -p "$state_dir" 2>/dev/null || return 0
+  echo "state=$1 rate=${2:-} restarts=${3:-0} invocation=${started:-} time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$state_dir/status.new" &&
+    mv -f "$state_dir/status.new" "$state_dir/status"
+}
+
+# A restart of the endpoint stops this unit with it; that is the expected end of a retry.
+trap 'exit 0' TERM
+
+if [ "$("$systemctl" is-active "$unit" 2>/dev/null)" != active ]; then
+  say "$unit is not active; nothing to judge"
+  exit 0
+fi
+started=$(invocation)
+audio_frames >/dev/null || { say "$interface has no per-size frame counters (ethtool -S); cannot judge"; status unknown; exit 0; }
+status checking
+began=$(date +%s)
+sleep "$settle"
+
+verdict=
+while :; do
+  first=$(rate) || { say "counters unreadable; cannot judge"; status unknown; exit 0; }
+  second=$(rate) || { say "counters unreadable; cannot judge"; status unknown; exit 0; }
+  a=$(classify "$first"); b=$(classify "$second")
+  if [ "$a" = "$b" ] && [ "$a" != idle ]; then verdict=$a; break; fi
+  if [ $(( $(date +%s) - began )) -ge "$flows_timeout" ]; then
+    if [ "$a" = idle ] || [ "$b" = idle ]; then
+      say "no audio arriving after ${flows_timeout} s ($first, $second frames a second): nothing to judge, endpoint left alone"
+      status idle "$second"
+      exit 0
+    fi
+    verdict=short   # two readings that never agreed and neither whole twice
+    break
+  fi
+  say "not settled ($first $a, $second $b); reading again"
+done
+
+if [ "$(invocation)" != "$started" ]; then
+  say "the endpoint was restarted while this start was being read; its own check takes over"
+  exit 0
+fi
+
+count=0
+if [ "$mode" = run ] && [ -r "$state_dir/restarts" ]; then
+  read -r count since < "$state_dir/restarts" || true
+  [[ ${count:-} =~ ^[0-9]+$ && ${since:-} =~ ^[0-9]+$ ]] || { count=0; since=0; }
+  [ $(( $(date +%s) - since )) -gt "$episode" ] && count=0
+fi
+
+if [ "$verdict" = whole ]; then
+  say "whole: $first and $second audio frames a second (restarts before it: $count)"
+  [ "$mode" = run ] && rm -f "$state_dir/restarts"
+  status ok "$second" "$count"
+  exit 0
+fi
+
+short_by() { echo $(( grid - $1 % grid )); }   # below the next multiple of the grid
+if [ "$count" -ge "$max_restarts" ]; then
+  echo "<3>startcheck: SHORT and giving up: $first and $second audio frames a second after $count restarts; the endpoint is left running with holes"
+  status gave-up "$second" "$count"
+  exit 0
+fi
+if [ "$mode" = dry ]; then
+  say "SHORT: $first and $second audio frames a second ($(short_by "$second") under a multiple of $grid); would restart $unit"
+  exit 0
+fi
+[ "$count" -eq 0 ] && since=$(date +%s)
+count=$(( count + 1 ))
+mkdir -p "$state_dir" && echo "$count $since" > "$state_dir/restarts"
+echo "<4>startcheck: SHORT: $first and $second audio frames a second ($(short_by "$second") under a multiple of $grid); restarting $unit, restart $count of $max_restarts"
+status restarting "$second" "$count"
+"$systemctl" reset-failed "$unit" 2>/dev/null
+"$systemctl" --no-block restart "$unit"
+exit 0

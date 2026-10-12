@@ -1,0 +1,29 @@
+# After each start of the Dante endpoint, read whether a return flow is losing
+# packets and restart the endpoint if it is (usb16x16-dante-startcheck has the
+# why, the method and its limits). A stopgap for the start-drawn holes of
+# 2026-10-12, kept out of usb16x16-dante.service itself so that unit stays
+# the accepted one, byte for byte, and its start does not wait on this.
+#
+# Wanted by the endpoint, so every start of it (by hand, by its own
+# Restart=, by the applier, at boot) starts one check; part of it, so
+# stopping or restarting the endpoint ends a check in progress.
+[Unit]
+Description=USB 16x16 Dante start check (restart the endpoint when a return flow is losing packets)
+After=usb16x16-dante.service
+PartOf=usb16x16-dante.service
+
+[Service]
+Type=oneshot
+# Root, for the restart; it reads eth0's counters and asks systemd, nothing else.
+ExecStart=/usr/local/libexec/usb16x16-dante/usb16x16-dante-startcheck
+# The restart count has to outlive one check.
+RuntimeDirectory=usb16x16-dante-startcheck
+RuntimeDirectoryPreserve=yes
+# 45 s to settle, two ten-second readings, up to three minutes for the flows.
+TimeoutStartSec=300
+NoNewPrivileges=yes
+ProtectHome=yes
+SyslogIdentifier=usb16x16-dante-startcheck
+
+[Install]
+WantedBy=usb16x16-dante.service

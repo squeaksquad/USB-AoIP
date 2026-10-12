@@ -4444,3 +4444,53 @@ What would separate them is a view of the wire that is not the Pi's:
 the switch's per-port counters or a mirror port, or the same Ferrofish
 channels as a multicast flow captured on a second machine. Why none of
 this showed before the Ferrofish left AES67 mode is not explained either.
+
+## A start check for the service: written, tried on eight starts, staged (2026-10-12 21:45-22:00 UTC)
+
+Asked for by the operator as the stopgap; the Ferrofish stays at 1.0 msec
+(his decision). The switch between the Pi and the Ferrofish is the Netgear
+GS305EP of the earlier work.
+
+**What it is.** `service/usb16x16-dante-startcheck` (058e9177) and
+`service/usb16x16-dante-startcheck.service` (e0ffc622), installed and
+enabled by `service/install-dante-startcheck.sh` (2013b67b; `rollback`
+disables and removes both). The unit is a root oneshot wanted by
+`usb16x16-dante.service`, so every start of the endpoint starts one check;
+the endpoint's unit itself is not changed and does not wait on it.
+Forty-five seconds after the start it reads eth0's received frames of 128
+bytes and over (`ethtool -S`) twice over ten seconds. A whole flow makes a
+multiple of 1,500 packets a second; a reading more than 60 from a multiple,
+twice, is a short start, and the endpoint is restarted (`reset-failed`
+first, since the endpoint's own limit is three starts in five minutes).
+At most four restarts in fifteen minutes, then a short start is left
+running and logged as an error. Under 1,000 a second it judges nothing.
+It refuses to restart a start it did not read (InvocationID). One line of
+state in `/run/usb16x16-dante-startcheck/status`; verdicts in
+`journalctl -u usb16x16-dante-startcheck`.
+
+**Its limits.** It recognises this loss by its size (about 800 a second
+off the multiple, about 115 with two flows losing); a fault removing
+exactly 1,500 a second would pass. A short start costs about 70 s before
+the endpoint is back, and each restart is a new latency draw. It restarts
+the endpoint under whatever is using it. The applier watches a start for
+up to 75 s and treats a restart it did not make as a failure; the check
+acts no sooner than 65 s after a start, so the two can meet on a slow
+start.
+
+**Tried.** `test-dante-startcheck.sh`: 26 checks against the day's
+measured rates and a stand-in ethtool and systemctl, all pass (Mac and
+Pi). On the Pi in `--dry-run` (reads and says what it would do, no root)
+on the running start and seven restarts: seven read whole at 6,015 to
+6,017 a second, one read SHORT at 5,205 and 5,204, 796 under the
+multiple. The first attempt at this trial found a fault before it found
+anything else: over ssh `ethtool` is not on the PATH, the check declined
+to judge, and seven restarts ran inside two seconds; the endpoint came
+through it. Fixed (it falls back to `/usr/sbin/ethtool`).
+
+**Not tried:** the unit itself (it needs root to install): that a short
+start is in fact restarted by it, the count across restarts, the status
+file, and its behaviour at boot. Owed after the install.
+
+**State at 22:00 UTC.** Nothing installed. Config 924cfa99, Ferrofish 1.0
+msec, start 21:53:57 read whole, gadget anchor 21:56:04, sixteen-channel
+soak PASS, 400 loaded impulses all 477, `daw_timeline` 665 (13.854 ms).

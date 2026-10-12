@@ -13330,3 +13330,21 @@ seconds against the expected 6,000 (24,000 at 0.25 msec). Cause still
 between the Ferrofish, the switch and the Pi's port. In service at 21:40:
 Ferrofish 1.0 msec, config 924cfa99, start 21:34:19 at full rate, soak
 PASS on sixteen channels, 472 / `daw_timeline` 660 (13.750 ms).
+
+**STAGED 2026-10-12 22:00 UTC: a start check for the Dante service, not
+installed.** Record `work/dante-mode/RESULTS.md`, last section. Decided by
+the operator: the Ferrofish stays at 1.0 msec, and the service gets a
+check that restarts a start which is losing return packets.
+`work/dante-mode/service/usb16x16-dante-startcheck` (058e9177), its
+oneshot unit `usb16x16-dante-startcheck.service` (e0ffc622), wanted by
+the endpoint's unit and leaving that unit unchanged, and
+`install-dante-startcheck.sh` (2013b67b, with `rollback`); all three on
+the Pi at `~/usb-16x16-work/dante-mode/service/`. It reads eth0's received
+audio frame rate after each start and restarts the endpoint when the rate
+is off a multiple of 1,500 by more than 60, at most four times in fifteen
+minutes. Tests pass; in dry-run on eight real starts it read seven whole
+(6,015 to 6,017) and one short (5,205). Owed after the operator's install:
+watch it act on a short start, the restart count, the status file, a boot.
+A stopgap: the cause of the loss is still between the Ferrofish, the
+GS305EP and the Pi's port. In service: config 924cfa99, start 21:53:57
+whole, soak PASS, 477 / `daw_timeline` 665 (13.854 ms).

@@ -43,6 +43,20 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
+**STAGED 2026-10-12 22:00 UTC, newest.** A start check for the service
+(`service/usb16x16-dante-startcheck`, its oneshot unit, and
+`install-dante-startcheck.sh`, on the Pi, the operator's sudo): after each
+endpoint start it reads eth0's received audio frame rate and restarts the
+endpoint if a flow is losing packets, at most four times. Check whether it
+is installed: `systemctl is-enabled usb16x16-dante-startcheck`. If it is,
+owed: watch it act on a short start (`journalctl -u
+usb16x16-dante-startcheck`, `/run/usb16x16-dante-startcheck/status`), and a
+boot; and remember that an endpoint restart may now be followed about 65 s
+later by another one, so wait for `state=ok` in the status file before
+measuring. `usb16x16-dante-startcheck --dry-run` judges a start without
+root. The operator keeps the Ferrofish at 1.0 msec; the switch is the
+Netgear GS305EP.
+
 **MEASURED 2026-10-12 21:40 UTC, newest; read with the block under it.**
 The Ferrofish's device latency is now 1.0 msec (operator): it sends
 16-frame packets, 3,000 a second a flow. The loss is unchanged in count
