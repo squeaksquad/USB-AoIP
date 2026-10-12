@@ -43,6 +43,30 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
+**DONE 2026-10-12 12:00-14:56 UTC: the 1 ms experiment below was run; its
+result is STAGED, not installed. Read this before the CHOSEN block.**
+RESULTS.md's last section and the handoff's last two entries. Both knobs
+at 1 ms (`config/asound-inferno-owner-both1ms.conf`, a91f5766) passed five
+anchors (374 to 392), the battery and a loaded hour on a candidate start:
+388, `daw_timeline` 576 (12.000 ms), about 100 samples under the day's
+control (470 to 511). `TX_LATENCY_NS` alone at 1 ms was clean (438 to
+463). `RX_LATENCY_NS` alone at 1 ms FAILED with four-sample holes on 5 %
+of samples while the Ferrofish reported 0 late: keep the two equal, always;
+why is not read. Staged: `service/install-dante-latency.sh` (b4d984be, on
+the Pi), the operator's sudo, then `systemctl restart usb16x16-dante` and
+a gadget restart. Check first whether it is installed (`sha256sum
+/etc/usb16x16/dante/asound-inferno-owner.conf`: 924cfa99 is 2 ms,
+a91f5766 is 1 ms). Owed after install: noise + 4 x 800 + 3,600 s on the
+installed form, then his ACCEPTED; the Ferrofish's Peak and Late over the
+candidate's hour (his read, asked for); a preset and the fault paths at
+1 ms (a 4.6 ms owner stall is five windows late there); the mechanism of
+the unequal-knob holes. The service runs the accepted 2 ms form, 474 on
+the 14:54:02 UTC anchor. Rule from the day: after many gadget restarts
+the Mac can stop listing the device; one more gadget restart restored it.
+The anchor script used is not in the repo: per anchor, gadget restart,
+30 s, `measure-candidate.sh noise 32`, `USB16X16_OTHER_LOAD=0.1
+measure-candidate.sh 32 400`.
+
 **CHOSEN 2026-10-12 for the next session: Inferno latency at 1 ms.**
 Before-reads first (`journalctl -u usb16x16-dante -n 3`, `NRestarts`, the
 neighbour entry, a noise probe for the level: 507 on the 11:50:22 UTC

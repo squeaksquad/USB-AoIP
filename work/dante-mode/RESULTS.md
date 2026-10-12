@@ -3977,3 +3977,135 @@ after any event that re-primes a direction is a new draw, as the record
 already says; this is a large one. An owner that re-primed back to its
 intended total after the disturbance settled would avoid it; nothing of
 the kind exists.
+
+## Inferno latency at 1 ms: both knobs together pass the battery and a loaded hour at 388, `daw_timeline` 576 (12.000 ms); the advertised knob alone makes holes (2026-10-12 12:00-14:56 UTC)
+
+The experiment chosen for this session. Owner 62879558 and plugin 0ee61f2f
+throughout, unchanged; only the ALSA config differs between arms. The
+control is the installed service; each test arm is the same owner binary
+(`owner/usb16x16-dante-owner-dspmeter`) through `usb16x16-dante-candidate
+start ... CONFIG=<file> --log-every 1` with the service stopped (so no
+meter file and a one-second log, otherwise the service's form). Nothing
+was installed. Evidence `outputs/latency/lat1ms-*`; the owners' own logs,
+without their periodic lines, in `outputs/latency/lat1ms-owner-20261012/`.
+
+**Method.** A candidate start is a new draw, and the draw band (465 to
+509) is as wide as the gain expected from one direction, so every arm was
+read on five fresh anchors: `sudo -n systemctl restart usb-16x16.service`
+under the running endpoint, 30 s, the noise probe, then 400 loaded
+impulses at 32 frames. Every impulse run in this section had spread 0.
+
+| Arm | Config | `RX_LATENCY_NS` (advertised) | `TX_LATENCY_NS` (Pi's receive) | Levels on five anchors | Noise probes | 600 s soak |
+|---|---|---|---|---|---|---|
+| Control (service) | 924cfa99 | 2 ms | 2 ms | 507, 472, 473, 470, 511 | clean | not run today |
+| `-txlat1ms` | e8cd2395 | 2 ms | 1 ms | 438, 441, 463, 454, 441 | clean | PASS |
+| `-rxlat1ms` | 6825964a | 1 ms | 2 ms | (459, 419, 459, 461, 452) | holes in all five | FAIL |
+| `-both1ms` | a91f5766 | 1 ms | 1 ms | 374, 382, 389, 392, 388 | clean | PASS |
+
+The control's first two figures are the 11:50:22 anchor of the section
+above and the 11:56:49 anchor found at the before-read (one more gadget
+restart had been made after the pickup prompt was written; the service
+read 472 on it, noise probe clean, `NRestarts` 0, the Ferrofish's
+neighbour entry REACHABLE). The control's draws sit in two tight groups,
+470 to 473 and 507 to 511.
+
+**Which knob is which, read in Dante Controller by the operator.** With
+only `TX_LATENCY_NS` at 1 ms the Ferrofish's Latency tab still headed the
+Pi's flows `USB-16x16-Inferno @ 2 msec`. With `RX_LATENCY_NS` at 1 ms it
+read `@ 1 msec`, Setting 1 msec: the Ferrofish accepts 1 ms for these
+flows. The Pi's own tab (`FF-PULSE-16-DX @ N msec`) read 2 msec with
+`TX_LATENCY_NS` at 2 ms and 1 msec with it at 1 ms. So the crossing in
+"Latency settings as wired" is confirmed from outside: `RX_LATENCY_NS` is
+what the Pi's receivers apply, `TX_LATENCY_NS` is what the Pi applies to
+what it receives.
+
+**The Pi's receive side alone (`-txlat1ms`, 12:12:42 to 12:40 UTC).** Mean
+447 against the control's 487, 39 lower; lowest draws 438 against 470.
+Five draws an arm do not pin that to the 48 a millisecond is. Clean
+probes, soak PASS, `back_holes` only the one each gadget restart leaves.
+
+**The advertised side alone (`-rxlat1ms`, 12:40:11 to 13:07 UTC): FAIL.**
+Every noise probe had four-sample zero runs and nothing else: 13,303 to
+18,633 runs in a 26 s capture, 4.4 to 6.0 % of samples. The soak failed
+(longest zero run 5). The owner counted the holes on the stream back from
+Inferno only (`back_holes` 75 with a longest of 1023 by the end,
+`out_holes` 3, the gadget restarts'), so the Mac, USB and the owner's copy
+out are clear. Over the same 27 minutes the Ferrofish's Latency tab for
+the Pi's flows read Setting 1 msec, peak 645 us, average 552 us, **Late
+0**, and the Pi's tab for the Ferrofish's flows peak 3.3 msec (a few
+counts in its last bin), average 162 us, Late 0. So the Ferrofish did not
+judge the Pi's packets late, and the samples were lost all the same. Where
+is not located: Inferno's transmit, the Ferrofish's playout, or the
+return. The levels in brackets are what the correlation read through the
+holes and are not a result.
+
+**Both at 1 ms (`-both1ms`, 13:07:40 to 14:50 UTC): PASS, and no holes.**
+The prediction made before running it, that it would fail like the arm
+above because it contains that arm's setting, was wrong. The holes
+belong to the two knobs being unequal with the advertised one the lower,
+not to 1 ms. The config has said "keep them equal" since the prototype;
+this is the first measurement of why, and the mechanism is still not
+read. Mean of the five anchors 385, 102 under the control's 487: the two
+milliseconds, within what five draws can say.
+
+Battery and hour, all on the 13:21:12 UTC anchor of that one candidate
+start: noise probe clean; 600 s sixteen-channel soak PASS (13:24); noise
+probe clean (13:34); four loaded 800-impulse runs, **all 388, spread 0,
+`daw_timeline` 576 (12.000 ms)**; 3,600 s sixteen-channel soak
+(13:49:34) **PASS**, longest zero run 1, no discontinuity; closing noise
+probe clean at the same offset. Over the hour the owner's worst loop gap
+was 1,036 us, no resync, no capture or playback fault, no re-prime,
+`tx_mean` 126.0 to 129.6 and `rx_mean` 142.4 to 146.0 against 128 and
+144, the Ferrofish's neighbour entry REACHABLE before and after. Dante
+Controller at the arm's start: both tabs at 1 msec, the Ferrofish's peak
+604 us, the Pi's 208 us. The operator cleared both histograms at about
+13:17 UTC; their Peak and Late at the end of the hour are his to read and
+are not in this record yet.
+
+**What changes besides the level.** Inferno's `tx lag of N samples
+detected, or media clock jumped, dropout occurs!` (N 127 to 143, four
+lines, one a flow) appeared within a second of a gadget restart at three
+of five restarts on `-both1ms` and two of five on `-txlat1ms`, against
+one of the three control restarts made today. `TX_LATENCY_NS` is also the bound on how stale a
+sample may be before a transmit flow is re-timed ("Latency settings as
+wired"), so at 1 ms a gadget restart trips it more often. It falls while
+the host is detached and nothing follows it in the probes or the levels,
+but it is a difference from 2 ms. The other events in the candidates'
+logs were also at gadget restarts: one 3.9 ms loop gap with a 60-frame
+playback resync on `-txlat1ms`, three playback resyncs of 19 to 55 frames
+on `-rxlat1ms`. None fell inside a measurement.
+
+**Margins, as far as they are known.** Pi to Ferrofish: peak 583 to 770
+us seen today against the 1 ms window, with a cluster near 0.9 ms noted
+on an earlier night and the Late count for this hour still to be read.
+Ferrofish to Pi: average 160 us, bulk under 0.5 ms; the few counts
+beyond 2 ms in the Pi's tab were there at 2 ms too and are not explained.
+Not tested at 1 ms: a preset, the fault paths (cable pull, Controller
+restart, Mac sleep, a leader reboot), an owner stall of the 4.6 ms kind,
+which at 1 ms is five windows late instead of two.
+
+**Staged for install, not installed.** `service/install-dante-latency.sh`
+(b4d984be), in the repo and at `~/usb-16x16-work/dante-mode/service/`:
+replaces `/etc/usb16x16/dante/asound-inferno-owner.conf` 924cfa99 with
+`config/asound-inferno-owner-both1ms.conf` a91f5766, keeps the old file
+as `/usr/local/libexec/usb16x16-dante/asound-inferno-owner.conf.previous`,
+`rollback` puts it back, and does not restart the endpoint (Inferno reads
+the file at open). The file installed is byte for byte the measured one,
+so its header still calls itself an experiment. To put it in service:
+
+```
+cd ~/usb-16x16-work/dante-mode/service && sudo ./install-dante-latency.sh
+sudo systemctl restart usb16x16-dante
+sudo systemctl restart usb-16x16.service
+```
+
+Then the battery and the hour on the installed form before ACCEPTED: the
+figures above are a candidate start's, without the meter file.
+
+**The service afterwards.** Candidate stopped, `usb16x16-dante` started
+14:51:15 UTC on the installed 2 ms config. After the gadget restart of
+14:52:00 the Mac's CoreAudio did not list `USB 16x16` although USB showed
+it (fifteen gadget restarts in under three hours by then); a second
+gadget restart at 14:54:02 brought it back in seven seconds, with no
+coreaudiod kill. On that anchor: noise probe clean, 400 loaded impulses
+all 474, `daw_timeline` 662 (13.792 ms). `NRestarts` 0.

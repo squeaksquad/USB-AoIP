@@ -13176,3 +13176,47 @@ round trip up to about 2 ms long until the USB side is next re-primed;
 audio whole throughout. In service: the accepted form, the Ferrofish with
 AES67 mode off (the AES67 rollback needs it back on and a Ferrofish
 reboot), level 507 on the 11:50:22 anchor.
+
+**MEASURED 2026-10-12 12:00-14:50 UTC: Inferno latency at 1 ms. Both knobs
+at 1 ms pass the battery and a loaded hour at 388, `daw_timeline` 576
+(12.000 ms), about 100 samples under the same day's control; the
+advertised knob alone at 1 ms makes holes.** Record
+`work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/lat1ms-*`. Owner 62879558 and plugin 0ee61f2f unchanged,
+run through the candidate launcher with one config an arm, five
+gadget-restart anchors an arm, nothing installed. Control (service, 2 ms /
+2 ms): 507, 472, 473, 470, 511. `TX_LATENCY_NS` 1 ms alone (the Pi's own
+receive latency, config e8cd2395): 438 to 463, clean, 600 s soak PASS.
+`RX_LATENCY_NS` 1 ms alone (what the Pi advertises, config 6825964a):
+four-sample zero runs on 4.4 to 6.0 % of samples in every noise probe and
+a failed soak, with the Ferrofish reporting 0 late and peak 645 us at its
+1 msec setting; the loss is on the Dante side of the owner and is not
+located further. Both at 1 ms (config a91f5766): 374, 382, 389, 392, 388,
+no holes; then on one anchor noise clean, 4 x 800 loaded all 388 spread 0,
+600 s soak PASS, 3,600 s sixteen-channel soak PASS, worst loop gap in the
+hour 1,036 us, no resync or fault. So the two knobs must be equal; the
+mechanism of the holes when they are not is unread. The Ferrofish accepts
+1 ms for the Pi's flows (operator, Dante Controller), and the crossing of
+the two knobs is confirmed from its Latency tabs. One difference at 1 ms
+besides the level: Inferno's transmit re-time message at three of five
+gadget restarts against one of three on the control, while the host is
+detached. Owed on this arm: the operator's Peak and Late from the
+Ferrofish's Latency tab over the hour; a preset; the fault paths.
+
+**STAGED 2026-10-12 14:51 UTC: the 1 ms config for install, not
+installed.** `work/dante-mode/service/install-dante-latency.sh` (b4d984be;
+on the Pi at `~/usb-16x16-work/dante-mode/service/`) replaces
+`/etc/usb16x16/dante/asound-inferno-owner.conf` 924cfa99 with
+`config/asound-inferno-owner-both1ms.conf` a91f5766, the measured file
+byte for byte, keeps the old one as
+`/usr/local/libexec/usb16x16-dante/asound-inferno-owner.conf.previous`,
+and has a `rollback`. It does not restart the endpoint: the setting takes
+effect at the next `systemctl restart usb16x16-dante`, a short outage and
+a new draw, to be followed by a gadget restart for a fresh anchor. The
+operator's sudo. After it: battery and loaded hour on the installed form
+(meters on, the service's own start) before ACCEPTED. In service
+meanwhile: the accepted form at 2 ms, restarted 14:51:15 UTC, 474 /
+`daw_timeline` 662 (13.792 ms) on the 14:54:02 anchor. FOUND on the way:
+after the fifteenth gadget restart in under three hours the Mac's
+CoreAudio did not list `USB 16x16` though USB showed it; one more gadget
+restart brought it back in seven seconds, no coreaudiod kill.
