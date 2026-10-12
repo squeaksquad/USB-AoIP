@@ -1,0 +1,242 @@
+{
+  "capturedAt" : "2026-10-12T15:50:31.692Z",
+  "capturedPeak" : 0.24999902,
+  "configuration" : {
+    "bufferFrames" : 32,
+    "deviceName" : "USB 16x16",
+    "impulseAmplitude" : 0.25,
+    "impulseCount" : 8,
+    "inputChannel" : 1,
+    "intervalMilliseconds" : 250,
+    "leadInMilliseconds" : 500,
+    "maximumLagMilliseconds" : 200,
+    "otherChannelLoadAmplitude" : 0,
+    "outputChannel" : 1,
+    "peakSearchRadiusSamples" : 8
+  },
+  "correlation" : {
+    "estimatedLagSamples" : 488,
+    "perImpulseDelaySamples" : [
+      488,
+      488,
+      488,
+      488,
+      488,
+      488,
+      488,
+      488
+    ],
+    "score" : 1,
+    "statistics" : {
+      "count" : 8,
+      "maximumMilliseconds" : 10.166666666666666,
+      "maximumSamples" : 488,
+      "medianMilliseconds" : 10.166666666666666,
+      "medianSamples" : 488,
+      "minimumSamples" : 488,
+      "p95Milliseconds" : 10.166666666666666,
+      "p95Samples" : 488,
+      "p99Milliseconds" : 10.166666666666666,
+      "p99Samples" : 488
+    }
+  },
+  "deviceBefore" : {
+    "actualSampleRate" : 48000,
+    "bufferFrameSize" : 512,
+    "bufferFrameSizeRanges" : [
+      {
+        "maximum" : 4096,
+        "minimum" : 15
+      }
+    ],
+    "capturedAt" : "2026-10-12T15:50:28.473Z",
+    "deviceID" : 339,
+    "input" : {
+      "channelNames" : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ],
+      "channels" : 16,
+      "deviceLatencyFrames" : 74,
+      "safetyOffsetFrames" : 74,
+      "streams" : [
+        {
+          "bitsPerChannel" : 32,
+          "bytesPerFrame" : 64,
+          "channels" : 16,
+          "formatFlagsHex" : "0x00000009",
+          "formatID" : "lpcm",
+          "framesPerPacket" : 1,
+          "interleaved" : true,
+          "latencyFrames" : 0,
+          "sampleRate" : 48000,
+          "streamID" : 341
+        }
+      ]
+    },
+    "isAlive" : true,
+    "manufacturer" : "Bryan DiMaio",
+    "name" : "USB 16x16",
+    "nominalSampleRate" : 48000,
+    "output" : {
+      "channelNames" : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ],
+      "channels" : 16,
+      "deviceLatencyFrames" : 50,
+      "safetyOffsetFrames" : 50,
+      "streams" : [
+        {
+          "bitsPerChannel" : 32,
+          "bytesPerFrame" : 64,
+          "channels" : 16,
+          "formatFlagsHex" : "0x00000009",
+          "formatID" : "lpcm",
+          "framesPerPacket" : 1,
+          "interleaved" : true,
+          "latencyFrames" : 0,
+          "sampleRate" : 48000,
+          "streamID" : 340
+        }
+      ]
+    },
+    "transportType" : "usb ",
+    "uid" : "AppleUSBAudioEngine:Bryan DiMaio:USB 16x16:AUDDEV001:1,2"
+  },
+  "deviceDuring" : {
+    "actualSampleRate" : 48000,
+    "bufferFrameSize" : 32,
+    "bufferFrameSizeRanges" : [
+      {
+        "maximum" : 4096,
+        "minimum" : 15
+      }
+    ],
+    "capturedAt" : "2026-10-12T15:50:28.690Z",
+    "deviceID" : 339,
+    "input" : {
+      "channelNames" : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ],
+      "channels" : 16,
+      "deviceLatencyFrames" : 74,
+      "safetyOffsetFrames" : 74,
+      "streams" : [
+        {
+          "bitsPerChannel" : 32,
+          "bytesPerFrame" : 64,
+          "channels" : 16,
+          "formatFlagsHex" : "0x00000009",
+          "formatID" : "lpcm",
+          "framesPerPacket" : 1,
+          "interleaved" : true,
+          "latencyFrames" : 0,
+          "sampleRate" : 48000,
+          "streamID" : 341
+        }
+      ]
+    },
+    "isAlive" : true,
+    "manufacturer" : "Bryan DiMaio",
+    "name" : "USB 16x16",
+    "nominalSampleRate" : 48000,
+    "output" : {
+      "channelNames" : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ],
+      "channels" : 16,
+      "deviceLatencyFrames" : 50,
+      "safetyOffsetFrames" : 50,
+      "streams" : [
+        {
+          "bitsPerChannel" : 32,
+          "bytesPerFrame" : 64,
+          "channels" : 16,
+          "formatFlagsHex" : "0x00000009",
+          "formatID" : "lpcm",
+          "framesPerPacket" : 1,
+          "interleaved" : true,
+          "latencyFrames" : 0,
+          "sampleRate" : 48000,
+          "streamID" : 340
+        }
+      ]
+    },
+    "transportType" : "usb ",
+    "uid" : "AppleUSBAudioEngine:Bryan DiMaio:USB 16x16:AUDDEV001:1,2"
+  },
+  "impulseOutputSampleTimes" : [
+    1544588,
+    1556588,
+    1568588,
+    1580588,
+    1592588,
+    1604588,
+    1616588,
+    1628588
+  ],
+  "inputBaseSampleTime" : 1520400,
+  "inputDiscontinuities" : 0,
+  "ioOffsetMaximumSamples" : 188,
+  "ioOffsetMinimumSamples" : 188,
+  "outputDiscontinuities" : 0
+}

@@ -43,6 +43,27 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
+**FOUND 2026-10-12 17:00 UTC. READ THIS FIRST; it overrides the two blocks
+under it where they differ.** The four-sample holes (about 5 % of
+samples, one position modulo 32, Dante side of the owner, Ferrofish 0
+late) are drawn by endpoint starts at 2 ms as well: 4 service starts of
+12 on the point of record's config, against 3 of 7 at 1 ms. Not unequal
+knobs, not 1 ms as such. First seen 12:40 UTC on 2026-10-12; before that
+day dozens of probed starts had none. Untested suspects: the Ferrofish
+out of AES67 mode since 11:29 UTC that day; some forty endpoint restarts
+minutes apart. RESULTS.md's last section has the counts and four ways to
+locate it (Pi self-subscribed in Controller; Ferrofish back in AES67
+mode; eth0 capture; spaced starts). RULE: a noise probe after every
+endpoint start before reading anything; on holes, restart and probe
+again. After about twenty endpoint restarts the Mac's input goes silent
+(harness: no return, `rawInputPeak` 0.0, while the owner's `back_peak`
+shows signal); a gadget restart fixes it. In service at 17:00 UTC: config
+924cfa99 (2 ms), start 16:51:32, probe clean.
+Also done that afternoon: a queue-depth sweep (RESULTS.md, the section
+before last). `--rx-queue` 96 was clean on one start (return floor 44),
+expected gain 48 samples, not yet shown: owed five anchors an arm, then
+battery and hour. `--tx-lead` below 128 made 2 ms holes; leave it.
+
 **FOUND 2026-10-12 15:20 UTC, read before the DONE block: 1 ms is NOT fit
 for service.** Installed at 1 ms / 1 ms the service had four-sample holes
 (5.7 % of samples, one position modulo 32, Ferrofish 0 late) on two starts

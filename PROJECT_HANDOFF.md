@@ -13226,6 +13226,11 @@ after the fifteenth gadget restart in under three hours the Mac's
 CoreAudio did not list `USB 16x16` though USB showed it; one more gadget
 restart brought it back in seven seconds, no coreaudiod kill.
 
+**CORRECTION 2026-10-12 17:00 UTC to the entry below:** the holes are
+drawn at 2 ms as well (4 service starts of 12 after the rollback); "1 ms
+advertised is not fit for service" is too narrow. See the FOUND entry of
+17:00.
+
 **FOUND 2026-10-12 15:09-15:20 UTC: installed at 1 ms / 1 ms, the service
 came up with the holes on two starts of five. 1 ms advertised is not fit
 for service; rollback asked of the operator.** Record
@@ -13247,3 +13252,40 @@ a91f5766, probe clean, a new draw at any restart. To go back to the point
 of record: `sudo ./install-dante-latency.sh rollback` in
 `~/usb-16x16-work/dante-mode/service/`, `sudo systemctl restart
 usb16x16-dante`, `sudo systemctl restart usb-16x16.service`, noise probe.
+
+**MEASURED 2026-10-12 15:42-16:14 UTC: the rollback, and a first sweep of
+the owner's queue depths.** Record `work/dante-mode/RESULTS.md`, the
+section before last; evidence `outputs/latency/lat1ms-rolledback-*`,
+`qd-*`. Rolled back by the operator to config 924cfa99: noise clean, 800
+loaded impulses all 477, `daw_timeline` 665 (13.854 ms). Sweep on owner
+62879558 through the candidate launcher at 2 ms, one start and one anchor
+a point: `--rx-queue` 128, 112 and 96 all clean with return floors 78, 58
+and 44 and no fault (levels 470, 479, 457, inside the day's draw band, so
+the expected 48-sample gain at 96 is not shown); `--tx-lead` 112 and 96
+each put one 2 ms hole into the noise probe and 80 re-primed 58 times, so
+the lead stays at 128. Nothing proposed: the return queue at 96 is owed
+five anchors an arm, then battery and hour.
+
+**FOUND 2026-10-12 16:14-17:00 UTC: the four-sample holes are drawn by
+starts at 2 ms too, 4 service starts of 12 on the point of record's own
+config. The point of record cannot be relied on to start clean today.**
+Record `work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/svc2ms-*`, `qd-restored-*`. The service restart that
+ended the sweep (16:14:06) had them at 5.2 %; of ten restarts after it,
+three had them (5.1 %, 5.3 %, 2.2 %). At 1 ms the count was 3 of 7, so
+the draw does not follow the latency setting as far as this shows; both
+of the day's earlier readings (unequal knobs, then 1 ms) are set aside.
+First start with holes in the record: 12:40 UTC today. Changed today and
+untested as causes: the Ferrofish out of AES67 mode and rebooted at 11:29
+UTC; some forty endpoint restarts since noon, mostly minutes apart. The
+loss is on the Dante side of the owner, the Ferrofish reports nothing
+late, the owner's journal shows no difference between a start with holes
+and one without. Also seen: after about twenty endpoint restarts the
+Mac's input went silent with the return arriving at the Pi (as on
+2026-10-10); a gadget restart restored it. In service at 17:00: config
+924cfa99, start 16:51:32, anchor 16:59:06, noise probe clean. Standing
+rule until the cause is found: a noise probe after every endpoint start,
+restart again on holes. Next, the operator's to choose: the Pi
+self-subscribed in Controller for ten starts; the Ferrofish back in AES67
+mode for ten starts; an eth0 capture on a start with holes; starts spaced
+ten minutes apart.

@@ -4121,6 +4121,13 @@ all 474, `daw_timeline` 662 (13.792 ms). `NRestarts` 0.
 
 ## Installed at 1 ms, the service has the holes on two starts of five: they are a draw at each start, not a matter of unequal knobs (2026-10-12 15:09-15:20 UTC)
 
+**CORRECTION 2026-10-12 17:00 UTC (two sections on).** "With 1 ms
+advertised" is too narrow. After the rollback the service at 2 ms / 2 ms
+drew the same holes on 4 starts of 12. The draw does not follow the
+latency setting as far as these counts can show; "1 ms advertised is not
+fit for service" should read "no start is fit for service today without a
+noise probe after it".
+
 The operator ran `install-dante-latency.sh` (config a91f5766 installed,
 924cfa99 kept as `.previous`), restarted `usb16x16-dante` at 15:09:12 UTC
 and the gadget at 15:09:17. The battery was not run: the first noise probe
@@ -4184,3 +4191,116 @@ packets, and what are the timestamps against the packet boundaries), and
 phase is the Pi's to choose, the owner or the plugin can choose it; if it
 is not, 1 ms needs a start-time probe and re-draw, which is not a
 service.
+
+## The owner's queue depths: the return queue comes down to 96 clean on one start each; the outgoing lead does not come down (2026-10-12 15:42-16:14 UTC)
+
+After the rollback (config 924cfa99, service started 15:42:12, gadget
+anchor 15:42:16): noise probe clean, 800 loaded impulses all 477,
+`daw_timeline` 665 (13.854 ms).
+
+Why look here: of the 576 samples the path read on its good 1 ms start,
+272 are the owner's own two targets (`--tx-lead` 128, `--rx-queue` 144),
+188 are the Mac's (two 32-frame buffers and a fixed 124), 96 were Dante's
+and about 20 are everything else. OWNER_DESIGN.md set 128 as a first value
+with a reasoned floor of 32 + 48 + margin and left "what a lower one
+costs" to be measured; it had not been. Over the loaded hour of the
+`-both1ms` start the per-second lowest depth was 77 to 82 on the outgoing
+side and 94 to 97 on the return, 3,600 lines each.
+
+Sweep, owner 62879558 through the candidate launcher on the installed
+2 ms config, one option changed a point, one start and one gadget-restart
+anchor each, noise probe then 400 loaded impulses. Evidence
+`outputs/latency/qd-*`.
+
+| Point | Lowest depth | Level | Noise probe | Owner |
+|---|---|---|---|---|
+| `--tx-lead 112` | out 56 | 491 | one zero run of 99 | `back_holes` 2 / 99, one Inferno tx-lag event |
+| `--tx-lead 96` | out 46 | 486 x 295, 487 x 105 | one zero run of 96 | `back_holes` 12 / 316 |
+| `--tx-lead 80` | out 29 | 438 to 441, four values | four-sample runs, 6.0 % | 58 transmit re-primes, `back_holes` 23 / 572 |
+| `--rx-queue 128` | back 78 | 470 | clean | one transmit resync of 20 frames, time not read |
+| `--rx-queue 112` | back 58 | 479 | clean | nothing |
+| `--rx-queue 96` | back 44 | 457 | clean | nothing |
+
+**The outgoing lead.** Both 112 and 96 put one hole of about 2 ms into a
+26 s probe, which no probe at 128 did in some twenty today, and at 96 the
+level stepped by a sample inside a run. 80 re-primed 58 times. One start
+a value, but three values the same way, against what the hour's depth
+minimums suggested: the lead covers something the per-second minimum of
+the playback delay does not show (a 2 ms hole is the size of Inferno's
+transmit re-time). Leave it at 128 unless that is read.
+
+**The return queue.** Clean at 128, 112 and 96, no fault on the return,
+and the floor follows the target frame for frame (78, 58, 44). 96 is the
+lowest the owner accepts (two USB periods). The gain is not shown: one
+anchor a point, and 470, 479 and 457 all lie inside the day's 2 ms draws
+(470 to 511). Expected from 144 to 96: 48 samples, 1 ms. Owed before
+anything is proposed: five anchors an arm against the control, each start
+noise-probed first, then battery and hour.
+
+**Below the block.** Both targets are one 48-frame block plus margin, and
+the block is the gadget's 1 ms USB packet. Going under it means the
+125 us-packet gadget variant with the owner's periods and targets lowered
+to match; the September trial of that variant left the AES67 bridge's
+depths alone and gained 15 samples.
+
+## The four-sample holes are drawn at 2 ms as well: 4 starts of 12 after the rollback (2026-10-12 16:14-17:00 UTC)
+
+The sweep's last step restarted the service on the rolled-back 2 ms
+config (16:14:06 UTC) and its noise probe read four-sample zero runs on
+5.2 % of samples: the signature of the two sections above, on the point
+of record. A restart at 16:19:01 was clean. Then ten service restarts, a
+noise probe 65 s after each (`outputs/latency/svc2ms-*`):
+
+| Start (UTC) | Probe |
+|---|---|
+| 16:21:36, 16:23:22, 16:25:07 | clean |
+| 16:26:53 | holes, 5.1 %, 15,403 runs |
+| 16:28:39, 16:30:25 | clean |
+| 16:32:10 | holes, 5.3 %, 15,887 runs |
+| 16:33:56 | clean |
+| 16:35:42 | no run of 4, but 0.1 % zeros |
+| 16:37:28 | holes, 2.2 %, 2,310 runs |
+
+Four more starts (16:39 to 16:51) gave no reading: the harness got no
+return at all (`rawInputPeak` 0.0) although the owner showed the return
+arriving from Dante. That is the Mac's input going silent after some
+twenty endpoint restarts, seen before on 2026-10-10; a gadget restart at
+16:59:06 brought it back, and the 16:51:32 start then probed clean.
+
+**Counts for the day.** Starts advertising 2 ms since noon, service and
+candidates: 4 with the four-sample holes of 12 service starts after the
+rollback (16:14 and three of the ten), and of the earlier ones only the
+`--tx-lead 80` point, which has its own fault. Starts advertising 1 ms:
+3 of 7. Before 11:29 UTC today, and on every earlier day, the record has
+dozens of noise-probed starts at 2 ms with none, the 02:02 UTC sleep
+episode apart. So the draw does not follow the latency setting as far as
+these numbers go (3 of 7 against 4 of 12), and the first start with holes
+in the record is 12:40 UTC today.
+
+**What changed today, none of it tested.** The Ferrofish was taken out of
+AES67 mode and rebooted at 11:29 UTC. The endpoint has been restarted
+about forty times since noon, most within a few minutes of the previous
+stop, where earlier days had a handful. Either could be the condition;
+so could something not thought of. The holes sit on the Dante side of the
+owner (`back_holes` counts them, `out_holes` does not) and the Ferrofish
+reports nothing late.
+
+**So the earlier readings of today are both set aside:** not unequal
+knobs, and not 1 ms as such. The battery and hour at 1 ms / 1 ms (388 /
+576) stand as measurements of a clean start; whether 1 ms adds anything
+to the hole rate is not shown either way.
+
+**State at 17:00 UTC.** Service on config 924cfa99 (2 ms / 2 ms), start
+16:51:32, gadget anchor 16:59:06, noise probe clean. Until the cause is
+found, every endpoint start (a restart, a reboot, an Ethernet-loss
+restart) needs a noise probe, and another restart if it shows holes.
+
+**To locate it, in order of cost.** (1) Take the Ferrofish out of the
+loop for a test: in Dante Controller subscribe the Pi's receive channels
+to the Pi's own transmit channels, if Inferno accepts a self-subscription,
+and repeat ten starts; holes there are Inferno's or the Pi's, none there
+points at the Ferrofish path. (2) The Ferrofish back in AES67 mode and
+rebooted, ten starts: tests the day's other change. (3) An eth0 capture
+on a start with holes and one without (root): are the zeros in the Pi's
+packets, in the Ferrofish's, or in neither. (4) Ten starts spaced ten
+minutes apart, for the quick-succession reading.
