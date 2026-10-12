@@ -13126,3 +13126,21 @@ owner's life and not only near a start. It happened on the form awaiting
 acceptance (unit 27b68877, drop-in 3a1842a6), 39 minutes after its hour
 passed clean; nothing ties it to either change, and nothing rules them
 out. Not ACCEPTED yet: the operator's call, with this entry in view.
+
+**ACCEPTED 2026-10-12 (operator, after the 11:21 UTC entries): the Dante
+service with the link-wait unit and the eth0 drop-in is the Dante point of
+record.** Owner 62879558 (through `usb16x16-dante-start`, direct with
+meters), plugin 0ee61f2f, Statime as installed, unit 27b68877
+(`service/usb16x16-dante-dsp-linkwait.service`), NetworkManager drop-in
+3a1842a6 (`service/90-usb16x16-eth0-carrier.conf`). Its figures: battery
+and loaded hour on the 04:30:41 UTC anchor, harness 509, `daw_timeline` 697
+(14.521 ms) at 32 frames, spread 0; fresh draws now span 465 to 509. Fault
+paths behind it: Controller restart at no cost; Ethernet cable pulls of
+23 s and 5 min ridden through with the level unmoved; `ip link set eth0
+down` an endpoint restart that returns unaided; Mac sleep ridden through.
+Accepted with two items open and deferred by the operator to another
+session: the owner's unexplained stalls (06:26:05 UTC, 4.6 ms at idle; the
+earlier loop-gap item) and the one episode of four-sample zero runs after
+the first Mac wake. Rollbacks, newest first: `install-eth0-carrier.sh
+rollback`; `install-dante-unit-update.sh rollback` (to unit 9f5289dd);
+then as before (`install-dante-dsp.sh rollback`).
