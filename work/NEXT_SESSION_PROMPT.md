@@ -17,6 +17,12 @@ to choose: fix that (an `ExecStartPre` wait for an address on eth0, no
 start limit; then whether Statime's exit should take the owner down) and
 re-run the bounce; a real carrier loss; then the three with a preset. The
 service is `direct` with meters, started by hand 03:36 UTC, level 502.
+**STAGED 03:55 UTC, not installed:** the fix for the first of those,
+`service/usb16x16-dante-dsp-linkwait.service` (0f3fabcf) with
+`install-dante-unit-update.sh` (unit file only, no restart, `rollback`).
+Ask whether the operator has run it (`sha256sum
+/etc/systemd/system/usb16x16-dante.service`: 9f5289dd is the old one), then
+repeat the bounce.
 
 Everything below this section is older; where it says a thing is owed or
 not built, check here and the handoff tail first.

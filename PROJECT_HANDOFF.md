@@ -12939,3 +12939,26 @@ it. A carrier loss without `ip link set down` (switch restart, a pull on a
 Pi with other power) is untested and may differ. The three paths with a
 preset running were not run. The service is `direct` with meters on a
 process started 03:36 UTC, level 502 on the Mac's current open.
+
+**STAGED 2026-10-12 03:55 UTC: a unit that waits for eth0's address, for
+the Ethernet-loss failure above; not installed.**
+`work/dante-mode/service/usb16x16-dante-dsp-linkwait.service` (0f3fabcf):
+the installed unit (9f5289dd) plus one `ExecStartPre` that waits, without
+limit, until eth0 has an IPv4 address (then 8 s more for Statime to hear
+the Ferrofish, if it had to wait) and `TimeoutStartSec=infinity`. The start
+limit of three in five minutes is kept: its reason (restart loops under a
+streaming Mac broke the Mac's audio on 2026-10-09 and 10) still holds, and
+a wait in `ExecStartPre` is not a start of the owner and does not count
+against it. `install-dante-unit-update.sh` (3201de38) swaps the unit file
+only, hash-guarded both ways, keeps the old one as
+`/usr/local/libexec/usb16x16-dante/usb16x16-dante.service.previous`,
+reloads systemd and does not restart the endpoint (no outage, no new draw;
+effective at the next start); `rollback` puts 9f5289dd back. Both staged
+in `~/usb-16x16-work/dante-mode/service/`, hashes equal on the Pi,
+`systemd-analyze verify` quiet, the wait returns in 3 ms with the address
+present. Not tested: the wait itself under a real loss. After the
+operator's `sudo ./install-dante-unit-update.sh`: repeat the 20 s bounce
+and read whether the endpoint returns unaided, and what Statime does when
+the link is down for minutes rather than seconds (it exited once and was
+restarted by systemd; `Restart=always`, no limit). Not addressed: Statime's
+exit still restarts the owner at every link loss.
