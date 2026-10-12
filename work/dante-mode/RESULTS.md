@@ -3829,3 +3829,35 @@ down`) still takes the restart path, which the unit's wait handles. The
 USB power result is for this Mac port and cable, a Pi with no USB
 peripherals, at about 5.0 V; it is not a claim that the Pi can run from
 USB under any load, and the Pi was not booted from USB alone.
+
+## Battery and loaded hour on the service with the link-wait unit and the eth0 drop-in (2026-10-12 04:30-05:47 UTC)
+
+Owner 62879558 direct with meters, plugin 0ee61f2f, unit 27b68877,
+NetworkManager drop-in 3a1842a6; the owner process of 04:19:52. Fresh
+anchor by `sudo -n systemctl restart usb-16x16.service` at 04:30:41 under
+the running service: both directions flowing again within a second, no
+resync and no loop gap this time. Everything below on that one anchor and
+one owner start, the Mac held awake with `caffeinate`.
+
+| Step | Start (UTC) | Result |
+|---|---|---|
+| Noise probe, 32 frames | 04:31:27 | clean, no zero run of 4 or more |
+| 800 loaded impulses | 04:32:08 | 509 x 800, spread 0 |
+| 800 loaded impulses | 04:35:45 | 509 x 800, spread 0 |
+| 800 loaded impulses | 04:39:20 | 509 x 800, spread 0 |
+| 800 loaded impulses | 04:42:55 | 509 x 800, spread 0 |
+| Soak, 16 channels, 3,600 s | 04:46:30 | PASS: longest zero run 1, peaks 0.1000 on all sixteen, no discontinuity in or out |
+
+Harness 509 (10.604 ms), `daw_timeline` 697 (14.521 ms) at 32 frames,
+offset 188 steady in every run. On the Pi from first step to last: the
+same process, `NRestarts` 0, `tx_resyncs` 0, `rx_resyncs` 0,
+`net_errors` 0, no re-prime, no capture fault (the one playback fault is
+the gadget restart), `out_holes` 0, `back_holes` 0, no undervoltage
+flag; over the hour, largest wake gap / Inferno warnings / neighbour /
+link / temperature: 1044 0 1000 temp=59.3'C . Evidence `outputs/latency/dante-linkwait-*`.
+
+**The level.** 509 is the highest fresh draw recorded: the band was 465 to
+507 and is 465 to 509 with this one. A draw at a gadget restart is the
+Mac's, and neither the unit's start conditions nor NetworkManager's
+handling of the carrier is on that path; the draws on this configuration
+so far are 488 (a service start) and 509 (this gadget restart).

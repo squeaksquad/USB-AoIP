@@ -13082,3 +13082,23 @@ In service: owner 62879558 direct with meters, unit 27b68877, drop-in
 setting changed since the point of record, and the acceptance (with its
 hour) is the operator's call. Rollbacks: `install-eth0-carrier.sh
 rollback`, `install-dante-unit-update.sh rollback`.
+
+**MEASURED 2026-10-12 04:30-05:47 UTC: battery and loaded hour PASS on the
+Dante service with unit 27b68877 and the eth0 drop-in 3a1842a6: harness
+509, `daw_timeline` 697 (14.521 ms) at 32 frames.** Record
+`work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/dante-linkwait-*`. Owner 62879558 direct with meters,
+plugin 0ee61f2f, the process of 04:19:52; fresh anchor by gadget restart
+at 04:30:41 (no resync, no gap). Noise probe clean; four loaded
+800-impulse runs all 509, spread 0, offset 188 steady; 3,600 s
+sixteen-channel soak PASS (longest zero run 1, no discontinuity). On the
+Pi throughout: one process, `NRestarts` 0, no resync, re-prime or capture
+fault, `net_errors` 0, both hole counters 0; over the hour, largest wake
+gap / Inferno warnings / neighbour / link / temperature: 1044 0 1000 temp=59.3'C . 509 is the
+highest fresh draw so far: the band is 465 to 509. Awaiting the operator's
+ACCEPTED for this form (the binaries are those of the point of record; the
+unit's two start waits and the NetworkManager setting are what changed).
+The day's fault paths on it: Controller restart, no cost; Ethernet cable
+pull of 23 s, rides through, level unmoved; `ip link set eth0 down`,
+endpoint restart, back unaided; Mac sleep, rides through, with the one
+unreproduced episode after the first wake.

@@ -31,9 +31,9 @@ through: same owner and Statime processes, no resync, level 488 before and
 after, silence for the pull plus 2 s. The Pi stays up on the Mac's USB
 port with the PoE cable out (rail lowest 4.92 V, no undervoltage flag), so
 real pulls are a usable test here. Statime is not patched (handoff, the
-STAGED entry of 04:12, says why). Owed if the operator wants this as the
-point of record: the battery and an hour on unit 27b68877 with the
-drop-in. Untested: a pull of minutes, a pull during audio, the fault paths
+STAGED entry of 04:12, says why). Battery and loaded hour PASSED on it 04:30-05:47 UTC (509 /
+`daw_timeline` 697, 14.521 ms; the band is now 465 to 509); awaiting the
+operator's ACCEPTED. Untested: a pull of minutes, a pull during audio, the fault paths
 with a preset, the sleep episode's cause.
 
 ## Current pickup — 2026-10-09: Dante (Inferno) is the development line; the alsaloop prototype reads level with AES67
