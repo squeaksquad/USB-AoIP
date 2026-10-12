@@ -3691,3 +3691,47 @@ decide. Evidence `outputs/latency/dante-ethbounce-*`.
 
 **The same three with a preset running: not run.** The pickup made them
 conditional on the direct ones passing.
+
+## eth0 down for 20 s again, with the address wait installed: back unaided, one start lost to a race (2026-10-12 03:50-03:58 UTC)
+
+The operator installed `usb16x16-dante-dsp-linkwait.service` in its first
+form (0f3fabcf: an `ExecStartPre` that waits for an IPv4 address on eth0,
+placed before the clock wait) at 03:50:36 UTC with
+`install-dante-unit-update.sh`, endpoint not restarted, and ran the same
+bounce.
+
+| Time (UTC) | Event |
+|---|---|
+| 03:51:20 | eth0 `Link is Down`; Statime panics and exits as before |
+| 03:51:22 | Statime restarted; the owner stopped cleanly and its unit started: the address wait passes at once, the address is still on the interface |
+| 03:51:26 | NetworkManager: eth0 `activated -> unavailable (carrier-changed)`, the address goes |
+| 03:51:30 | the clock wait ends, the owner starts and Inferno aborts: `BIND_IP has no IPv4 addresses` |
+| 03:51:35 | second start: the address wait holds |
+| 03:51:43 | `Link is Up`, NetworkManager re-activates `aoip-eth0` within 0.2 s |
+| 03:51:52 | the wait's 8 s for Statime over; owner up, both Inferno streams running, both USB directions flowing at 0.3 s |
+
+**The endpoint came back without anyone touching it**, 32 s after the link
+went down and 9 s after it returned; `NRestarts` 1. Neighbour entry
+REACHABLE, transmit counter moving. Noise probe at 32 frames clean
+(03:53:51), 800 loaded impulses all 500, spread 0, `daw_timeline` 688
+(14.333 ms); the level was 502 before, so the owner restart moved it 2
+with the Mac's device open throughout. Evidence
+`outputs/latency/dante-ethbounce2-*`.
+
+**The race.** NetworkManager leaves the address in place for about six
+seconds after the carrier drops (it did so on the first bounce too), so an
+address check made the moment Statime restarts passes and the owner then
+starts into a dead interface. One of the three starts was spent on it; a
+second link loss inside five minutes would spend another. This is how a
+real carrier loss looks to NetworkManager as well (`carrier-changed`), so
+the race is not an artefact of `ip link set down`.
+
+**Second form, staged, not installed:** the unit (27b68877) now makes the
+wait after the clock wait and requires both
+`/sys/class/net/eth0/carrier` = 1 and an address; the installer (6f7548a7)
+replaces either 9f5289dd or 0f3fabcf and keeps 9f5289dd as the rollback
+target. Checked on the Pi as before (`systemd-analyze verify` quiet, the
+wait returns in 3 ms on a live link). Untested under a loss.
+
+**Still as it was:** every link loss is a Statime exit and a full owner
+restart (a new Inferno prepare and a possible step in the level).

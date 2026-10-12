@@ -12962,3 +12962,27 @@ and read whether the endpoint returns unaided, and what Statime does when
 the link is down for minutes rather than seconds (it exited once and was
 restarted by systemd; `Restart=always`, no limit). Not addressed: Statime's
 exit still restarts the owner at every link loss.
+
+**INSTALLED 2026-10-12 03:50:36 UTC and MEASURED: with the address wait in
+the unit, the endpoint comes back from a 20 s eth0 loss unaided, at the
+cost of one failed start; a second form of the unit that closes that race
+is staged.** Record `work/dante-mode/RESULTS.md`, last section. (The
+STAGED entry above says 03:55 UTC; it was 03:48.) The operator ran `sudo
+./install-dante-unit-update.sh` (unit 0f3fabcf in place of 9f5289dd, kept
+as `/usr/local/libexec/usb16x16-dante/usb16x16-dante.service.previous`, no
+restart) and the same bounce at 03:51:20. Statime exited and restarted as
+before; the owner's first start aborted on `BIND_IP has no IPv4 addresses`,
+because NetworkManager keeps the address for about six seconds after the
+carrier drops and the wait had already passed; the second start waited,
+and the owner was up at 03:51:52, 9 s after the link returned, `NRestarts`
+1. Neighbour REACHABLE, noise probe clean, 800 loaded impulses all 500,
+spread 0, `daw_timeline` 688 (14.333 ms); 502 before, so the owner restart
+moved the level 2. STAGED for the race: unit 27b68877 (the wait after the
+clock wait, carrier and address both required) and installer 6f7548a7
+(replaces 9f5289dd or 0f3fabcf, rollback target 9f5289dd), in
+`~/usb-16x16-work/dante-mode/service/`, hashes equal on the Pi; not
+installed, untested under a loss. In service now: owner 62879558 direct
+with meters on unit 0f3fabcf, process from 03:51:52 UTC. Open: Statime's
+exit on a link loss still costs a full owner restart; a link loss of
+minutes; a carrier loss that is not `ip link set down`; the three fault
+paths with a preset.

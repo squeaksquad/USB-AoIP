@@ -18,7 +18,8 @@
 # 2026-10-12: with eth0 down for 20 s Statime exited, the endpoint restarted
 # with it, Inferno aborted three times for want of an IPv4 address and the
 # start limit left the unit failed (RESULTS.md, "eth0 down for 20 s"). The
-# new unit waits in ExecStartPre until eth0 has an address, without limit.
+# new unit waits in ExecStartPre until eth0 has its carrier and an address,
+# without limit.
 #
 # After this, install-dante-dsp.sh no longer reports "already installed" (it
 # pins the unit this replaces); its rollback still goes back to the owner
@@ -32,7 +33,11 @@ fi
 
 script_dir=$(cd "$(dirname "$0")" && pwd)
 source=$script_dir/usb16x16-dante-dsp-linkwait.service
-new=0f3fabcf14ec64a58cebad86f367355220b9198273e70d392106bfe7a003d795
+new=27b68877c2fcb49dd212d245ffe4adf4977dc82ee3fe37862305b7faf86685d7
+# The first form of this unit (2026-10-12, address check alone and before the
+# clock wait: it lost a race with NetworkManager). Replaced too; the rollback
+# target stays 9f5289dd.
+first=0f3fabcf14ec64a58cebad86f367355220b9198273e70d392106bfe7a003d795
 old=9f5289dd3fbbdd84611c3186d46851c398e925faf0bebd928a0a4a8d441643a9
 unit=usb16x16-dante.service
 installed=/etc/systemd/system/$unit
@@ -59,9 +64,12 @@ if [ "$current" = "$new" ]; then
   echo "already installed: $(echo "$new" | cut -c1-8)"
   exit 0
 fi
-[ "$current" = "$old" ] || { echo "the installed unit is $(echo "$current" | cut -c1-8), not the 9f5289dd this replaces; refusing" >&2; exit 4; }
+[ "$current" = "$old" ] || [ "$current" = "$first" ] || { echo "the installed unit is $(echo "$current" | cut -c1-8), not the 9f5289dd or 0f3fabcf this replaces; refusing" >&2; exit 4; }
 
-install -o root -g root -m 644 "$installed" "$previous"
+if [ "$current" = "$old" ]; then
+  install -o root -g root -m 644 "$installed" "$previous"
+fi
+[ "$(sha256_of "$previous")" = "$old" ] || { echo "$previous is not 9f5289dd; refusing" >&2; exit 4; }
 install -o root -g root -m 644 "$source" "$installed.new"
 mv -f "$installed.new" "$installed"
 echo "installed $(sha256_of "$installed" | cut -c1-8), kept $(sha256_of "$previous" | cut -c1-8) as $previous"

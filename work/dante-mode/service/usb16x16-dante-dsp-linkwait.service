@@ -52,16 +52,6 @@ Environment=ALSA_PLUGIN_DIR=/usr/local/lib/usb16x16-dante/alsa-plugins
 # Inferno logs an error for every control request it does not implement, most
 # of a line a second with Dante Controller open. They are not faults.
 Environment=RUST_LOG=warn,inferno_aoip::device_server::arc_server=off,inferno_aoip::device_server::info_mcast_server=off
-# Wait for eth0 to have an IPv4 address, for as long as it takes. Inferno
-# aborts at once without one ("interface specified in BIND_IP has no IPv4
-# addresses"), and when the link is lost Statime exits and takes this unit
-# through a restart while the address is still gone: on 2026-10-12 a 20 s
-# loss used up the three starts in ten seconds and the endpoint stayed down.
-# Waiting here is not a start of the owner, so it opens nothing on the gadget
-# and does not count against the limit above. Statime has been running
-# without its leader meanwhile, so after a wait give it the same 8 s to hear
-# the Ferrofish that the next line gives it after its own start.
-ExecStartPre=/bin/sh -c 'w=0; until ip -4 -o addr show dev eth0 2>/dev/null | grep -q "inet "; do w=1; sleep 1; done; [ $$w -eq 0 ] || sleep 8'
 # Wait for the clock, not just its socket: Statime makes the socket at once
 # and has no clock to give until it has heard the Ferrofish, and the plugin
 # then fails with "no clock available" (the first start on 2026-10-11, which
@@ -69,6 +59,19 @@ ExecStartPre=/bin/sh -c 'w=0; until ip -4 -o addr show dev eth0 2>/dev/null | gr
 # start, so its age is how long the clock has been up; 8 s was enough twice
 # over. Gives up after 40 s. ($$ is systemd's escape for $.)
 ExecStartPre=/bin/sh -c 'n=0; until [ -S /tmp/ptp-usrvclock ] && [ $$(( $$(date +%%s) - $$(stat -c %%Y /tmp/ptp-usrvclock) )) -ge 8 ]; do n=$$((n+1)); [ $$n -gt 80 ] && exit 1; sleep 0.5; done'
+# Then wait for eth0 to have its carrier and an IPv4 address, for as long as
+# it takes. Inferno aborts at once without an address ("interface specified
+# in BIND_IP has no IPv4 addresses"), and when the link is lost Statime exits
+# and takes this unit through a restart while the link is still gone: on
+# 2026-10-12 a 20 s loss used up the three starts in ten seconds and the
+# endpoint stayed down. Both conditions, and after the clock wait, because
+# NetworkManager leaves the address on the interface for about six seconds
+# after the carrier drops: a check of the address alone, made first, passed
+# and cost one start the same day. Waiting here is not a start of the owner,
+# so it opens nothing on the gadget and does not count against the limit
+# above. Statime has been running without its leader meanwhile, so after a
+# wait give it the same 8 s to hear the Ferrofish.
+ExecStartPre=/bin/sh -c 'w=0; until [ "$$(cat /sys/class/net/eth0/carrier 2>/dev/null)" = 1 ] && ip -4 -o addr show dev eth0 2>/dev/null | grep -q "inet "; do w=1; sleep 1; done; [ $$w -eq 0 ] || sleep 8'
 # The address wait above has no end, so the start has no timeout either
 # (the default 90 s would turn a long outage into three failed starts).
 TimeoutStartSec=infinity
