@@ -13289,3 +13289,28 @@ restart again on holes. Next, the operator's to choose: the Pi
 self-subscribed in Controller for ten starts; the Ferrofish back in AES67
 mode for ten starts; an eth0 capture on a start with holes; starts spaced
 ten minutes apart.
+
+**FOUND 2026-10-12 20:33-21:05 UTC: the four-sample holes are packets from
+the Ferrofish that never reach the Pi, located by eth0 capture.** Record
+`work/dante-mode/RESULTS.md`, last section; reader
+`work/dante-mode/diag/dante-pcap-zeros.py`; reports
+`outputs/latency/holes-capture-20261012/`. On a start with holes the Pi's
+four transmit flows (4 channels, 32 frames a packet) are whole, and one of
+the Ferrofish's two return flows (8 channels, 4 frames a packet, 12,000
+packets a second) is missing 816 packets a second: always the packet with
+timestamp 31 modulo 32, always the one due 80 to 120 us after the Pi's own
+transmit burst, about half the time. The Pi's MAC counts 23,236 frames a
+second against 24,000 with no error counter moving, so they do not arrive
+at its port: the Ferrofish or the switch, not separated, the timing
+pointing at the Ferrofish. On a clean start both return flows are whole.
+The draw is the phase the Ferrofish gives each flow when the Pi's
+endpoint starts. Inference, not measured: the 4-frame packets go with the
+Ferrofish's 0.25 msec device latency, in force since it left AES67 mode
+at 11:29 UTC, which is when the holes began. Proposed to the operator: the
+Ferrofish's device latency to 1 msec in Dante Controller, then one capture
+and ten starts. Retired: the transmit-side reading from Inferno's source
+(silent zero fill), which is not this fault. Seen on the way: an owner
+stall of 4.4 ms at 20:58:49 with an 83-frame playback resync and a 54 ms
+hole at the Mac, the open stall item again. In service at 21:05: config
+924cfa99, start 20:56:11, anchor 21:02:42, noise clean, 488 /
+`daw_timeline` 676 (14.083 ms).

@@ -4304,3 +4304,97 @@ rebooted, ten starts: tests the day's other change. (3) An eth0 capture
 on a start with holes and one without (root): are the zeros in the Pi's
 packets, in the Ferrofish's, or in neither. (4) Ten starts spaced ten
 minutes apart, for the quick-succession reading.
+
+## The holes are packets from the Ferrofish that never reach the Pi: one 4-frame packet in eight, on one return flow, always the same slot (2026-10-12 20:33-21:05 UTC)
+
+Four bounded eth0 captures on the Pi (tcpdump as root by the operator,
+cued from the session, 4 s each to tmpfs, 0 dropped by the kernel in all
+four), each taken during a 75 s sixteen-channel noise run so that a real
+sample is never three zero bytes. Read by `diag/dante-pcap-zeros.py`
+(written for this; packet layout from Inferno's `flows_tx.rs` /
+`flows_rx.rs`: one byte 2, seconds and samples as two big-endian u32,
+interleaved samples). Its reports are
+`outputs/latency/holes-capture-20261012/*.txt`; the captures are beside
+them on the Mac and are not in the repository. Service on config 924cfa99
+(2 ms / 2 ms) throughout.
+
+| Capture | Start (UTC) | Soak at the time | Pi sends | Pi receives |
+|---|---|---|---|---|
+| 1 | 16:51:32, clean | PASS | 4 flows clean | not in the filter |
+| 2 | 20:40:44, holes | FAIL, zero runs of 4 and 5 | 4 flows clean | not in the filter |
+| 3 | 20:40:44, holes | FAIL | 4 flows clean | flow A: 3,248 packets missing of about 47,750; flow B: none |
+| 4 | 20:56:11, clean | (see below) | 4 flows clean | 1 packet missing in each flow, same instant |
+
+**What is on the wire.** The Pi sends four flows of 4 channels, 32 frames
+a packet, 1,500 packets a second each; timestamps step by 32 without
+exception, arrival gaps within 35 us of 667, and no zero run in any
+packet on either kind of start. The Ferrofish sends two flows of 8
+channels, **4 frames a packet, 12,000 packets a second each**; no zero
+run in any packet that arrives.
+
+**The hole.** On the start with holes one return flow's timestamps step
+by 8 instead of 4 at 3,248 places in 3.98 s: a packet that is not in the
+capture, four frames of eight channels each time. Every missing packet
+has timestamp 31 modulo 32, and every one was due 80 to 120 us after a
+transmit burst of the Pi's (whose timestamps are 8 modulo 32). The Pi's
+burst period is exactly eight of the Ferrofish's packets, so each return
+flow has one packet a burst at a fixed offset; on this start that packet
+of flow A went missing 54 % of the time (816 a second) and no other
+packet of either flow did. Losses come 7, 15, 23 or 31 packets apart,
+never otherwise. That is the whole signature measured at the Mac: runs of
+exactly four samples, one position modulo 32, about half the 32-sample
+blocks.
+
+**Not the Pi, as far as its counters go.** Over five seconds on that
+start eth0's MAC counted 116,181 received frames, 23,236 a second against
+the 24,000 the two flows should make, with no FIFO, overrun, resource or
+missed counter moving and tcpdump dropping none. The packets do not
+arrive at the Pi's port. Not separated from here: the Ferrofish not
+sending them, or the switch dropping them. That the lost slot is tied to
+the instant after the Pi's four packets reach the Ferrofish reads as the
+Ferrofish; a switch has no reason to care.
+
+**The draw.** The two return flows' timestamp phases were 2 and 3 modulo
+4 on the start with holes (the flow at 3 was the one losing packets) and
+2 and 2 on the clean start of capture 4, where the packet due 92 us after
+the burst arrived every time. So the Ferrofish sets each flow's phase
+when the Pi's endpoint starts, and one sample of phase (21 us) is the
+difference between a slot that is hit and one that is not. Two starts
+are not a rule: the phase values that lose are not mapped.
+
+**Why since today, as inference.** A Dante device at a 0.25 ms device
+latency sends packets this small. The operator read the Ferrofish's
+device latency as 0.25 msec after taking it out of AES67 mode at 11:29
+UTC; the first start with holes in the record is 12:40 UTC. No capture
+exists from before the change, so that the return packets were larger
+then is not measured.
+
+**What this retires.** The transmit-side reading made from the source
+before the capture (Inferno fills samples it does not have with zeros,
+silently) is real code but is not this fault: the Pi's packets are whole.
+The `--tx-lead 80` point of the sweep may still be that mechanism; it was
+not captured.
+
+**A test that leaves AES67 mode off.** Dante Controller, the Ferrofish's
+Device Config, Latency 1 msec: its packets should grow and its packet
+rate fall by four or eight. At the service's 2 ms settings that should
+cost nothing in the round trip (both receive windows are already 2 ms).
+Then one capture to see the packet size and ten starts with probes. On
+the Pi's side nothing is indicated; spreading its four flows' sends apart
+would be a guess.
+
+**Seen on the way.** (1) During capture 4's noise run the owner stalled
+at 20:58:49 UTC: loop gap 4,388 us, Inferno playback overrun of 83,
+`NETRESYNC dir=playback frames=83`, a transmit re-prime, and a 2,592-sample
+zero run on all sixteen channels at the Mac, 13 s after the capture
+ended. The class of the open stall item; whether the capture provoked it
+is not known. Afterwards the level read 534 (`daw_timeline` 722) until a
+gadget restart, as after the Ferrofish's reboot. (2) systemd's start
+limit refused one of the session's quick restarts; `reset-failed` clears
+it.
+
+**State at 21:05 UTC.** Config 924cfa99, start 20:56:11, gadget anchor
+21:02:42: noise probe clean, 400 loaded impulses all 488, `daw_timeline`
+676 (14.083 ms). The rule stands until the Ferrofish's packets are
+changed or the loss is otherwise removed: a noise probe after every
+endpoint start, restart on holes.

@@ -1,0 +1,21 @@
+outputs/latency/holes-capture-20261012/clean-start-165132Z.pcap: 22868 audio packets in 4 flows, 0 other packets, 0 truncated and skipped
+
+Pi sends   169.254.92.97:36490 -> 169.254.248.189:14379
+  packets 5717 over 3.811 s, audio bytes {384: 5717}, timestamp steps {32: 5716}, so 32 frames a packet, 4 channels
+  arrival gap us: median 670, 99.9% 681, max 717
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0
+
+Pi sends   169.254.92.97:45171 -> 169.254.248.189:14381
+  packets 5717 over 3.811 s, audio bytes {384: 5717}, timestamp steps {32: 5716}, so 32 frames a packet, 4 channels
+  arrival gap us: median 670, 99.9% 682, max 720
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0
+
+Pi sends   169.254.92.97:53508 -> 169.254.248.189:14383
+  packets 5717 over 3.811 s, audio bytes {384: 5717}, timestamp steps {32: 5716}, so 32 frames a packet, 4 channels
+  arrival gap us: median 670, 99.9% 682, max 721
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0
+
+Pi sends   169.254.92.97:57820 -> 169.254.248.189:14385
+  packets 5717 over 3.811 s, audio bytes {384: 5717}, timestamp steps {32: 5716}, so 32 frames a packet, 4 channels
+  arrival gap us: median 670, 99.9% 680, max 708
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0

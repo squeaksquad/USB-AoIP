@@ -1,0 +1,31 @@
+outputs/latency/holes-capture-20261012/holes-start-204044Z-both.pcap: 116139 audio packets in 6 flows, 43 other packets, 0 truncated and skipped
+
+Pi sends   169.254.92.97:36295 -> 169.254.248.189:14381
+  packets 5969 over 3.979 s, audio bytes {384: 5969}, timestamp steps {32: 5968}, so 32 frames a packet, 4 channels
+  arrival gap us: median 670, 99.9% 685, max 686
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0
+
+Pi sends   169.254.92.97:42797 -> 169.254.248.189:14379
+  packets 5969 over 3.979 s, audio bytes {384: 5969}, timestamp steps {32: 5968}, so 32 frames a packet, 4 channels
+  arrival gap us: median 670, 99.9% 681, max 685
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0
+
+Pi sends   169.254.92.97:47941 -> 169.254.248.189:14385
+  packets 5969 over 3.979 s, audio bytes {384: 5969}, timestamp steps {32: 5968}, so 32 frames a packet, 4 channels
+  arrival gap us: median 670, 99.9% 685, max 687
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0
+
+Pi sends   169.254.92.97:55296 -> 169.254.248.189:14383
+  packets 5969 over 3.979 s, audio bytes {384: 5969}, timestamp steps {32: 5968}, so 32 frames a packet, 4 channels
+  arrival gap us: median 670, 99.9% 685, max 686
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0
+
+Pi receives  169.254.248.189:61445 -> 169.254.92.97:49006
+  packets 44507 over 3.980 s, audio bytes {96: 44507}, timestamp steps {4: 41258, 8: 3248}, so 4 frames a packet, 8 channels
+  arrival gap us: median 83, 99.9% 170, max 201
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0
+
+Pi receives  169.254.248.189:61446 -> 169.254.92.97:60258
+  packets 47756 over 3.980 s, audio bytes {96: 47756}, timestamp steps {4: 47755}, so 4 frames a packet, 8 channels
+  arrival gap us: median 83, 99.9% 146, max 152
+  packets with a zero run of 9+ bytes: 0 (0.0 %); wholly zero packets: 0

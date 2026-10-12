@@ -43,6 +43,24 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
+**FOUND 2026-10-12 21:05 UTC. READ THIS FIRST.** The four-sample holes are
+located: on a start with holes, one of the Ferrofish's two return flows
+(8 channels, 4-frame packets, 12,000 a second) is missing the packet due
+80 to 120 us after the Pi's own transmit burst, about half the time, and
+those packets never reach the Pi's port (MAC counters clean). The Pi's
+transmit is whole. RESULTS.md's last section; `diag/dante-pcap-zeros.py`
+reads a capture (tcpdump needs the operator's sudo; the command pattern
+is in that section's evidence and the tool's header). Proposed and
+awaiting the operator: Ferrofish device latency 1 msec in Dante
+Controller (AES67 mode stays off), then one capture to see the packet
+size and ten starts with noise probes. If he has done it, check first
+what the Ferrofish's packets look like now. Until the loss is gone: a
+noise probe after every endpoint start, restart on holes. In service:
+config 924cfa99 (2 ms), 488 on the 21:02:42 UTC anchor. Open besides: the
+owner stall (4.4 ms at 20:58:49, during a capture's noise run); the
+return queue at 96 (owed five anchors an arm); 1 ms on both knobs (388 /
+576 on a clean start, worth retrying once starts are clean).
+
 **FOUND 2026-10-12 17:00 UTC. READ THIS FIRST; it overrides the two blocks
 under it where they differ.** The four-sample holes (about 5 % of
 samples, one position modulo 32, Dante side of the owner, Ferrofish 0
