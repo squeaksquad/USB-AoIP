@@ -12861,3 +12861,25 @@ real unit, the wrapper's refusal under the unit. Carried open: the
 early-start loop gap; the gadget restart's 3 to 4 ms gap one time in
 three; the harness's 32-run limit for the soak criterion. The service is
 `direct` with meters, started 00:54 UTC, no fresh anchor drawn since.
+
+**MEASURED 2026-10-12 01:08-01:14 UTC: a fresh anchor on the service as it
+stands after the reboot: harness 466, `daw_timeline` 654 (13.625 ms) at 32
+frames.** `usb16x16-dante.service` on owner 62879558, direct with meters;
+gadget restart 01:08:40 UTC under the running service (it cost the known
+one-in-three resync, nothing else). Noise probe clean; 800 loaded impulses
+all 466 samples (9.708 ms) spread 0, offset 188 steady; no re-prime or
+capture fault. One run, not the battery; the same level as the anchors of
+16:14 (466) and 18:58 UTC (465). RTL Utility was open on the Mac during the
+runs (not measuring; the harness's results show no sign of a shared device,
+but the rule is that they never share it). An RTL reading on this anchor is
+the operator's to take; `work/latency-harness/read-rtl-log.sh` reads it
+back.
+
+**MEASURED 2026-10-12 01:47 UTC: RTL Utility at 32 frames reads 654 samples,
+13.625 ms, on the 01:08:40 UTC anchor: the harness's 466 plus the 188 it
+predicts.** The operator's reading, read back from RTL Utility's own log by
+`read-rtl-log.sh 1 466 32` (USB 16x16 both ways, channel 1, 32 frames,
+reported latency 312, return -21.6 dB, correlation 50.1; saved as
+`outputs/latency/rtl-utility-32f-20261012T014805Z.txt`). The first RTL
+reading on the DSP owner 62879558 and on the installed service form, direct
+with meters. The owner had been up 53 minutes on the one anchor.
