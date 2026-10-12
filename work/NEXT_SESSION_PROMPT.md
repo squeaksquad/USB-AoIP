@@ -43,6 +43,16 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
+**INSTALLED 2026-10-12 23:01 UTC, newest: the start check is in service
+and has acted once** (a short start at 23:03:45 restarted after 65 s, the
+next read whole). Handoff tail. Before any measurement after an endpoint
+start, wait for `state=ok` with the current InvocationID in
+`/run/usb16x16-dante-startcheck/status`. Owed: a boot with it; the stop at
+four restarts on the real unit; the operator's ACCEPTED. In service:
+Ferrofish 1.0 msec, config 924cfa99 (2 ms), 494 / 682 on the 23:06:15
+anchor. Still open underneath: the cause of the loss; the owner stall;
+the return queue at 96; 1 ms on both knobs.
+
 **STAGED 2026-10-12 22:00 UTC, newest.** A start check for the service
 (`service/usb16x16-dante-startcheck`, its oneshot unit, and
 `install-dante-startcheck.sh`, on the Pi, the operator's sudo): after each

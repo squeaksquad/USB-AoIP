@@ -13348,3 +13348,21 @@ watch it act on a short start, the restart count, the status file, a boot.
 A stopgap: the cause of the loss is still between the Ferrofish, the
 GS305EP and the Pi's port. In service: config 924cfa99, start 21:53:57
 whole, soak PASS, 477 / `daw_timeline` 665 (13.854 ms).
+
+**INSTALLED 2026-10-12 23:01 UTC: the Dante start check, and it has acted
+once.** Record `work/dante-mode/RESULTS.md`, last section. By the operator
+with `install-dante-startcheck.sh`: `/usr/local/libexec/usb16x16-dante/usb16x16-dante-startcheck`
+058e9177, `/etc/systemd/system/usb16x16-dante-startcheck.service` e0ffc622,
+enabled; the endpoint's unit unchanged (27b68877). Live test: a start at
+23:03:45 UTC came up short (5,202 and 5,203 audio frames a second, 797
+under the multiple), the check restarted the endpoint 65 s after it
+began, the next start read whole (6,016) and the count was cleared. On
+that start, fresh anchor 23:06:15: sixteen-channel soak PASS, 400 loaded
+impulses all 494, `daw_timeline` 682 (14.208 ms). Rollback
+`install-dante-startcheck.sh rollback`. Not yet seen on the real unit: the
+stop at four restarts, a boot, the check meeting the applier. Not
+ACCEPTED: the operator's call, and it is a stopgap for a loss whose cause
+is still open (Ferrofish, GS305EP or the Pi's port). From now on an
+endpoint start may be followed about 65 s later by a restart: read
+`/run/usb16x16-dante-startcheck/status` for `state=ok` and the current
+InvocationID before measuring.

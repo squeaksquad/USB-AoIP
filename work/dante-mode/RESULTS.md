@@ -4494,3 +4494,27 @@ file, and its behaviour at boot. Owed after the install.
 **State at 22:00 UTC.** Nothing installed. Config 924cfa99, Ferrofish 1.0
 msec, start 21:53:57 read whole, gadget anchor 21:56:04, sixteen-channel
 soak PASS, 400 loaded impulses all 477, `daw_timeline` 665 (13.854 ms).
+
+## The start check installed, and seen to act (2026-10-12 23:01-23:10 UTC)
+
+Installed by the operator at 23:01 UTC with `install-dante-startcheck.sh`:
+script 058e9177, unit e0ffc622, enabled, linked under
+`usb16x16-dante.service.wants/`; the endpoint's unit still 27b68877.
+
+Two endpoint restarts by the session were enough. The start of 23:02:39
+was read whole (6,016 and 6,016) at 23:03:44. The start of 23:03:45 was
+read **SHORT, 5,202 and 5,203, 797 under a multiple of 1,500**, at
+23:04:50; the check logged `restarting usb16x16-dante.service, restart 1
+of 4` and the endpoint started again in the same second. That start was
+read whole (6,016 and 6,016) at 23:05:55 with `restarts before it: 1`,
+the count file was removed and the status line read `state=ok rate=6016
+restarts=1`. Sixty-five seconds from a start to its verdict each time.
+The check's unit ended `Stopped`, not failed, when the restart it asked
+for took it down (bash logs one `Terminated` line there; harmless).
+
+Then a fresh gadget anchor (23:06) on the start the check had passed:
+sixteen-channel soak PASS, 400 loaded impulses spread 0 (the level is in
+the handoff entry).
+
+**Still not seen:** the stop at four restarts, on the real unit (the
+stand-in test covers it); a boot; the check meeting the applier.
