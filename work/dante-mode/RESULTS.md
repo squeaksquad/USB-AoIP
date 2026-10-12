@@ -4398,3 +4398,49 @@ it.
 676 (14.083 ms). The rule stands until the Ferrofish's packets are
 changed or the loss is otherwise removed: a noise probe after every
 endpoint start, restart on holes.
+
+## Ferrofish device latency 0.25 to 1.0 msec: its packets grow to 16 frames, the loss stays, and each hole is now 16 samples (2026-10-12 21:20-21:40 UTC)
+
+The operator set the Ferrofish's Device Latency to 1.0 msec in Dante
+Controller (AES67 mode stays off). Config 924cfa99 on the Pi throughout.
+
+- **Existing flows did not change.** On the start that was running the Pi
+  still received 24,050 frames a second. After an endpoint restart
+  (21:22:46 UTC) it received about 6,000: 384 audio bytes a frame, which
+  with the 16-sample holes below is 8 channels of 16 frames, two flows of
+  3,000 a second. The packet size follows the Ferrofish's device latency,
+  and is fixed when a flow is made. (Read from eth0's MAC counters,
+  `ethtool -S`, which need no root; no capture was taken.)
+- **The loss is still there, at the same rate.** That first start received
+  5,194 a second, 806 short, and its sixteen-channel soak FAILED with zero
+  runs of 16 on channels 5 to 12. Of eight more starts classified by
+  receive rate alone, two were short by 809 and 805 a second and six were
+  whole (6,005). With 4-frame packets the shortfall was 816 a second. So
+  the number lost does not depend on the Ferrofish's packet size: it is
+  about 54 % of the Pi's 1,500 bursts a second, one return packet a burst,
+  as the capture section found. A bigger packet only makes each hole
+  bigger. Three starts of nine at this setting.
+- **The noise probe was blind to it.** It listens on channel 2 and read
+  the 21:22:46 start as clean while channels 5 to 12 had holes. Every
+  "clean" in this day's counts that rests on the probe alone (not on a
+  sixteen-channel soak or a capture) may be wrong, and the rates quoted
+  are lower bounds. The starts that carried a soak or an hour are not
+  affected.
+- **A better start check, no audio and no root:** the Pi's received audio
+  frame rate against what the flows should make,
+  `ethtool -S eth0 | grep rx_256_511_byte_frames` twice ten seconds apart
+  (6,000 a second at this setting; 24,000 at 0.25 msec, where the frames
+  fall in `rx_128_255`). Short by about 800 is a start with holes.
+
+**State at 21:40 UTC.** Ferrofish at 1.0 msec; config 924cfa99; start
+21:34:19, receive rate 6,005, gadget anchor 21:35:27, sixteen-channel soak
+PASS, 400 loaded impulses all 472, `daw_timeline` 660 (13.750 ms).
+
+**Where this leaves the cause.** A return packet goes missing when it
+falls just after the Pi's burst, whatever its size, on about one start in
+three, and it does not reach the Pi's MAC. Still not separated: the
+Ferrofish, the switch, or the Pi's port losing a frame it does not count.
+What would separate them is a view of the wire that is not the Pi's:
+the switch's per-port counters or a mirror port, or the same Ferrofish
+channels as a multicast flow captured on a second machine. Why none of
+this showed before the Ferrofish left AES67 mode is not explained either.

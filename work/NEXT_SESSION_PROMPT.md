@@ -43,6 +43,20 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
+**MEASURED 2026-10-12 21:40 UTC, newest; read with the block under it.**
+The Ferrofish's device latency is now 1.0 msec (operator): it sends
+16-frame packets, 3,000 a second a flow. The loss is unchanged in count
+(about 807 packets a second on 3 starts of 9), so a bad start now has
+16-sample holes. START CHECK, replaces the noise probe (which hears only
+channel 2 and missed holes on channels 5 to 12): on the Pi, `ethtool -S
+eth0 | grep rx_256_511_byte_frames` twice ten seconds apart must give
+6,000 a second; about 800 short is a bad start, restart and re-check.
+Cause still between the Ferrofish, the switch and the Pi's port: next is
+a view of the wire that is not the Pi's (switch port counters or mirror;
+a multicast flow captured on a second machine), or a start-check in the
+service as a stopgap. In service: start 21:34:19 at full rate, soak PASS,
+472 / 660.
+
 **FOUND 2026-10-12 21:05 UTC. READ THIS FIRST.** The four-sample holes are
 located: on a start with holes, one of the Ferrofish's two return flows
 (8 channels, 4-frame packets, 12,000 a second) is missing the packet due

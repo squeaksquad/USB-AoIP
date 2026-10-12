@@ -13314,3 +13314,19 @@ stall of 4.4 ms at 20:58:49 with an 83-frame playback resync and a 54 ms
 hole at the Mac, the open stall item again. In service at 21:05: config
 924cfa99, start 20:56:11, anchor 21:02:42, noise clean, 488 /
 `daw_timeline` 676 (14.083 ms).
+
+**MEASURED 2026-10-12 21:20-21:40 UTC: the Ferrofish at 1.0 msec device
+latency sends 16-frame packets, and the loss is unchanged in count, so the
+holes are now 16 samples.** Record `work/dante-mode/RESULTS.md`, last
+section. Set by the operator in Dante Controller; AES67 mode stays off.
+New flows carry 3,000 packets a second each instead of 12,000. Three
+starts of nine still lose about 807 packets a second (816 before): the
+count follows the Pi's 1,500 bursts a second, not the Ferrofish's packet
+size. CORRECTION to the day's counts: the noise probe listens on channel 2
+only and read a start as clean whose channels 5 to 12 had holes; "clean"
+by the probe alone is a lower bound. Start check from now on, no audio or
+root needed: eth0's received audio frame rate from `ethtool -S` over ten
+seconds against the expected 6,000 (24,000 at 0.25 msec). Cause still
+between the Ferrofish, the switch and the Pi's port. In service at 21:40:
+Ferrofish 1.0 msec, config 924cfa99, start 21:34:19 at full rate, soak
+PASS on sixteen channels, 472 / `daw_timeline` 660 (13.750 ms).
