@@ -3853,8 +3853,8 @@ offset 188 steady in every run. On the Pi from first step to last: the
 same process, `NRestarts` 0, `tx_resyncs` 0, `rx_resyncs` 0,
 `net_errors` 0, no re-prime, no capture fault (the one playback fault is
 the gadget restart), `out_holes` 0, `back_holes` 0, no undervoltage
-flag; over the hour, largest wake gap / Inferno warnings / neighbour /
-link / temperature: 1044 0 1000 temp=59.3'C . Evidence `outputs/latency/dante-linkwait-*`.
+flag; over the hour, largest wake gap 1,044 us, no Inferno warning, eth0 at 1000 Mbit/s,
+59.3 C at the end; the neighbour entry REACHABLE when read after the hour. Evidence `outputs/latency/dante-linkwait-*`.
 
 **The level.** 509 is the highest fresh draw recorded: the band was 465 to
 507 and is 465 to 509 with this one. A draw at a gadget restart is the

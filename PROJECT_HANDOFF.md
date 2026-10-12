@@ -13093,8 +13093,8 @@ at 04:30:41 (no resync, no gap). Noise probe clean; four loaded
 800-impulse runs all 509, spread 0, offset 188 steady; 3,600 s
 sixteen-channel soak PASS (longest zero run 1, no discontinuity). On the
 Pi throughout: one process, `NRestarts` 0, no resync, re-prime or capture
-fault, `net_errors` 0, both hole counters 0; over the hour, largest wake
-gap / Inferno warnings / neighbour / link / temperature: 1044 0 1000 temp=59.3'C . 509 is the
+fault, `net_errors` 0, both hole counters 0; over the hour, largest wake gap 1,044 us, no Inferno warning, eth0 at 1000 Mbit/s,
+59.3 C at the end; the neighbour entry REACHABLE when read after the hour. 509 is the
 highest fresh draw so far: the band is 465 to 509. Awaiting the operator's
 ACCEPTED for this form (the binaries are those of the point of record; the
 unit's two start waits and the NetworkManager setting are what changed).
