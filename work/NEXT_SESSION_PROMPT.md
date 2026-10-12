@@ -43,8 +43,14 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
-**Candidate experiment, asked for by the operator 2026-10-12: Inferno
-latency at 1 ms.** Both `RX_LATENCY_NS` and `TX_LATENCY_NS` are 2,000,000
+**CHOSEN 2026-10-12 for the next session: Inferno latency at 1 ms.**
+Before-reads first (`journalctl -u usb16x16-dante -n 3`, `NRestarts`, the
+neighbour entry, a noise probe for the level: 507 on the 11:50:22 UTC
+anchor unless something has re-primed since; the stalls move it by 2).
+The Ferrofish's own device latency reads 0.25 msec and it applies 2 msec
+to the Pi's flows because that is what the Pi advertises; its Latency tab
+for those flows read peak 583 us, average 550 us on 2026-10-12 with AES67
+mode off. Both `RX_LATENCY_NS` and `TX_LATENCY_NS` are 2,000,000
 in `/etc/usb16x16/dante/asound-inferno-owner.conf` (repo
 `work/dante-mode/config/asound-inferno-owner.conf`); 2 ms is the only
 value below the 10 ms default ever run, nothing at 1 ms is in the record.
@@ -61,7 +67,13 @@ direction at a time, the Pi's receive side first; a copy of the config
 with one value changed, run through `usb16x16-dante-candidate start
 <binary> CONFIG=...` with the service stopped, nothing installed; judge by
 the noise probe, a soak and the Ferrofish's Late count read by the
-operator, then the battery and an hour before anything is proposed. Check
+operator, then the battery and an hour before anything is proposed. Any
+level comparison needs the same kind of anchor on both arms (a gadget
+restart under the running process), since a candidate start is itself a
+new draw; the expected gain per direction (48) is about the size of the
+draw band (465 to 509), so read several anchors per arm or compare within
+one process if the setting can be changed without a re-prime (it cannot
+through the config file: it is read at open). Check
 first whether the Ferrofish accepts 1 ms at all for these flows. A five-minute pull also rode through (11:10 UTC, 511 before
 and after). FOUND the same night: an unexplained 4.6 ms owner stall at
 idle at 06:26:05 UTC, a 91-frame resync, level 509 to 511 (RESULTS.md,
