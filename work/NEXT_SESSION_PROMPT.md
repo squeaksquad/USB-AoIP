@@ -34,7 +34,28 @@ real pulls are a usable test here. Statime is not patched (handoff, the
 STAGED entry of 04:12, says why). Battery and loaded hour PASSED on it 04:30-05:47 UTC (509 /
 `daw_timeline` 697, 14.521 ms; the band is now 465 to 509); ACCEPTED by
 the operator 2026-10-12: this form is the Dante point of record. Next, in
-another session by his choice: the owner's stalls. A five-minute pull also rode through (11:10 UTC, 511 before
+another session by his choice: the owner's stalls.
+
+**Candidate experiment, asked for by the operator 2026-10-12: Inferno
+latency at 1 ms.** Both `RX_LATENCY_NS` and `TX_LATENCY_NS` are 2,000,000
+in `/etc/usb16x16/dante/asound-inferno-owner.conf` (repo
+`work/dante-mode/config/asound-inferno-owner.conf`); 2 ms is the only
+value below the 10 ms default ever run, nothing at 1 ms is in the record.
+Each is a receive latency for one direction and the two knobs are crossed
+in this Inferno revision (RESULTS.md, "Latency settings as wired"): after
+each change check which direction moved (Controller shows the Ferrofish's
+figure for the Pi's flows as "USB-16x16-Inferno @ N msec"). Expected gain
+about 48 samples per direction, 96 (2 ms) for both. The risk is the Pi to
+Ferrofish direction: a packet later than the setting is dropped silently
+(holes, not a latency change), and the Ferrofish's Latency tab has shown
+the Pi's packets peaking at 708 us (2026-10-12) with a cluster near 0.9 ms
+on an earlier night, so 0.1 to 0.3 ms of margin at 1 ms. How: one
+direction at a time, the Pi's receive side first; a copy of the config
+with one value changed, run through `usb16x16-dante-candidate start
+<binary> CONFIG=...` with the service stopped, nothing installed; judge by
+the noise probe, a soak and the Ferrofish's Late count read by the
+operator, then the battery and an hour before anything is proposed. Check
+first whether the Ferrofish accepts 1 ms at all for these flows. A five-minute pull also rode through (11:10 UTC, 511 before
 and after). FOUND the same night: an unexplained 4.6 ms owner stall at
 idle at 06:26:05 UTC, a 91-frame resync, level 509 to 511 (RESULTS.md,
 last section): the loop-gap item, now also away from a start. Untested: a
