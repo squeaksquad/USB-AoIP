@@ -13041,3 +13041,16 @@ going in: whether the setting reaches an already-active device on a
 reload; what Statime does with no leader for the length of the loss and
 when the leader returns; whether the Ferrofish's subscriptions and the
 Pi's resume by themselves.
+
+**INSTALLED 2026-10-12 04:15:30 UTC: the eth0 `ignore-carrier` drop-in
+(3a1842a6), by the operator's `sudo ./install-eth0-carrier.sh`; untested.**
+(The STAGED entry above is stamped 04:25 UTC; it was 04:12.) eth0 still
+`connected` on `aoip-eth0`, the endpoint untouched (`NRestarts` 0, the
+04:02:43 process). Whether the setting reached the active device on the
+reload is not known until a carrier loss. Read the same minute, for the
+operator's question of whether the Pi stays up on USB with the PoE cable
+out: the Pi's bootloader recorded 900 mA as its supply's limit
+(`/proc/device-tree/chosen/power/max_current`), the Mac lists 500 mA
+(2.5 W) allocated to the `USB 16x16` device, the rail reads 5.148 V with
+PoE in, `get_throttled` 0x0. None of that says what the Mac's port will
+actually deliver or whether the handover is clean.
