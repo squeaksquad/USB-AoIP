@@ -35,6 +35,13 @@ STAGED entry of 04:12, says why). Battery and loaded hour PASSED on it 04:30-05:
 `daw_timeline` 697, 14.521 ms; the band is now 465 to 509); ACCEPTED by
 the operator 2026-10-12: this form is the Dante point of record. Next, in
 another session by his choice: the owner's stalls.
+**Since then (11:30-11:55 UTC):** the operator turned AES67 mode off on
+the Ferrofish and rebooted it. The service rode through; the level read
+605 afterwards and 507 after a gadget restart: the Dante clock moved while
+the leader rebooted and two transmit re-primes left about 94 frames on the
+USB side (RESULTS.md, last two sections). A leader reboot therefore wants
+a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
+back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
 **Candidate experiment, asked for by the operator 2026-10-12: Inferno
 latency at 1 ms.** Both `RX_LATENCY_NS` and `TX_LATENCY_NS` are 2,000,000

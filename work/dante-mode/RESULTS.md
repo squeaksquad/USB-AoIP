@@ -3943,3 +3943,37 @@ the transmitter's); the two transmit re-primes in a disturbed minute
 landing far from the usual depth. A clock offset between the Pi and the
 Ferrofish is not a candidate by itself: it adds to one direction what it
 takes from the other.
+
+## The 605 was on the USB side: a gadget restart brings 507 back (2026-10-12 11:45-11:55 UTC)
+
+Read by the operator in Dante Controller after the entry above: the
+Ferrofish's Latency tab still `USB-16x16-Inferno @ 2 msec` (peak 583 us,
+average 550 us, 0 late over the 22 s since it was opened), its Device
+Latency 0.25 msec, PTPv1 unicast delay requests enabled, PTPv2 disabled.
+So the Ferrofish's receive latency for the Pi's flows did not change.
+
+Then a fresh anchor, `sudo -n systemctl restart usb-16x16.service` at
+11:50:22 under the running service: gadget gone and back in a second, both
+directions flowing, the owner and Statime processes and both Inferno
+streams untouched. Noise probe clean (11:51:02), 800 loaded impulses all
+**507**, spread 0, `daw_timeline` 695 (14.479 ms). Evidence
+`outputs/latency/dante-ffreboot-anchor-*`.
+
+**So the extra 94 samples were frames held between the Mac and the Pi's
+gadget queues, not Dante latency.** Re-priming the USB side alone removed
+them, and nothing on the network side was restarted or changed. They went
+in during the minute the Ferrofish was rebooting: the Dante clock moved
+against the Mac's (pitch to +25 / +44 ppm, which at 48 kHz is one to two
+samples a second), the outgoing queue fell to 31 against its lead of 128
+and was re-primed twice. 128 - 31 is 97; the level rose 94. Not shown
+which of the two re-primes added what, or that the arithmetic is more than
+a coincidence of size.
+
+**What this means for use.** A clock leader that reboots under the running
+service leaves the round trip longer by up to about 2 ms until the USB
+side is next re-primed (a gadget restart, an owner restart, or the Mac
+closing and re-opening the device); audio is whole throughout. The level
+after any event that re-primes a direction is a new draw, as the record
+already says; this is a large one. An owner that re-primed back to its
+intended total after the disturbance settled would avoid it; nothing of
+the kind exists.

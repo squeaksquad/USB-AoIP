@@ -13160,3 +13160,19 @@ thing to read (Controller, Ferrofish, Latency tab and device latency).
 The point of record's figures (465 to 509) do not describe the service as
 it stands until this is understood. The AES67 rollback is unavailable
 while the Ferrofish's AES67 mode is off.
+
+**MEASURED 2026-10-12 11:50-11:55 UTC: the 605 after the Ferrofish's
+reboot was frames on the USB side; a gadget restart returns 507,
+`daw_timeline` 695 (14.479 ms).** Record `work/dante-mode/RESULTS.md`, last
+section. The operator read the Ferrofish's receive latency for the Pi's
+flows as still 2 msec (0 late) and its device latency as 0.25 msec, so no
+Dante setting moved. A fresh anchor by gadget restart at 11:50:22, with
+the owner, Statime and both Inferno streams untouched, read noise probe
+clean and 800 loaded impulses all 507, spread 0. The 94 samples went in
+while the leader rebooted and the Dante clock moved against the Mac's: the
+outgoing queue fell to 31 of 128 and was re-primed twice. Consequence, now
+known: a clock leader's reboot under the running service can leave the
+round trip up to about 2 ms long until the USB side is next re-primed;
+audio whole throughout. In service: the accepted form, the Ferrofish with
+AES67 mode off (the AES67 rollback needs it back on and a Ferrofish
+reboot), level 507 on the 11:50:22 anchor.
