@@ -24,6 +24,12 @@ passes at the cost of an endpoint restart. Open, the operator's to choose:
 the sleep episode (do the recurrence procedure if it shows); making Statime
 survive a link loss so the owner is not restarted; a loss of minutes; a
 real carrier loss; the three paths with a preset.
+**STAGED 04:25 UTC, not installed:** `service/90-usb16x16-eth0-carrier.conf`
+with `install-eth0-carrier.sh` (NetworkManager `ignore-carrier` for eth0,
+so the address survives a carrier loss and Statime has no failed send to
+exit on). Statime is not patched; the handoff's STAGED entry says why.
+Its test is a carrier loss with PoE kept (the switch's port disable), a
+baseline first; `ip link set down` cannot test it.
 
 ## Current pickup — 2026-10-09: Dante (Inferno) is the development line; the alsaloop prototype reads level with AES67
 

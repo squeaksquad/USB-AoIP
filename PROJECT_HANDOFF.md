@@ -13009,3 +13009,35 @@ operator's call. In service: owner 62879558 direct with meters on unit
 Open: the sleep episode; Statime's exit turning every link loss into an
 owner restart; a loss of minutes; a real carrier loss; two losses close
 together; the three paths with a preset.
+
+**STAGED 2026-10-12 04:25 UTC: for Statime's exit on a link loss, a
+NetworkManager drop-in that keeps eth0's connection through a carrier
+loss; not installed, and no patch to Statime.** Read first: Statime
+(`statime-linux/src/main.rs`, pinned 244f20a5) ends on any failed send
+(four `.expect("Failed to send ...")`, lines 1000 / 1021 / 1083 / 1112);
+the send fails with `Network is unreachable` because NetworkManager
+(`aoip-eth0`, `ipv4.method link-local`) deactivates the connection about
+six seconds after the carrier drops and the address and route go. Making
+those sends non-fatal was considered and not done: Statime joins the PTP
+groups by interface index (224.0.1.129, 224.0.0.107), and the session's
+reading of the kernel, NOT tested here, is that removing an interface's
+last IPv4 address drops the groups joined on it and re-adding the address
+does not restore them, so a Statime that survived would be deaf to the
+leader with nothing to show it; the owner's Inferno sockets would face the
+same. While the address goes, a restart is the correct handling, and the
+unit now does it cleanly. What can be avoided is the address going:
+`work/dante-mode/service/90-usb16x16-eth0-carrier.conf` (3a1842a6: a
+`[device-usb16x16-eth0]` section, `ignore-carrier=true`) with
+`install-eth0-carrier.sh` (c79c797b: installs to
+`/etc/NetworkManager/conf.d/`, reloads NetworkManager without restarting
+it, `rollback` removes the file). Expected, untested: on a real carrier
+loss the address, route and groups stay, no send fails, neither Statime
+nor the owner restarts and the level does not step. It does nothing for
+`ip link set eth0 down`, which removes the route whatever NetworkManager
+does, so the bounce used so far cannot test it: the test is a carrier loss
+with PoE kept (the switch's port disable; the Pi has no `ethtool`), first
+on the service as it stands for a baseline, then with the drop-in. Unknown
+going in: whether the setting reaches an already-active device on a
+reload; what Statime does with no leader for the length of the loss and
+when the leader returns; whether the Ferrofish's subscriptions and the
+Pi's resume by themselves.
