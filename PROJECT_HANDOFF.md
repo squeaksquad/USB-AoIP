@@ -13144,3 +13144,19 @@ earlier loop-gap item) and the one episode of four-sample zero runs after
 the first Mac wake. Rollbacks, newest first: `install-eth0-carrier.sh
 rollback`; `install-dante-unit-update.sh rollback` (to unit 9f5289dd);
 then as before (`install-dante-dsp.sh rollback`).
+
+**FOUND 2026-10-12 11:29-11:44 UTC: the Ferrofish taken out of AES67 mode
+and rebooted (operator): the service rode through, and the level is now
+605, not 511.** Record `work/dante-mode/RESULTS.md`, last section;
+evidence `outputs/latency/dante-ffreboot-*`. No restart of either unit, no
+network resync, no capture fault; two transmit re-primes and about ten
+minutes of servo settling while the Dante clock moved (integrals to -20 /
++27 ppm and back). Then noise probe clean and 800 loaded impulses all 605,
+spread 0, `daw_timeline` 793 (16.521 ms): 94 samples (1.96 ms) above ten
+minutes before, same owner process, same open on the Mac. Cause not
+established; 94 is one direction's 2 ms within two samples, so a receive
+latency that changed at the Ferrofish's reboot or mode change is the first
+thing to read (Controller, Ferrofish, Latency tab and device latency).
+The point of record's figures (465 to 509) do not describe the service as
+it stands until this is understood. The AES67 rollback is unavailable
+while the Ferrofish's AES67 mode is off.

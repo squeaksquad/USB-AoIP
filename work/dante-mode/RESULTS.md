@@ -3907,3 +3907,39 @@ against 1 s after the 23 s pull, and asked a second time at 55 s; audio
 toward the Ferrofish was therefore out for the pull plus about half a
 minute. What Statime's clock did in five minutes without a leader is still
 not observed directly; the round trip came back where it was.
+
+## The Ferrofish out of AES67 mode, and its reboot: ridden through, but the level went 511 to 605 (2026-10-12 11:29-11:44 UTC)
+
+The operator turned AES67 mode off on the Ferrofish in Dante Controller and
+rebooted it (about 11:32 UTC); afterwards it was still clock leader on
+external clock and the cells for the Pi went green unaided. Before
+(11:29:24): noise probe clean, level 511, the processes of 04:19.
+
+On the Pi: Statime logged one `Unexpected DelayResp v1 message` (11:32:05)
+and stayed up; Inferno timed out both receive flows at 11:32:48; no
+restart of either unit (`NRestarts` 0, same PIDs), no `NETRESYNC`,
+`rx_resyncs` 0, no capture fault, `net_errors` 0, wake gaps under 1.05 ms.
+In the minute to 11:33:52 the gadget side was disturbed: `tx_links` 4 to
+6, `tx_reprimes` 2 to 4, `tx_depth` down to 31, the return queue up to
+204 with 3 overflow frames, and the servo integrals went from -14.6 /
++14.8 to -20.3 / +27.3 ppm; they came back over about ten minutes (-15.1 /
++15.6 and depths 128.0 / 143.7 at 11:43). The Dante clock moved against
+the Mac's while the Ferrofish restarted and the servos followed it.
+
+After (11:39:35): noise probe at 32 frames clean; 800 loaded impulses all
+**605**, spread 0, `daw_timeline` 793 (16.521 ms). That is 94 samples
+(1.96 ms) above the 511 of ten minutes earlier, on the same owner process
+and the same open of the Mac's device. Evidence
+`outputs/latency/dante-ffreboot-*`.
+
+**Not explained.** 94 is close to 96, which is 2 ms: one direction's
+receive latency gone from 2 ms to 4, or the like, less the two samples a
+re-prime has cost before. Candidates, none checked: the Ferrofish applying
+a different receive latency to the Pi's flows after its reboot or in its
+new mode (Controller's Latency tab names it: `USB-16x16-Inferno @ N
+msec`); the Pi's receive side taking a larger minimum from what the
+Ferrofish now advertises (Inferno uses the larger of its own setting and
+the transmitter's); the two transmit re-primes in a disturbed minute
+landing far from the usual depth. A clock offset between the Pi and the
+Ferrofish is not a candidate by itself: it adds to one direction what it
+takes from the other.
