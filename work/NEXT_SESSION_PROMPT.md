@@ -2,6 +2,22 @@
 
 ## Current pickup — 2026-10-12: the Dante service has DSP, an applier and a page; its owed list is done. Start here.
 
+**Added 2026-10-12 03:45 UTC: the three fault paths were run direct; read
+this before the CHOSEN block below.** Handoff tail (two FOUND, one
+MEASURED) and the last three sections of `work/dante-mode/RESULTS.md`.
+Controller restart: PASS, no cost. Mac sleep, three times: the service
+rides through (silence and a new level each time), but the first wake left
+four-sample zero runs on a 32-sample grid on the return for at least nine
+minutes; not reproduced in two more sleeps, hop not located; RESULTS.md
+says what to do on a recurrence before touching anything. eth0 down 20 s
+(software, the cable is the PoE feed): **FAIL**, Statime exits, the owner
+restarts with it, panics three times with no IPv4 address and the unit's
+start limit leaves it `failed` until a manual start. Next, the operator's
+to choose: fix that (an `ExecStartPre` wait for an address on eth0, no
+start limit; then whether Statime's exit should take the owner down) and
+re-run the bounce; a real carrier loss; then the three with a preset. The
+service is `direct` with meters, started by hand 03:36 UTC, level 502.
+
 Everything below this section is older; where it says a thing is owed or
 not built, check here and the handoff tail first.
 

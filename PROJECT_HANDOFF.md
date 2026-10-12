@@ -12883,3 +12883,59 @@ reported latency 312, return -21.6 dB, correlation 50.1; saved as
 `outputs/latency/rtl-utility-32f-20261012T014805Z.txt`). The first RTL
 reading on the DSP owner 62879558 and on the installed service form, direct
 with meters. The owner had been up 53 minutes on the one anchor.
+
+**FOUND 2026-10-12 02:02-03:01 UTC: Mac sleep and wake under the Dante DSP
+service, three times: the service rode through each one, but the first
+wake left the return with four-sample zero runs for at least nine minutes;
+not reproduced, not located.** Record `work/dante-mode/RESULTS.md`, last
+section; evidence `outputs/latency/dante-sleepwake*`. Owner 62879558,
+direct with meters. All three sleeps: `NRestarts` 0, no resync, re-prime or
+capture fault, both directions flowing 2 s after the wake with nobody
+restarting anything, neighbour REACHABLE, eth0 1000; each costs silence for
+the sleep and a new level (the Mac re-opens the device): 466 to 493, 487 to
+469, 469 to 502. After the third: six noise probes clean from 29 s, 800
+loaded impulses all 502, spread 0, `daw_timeline` 690 (14.375 ms). After
+the first (02:06:30-02:08:10, with a 45 s DarkWake inside): four noise
+probes with 3 to 5% zeros in runs of exactly four on a 32-sample grid that
+does not follow the Mac's I/O size, 485 / 493 splits; `sudo killall
+coreaudiod` did not clear it, so it is not the Mac hole state of September;
+Controller showed the Ferrofish's receive from the Pi 0 late and the clock
+in sync, which leaves the Ferrofish's transmit, the Metric Halo loop or the
+Pi's receive. Clean after an owner restart at 02:26:52, with no probe in
+the nine minutes before it, so the restart is not shown to be the cure.
+The service was therefore restarted once by the session (new owner PID
+since 02:26:52; point-of-record binary and configuration unchanged). Open:
+the hop, the cause, whether a DarkWake or the owner's age matters. The
+`back_holes` counter rises during some clean probes too and is not a sign
+of it. Controller restart and Ethernet reconnect still to do.
+
+**MEASURED 2026-10-12 03:02-03:09 UTC: a Dante Controller restart under
+the Dante DSP service costs nothing.** Record `work/dante-mode/RESULTS.md`.
+Controller quit, closed 30 s, reopened, all cells green; on the Pi no
+journal event, `NRestarts` 0, every counter unchanged, neighbour REACHABLE;
+noise probe clean, 800 loaded impulses all 502, spread 0, `daw_timeline`
+690 (14.375 ms), the level unchanged.
+
+**FOUND 2026-10-12 03:30-03:41 UTC: eth0 down for 20 s ends the Dante
+service until it is started by hand.** Record `work/dante-mode/RESULTS.md`,
+last section. Done as `ip link set eth0 down; sleep 20; ip link set eth0
+up` by the operator, not a cable pull: the cable is the Pi's PoE feed. One
+second after the link went down Statime panicked on a failed send
+(`Network is unreachable`) and systemd restarted it; the Dante unit is
+`PartOf` Statime and restarted with it; the new owner panicked in Inferno
+three times in ten seconds (`interface specified in BIND_IP has no IPv4
+addresses`) while eth0 was still down; the fourth start, three seconds
+after the link returned, was refused by the unit's start limit (3 in
+300 s) and the unit stayed `failed`. The session started it at 03:36:19
+(`sudo -n systemctl start usb16x16-dante`): up on the first attempt,
+neighbour REACHABLE, transmit counter moving, noise probe clean, 800
+loaded impulses all 502, spread 0, `daw_timeline` 690 (14.375 ms). The
+fault paths so far: Controller restart PASS; Mac sleep rides through, with
+one unreproduced episode of damaged return audio (the FOUND entry above);
+Ethernet loss FAIL. Not changed, the operator's to decide: a wait for an
+IPv4 address on eth0 before the owner starts and no start limit on the
+unit; and whether Statime's exit on a link loss should take the owner with
+it. A carrier loss without `ip link set down` (switch restart, a pull on a
+Pi with other power) is untested and may differ. The three paths with a
+preset running were not run. The service is `direct` with meters on a
+process started 03:36 UTC, level 502 on the Mac's current open.

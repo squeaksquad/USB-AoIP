@@ -3555,3 +3555,139 @@ priority). `usb16x16-web` and `usb16x16-apply.path` active,
 Afterwards a `profile` request returned the service to `direct` and a
 `remove` request deleted `dante-soak-308.dsp`; the AES67 presets in the
 directory are untouched.
+
+## Fault paths under the DSP service: Mac sleep and wake, three times (2026-10-12 02:02-03:01 UTC)
+
+Owner 62879558 under `usb16x16-dante.service`, direct with meters, plugin
+0ee61f2f. The operator slept and woke the Mac; the session read the journal
+afterwards and probed. Evidence: `outputs/latency/dante-sleepwake*`.
+
+| | Sleep 1 | Sleep 2 | Sleep 3 |
+|---|---|---|---|
+| Asleep (UTC) | 02:06:30-02:08:10, a 45 s DarkWake inside | 02:31:55-02:33:13 | 02:46:32-02:49:52 |
+| Owner | up 70 min, one gadget restart behind it | restarted 5 min before | the same, 20 min |
+| `NRestarts`, resyncs, re-primes, capture faults | 0, +0, +0, +0 | 0, +0, +0, +0 | 0, +0, +0, +0 |
+| Both directions flowing after the wake | 2 s, unaided | 2 s, unaided | 2 s, unaided |
+| Neighbour entry, eth0 | REACHABLE, 1000 | REACHABLE, 1000 | REACHABLE, 1000 |
+| Level before / after (new draw: the Mac re-opened the device) | 466 / 493 | 487 / 469 | 469 / 502 |
+| Noise probes | **not clean**, four, 1 to 9 min after | clean, one, 10 min after | clean, six, 0.5 to 6.5 min after |
+| Loaded 800 impulses | not run | not run | 502 x 800, spread 0, `daw_timeline` 690 (14.375 ms) |
+
+Each sleep cost: both USB directions idle for the sleep (`tx_links` +1,
+`rx_primes` +1, `rx_overflow` some thousands while idle), silence, and a new
+level. No capture-fault loop. The service passes on everything it was asked
+except the first sleep's probe.
+
+**The first sleep's fault.** Zero runs of exactly four samples on the
+return, 3 to 5% of samples, for at least nine minutes after the wake:
+
+| Probe (UTC) | Frames | Zeros | Runs of 4 | Start offsets |
+|---|---|---|---|---|
+| 02:09:06 | 32 | 4.1% | 12,465 | 3 mod 32 |
+| 02:10:37 | 32 | 4.7% | 14,097 | 15 mod 32 |
+| 02:14:42 (after `sudo killall coreaudiod`, 02:13:50) | 32 | 5.2% | 15,388 | 0 mod 32 |
+| 02:17:16 | 64 | 3.0% | 8,641 | 4 and 36 mod 64, half each |
+| 02:27:59 (after an owner restart, 02:26:52) | 32 | 0 | 0 | |
+
+Readiness probes read 493 with 485 / 493 splits. What is established: the
+runs sit on a 32-sample grid that does not follow the Mac's I/O size (two
+offsets 32 apart at 64 frames), and a coreaudiod restart, which re-links
+both USB directions, did not clear them; so this is not the Mac output hole
+state of 2026-09-05 / 06, which that restart cleared. 32 samples is one
+Dante packet. Dante Controller at about 02:23 UTC (operator): the
+Ferrofish's receive from the Pi 0 late, peak 708 us, average 562 us over
+the 15 minutes since the wake; the Ferrofish leader on external clock (MADI
+from the Metric Halo, locked), every device in sync. That clears the Pi's
+transmit and the clock as seen by Controller, and leaves the Ferrofish's
+transmit, the Metric Halo loop and the Pi's receive.
+
+**Not established.** Which hop. Whether the owner restart cleared it: there
+was no probe between 02:17 and the restart at 02:26:52, and the fault may
+have ended by itself in that gap. Why this sleep and not the other two: it
+is the only one with a DarkWake inside (the Mac woke on a network packet
+for 45 s and slept again) and the only one on a long-lived owner. The
+session lost the first ten minutes after the second wake to a stalled
+command of its own, so "did not recur" for sleep 2 rests on one probe at
+ten minutes; sleep 3 was probed from 29 s.
+
+**Two readings that are not evidence of the fault.** The servo integrals
+moved from +/-14.5 to about -16.7 / +17.4 ppm after the first wake and
+drifted back over twenty minutes; they did the same after the third wake
+(-16.0 / +17.8) with clean audio. `back_holes` (all-channel gaps of 8 to
+4,800 frames on the stream from Inferno) rose 0 to 34, largest 1023, across
+the bad probes with `out_holes` at 2; it also rose by 13 (largest 124)
+across the clean 02:43 probe and by nothing across five of the six after
+the third wake. None of those gaps is in the Mac's noise capture, and the
+return is digital silence when idle (meter file). Unexplained.
+
+**To do on a recurrence**, before touching anything: a 64-frame probe (the
+grid), Controller's Latency tab for the Ferrofish, then probes every two
+minutes for fifteen minutes; only then an owner restart, straight after a
+bad probe.
+
+## Fault paths under the DSP service: Dante Controller restart (2026-10-12 03:02-03:09 UTC)
+
+The operator quit Dante Controller, left it closed about 30 s and opened it
+again; every cell for the Pi and the Ferrofish green afterwards (the only
+orange ones were the Mac's own DVS, unrelated). The Pi did not notice: no
+journal line but the status lines, `NRestarts` 0, the same process,
+resyncs, links, primes, faults, `net_errors` and both hole counters
+unchanged, neighbour REACHABLE, eth0 1000. Noise probe at 32 frames clean
+(03:04:45); 800 loaded impulses all 502, spread 0, `daw_timeline` 690
+(14.375 ms); the level unchanged, as it must be with no PCM restart.
+**PASS, at no cost.** Evidence `outputs/latency/dante-controller-*`.
+
+## Fault paths under the DSP service: eth0 down for 20 s: the service does not come back (2026-10-12 03:30-03:41 UTC)
+
+**Not a cable pull.** The Pi's Ethernet cable is its PoE feed, and whether
+the Mac's USB port holds the Pi up without it is untested, so the operator
+ran `sudo sh -c 'ip link set eth0 down; sleep 20; ip link set eth0 up'`
+instead. That takes the address off the interface as well as the carrier;
+a carrier loss alone (a switch restart, a real pull on a Pi with other
+power) may behave differently and is not tested.
+
+**What happened** (journal, UTC):
+
+| Time | Event |
+|---|---|
+| 03:30:44 | eth0 `Link is Down`, the PTP clock unregistered |
+| 03:30:45 | Statime panics: `Failed to send event message: ... Network is unreachable` (`statime-linux/src/main.rs:1000`), exit 101 |
+| 03:30:47 | systemd restarts Statime; the Dante unit is `PartOf` it, so the owner is stopped (cleanly, `exit=0`, no resync or fault in 3,834 s) and started with it |
+| 03:30:55, 03:31:00, 03:31:05 | the new owner panics in Inferno three times: `interface specified in BIND_IP has no IPv4 addresses` (`inferno_aoip/src/device_server/settings.rs:36`), SIGABRT |
+| 03:31:07 | eth0 `Link is Up - 1Gbps/Full` |
+| 03:31:10 | fourth start refused: `Start request repeated too quickly` (`StartLimitBurst=3` in `StartLimitIntervalSec=300`); the unit is `failed` and stays so |
+
+Statime itself came back at its first restart and stayed up. The endpoint
+was absent from Dante Controller and the Ferrofish's receive cells orange
+until the session ran `sudo -n systemctl start usb16x16-dante` at 03:36:19
+(a first try at 03:35:25 was still inside the limit's window and was
+refused). That start: first attempt, both Inferno streams running, both USB
+directions flowing at 0.3 s, neighbour entry REACHABLE, transmit counter
+moving (about 6,000 packets a second; no stall after the flap). Noise probe
+clean at 03:37:12 (started about 25 s after the owner, short of the 30 s
+rule), 800 loaded impulses all 502, spread 0, `daw_timeline` 690
+(14.375 ms): the same level as before, the Mac's device never having
+closed.
+
+**FAIL.** The passing criteria were the service on its first start and
+both directions flowing again without anyone restarting anything. A 20 s
+loss of eth0 ends the service until someone starts it by hand; five
+minutes of silence here, indefinitely unattended. Two defects, either of
+which alone would have been survivable:
+
+1. The unit retries only three times in five minutes, five seconds apart,
+   and the interface was down for longer than those fifteen seconds. A
+   start that waited for an IPv4 address on eth0 (an `ExecStartPre` beside
+   the existing wait for Statime's clock socket), or a unit with no start
+   limit, would have come back by itself about 03:31:10.
+2. Statime exits on a failed send, and the unit's `PartOf` turns that into
+   an owner restart, so even a short flap costs a full endpoint restart
+   (new Inferno prepare, subscriptions re-resolved) rather than a pause.
+   Whether the owner would ride through a flap if Statime did is not
+   known; it was stopped before it could show.
+
+Neither is changed: both are unit or install changes, the operator's to
+decide. Evidence `outputs/latency/dante-ethbounce-*`.
+
+**The same three with a preset running: not run.** The pickup made them
+conditional on the direct ones passing.
