@@ -14,7 +14,12 @@
 #                                                    all-16 continuous load (the
 #                                                    battery's soak): every channel
 #                                                    must return signal with no zero
-#                                                    run of 4 or more; default 600 s
+#                                                    run of 4 or more; default 600 s.
+#                                                    With a preset running, zero runs
+#                                                    are put to soak_reference.py: a
+#                                                    low-passed output crosses zero
+#                                                    slowly, and each run must be one
+#                                                    the preset produces
 # USB16X16_OTHER_LOAD=0.1 loads the other 15 channels in the impulse run.
 # Close RTL Utility first: the harness and RTL never share the device.
 set -uo pipefail
@@ -125,16 +130,16 @@ if [[ $mode == soak ]]; then
   if (( measure_exit == 0 )) && [[ -s "$result_path" ]]; then
     # The battery's criteria (work/dsp-service/validate.py): full-length capture,
     # signal on every channel, no zero run of 4 or more, nothing non-finite or at full scale.
-    /usr/bin/python3 - "$result_path" <<'PYEOF' || measure_exit=7
+    /usr/bin/python3 - "$result_path" <<'PYEOF'
 import json, sys
-d = json.load(open(sys.argv[1])); bad = []
+d = json.load(open(sys.argv[1])); bad = []; zero_runs = []
 for key in ("inputDiscontinuities", "outputDiscontinuities"):
     if d.get(key): bad.append(f"{key}={d[key]}")
 for i, c in enumerate(d["channels"], 1):
     why = []
     if c["samples"] < (d["seconds"] - 3) * 48000: why.append("short")
     if c["peak"] < 1e-8: why.append("silent")
-    if c["longestZeroRun"] >= 4: why.append(f"zero run {c['longestZeroRun']}")
+    if c["longestZeroRun"] >= 4: zero_runs.append(f"ch{i}: zero run {c['longestZeroRun']}")
     if c.get("nonFinite"): why.append("non-finite")
     if c.get("fullScaleSamples"): why.append("full scale")
     if why: bad.append(f"ch{i}: " + ", ".join(why))
@@ -142,9 +147,37 @@ runs = [c["longestZeroRun"] for c in d["channels"]]
 peaks = [c["peak"] for c in d["channels"]]
 print(f"channels={len(d['channels'])} seconds={d['seconds']} longest zero run max={max(runs)} peak min={min(peaks):.4f} max={max(peaks):.4f}")
 print(f"discontinuities in={d.get('inputDiscontinuities')} out={d.get('outputDiscontinuities')}")
-print("soak: PASS" if not bad else "soak: FAIL " + "; ".join(bad))
-raise SystemExit(1 if bad else 0)
+if bad:
+    print("soak: FAIL " + "; ".join(bad + zero_runs)); raise SystemExit(1)
+if zero_runs:
+    # Not a verdict yet: with a preset running these may be the preset's own (soak_reference.py decides).
+    print("zero runs: " + "; ".join(zero_runs)); raise SystemExit(3)
+print("soak: PASS")
 PYEOF
+    verdict=$?
+    if (( verdict == 3 )); then
+      # Which preset the endpoint ran, from its own log; the artifact is fetched now that the audio has closed.
+      preset=$(pi 'f=$(ls -t /dev/shm/dante-alsaloop-*.log /dev/shm/dante-owner-*.log 2>/dev/null | head -1)
+[ "$(systemctl is-active usb16x16-dante 2>/dev/null)" = active ] && f=/dev/shm/dante-service-journal.txt
+grep -m1 "^DSP loaded file=" "$f" 2>/dev/null | cut -d" " -f3 | cut -d= -f2-')
+      if [[ -z "$preset" ]]; then
+        print -r -- "soak: FAIL the zero runs above, with no preset running: a hole"
+        measure_exit=7
+      elif ! pi "cat '$preset'" > "$api_dir/preset.dsp" 2>/dev/null || [[ ! -s "$api_dir/preset.dsp" ]]; then
+        print -r -- "soak: FAIL the zero runs above; the preset $preset could not be fetched to check them"
+        measure_exit=7
+      else
+        print -r -- "preset $preset ($(shasum -a 256 "$api_dir/preset.dsp" | cut -c1-8)): checking each zero run against it"
+        /usr/bin/python3 "$script_dir/soak_reference.py" "$result_path" "$api_dir/preset.dsp" --output "$api_dir/reference"
+        case $? in
+          0) print -r -- "soak: PASS, every zero run is the preset's own (reference in ${api_dir:t}/reference)" ;;
+          1) print -r -- "soak: FAIL, a zero run the preset does not produce"; measure_exit=7 ;;
+          *) print -r -- "soak: FAIL, the zero runs could not be checked against the preset (inconclusive is not a pass)"; measure_exit=7 ;;
+        esac
+      fi
+    elif (( verdict != 0 )); then
+      measure_exit=7
+    fi
   else
     print -r -- "harness stderr: $(head -c 300 "$api_dir/measure.log")"
   fi

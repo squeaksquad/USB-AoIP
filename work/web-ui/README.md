@@ -16,6 +16,45 @@ CamillaDSP YAML. Meters are the bridge's live tap when the service reports one, 
 latency and added DSP cost remain explicitly unavailable. The existing bridge is
 unchanged.
 
+## On a Dante Pi (2026-10-11)
+
+The Pi now runs the Dante service, and this page serves it as it serves the
+AES67 one. The rest of this file was written for AES67 and still describes
+that stack; what is different on Dante is here, and the backend's side of it
+is `work/web-control/README.md`, "Two stacks, one service".
+
+- **The page asks, it does not assume.** `/api/health` carries `stack`
+  (`dante` or `aes67`). Every word that names the stack comes from
+  `stackTerms(health)` in `backend.mjs`: the service and engine names, the
+  preset prefix, how long a restart interrupts audio, the log choices, the
+  Operating-modes text. On a Dante Pi the page does not say AES67, bridge,
+  PTP or supervisor; the tests assert it. With no backend the page reads as
+  it did for AES67.
+- **Profiles.** `direct` (no DSP stage; the one row under "Without DSP")
+  and your presets, installed as `dante-<slug>`. Any installed preset can
+  be switched to; a preset always starts with live editing on.
+- **A restart** interrupts audio for a few seconds, not a minute, and some
+  return channels can take about 20 seconds to come back. A new latency
+  level is still drawn.
+- **Live editing** works as described under "Live preview" below, against
+  the Dante endpoint: same shape key, same commit and discard.
+- **Meters** are the endpoint's three taps: what the host sends, what goes
+  to Dante after the stage, what Dante returns. The Outputs page draws the
+  first two.
+- **System overview** shows the endpoint's own once-a-minute telemetry (USB
+  host link, clock servo, depth, resyncs and re-primes, USB faults, loop
+  gap, DSP stage cost) where the AES67 page shows the bridge's, and the
+  Dante clock service where it shows PTP. There is no stream table:
+  subscriptions are made in Dante Controller.
+- **DSP source.** The endpoint filters what the USB host sends; the AoIP
+  source button is disabled and a draft set to it is not offered for
+  install.
+
+To see the Dante page without a Pi, run the real service with
+`USB16X16_STACK=dante` and the three paths pointed at a scratch directory
+(`USB16X16_DANTE_CONF`, `USB16X16_DANTE_RUN_DIR`, `USB16X16_DSP_DIR`,
+plus `USB16X16_APPLY_DIR`), `--no-auth --bind 127.0.0.1`.
+
 ## Run and check
 
 Connected, on the Pi — see `work/web-control/README.md` for the install:
@@ -760,3 +799,19 @@ is established by this browser prototype.
   and `.txt` file import, unsupported-filter rejection, all-processing paste, and
   EQ-only paste while retaining destination routing. These checks establish UI
   behavior only.
+
+### 2026-10-11: the Dante stack
+
+`node --test work/web-ui/*.test.mjs`: 114 pass, among them the Dante cases
+in `backend.test.mjs` and `workflows.test.mjs`, each of which also asserts
+that the text it produces carries none of AES67, bridge, PTP, supervisor,
+RAVENNA. In a browser against the real service run locally in Dante mode:
+both pages render, no console error, none of those words in any text or
+tooltip. Against the Pi, through a no-login loopback copy of the service
+the operator started for the purpose: Compile & apply of the example draft
+(302 biquads) as `dante-claude-page-trial`; a live edit of output 1's gain
+from 0 to -6 dB moved that output's meter from -36.6 to -42.8 dBFS with
+output 2 unchanged and no restart; Commit; Switch to `direct`; Remove. Three
+wording points found there and fixed (the DSP row said "Under development";
+two run-on sentences). Record: `work/dante-mode/RESULTS.md`, "The page
+against the Pi".

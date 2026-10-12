@@ -12809,3 +12809,36 @@ cleared the preset. Three wording points found and fixed (page files
 1a8e4e11 / de5eb119 on the Pi). Service `direct` with meters, aged anchor.
 Owed: the page's README, an hour at about 300 biquads through the service,
 a reboot on this form.
+
+**MEASURED 2026-10-11 23:17 to 2026-10-12 00:18 UTC: an hour at 308 biquads
+through the installed Dante service: transport clean; the soak's zero-run
+rule tripped on the preset's two sub outputs and is shown not to apply
+there.** Record `work/dante-mode/RESULTS.md`, last section. `loaded.dsp`
+installed through the applier as `dante-soak-308`. 3,600 s sixteen-channel
+capture with no discontinuity; no resync, re-prime, overflow, capture fault
+or restart; loop gap at most 1.27 ms; `dsp_us_mean` about 80, `dsp_us_max`
+300 once (150 otherwise). The wrapper printed FAIL: zero runs of 4 and 9 on
+channels 4 and 13, the preset's low-passed sub outputs, with twelve channels
+at 1. `owner/zero_runs.cpp` reproduces it with no transport at all (13 and
+12 on the same two channels in an hour of the same load), so it is the
+signal, not a hole. Not reported as a pass; a soak rule that knows a
+low-passed output is owed. Also done: the page's README. The service is
+left on `dante-soak-308` for the operator's reboot; `direct` afterwards.
+
+**IMPLEMENTED 2026-10-12 ~00:50 UTC: a soak criterion for presets with bass
+management, `dante-event-reference-v1`; under it the hour at 308 biquads
+PASSES.** Record `work/dante-mode/RESULTS.md`, last section.
+`work/dante-mode/soak_reference.py` (952566e0) with
+`owner/reference_export.cpp` (1a487a7b): for every zero run of four or more
+the harness recorded, the window of all sixteen channels must match what
+the installed artifact makes of the harness's deterministic stimulus (the
+owner's own path, macOS's 0.999998 gain modelled), within 2 codes, the
+zeros exactly as predicted, at one alignment for the whole capture.
+Incomplete evidence is inconclusive and counts as a failure. The bridge's
+criterion v1 carried over, for any artifact and up to an hour. On the
+23:17-00:18 UTC capture: all 15 runs matched, worst error 1.01 codes, one
+alignment; wrong preset and a one-sample shift are both caught.
+`measure-candidate.sh soak` (3a1c5eb3) applies it by itself when a preset
+is running. 12 tests. Limits: 32 runs per capture, an activity criterion
+not whole-stream proof. The service is still on `dante-soak-308` for the
+operator's reboot.

@@ -3428,3 +3428,115 @@ The service was restarted twice by this (the preset, direct), each first
 time; it is `direct` with meters, aged anchor. The loopback copy is the
 operator's to stop. Not done: `loaded`-sized presets for an hour, a reboot
 on this form, the page's README.
+
+## An hour at 308 biquads through the installed service: transport clean; the soak's zero-run rule does not fit this preset (2026-10-11 23:17 to 2026-10-12 00:18 UTC)
+
+`loaded.dsp` (2b6baa04, 308 biquads, 26 internal channels) installed
+through the applier as `dante-soak-308` from `direct`; the service
+restarted onto it first time. Gadget restart 23:17:18 UTC, then
+`measure-candidate.sh soak 3600 32` (readiness spread relaxed to 60: an
+impulse through these filters is smeared).
+
+| | |
+|---|---|
+| Capture | 3,600 s, sixteen channels, no discontinuity, nothing non-finite or at full scale |
+| Longest zero run | 1 on twelve channels, 2 on channel 9, **4 on channel 4, 9 on channel 13** |
+| Verdict by the wrapper's rule (no run of 4 or more) | FAIL, on those two channels |
+| Stage cost over the hour | `dsp_us_mean` 80 averaged over the minutes, 93 in the worst minute; `dsp_us_max` 300 once, 150 otherwise |
+| Meter cost | at most 54 us |
+| Service | no restart, resync, re-prime, overflow or capture fault; loop gap at most 1.27 ms; one link each way after the gadget restart |
+| Neighbour entry, temperature | REACHABLE; 59 C |
+
+**The two zero runs are the preset's, not the transport's.** Channels 4 and
+13 are this preset's two subwoofer outputs: low-passed and about 12 dB below
+the rest (peaks 0.0069 and 0.0063 against 0.016 to 0.060). A transport hole
+is every channel at once, and twelve channels never had two zeros in a row.
+`owner/zero_runs.cpp` runs the same load (independent uniform noise at 0.1)
+through the same artifact by the owner's own conversion path, with no
+transport at all, for an hour: zero run 1 on fourteen channels, **13 on
+channel 4 and 12 on channel 13** (5 and 14 runs of four or more), peaks
+0.0074 and 0.0063. A slow, small signal sits within half a code of zero for
+several samples now and then; the rule was written for full-band channels.
+The owner's `back_holes` (96, longest 327 frames) are again the readiness
+probes' impulses through the filters, `out_holes` 0.
+
+So: at 308 biquads the service ran an hour under sixteen-channel load with
+nothing lost and about 0.3 ms of its 1 ms wake spent in the worst block.
+The ceiling the applier inherited from the bridge stands on the owner. The
+wrapper's verdict line is not a pass and is not reported as one; a soak
+criterion that knows a low-passed output (or a per-preset expectation from
+`zero_runs`) is owed if such presets are to be soaked routinely.
+
+The service is left on `dante-soak-308` for the reboot test.
+
+## A soak criterion for presets with bass management: `soak_reference.py` (2026-10-12, about 00:50 UTC)
+
+At the operator's request, after the hour above tripped the zero-run rule
+on a preset's subwoofer outputs.
+
+**The rule.** A zero run of four or more on a channel is still an
+objection; with a preset running it must now be answered, run by run. The
+harness's `continuous` stimulus is deterministic (xorshift32 from a fixed
+seed) and its report already keeps a window of all sixteen channels around
+every such run (16 frames before, the run, 16 after; up to 32 runs).
+`work/dante-mode/soak_reference.py` regenerates what the Dante wire should
+carry from the installed artifact and requires, for every run:
+
+1. one alignment, found on another channel in the 16 frames before the run,
+   and the same alignment for every run in the capture, so a frame lost or
+   repeated anywhere between two runs is seen;
+2. every sample of all sixteen channels in the window within 2 codes of the
+   reference;
+3. the zeros exactly where the reference has zeros, with a non-zero each
+   side: an unexpected zero cannot hide inside the tolerance.
+
+`matched-events` or `no-events` passes. A mismatch fails. Evidence that
+cannot decide (a discontinuity, a short capture, more runs than the harness
+kept, a run with no window, a channel silent) is `inconclusive`, which the
+wrapper reports as a failure, never a pass.
+
+**The reference.** `owner/reference_export.cpp` (1a487a7b): the stimulus,
+macOS's gain of 0.999998 and rounding to 24 bits, then the owner's own
+`OutDsp` path with the artifact. It is the bridge's loaded event reference
+criterion v1 (`work/dsp-service/REFERENCE_VALIDATION.md`) carried over, with
+three differences: any artifact rather than one pinned preset; captures up
+to an hour; the host's gain modelled, each way, rather than left to the
+tolerance. Like v1 it is an activity criterion: samples outside the windows
+are not compared, and it does not claim the whole stream.
+
+**On the hour above** (15 runs: 3 on channel 4, 12 on channel 13, longest
+9): `matched-events`. Every run is exactly the preset's, the worst sample in
+any window 1.01 codes from the reference, and one alignment (669 frames)
+holds for all fifteen, from 11 minutes to 57 minutes into the capture. So
+the hour at 308 biquads now has a verdict it can stand on: **PASS under
+`dante-event-reference-v1`**, with the transport facts as recorded. Result:
+`outputs/latency/dante-dsp-service-loaded-soak-3600s-32f-20261011T231801Z-api/reference/result.json`.
+
+**Negative controls on the same capture.** The wrong preset
+(`crossover.dsp`): mismatch, "not the stimulus through this preset". One
+window's frames moved by a single sample: mismatch, "alignment moved by 1
+frames ... frames were lost or repeated".
+
+**Tests** (`test_soak_reference.py`, 12): matched runs at one alignment; no
+events; conversion error tolerated to 2 codes but not on the zeros; a hole
+where the preset has signal; a run longer or shorter than predicted; an
+alignment that moves; audio that is not the stimulus; eleven kinds of
+incomplete or inconsistent evidence, each inconclusive; the search bound;
+and the exporter's stimulus against an independent implementation through a
+unity preset.
+
+**In the wrapper.** `measure-candidate.sh soak` (3a1c5eb3): with zero runs
+and nothing else wrong, it reads which preset the endpoint loaded from the
+endpoint's own log, fetches that file once the audio has closed, and runs
+the criterion: `soak: PASS, every zero run is the preset's own`, or FAIL.
+With no preset running a zero run is a hole, as before. Direct soaks are
+unchanged.
+
+**Limits.** The harness keeps 32 runs; a preset with more low-level outputs,
+or a longer soak, can exceed that and then the capture is inconclusive (the
+limit is a constant in the harness). The 2-code tolerance is fixed, not
+fitted; the host-gain model is the one `bitexact` established and has not
+been tried at levels near full scale through a preset. A preset with a
+delay, or one whose filters ring for longer than the harness's two-second
+warm-up, is untried. The reference costs about two minutes of Mac time for
+an hour-long capture at 308 biquads.
