@@ -69,7 +69,38 @@ harness app, which can cost its microphone permission: the operator's
 call); `install-web-control.sh`'s rollback text still describes the AES67
 era.
 
-**Candidates for next work, the operator's to choose.** A fresh anchor and
+**CHOSEN 2026-10-12: the fault paths not yet exercised, in a fresh
+session.** Mac sleep and wake, a Dante Controller restart, an Ethernet
+unplug and replug, each under the running service (owner 62879558, direct
+with meters; anchor 01:08:40 UTC, harness 466, RTL 654 = 13.625 ms). The
+operator does each at the hardware; the session watches and reads. For
+each one, one at a time:
+
+- Before: `journalctl -u usb16x16-dante -n 3` for the counters (resyncs,
+  re-primes, capture and playback faults, detaches, links), `systemctl show
+  usb16x16-dante -p NRestarts`, `ip -s neigh show dev eth0` for the
+  Ferrofish's entry, `cat /sys/class/net/eth0/speed`. RTL Utility closed.
+- During: nothing running from the session on the Pi but a journal follow.
+- After: the same reads; then a noise probe and one loaded 800-impulse run
+  (`measure-candidate.sh`), waiting 30 s after any owner start or re-link.
+  A level other than the one before is a new draw only if the gadget's PCMs
+  restarted (the Mac re-opening the device does that); say which it was.
+- What passes: the service still on its first start (`NRestarts`
+  unchanged), both directions flowing again without anyone restarting
+  anything, no capture-fault loop (the symptom fixed on 2026-10-11:
+  `capture_faults` rising 20 a second with tx idle), the neighbour entry
+  REACHABLE, noise probe clean, spread 0. What it cost (a resync, a
+  re-prime, seconds of silence, a new level) is recorded, not judged.
+- Known going in: after a link flap the Pi has before now stopped
+  transmitting with the service looking healthy (memory: eth0 TX stall;
+  check the TX counter); after an idle stretch the Mac can lose the Pi over
+  Wi-Fi until the Pi pings it (use the IP); a Mac that re-opens the device
+  sometimes sends silence until `sudo killall coreaudiod`.
+- Then the same three with a preset running, if the direct ones pass: the
+  stage is reset at each re-prime and that path has had one injected stall
+  behind it, no real fault.
+
+**Other candidates, the operator's to choose.** A fresh anchor and
 an RTL reading on the service as it now stands; the fault paths not
 exercised above; the gadget-restart gap; the harness's window limit; the
 AoIP-only source, which the Dante owner does not have.
