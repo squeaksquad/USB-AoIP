@@ -12986,3 +12986,26 @@ with meters on unit 0f3fabcf, process from 03:51:52 UTC. Open: Statime's
 exit on a link loss still costs a full owner restart; a link loss of
 minutes; a carrier loss that is not `ip link set down`; the three fault
 paths with a preset.
+
+**INSTALLED 2026-10-12 04:02:03 UTC and MEASURED: on unit 27b68877 the
+endpoint returns from a 20 s eth0 loss unaided on a single start.** Record
+`work/dante-mode/RESULTS.md`, last section. The operator's `sudo
+./install-dante-unit-update.sh` (27b68877 over 0f3fabcf; rollback target
+still 9f5289dd in
+`/usr/local/libexec/usb16x16-dante/usb16x16-dante.service.previous`), then
+the bounce at 04:02:10. Statime exited and was restarted; the unit waited
+28 s in `ExecStartPre` for the clock, the carrier and the address; the
+owner started once at 04:02:43, 9 s after the link returned; no failed
+start, `NRestarts` 0. Neighbour REACHABLE, noise probe clean, 800 loaded
+impulses all 498, spread 0, `daw_timeline` 686 (14.292 ms). The fault
+paths, direct, as they stand: Controller restart PASS at no cost; Ethernet
+loss PASS on this unit at the cost of an endpoint restart (silence for the
+loss plus about 9 s, a level step of 2 each time: 502, 500, 498); Mac
+sleep rides through, with one unreproduced, unlocated episode of
+four-sample zero runs on the return after the first wake. Not accepted as
+a point of record: the unit changed, nothing else did, and that is the
+operator's call. In service: owner 62879558 direct with meters on unit
+27b68877, process from 04:02:43 UTC, level 498 on the Mac's current open.
+Open: the sleep episode; Statime's exit turning every link loss into an
+owner restart; a loss of minutes; a real carrier loss; two losses close
+together; the three paths with a preset.

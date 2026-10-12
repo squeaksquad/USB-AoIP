@@ -3735,3 +3735,36 @@ wait returns in 3 ms on a live link). Untested under a loss.
 
 **Still as it was:** every link loss is a Statime exit and a full owner
 restart (a new Inferno prepare and a possible step in the level).
+
+## eth0 down for 20 s, third time, on the second form of the unit: back unaided on one start (2026-10-12 04:02-04:09 UTC)
+
+Unit 27b68877 installed by the operator at 04:02:03 UTC (endpoint not
+restarted), then the same bounce.
+
+| Time (UTC) | Event |
+|---|---|
+| 04:02:10 | eth0 `Link is Down`; Statime panics, exits 04:02:12 |
+| 04:02:14-15 | Statime restarted; the owner stopped cleanly (`exit=0`) and its unit starting |
+| 04:02:16 | NetworkManager drops the address |
+| 04:02:15-43 | the unit waits in `ExecStartPre`: the clock, then carrier and address |
+| 04:02:34 | `Link is Up`, address back the same second |
+| 04:02:43 | the owner's one start: both Inferno streams running, both USB directions flowing at 0.3 s |
+
+No failed start, no abort in Inferno, `NRestarts` 0 (systemd counts
+automatic restarts after a failure; the stop and start that follow Statime
+are not one, so the counter is 0 after a clean pass, not "unchanged" as the
+session had told the operator to expect). The endpoint was gone for 33 s:
+the 24 s the link was down plus 9 s. Neighbour entry REACHABLE, transmit
+counter moving. Noise probe at 32 frames clean (04:04:59), 800 loaded
+impulses all 498, spread 0, `daw_timeline` 686 (14.292 ms); 500 before, so
+again a step of 2 at the owner restart with the Mac's device open
+throughout. Evidence `outputs/latency/dante-ethbounce3-*`.
+
+**PASS for the service as amended**, with its cost stated: a link loss is
+an endpoint restart (silence for the loss plus about nine seconds, and the
+level may step: 502, 500, 498 across the three bounces).
+
+Not tested: a loss of minutes (Statime restarted once per loss here and
+then sat without a leader for 20 s; what it does over minutes is unknown);
+a carrier loss that is not `ip link set down`; two losses close together;
+any of this with a preset running.

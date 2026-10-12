@@ -12,20 +12,18 @@ minutes; not reproduced in two more sleeps, hop not located; RESULTS.md
 says what to do on a recurrence before touching anything. eth0 down 20 s
 (software, the cable is the PoE feed): **FAIL**, Statime exits, the owner
 restarts with it, panics three times with no IPv4 address and the unit's
-start limit leaves it `failed` until a manual start. Next, the operator's
-to choose: fix that (an `ExecStartPre` wait for an address on eth0, no
-start limit; then whether Statime's exit should take the owner down) and
-re-run the bounce; a real carrier loss; then the three with a preset. The
-service is `direct` with meters.
-**Unit fix, 03:50 UTC:** the operator installed
-`service/usb16x16-dante-dsp-linkwait.service` in its first form (0f3fabcf)
-and the bounce then came back unaided in 32 s, `NRestarts` 1: one start
-lost because NetworkManager keeps the address six seconds after the
-carrier drops. The second form (27b68877: carrier and address, after the
-clock wait) with installer 6f7548a7 is staged, not installed. Check
-`sha256sum /etc/systemd/system/usb16x16-dante.service` (0f3fabcf = first
-form, 27b68877 = second), then repeat the bounce: the pass is `NRestarts`
-0 after it. Level 500 on the 03:51:52 process.
+start limit leaves it `failed` until a manual start (fixed the same hour,
+next paragraph). The service is `direct` with meters.
+**Unit fix, installed 04:02 UTC:** `/etc/systemd/system/usb16x16-dante.service`
+is now 27b68877 (`service/usb16x16-dante-dsp-linkwait.service`: after the
+clock wait, wait without limit for eth0's carrier and address; rollback
+`install-dante-unit-update.sh rollback` to 9f5289dd). On it the 20 s bounce
+comes back unaided on one start, `NRestarts` 0, 9 s after the link returns,
+level stepping 2 (498 on the 04:02:43 process). So Ethernet loss now
+passes at the cost of an endpoint restart. Open, the operator's to choose:
+the sleep episode (do the recurrence procedure if it shows); making Statime
+survive a link loss so the owner is not restarted; a loss of minutes; a
+real carrier loss; the three paths with a preset.
 
 ## Current pickup — 2026-10-09: Dante (Inferno) is the development line; the alsaloop prototype reads level with AES67
 
