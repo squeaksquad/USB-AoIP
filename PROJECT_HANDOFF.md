@@ -13054,3 +13054,31 @@ out: the Pi's bootloader recorded 900 mA as its supply's limit
 (2.5 W) allocated to the `USB 16x16` device, the rail reads 5.148 V with
 PoE in, `get_throttled` 0x0. None of that says what the Mac's port will
 actually deliver or whether the handover is clean.
+
+**MEASURED 2026-10-12 04:18-04:27 UTC: a real pull of the Pi's Ethernet
+cable. The Pi stays up on the Mac's USB port, and with the eth0 drop-in
+the endpoint rides through without a restart, the level unmoved.** Record
+`work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/dante-cablepull-*`. Pull 1 (services stopped and disk
+synced first, 35 s): uptime continuous, rail 5.15 V to a mean of 5.01 V,
+lowest 4.92 V, `get_throttled` 0x0; eth0 kept its address throughout, so
+the drop-in reached the active device on the reload. Pull 2 (service
+running, 23 s, 04:21:53 to 04:22:16): Statime logged five missing send
+timestamps and "trying to act as master" and did not exit; Inferno timed
+out both receive flows and orphaned the sixteen subscriptions; one second
+after the link returned the Ferrofish asked for its flows again and
+everything resumed. The same owner and Statime processes, `NRestarts` 0,
+no resync, no fault, `net_errors` 0, neighbour REACHABLE, Controller's
+cells orange then green unaided; rail lowest 4.97 V with the service
+running. Noise probe clean, 800 loaded impulses all 488, spread 0,
+`daw_timeline` 676 (14.083 ms): 488 before the pull and 488 after. So a
+carrier loss now costs silence for the loss plus about 2 s, against an
+endpoint restart and a level step before. One pull; a loss of minutes, a
+loss during audio and Statime's clock while leaderless are not shown.
+`ip link set eth0 down` still takes the restart path (the unit's wait).
+In service: owner 62879558 direct with meters, unit 27b68877, drop-in
+3a1842a6, processes from 04:19:44 (Statime) and 04:19:52 (owner), level
+488. Nothing here is marked ACCEPTED: the unit and the NetworkManager
+setting changed since the point of record, and the acceptance (with its
+hour) is the operator's call. Rollbacks: `install-eth0-carrier.sh
+rollback`, `install-dante-unit-update.sh rollback`.

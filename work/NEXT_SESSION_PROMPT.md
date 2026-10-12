@@ -24,12 +24,17 @@ passes at the cost of an endpoint restart. Open, the operator's to choose:
 the sleep episode (do the recurrence procedure if it shows); making Statime
 survive a link loss so the owner is not restarted; a loss of minutes; a
 real carrier loss; the three paths with a preset.
-**STAGED 04:25 UTC, not installed:** `service/90-usb16x16-eth0-carrier.conf`
-with `install-eth0-carrier.sh` (NetworkManager `ignore-carrier` for eth0,
-so the address survives a carrier loss and Statime has no failed send to
-exit on). Statime is not patched; the handoff's STAGED entry says why.
-Its test is a carrier loss with PoE kept (the switch's port disable), a
-baseline first; `ip link set down` cannot test it.
+**INSTALLED 04:15 UTC and measured:** `service/90-usb16x16-eth0-carrier.conf`
+(NetworkManager `ignore-carrier` for eth0; `install-eth0-carrier.sh
+rollback` removes it). A real 23 s pull of the Pi's cable then rode
+through: same owner and Statime processes, no resync, level 488 before and
+after, silence for the pull plus 2 s. The Pi stays up on the Mac's USB
+port with the PoE cable out (rail lowest 4.92 V, no undervoltage flag), so
+real pulls are a usable test here. Statime is not patched (handoff, the
+STAGED entry of 04:12, says why). Owed if the operator wants this as the
+point of record: the battery and an hour on unit 27b68877 with the
+drop-in. Untested: a pull of minutes, a pull during audio, the fault paths
+with a preset, the sleep episode's cause.
 
 ## Current pickup — 2026-10-09: Dante (Inferno) is the development line; the alsaloop prototype reads level with AES67
 

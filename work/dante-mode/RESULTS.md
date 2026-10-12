@@ -3768,3 +3768,64 @@ Not tested: a loss of minutes (Statime restarted once per loss here and
 then sat without a leader for 20 s; what it does over minutes is unknown);
 a carrier loss that is not `ip link set down`; two losses close together;
 any of this with a preset running.
+
+## A real cable pull: the Pi stays up on USB, and with eth0's carrier ignored the endpoint rides through (2026-10-12 04:15-04:27 UTC)
+
+**The NetworkManager drop-in.** `service/90-usb16x16-eth0-carrier.conf`
+(3a1842a6: `[device-usb16x16-eth0]`, `match-device=interface-name:eth0`,
+`ignore-carrier=true`), installed by the operator at 04:15:30 with
+`install-eth0-carrier.sh` (a reload of NetworkManager, no restart). Why
+this and not a patch to Statime is in the handoff's STAGED entry of the
+same hour.
+
+**Pull 1, services stopped, the power question** (both units stopped by
+the session and the disk synced; rail and flags streamed to the Mac over
+Wi-Fi at 0.4 s, `outputs/latency/dante-cablepull-idle-power-*.txt`). The
+Pi's Ethernet cable is its PoE feed; its USB-C port was on the Mac. Cable
+out 04:18:44 to 04:19:19, 35 s. The Pi stayed up: uptime continuous,
+`EXT5V_V` 5.15 V before, mean 5.01 V and lowest 4.92 V with the cable out,
+5.15 V after, `get_throttled` 0x0 throughout (the undervoltage threshold is
+4.63 V). Going in, the bootloader had recorded 900 mA as the supply limit
+and the Mac listed 500 mA allocated to the device; neither predicted this.
+eth0 kept its address for the whole 35 s and NetworkManager logged only
+`carrier: link connected` at the end, where on the three software bounces
+it had deactivated the connection six seconds after the carrier went: the
+setting reached the already-active device on the reload.
+
+**Pull 2, the service running** (started 04:19:52, noise probe clean at
+level 488 before; rail sampled once a second,
+`outputs/latency/dante-cablepull-service-power-*.txt`). Cable out 04:21:53
+to 04:22:16, 23 s.
+
+| Time (UTC) | Event |
+|---|---|
+| 04:21:53 | eth0 `Link is Down`; the address stays |
+| 04:21:54-59 | Statime: five `Missing send timestamp` errors, then `trying to act as master in PTPv1, not implemented yet`; it does not exit |
+| 04:21:55 | Inferno: both receive flows time out, the sixteen subscriptions `orphaned`; two `TimedOut` warnings at 04:21:58 and 04:22:01 |
+| 04:22:16 | `Link is Up`, NetworkManager `carrier: link connected` |
+| 04:22:17-18 | Inferno: four `add flow request for already existing flow, setting channels instead`: the Ferrofish asking for its flows again |
+
+Afterwards: the same owner process and the same Statime process,
+`NRestarts` 0 on both, `tx_resyncs` 0, `rx_resyncs` 0, `net_errors` 0,
+links and primes 1 / 1, no capture or playback fault, no warning from
+Inferno after 04:22:18, neighbour entry REACHABLE, the PTP groups still
+joined, transmit counter moving. Controller's cells for the Pi went orange
+and back to green by themselves (operator). Rail with the cable out and
+the service running: mean 5.02 V, lowest 4.97 V, no flag. Noise probe at
+32 frames clean (04:23:10), 800 loaded impulses all 488, spread 0,
+`daw_timeline` 676 (14.083 ms): **the level did not move.** Evidence
+`outputs/latency/dante-cablepull-*`.
+
+**PASS, and the first Ethernet loss that is not an endpoint restart.** The
+cost was silence on the Dante side for the 23 s the cable was out plus
+about 2 s.
+
+Limits. One pull of 23 s. Not shown: what Statime's clock did while it had
+no leader and how it rejoined (it logs nothing; the level and the clean
+probe say whatever it did left the round trip where it was, on this one
+occasion); a loss of minutes, over which a free-running clock has longer
+to wander; a loss during audio. The software bounce (`ip link set eth0
+down`) still takes the restart path, which the unit's wait handles. The
+USB power result is for this Mac port and cable, a Pi with no USB
+peripherals, at about 5.0 V; it is not a claim that the Pi can run from
+USB under any load, and the Pi was not booted from USB alone.
