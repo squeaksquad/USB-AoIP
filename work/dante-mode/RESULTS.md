@@ -3861,3 +3861,49 @@ flag; over the hour, largest wake gap 1,044 us, no Inferno warning, eth0 at 1000
 Mac's, and neither the unit's start conditions nor NetworkManager's
 handling of the carrier is on that path; the draws on this configuration
 so far are 488 (a service start) and 509 (this gadget restart).
+
+## A five-minute cable pull rides through; an unexplained 4.6 ms stall overnight (2026-10-12 06:26 and 11:09-11:21 UTC)
+
+**The stall, found when taking the pull's before-reads.** At 06:26:05 UTC,
+39 minutes after the battery's soak ended, with no audio and nothing
+running from the session, the owner's loop had a gap of 4,562 us (the
+status line of 06:26:52; every other minute between 05:47 and 11:09 is
+under 1.5 ms). Inferno reported a playback overrun (`buffered for
+playback: -91 samples`), the owner resynchronised (`NETRESYNC dir=playback
+frames=91`), the gadget's playback faulted once and the return was
+re-primed 0.1 s later; `tx_reprimes` 0 to 2. No restart, both directions
+flowing again within 0.1 s. Nothing else in the Pi's journal within 90 s
+either side (no timer, no kernel line, no web request, Statime silent);
+the Mac's power log shows no sleep or wake in the night. Cause not known.
+It is the class of the open "loop gap" item (15.6 ms once, 27.6 s after a
+candidate start on 2026-10-11), here two hours into an owner's life and
+idle. The level read 511 afterwards, 509 before: the resync and re-prime
+moved it 2.
+
+**The pull.** Same owner and Statime processes as the battery. Before
+(11:09:41): noise probe clean, level 511, rail 5.14 V. Cable out 11:10:37
+to 11:15:50, 5 min 13 s (rail and link state every 2 s,
+`outputs/latency/dante-longpull-power-*.txt`).
+
+| Time (UTC) | Event |
+|---|---|
+| 11:10:37 | eth0 `Link is Down`; the address stays for the whole pull |
+| 11:10:38-43 | Statime: five `Missing send timestamp`, then `trying to act as master`; nothing more from it |
+| 11:10:40 | Inferno: both receive flows time out; two `TimedOut` warnings by 11:10:46, then silence |
+| 11:15:50 | `Link is Up`, `carrier: link connected` |
+| 11:16:16-17, 11:16:45 | Inferno: `add flow request for already existing flow` twice, and twice more 28 s later |
+
+Afterwards: the same two processes, `NRestarts` 0 on both, no further
+resync (`tx_resyncs` still the night's 1, `rx_resyncs` 0), no re-prime, no
+fault, `net_errors` 0, the owner's wake gaps under 1.1 ms through the
+pull, depths 128 / 144 held, neighbour entry REACHABLE, the PTP groups
+joined, transmit counter moving, rail lowest 4.92 V with no flag. Noise
+probe at 32 frames clean (11:16:32, 42 s after the link returned), 800
+loaded impulses all 511, spread 0, `daw_timeline` 699 (14.562 ms): **511
+before and 511 after.** Evidence `outputs/latency/dante-longpull-*`.
+
+**PASS.** The Ferrofish took 26 s to ask for its flows again this time
+against 1 s after the 23 s pull, and asked a second time at 55 s; audio
+toward the Ferrofish was therefore out for the pull plus about half a
+minute. What Statime's clock did in five minutes without a leader is still
+not observed directly; the round trip came back where it was.

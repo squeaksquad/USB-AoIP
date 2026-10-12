@@ -33,8 +33,12 @@ port with the PoE cable out (rail lowest 4.92 V, no undervoltage flag), so
 real pulls are a usable test here. Statime is not patched (handoff, the
 STAGED entry of 04:12, says why). Battery and loaded hour PASSED on it 04:30-05:47 UTC (509 /
 `daw_timeline` 697, 14.521 ms; the band is now 465 to 509); awaiting the
-operator's ACCEPTED. Untested: a pull of minutes, a pull during audio, the fault paths
-with a preset, the sleep episode's cause.
+operator's ACCEPTED. A five-minute pull also rode through (11:10 UTC, 511 before
+and after). FOUND the same night: an unexplained 4.6 ms owner stall at
+idle at 06:26:05 UTC, a 91-frame resync, level 509 to 511 (RESULTS.md,
+last section): the loop-gap item, now also away from a start. Untested: a
+pull during audio, the fault paths with a preset, the sleep episode's
+cause.
 
 ## Current pickup — 2026-10-09: Dante (Inferno) is the development line; the alsaloop prototype reads level with AES67
 

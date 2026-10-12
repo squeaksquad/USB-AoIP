@@ -13102,3 +13102,27 @@ The day's fault paths on it: Controller restart, no cost; Ethernet cable
 pull of 23 s, rides through, level unmoved; `ip link set eth0 down`,
 endpoint restart, back unaided; Mac sleep, rides through, with the one
 unreproduced episode after the first wake.
+
+**MEASURED 2026-10-12 11:09-11:21 UTC: a five-minute pull of the Pi's
+Ethernet cable rides through on the service with the eth0 drop-in: no
+restart, level 511 before and after.** Record
+`work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/dante-longpull-*`. Cable out 11:10:37 to 11:15:50. Statime
+and the owner are the processes of 04:19, `NRestarts` 0 on both; no
+resync, re-prime or fault from the pull, `net_errors` 0, wake gaps under
+1.1 ms throughout, neighbour REACHABLE, rail lowest 4.92 V. The Ferrofish
+asked for its flows again 26 s after the link returned (1 s after the 23 s
+pull). Noise probe clean, 800 loaded impulses all 511, spread 0,
+`daw_timeline` 699 (14.562 ms).
+
+**FOUND 2026-10-12 06:26:05 UTC: an unexplained 4.6 ms stall of the owner
+at idle, overnight; it resynchronised by itself and the level went 509 to
+511.** Same record. Loop gap 4,562 us, Inferno playback overrun of 91
+samples, `NETRESYNC dir=playback frames=91`, one gadget playback fault,
+the return re-primed; no restart, flowing again within 0.1 s. Nothing in
+the Pi's journal around it, no timer due, no session activity, the Mac
+awake. The class of the open loop-gap item, now seen two hours into an
+owner's life and not only near a start. It happened on the form awaiting
+acceptance (unit 27b68877, drop-in 3a1842a6), 39 minutes after its hour
+passed clean; nothing ties it to either change, and nothing rules them
+out. Not ACCEPTED yet: the operator's call, with this entry in view.
