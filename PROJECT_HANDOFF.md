@@ -12842,3 +12842,22 @@ alignment; wrong preset and a one-sample shift are both caught.
 is running. 12 tests. Limits: 32 runs per capture, an activity criterion
 not whole-stream proof. The service is still on `dante-soak-308` for the
 operator's reboot.
+
+**DONE 2026-10-12 00:52 UTC: the Dante service with DSP came up unaided
+after a reboot, on a preset.** The operator's `sudo reboot` with
+`dante-soak-308` (308 biquads) configured. Statime active 17 s after boot,
+the endpoint 8 s later on its first attempt (`NRestarts` 0): the wrapper
+accepted the preset's hash, the owner loaded it with live following and the
+meters on, both Inferno streams running, linked to the host in 0.4 s; user
+`usb16x16-dante`, the two capabilities, memory locked, FIFO 79 / 80 / 81;
+the web service and the Apply watcher active, the AES67 service inactive;
+eth0 at 1000 Mbit/s, the Ferrofish's neighbour entry REACHABLE. Then,
+through the applier: back to `direct` and the soak preset removed. With
+this the service form's owed list is done: battery and hour in the boot
+configuration, a preset, live update and commit through the applier and
+through the page, an hour at 308 biquads (PASS under
+`dante-event-reference-v1`), a reboot. Not exercised: a rollback on the
+real unit, the wrapper's refusal under the unit. Carried open: the
+early-start loop gap; the gadget restart's 3 to 4 ms gap one time in
+three; the harness's 32-run limit for the soak criterion. The service is
+`direct` with meters, started 00:54 UTC, no fresh anchor drawn since.

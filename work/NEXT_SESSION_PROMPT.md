@@ -1,5 +1,79 @@
 # Next-session pickup prompt
 
+## Current pickup — 2026-10-12: the Dante service has DSP, an applier and a page; its owed list is done. Start here.
+
+Everything below this section is older; where it says a thing is owed or
+not built, check here and the handoff tail first.
+
+**What is in service** (all ACCEPTED or installed by the operator on
+2026-10-11, handoff tail): `usb16x16-statime.service` and
+`usb16x16-dante.service`, the latter starting owner **62879558** through
+`usb16x16-dante-start` from `/etc/usb16x16/dante/owner.conf`; plugin
+0ee61f2f; `usb16x16-apply` 1.4.0 and `usb16x16-web` 1.5.0, both serving the
+Dante stack because its unit is the one enabled at boot. The service runs
+**direct with the level meters on**. Point of record 465 / `daw_timeline`
+653 (13.604 ms) at 32 frames; fresh draws span 465 to 507. No fresh anchor
+has been drawn since the 2026-10-12 00:52 UTC reboot.
+
+**What the owner can do now.** `--dsp-preset` (the bridge core's `DspStage`
+on the gadget-to-Dante direction), `--dsp-live-file` (live coefficients, the
+bridge's protocol), `--meter-file` (three taps), and it recovers from a
+gadget capture overrun (the fix found on 2026-10-11). A profile is `direct`
+or `dante-<slug>` (`/etc/usb16x16/dsp/dante-<slug>.dsp`); the applier
+rewrites `owner.conf` and restarts the unit, verifies from the journal and
+rolls back. The page says Dante throughout and drives all of it.
+
+**How to work on it.**
+
+- Operate: `sudo -n systemctl start|stop|restart usb16x16-dante`; fresh
+  anchor `sudo -n systemctl restart usb-16x16.service`; logs `journalctl -u
+  usb16x16-dante`; meters `/run/usb16x16-dante/meters.txt`.
+- Candidate owner builds: build on the Pi **with the service stopped** in
+  `~/usb-16x16-work/dante-mode/owner/dsp/` (the core is staged at
+  `~/usb-16x16-work/phase4-bridge/`), then `sudo -n
+  /usr/local/sbin/usb16x16-dante-candidate start <binary under owner/>
+  [options]`, `... stop`, and start the service again. Leave 30 s after any
+  owner start before a sixteen-channel capture.
+- Measure: `work/dante-mode/measure-candidate.sh` (`noise 32`, `32 800`
+  with `USB16X16_OTHER_LOAD=0.1`, `soak 3600 32`). Detach anything over ten
+  minutes. A soak on a preset with low-level outputs is judged by
+  `soak_reference.py` (the wrapper calls it); a bare "zero run" there is
+  not a hole until that says mismatch.
+- Apply by hand: a request file in `~/usb-16x16-work/web-apply/` as the web
+  service writes it (the 2026-10-11 trial in RESULTS.md has the shape). Ask
+  the operator before doing so: it runs as root.
+- The page: the session has no login and makes none. To drive the page, ask
+  the operator to start `usb16x16-web --no-auth --bind 127.0.0.1 --port
+  8089 ...` in an ssh session **on the Pi**, then tunnel.
+- Tests: `python3 -m unittest` in `work/web-control` (100) and
+  `work/dante-mode` (`test_soak_reference`), `node --test` in `work/web-ui`
+  (114), the three owner tests and `service/test-dante-start.sh`.
+
+**Rollbacks**, newest first: `install-dante-dsp.sh rollback` (to owner
+e392dd71 and the unit before DSP); `install-owner-update.sh rollback` (only
+meaningful below that, to 22fd2622); AES67: `sudo systemctl disable --now
+usb16x16-dante usb16x16-statime` then `sudo systemctl enable --now
+usb16x16-aes67` (the applier and the web service follow the enabled unit).
+
+**Not exercised.** A rollback by the applier on the real unit (no start has
+failed); the wrapper's refusal under the unit; Mac sleep, a Controller
+restart and an Ethernet reconnect under the service; presets with alignment
+delays; levels near full scale through a preset.
+
+**Open, none blocking.** The early-start loop gap (one 15.6 ms occurrence
+27.6 s after a candidate start on 2026-10-11, unexplained); a gadget restart
+costs a 3 to 4 ms loop gap and a small resync about one time in three, on
+every build; the harness keeps 32 zero-run windows, which bounds what
+`soak_reference.py` can judge (raising it means rebuilding the ad-hoc-signed
+harness app, which can cost its microphone permission: the operator's
+call); `install-web-control.sh`'s rollback text still describes the AES67
+era.
+
+**Candidates for next work, the operator's to choose.** A fresh anchor and
+an RTL reading on the service as it now stands; the fault paths not
+exercised above; the gadget-restart gap; the harness's window limit; the
+AoIP-only source, which the Dante owner does not have.
+
 ## Current pickup — 2026-10-09: Dante (Inferno) is the development line; the alsaloop prototype reads level with AES67
 
 Read the handoff's last two entries (`DONE 2026-10-08 / 09` and `DECIDED

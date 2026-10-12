@@ -3540,3 +3540,18 @@ been tried at levels near full scale through a preset. A preset with a
 delay, or one whose filters ring for longer than the harness's two-second
 warm-up, is untried. The reference costs about two minutes of Mac time for
 an hour-long capture at 308 biquads.
+
+## Reboot on the DSP service form, with a preset configured (2026-10-12 00:52 UTC)
+
+The operator's `sudo reboot` with `owner.conf` naming `dante-soak-308`.
+Statime active at 17.1 s of uptime, the endpoint at 25.2 s on its first
+attempt, `NRestarts` 0. The start through `usb16x16-dante-start`: preset
+hash accepted, `DSP loaded ... biquads=308`, `DSPLIVE following`, `METERS
+publishing`, both Inferno streams running, both USB directions flowing at
+0.4 s. Process as designed (service user, two capabilities, memory locked,
+FIFO 79 / 80 / 81, the telemetry, steward, live and meter threads at normal
+priority). `usb16x16-web` and `usb16x16-apply.path` active,
+`usb16x16-aes67` inactive, eth0 1000 Mbit/s, neighbour entry REACHABLE.
+Afterwards a `profile` request returned the service to `direct` and a
+`remove` request deleted `dante-soak-308.dsp`; the AES67 presets in the
+directory are untouched.
