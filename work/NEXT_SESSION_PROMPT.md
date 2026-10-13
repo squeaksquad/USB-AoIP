@@ -1,5 +1,75 @@
 # Next-session pickup prompt
 
+## Current pickup — 2026-10-13: the owner's stalls. Start here.
+
+**State.** ACCEPTED 2026-10-13: the Dante service with both Inferno knobs
+at 1 ms and the return queue at 96 is the point of record, 343,
+`daw_timeline` 531 (11.062 ms). Handoff tail; RESULTS.md's last two
+sections. It was running at 10:30 UTC on its 01:31:56 UTC start, nine
+hours without a restart, resync or loop gap over 1.5 ms. Do not disturb it
+without need: every endpoint start is a new draw and about one in four
+comes up losing return packets (the start check restarts those; wait for
+`state=ok` with the current InvocationID in
+`/run/usb16x16-dante-startcheck/status` before measuring anything).
+
+**The job, chosen by the operator: the owner's stalls.** Now and then the
+owner's loop, which wakes every millisecond, is late by 4 to 6 ms. The
+outgoing lead (128 frames) runs out, Inferno reports a playback overrun,
+the owner logs `NETRESYNC dir=playback frames=N` and re-primes, and the
+Mac hears tens of milliseconds of silence on all sixteen channels; the
+level can also sit about 2 ms high afterwards until the USB side is next
+re-primed. With the return queue at 96 its floor is about 46 frames, so a
+stall of one to two milliseconds, harmless before, would now empty the
+return too; none of that size has been seen.
+
+Every instance in the record (`grep -n "NETRESYNC\|loop gap" RESULTS.md`):
+
+| When (UTC) | Gap | Frames | Circumstance |
+|---|---|---|---|
+| 2026-10-10, owner 22fd2622's first start | 6.0 ms at 4.2 s; 3.7 ms at a cable replug | | near a start; the "early-start loop gap" |
+| 2026-10-12 06:26:05 | 4,562 us | 91 | idle, two hours into a start, nothing in the journal, Mac awake |
+| 2026-10-12 12:25:56 | 3,935 us | 60 | a candidate, within a second of a gadget restart |
+| 2026-10-12 20:58:49 | 4,388 us | 83 | during a noise run, 13 s after a 4 s tcpdump ended; 54 ms of silence at the Mac |
+| 2026-10-12 23:34:22 | 3.8 ms | 54 | a candidate, at a gadget restart 68 s into its start |
+
+Two kinds are mixed there and should be separated first. Those at a
+gadget restart may be the owner's own doing: it closes and reopens the
+gadget's PCMs on its real-time loop thread (`owner/main.cpp`, the
+`snd_pcm_close` / `snd_pcm_open` around lines 898 to 1080), and those
+calls can block. Those at idle or under signal (06:26, 20:58) have no
+such cause in view. Not yet looked at for any of them: what else was
+running on that core, which thread was late (the loop, or Inferno's
+`flows TX` at FIFO 81 / `flows RX` at FIFO 80 above the loop's 79), the
+kernel's own latency.
+
+**What exists to work with.** The owner's per-interval `gap_us_max` (the
+service logs once a minute, so it gives the minute and not the instant;
+candidates run with `--log-every 1`); its `THREADS` lines; `--stall-at` /
+`--stall-ms`, a test-only injected stall, for checking any detector;
+password-free on the Pi: `/usr/local/sbin/run-cyclictest-safe.sh` and
+`/usr/local/sbin/usb16x16-stall-tuning` (governor, IRQ pinning; pinning
+was tried on 2026-10-11 for the ARP holes and removed);
+`work/dante-mode/diag/eth-tx-watch.py`; the handoff's Phase 6 material on
+scheduler latency and the AES67 bridge's gap bar
+(`outputs/latency/phase6-gapbar-20260907/`), where the same class of
+event was chased on the bridge: grep the handoff for it before designing
+anything. A diagnostic owner build is a Pi build, service stopped, and a
+candidate run, not an install.
+
+**Rules that bind here.** Search the handoff and RESULTS.md first.
+Nothing heavy on the Pi while the service carries audio (no builds,
+transfers or filesystem walks). Candidate starts are not covered by the
+start check: judge them by the receive rate
+(`usb16x16-dante-startcheck --classify`). A rare event needs hours, not
+ten-minute soaks. One variable at a time; nothing concluded or proposed
+for install from one start. Installs and tcpdump are the operator's sudo.
+
+**Also open, not this session's job unless he says:** the start-drawn
+loss of return packets (between the Ferrofish, the Netgear GS305EP and
+the Pi's port; a view of the wire that is not the Pi's is what would
+split it); a boot, a preset and the fault paths at the accepted settings;
+`--tx-lead` under 128 made 2 ms holes and why is unread.
+
 ## Current pickup — 2026-10-12: the Dante service has DSP, an applier and a page; its owed list is done. Start here.
 
 **Added 2026-10-12 03:45 UTC: the three fault paths were run direct; read

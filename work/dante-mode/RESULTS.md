@@ -4640,3 +4640,40 @@ on the installed form; the candidate's battery and hour; ten anchors. Not
 behind it: a preset, the fault paths, a boot on these files. Rollback
 `install-dante-lowlatency.sh rollback`, then restart the endpoint and the
 gadget.
+
+## ACCEPTED 2026-10-13: the low-latency set is the Dante point of record
+
+Accepted by the operator on 2026-10-13 after the section above, with his
+reads of the Dante Controller Latency histograms he had cleared at the
+start of that battery, 8 h 53 min later:
+
+| Tab | Setting | Peak | Average | Late |
+|---|---|---|---|---|
+| Ferrofish, the Pi's flows (`USB-16x16-Inferno @ 1 msec`) | 1 msec | 708 us | 565 us | 0 |
+| Pi, the Ferrofish's flows (`FF-PULSE-16-DX @ 1 msec`) | 1 msec | 625 us | 407 us | 0 |
+
+Neither has a count beyond 0.75 ms in nine hours of one start, so the
+counts past 2 ms in the earlier, mixed histograms belong to starts,
+restarts or stalls and not to steady running.
+
+The same start at 10:30 UTC, nine hours old: `NRestarts` 0, no resync, no
+re-prime, no loop gap over 1,500 us in any minute of its life, receive
+rate 6,005, the neighbour entry REACHABLE, config a91f5766, wrapper
+882f48ac, transport.conf 821bc306.
+
+**The point of record.** Owner 62879558 through
+`usb16x16-dante-start-transport` (882f48ac, installed as
+`usb16x16-dante-start`), direct with meters, `RX_QUEUE=96`; plugin
+0ee61f2f; Inferno config a91f5766 (both latency knobs 1 ms); unit
+27b68877 with the eth0 drop-in; the start check 058e9177 / e0ffc622;
+Statime as installed; the Ferrofish at 1.0 msec device latency, AES67 mode
+off. **343, `daw_timeline` 531 (11.062 ms) at 32 frames** on its anchor;
+the candidate arm's five draws at these settings span 322 to 353.
+Rollbacks, newest first: `install-dante-lowlatency.sh rollback` (to the
+2 ms form, 472 to 494); `install-dante-startcheck.sh rollback`; then as
+before.
+
+**Accepted with these open, by his decision to take the stall next in a
+new session:** the owner's stalls; the start-drawn loss of return packets
+that the start check works around; a boot, a preset and the fault paths
+at these settings.

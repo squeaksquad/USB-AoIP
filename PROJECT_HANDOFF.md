@@ -13416,3 +13416,27 @@ is the 2 ms form, which is what `install-dante-lowlatency.sh rollback`
 returns to. Open with it: a preset and the fault paths at these settings,
 a boot, the operator's Latency-tab reads for the hour; and underneath, the
 start-drawn packet loss (the start check's reason), the owner stall.
+
+**ACCEPTED 2026-10-13 (operator, about 10:30 UTC): the low-latency set is
+the Dante point of record: 343, `daw_timeline` 531 (11.062 ms) at 32
+frames.** Record `work/dante-mode/RESULTS.md`, last section. Owner
+62879558 started through wrapper 882f48ac (`usb16x16-dante-start-transport`
+installed as `usb16x16-dante-start`), direct with meters, return queue 96
+from `/etc/usb16x16/dante/transport.conf` (821bc306); plugin 0ee61f2f;
+Inferno config a91f5766 (RX and TX latency 1 ms); unit 27b68877 with the
+eth0 ignore-carrier drop-in; start check 058e9177 / e0ffc622; Statime as
+installed; Ferrofish at 1.0 msec device latency with AES67 mode off.
+Behind it: battery and loaded hour on the installed form (01:35-03:01
+UTC), the candidate's battery and hour, ten anchors (322 to 353), and the
+operator's Latency-tab reads over 8 h 53 min of that start: the Ferrofish
+peak 708 us, the Pi peak 625 us, 0 late on both. That start at nine hours:
+no restart, resync, re-prime or loop gap over 1.5 ms. Against the 2 ms
+form of the evening before (472 to 494) it is about 2.9 ms lower; against
+the AES67 record (703 / 891, 18.563 ms) 7.5 ms. Rollbacks, newest first:
+`install-dante-lowlatency.sh rollback`; `install-dante-startcheck.sh
+rollback`; `install-eth0-carrier.sh rollback`;
+`install-dante-unit-update.sh rollback`; `install-dante-dsp.sh rollback`.
+Open and deferred by the operator: the owner's stalls (his next session);
+the start-drawn loss of return packets, worked around by the start check;
+a boot, a preset and the fault paths at these settings. The AES67 rollback
+still needs the Ferrofish back in AES67 mode and rebooted.
