@@ -4599,3 +4599,44 @@ paths, a boot, or the installed form.
 01:18:27 UTC on the installed 2 ms files; the start check found that
 start short and restarted it, and the next (01:19:33) read whole, 6,016.
 Its level was not read.
+
+## The low-latency set installed: battery and loaded hour PASS on the installed form, 343, `daw_timeline` 531 (11.062 ms) (2026-10-13 01:31-03:01 UTC)
+
+Installed by the operator with `install-dante-lowlatency.sh`:
+`/etc/usb16x16/dante/asound-inferno-owner.conf` a91f5766,
+`/usr/local/libexec/usb16x16-dante/usb16x16-dante-start` 882f48ac,
+`/etc/usb16x16/dante/transport.conf` 821bc306; owner 62879558 and unit
+27b68877 unchanged. The service's start of 01:31:56 UTC runs
+`... --log-every 60 --rx-queue 96 --meter-file /run/usb16x16-dante/meters.txt`
+(read from the process), `tx_lead=128 rx_queue=96` in its START line. The
+start check read it whole (6,017 and 6,016) at 01:33:01, no restart
+needed. Fresh anchor by the operator's gadget restart at 01:34:02.
+Ferrofish at 1.0 msec. Evidence `outputs/latency/lowlat-installed-*`.
+
+All on that anchor of that start:
+
+- 600 s sixteen-channel soak: PASS.
+- Four loaded 800-impulse runs: **all 343, spread 0, `daw_timeline` 531
+  (11.062 ms)**.
+- 3,600 s sixteen-channel soak (02:00:25): **PASS**, longest zero run 1,
+  no discontinuity.
+- 400 loaded impulses afterwards: all 343.
+
+Over the battery and the hour (from t = 240 s): worst loop gap 1,056 us,
+no resync, no fault, no re-prime, `out_holes` and `back_holes` 0, lowest
+outgoing depth 75, lowest return depth 47, `rx_mean` 95 to 97 against 96,
+meter tap 4.4 us mean and 8.0 us max, receive rate 6,006 before and 6,005
+after, `NRestarts` 0, the Ferrofish's neighbour entry REACHABLE. The
+start's lowest depths overall (66 out, 38 back) are from its first four
+minutes, which hold the start itself and the gadget restart.
+
+343 is inside the candidate arm's five draws (322 to 353); the evening's
+service at 2 ms and queue 144 read 472 to 494. The Dante Controller
+Latency histograms, cleared by the operator at the start of this run, are
+his to read and are not in this record yet.
+
+**Not ACCEPTED: the operator's call.** Behind it: this battery and hour
+on the installed form; the candidate's battery and hour; ten anchors. Not
+behind it: a preset, the fault paths, a boot on these files. Rollback
+`install-dante-lowlatency.sh rollback`, then restart the endpoint and the
+gadget.

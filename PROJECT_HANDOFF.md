@@ -13396,3 +13396,23 @@ hour on the installed form on a start the check has passed, then his
 ACCEPTED. Also seen: the start check acted a second time, on the service
 start of 01:18:27 (short; the 01:19:33 start read whole). In service
 meanwhile: the 2 ms files, start 01:19:33, level not read.
+
+**INSTALLED 2026-10-13 01:31 UTC, and MEASURED 01:35-03:01 UTC: the
+low-latency set in the service passes the battery and a loaded hour at
+343, `daw_timeline` 531 (11.062 ms).** Record
+`work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/lowlat-installed-*`. By the operator with
+`install-dante-lowlatency.sh`: Inferno config a91f5766 (both latency knobs
+1 ms), start wrapper 882f48ac, `/etc/usb16x16/dante/transport.conf`
+821bc306 (`RX_QUEUE=96`); owner 62879558, plugin 0ee61f2f, unit 27b68877,
+the start check and Statime unchanged; Ferrofish at 1.0 msec. On the
+service's 01:31:56 start, passed by the start check, anchor 01:34:02:
+600 s sixteen-channel soak PASS, 4 x 800 loaded all 343 spread 0,
+3,600 s soak PASS, 400 more at 343; worst loop gap 1,056 us, no resync or
+fault, return floor 47, outgoing floor 75, meters on. The 2 ms service of
+the same evening read 472 to 494 (`daw_timeline` 13.750 to 14.208 ms).
+Awaiting the operator's ACCEPTED; until then the point of record on paper
+is the 2 ms form, which is what `install-dante-lowlatency.sh rollback`
+returns to. Open with it: a preset and the fault paths at these settings,
+a boot, the operator's Latency-tab reads for the hour; and underneath, the
+start-drawn packet loss (the start check's reason), the owner stall.

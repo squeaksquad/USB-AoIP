@@ -43,6 +43,18 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
+**INSTALLED 2026-10-13 01:31 UTC, newest: the low-latency set is in
+service and passed the battery and a loaded hour on the installed form:
+343, `daw_timeline` 531 (11.062 ms).** Handoff tail. Config a91f5766,
+wrapper 882f48ac, `transport.conf` 821bc306, Ferrofish 1.0 msec, start
+check installed. Awaiting the operator's ACCEPTED (ask; do not assume).
+Owed with it: a boot on these files, a preset and the fault paths at
+these settings. Then, his stated order: explore the issues, which are the
+start-drawn loss of return packets (cause between the Ferrofish, the
+GS305EP and the Pi's port; the start check is the stopgap) and the owner
+stall (4.4 ms at 20:58 UTC on 2026-10-12). Rollback
+`install-dante-lowlatency.sh rollback`.
+
 **STAGED 2026-10-13 01:18 UTC, newest: both latency gains, measured and
 ready.** Both Inferno knobs at 1 ms plus the return queue at 96 read 328,
 `daw_timeline` 516 (10.750 ms) through a battery and a loaded hour on a
