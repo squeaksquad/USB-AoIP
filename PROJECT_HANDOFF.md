@@ -13366,3 +13366,33 @@ is still open (Ferrofish, GS305EP or the Pi's port). From now on an
 endpoint start may be followed about 65 s later by a restart: read
 `/run/usb16x16-dante-startcheck/status` for `state=ok` and the current
 InvocationID before measuring.
+
+**MEASURED 2026-10-12 23:16 to 2026-10-13 01:16 UTC: both Inferno knobs at
+1 ms with the owner's return queue at 96 read 328, `daw_timeline` 516
+(10.750 ms), through the battery and a loaded hour on a candidate start;
+about 3 ms under the same evening's service.** Record
+`work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/gain-*`. Owner 62879558, plugin 0ee61f2f, Ferrofish at
+1.0 msec. Five anchors an arm: control (service, 2 ms, queue 144) 472,
+477, 494; config a91f5766 (both knobs 1 ms) 411, 372, 410, 394, 370; the
+same with `--rx-queue 96` 353, 342, 322, 344, 328; every sixteen-channel
+soak PASS. On the last anchor: 600 s soak PASS, 4 x 800 loaded all 328
+spread 0, 3,600 s soak PASS, no resync or fault, return floor 46, outgoing
+floor 75. Margins read by the operator in Dante Controller: the Ferrofish
+0 late at 1 msec with peak 750 us; the Pi's tab at 1 msec starting at
+peak 437 us. Given up: the return queue's floor is about 1 ms instead of
+2.
+
+**STAGED 2026-10-13 01:18 UTC: both gains for install, not installed.**
+`work/dante-mode/service/install-dante-lowlatency.sh` (2328c77e, on the
+Pi) swaps three files: `/etc/usb16x16/dante/asound-inferno-owner.conf`
+924cfa99 to a91f5766; `/usr/local/libexec/usb16x16-dante/usb16x16-dante-start`
+1f83825b to 882f48ac (`usb16x16-dante-start-transport`, which also reads
+`/etc/usb16x16/dante/transport.conf`); and that file, new, 821bc306,
+`RX_QUEUE=96`. It keeps what it replaces, restarts nothing, and `rollback`
+undoes all three. The operator's sudo, then `systemctl restart
+usb16x16-dante` and a gadget restart. Owed after it: battery and loaded
+hour on the installed form on a start the check has passed, then his
+ACCEPTED. Also seen: the start check acted a second time, on the service
+start of 01:18:27 (short; the 01:19:33 start read whole). In service
+meanwhile: the 2 ms files, start 01:19:33, level not read.

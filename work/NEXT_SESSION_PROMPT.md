@@ -43,6 +43,20 @@ USB side (RESULTS.md, last two sections). A leader reboot therefore wants
 a fresh anchor afterwards. The AES67 rollback now also needs AES67 mode
 back on and a Ferrofish reboot. Level 507 on the 11:50:22 anchor.
 
+**STAGED 2026-10-13 01:18 UTC, newest: both latency gains, measured and
+ready.** Both Inferno knobs at 1 ms plus the return queue at 96 read 328,
+`daw_timeline` 516 (10.750 ms) through a battery and a loaded hour on a
+candidate start, about 3 ms under the service. Installer
+`service/install-dante-lowlatency.sh` (2328c77e, on the Pi; three files,
+one rollback), the operator's sudo. First check what is installed:
+`sha256sum /etc/usb16x16/dante/asound-inferno-owner.conf
+/usr/local/libexec/usb16x16-dante/usb16x16-dante-start` (924cfa99 +
+1f83825b is the old pair, a91f5766 + 882f48ac the new) and `cat
+/etc/usb16x16/dante/transport.conf`. If installed: owed the battery and a
+loaded hour on the installed form, on a start the check has passed
+(`state=ok` in the status file), then his ACCEPTED. RESULTS.md's last
+section says what the figures rest on and what the lower queue gives up.
+
 **INSTALLED 2026-10-12 23:01 UTC, newest: the start check is in service
 and has acted once** (a short start at 23:03:45 restarted after 65 s, the
 next read whole). Handoff tail. Before any measurement after an endpoint

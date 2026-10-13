@@ -1,0 +1,106 @@
+#!/bin/bash
+# Start usb16x16-dante-owner the way /etc/usb16x16/dante/owner.conf says:
+# the unit's ExecStart once the owner has DSP. The unit keeps the user, the
+# capabilities and the environment; this only turns the configuration into
+# the owner's command line and execs it, so the owner is the unit's main
+# process as before.
+#
+#   usb16x16-dante-start            exec the owner
+#   usb16x16-dante-start --print    print the command line, one argument a line, and exit
+#
+# owner.conf is KEY=value lines, read, never sourced. Every key is optional;
+# with no file at all the command line is the one the unit carried before
+# there was a configuration (direct, no meters).
+#
+#   METERS=0|1         1: --meter-file /run/usb16x16-dante/meters.txt
+#   DSP_PRESET=PATH    a coefficient artifact under /etc/usb16x16/dsp/; empty: direct
+#   DSP_SHA256=HEX     required with DSP_PRESET: the file must hash to this
+#   DSP_LIVE=0|1       1: follow /run/usb16x16-dante/dsp-live.dsp (needs DSP_PRESET)
+#
+# This is usb16x16-dante-start plus one thing (2026-10-12): transport settings
+# from a second file, /etc/usb16x16/dante/transport.conf, same KEY=value form.
+# They are kept out of owner.conf because the applier rewrites that file from
+# the page and knows only its own keys; what is here is installed by the
+# operator and survives every Apply. With no such file the command line is
+# exactly the one usb16x16-dante-start makes.
+#
+#   RX_QUEUE=N         --rx-queue N: the return queue's target depth in frames
+#                      (the owner's default is 144; it refuses under 96)
+#
+# A configuration that cannot be honoured is a refusal (exit 2), never a
+# quieter start: a system set up with crossovers must not come up without
+# them. The unit does not restart on exit 2.
+set -euo pipefail
+
+conf=${USB16X16_DANTE_CONF:-/etc/usb16x16/dante/owner.conf}
+owner=${USB16X16_DANTE_OWNER:-/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner}
+transport=${USB16X16_DANTE_TRANSPORT:-/etc/usb16x16/dante/transport.conf}
+dsp_dir=${USB16X16_DSP_DIR:-/etc/usb16x16/dsp}
+run_dir=${USB16X16_DANTE_RUN_DIR:-/run/usb16x16-dante}
+state_dir=${USB16X16_DANTE_STATE_DIR:-/var/lib/usb16x16-dante}
+refuse() { echo "usb16x16-dante-start: REFUSED: $*" >&2; exit 2; }
+
+meters=0
+preset=
+preset_sha=
+live=0
+if [ -e "$conf" ]; then
+  [ -r "$conf" ] || refuse "$conf cannot be read"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    [[ $line =~ ^([A-Z0-9_]+)=(.*)$ ]] || refuse "$conf: not KEY=value: $line"
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+    case "$key" in
+      METERS)     [[ $value =~ ^[01]$ ]] || refuse "METERS must be 0 or 1"; meters=$value ;;
+      DSP_LIVE)   [[ $value =~ ^[01]$ ]] || refuse "DSP_LIVE must be 0 or 1"; live=$value ;;
+      DSP_PRESET) preset=$value ;;
+      DSP_SHA256) [[ $value =~ ^[0-9a-f]{64}$ ]] || refuse "DSP_SHA256 must be 64 hex digits"; preset_sha=$value ;;
+      *)          refuse "$conf: unknown key $key" ;;
+    esac
+  done < "$conf"
+fi
+
+rx_queue=
+if [ -e "$transport" ]; then
+  [ -r "$transport" ] || refuse "$transport cannot be read"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    [[ $line =~ ^([A-Z0-9_]+)=(.*)$ ]] || refuse "$transport: not KEY=value: $line"
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+    case "$key" in
+      RX_QUEUE) [[ $value =~ ^[0-9]{2,4}$ ]] && [ "$value" -ge 96 ] && [ "$value" -le 384 ] || refuse "RX_QUEUE must be a number of frames from 96 to 384"
+                rx_queue=$value ;;
+      *)        refuse "$transport: unknown key $key" ;;
+    esac
+  done < "$transport"
+fi
+
+sha256_of() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -c1-64; else shasum -a 256 "$1" | cut -c1-64; fi; }
+
+arguments=(--seconds 0 --ppm-file "$state_dir/usb16x16-dante-owner.ppm" --log-every 60)
+[ -n "$rx_queue" ] && arguments+=(--rx-queue "$rx_queue")
+[ "$meters" = 1 ] && arguments+=(--meter-file "$run_dir/meters.txt")
+if [ -n "$preset" ]; then
+  [[ $preset == "$dsp_dir"/*.dsp && $preset != *..* && ${preset#"$dsp_dir"/} != */* ]] ||
+    refuse "DSP_PRESET must be a .dsp file directly under $dsp_dir"
+  [ -f "$preset" ] && [ -r "$preset" ] || refuse "DSP_PRESET $preset is missing or unreadable"
+  [ -n "$preset_sha" ] || refuse "DSP_PRESET needs DSP_SHA256"
+  actual=$(sha256_of "$preset")
+  [ "$actual" = "$preset_sha" ] || refuse "DSP_PRESET $preset hashes to ${actual:0:8}, not the ${preset_sha:0:8} in $conf"
+  arguments+=(--dsp-preset "$preset")
+  if [ "$live" = 1 ]; then
+    arguments+=(--dsp-live-file "$run_dir/dsp-live.dsp" --dsp-live-status "$run_dir/dsp-live.status")
+  fi
+else
+  [ -z "$preset_sha" ] || refuse "DSP_SHA256 without DSP_PRESET"
+  [ "$live" = 0 ] || refuse "DSP_LIVE=1 needs DSP_PRESET: there is no stage to update"
+fi
+
+if [ "${1:-}" = --print ]; then
+  printf '%s\n' "$owner" "${arguments[@]}"
+  exit 0
+fi
+[ $# -eq 0 ] || refuse "usage: $0 [--print]"
+exec "$owner" "${arguments[@]}"

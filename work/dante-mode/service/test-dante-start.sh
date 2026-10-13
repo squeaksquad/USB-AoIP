@@ -1,8 +1,13 @@
 #!/bin/bash
 # Test of usb16x16-dante-start's configuration handling; runs anywhere.
-#   ./test-dante-start.sh
+#   ./test-dante-start.sh             the wrapper as installed 2026-10-11
+#   ./test-dante-start.sh transport   usb16x16-dante-start-transport: the same cases, which it must pass
+#                                     unchanged with no transport file, and then its own
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
+wrapper=$here/usb16x16-dante-start
+[ "${1:-}" = transport ] && wrapper=$here/usb16x16-dante-start-transport
+export USB16X16_DANTE_TRANSPORT=/nonexistent/transport.conf
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/dsp" "$work/elsewhere"
@@ -13,7 +18,7 @@ failures=0
 run() {   # the configuration text; sets $out and $code
   printf '%s' "$1" > "$work/owner.conf"
   out=$(USB16X16_DANTE_CONF="$work/owner.conf" USB16X16_DSP_DIR="$work/dsp" USB16X16_DANTE_RUN_DIR=/run/x \
-        USB16X16_DANTE_STATE_DIR=/var/x USB16X16_DANTE_OWNER=/bin/owner "$here/usb16x16-dante-start" --print 2>&1 | tr '\n' ' ')
+        USB16X16_DANTE_STATE_DIR=/var/x USB16X16_DANTE_OWNER=/bin/owner "$wrapper" --print 2>&1 | tr '\n' ' ')
   code=${PIPESTATUS[0]}
 }
 expect() {   # name, wanted exit, wanted substring
@@ -24,7 +29,7 @@ expect() {   # name, wanted exit, wanted substring
 base="/bin/owner --seconds 0 --ppm-file /var/x/usb16x16-dante-owner.ppm --log-every 60 "
 
 rm -f "$work/owner.conf"
-out=$(USB16X16_DANTE_CONF="$work/owner.conf" USB16X16_DANTE_STATE_DIR=/var/x USB16X16_DANTE_OWNER=/bin/owner "$here/usb16x16-dante-start" --print | tr '\n' ' '); code=$?
+out=$(USB16X16_DANTE_CONF="$work/owner.conf" USB16X16_DANTE_STATE_DIR=/var/x USB16X16_DANTE_OWNER=/bin/owner "$wrapper" --print | tr '\n' ' '); code=$?
 [ "$out" = "$base" ] || { echo "FAIL: no file is the old command line: $out"; failures=$((failures + 1)); }
 run ""; [ "$out" = "$base" ] || { echo "FAIL: an empty file is the old command line: $out"; failures=$((failures + 1)); }
 run $'# comment\n\nMETERS=1\n';                expect "meters" 0 "--log-every 60 --meter-file /run/x/meters.txt "
@@ -47,4 +52,20 @@ run $'DSP_SHA256=xyz\n';                                                        
 run $'SOMETHING=1\n';                                                           expect "unknown key" 2 "unknown key"
 run $'METERS=1; rm -rf /\n';                                                    expect "nothing is executed" 2 "METERS must be"
 run $'export METERS=1\n';                                                       expect "not KEY=value" 2 "not KEY=value"
+if [ "${1:-}" = transport ]; then
+  export USB16X16_DANTE_TRANSPORT=$work/transport.conf
+  tr_run() { printf '%s' "$1" > "$work/transport.conf"; run "$2"; }
+  tr_run $'# the return queue\nRX_QUEUE=96\n' ""
+  [ "$out" = "${base}--rx-queue 96 " ] || { echo "FAIL: RX_QUEUE alone: $out"; failures=$((failures + 1)); }
+  tr_run $'RX_QUEUE=96\n' $'METERS=1\n';      expect "queue with meters" 0 "--log-every 60 --rx-queue 96 --meter-file /run/x/meters.txt "
+  tr_run "RX_QUEUE=112" "DSP_PRESET=$work/dsp/a.dsp"$'\n'"DSP_SHA256=$sha"$'\n'"DSP_LIVE=1"
+  expect "queue with a live preset" 0 "--rx-queue 112 --dsp-preset $work/dsp/a.dsp --dsp-live-file /run/x/dsp-live.dsp "
+  tr_run "" "";                                 [ "$out" = "$base" ] || { echo "FAIL: an empty transport file: $out"; failures=$((failures + 1)); }
+  tr_run $'RX_QUEUE=95\n' "";                   expect "queue too small" 2 "RX_QUEUE must be"
+  tr_run $'RX_QUEUE=4096\n' "";                 expect "queue too large" 2 "RX_QUEUE must be"
+  tr_run $'RX_QUEUE=96; reboot\n' "";           expect "nothing is executed" 2 "RX_QUEUE must be"
+  tr_run $'TX_LEAD=96\n' "";                    expect "unknown transport key" 2 "unknown key"
+  tr_run $'METERS=1\n' "";                      expect "owner.conf keys do not belong there" 2 "unknown key"
+  tr_run $'RX_QUEUE=96\n' $'RX_QUEUE=96\n';     expect "transport keys do not belong in owner.conf" 2 "unknown key"
+fi
 if [ "$failures" -eq 0 ]; then echo "test-dante-start: all passed"; else echo "test-dante-start: $failures FAILED"; exit 1; fi

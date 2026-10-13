@@ -4518,3 +4518,84 @@ the handoff entry).
 
 **Still not seen:** the stop at four restarts, on the real unit (the
 stand-in test covers it); a boot; the check meeting the applier.
+
+## Both Inferno knobs at 1 ms and the return queue at 96: 328, `daw_timeline` 516 (10.750 ms) through the battery and a loaded hour; staged (2026-10-12 23:16 to 2026-10-13 01:20 UTC)
+
+The two gains found earlier in the day, taken one at a time on candidate
+starts (owner 62879558, plugin 0ee61f2f, through the launcher, service
+stopped), now with the Ferrofish at 1.0 msec and 16-frame return packets.
+Each candidate start was first judged whole by eth0's receive rate (the
+start check does not cover candidates); both were, on the first try. Each
+anchor is a gadget restart, a 30 s sixteen-channel soak and 400 loaded
+impulses at 32 frames. Evidence `outputs/latency/gain-*`; owner log
+extracts in `outputs/latency/lat1ms-owner-20261012/`.
+
+| Arm | Levels on five anchors | Mean | `daw_timeline` | Soaks |
+|---|---|---|---|---|
+| Control: the service, 2 ms / 2 ms, queue 144 (same evening, three anchors) | 472, 477, 494 | 481 | 13.750 to 14.208 ms | PASS |
+| Config a91f5766: both knobs 1 ms | 411, 372, 410, 394, 370 | 391 | 11.625 to 12.479 ms | 5 PASS |
+| The same with `--rx-queue 96` | 353, 342, 322, 344, 328 | 338 | 10.625 to 11.271 ms | 5 PASS |
+
+- **1 ms knobs:** 90 under the control, as in the afternoon (385), and
+  clean with 16-frame packets arriving, which was open: the Pi's Latency
+  tab for the Ferrofish's flows, cleared during the hour, began at peak
+  437 us and average 413 us against its 1 msec setting (160 us average
+  with 4-frame packets), and the Ferrofish's for the Pi's flows read peak
+  750 us, average 565 us, 0 late over the 81 minutes before it was
+  cleared.
+- **Return queue 96:** a further 53 against the 48 expected. The return
+  floor was 45 to 48 frames on every anchor, no fault on the return.
+- **Together:** 143 samples, 3 ms.
+
+**Battery and hour, all on the 23:47:07 UTC anchor of the second candidate
+start (23:33:14):** 600 s sixteen-channel soak PASS; four loaded
+800-impulse runs, **all 328, spread 0, `daw_timeline` 516 (10.750 ms)**;
+3,600 s sixteen-channel soak (00:15:43) **PASS**, longest zero run 1, no
+discontinuity; 400 loaded impulses afterwards, all 328. Over the battery
+and the hour: no resync, no fault, no re-prime, `back_holes` 0, receive
+rate 6,006 before and 6,005 after, lowest outgoing depth 75 and lowest
+return depth 46, the Ferrofish's neighbour entry REACHABLE. The log's one
+resync (54 frames, a 3.8 ms loop gap) is at the first gadget restart, 68 s
+into the start.
+
+**What the lower queue gives up.** The return floor is about 46 frames,
+1 ms, where it was about 94: a stall of the owner's loop longer than
+about a millisecond now empties the return queue, where it took about two.
+The stalls on record (4.4 to 6 ms) empty it at either setting, and the
+loop's ordinary gaps are 1.0 to 1.07 ms against a 1 ms period, so nothing
+measured falls between; it is margin given up all the same. As before at
+1 ms, Inferno re-times a transmit flow at more gadget restarts.
+
+**Staged, not installed.** `service/install-dante-lowlatency.sh`
+(2328c77e) puts both in the service at once: the Inferno config 924cfa99
+to a91f5766; the start wrapper 1f83825b to `usb16x16-dante-start-transport`
+882f48ac, which also reads `/etc/usb16x16/dante/transport.conf` (the
+applier rewrites owner.conf and knows only its own keys, so the queue
+cannot live there; with no transport file the new wrapper's command line
+is the old one's, and it passes the old wrapper's test and ten cases of
+its own, `test-dante-start.sh transport`); and `service/transport.conf`
+821bc306 with `RX_QUEUE=96`. Checks everything before writing, keeps what
+it replaces, restarts nothing, `rollback` undoes all three. On the Pi at
+`~/usb-16x16-work/dante-mode/service/`; against the installed files there
+the new wrapper prints `... --log-every 60 --rx-queue 96 --meter-file
+/run/usb16x16-dante/meters.txt`. Then:
+
+```
+cd ~/usb-16x16-work/dante-mode/service && sudo ./install-dante-lowlatency.sh
+sudo systemctl restart usb16x16-dante
+sudo systemctl restart usb-16x16.service
+```
+
+and, owed before ACCEPTED, the battery and a loaded hour on the installed
+form (meters on, the service's start, the start check in play), on a start
+the check has passed.
+
+**What this rests on, plainly.** Two candidate starts at 1 ms / 1 ms (the
+afternoon's and this one) and two with the queue at 96 (the sweep's and
+this one), ten anchors, one battery and hour. Not: a preset, the fault
+paths, a boot, or the installed form.
+
+**The service afterwards.** Candidate stopped, `usb16x16-dante` started
+01:18:27 UTC on the installed 2 ms files; the start check found that
+start short and restarted it, and the next (01:19:33) read whole, 6,016.
+Its level was not read.

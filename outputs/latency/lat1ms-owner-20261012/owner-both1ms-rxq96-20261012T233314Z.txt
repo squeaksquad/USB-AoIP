@@ -1,0 +1,72 @@
+START 20261012T233314Z seconds=candidate owner=62879558 plugin=0ee61f2f config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner-both1ms.conf trial=no mode=usb cpus=all user=usb16x16-dante
+ARGS --seconds 0 --rx-queue 96 --log-every 1
+START 20261012T233314Z seconds=candidate owner=62879558 plugin=0ee61f2f config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner-both1ms.conf trial=no mode=usb cpus=all user=usb16x16-dante
+ARGS --seconds 0 --rx-queue 96 --log-every 1
+START usb16x16-dante-owner mode=usb pcm=inferno period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-14.96 seed_from_file=1
+NETOPEN dir=capture period=64 buffer=1024 hw_params_us=251187 state=PREPARED
+NETOPEN dir=playback period=64 buffer=1024 hw_params_us=73 state=PREPARED
+NETSTART capture=RUNNING playback=RUNNING
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480
+USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=85 t=0.300
+USBCLOSE reason=-19 (No such device)
+[2026-10-12T23:34:22.342688Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 122 samples detected, or media clock jumped, dropout occurs!
+[2026-10-12T23:34:22.342705Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 122 samples detected, or media clock jumped, dropout occurs!
+[2026-10-12T23:34:22.342707Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 122 samples detected, or media clock jumped, dropout occurs!
+[2026-10-12T23:34:22.342709Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 122 samples detected, or media clock jumped, dropout occurs!
+[2026-10-12T23:34:22.342754Z WARN  asound_module_pcm_inferno] XRUN: buffered for playback: -54 samples, avail 1078, hw_avail 0, hw_ptr 3230763, appl_ptr 3230709
+NETRESYNC dir=playback frames=54 t=67.638
+USBLINK usb=absent tx=idle rx=idle tx_links=1 rx_primes=1 capture_faults=0 playback_faults=1 last_fault=-19 tx_prime_block=48 tx_prime_found=85 t=67.638
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480
+USBLINK usb=open tx=idle rx=idle tx_links=1 rx_primes=2 capture_faults=0 playback_faults=1 last_fault=-19 tx_prime_block=48 tx_prime_found=85 t=68.639
+USBLINK usb=open tx=flow rx=flow tx_links=2 rx_primes=2 capture_faults=0 playback_faults=1 last_fault=-19 tx_prime_block=48 tx_prime_found=93 t=68.739
+USBCLOSE reason=-19 (No such device)
+USBLINK usb=absent tx=idle rx=idle tx_links=2 rx_primes=2 capture_faults=0 playback_faults=2 last_fault=-19 tx_prime_block=48 tx_prime_found=93 t=258.742
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480
+USBLINK usb=open tx=idle rx=idle tx_links=2 rx_primes=3 capture_faults=0 playback_faults=2 last_fault=-19 tx_prime_block=48 tx_prime_found=93 t=259.743
+USBLINK usb=open tx=flow rx=flow tx_links=3 rx_primes=3 capture_faults=0 playback_faults=2 last_fault=-19 tx_prime_block=48 tx_prime_found=104 t=259.943
+USBCLOSE reason=-19 (No such device)
+USBLINK usb=absent tx=idle rx=idle tx_links=3 rx_primes=3 capture_faults=0 playback_faults=3 last_fault=-19 tx_prime_block=48 tx_prime_found=104 t=449.839
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480
+USBLINK usb=open tx=idle rx=idle tx_links=3 rx_primes=4 capture_faults=0 playback_faults=3 last_fault=-19 tx_prime_block=48 tx_prime_found=104 t=450.840
+USBLINK usb=open tx=idle rx=flow tx_links=3 rx_primes=4 capture_faults=0 playback_faults=3 last_fault=-19 tx_prime_block=48 tx_prime_found=104 t=451.040
+USBLINK usb=open tx=flow rx=flow tx_links=4 rx_primes=4 capture_faults=0 playback_faults=3 last_fault=-19 tx_prime_block=48 tx_prime_found=124 t=451.141
+USBLINK usb=closing tx=idle rx=idle tx_links=4 rx_primes=4 capture_faults=0 playback_faults=4 last_fault=-19 tx_prime_block=48 tx_prime_found=124 t=641.137
+USBCLOSE reason=-19 (No such device)
+[2026-10-12T23:43:55.936510Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 128 samples detected, or media clock jumped, dropout occurs!
+[2026-10-12T23:43:55.936524Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 128 samples detected, or media clock jumped, dropout occurs!
+[2026-10-12T23:43:55.936526Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 128 samples detected, or media clock jumped, dropout occurs!
+[2026-10-12T23:43:55.936528Z ERROR inferno_aoip::device_server::flows_tx] tx lag of 128 samples detected, or media clock jumped, dropout occurs!
+USBLINK usb=absent tx=idle rx=idle tx_links=4 rx_primes=4 capture_faults=0 playback_faults=4 last_fault=-19 tx_prime_block=48 tx_prime_found=124 t=641.237
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480
+USBLINK usb=open tx=idle rx=idle tx_links=4 rx_primes=5 capture_faults=0 playback_faults=4 last_fault=-19 tx_prime_block=48 tx_prime_found=124 t=642.238
+USBLINK usb=open tx=flow rx=flow tx_links=5 rx_primes=5 capture_faults=0 playback_faults=4 last_fault=-19 tx_prime_block=48 tx_prime_found=102 t=642.438
+USBCLOSE reason=-19 (No such device)
+USBLINK usb=absent tx=idle rx=idle tx_links=5 rx_primes=5 capture_faults=0 playback_faults=5 last_fault=-19 tx_prime_block=48 tx_prime_found=102 t=832.734
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480
+USBLINK usb=open tx=idle rx=idle tx_links=5 rx_primes=6 capture_faults=0 playback_faults=5 last_fault=-19 tx_prime_block=48 tx_prime_found=102 t=833.735
+USBLINK usb=open tx=flow rx=flow tx_links=6 rx_primes=6 capture_faults=0 playback_faults=5 last_fault=-19 tx_prime_block=48 tx_prime_found=119 t=833.935
+[2026-10-13T00:09:34.088404Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390021000f4240
+[2026-10-13T00:09:34.088421Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff00200a0400004cea4163338f0000417564696e61746507390021000f4240
+[2026-10-13T00:09:34.110782Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390021000f4240
+[2026-10-13T00:09:34.110798Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff00200a0500004cea4163338f0000417564696e61746507390021000f4240
+[2026-10-13T00:38:53.933389Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390021000f4240
+[2026-10-13T00:38:53.933395Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff00200a1500004cea4163338f0000417564696e61746507390021000f4240
+[2026-10-13T00:38:53.953576Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390021000f4240
+[2026-10-13T00:38:53.953582Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff00200a1700004cea4163338f0000417564696e61746507390021000f4240
+[2026-10-13T00:38:55.252479Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390021000f4240
+[2026-10-13T00:38:55.252483Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff00200a4700004cea4163338f0000417564696e61746507390021000f4240
+[2026-10-13T00:38:55.473731Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390021000f4240
+[2026-10-13T00:38:55.473742Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff00200a4b00004cea4163338f0000417564696e61746507390021000f4240
+[2026-10-13T01:09:55.085263Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390021000f4240
+[2026-10-13T01:09:55.085277Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff00200a7000004cea4163338f0000417564696e61746507390021000f4240
+[2026-10-13T01:09:55.107595Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390021000f4240
+[2026-10-13T01:09:55.107599Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff00200a7100004cea4163338f0000417564696e61746507390021000f4240
+SUMMARY seconds=6309.87 exit=0 tx_frames=302870808 rx_frames=302870780 tx_resyncs=1 tx_lost=54 rx_resyncs=0 rx_lost=0 cleared=302870524 offset_mismatches=0 net_errors=0 last_error=0 capture=RUNNING playback=RUNNING
+USBSUMMARY usb_tx=302573346 usb_rx=302580065 tx_links=6 tx_reprimes=0 rx_primes=6 rx_overflow=0 rx_idle_discards=47566 capture_faults=0 playback_faults=5 detaches=5 pitch_write_errors=0 servo_rejected=0 tx_integral_ppm=-14.50 rx_integral_ppm=14.63 out_holes=0/0 back_holes=0/0
+[2026-10-13T01:18:24.908186Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for playback stream
+[2026-10-13T01:18:24.908224Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for capture stream
+--- last periodic lines
+OWNER t=6310.0 wakes=1001 gap_us_max=1006 tx_depth=79..80 rx_avail_max=49 tx_frames=48048 rx_frames=48048 tx_resyncs=1 tx_lost=54 rx_resyncs=0 rx_lost=0 cleared=302868622 offset_mismatches=0 net_errors=0
+USB t=6310.0 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=96.8 rx_depth=48..49 pitch_c=1000014 pitch_p=1000015 tx_i=-14.50 rx_i=14.63 usb_tx=302571474 usb_rx=302578163 tx_links=6 tx_reprimes=0 rx_primes=6 rx_overflow=0 rx_idle_discards=47566 capture_faults=0 playback_faults=5 detaches=5 pitch_write_errors=0 servo_rejected=0 out_peak=0,0 back_peak=0,0 out_holes=0/0 back_holes=0/0
+--- gap_us_max over 1500
+t=68.0 gap_us_max=3790
