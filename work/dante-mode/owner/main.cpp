@@ -31,6 +31,12 @@
 // Dante, what Dante returned) are published to that file by another such
 // thread (meter_tap.hpp); with or without a preset.
 //
+// With --gap-trace US (diagnostic, off by default) every wake that comes US
+// microseconds or more after the one before is printed at once as a LOOPGAP
+// line: how much of the gap was spent waiting, how much in each stage of the
+// wake before it, the CPU either side, and the thread's context switches and
+// page faults over the gap. It costs the loop two system calls a wake.
+//
 // Build on the Pi (the bridge core is the one source file DspStage lives in):
 //   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
@@ -50,6 +56,7 @@
 #include <pthread.h>
 #include <sched.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -125,6 +132,11 @@ struct Options {
     // exercise the paths a stall takes (resync, gadget overrun, re-prime).
     unsigned stall_at{0};
     unsigned stall_ms{0};
+    // Diagnostic: report every wake this many microseconds or more after the last. 0 is off.
+    unsigned gap_trace_us{0};
+    // Experiment (2026-10-13): touch this many kilobytes of the loop thread's stack before it
+    // turns real-time, so the loop never grows its stack (a page fault that can sleep). 0 is off.
+    unsigned stack_prefault_kb{0};
     bool mlock{true};
     bool realtime{true};
 };
@@ -140,6 +152,7 @@ struct Options {
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
+               "                     [--gap-trace MICROSECONDS] [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
                "  --tx-lead   Inferno playback depth held after each gadget block (and the silent lead)\n"
@@ -158,6 +171,8 @@ struct Options {
                "  --guard     frames behind the clock that are not cleared yet\n"
                "  --seconds   stop after this long; 0 runs until a signal\n"
                "  --stall-at, --stall-ms   test only: stall the loop once, MS long, SECONDS after it starts\n"
+               "  --gap-trace   diagnostic: print a LOOPGAP line for every wake this late or later\n"
+               "  --stack-prefault   experiment: touch this much of the loop's stack before it turns real-time\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
     std::exit(2);
@@ -198,6 +213,8 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--meter-file") o.meter_file = v;
         else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
         else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
+        else if (a == "--gap-trace") o.gap_trace_us = static_cast<unsigned>(parse_number(v, "--gap-trace"));
+        else if (a == "--stack-prefault") o.stack_prefault_kb = static_cast<unsigned>(parse_number(v, "--stack-prefault"));
         else if (a == "--period") o.period = parse_number(v, "--period");
         else if (a == "--buffer") o.buffer = parse_number(v, "--buffer");
         else if (a == "--tx-lead") o.tx_lead = parse_number(v, "--tx-lead");
@@ -221,6 +238,7 @@ Options parse_options(int argc, char** argv) {
     if (o.priority < 1 || o.priority > 98) usage("--priority must be 1 to 98");
     if (o.log_every < 1) usage("--log-every must be at least 1");
     if ((o.stall_at == 0) != (o.stall_ms == 0) || o.stall_ms > 500) usage("--stall-at and --stall-ms go together; at most 500 ms");
+    if (o.stack_prefault_kb > 4096) usage("--stack-prefault is at most 4096");
     if (o.dsp_preset.empty() && (!o.dsp_live_file.empty() || !o.dsp_live_status.empty())) {
         usage("--dsp-live-file needs --dsp-preset: there is no stage to update");
     }
@@ -318,6 +336,26 @@ bool wait_for_thread(const char* wanted, int milliseconds) {
 enum class UsbOwner : int { steward_absent = 0, loop = 1, steward_closing = 2 };
 enum class TxState : int { idle = 0, armed = 1, flow = 2 };
 
+// --gap-trace: what one late wake was made of. Written by the loop, printed by the telemetry thread.
+struct GapEvent {
+    std::int64_t at_ns{0};
+    std::int64_t gap_us{0};
+    std::int64_t wait_us{0};      // inside ppoll or clock_nanosleep
+    int woke{0};                  // 0 the 1 ms grid, 1 ppoll with frames, 2 ppoll timed out
+    std::int64_t stage_us[5]{};   // the wake before: Inferno capture, Inferno playback, gadget tx, gadget rx, the rest
+    std::int64_t other_us{0};     // between service() returning and the wait beginning
+    int cpu_before{0};
+    int cpu_after{0};
+    long voluntary{0};            // the loop thread's context switches and page faults over the gap
+    long involuntary{0};
+    long minor_faults{0};
+    long major_faults{0};
+};
+struct GapTrace {
+    std::array<GapEvent, 16> events{};
+    std::atomic<std::uint64_t> written{0};
+};
+
 struct Telemetry {
     std::atomic<std::uint64_t> wakes{0};
     std::atomic<std::int64_t> gap_us_max{0};
@@ -396,6 +434,7 @@ struct Telemetry {
     std::atomic<std::uint64_t> meter_ns_total{0};
     std::atomic<std::uint64_t> meter_calls{0};
     std::atomic<unsigned> stall_injected_ms{0};   // --stall-at fired; reported once
+    GapTrace gaps;
 };
 
 void store_max(std::atomic<std::int64_t>& target, std::int64_t value) noexcept {
@@ -428,6 +467,7 @@ void* telemetry_entry(void* argument) {
     std::uint64_t last_tx = 0;
     std::uint64_t last_rx = 0;
     std::uint64_t reported_errors = 0;
+    std::uint64_t gaps_printed = 0;
     int link_owner = -1;
     int link_tx = -1;
     int link_rx = -1;
@@ -444,6 +484,19 @@ void* telemetry_entry(void* argument) {
         }
         if (const unsigned stall = t.stall_injected_ms.exchange(0, std::memory_order_relaxed); stall != 0) {
             std::printf("STALL injected ms=%u t=%.3f\n", stall, seconds);
+        }
+        const std::uint64_t gaps_written = t.gaps.written.load(std::memory_order_acquire);
+        if (gaps_written - gaps_printed > t.gaps.events.size()) gaps_printed = gaps_written - t.gaps.events.size();
+        for (; gaps_printed < gaps_written; ++gaps_printed) {
+            const GapEvent& g = t.gaps.events[gaps_printed % t.gaps.events.size()];
+            std::printf("LOOPGAP n=%" PRIu64 " t=%.6f gap_us=%" PRId64 " wait_us=%" PRId64 " woke=%s other_us=%" PRId64
+                        " capture_us=%" PRId64 " playback_us=%" PRId64 " usb_tx_us=%" PRId64 " usb_rx_us=%" PRId64
+                        " rest_us=%" PRId64 " cpu=%d>%d voluntary=%ld involuntary=%ld minor_faults=%ld major_faults=%ld\n",
+                        gaps_printed + 1, static_cast<double>(g.at_ns - started) / 1e9, g.gap_us, g.wait_us,
+                        g.woke == 0 ? "grid" : g.woke == 1 ? "frames" : "timeout", g.other_us, g.stage_us[0],
+                        g.stage_us[1], g.stage_us[2], g.stage_us[3], g.stage_us[4], g.cpu_before, g.cpu_after,
+                        g.voluntary, g.involuntary, g.minor_faults, g.major_faults);
+            std::fflush(stdout);
         }
         if (const std::uint64_t errors = t.net_errors.load(std::memory_order_relaxed); errors != reported_errors) {
             const auto code = static_cast<int>(t.last_error.load(std::memory_order_relaxed));
@@ -1550,7 +1603,9 @@ void run_servos(UsbHalf& usb, const Options& o, std::int64_t now, Telemetry& t) 
 
 // One wake of the whole owner. False on an Inferno error, which the design has
 // no answer to short of the prepare it forbids.
-bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, std::int64_t now, Telemetry& t) noexcept {
+// `marks`, when given (--gap-trace), takes the time after each of the first four stages.
+bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, std::int64_t now, Telemetry& t,
+             std::int64_t* marks) noexcept {
     // The gadget arrives and leaves through the owner word.
     const bool loop_owns = t.usb_owner.load(std::memory_order_acquire) == static_cast<int>(UsbOwner::loop);
     if (loop_owns && !usb.attached) {
@@ -1565,12 +1620,15 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
 
     const long received = take_capture(net, usb.attached ? usb.rx_scratch.data() : nullptr, t);
     if (received < 0) return false;
+    if (marks != nullptr) marks[0] = now_ns();
 
     std::int64_t depth = 0;
     bool resynced = false;
     if (!observe_playback(net, depth, resynced, t)) return false;
+    if (marks != nullptr) marks[1] = now_ns();
 
     if (usb.attached && !service_tx(usb, handles, net, depth, resynced, t)) return false;
+    if (marks != nullptr) marks[2] = now_ns();
     if (usb.attached) {
         observe_peaks(usb.rx_scratch.data(), received, t.back_peak_1, t.back_peak_2);
         observe_holes(usb.rx_scratch.data(), received, usb.back_zero_run, t.back_holes, t.back_hole_max);
@@ -1581,6 +1639,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
         }
         service_rx(usb, handles, o, received, t);
     }
+    if (marks != nullptr) marks[3] = now_ns();
     if (usb.attached) run_servos(usb, o, now, t);
 
     // No block went through the stage on this wake: take any coefficient set
@@ -1592,6 +1651,12 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
         return commit_playback(net, nullptr, static_cast<snd_pcm_uframes_t>(static_cast<std::int64_t>(net.lead) - depth), t);
     }
     return true;
+}
+
+// Writes to every page of `bytes` of stack below the caller. With the memory lock the pages stay.
+[[gnu::noinline]] void prefault_stack(std::size_t bytes) noexcept {
+    volatile char* block = static_cast<volatile char*>(__builtin_alloca(bytes));
+    for (std::size_t at = 0; at < bytes; at += 1024) block[at] = 0;
 }
 
 pthread_t start_thread(void* (*entry)(void*), void* argument, const char* what) {
@@ -1726,6 +1791,10 @@ int main(int argc, char** argv) {
                 snd_pcm_state_name(snd_pcm_state(net.playback.handle)));
 
     // 5. Only now does the loop thread turn real-time.
+    if (options.stack_prefault_kb != 0) {
+        prefault_stack(static_cast<std::size_t>(options.stack_prefault_kb) * 1024);
+        std::printf("STACK prefaulted kb=%u\n", options.stack_prefault_kb);
+    }
     if (options.realtime) {
         sched_param parameters{};
         parameters.sched_priority = options.priority;
@@ -1744,11 +1813,22 @@ int main(int argc, char** argv) {
     std::int64_t last_wake = started;
     int exit_code = 0;
     bool stalled = false;
+    const bool tracing = options.gap_trace_us != 0;
+    std::int64_t marks[4]{started, started, started, started};
+    std::int64_t service_ended = started;
+    rusage usage_before{};
+    int cpu_before = 0;
+    if (tracing) {
+        getrusage(RUSAGE_THREAD, &usage_before);
+        cpu_before = sched_getcpu();
+    }
     while (!stop_requested.load(std::memory_order_relaxed)) {
+        int woke = 0;
+        const std::int64_t wait_began = tracing ? now_ns() : 0;
         // While a host is sending, its frames time the loop; otherwise a 1 ms grid does.
         if (usb.attached && usb.tx != TxState::idle && usb.tx_holdoff == 0) {
             timespec timeout{0, static_cast<long>(kTickNs)};
-            ppoll(handles.capture_poll, static_cast<nfds_t>(handles.capture_poll_count), &timeout, nullptr);
+            woke = ppoll(handles.capture_poll, static_cast<nfds_t>(handles.capture_poll_count), &timeout, nullptr) > 0 ? 1 : 2;
             next = now_ns() + kTickNs;
         } else {
             timespec target{};
@@ -1759,13 +1839,42 @@ int main(int argc, char** argv) {
         }
         const std::int64_t now = now_ns();
         store_max(telemetry.gap_us_max, (now - last_wake) / 1000);
+        if (tracing) {
+            rusage usage{};
+            getrusage(RUSAGE_THREAD, &usage);
+            const int cpu = sched_getcpu();
+            if ((now - last_wake) / 1000 >= static_cast<std::int64_t>(options.gap_trace_us)) {
+                const std::uint64_t slot = telemetry.gaps.written.load(std::memory_order_relaxed);
+                GapEvent& g = telemetry.gaps.events[slot % telemetry.gaps.events.size()];
+                g.at_ns = now;
+                g.gap_us = (now - last_wake) / 1000;
+                g.wait_us = (now - wait_began) / 1000;
+                g.woke = woke;
+                g.stage_us[0] = (marks[0] - last_wake) / 1000;
+                g.stage_us[1] = (marks[1] - marks[0]) / 1000;
+                g.stage_us[2] = (marks[2] - marks[1]) / 1000;
+                g.stage_us[3] = (marks[3] - marks[2]) / 1000;
+                g.stage_us[4] = (service_ended - marks[3]) / 1000;
+                g.other_us = (wait_began - service_ended) / 1000;
+                g.cpu_before = cpu_before;
+                g.cpu_after = cpu;
+                g.voluntary = usage.ru_nvcsw - usage_before.ru_nvcsw;
+                g.involuntary = usage.ru_nivcsw - usage_before.ru_nivcsw;
+                g.minor_faults = usage.ru_minflt - usage_before.ru_minflt;
+                g.major_faults = usage.ru_majflt - usage_before.ru_majflt;
+                telemetry.gaps.written.store(slot + 1, std::memory_order_release);
+            }
+            usage_before = usage;
+            cpu_before = cpu;
+        }
         last_wake = now;
         telemetry.wakes.fetch_add(1, std::memory_order_relaxed);
-        if (!service(net, usb, handles, options, now, telemetry)) {
+        if (!service(net, usb, handles, options, now, telemetry, tracing ? marks : nullptr)) {
             // Not recoverable by design: a prepare here is the six-second dropout.
             exit_code = 3;
             break;
         }
+        if (tracing) service_ended = now_ns();
         if (options.stall_at != 0 && !stalled && now - started >= static_cast<std::int64_t>(options.stall_at) * 1000000000LL) {
             stalled = true;
             timespec stall{0, static_cast<long>(options.stall_ms) * 1000000L};

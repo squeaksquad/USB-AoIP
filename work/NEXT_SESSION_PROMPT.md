@@ -2,6 +2,55 @@
 
 ## Current pickup — 2026-10-13: the owner's stalls. Start here.
 
+**Added 2026-10-13 10:45 UTC: first read done; read RESULTS.md's last
+section before the paragraphs below.** The journal makes the stalls two
+kinds (seven of eleven at a gadget departure, four not) and a separate
+event of 3 to 6 ms, not the tail of the jitter. The gadget open and close
+are on the steward thread, not the loop: the "owner's own doing" paragraph
+below is wrong as written. A watcher runs on the Pi
+(`diag/owner-sched-watch.py`, log in `/dev/shm/owner-sched-watch-*.log`):
+after any minute whose `gap_us_max` is over 1.5 ms, read that minute's `S`
+lines and the `E` lines marked `<--` before anything else. `--gap-trace`
+is in `owner/main.cpp` (330c0e2e), not built. Next, with the operator's
+word: gadget restarts under the watcher, then a `--gap-trace` candidate
+(Pi build with the service stopped, `--gap-trace 1500 --log-every 1`,
+check it with `--stall-at`).
+
+**Added 2026-10-14 01:12 UTC, newest: INSTALLED by the operator**
+(`/etc/sysctl.d/90-usb16x16-compaction.conf`, 2db7c8b9). Owed: a boot (the
+value must read 0 afterwards, start check `state=ok`, then a fresh anchor
+and a noise probe), a day on it, the Ferrofish's Latency tab cleared and
+read, his ACCEPTED. The watchers do not survive a boot; restart
+`diag/owner-sched-watch.py` if a stall is to be caught.
+
+**Added 2026-10-14 01:10 UTC: thirteen clean hours at 0; the
+setting is staged as a file.** `sudo ./install-compaction-sysctl.sh` in
+`~/usb-16x16-work/dante-mode/service/` is the operator's (b975d110, file
+2db7c8b9, has a `rollback`). Check with `ls /etc/sysctl.d/` and `cat
+/proc/sys/vm/compact_unevictable_allowed`. Then a boot, a day on it, and
+his ACCEPTED.
+
+**Added 2026-10-13 11:58 UTC: the setting is at 0 (runtime) and
+the provocation is clean on two starts.** RESULTS.md's last section. The
+service runs on it since 11:56:58 UTC with both watchers. Next: read the
+journal for any minute over 1.5 ms since then
+(`cat /proc/sys/vm/compact_unevictable_allowed` first; a reboot puts 1
+back); after a clean day or so, stage `/etc/sysctl.d/` + installer +
+rollback for the operator. The paragraph below is the step before.
+
+**Added 2026-10-13 11:25 UTC: cause found for the idle kind, fix
+untried.** RESULTS.md's last section. The idle stalls are `kcompactd`
+migrating the owner's locked pages (provoked 3 of 3 with a traced
+candidate); the gadget-restart kind is a late timer at the kernel's gadget
+bind, one restart in four, harmless. Next is the operator's
+`echo 0 | sudo tee /proc/sys/vm/compact_unevictable_allowed`, then
+`provoke.sh` (in `~/usb-16x16-work/dante-mode/diag/stalls-20261013/`) on
+the candidate `usb16x16-dante-owner-gaptrace` with the service stopped:
+no `LOOPGAP` with `minor_faults` over 0 is the pass. Then hours on the
+service, then a sysctl.d file as an install with a rollback. Check
+`cat /proc/sys/vm/compact_unevictable_allowed` first: it is lost at a
+reboot.
+
 **State.** ACCEPTED 2026-10-13: the Dante service with both Inferno knobs
 at 1 ms and the return queue at 96 is the point of record, 343,
 `daw_timeline` 531 (11.062 ms). Handoff tail; RESULTS.md's last two

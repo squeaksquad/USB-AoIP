@@ -1,0 +1,10 @@
+MARK quiet-end 11:52:07.774 owner_t=t=61.0
+MARK build-begin 11:52:07.778 owner_t=t=61.0
+MARK build-end 11:52:14.917 owner_t=t=69.0
+MARK alloc-begin 11:52:44.922 owner_t=t=99.1
+MARK alloc-end 11:52:45.189 owner_t=t=99.1
+MARK cat-begin 11:53:15.208 owner_t=t=129.1
+MARK cat-end 11:53:21.007 owner_t=t=135.1
+MARK end 11:53:51.013 owner_t=t=165.1
+/dev/shm/dante-owner-20261013T115105Z.log
+DONE

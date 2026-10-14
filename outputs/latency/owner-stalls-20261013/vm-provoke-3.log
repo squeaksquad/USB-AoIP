@@ -1,0 +1,96 @@
+11:53:56.936 unevictable_pgs_culled=+4
+11:53:56.986 unevictable_pgs_culled=+2
+11:53:57.036 unevictable_pgs_culled=+1
+11:53:57.137 unevictable_pgs_culled=+2
+11:53:59.444 compact_daemon_wake=+1
+11:53:59.946 pgmigrate_success=+882 pgmigrate_fail=+11 compact_isolated=+2638 compact_migrate_scanned=+6144
+11:54:04.462 unevictable_pgs_culled=+5
+11:54:24.030 pgmigrate_success=+121 pgmigrate_fail=+13 compact_isolated=+945 compact_migrate_scanned=+12288
+11:54:28.094 pgmigrate_success=+94 pgmigrate_fail=+13 compact_isolated=+624 compact_migrate_scanned=+10240
+11:54:32.209 pgmigrate_success=+34 pgmigrate_fail=+11 compact_isolated=+912 compact_migrate_scanned=+6144
+11:54:56.643 pgmajfault=+16
+11:54:56.693 pgmajfault=+24
+11:54:56.743 pgmajfault=+19
+11:54:56.794 pgmigrate_success=+97 pgmigrate_fail=+12 compact_isolated=+899 compact_migrate_scanned=+12288 pgmajfault=+20
+11:54:56.844 pgmajfault=+4
+11:54:56.894 pgmajfault=+1
+11:54:57.196 pgmajfault=+1
+11:54:57.296 pgmajfault=+4
+11:54:57.347 pgmajfault=+20
+11:54:57.397 pgmajfault=+20
+11:54:57.447 pgmajfault=+10
+11:54:57.497 pgmajfault=+13
+11:54:57.548 pgmajfault=+4
+11:54:57.598 pgmajfault=+2
+11:54:57.648 pgmajfault=+2
+11:54:58.000 pgmajfault=+1
+11:54:58.403 pgmajfault=+1
+11:54:58.453 pgmajfault=+6
+11:54:58.503 pgmajfault=+4
+11:54:58.554 pgmajfault=+13
+11:54:58.604 pgmajfault=+4
+11:54:58.654 pgmajfault=+3
+11:54:58.704 pgmajfault=+1
+11:54:58.755 pgmajfault=+1
+11:54:58.855 pgmajfault=+11
+11:54:58.906 pgmajfault=+7
+11:54:59.207 pgmajfault=+1
+11:54:59.409 pgmajfault=+1
+11:54:59.459 pgmajfault=+4
+11:54:59.509 pgmajfault=+2
+11:55:00.163 pgmajfault=+1
+11:55:00.415 pgmajfault=+1
+11:55:00.465 pgmajfault=+1
+11:55:00.868 pgmigrate_success=+487 pgmigrate_fail=+10 compact_isolated=+3196
+11:55:00.918 pgmigrate_success=+658 pgmigrate_fail=+1 compact_migrate_scanned=+8192 pgmajfault=+10
+11:55:00.969 pgmajfault=+7
+11:55:01.019 pgmajfault=+1
+11:55:02.779 pgmajfault=+1
+11:55:02.980 pgmajfault=+2
+11:55:03.181 pgmajfault=+5
+11:55:04.036 pgmajfault=+1
+11:55:04.287 pgmajfault=+5
+11:55:04.338 pgmajfault=+10
+11:55:04.489 pgmajfault=+2
+11:55:04.991 compact_daemon_wake=+1
+11:55:05.493 pgmigrate_success=+809 pgmigrate_fail=+10 compact_isolated=+1867 compact_migrate_scanned=+6144
+11:55:15.177 pgmajfault=+1
+11:55:17.234 pgmajfault=+3
+11:55:28.573 pgmajfault=+1
+11:55:29.577 pgmigrate_success=+164 pgmigrate_fail=+12 compact_isolated=+369 compact_migrate_scanned=+10240
+11:55:33.641 pgmigrate_success=+126 pgmigrate_fail=+11 compact_isolated=+747 compact_migrate_scanned=+10240
+11:55:34.495 pgmajfault=+1
+11:55:34.597 pgmajfault=+11
+11:55:34.649 compact_daemon_wake=+1 pgmajfault=+652
+11:55:34.700 pgmajfault=+823
+11:55:34.750 pgmajfault=+2
+11:55:35.051 pgmajfault=+3
+11:55:35.152 compact_daemon_wake=+1
+11:55:35.202 pgmajfault=+5
+11:55:36.055 pgmajfault=+5
+11:55:36.205 pgmajfault=+10
+11:55:37.008 pgmajfault=+18
+11:55:37.059 pgmajfault=+4
+11:55:37.360 pgmajfault=+23
+11:55:37.410 pgmajfault=+19
+11:55:37.461 pgmajfault=+25
+11:55:37.762 compact_daemon_wake=+1
+11:55:38.264 pgmigrate_success=+517 pgmigrate_fail=+11 compact_isolated=+2186 compact_migrate_scanned=+10240
+11:55:49.904 pgmajfault=+4
+11:55:49.955 pgmajfault=+2
+11:55:52.212 pgmajfault=+3
+11:55:52.413 pgmajfault=+4
+11:55:56.076 pgmajfault=+8
+11:55:57.581 pgmajfault=+1
+11:56:02.347 compact_daemon_wake=+1
+11:56:02.849 pgmigrate_success=+273 pgmigrate_fail=+13 compact_isolated=+783 compact_migrate_scanned=+14336
+11:56:06.414 compact_daemon_wake=+1
+11:56:06.716 pgmajfault=+6
+11:56:06.918 pgmigrate_success=+550 pgmigrate_fail=+10 compact_isolated=+1578
+11:56:06.969 pgmigrate_success=+190 pgmigrate_fail=+1 compact_migrate_scanned=+8192 pgmajfault=+1
+11:56:10.534 pgmigrate_success=+33 pgmigrate_fail=+10 compact_isolated=+78 compact_migrate_scanned=+4317
+11:56:10.735 pgmajfault=+9
+11:56:22.224 pgmajfault=+1
+11:56:27.341 pgmajfault=+1
+11:56:28.496 pgmajfault=+1
+11:56:35.119 pgmigrate_success=+359 pgmigrate_fail=+12 compact_isolated=+1265 compact_migrate_scanned=+12288

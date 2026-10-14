@@ -1,0 +1,9 @@
+START 1 usb16x16-dante-owner-gaptrace /dev/shm/dante-owner-20261013T111355Z.log gaps=0 resyncs=0
+START 2 usb16x16-dante-owner-gaptrace /dev/shm/dante-owner-20261013T111434Z.log gaps=0 resyncs=0
+START 3 usb16x16-dante-owner-gaptrace /dev/shm/dante-owner-20261013T111514Z.log gaps=0 resyncs=0
+START 4 usb16x16-dante-owner-gaptrace /dev/shm/dante-owner-20261013T111553Z.log gaps=0 resyncs=0
+START 5 usb16x16-dante-owner-gaptrace /dev/shm/dante-owner-20261013T111632Z.log gaps=0 resyncs=0
+START 6 usb16x16-dante-owner-gaptrace /dev/shm/dante-owner-20261013T111712Z.log gaps=0 resyncs=0
+START 7 usb16x16-dante-owner-gaptrace /dev/shm/dante-owner-20261013T111751Z.log gaps=0 resyncs=0
+START 8 usb16x16-dante-owner-gaptrace /dev/shm/dante-owner-20261013T111830Z.log gaps=0 resyncs=0
+DONE

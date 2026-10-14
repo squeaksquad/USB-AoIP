@@ -4677,3 +4677,200 @@ before.
 new session:** the owner's stalls; the start-drawn loss of return packets
 that the start check works around; a boot, a preset and the fault paths
 at these settings.
+
+## The owner's stalls, first read: two kinds by the journal, a watcher running, a gap trace written (2026-10-13 10:37-10:45 UTC)
+
+Nothing was stopped, restarted or built. The service is on its 01:31:56
+UTC start (PID 154810, `state=ok`), no resync, worst loop gap 1,058 us.
+
+**The record, from the unit's journal since 2026-10-11** (2,516 status
+lines, 42 hours of service minutes; candidates do not log there). The
+minute's worst gap is 1.0 to 1.1 ms in 2,499 of them, 1.2 to 1.4 ms in 5,
+1.98 ms once, and 3.2 to 6.0 ms in 11. Between 1.4 and 3.2 ms there is one
+reading. A stall is therefore not the tail of the ordinary jitter; it is a
+separate event with a size of its own, about 2.2 to 3.5 ms on top of the
+millisecond (the kernel's tick is 4 ms, `CONFIG_HZ=250`; noted, not
+argued from).
+
+| Kind | Count | When (UTC) |
+|---|---|---|
+| At a gadget departure: the resync is 1 s before the next `USBOPEN` | 7 | 10-11 18:14:58, 18:20:09, 18:58:49; 10-12 01:08:40, 12:06:20, 15:42:16, 23:06:15 |
+| No gadget event | 4 | 10-11 07:31 (5,992 us, 14 s into a start); 10-12 06:26:05 (idle); 15:43:14 (62 s into a start); 20:58:49 (noise run) |
+
+**Corrections to the pickup prompt.** (1) The gadget's PCMs are opened and
+closed by the steward thread, not the loop (`steward_entry`); what the loop
+itself does to a gadget handle is `snd_pcm_drop` / `prepare` / `start` on a
+fault. At 23:06:15 the order in the journal is the steward's `USBCLOSE`
+(.657), the kernel rebinding the gadget (.669), Inferno's overrun (.672):
+the stall ends within 15 ms after the close and the rebind, so the close,
+the kernel's teardown and the loop's own fault path are all still
+candidates. (2) No owner thread is pinned: all eight float over CPUs 0 to
+3 (the loop was on 0, then 1, then 2 within a minute), and softirq time is
+accounted almost wholly to CPU 0 (eth0 and the gadget's interrupts are
+both counted there). (3) The loop thread had 7 involuntary switches and 0
+major faults in nine hours, and 72 ms of runqueue wait in all, about 2 us
+a wake.
+
+**Running since 10:40:14 UTC: `diag/owner-sched-watch.py`** (25ecce38,
+`~/usb-16x16-work/dante-mode/diag/`, PID 198050, nice 19, log
+`/dev/shm/owner-sched-watch-20261013T1040Z.log`, about 20 MB a day, stops
+itself at 150 MB). Once a second it reads each owner thread's
+`schedstat` and last CPU and the per-CPU interrupt time, and on any second
+in which a real-time thread waited 1 ms or more for a CPU it adds the
+interrupt and softirq counts either side. For the next stall it says which
+second, which thread, and whether the loop was runnable and kept off a CPU
+(its wait jumps by the gap) or blocked or woken late (its wait does not
+move). With it running the service's minutes read 1,021 to 1,058 us, as
+before. Stop it with `pkill -f owner-sched-watch`.
+
+**Written, not built: `--gap-trace US` in `owner/main.cpp`** (330c0e2e;
+off by default, and then the loop makes no new call). Every wake US or
+more after the last is printed at once as `LOOPGAP`: time to the
+microsecond, how long the wait itself took and whether frames or the
+timeout ended it, the time in each stage of the wake before (Inferno
+capture, Inferno playback, gadget transmit, gadget receive, the rest), the
+CPU either side, and the thread's switches and page faults over the gap.
+That splits what the watcher cannot: blocked inside one of the loop's own
+calls, and in which, against a wait that returned late. Parsed clean on
+the Mac against a throwaway ALSA stub (clang, `-Wall -Wextra -Wpedantic`);
+the Pi build needs the service stopped. `--stall-at` lands in `other_us`.
+
+**What would settle the gadget kind in a few minutes:** gadget restarts
+under the watcher (about one in three stalls), and under a `--gap-trace`
+candidate. Each costs a silence and a new anchor; not done without the
+operator's word. The other kind is four events in 42 hours and needs the
+watcher left running.
+
+## The stalls are three things; the one that strikes at idle is page migration by `kcompactd` (2026-10-13 10:50-11:25 UTC)
+
+With the operator's word to restart the gadget and stop the service.
+Evidence on the Pi in `~/usb-16x16-work/dante-mode/diag/stalls-20261013/`
+(not yet copied to the Mac: the service is carrying audio).
+
+**1. Eight gadget restarts on the service under the watcher
+(10:50-10:59).** One stall, at the seventh (10:57:31, 3,442 us, a
+37-frame resync). In that second the loop thread waited 14 us in all for a
+CPU and was not switched out involuntarily: it was not kept off a CPU by
+another thread. Blocked, or woken late.
+
+**2. The traced candidate** (owner 29e62371 from source 330c0e2e, built
+with the service stopped; `--rx-queue 96 --log-every 1 --gap-trace 1500`,
+no meter file). The injected stall reads as it should (`other_us=5003`).
+Twenty-four gadget restarts 20 s apart gave six stalls, all alike:
+`woke=grid wait_us=` 3,309 to 3,935 with nothing in any stage, no page
+fault, no involuntary switch, on CPU 1 once and CPU 3 five times. The
+gadget is away, the loop is on its 1 ms `clock_nanosleep`, and the sleep
+returns 3.3 to 3.9 ms late. Against the kernel's own stamps each of the
+six ends at the same offset from `dwc2 ... bound driver` to within 20 ms.
+So the gadget kind is a late timer on the loop's CPU at the moment the
+kernel binds the gadget, about one restart in four (7 of 32 today). Not
+the owner's doing and not Inferno's. The likeliest reading, not shown:
+the bind holds interrupts off for those milliseconds on whichever CPU
+runs it, and one time in four that is the loop's. The console is not it
+(`kernel.printk` console level 3, the bind's lines are not printed to the
+serial port). It only ever happens with the gadget already gone.
+
+**3. The same start had four stalls of another kind in its first 15 s**
+(t = 1.74, 1.75, 14.04, 14.04): 2.0 to 4.4 ms inside a call on the Inferno
+PCM (`capture_us` three times, `usb_tx_us` once), each with one minor page
+fault and one extra voluntary sleep on the loop thread. The loop slept in
+a page fault, on memory that is locked. Eight more starts of 35 s had none
+(`starts-A.log`), so it is not a path every start takes; that first start
+was 16 s after a compile.
+
+**4. Provoked.** The traced candidate again, quiet for 60 s (nothing),
+then a compile, a 450 MB allocation freed, and a read of every shared
+library, with `/proc/vmstat`'s migration counters polled at 20 Hz
+(`diag/vmstat-watch.py`):
+
+| Stall (owner t) | Gap | Where | Minor faults | `kcompactd` burst at the same offset |
+|---|---|---|---|---|
+| 102.228, 102.235 | 6,208, 6,009 us | capture, gadget rx, playback | 3, 3 | 11:21:15.93, 1,664 pages migrated |
+| 122.698 | 2,506 us | in `ppoll` | 1 | 11:21:36.40, 1,103 pages |
+| 128.853 | 6,610 us | in `ppoll` | 1 | 11:21:42.57, 1,467 pages |
+
+Three events, three bursts, one constant offset between the two clocks to
+within 50 ms; resyncs of 74 and 188 frames. The compile itself (7 s)
+provoked nothing. **The mechanism:** `vm.compact_unevictable_allowed` is 1
+and `vm.compaction_proactiveness` 20 on this kernel, so `kcompactd` moves
+the owner's locked pages like any others; a thread that touches a page
+while it is being moved takes a fault and sleeps until the move is done,
+and `kcompactd` runs at ordinary priority. `mlockall` keeps pages in
+memory, not in place. This is the kind with no gadget event: idle
+(06:26), 13 s after a `tcpdump` ended (20:58), early in a start (07:31,
+15:43). The Pi has 990 MB in four fake NUMA nodes, and small bursts of
+compaction run every few seconds even at idle.
+
+**Not yet shown:** that turning it off removes them. The setting is the
+kernel's own for this case (PREEMPT_RT kernels default it to 0):
+`vm.compact_unevictable_allowed=0`, root's to write, runtime and
+reversible. The test is `provoke.sh` again with it at 0: no `LOOPGAP` with
+a page fault. Whether CMA allocation (which moves pages regardless) also
+reaches the owner is then seen or not.
+
+**Also written:** `--stack-prefault KB` in `owner/main.cpp` (41cfd348,
+built as 99947ab5, off by default), from a first guess that the fault was
+stack growth; the eight clean starts and the provocation say it is not
+that, and it has not been run. `diag/owner-sched-watch.py` now prints the
+interrupt counts every second (about 60 MB a day).
+
+**State at 11:25 UTC.** Service started 11:23:57, restarted once by the
+start check, `state=ok`; no fresh anchor taken, so the level is this
+start's draw and unread. Both watchers run on it
+(`/dev/shm/owner-sched-watch-20261013T1125Z.log`,
+`/dev/shm/vmstat-watch-service.log`).
+
+## With `vm.compact_unevictable_allowed` at 0 the provocation makes no stall, twice (2026-10-13 11:50-11:58 UTC)
+
+The operator wrote 0 to `/proc/sys/vm/compact_unevictable_allowed` (runtime;
+`compaction_proactiveness` still 20). The same `provoke.sh` on the same
+candidate (29e62371, `--gap-trace 1500`), two starts:
+
+| Run | `LOOPGAP` lines | Resyncs | Pages `kcompactd` migrated in the run | Largest burst |
+|---|---|---|---|---|
+| Before, setting 1 (11:19) | 4 in 3 events, all with page faults | 2 | about 7,200 | 1,664 |
+| Setting 0 (11:51) | 0 | 0 | 4,583 | 1,272 |
+| Setting 0 (11:53) | 0 | 0 | 5,394 | 882 |
+
+Compaction still ran and still moved pages by the thousand; it no longer
+reached the loop. Said plainly: three runs in all, one against two, and
+the later runs' provocation was somewhat lighter (the library read was
+cached: 4 to 6 s against 10). It agrees with the mechanism and does not
+yet prove the rate at idle; that is hours on the service with the setting
+in place. On the service between 11:25 and 11:50, setting still 1 and
+idle: 28 bursts, 409 pages, no stall.
+
+**State at 11:58 UTC.** Service started 11:56:58, `state=ok` with no
+restart by the start check, gadget restarted 11:58:03 for an anchor (that
+restart drew the late-timer kind: a 20-frame resync with the gadget away,
+3 of today's 33). Level unread. Setting 0, runtime only: a reboot puts 1
+back. Watchers on the service: `/dev/shm/sched-20261013T1158Z.log`,
+`/dev/shm/vm-service-1158Z.log`. Owed: the hours; then a file in
+`/etc/sysctl.d/` as an install with its rollback; the logs in
+`~/usb-16x16-work/dante-mode/diag/stalls-20261013/` to the Mac.
+
+## Thirteen hours on the service at 0 without a stall; the setting staged as a file (2026-10-14 01:07-01:10 UTC)
+
+The service's 11:56:58 UTC start, read at 01:07 UTC on the 14th: 790
+status minutes, worst loop gap 3,076 us and that at the 11:58:03 anchor
+restart (the gadget-bind kind); every other minute about 1.1 ms or under.
+No resync, re-prime or fault after the anchor, `NRestarts` 0, no hole
+counted either way. `kcompactd` migrated 7,378 pages in 1,663 bursts over
+the same hours. The loop thread's worst wait for a CPU in any second was
+169 us. The operator's Latency tab for the Pi's receive side over that
+start (13:04:34): average 406 us, peak 1.1 msec (two packets at 1.0 to
+1.1), 0 late. The Ferrofish's tab (23:30:49, so it spans the morning's
+provoked stalls and restarts as well) read peak 5.5 msec and 4 late; it
+read 708 us and 0 late at 10:30 before the tests, and wants clearing and a
+fresh read before it says anything about the setting.
+
+Thirteen hours against a rate of four in 42 is encouraging, not decisive.
+
+**STAGED** in `~/usb-16x16-work/dante-mode/service/` and
+`work/dante-mode/service/`: `90-usb16x16-compaction.conf` (2db7c8b9, the
+one line `vm.compact_unevictable_allowed = 0`) and
+`install-compaction-sysctl.sh` (b975d110): installs the file to
+`/etc/sysctl.d/`, applies it, restarts nothing; refuses if another sysctl
+file sets the key; `rollback` removes the file and writes 1 back. Tried
+only as far as its refusal without sudo. Until it is installed the 0 is
+the operator's runtime write and a reboot undoes it.

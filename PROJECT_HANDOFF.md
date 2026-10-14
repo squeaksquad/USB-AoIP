@@ -13440,3 +13440,80 @@ Open and deferred by the operator: the owner's stalls (his next session);
 the start-drawn loss of return packets, worked around by the start check;
 a boot, a preset and the fault paths at these settings. The AES67 rollback
 still needs the Ferrofish back in AES67 mode and rebooted.
+
+**FOUND 2026-10-13 10:37-10:45 UTC: the owner's stalls are two kinds, and
+they are events of their own size, not jitter.** Record
+`work/dante-mode/RESULTS.md`, last section. In 42 hours of the unit's
+status lines the minute's worst loop gap is under 1.4 ms in all but 12:
+one of 1.98 ms and eleven of 3.2 to 6.0 ms. Seven of the eleven are at a
+gadget departure (resync one second before the next `USBOPEN`); four have
+no gadget event (one idle, one under signal, two within 62 s of a start).
+The gadget's PCMs are opened and closed on the steward thread, not the
+loop, so the pickup prompt's first suspect is wrong as written; no owner
+thread is pinned, and softirq time is on CPU 0. Nothing was stopped or
+built. Running on the Pi since 10:40:14 UTC, unprivileged and at nice 19:
+`work/dante-mode/diag/owner-sched-watch.py` (25ecce38), a once-a-second
+read of the owner's per-thread scheduler counters into
+`/dev/shm/owner-sched-watch-20261013T1040Z.log`; the service's gaps are
+unchanged with it (1,021 to 1,058 us). Written and not built:
+`--gap-trace` in `owner/main.cpp` (330c0e2e, off by default), which prints
+what each late wake was made of. Owed: an idle stall caught by the watcher
+(hours to days); gadget restarts under it and a `--gap-trace` candidate,
+both the operator's to allow.
+
+**ROOT CAUSE 2026-10-13 10:50-11:25 UTC, fix not yet tried: the owner's
+idle stalls are `kcompactd` moving its locked pages.** Record
+`work/dante-mode/RESULTS.md`, last section; evidence on the Pi in
+`~/usb-16x16-work/dante-mode/diag/stalls-20261013/`. A traced candidate
+(owner 29e62371, `--gap-trace 1500`) shows two mechanisms. At a gadget
+restart, one time in four (7 of 32), the loop's 1 ms sleep returns 3.3 to
+3.9 ms late at the instant the kernel binds the gadget: a late timer, no
+fault, nothing in the owner or Inferno, and only with the gadget already
+gone. The other kind is the loop asleep in a minor page fault for 2 to
+6.6 ms; provoked three times out of three by memory activity beside the
+candidate, each at a `kcompactd` burst of over 1,000 migrated pages.
+`vm.compact_unevictable_allowed` is 1, so compaction moves locked pages
+and a real-time thread touching one waits for an ordinary-priority kernel
+thread. Owed: the operator's `vm.compact_unevictable_allowed=0` (runtime),
+then the provocation again; if clean, hours on the service, then a
+persistent sysctl file as an install with its rollback. Service restarted
+11:23:57 UTC (start check `state=ok`), no fresh anchor, watchers running.
+
+**MEASURED 2026-10-13 11:50-11:58 UTC: with `vm.compact_unevictable_allowed`
+at 0 the provocation makes no stall, on two starts.** Record
+`work/dante-mode/RESULTS.md`, last section. Set at runtime by the operator
+(a reboot restores 1). Same candidate and script as the run that made
+three stall events: 0 `LOOPGAP`, 0 resyncs on both starts, with
+`kcompactd` still migrating 4,583 and 5,394 pages. Two runs against one,
+the later provocation somewhat lighter; the idle rate is not shown until
+the service has hours on it. Service restarted 11:56:58 UTC, start check
+`state=ok`, anchor 11:58:03, level unread, setting 0, both watchers
+running. Owed: hours on the service at 0; then the setting as a
+`/etc/sysctl.d/` file by an installer with a rollback, and the operator's
+ACCEPTED; the gadget-bind late timer (one restart in four, gadget already
+away) is left as found.
+
+**STAGED 2026-10-14 01:10 UTC: `vm.compact_unevictable_allowed = 0` as a
+file, not installed; thirteen hours at 0 without a stall.** Record
+`work/dante-mode/RESULTS.md`, last section. On the 11:56:58 UTC start,
+with the runtime setting: 790 minutes, no loop gap over about 1.1 ms after
+the anchor restart, no resync, fault or hole, `kcompactd` moving 7,378
+pages meanwhile. Staged on the Pi in `~/usb-16x16-work/dante-mode/service/`:
+`90-usb16x16-compaction.conf` (2db7c8b9) and `install-compaction-sysctl.sh`
+(b975d110; `rollback` removes the file and writes 1 back; restarts
+nothing). Owed: the operator's `sudo ./install-compaction-sysctl.sh`; a
+boot to see the value come back as 0; a day or more on it; a cleared
+Ferrofish Latency tab read again; then his ACCEPTED.
+
+**INSTALLED 2026-10-14 about 01:12 UTC, by the operator:
+`/etc/sysctl.d/90-usb16x16-compaction.conf` (2db7c8b9),
+`vm.compact_unevictable_allowed = 0`.** By `install-compaction-sysctl.sh`
+(b975d110); `rollback` removes it and writes 1 back. Read after it: the
+value 0, the service untouched on its 11:56:58 UTC start (793 minutes,
+worst loop gap since the anchor 1,059 us, no resync). Evidence copied to
+`outputs/latency/owner-stalls-20261013/` (the traced candidate's logs, the
+provocation runs before and after, the watchers' logs). Owed: a boot to
+see 0 come back and the endpoint with it; a day or more; the Ferrofish's
+Latency tab cleared and read again; his ACCEPTED. Not installed and not
+proposed: the `--gap-trace` owner (candidate 29e62371 on the Pi; the
+service's owner is still 62879558).
