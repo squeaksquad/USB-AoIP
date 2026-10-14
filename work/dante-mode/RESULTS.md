@@ -4899,3 +4899,10 @@ One reading; not chased.
 Watchers restarted on this boot (`/dev/shm/sched-20261014T0115Z.log`,
 `/dev/shm/vm-service-20261014T0115Z.log`); `diag/vmstat-watch.py` is now
 staged beside the other on the Pi. The day's count starts at 01:14:18.
+
+**Latency tabs cleared by the operator, about 01:41 UTC on 2026-10-14**
+(both the Pi's and the Ferrofish's histograms). From here they cover only
+the undisturbed run on the 01:14:18 start and its 01:20:16 anchor: read
+them after a day. At the clear: setting 0, `NRestarts` 0, 21 minutes since
+the anchor with a worst loop gap of 1,067 us and no resync, both watchers
+running.
