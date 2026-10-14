@@ -13547,3 +13547,21 @@ survive: Dante Controller had opened a blank "Configure Dante Interfaces
 in unmanaged mode" dialog on another Space at each launch, which blocked
 every click in its main window; Escape closed it at about 10:49 UTC, and
 the histograms restarted from then. Their read is now owed from 10:49.
+
+**MEASURED 2026-10-14 ~21:00 UTC: the day on the installed setting is
+clean, on the Pi and on both Latency tabs.** Operator's tabs over
+10:11 (from ~10:49 UTC): the Pi receiving from the Ferrofish, peak 583 us,
+average 413 us, 0 late; the Ferrofish receiving from the Pi, peak 666 us,
+average 568 us, 0 late. The Pi since the 01:20:16 anchor: 1,179 status
+minutes, worst loop gap 1,093 us, no resync, `NRestarts` 0, fault and hole
+counters unchanged since the minute after the anchor; `kcompactd` migrated
+2,497 pages in 362 bursts meanwhile. With the 13 h on the runtime setting
+before the boot, about 33 h without an idle stall, against a rate of about
+one in ten hours before. **Seen on the way, not a fault:** from about
+17:00 UTC Inferno's `flows RX` thread (FIFO 80) moved from CPU 1 to CPU 0,
+where the eth0 and gadget interrupts and their softirqs land, and its
+runqueue wait went from about 0 to about 400 us a second (worst 1.9 ms in
+one second, summed over 6,000 wakes); no loop gap, hole or late packet
+followed. Pinning the owner's threads off CPU 0 would remove it; not
+proposed on this evidence. Awaiting the operator's ACCEPTED of the sysctl
+file.

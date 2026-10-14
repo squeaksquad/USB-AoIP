@@ -16,7 +16,13 @@ word: gadget restarts under the watcher, then a `--gap-trace` candidate
 (Pi build with the service stopped, `--gap-trace 1500 --log-every 1`,
 check it with `--stall-at`).
 
-**Added 2026-10-14 01:27 UTC, newest: the boot is done.** Value 0 after
+**Added 2026-10-14 21:00 UTC, newest: the day is clean** (Pi: 1,179
+minutes, worst gap 1,093 us, no resync; both Latency tabs 0 late, peaks
+583 / 666 us). Awaiting only the operator's ACCEPTED of the sysctl file.
+Noted, not a fault: Inferno's `flows RX` drifted onto CPU 0 at ~17:00 UTC
+and waits ~400 us/s behind the interrupts there (RESULTS.md, last entry).
+
+**Added 2026-10-14 01:27 UTC: the boot is done.** Value 0 after
 it, service up by itself since 01:14:18 UTC, 331 / `daw_timeline` 519 on
 the 01:20:16 anchor (the first anchor after the boot read 389, unexplained).
 Owed now: read the journal for any minute over 1.5 ms since 01:21 UTC (a
