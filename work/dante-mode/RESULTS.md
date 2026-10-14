@@ -4935,3 +4935,12 @@ one second, summed over 6,000 wakes); no loop gap, hole or late packet
 followed. Pinning the owner's threads off CPU 0 would remove it; not
 proposed on this evidence. Awaiting the operator's ACCEPTED of the sysctl
 file.
+
+## ACCEPTED 2026-10-14: `vm.compact_unevictable_allowed = 0` is part of the Dante point of record
+
+By the operator, about 21:05 UTC, on the evidence of the sections above:
+the mechanism provoked and then not, 13 h on the runtime setting, a boot
+and a clean day on the installed file, both Latency tabs 0 late. File
+2db7c8b9, installer b975d110, rollback `install-compaction-sysctl.sh
+rollback`. The rest of the point of record is the 2026-10-13 set,
+unchanged; level 331 / `daw_timeline` 519 on the 01:20:16 anchor.

@@ -13565,3 +13565,24 @@ one second, summed over 6,000 wakes); no loop gap, hole or late packet
 followed. Pinning the owner's threads off CPU 0 would remove it; not
 proposed on this evidence. Awaiting the operator's ACCEPTED of the sysctl
 file.
+
+**ACCEPTED 2026-10-14 (operator, about 21:05 UTC): `vm.compact_unevictable_allowed
+= 0` is part of the Dante point of record.** Record
+`work/dante-mode/RESULTS.md`, last sections. `/etc/sysctl.d/90-usb16x16-compaction.conf`
+(2db7c8b9) installed by `work/dante-mode/service/install-compaction-sysctl.sh`
+(b975d110). It fixes the owner's idle stalls (2 to 6.6 ms, a resync and
+tens of milliseconds of silence, about one in ten hours): `kcompactd` no
+longer moves the owner's locked pages, so the loop no longer sleeps in a
+page fault behind it. Behind it: provoked three times of three before,
+none on two starts after; 13 h on the runtime setting and a day after the
+boot with no idle stall (worst loop gap 1,093 us), the setting back as 0
+after a boot, both Latency tabs 0 late over ten hours (peaks 583 / 666
+us). Level in service 331 / `daw_timeline` 519 (10.812 ms) on the
+2026-10-14 01:20:16 anchor. Everything else in the point of record is the
+2026-10-13 ACCEPTED set, unchanged (owner 62879558, plugin 0ee61f2f,
+Inferno config a91f5766, `RX_QUEUE=96`, unit 27b68877, eth0 drop-in,
+start check). Rollbacks, newest first: `install-compaction-sysctl.sh
+rollback`, then those of the 2026-10-13 entry. Left as found: the late
+timer at a gadget restart (about one in four, gadget already away);
+Inferno's `flows RX` on CPU 0 behind the interrupts (no effect seen). Not
+installed: the `--gap-trace` / `--stack-prefault` owner source.

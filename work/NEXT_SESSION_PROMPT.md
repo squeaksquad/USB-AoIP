@@ -1,6 +1,6 @@
 # Next-session pickup prompt
 
-## Current pickup — 2026-10-13: the owner's stalls. Start here.
+## Current pickup — 2026-10-13: the owner's stalls (closed 2026-10-14). Start here.
 
 **Added 2026-10-13 10:45 UTC: first read done; read RESULTS.md's last
 section before the paragraphs below.** The journal makes the stalls two
@@ -16,7 +16,14 @@ word: gadget restarts under the watcher, then a `--gap-trace` candidate
 (Pi build with the service stopped, `--gap-trace 1500 --log-every 1`,
 check it with `--stall-at`).
 
-**Added 2026-10-14 21:00 UTC, newest: the day is clean** (Pi: 1,179
+**ACCEPTED 2026-10-14 ~21:05 UTC, newest: the sysctl file is part of the
+Dante point of record; the owner's stalls are closed.** Handoff tail. The
+idle kind was `kcompactd`; the gadget-restart late timer is left as found.
+Next work is the operator's choice; still open from before: the
+start-drawn loss of return packets (start check is the stopgap), a preset
+and the fault paths at the accepted settings, `--tx-lead` under 128.
+
+**Added 2026-10-14 21:00 UTC: the day is clean** (Pi: 1,179
 minutes, worst gap 1,093 us, no resync; both Latency tabs 0 late, peaks
 583 / 666 us). Awaiting only the operator's ACCEPTED of the sysctl file.
 Noted, not a fault: Inferno's `flows RX` drifted onto CPU 0 at ~17:00 UTC
