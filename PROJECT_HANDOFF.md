@@ -13536,3 +13536,14 @@ the undisturbed run on the 01:14:18 start and its 01:20:16 anchor: read
 them after a day. At the clear: setting 0, `NRestarts` 0, 21 minutes since
 the anchor with a worst loop gap of 1,067 us and no resync, both watchers
 running.
+
+**Night on the installed setting, read 2026-10-14 10:51 UTC: clean.**
+Since the 01:20:16 anchor: 570 status minutes, worst loop gap 1,093 us
+(06:36 UTC), no resync, `NRestarts` 0, setting 0. The fault and hole
+counters last moved in the minute after that anchor (one 49-frame hole
+each way, the gadget restart's own transient; the noise probe at 01:20:28
+was clean) and have not moved since. The Latency tabs' history did not
+survive: Dante Controller had opened a blank "Configure Dante Interfaces
+in unmanaged mode" dialog on another Space at each launch, which blocked
+every click in its main window; Escape closed it at about 10:49 UTC, and
+the histograms restarted from then. Their read is now owed from 10:49.
