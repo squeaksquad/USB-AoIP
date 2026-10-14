@@ -13517,3 +13517,15 @@ see 0 come back and the endpoint with it; a day or more; the Ferrofish's
 Latency tab cleared and read again; his ACCEPTED. Not installed and not
 proposed: the `--gap-trace` owner (candidate 29e62371 on the Pi; the
 service's owner is still 62879558).
+
+**MEASURED 2026-10-14 01:14-01:27 UTC: a boot on the installed sysctl
+file.** Record `work/dante-mode/RESULTS.md`, last section; evidence
+`outputs/latency/boot-sysctl-*`. `vm.compact_unevictable_allowed` reads 0
+after the boot; the service came up by itself (01:14:18 UTC, start check
+`state=ok`, no restart). Two anchors, noise probe clean on both: 389
+(`daw_timeline` 577, 12.021 ms) on the first gadget restart after the
+boot, 331 (`daw_timeline` 519, 10.812 ms) on the second; the band was 322
+to 353, so the first is high and unexplained, one reading. Level in
+service: 331 on the 01:20:16 anchor. Owed: a day or more without a stall
+on this boot (watchers running), the Ferrofish's Latency tab cleared and
+read, the operator's ACCEPTED.

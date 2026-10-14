@@ -4874,3 +4874,28 @@ one line `vm.compact_unevictable_allowed = 0`) and
 file sets the key; `rollback` removes the file and writes 1 back. Tried
 only as far as its refusal without sudo. Until it is installed the 0 is
 the operator's runtime write and a reboot undoes it.
+
+## Installed, and a boot on it: the value comes back 0 and the endpoint with it (2026-10-14 01:12-01:27 UTC)
+
+The operator ran `install-compaction-sysctl.sh` (file 2db7c8b9 in
+`/etc/sysctl.d/`) and rebooted. After the boot:
+`vm.compact_unevictable_allowed` 0; the service started 01:14:18 UTC,
+start check `state=ok` at 01:15:23 with no restart (rate 6,014);
+`NRestarts` 0; neighbour entries REACHABLE.
+
+| Anchor (gadget restart) | Noise probe, 32 frames | 800 loaded impulses | `daw_timeline` |
+|---|---|---|---|
+| 01:15:27 | clean, no zero run | 389, spread 0 | 577 (12.021 ms) |
+| 01:20:16 | clean, no zero run | 331, spread 0 | 519 (10.812 ms) |
+
+Both anchor restarts drew the gadget-bind late timer (3,657 us with a
+47-frame resync; a 21-frame resync), with the gadget away as always; no
+other gap over 1.1 ms, no xrun, lag or error line during any run. The
+first anchor's 389 is outside the accepted set's band of ten anchors (322
+to 353) and the second's 331 is inside it. Why the first read high is not
+known: it was the first gadget restart after a boot, 69 s into the start.
+One reading; not chased.
+
+Watchers restarted on this boot (`/dev/shm/sched-20261014T0115Z.log`,
+`/dev/shm/vm-service-20261014T0115Z.log`); `diag/vmstat-watch.py` is now
+staged beside the other on the Pi. The day's count starts at 01:14:18.

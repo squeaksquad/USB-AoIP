@@ -16,7 +16,13 @@ word: gadget restarts under the watcher, then a `--gap-trace` candidate
 (Pi build with the service stopped, `--gap-trace 1500 --log-every 1`,
 check it with `--stall-at`).
 
-**Added 2026-10-14 01:12 UTC, newest: INSTALLED by the operator**
+**Added 2026-10-14 01:27 UTC, newest: the boot is done.** Value 0 after
+it, service up by itself since 01:14:18 UTC, 331 / `daw_timeline` 519 on
+the 01:20:16 anchor (the first anchor after the boot read 389, unexplained).
+Owed now: read the journal for any minute over 1.5 ms since 01:21 UTC (a
+day or more), the Ferrofish's Latency tab, his ACCEPTED.
+
+**Added 2026-10-14 01:12 UTC: INSTALLED by the operator**
 (`/etc/sysctl.d/90-usb16x16-compaction.conf`, 2db7c8b9). Owed: a boot (the
 value must read 0 afterwards, start check `state=ok`, then a fresh anchor
 and a noise probe), a day on it, the Ferrofish's Latency tab cleared and
