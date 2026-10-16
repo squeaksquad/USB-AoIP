@@ -4944,3 +4944,51 @@ and a clean day on the installed file, both Latency tabs 0 late. File
 2db7c8b9, installer b975d110, rollback `install-compaction-sysctl.sh
 rollback`. The rest of the point of record is the 2026-10-13 set,
 unchanged; level 331 / `daw_timeline` 519 on the 01:20:16 anchor.
+
+## Sample rate, step 1: Controller and netaudio read and write the rate; nothing changes it yet (2026-10-16 14:49-15:10 UTC)
+
+SAMPLE_RATE_DESIGN.md step 1, hand-run as a candidate with the service
+stopped. Plugin d3a6b40a = patches 0001-0004 (`build-patched.sh
+xrun-option-retry1-confirm-rate 0001 0002 0003 0004`), owner 62879558,
+`config/asound-inferno-owner-both1ms-rate.conf`, `--rx-queue 96`. Patch
+0004 (25adf7e7): board-info byte 0x17 from `BOARD_FLAGS_17`, the
+sample-rate status (conmon 0x0080) and encoding status (0x0082) published
+at start, every 60 s and on any 0x0081 / 0x0083 request, the rates from
+`SUPPORTED_SAMPLE_RATES`; a set is logged and answered with the unchanged
+status, so it is a refusal. `STATE_ID` keeps the state directory when
+`DEVICE_ID` changes.
+
+- Flags 0xdb and the status: Controller shows "48k" and asks for the
+  encoding options (0x0083); with 48000 alone the dropdown stays disabled.
+  With 44100,48000 it enables; picking 44.1k sends
+  `ffff0028 <id> 0000 <controller MAC> 0000 "Audinate" 073e 0081 00000064 00000001 0000ac44`
+  to port 8700 (the DVS capture's packet), logged three times, refused, and
+  the view returns to 48k on reopening. Queries are the same with flag 0.
+- netaudio 0.4.2 sent the Pi no settings query at all: it takes a device's
+  MAC from the mDNS `id`, and ours (DEVICE_ID `5553423136783136`, ASCII
+  "USB16x16") is not one. With DEVICE_ID `88a29e8b01e40000` (eth0's MAC
+  plus process 0000, the Ferrofish's form) and STATE_ID the old ID, `device
+  list` reports `sample_rate_hz` 48000, `supported_sample_rates_hz`
+  [44100, 48000], encoding 24; `--verify device config sample-rate 44100`
+  reads, writes (suffix 0x3a, pseudo-MAC "RT"), and reports "device reports
+  48000 Hz instead of 44100 Hz", as a refusal should read.
+- The audio path through all three candidate starts: no lost packets, no
+  holes, either direction (300 s on the second, 70 s on the third).
+
+Not installed. The service was restarted on its installed form (plugin
+0ee61f2f, old DEVICE_ID) at 15:07:26 UTC. Its start check stayed at
+`checking` with both return flows idle: the Ferrofish, the D2USB and DVS
+were at 44.1 kHz (set from the Dante Switcher work), so no return can reach
+a 48 kHz Pi. With the Ferrofish back at 48 kHz the check had already
+given up (`state=idle`, 15:10:31), so the endpoint was restarted at
+15:43:08 UTC: start check `state=ok` (6016 / 6015 frames a second, no
+restart), noise probe at 32 frames 15:44:29 clean (zero runs >= 4: 0,
+xrun, lag and error lines +0;
+`outputs/latency/service-restore-rate-noise-ch2-32f-20261016T154429Z.json`).
+A rate change elsewhere on the network leaves the start check idle, not
+failed: it judges nothing until the rates match, and needs a restart after.
+
+Owed before patch 0004 can be installed: a decision on the DEVICE_ID change
+(Controller sees a new device ID under the same name; the Ferrofish
+subscribes by name and the Pi's subscriptions stay through STATE_ID), and
+the battery on it. Then steps 3 and 4 make a set do something.

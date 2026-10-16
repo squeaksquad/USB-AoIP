@@ -1,0 +1,224 @@
+diff --git a/inferno_aoip/src/device_info.rs b/inferno_aoip/src/device_info.rs
+index 13cf495..9ddd860 100644
+--- a/inferno_aoip/src/device_info.rs
++++ b/inferno_aoip/src/device_info.rs
+@@ -37,6 +37,12 @@ pub struct DeviceInfo {
+   pub pcm_type: u8, // usually 0xe, in older devices 4
+   pub latency_ns: usize,
+   pub sample_rate: u32,
++  /// Rates published in the sample-rate status (conmon 0x0080); empty: not published.
++  pub supported_sample_rates: Vec<u32>,
++  /// Board info byte 0x17 (Identify, Sample rate & encoding configuration, Reboot, Factory reset).
++  pub board_flags_17: u8,
++  /// Names the state directory; the device ID's hex unless STATE_ID is set.
++  pub state_id: String,
+ 
+   pub arc_port: u16,
+   pub cmc_port: u16,
+@@ -76,6 +82,9 @@ mod tests {
+       pcm_type: 0,
+       latency_ns,
+       sample_rate,
++      supported_sample_rates: Vec::new(),
++      board_flags_17: 0,
++      state_id: String::new(),
+       arc_port: 0,
+       cmc_port: 0,
+       flows_control_port: 0,
+diff --git a/inferno_aoip/src/device_server/info_mcast_server.rs b/inferno_aoip/src/device_server/info_mcast_server.rs
+index 1b828b1..bd3eb53 100644
+--- a/inferno_aoip/src/device_server/info_mcast_server.rs
++++ b/inferno_aoip/src/device_server/info_mcast_server.rs
+@@ -124,7 +124,7 @@ impl<'s> Multicaster<'s> {
+     content[0x14] = 0;
+     content[0x15] = 0;
+     content[0x16] = 0x10;
+-    content[0x17] = 0;
++    content[0x17] = self.self_info.board_flags_17;
+ 
+     content[0xbb] = 0x1f; // if 0, device is flooded with info multicast requests around 1 per second
+                           /* content[0xbf] = 5;
+@@ -299,6 +299,49 @@ impl<'s> Multicaster<'s> {
+     ]).await; */
+   }
+ 
++  // Sample-rate status, conmon 0x0080: header 0x0018, count, current rate, the
++  // current rate again (as the device captured above sends it), 0x00020000,
++  // then the supported rates. Sent at start, every minute and on any 0x0081.
++  async fn send_sample_rate_status(&mut self) {
++    if self.self_info.supported_sample_rates.is_empty() {
++      return;
++    }
++    let mut bytes = ByteBuffer::new();
++    bytes.set_endian(bytebuffer::Endian::BigEndian);
++    bytes.write_u16(0x0018);
++    bytes.write_u16(self.self_info.supported_sample_rates.len() as u16);
++    bytes.write_u32(self.self_info.sample_rate);
++    bytes.write_u32(self.self_info.sample_rate);
++    bytes.write_u32(0x0002_0000);
++    for rate in &self.self_info.supported_sample_rates {
++      bytes.write_u32(*rate);
++    }
++    self
++      .send(self.device_info_destination, 0xffff, [0x07, 0x2a, 0x00, 0x80, 0, 0, 0, 0], bytes.as_bytes())
++      .await;
++  }
++
++  // Encoding status, conmon 0x0082, the same layout with bit depths: 24 only,
++  // the depth the flows carry. Answers Controller's 0x0083 query, which it
++  // sends once the board flags say sample rate & encoding are configurable.
++  async fn send_encoding_status(&mut self) {
++    if self.self_info.supported_sample_rates.is_empty() {
++      return;
++    }
++    let bits = self.self_info.bits_per_sample as u32;
++    let mut bytes = ByteBuffer::new();
++    bytes.set_endian(bytebuffer::Endian::BigEndian);
++    bytes.write_u16(0x0018);
++    bytes.write_u16(1);
++    bytes.write_u32(bits);
++    bytes.write_u32(bits);
++    bytes.write_u32(0x0002_0000);
++    bytes.write_u32(bits);
++    self
++      .send(self.device_info_destination, 0xffff, [0x07, 0x2a, 0x00, 0x82, 0, 0, 0, 0], bytes.as_bytes())
++      .await;
++  }
++
+   async fn send_clock_stats(&mut self) {
+     let freq_offset = if let Some(f) = self.get_freq_offset_ppb() {
+       f
+@@ -390,6 +433,10 @@ pub async fn run_server(
+   let mut mcaster = Multicaster::new(self_info.as_ref(), server, clock, get_peaks);
+   mcaster.send_board_info().await;
+   mcaster.send_product_info().await;
++  mcaster.send_sample_rate_status().await;
++  mcaster.send_encoding_status().await;
++  let mut rate_status_interval = interval(Duration::from_secs(60));
++  rate_status_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+   let mut heartbeat_interval = interval(Duration::from_secs(1));
+   heartbeat_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+   while mcaster.should_work() {
+@@ -417,6 +464,26 @@ pub async fn run_server(
+           [0x07, _, 0, 0x13, 0, 0, 0, _] => {
+             mcaster.send_network_info().await;
+           }
++          [0x07, _, 0, 0x81, 0, 0, 0, _] if !mcaster.self_info.supported_sample_rates.is_empty() => {
++            // Sample-rate query (mode 0) or set (mode 1, rate after it). Nothing
++            // changes the rate here: a set is logged with its raw payload and
++            // answered with the current status, which is a refusal to Controller.
++            let word = |at: usize| request_buf.get(at..at + 4).map(|b| u32::from_be_bytes(b.try_into().unwrap()));
++            match (word(32), word(36)) {
++              (Some(1), Some(rate)) => warn!(
++                "sample rate set to {rate} requested, not acted on (running at {}); raw udp payload: {}",
++                mcaster.self_info.sample_rate,
++                hex::encode(request_buf)
++              ),
++              _ => info!("sample rate query; raw udp payload: {}", hex::encode(request_buf)),
++            }
++            mcaster.send_sample_rate_status().await;
++          }
++          [0x07, _, 0, 0x83, 0, 0, 0, _] if !mcaster.self_info.supported_sample_rates.is_empty() => {
++            // Encoding query or set: nothing changes; the status is the answer.
++            info!("encoding request; raw udp payload: {}", hex::encode(request_buf));
++            mcaster.send_encoding_status().await;
++          }
+           [0x07, _, 0, 0x77, 0, 0, 0, _]=> {
+             mcaster.send(
+               mcaster.device_info_destination, 0xffff, [0x07, 0x2a, 0x00, 0x78, 0, 0, 0, 0],
+@@ -437,6 +504,10 @@ pub async fn run_server(
+           break;
+         }
+       },
++      _ = rate_status_interval.tick() => {
++        mcaster.send_sample_rate_status().await;
++        mcaster.send_encoding_status().await;
++      },
+       _ = heartbeat_interval.tick() => {
+         mcaster.send_heartbeat().await;
+       },
+diff --git a/inferno_aoip/src/device_server/settings.rs b/inferno_aoip/src/device_server/settings.rs
+index 359fa90..ff2697f 100644
+--- a/inferno_aoip/src/device_server/settings.rs
++++ b/inferno_aoip/src/device_server/settings.rs
+@@ -75,6 +75,29 @@ fn create_self_info(
+     .map(|s| s.parse().expect("invalid SAMPLE_RATE, must be integer"))
+     .unwrap_or(48000);
+ 
++  let supported_sample_rates: Vec<u32> = settings
++    .get("SUPPORTED_SAMPLE_RATES")
++    .map(|s| {
++      s.split(',')
++        .map(|r| r.trim().parse().expect("invalid SUPPORTED_SAMPLE_RATES, must be integers separated by commas"))
++        .collect()
++    })
++    .unwrap_or_default();
++  assert!(
++    supported_sample_rates.is_empty() || supported_sample_rates.contains(&sample_rate),
++    "SUPPORTED_SAMPLE_RATES must contain SAMPLE_RATE"
++  );
++  let board_flags_17 = settings
++    .get("BOARD_FLAGS_17")
++    .map(|s| {
++      u8::from_str_radix(s.trim_start_matches("0x"), 16).expect("invalid BOARD_FLAGS_17, must be a hex byte")
++    })
++    .unwrap_or(0);
++
++  // The state directory (saved subscriptions, channel names) follows DEVICE_ID
++  // unless STATE_ID names another, so the advertised ID can change and keep them.
++  let state_id = settings.get("STATE_ID").cloned().unwrap_or_else(|| hex::encode(devid));
++
+   let mut netmask = Ipv4Addr::new(0, 0, 0, 0);
+   let mut gateway = Ipv4Addr::new(0, 0, 0, 0);
+   let mut mac_address = MacAddr::zero();
+@@ -134,6 +157,9 @@ fn create_self_info(
+     pcm_type: 0xe,
+     latency_ns,
+     sample_rate,
++    supported_sample_rates,
++    board_flags_17,
++    state_id,
+ 
+     arc_port: ARC_PORT,
+     cmc_port: CMC_PORT,
+diff --git a/inferno_aoip/src/protocol/flows_control.rs b/inferno_aoip/src/protocol/flows_control.rs
+index 30130df..6a98b59 100644
+--- a/inferno_aoip/src/protocol/flows_control.rs
++++ b/inferno_aoip/src/protocol/flows_control.rs
+@@ -224,6 +224,9 @@ mod tests {
+       pcm_type: 0,
+       latency_ns: 0,
+       sample_rate: 0,
++      supported_sample_rates: Vec::new(),
++      board_flags_17: 0,
++      state_id: String::new(),
+       arc_port: 0,
+       cmc_port: 0,
+       flows_control_port: 0,
+diff --git a/inferno_aoip/src/protocol/proto_arc.rs b/inferno_aoip/src/protocol/proto_arc.rs
+index e1fb1db..9895cc6 100644
+--- a/inferno_aoip/src/protocol/proto_arc.rs
++++ b/inferno_aoip/src/protocol/proto_arc.rs
+@@ -494,6 +494,9 @@ mod tests {
+       pcm_type: 0x0e,
+       latency_ns: 5000000,
+       sample_rate: 48000,
++      supported_sample_rates: Vec::new(),
++      board_flags_17: 0,
++      state_id: String::new(),
+       arc_port: 4440,
+       cmc_port: 8800,
+       flows_control_port: 4455,
+diff --git a/inferno_aoip/src/state_storage.rs b/inferno_aoip/src/state_storage.rs
+index e582e3d..61d7c91 100644
+--- a/inferno_aoip/src/state_storage.rs
++++ b/inferno_aoip/src/state_storage.rs
+@@ -21,7 +21,7 @@ impl StateStorage {
+   pub fn new(self_info: &DeviceInfo) -> Self {
+     let dir = AppDirs::new(Some("inferno_aoip"), false).unwrap().state_dir.to_str().unwrap().to_owned()
+       + MAIN_SEPARATOR_STR
+-      + &hex::encode(self_info.factory_device_id);
++      + &self_info.state_id;
+     create_dir_all(&dir).log_and_forget();
+     info!("using state directory: {dir}");
+     Self { path_prefix: dir + MAIN_SEPARATOR_STR }

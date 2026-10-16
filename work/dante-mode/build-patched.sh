@@ -6,6 +6,7 @@
 #   build-patched.sh NAME PATCH [PATCH...]             plugins/NAME/         = pinned + those, in order
 #   e.g. build-patched.sh xrun-option-retry1 0001 0002
 #        build-patched.sh xrun-option-retry1-confirm 0001 0002 0003
+#        build-patched.sh xrun-option-retry1-confirm-rate 0001 0002 0003 0004
 # PATCH is the number a file in patches/ begins with. plugins/stock/ holds a copy
 # of the pinned build (SOURCES.lock). Select one with ALSA_PLUGIN_DIR.
 # inferno/target/release keeps the stock file, so the probe and prototype
@@ -23,7 +24,13 @@ so="$base/inferno/target/release/libasound_module_pcm_inferno.so"
 # before the build and again after the patches are taken back out.
 pinned="903c8697d2254ff37416b3618d7135ac8b11b9095eba2d390d6e65df623106c8  alsa_pcm_inferno/src/lib.rs
 c1bb711373b9e371d0e4729269878d763782c02b822e3f227412c0914e2640de  inferno_aoip/src/device_server/channels_subscriber.rs
-c7af0c2c926bd4259f283b857465a4613c62ac91d48f2141b26730dd79b6467d  inferno_aoip/src/device_server/flows_tx.rs"
+c7af0c2c926bd4259f283b857465a4613c62ac91d48f2141b26730dd79b6467d  inferno_aoip/src/device_server/flows_tx.rs
+544b124e7ad94925756a093bfbd69b69d539dff9e14ab218445c03f5ed607ecc  inferno_aoip/src/device_info.rs
+351d7578ad5ce7678e3aec4e57bc76170778f42f25e9a7bfb766da362258b0bf  inferno_aoip/src/device_server/info_mcast_server.rs
+d6da9a2b78cf1bcf6d9614ed7b8ce2537f52c845e8f6f4db0fb04913990ad521  inferno_aoip/src/device_server/settings.rs
+1f82000c5d1f9784446fcf0cc33cce2925ef62db8524d189c579204e85a26acd  inferno_aoip/src/protocol/flows_control.rs
+2d3e9748c205d967336159f725e6fd258bb0e3eefb1f17b0befaa60ff6f24344  inferno_aoip/src/protocol/proto_arc.rs
+8e2e2b82045446f39b24144301708989fe50f5d64ee8f90b274fc067b0c96bb1  inferno_aoip/src/state_storage.rs"
 
 refuse() { echo "REFUSED: $*"; echo "BUILD_EXIT 99"; exit 99; }
 sha() { sha256sum "$1" | cut -d' ' -f1; }
