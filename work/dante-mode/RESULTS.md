@@ -5046,3 +5046,41 @@ d3a6b40a and the config a91f5766 -> 7beabf1a, old copies kept as
 `rollback` puts both back). Not installed: installs are the operator's.
 After it, `install-dante-service.sh` and `install-dante-lowlatency.sh` no
 longer find the plugin and config they pin.
+
+## Sample rate, step 2 installed: impulses all 355 and the hour PASS, but the 600 s soak FAILED on two return holes (2026-10-16 18:56-20:25 UTC)
+
+Installed by the operator with `service/install-dante-rate-status.sh`:
+plugin d3a6b40a, config 7beabf1a. Endpoint start 18:56:04 UTC, gadget
+restart (his) 18:56:41, start check `state=ok` (6016) at 18:57:09. netaudio:
+ID `88a29e8b01e40000`, 48000, [48000], capabilities 4120. All on that
+anchor of that start (`outputs/latency/rate48-installed-*`):
+
+- Noise probe at 32 frames: clean.
+- 600 s sixteen-channel soak (18:58:39): **FAIL**. Two events, each on
+  channels 6 to 13 only (one of the Ferrofish's two 8-channel return
+  flows): 7 samples at 85.5 s and 16 samples at 195.7 s into the capture.
+  One return packet missing or late each time, the 2026-10-12 signature
+  ("Ferrofish device latency 0.25 to 1.0 msec") but two in ten minutes,
+  not ~800 a second: the receive rate read 6,005 a second at 19:23
+  (`ethtool -S`, `rx_256_511_byte_frames`), whole. No UDP receive or
+  buffer error on the Pi.
+- Four loaded 800-impulse runs: **all 355, spread 0, `daw_timeline` 543
+  (11.312 ms)**.
+- 3,600 s sixteen-channel soak (19:23:14): **PASS**.
+- 400 loaded impulses afterwards: all 355.
+
+The owner (`outputs/latency/rate48-installed-service-journal-20261016T185604Z.txt`):
+worst loop gap 1,057 us after the first minute; the start's one transmit
+resync (61 frames, an Inferno `XRUN ... -61` at 18:56:41.207) and both
+detaches and playback faults are the gadget restart landing 37 s into the
+start; nothing after t = 60. `out_holes` and `back_holes` 0 (they count
+all-channel runs; an 8-channel hole does not register). `NRestarts` 0,
+Ferrofish neighbour entry REACHABLE.
+
+Read: the same plugin and config ran the candidate's 600 s and hour clean
+today, and this start's hour was clean too, so two isolated single-packet
+return holes in its first ten minutes point at the return path's known
+draw rather than at patch 0004, whose only network traffic is a ~60-byte
+status multicast every 60 s. Not proven. **Not ACCEPTED**: the battery did
+not pass as defined. The operator's call: re-run the ten-minute soak, take
+another start, or roll back (`install-dante-rate-status.sh rollback`).
