@@ -5084,3 +5084,11 @@ draw rather than at patch 0004, whose only network traffic is a ~60-byte
 status multicast every 60 s. Not proven. **Not ACCEPTED**: the battery did
 not pass as defined. The operator's call: re-run the ten-minute soak, take
 another start, or roll back (`install-dante-rate-status.sh rollback`).
+
+**Re-run of the 600 s soak, same start and anchor (operator's call), 22:16:28 UTC: PASS.**
+Sixteen channels, longest zero run 1, no discontinuity, peaks 0.1000;
+xrun, lag and error lines +0, `NRestarts` 0
+(`outputs/latency/rate48-installed-resoak-soak-600s-32f-20261016T221628Z.json`).
+So on this start: the first ten minutes held two single-packet return holes
+on one flow, the hour after and these ten minutes none. Acceptance is the
+operator's call.
