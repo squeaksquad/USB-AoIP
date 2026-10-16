@@ -228,3 +228,224 @@ acceptable if (a) fails. The text above is written to these answers.
 5. Option (b) (offer only the new rate after a Controller change) locks
    the Mac out of rate changes until the next re-enumeration. Acceptable
    if (a) fails?
+
+## Transparent switching, and DSP that keeps up at every offered rate (plan, 2026-10-16)
+
+Operator, 2026-10-16: switching rates must be transparent to the user, and
+the DSP must keep up without issue. This section is the plan for that. It
+keeps steps 1 to 3, revises 4 to 7 and adds DSP steps. Design only; nothing
+here is built.
+
+### What "transparent" means here
+
+The user changes the rate in one place, the way they already do (the DAW
+session, Audio MIDI Setup, or MIOConsole3d on the Metric Halo). After a
+dropout of a few seconds, every device is running at the new rate: the Mac's
+USB 16x16 device, the Pi, the Ferrofish and the rest of the Dante domain,
+with the same DSP preset compiled for the new rate. The user does nothing
+else: no Dante Controller, no page, no re-applying a preset. If any part
+cannot follow, nothing changes on the Pi: it stays at the old rate, and the
+user is told why in one line (a Dante Switcher notification and the page).
+
+A rate change is never silent. Every Dante device re-clocks, and the Pi's
+endpoint restarts (no live rate change, as above). The target is audio back
+within about 10 s of the change. That is the one measured restart
+(subscriptions back 5 to 18 s after a device returned, RESULTS.md part 2),
+plus the extra start the start check forces about one time in three or four.
+
+### One source of truth: the Mac
+
+Most of the machinery already exists, on the Mac.
+`~/Development/Dante Switcher` (its PLAN.md, 2026-10-16) is a menu-bar agent
+that follows the Metric Halo's rate (CoreAudio listener, a 2 s debounce)
+and sets every Dante device's rate with the same `0x0081` settings packet
+Controller sends: the Pulse (the leader) first, a wait for its word clock
+to lock, then everyone else. It already lists the Inferno device as a
+target, and patch 0004 is what lets the Pi report a rate and receive that
+set.
+
+The plan rests on that agent:
+
+1. **The Mac decides; the Pi follows or refuses.** The Pi's arbiter accepts
+   a rate only when the USB host is at that rate, or the host has the
+   interface down. A Controller set to a rate the Mac is not at is
+   refused: the status is re-sent at the old rate, so Controller shows it
+   snap back. This drops the gadget re-enumeration of "Controller-initiated
+   change" (options (a) and (b)) altogether. The gadget never has to push a
+   rate onto macOS, which it cannot do reliably, and it is never
+   re-enumerated for a rate change.
+2. **Dante Switcher sets the USB 16x16 too.** Beside the Dante devices it
+   sets the USB 16x16's `kAudioDevicePropertyNominalSampleRate` through
+   CoreAudio. That is a UAC2 SET_CUR to the gadget, which the Pi sees as
+   `Capture Rate` / `Playback Rate`. It should also watch the USB 16x16 as
+   a rate source beside the Metric Halo, because a DAW session that uses the
+   USB 16x16 sets that device's rate, not the Metric Halo's. This is a
+   change to that project, not to this one (open question 1).
+3. **The arbiter makes one restart from two signals.** For one user change
+   the Pi gets a Dante `0x0081` set and a gadget rate change, in either
+   order and up to a few seconds apart. The arbiter treats the first as
+   "rate R wanted", waits up to a settle window (default 5 s) for the
+   other to agree (or for the host to read 0), and then restarts once.
+   The two disagreeing past the window is a refusal. "Who wins" above stays
+   as the guard for a tug-of-war.
+
+### The sequence on the Pi
+
+```
+ 0x0081 set R  ──┐
+                 ├─> arbiter: R offered? preset has an artifact for R that fits
+ gadget rate R ──┘   the DSP budget? transport settings for R? host at R or idle?
+                       │ no ──> refuse: status re-sent at old rate, reason on the page
+                       │ yes
+                       v
+   write rate R: owner.conf RATE, Inferno SAMPLE_RATE, artifact path for R
+   restart the endpoint: owner --rate R loads the R artifact before any open
+                       │
+   verify within T: Inferno publishes R; DSP loaded rate=R; USBOPEN host_rate=match
+   (or host idle); start check state=ok at R
+                       │ any fails ──> write the old rate back, restart, refuse
+                       v
+   commit: the rate is persisted, so a reboot comes back at R
+```
+
+Nothing is compiled during a change. Every artifact the change needs was
+compiled when the preset was saved (next section), so the DSP part of a
+change is loading a file, which takes milliseconds. An uncommitted live
+edit is dropped by a rate change: the endpoint comes back on the committed
+preset at the new rate, and the page says so.
+
+### DSP: one artifact per rate, all six, at save time
+
+- The page compiles each preset at **all six Dante rates** when it is saved
+  or applied, not only the offered ones (`compileDraftRates` with
+  `DANTE_RATES`). It costs six small artifacts per preset. A rate that is
+  offered later then never finds a preset without its artifact, and no
+  compiler is needed on the Pi, which has no node.
+- The store keeps `/etc/usb16x16/dsp/<slug>@<rate>.dsp`, each with its own
+  hash. `owner.conf` keeps naming the preset (`DSP_PRESET` for the slug,
+  `DSP_SHA256` per rate), and the start wrapper picks the file for `RATE`.
+  A rate with no artifact is a refusal, as step 3 says. The applier's
+  48 kHz-only check becomes "the artifact's rate is the rate it is filed
+  under".
+- A live edit compiles at the running rate only, for the preview. Commit
+  compiles all six.
+
+### DSP: keeping up
+
+What is measured, all at 48 kHz on the owner's loop thread (RESULTS.md
+2026-10-11): the loaded preset (308 biquads) costs `dsp_us_mean` about 95 µs
+for each 1 ms of audio, and `dsp_us_max` 169 in a 180 s run. The
+transparent preset (256 biquads) over an hour: mean 80, worst minute 93,
+max 150, and 300 once. The work is per frame, so it scales with the rate.
+Extrapolated, **not measured**, as a share of one core's real time:
+
+| Rate | Mean (loaded) | Typical max | Worst seen, scaled |
+|---|---|---|---|
+| 44.1 / 48 kHz | 9-10 % | 17 % | 30 % |
+| 88.2 / 96 kHz | 19 % | 34 % | 60 % |
+| 176.4 / 192 kHz | 38 % | 68 % | 120 % (misses the deadline) |
+
+So 96 kHz probably fits as things are, with less margin than anything
+accepted so far, and 192 kHz does not fit on the loop thread. The plan, in
+order of risk (least first). Each item is a change on its own with its own
+check:
+
+1. **Measure before changing anything.** `usb16x16-dsp-offline --rate R
+   --bench N` on the Pi, service stopped, for `transparent`, `loaded` and
+   a worst-case 16 x 16-band preset at each rate. That gives the cost per
+   section-frame that the admission rule below needs, and replaces the
+   table above with numbers.
+2. **Skip unity sections.** A user preset is the fixed shape: 256 band
+   slots, most of them unity. When a coefficient set is built (at load and
+   at each publish, on the control thread), the stage marks which sections
+   are exactly unity. The audio thread runs those as a history shift (x1,
+   x2, y1, y2 updated, no arithmetic). That keeps filter state exact, so a
+   band switched on live does not click. Output is bit-identical (unity is
+   y = x). Expected to cut a typical preset's cost by more than half. The
+   check: the existing DSP tests, the CamillaDSP head-to-head
+   (`run-headtohead.sh`) unchanged, and the bench.
+3. **Two channels at a time.** Run the per-channel chains for output pairs
+   as NEON double2. Each channel's arithmetic order is unchanged, so the
+   output is the same sample for sample; the head-to-head harness proves
+   it. Roughly 1.6 to 2 times.
+4. **Only if 2 and 3 are not enough for a rate:** a DSP worker thread on a
+   core of its own. It is created with the other threads before the device
+   opens (rule 3: never a thread after capture start). One block of
+   pipeline costs one wake (about 1 ms) of added latency at that rate only.
+   It is a separate candidate with its own battery, and it is the last
+   resort because it adds latency.
+5. **Admission, so a rate never runs a preset that does not fit.** The page
+   estimates each artifact's cost per rate (active sections x frames a
+   second x the measured cost per section-frame from item 1). When saving,
+   it shows per rate "fits" or "too heavy at 192 kHz". The arbiter refuses a
+   change whose artifact is over budget, with the reason. The budget is
+   what has been soaked: a rate's worst-case `dsp_us_max` share must stay
+   under what 48 kHz has run accepted with (30 % of the period) until a
+   battery at that rate says otherwise.
+6. **Watch it in service.** `dsp_us_max` per minute against the budget is
+   on the page. Going over is logged and shown, never silently degraded
+   (no bypass, no direct fallback).
+
+### Transport per rate
+
+Queue depths and periods are frames (step 3), so at 96 kHz `RX_QUEUE=96` is
+1 ms of margin instead of 2. `transport.conf` gains per-rate keys
+(`RX_QUEUE_96000=...`). A rate without its own entry takes the 48 kHz figure
+scaled to the same time. Each rate's figures come from its battery (step 6),
+as 96 frames did at 48 kHz.
+
+### What bounds the offered list
+
+- **USB:** sixteen 24-bit channels at 192 kHz is 1,152 bytes a microframe,
+  more than one 1,024-byte high-speed transaction, so the gadget needs a
+  high-bandwidth endpoint, if `f_uac2` can do that at all (step 5).
+- **The domain:** the D2USB stops at 96 kHz. The Pulse goes to 192 kHz.
+  Dante Switcher already reports "unsupported" for each device.
+- **DSP:** the table above.
+
+Realistically the offered list is 44.1, 48, 88.2 and 96 kHz. 176.4 and 192
+kHz only if the gadget, the domain and the DSP all clear them.
+
+### Revised steps (1 to 3 as above)
+
+4. **Arbiter at 48 kHz.** As before, plus the settle window that turns two
+   signals into one restart, and the "Mac decides" rule. Check: a set to 48
+   from Controller or Dante Switcher restarts nothing; a set to 96 is
+   refused with the reason; the old rate is re-sent.
+4b. **DSP bench at every rate** (DSP item 1). Mac code exists. A Pi run
+   with the service stopped, the operator's go.
+4c. **Unity skip, then NEON pairs** (DSP items 2 and 3), each a candidate
+   with the head-to-head harness, the bench, and the 48 kHz battery and
+   hour (no audible change allowed).
+4d. **Per-rate preset store and admission** (DSP items 5 and 6): the page
+   compiles all six, the applier files them by rate, the start wrapper
+   picks by `RATE`.
+5. **Multi-rate gadget** (as before, protected gadget untouched). The
+   experiment shrinks to: does a CoreAudio rate set reach `Capture Rate`
+   cleanly, does the Mac re-open without the device vanishing, and does
+   16 x 24-bit hold at 32 frames at 96 kHz. Re-enumeration on a Controller
+   change is no longer needed.
+6. **96 kHz end to end** (then 44.1 and 88.2): the domain at 96 via Dante
+   Switcher, the full battery and an hour on the loaded preset, DSP inside
+   its budget. Each rate joins `OFFERED_RATES` (page) and the arbiter's
+   list only after its battery.
+7. **Transparent, both ways.** Dante Switcher sets the USB 16x16 and the
+   Pi, and the arbiter coalesces. Check: a rate change in Logic, in AMS
+   and in MIOConsole3d each brings the whole system to the new rate with
+   no other action, audio back within the target, the preset in force at
+   the new rate. A Controller set the Mac is not at is refused. A reboot
+   comes back at the last committed rate.
+
+### Open questions for the operator (this plan)
+
+1. Dante Switcher becomes part of the path: it would set the USB 16x16's
+   CoreAudio rate and watch it as a source beside the Metric Halo. Is that
+   the right home for the Mac side (recommended: it already debounces,
+   orders the leader first and verifies), or should the Pi do more?
+2. "The Mac decides" replaces the earlier answer (5): a Controller change
+   the Mac is not at is refused instead of forcing the gadget onto the new
+   rate. Acceptable?
+3. A dropout of about 10 s per change, longer when the start check retries:
+   acceptable as "transparent"?
+4. 176.4 and 192 kHz: worth a DSP worker thread (adds about 1 ms of latency
+   at those rates only), or cap the offered list at 96 kHz?
