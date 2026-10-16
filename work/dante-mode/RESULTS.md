@@ -5092,3 +5092,11 @@ xrun, lag and error lines +0, `NRestarts` 0
 So on this start: the first ten minutes held two single-packet return holes
 on one flow, the hour after and these ten minutes none. Acceptance is the
 operator's call.
+
+## ACCEPTED 2026-10-16: the 48 kHz-only sample-rate form is part of the Dante point of record
+
+Operator's ACCEPTED after the re-run soak. Plugin d3a6b40a and config
+7beabf1a, by `service/install-dante-rate-status.sh` (rollback with
+`rollback`). Level in service 355 / `daw_timeline` 543 (11.312 ms) on the
+18:56:41 UTC anchor. The rest of the point of record is the 2026-10-14
+set, unchanged.

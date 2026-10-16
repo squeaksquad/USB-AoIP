@@ -13586,3 +13586,29 @@ rollback`, then those of the 2026-10-13 entry. Left as found: the late
 timer at a gadget restart (about one in four, gadget already away);
 Inferno's `flows RX` on CPU 0 behind the interrupts (no effect seen). Not
 installed: the `--gap-trace` / `--stack-prefault` owner source.
+
+**ACCEPTED 2026-10-16 (operator, after the 22:27 UTC soak): the 48 kHz-only
+sample-rate form is part of the Dante point of record.** Record
+`work/dante-mode/RESULTS.md`, "Sample rate" sections; design
+`work/dante-mode/SAMPLE_RATE_DESIGN.md` (step 2 of 7). Installed by
+`work/dante-mode/service/install-dante-rate-status.sh`: Inferno plugin
+d3a6b40a (patches 0001 to 0004) and `/etc/usb16x16/dante/asound-inferno-owner.conf`
+7beabf1a. The endpoint now publishes its sample rate (48 kHz, the only one
+offered) and answers rate and encoding reads, so Dante Controller shows
+"48k" and netaudio lists `sample_rate_hz` 48000 and
+`supported_sample_rates_hz` [48000]; a set to any other rate is logged and
+refused. Board flags 0x18 (rate and encoding configuration only). The
+device ID is now `88a29e8b01e40000` (eth0's MAC plus process 0000), which
+netaudio needs to address the Pi at all; the name is unchanged and
+`STATE_ID` keeps the saved subscriptions in the old ID's directory. Behind
+it, on the operator's 18:56:41 UTC anchor of the 18:56:04 start: noise
+probe clean; four loaded 800-impulse runs all 355, `daw_timeline` 543
+(11.312 ms); 3,600 s soak PASS; 400 impulses all 355; the first 600 s
+soak FAILED on two single-packet return holes on channels 6 to 13 (7 and
+16 samples), its re-run at 22:16 PASS. The candidate's battery and hour on
+the same files passed clean (356 / 544). Everything else is the
+2026-10-14 point of record, unchanged (owner 62879558, `RX_QUEUE=96`, unit
+27b68877, eth0 drop-in, start check, compaction sysctl). Rollbacks,
+newest first: `install-dante-rate-status.sh rollback`, then those of the
+2026-10-14 and 2026-10-13 entries. Next: steps 3 and 4 (a rate-aware
+stack and the arbiter), and step 5's experiment on the Mac.

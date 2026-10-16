@@ -165,7 +165,8 @@ and reports instead of looping.
    2026-10-16: the form is plugin d3a6b40a with
    `config/asound-inferno-owner-rate48.conf` (flags 0x18, 48000 only, the
    MAC-form DEVICE_ID); candidate battery and hour PASS, 356 / 544;
-   `service/install-dante-rate-status.sh` staged, not installed.
+   `service/install-dante-rate-status.sh`; INSTALLED and ACCEPTED 2026-10-16
+   (355 / 543 in service).
 3. **Make the stack rate-aware at 48 kHz.** Owner takes `--rate`
    (default 48000) instead of `kRate` and checks the gadget's rate
    controls; DSP artifact carries its rate and the owner refuses a
