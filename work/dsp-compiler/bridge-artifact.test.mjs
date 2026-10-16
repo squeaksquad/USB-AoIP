@@ -368,3 +368,61 @@ test('bass redirection off is muted sends and unity high-passes, same shape', ()
   const minimalOff = parse(bridgeArtifact(build(off)));
   assert.notEqual(minimalOff.internal, b.internal, 'the minimal shape drops the branches; the fixed one keeps them');
 });
+
+// ---------------------------------------------------------------- sample rate
+// SAMPLE_RATE_DESIGN.md, step 3: the artifact names its rate, its coefficients
+// are computed at it, and 48 kHz is unchanged. The bridge refuses an artifact
+// whose rate is not the one it runs at (bridge_tests.cpp,
+// test_dsp_refuses_an_artifact_for_another_rate).
+
+import { maxDelaySamples } from './bridge-artifact.mjs';
+
+const at = (preset, rate, shape = 'minimal') =>
+  bridgeArtifact(compile(preset, fileDevices('in.raw', 'out.raw', 'S32_LE', 1024, rate), {shape}));
+
+test('a 48 kHz artifact is the one compiled without naming a rate', () => {
+  for (const preset of [crossoverPreset(), clipPreset(), phonesPreset(), loadedPreset()]) {
+    assert.equal(at(preset, 48000), bridgeArtifact(build(preset)));
+    assert.equal(at(preset, 48000, 'fixed'), fixed(preset));
+  }
+  assert.equal(maxDelaySamples(48000), MAX_DELAY_SAMPLES);
+});
+
+test('an artifact at another rate names it and is computed at it', () => {
+  const preset = crossoverPreset();
+  for (const rate of [44100, 88200, 96000, 176400, 192000]) {
+    const artifact = parse(at(preset, rate));
+    assert.equal(artifact.rate, rate);
+    assert.equal(artifact.maxdelay, maxDelaySamples(rate), '10 ms at that rate');
+    // The first crossover branch, measured at its own rate: -6 dB at the corner,
+    // whichever rate it was compiled for.
+    const result = compile(preset, fileDevices('in.raw', 'out.raw', 'S32_LE', 1024, rate));
+    const [index, names] = [...result.config.pipeline.entries()]
+      .filter(([, step]) => step.type === 'Filter')
+      .map(([, step]) => [step.channels[0], step.names])
+      .find(([, stepNames]) => result.config.filters[stepNames[0]].type === 'BiquadCombo');
+    const {freq} = result.config.filters[names[0]].parameters;
+    const branch = artifact.branch.find(entry => entry.channel === index);
+    assert.ok(Math.abs(cascadeResponseDb(branch.sections, freq, rate) + 6.0206) < 1e-3,
+      `the ${rate} Hz crossover is -6 dB at its corner when evaluated at ${rate}`);
+  }
+  const at48 = parse(at(preset, 48000)), at96 = parse(at(preset, 96000));
+  assert.notDeepEqual(at48.branch, at96.branch, 'the same preset has different coefficients at another rate');
+  assert.deepEqual(at48.expand, at96.expand, 'and the same mix');
+});
+
+test('the delay ceiling is 10 ms at every rate', () => {
+  const preset = createConfig();
+  preset.outputs[0].delayMs = 10;
+  assert.equal(parse(at(preset, 96000)).outputs[0].delay, 960);
+  assert.equal(parse(at(preset, 44100)).outputs[0].delay, 441);
+  assert.equal(delayLatency(preset, 96000).samples, 960);
+  assert.equal(delayLatency(preset, 96000).ms, 10);
+  assert.equal(delayLatency(preset).samples, 480, 'the default is 48 kHz');
+});
+
+test('the shape names the rate, so a live update at another rate is a shape change', async () => {
+  const preset = createConfig();
+  assert.match(artifactShape(at(preset, 96000, 'fixed')), /^rate 96000\nchannels 16\ninternal \d+\nmaxdelay 960$/m);
+  assert.notEqual(await artifactShapeKey(at(preset, 96000, 'fixed')), await artifactShapeKey(fixed(preset)));
+});

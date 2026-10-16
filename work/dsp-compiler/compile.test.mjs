@@ -375,3 +375,41 @@ test('the LFE branch is scored on the LFE slope, not its input\'s', () => {
   assert.ok(warning, 'a 12 dB/oct LFE low-pass is called out');
   assert.match(warning, new RegExp(`Affected inputs: ${preset.lfe.input + 1} `));
 });
+
+// ---------------------------------------------------------------- sample rate
+// SAMPLE_RATE_DESIGN.md, step 3: a preset compiles at any Dante rate, and
+// 48 kHz, the default, is unchanged.
+
+import { DANTE_RATES, OFFERED_RATES } from './compile.mjs';
+
+test('48 kHz is the default rate and the only one offered today', () => {
+  assert.equal(SAMPLE_RATE, 48000);
+  assert.deepEqual(OFFERED_RATES, [48000]);
+  assert.ok(OFFERED_RATES.every(rate => DANTE_RATES.includes(rate)), 'every offered rate is a Dante rate');
+  assert.equal(fileDevices('in.raw', 'out.raw').samplerate, 48000);
+  const preset = createConfig();
+  preset.outputs[0].delayMs = 2.5;
+  assert.deepEqual(build(preset).config, compile(preset, fileDevices('in.raw', 'out.raw', 'S32_LE', 1024, 48000)).config,
+    'naming 48 kHz compiles exactly what the default compiles');
+  assert.equal(build(preset).report.rate, 48000);
+});
+
+test('the devices section carries the rate and delays are whole samples at it', () => {
+  const preset = createConfig();
+  preset.outputs[0].delayMs = 10;
+  preset.outputs[2].delayMs = 2.5;
+  for (const [rate, ten, twoAndAHalf] of [[44100, 441, 110], [96000, 960, 240], [192000, 1920, 480]]) {
+    const result = compile(preset, fileDevices('in.raw', 'out.raw', 'S32_LE', 1024, rate));
+    assert.equal(result.config.devices.samplerate, rate);
+    assert.equal(result.report.rate, rate);
+    assert.equal(result.config.filters.delay_out1.parameters.delay, ten, `10 ms at ${rate}`);
+    assert.equal(result.config.filters.delay_out3.parameters.delay, twoAndAHalf, `2.5 ms at ${rate}`);
+  }
+  assert.equal(alsaDevices('hw:0', 'hw:1', 'S24_3_LE', 1024, 96000).samplerate, 96000);
+});
+
+test('a rate Dante does not have is refused', () => {
+  for (const rate of [32000, 47999, 0, undefined]) {
+    assert.throws(() => compile(createConfig(), {...devices, samplerate: rate}), /not a Dante rate/);
+  }
+});

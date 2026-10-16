@@ -19,6 +19,8 @@ import { bandBiquad, crossoverBiquads } from './coefficients.mjs';
 export const ARTIFACT_VERSION = 1;
 // 10 ms at 48 kHz, the alignment delay ceiling model.mjs validates against.
 export const MAX_DELAY_SAMPLES = 480;
+/** The same 10 ms at any rate; DspStage::max_delay_samples in the bridge. */
+export const maxDelaySamples = rate => rate / 100;
 
 const CAMILLA_BAND_TYPE = {Peaking: 'bell', Lowshelf: 'lowShelf', Highshelf: 'highShelf'};
 const ORDER_SLOPE = {2: 12, 4: 24, 8: 48};
@@ -28,7 +30,7 @@ const number = value => String(value);
 const linear = source =>
   source.mute ? 0 : 10 ** (source.gain / 20) * (source.inverted ? -1 : 1);
 
-function sectionsFor(filter) {
+function sectionsFor(filter, rate) {
   if (filter.type === 'Biquad') {
     const {type, freq, q, gain} = filter.parameters;
     if (type === 'Free') {
@@ -39,14 +41,14 @@ function sectionsFor(filter) {
     }
     const band = CAMILLA_BAND_TYPE[type];
     if (band === undefined) throw new Error(`Unknown biquad type ${type}`);
-    return [bandBiquad({type: band, frequency: freq, q, gainDb: gain})];
+    return [bandBiquad({type: band, frequency: freq, q, gainDb: gain}, rate)];
   }
   if (filter.type === 'BiquadCombo') {
     const {type, freq, order} = filter.parameters;
     const slope = ORDER_SLOPE[order];
     if (slope === undefined) throw new Error(`Unsupported crossover order ${order}`);
-    if (type === 'LinkwitzRileyHighpass') return crossoverBiquads('highpass', freq, slope);
-    if (type === 'LinkwitzRileyLowpass') return crossoverBiquads('lowpass', freq, slope);
+    if (type === 'LinkwitzRileyHighpass') return crossoverBiquads('highpass', freq, slope, rate);
+    if (type === 'LinkwitzRileyLowpass') return crossoverBiquads('lowpass', freq, slope, rate);
     throw new Error(`Unknown combo type ${type}`);
   }
   throw new Error(`Filter type ${filter.type} has no biquad form`);
@@ -82,7 +84,7 @@ function filterSteps(config) {
  * allocation once and never grow anything afterwards:
  *
  *     usb16x16-dsp 1
- *     rate 48000 / channels 16 / internal N / maxdelay 480
+ *     rate R / channels 16 / internal N / maxdelay R/100   (48000 and 480 at 48 kHz)
  *     expand N        then N rows of  DEST SRC GAIN
  *     branch N        then N of       CHANNEL SECTIONS  + SECTIONS coefficient rows
  *     assign N        then N rows of  DEST SRC GAIN
@@ -91,6 +93,10 @@ function filterSteps(config) {
  */
 export function bridgeArtifact(result, {presetName} = {}) {
   const {config, plan} = result;
+  // Coefficients for the rate the pipeline was compiled at, which the artifact
+  // names and the bridge checks against the rate it runs at.
+  const rate = config.devices.samplerate;
+  const maxDelay = maxDelaySamples(rate);
   const steps = filterSteps(config);
   const lines = [];
 
@@ -111,7 +117,7 @@ export function bridgeArtifact(result, {presetName} = {}) {
   const branch = [];
   let branchCount = 0;
   for (const [channel, names] of [...steps.branch.entries()].sort((a, b) => a[0] - b[0])) {
-    const sections = names.flatMap(name => sectionsFor(config.filters[name]));
+    const sections = names.flatMap(name => sectionsFor(config.filters[name], rate));
     if (!sections.length) continue;
     branchCount += 1;
     branch.push(`${channel} ${sections.length}`);
@@ -136,21 +142,21 @@ export function bridgeArtifact(result, {presetName} = {}) {
       } else if (filter.type === 'Gain') {
         gain *= filter.parameters.mute ? 0 : linear(filter.parameters);
       } else {
-        sections.push(...sectionsFor(filter));
+        sections.push(...sectionsFor(filter, rate));
       }
     }
-    if (delay > MAX_DELAY_SAMPLES) {
-      throw new Error(`Output ${output + 1} asks for ${delay} samples of delay, over the ${MAX_DELAY_SAMPLES} ceiling`);
+    if (delay > maxDelay) {
+      throw new Error(`Output ${output + 1} asks for ${delay} samples of delay, over the ${maxDelay} ceiling`);
     }
     outputs.push({output, delay, gain, sections});
   }
 
   lines.push(`usb16x16-dsp ${ARTIFACT_VERSION}`);
   lines.push(`preset ${presetName ?? config.title}`);
-  lines.push(`rate ${config.devices.samplerate}`);
+  lines.push(`rate ${rate}`);
   lines.push(`channels ${config.mixers.expand.channels.in}`);
   lines.push(`internal ${plan.channels.length}`);
-  lines.push(`maxdelay ${MAX_DELAY_SAMPLES}`);
+  lines.push(`maxdelay ${maxDelay}`);
   lines.push(`expand ${expand.length}`, ...expand);
   lines.push(`branch ${branchCount}`, ...branch);
   lines.push(`assign ${assign.length}`, ...assign);
@@ -319,14 +325,15 @@ export async function artifactShapeKey(text) {
  * delayed channel has been produced. So the cost is the maximum, not the sum
  * and not the average, and it is paid as soon as any delay is non-zero.
  */
-export function delayLatency(config) {
+export function delayLatency(config, rate = 48000) {
   const samples = Math.max(0, ...config.outputs.map(
-    output => Math.round(output.delayMs / 1000 * 48000)));
+    output => Math.round(output.delayMs / 1000 * rate)));
+  const perMs = rate / 1000;
   return {
     samples,
-    ms: Number((samples / 48).toFixed(3)),
+    ms: Number((samples / perMs).toFixed(3)),
     text: samples === 0 ? null
-      : `Alignment delay adds ${(samples / 48).toFixed(2)} ms of latency to every `
+      : `Alignment delay adds ${(samples / perMs).toFixed(2)} ms of latency to every `
         + 'output, not just the delayed ones: the largest delay you have set is '
         + 'what the transport has to carry. Set it to zero everywhere to get '
         + 'that back.',

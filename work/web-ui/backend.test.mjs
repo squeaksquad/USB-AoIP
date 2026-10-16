@@ -568,3 +568,33 @@ test('Dante: the DSP row says ready or running, never under development', () => 
   const running = systemFacts({...danteLive, mode: {actual: 'dsp', running: true}, profile: {...danteLive.profile, selected: 'dante-room-a'}});
   assert.equal(running.find(r => r.label === 'DSP processor').value, 'Running dante-room-a');
 });
+
+// SAMPLE_RATE_DESIGN.md, step 3: one artifact per offered rate.
+import { compileDraftRates } from './backend.mjs';
+
+test('compileDraft at 48 kHz is unchanged, and at another rate names that rate', async () => {
+  const preset = createConfig();
+  preset.outputs[0].delayMs = 5;
+  const plain = await compileDraft(preset);
+  const at48 = await compileDraft(preset, undefined, {rate: 48000});
+  assert.equal(at48.artifact, plain.artifact);
+  assert.equal(at48.shapeKey, plain.shapeKey);
+  assert.equal(plain.delay.samples, 240);
+  const at96 = await compileDraft(preset, undefined, {rate: 96000});
+  assert.match(at96.artifact, /\nrate 96000\nchannels 16\n/);
+  assert.equal(at96.delay.samples, 480);
+  assert.equal(at96.delay.ms, 5);
+  assert.notEqual(at96.shapeKey, plain.shapeKey, 'a rate is part of the shape');
+});
+
+test('compileDraftRates compiles once per offered rate, 48 kHz only today', async () => {
+  const preset = createConfig();
+  const offered = await compileDraftRates(preset);
+  assert.deepEqual(Object.keys(offered), ['48000']);
+  assert.equal(offered[48000].artifact, (await compileDraft(preset)).artifact);
+  const several = await compileDraftRates(preset, undefined, {rates: [44100, 48000, 96000]});
+  assert.deepEqual(Object.keys(several).map(Number).sort((a, b) => a - b), [44100, 48000, 96000]);
+  for (const rate of [44100, 48000, 96000]) assert.match(several[rate].artifact, new RegExp(`\\nrate ${rate}\\n`));
+  await assert.rejects(compileDraftRates(preset, undefined, {rates: [48000, 32000]}), /not a Dante rate/);
+  await assert.rejects(compileDraftRates(preset, undefined, {rates: []}), /No rate/);
+});

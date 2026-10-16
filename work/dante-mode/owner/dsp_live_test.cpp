@@ -28,8 +28,9 @@ void check(bool condition, const char* message) {
 constexpr std::size_t kChannels = usb16x16::kChannels;
 
 // Straight channels at `gain`; `inputs` of them are routed, so two values give two shapes.
-std::string straight(double gain, std::size_t inputs = kChannels) {
-    std::string text = "usb16x16-dsp 1\npreset straight\nrate 48000\nchannels 16\ninternal 16\nmaxdelay 480\n";
+std::string straight(double gain, std::size_t inputs = kChannels, unsigned rate = 48000) {
+    std::string text = "usb16x16-dsp 1\npreset straight\nrate " + std::to_string(rate) +
+                       "\nchannels 16\ninternal 16\nmaxdelay " + std::to_string(rate / 100) + "\n";
     text += "expand " + std::to_string(inputs) + "\n";
     for (std::size_t c = 0; c < inputs; ++c) text += std::to_string(c) + " " + std::to_string(c) + " " + std::to_string(gain) + "\n";
     text += "branch 0\nassign 16\n";
@@ -119,6 +120,31 @@ void test_follow(const std::string& directory) {
     check(live.status_failures() == 0, "every status write landed");
 }
 
+// SAMPLE_RATE_DESIGN.md, step 3: a live file is loaded at the running stage's
+// rate, so one compiled for another rate is refused by the loader with both rates
+// named, and a stage running at 96 kHz takes 96 kHz files.
+void test_other_rate_refused(const std::string& directory) {
+    const std::string path = directory + "/rate.dsp";
+    auto dsp = std::make_unique<OutDsp>();
+    dsp->load(straight(1.0));
+    DspLive live(dsp->stage(), path, path + ".status", wall(-5));
+    put(path, straight(0.5, kChannels, 96000));
+    DspLive::Event event = live.poll();
+    check(event.outcome == DspLive::Outcome::refused && has(event.reason, "compiled for rate 96000") &&
+              has(event.reason, "running at 48000"),
+          "a live file for another rate is refused, naming both rates");
+    check(probe(*dsp) == 1000, "a file at another rate changes nothing");
+
+    auto at96 = std::make_unique<OutDsp>();
+    at96->load(straight(1.0, kChannels, 96000), 96000);
+    DspLive live96(at96->stage(), directory + "/rate96.dsp", directory + "/rate96.dsp.status", wall(-5));
+    put(directory + "/rate96.dsp", straight(0.5, kChannels, 96000));
+    check(live96.poll().outcome == DspLive::Outcome::applied, "a stage at 96 kHz takes a 96 kHz live file");
+    check(probe(*at96) == 500, "and runs on its numbers");
+    put(directory + "/rate96.dsp", straight(0.25));
+    check(live96.poll().outcome == DspLive::Outcome::refused, "and refuses a 48 kHz one");
+}
+
 void test_predates_start(const std::string& directory) {
     const std::string path = directory + "/stale.dsp";
     auto dsp = std::make_unique<OutDsp>();
@@ -150,6 +176,7 @@ int main() {
         return 1;
     }
     test_follow(directory);
+    test_other_rate_refused(directory);
     test_predates_start(directory);
     test_status_unwritable();
     std::printf(failures == 0 ? "dsp_live_test: all passed\n" : "dsp_live_test: %d FAILED\n", failures);

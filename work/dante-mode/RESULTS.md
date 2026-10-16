@@ -5100,3 +5100,84 @@ Operator's ACCEPTED after the re-run soak. Plugin d3a6b40a and config
 `rollback`). Level in service 355 / `daw_timeline` 543 (11.312 ms) on the
 18:56:41 UTC anchor. The rest of the point of record is the 2026-10-14
 set, unchanged.
+
+## Sample rate, step 3: the stack takes the rate as a parameter, still 48 kHz only; Mac-side code and tests, nothing built on the Pi (2026-10-16)
+
+SAMPLE_RATE_DESIGN.md, step 3. Every place that assumed 48 kHz now takes
+the rate, with 48000 as the default, so every installed command line and
+every artifact the page makes today is unchanged. Nothing was built on or
+installed to the Pi.
+
+What changed:
+
+- **Owner** (`owner/main.cpp`, new `owner/rate_check.hpp`): `kRate` is gone;
+  `--rate` (default 48000, any Dante rate: 44100, 48000, 88200, 96000,
+  176400, 192000) opens both Inferno PCMs and both gadget PCMs and is
+  printed on the START line. Queue depths and periods stay in frames. The
+  DSP preset is loaded at `--rate` (DSP line gains `rate=`) and the meters'
+  windows are 50 ms at it. Before each gadget open the steward reads the
+  gadget's `Capture Rate` / `Playback Rate` controls: either one at a rate
+  other than `--rate` keeps the USB half closed with one `USBRATE refused
+  host_capture=... host_playback=... rate=...` line (and one `USBRATE
+  cleared` when it ends); 0 (host interface down) or no such controls is
+  "not known" and the open goes ahead as before. USBOPEN gains `rate=`,
+  `host_rate=match|unknown`, `host_capture=`, `host_playback=` at its end.
+  The check runs on the steward only, at open; no thread is added and the
+  loop is untouched. A host that changes rate while the half is open is
+  not watched yet (the protected gadget offers 48 kHz only; step 5).
+- **DSP stage** (`phase4-bridge`, `DspStage::load(text, rate = 48000)`): an
+  artifact compiled for another rate is refused with both rates named
+  ("compiled for rate 96000, running at 48000"). The delay ceiling is 10 ms
+  at the running rate (`max_delay_samples`, rate / 100; 480 at 48 kHz) and
+  the canonical shape carries the rate and that ceiling, so a live update
+  at another rate is refused as a shape change. `owner/dsp_path.hpp` loads
+  at `--rate`; `owner/dsp_live.hpp` loads each live file at the running
+  stage's rate. `usb16x16-dsp-offline` takes `--rate`. The installed
+  bridge's `main.cpp` calls the default and is unchanged in behaviour.
+- **Compiler** (`work/dsp-compiler`): coefficients, delays (whole samples
+  at the rate), `maxdelay` and `rate` all come from the devices section's
+  `samplerate`, which must be a Dante rate. `fileDevices` / `alsaDevices`
+  take it as a last argument; `usb16x16-dsp-compile --rate`;
+  `delayLatency(config, rate)`. `DANTE_RATES` and `OFFERED_RATES` (`[48000]`,
+  the list a rate joins only after its battery) are exported.
+- **Page** (`web-ui/backend.mjs`): `compileDraft(..., {rate})` and
+  `compileDraftRates`, one compiled artifact per offered rate. Not yet sent
+  to the Pi: the applier (`usb16x16-apply`, unchanged) takes one artifact
+  and still refuses any rate but 48000. Storing one artifact per rate and
+  the arbiter picking one is step 4.
+- **Start check** (`service/usb16x16-dante-startcheck`): `--rate HZ` or
+  `USB16X16_STARTCHECK_RATE` (default 48000). A whole flow is a multiple of
+  rate / 32 packets a second, worked in 32nds of a packet so 44.1, 88.2 and
+  176.4 kHz stay exact; at 48 kHz the arithmetic is identical to before.
+  Tolerance and idle floor stay as measured at 48 kHz.
+- **`diag/dante-pcap-zeros.py`**: the rate is read from the packets'
+  samples-within-the-second field once a flow crosses a second; `--rate`
+  says what the capture must be at and a capture that contradicts it is
+  refused; a capture that never crosses a second is taken at 48000 and
+  says so.
+
+48 kHz unchanged, checked: every verification preset (nine of them),
+minimal and fixed shape, compiled by HEAD's compiler and by this one gives
+byte-identical artifacts and YAML (18 of 18). The pinned shape-key vector
+is unchanged in all three implementations.
+
+Tests, all on the Mac: bridge core (new
+`test_dsp_refuses_an_artifact_for_another_rate`) all passed; owner
+`servo_test`, `dsp_path_test` (+ rate), `dsp_live_test` (+ rate),
+`meter_tap_test` (+ rate), new `rate_check_test` all passed;
+`reference_export.cpp` and `zero_runs.cpp` build; node: dsp-compiler and
+web-ui 182 pass, 0 fail (new rate tests in `compile.test.mjs`,
+`bridge-artifact.test.mjs`, `backend.test.mjs`); `test-dante-startcheck.sh`
+(+12 rate cases) and `test-dante-start.sh` (both forms) all passed;
+`test_soak_reference.py`, new `diag/test_dante_pcap_zeros.py`, and the four
+`web-control` test files OK. `owner/main.cpp` cannot link on the Mac: a
+syntax check against a stub ALSA header shows only the six Linux-only calls
+in the untouched loop code (`RUSAGE_THREAD`, `sched_getcpu`, `ppoll`,
+`TIMER_ABSTIME`).
+
+Owed before any of it runs: build the owner on the Pi with the service
+stopped, and a battery at 48 kHz to show it unchanged (design, step 3's
+check). Installing the start check means re-pinning its hash in
+`install-dante-startcheck.sh` (it is now 53ab187a; the installed one is
+058e9177). The page change needs a web-control reinstall to reach the Pi,
+and is inert there until step 4.

@@ -84,6 +84,8 @@ DspStage::DspStage(DspStage&& other) noexcept
       shape_(std::move(other.shape_)),
       internal_channels_(other.internal_channels_),
       delay_samples_(other.delay_samples_),
+      rate_(other.rate_),
+      max_delay_(other.max_delay_),
       expand_(std::move(other.expand_)),
       assign_(std::move(other.assign_)),
       branches_(std::move(other.branches_)),
@@ -104,6 +106,8 @@ DspStage& DspStage::operator=(DspStage&& other) noexcept {
         shape_ = std::move(other.shape_);
         internal_channels_ = other.internal_channels_;
         delay_samples_ = other.delay_samples_;
+        rate_ = other.rate_;
+        max_delay_ = other.max_delay_;
         expand_ = std::move(other.expand_);
         assign_ = std::move(other.assign_);
         branches_ = std::move(other.branches_);
@@ -120,7 +124,7 @@ DspStage& DspStage::operator=(DspStage&& other) noexcept {
     return *this;
 }
 
-DspStage DspStage::load(const std::string_view text) {
+DspStage DspStage::load(const std::string_view text, const unsigned running_rate) {
     ArtifactReader reader(text);
     reader.expect("usb16x16-dsp");
     const std::size_t version = reader.count("version", 1);
@@ -133,10 +137,15 @@ DspStage DspStage::load(const std::string_view text) {
     stage.preset_ = reader.rest_of_line();
     reader.expect("rate");
     const std::size_t rate = reader.count("rate", 768000);
-    if (static_cast<double>(rate) != kNominalRate) {
-        throw std::runtime_error("dsp artifact: rate " + std::to_string(rate) +
-                                 " is not the bridge's 48000");
+    if (rate != running_rate) {
+        throw std::runtime_error("dsp artifact: compiled for rate " + std::to_string(rate) +
+                                 ", running at " + std::to_string(running_rate));
     }
+    if (rate % 100 != 0 || rate == 0) {
+        throw std::runtime_error("dsp artifact: rate " + std::to_string(rate) + " is not a whole number of hundreds");
+    }
+    stage.rate_ = static_cast<unsigned>(rate);
+    stage.max_delay_ = max_delay_samples(stage.rate_);
     reader.expect("channels");
     const std::size_t channels = reader.count("channels", kChannels);
     if (channels != kChannels) {
@@ -149,7 +158,7 @@ DspStage DspStage::load(const std::string_view text) {
         throw std::runtime_error("dsp artifact: a pipeline with no internal channels routes nothing");
     }
     reader.expect("maxdelay");
-    const std::size_t declared_delay = reader.count("maxdelay", kMaxDelaySamples);
+    const std::size_t declared_delay = reader.count("maxdelay", stage.max_delay_);
 
     const auto read_mix = [&reader](std::vector<MixEntry>& into, std::vector<double>& gains,
                                     const char* what, const std::size_t destinations,
@@ -219,7 +228,7 @@ DspStage DspStage::load(const std::string_view text) {
     // The second set is sized now, so a publish never allocates.
     stage.sets_[1] = numbers;
     stage.states_.assign(numbers.sections.size(), State{});
-    stage.delay_lines_.assign(kChannels * kMaxDelaySamples, 0.0);
+    stage.delay_lines_.assign(kChannels * stage.max_delay_, 0.0);
     stage.delay_write_.fill(0);
     stage.shape_ = shape_text(stage);
     return stage;
@@ -230,10 +239,10 @@ DspStage DspStage::load(const std::string_view text) {
 std::string DspStage::shape_text(const DspStage& stage) {
     std::string out;
     out += "usb16x16-dsp-shape 1\n";
-    out += "rate 48000\n";
+    out += "rate " + std::to_string(stage.rate_) + "\n";
     out += "channels " + std::to_string(kChannels) + "\n";
     out += "internal " + std::to_string(stage.internal_channels_) + "\n";
-    out += "maxdelay " + std::to_string(kMaxDelaySamples) + "\n";
+    out += "maxdelay " + std::to_string(stage.max_delay_) + "\n";
     out += "expand " + std::to_string(stage.expand_.size()) + "\n";
     for (const MixEntry& entry : stage.expand_) {
         out += std::to_string(entry.dest) + " " + std::to_string(entry.source) + "\n";
@@ -382,7 +391,7 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
             run_chain(c, spec.first, spec.count, sample);
             const std::uint32_t delay = c.output_delay[channel];
             if (delay > 0) {
-                double* const line = delay_lines_.data() + channel * kMaxDelaySamples;
+                double* const line = delay_lines_.data() + channel * max_delay_;
                 const std::uint32_t write = delay_write_[channel];
                 const double delayed = line[write];
                 line[write] = sample;

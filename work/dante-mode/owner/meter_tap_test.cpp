@@ -120,6 +120,21 @@ void test_through_the_stage(const std::string& directory) {
           "and the input tap counts none");
 }
 
+// SAMPLE_RATE_DESIGN.md, step 3: windows are 50 ms at the owner's rate.
+void test_window_follows_the_rate(const std::string& directory) {
+    check(OwnerMeters().usb_capture.window_frames() == 2400, "the default is 50 ms at 48 kHz, the bridge's 2400");
+    check(OwnerMeters(48000).dante_capture.window_frames() == 2400, "48 kHz given is the same");
+    check(OwnerMeters(44100).dante_playback.window_frames() == 2205, "50 ms at 44.1 kHz is 2205 frames");
+    auto meters = std::make_unique<OwnerMeters>(96000);
+    MeterPublisher publisher(*meters, directory + "/meters96.txt");
+    const auto block = block_of(48);
+    for (int n = 0; n < 50; ++n) meters->observe(block.data(), 48, meters->usb_capture);
+    check(!publisher.poll(), "at 96 kHz, 2400 frames is half a window");
+    for (int n = 0; n < 50; ++n) meters->observe(block.data(), 48, meters->usb_capture);
+    check(publisher.poll(), "and 4800 frames closes it");
+    check(has(slurp(directory + "/meters96.txt"), "window_frames=4800"), "the file says the window it was measured over");
+}
+
 void test_unwritable() {
     auto meters = std::make_unique<OwnerMeters>();
     MeterPublisher publisher(*meters, "/nonexistent-directory/meters.txt");
@@ -139,6 +154,7 @@ int main() {
     }
     test_levels_and_file(directory);
     test_through_the_stage(directory);
+    test_window_follows_the_rate(directory);
     test_unwritable();
     std::printf(failures == 0 ? "meter_tap_test: all passed\n" : "meter_tap_test: %d FAILED\n", failures);
     return failures == 0 ? 0 : 1;

@@ -14,7 +14,13 @@ Packet layout, from Inferno's flows_tx.rs / flows_rx.rs: one byte 0x02, the
 timestamp as seconds and samples-within-the-second (two big-endian u32), then
 interleaved big-endian samples, `channels * bytes_per_sample` a frame.
 
-  dante-pcap-zeros.py CAPTURE.pcap [--pi 169.254.92.97] [--min-run 9] [--bytes 3]
+  dante-pcap-zeros.py CAPTURE.pcap [--pi 169.254.92.97] [--min-run 9] [--bytes 3] [--rate HZ]
+
+The sample rate (SAMPLE_RATE_DESIGN.md, step 3) is read from the capture: the
+samples-within-the-second field counts up to the rate and wraps, so once a
+flow has crossed a second its largest value names the Dante rate. --rate
+says what the capture must be at, and a capture that contradicts it is
+refused; a capture that never crosses a second is taken at --rate, or 48000.
 
 Capture on the Pi (root), bounded, to tmpfs:
   timeout 4 tcpdump -i eth0 -n -s 0 -B 32768 -w /dev/shm/x.pcap \
@@ -108,14 +114,53 @@ class Flow:
         self.run_packet_index = []
 
 
+DANTE_RATES = (44100, 48000, 88200, 96000, 176400, 192000)
+
+
+def infer_rate(stamps):
+    """The Dante rate a capture's (seconds, samples) stamps were made at, or None
+    when no flow crossed a second. Rates are thousands of samples apart and a
+    packet is at most a few hundred, so the smallest rate above the largest
+    within-second count is the rate."""
+    crossed = False
+    largest = 0
+    for flow_stamps in stamps.values():
+        for (s1, _), (s2, _) in zip(flow_stamps, flow_stamps[1:]):
+            if s2 != s1:
+                crossed = True
+        largest = max([largest] + [samples for _, samples in flow_stamps])
+    if not crossed:
+        return None
+    for rate in DANTE_RATES:
+        if largest < rate:
+            return rate
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("capture")
     parser.add_argument("--pi", default="169.254.92.97", help="the Pi's eth0 address, to name the directions")
     parser.add_argument("--min-run", type=int, default=9, help="shortest run of zero bytes reported (9 = three 24-bit samples)")
     parser.add_argument("--bytes", type=int, default=3, help="bytes per sample, for the frame arithmetic in the report")
-    parser.add_argument("--rate", type=int, default=48000)
+    parser.add_argument("--rate", type=int, choices=DANTE_RATES,
+                        help="the rate the capture must be at (default: read from the capture)")
     options = parser.parse_args()
+
+    # First pass: the rate, from every flow's timestamps.
+    stamps = collections.defaultdict(list)
+    for _, frame, cut in packets(options.capture):
+        parsed = udp_payload(frame)
+        if parsed is None or cut:
+            continue
+        src, dst, sport, dport, payload = parsed
+        if len(payload) >= 9 + options.bytes and payload[0] == 2:
+            stamps[(src, sport, dst, dport)].append(struct.unpack(">II", payload[1:9]))
+    inferred = infer_rate(stamps)
+    if options.rate is not None and inferred is not None and inferred != options.rate:
+        sys.exit(f"the capture's timestamps count to {inferred} a second, not the --rate {options.rate}")
+    rate = options.rate or inferred or 48000
+    rate_source = "given" if options.rate else "from the timestamps" if inferred else "assumed: no flow crossed a second"
 
     flows = collections.defaultdict(Flow)
     truncated = other = 0
@@ -134,7 +179,7 @@ def main():
         flow = flows[(src, sport, dst, dport)]
         audio = payload[9:]
         seconds, samples = struct.unpack(">II", payload[1:9])
-        stamp = seconds * options.rate + samples
+        stamp = seconds * rate + samples
         if flow.last_stamp is not None:
             flow.steps[stamp - flow.last_stamp] += 1
             flow.gaps.append(when - flow.last_time)
@@ -156,7 +201,7 @@ def main():
     if not flows:
         sys.exit(f"no Dante audio packets found ({other} other packets)")
     print(f"{options.capture}: {sum(f.count for f in flows.values())} audio packets in {len(flows)} flows, "
-          f"{other} other packets, {truncated} truncated and skipped")
+          f"{other} other packets, {truncated} truncated and skipped; rate {rate} ({rate_source})")
     for key in sorted(flows, key=lambda k: (k[0] != options.pi, k)):
         src, sport, dst, dport = key
         flow = flows[key]

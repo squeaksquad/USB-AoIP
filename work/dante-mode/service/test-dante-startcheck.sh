@@ -90,5 +90,22 @@ expect "an inactive endpoint is not judged"       ""   "$(cat "$work/asked" 2>/d
 fresh; ( sleep 1; echo other456 > "$work/invocation" ) & out=$(run 5193); wait
 expect "a start it did not measure is left alone" ""   "$(cat "$work/asked" 2>/dev/null)"
 
+# The sample rate (SAMPLE_RATE_DESIGN.md, step 3): 48 kHz is the default and
+# judges as above; another rate moves the grid to rate / 32 packets a second.
+expect "48 kHz named is the default (5193)"       short "$("$check" --rate 48000 --classify 5193)"
+expect "48 kHz named is the default (6005)"       whole "$("$check" --rate 48000 --classify 6005)"
+expect "96 kHz: whole at 16 frames (12003)"       whole "$("$check" --rate 96000 --classify 12003)"
+expect "96 kHz: one flow losing 800 (11200)"      short "$("$check" --rate 96000 --classify 11200)"
+expect "96 kHz: half its grid is short (4500)"    short "$("$check" --rate 96000 --classify 4500)"
+expect "44.1 kHz: two flows at 4 frames (22050)"  whole "$("$check" --rate 44100 --classify 22050)"
+expect "44.1 kHz: 16 frames, a fraction (2756)"   whole "$("$check" --rate 44100 --classify 2756)"
+expect "44.1 kHz: one flow losing 800 (1956)"     short "$("$check" --rate 44100 --classify 1956)"
+expect "the rate from the environment too"        whole "$(USB16X16_STARTCHECK_RATE=96000 "$check" --classify 12003)"
+expect "a rate Dante does not have is refused"    2    "$("$check" --rate 32000 --classify 6005 >/dev/null 2>&1; echo $?)"
+fresh; out=$(run 12003 --rate 96000 --dry-run)
+expect "a whole 96 kHz start judged as a whole"   1    "$(echo "$out" | grep -c "startcheck: whole")"
+fresh; out=$(run 11200 --rate 96000 --dry-run)
+expect "a short 96 kHz start names its grid"      1    "$(echo "$out" | grep -c "800 under a multiple of 3000")"
+
 echo
 if [ "$failures" -eq 0 ]; then echo "all passed"; else echo "$failures failed"; exit 1; fi

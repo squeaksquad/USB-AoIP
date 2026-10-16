@@ -13,6 +13,7 @@
 #include <memory>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -32,8 +33,9 @@ void check(bool condition, const char* message) {
 constexpr std::size_t kChannels = usb16x16::kChannels;
 
 // Every input to the output of the same number at `gain`, no filters, no delay.
-std::string straight(double gain) {
-    std::string text = "usb16x16-dsp 1\npreset straight\nrate 48000\nchannels 16\ninternal 16\nmaxdelay 480\nexpand 16\n";
+std::string straight(double gain, unsigned rate = 48000) {
+    std::string text = "usb16x16-dsp 1\npreset straight\nrate " + std::to_string(rate) +
+                       "\nchannels 16\ninternal 16\nmaxdelay " + std::to_string(rate / 100) + "\nexpand 16\n";
     for (std::size_t c = 0; c < kChannels; ++c) text += std::to_string(c) + " " + std::to_string(c) + " " + std::to_string(gain) + "\n";
     text += "branch 0\nassign 16\n";
     for (std::size_t c = 0; c < kChannels; ++c) text += std::to_string(c) + " " + std::to_string(c) + " 1\n";
@@ -164,12 +166,45 @@ void run_artifact(const char* path) {
 
 }  // namespace
 
+// SAMPLE_RATE_DESIGN.md, step 3: the owner loads its preset at --rate. 48 kHz
+// is the default; an artifact compiled for any other rate is refused before
+// anything is opened, and the adapter stays off.
+void test_rate_must_match() {
+    auto dsp = std::make_unique<OutDsp>();
+    dsp->load(straight(1.0));
+    check(dsp->enabled() && dsp->stage().rate() == 48000, "the default rate is 48 kHz");
+    for (const unsigned other : {44100U, 88200U, 96000U, 176400U, 192000U}) {
+        auto refused = std::make_unique<OutDsp>();
+        bool threw = false;
+        try {
+            refused->load(straight(1.0, other), 48000);
+        } catch (const std::runtime_error&) {
+            threw = true;
+        }
+        check(threw && !refused->enabled(), "an artifact for another rate is refused at 48 kHz and the stage stays off");
+    }
+    bool threw = false;
+    try {
+        dsp->load(straight(1.0), 96000);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    check(threw, "a 48 kHz artifact is refused at 96 kHz");
+    auto at96 = std::make_unique<OutDsp>();
+    at96->load(straight(1.0, 96000), 96000);
+    auto block = noise(48, 9);
+    const auto before = block;
+    at96->process(block.data(), 48);
+    check(at96->stage().rate() == 96000 && block == before, "a 96 kHz artifact at 96 kHz runs, and unity stays bit-exact");
+}
+
 int main(int argc, char** argv) {
     test_unloaded_is_inert();
     test_unity_is_bit_exact();
     test_gain_rounds_and_saturates();
     test_reset_clears_state();
     test_oversized_block_is_refused();
+    test_rate_must_match();
     for (int i = 1; i < argc; ++i) run_artifact(argv[i]);
     std::printf(failures == 0 ? "dsp_path_test: all passed\n" : "dsp_path_test: %d FAILED\n", failures);
     return failures == 0 ? 0 : 1;

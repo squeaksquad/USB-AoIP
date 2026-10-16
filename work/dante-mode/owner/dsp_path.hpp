@@ -29,8 +29,9 @@ public:
     // The owner's scratch: no block is longer.
     static constexpr std::size_t kMaxFrames = 1024;
 
-    // Throws what DspStage::load throws. Before the loop only.
-    void load(std::string_view artifact) { stage_ = DspStage::load(artifact); }
+    // Throws what DspStage::load throws, which includes an artifact compiled
+    // for a rate other than `rate`, the owner's --rate. Before the loop only.
+    void load(std::string_view artifact, unsigned rate = 48000) { stage_ = DspStage::load(artifact, rate); }
 
     [[nodiscard]] bool enabled() const noexcept { return stage_.loaded(); }
     [[nodiscard]] DspStage& stage() noexcept { return stage_; }

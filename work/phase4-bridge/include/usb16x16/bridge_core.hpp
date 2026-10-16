@@ -55,6 +55,11 @@ public:
     static constexpr std::size_t kMaxInternalChannels = 48;
     // 10 ms at 48 kHz, the alignment-delay ceiling the preset model validates.
     static constexpr std::size_t kMaxDelaySamples = 480;
+    // The same 10 ms at any rate the stage runs at (every Dante rate is a
+    // whole number of hundreds, so this is exact).
+    [[nodiscard]] static constexpr std::size_t max_delay_samples(const unsigned rate) noexcept {
+        return rate / 100;
+    }
 
     struct Section {
         double b0{}, b1{}, b2{}, a1{}, a2{};
@@ -71,7 +76,10 @@ public:
     // Parse the artifact `usb16x16-dsp-compile --bridge` writes. Throws
     // std::runtime_error with the offending line on anything malformed;
     // a bridge that cannot load a preset must refuse it, not run half of one.
-    static DspStage load(std::string_view text);
+    // `rate` is the rate the caller runs at: the coefficients and delays are
+    // compiled for one rate, so an artifact that names another is refused
+    // (SAMPLE_RATE_DESIGN.md, step 3), never run off-tune.
+    static DspStage load(std::string_view text, unsigned rate = static_cast<unsigned>(kNominalRate));
 
     // The canonical shape text and its SHA-256, as `artifactShape` and
     // `artifactShapeKey` in work/dsp-compiler/bridge-artifact.mjs define them;
@@ -94,6 +102,8 @@ public:
     [[nodiscard]] bool loaded() const noexcept { return internal_channels_ > 0; }
     [[nodiscard]] std::size_t internal_channels() const noexcept { return internal_channels_; }
     [[nodiscard]] const std::string& preset() const noexcept { return preset_; }
+    // The rate the artifact was compiled for, which load() checked; 0 unloaded.
+    [[nodiscard]] unsigned rate() const noexcept { return rate_; }
     // The transport cost of the alignment delays: the largest of them, because
     // the output is not complete until the most delayed channel is produced.
     [[nodiscard]] std::size_t delay_samples() const noexcept { return delay_samples_; }
@@ -141,6 +151,8 @@ private:
     std::string shape_;
     std::size_t internal_channels_{};
     std::size_t delay_samples_{};
+    unsigned rate_{};
+    std::size_t max_delay_{};
     std::vector<MixEntry> expand_;
     std::vector<MixEntry> assign_;
     std::vector<Chain> branches_;
@@ -153,7 +165,7 @@ private:
     std::atomic<unsigned> active_{0};
     std::atomic<std::uint64_t> published_{0};
     std::atomic<std::uint64_t> seen_{0};
-    // One contiguous block, kMaxDelaySamples per output, so a delay line never
+    // One contiguous block, max_delay_ per output, so a delay line never
     // allocates and the whole stage is one cache-friendly region.
     std::vector<double> delay_lines_;
     std::array<std::uint32_t, kChannels> delay_write_{};

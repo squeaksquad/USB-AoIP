@@ -40,6 +40,16 @@ class OwnerMeters {
 public:
     static constexpr std::size_t kMaxFrames = 1024;
 
+    // A window is 50 ms at whatever rate the owner runs (--rate): 2400 frames
+    // at 48 kHz, as the bridge's, 4800 at 96 kHz, 2205 at 44.1 kHz. The page
+    // reads window_frames from the file and never assumes it.
+    static constexpr std::size_t window_frames_for(unsigned rate) noexcept { return rate / 20; }
+
+    explicit OwnerMeters(unsigned rate = 48000) noexcept
+        : usb_capture(window_frames_for(rate)),
+          dante_playback(window_frames_for(rate)),
+          dante_capture(window_frames_for(rate)) {}
+
     LevelMeter usb_capture;
     LevelMeter dante_playback;
     LevelMeter dante_capture;

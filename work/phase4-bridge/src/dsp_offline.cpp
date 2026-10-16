@@ -80,6 +80,7 @@ int usage() {
         "  --format s32le|f64le   sample format of both files (default s32le)\n"
         "  --block N              frames per process() call (default 48)\n"
         "  --bypass               load the artifact but do not run it\n"
+        "  --rate HZ              the rate the artifact must be compiled for (default 48000)\n"
         "  --bench N              time N process() calls in memory and exit\n"
         "  --shape                print the shape key and canonical shape, then exit\n"
         "  --swap-at FRAME FILE   publish FILE's coefficients at the first block\n"
@@ -142,6 +143,7 @@ int main(const int argc, char** const argv) {
     std::size_t block = 48;
     std::size_t bench = 0;
     bool bypass = false;
+    unsigned rate = 48000;
     bool shape_only = false;
     bool swap = false;
     std::size_t swap_frame = 0;
@@ -160,6 +162,7 @@ int main(const int argc, char** const argv) {
         else if (argument == "--out") output_path = take();
         else if (argument == "--block") block = std::stoul(take());
         else if (argument == "--bypass") bypass = true;
+        else if (argument == "--rate") rate = static_cast<unsigned>(std::stoul(take()));
         else if (argument == "--bench") bench = std::stoul(take());
         else if (argument == "--shape") shape_only = true;
         else if (argument == "--swap-at") { swap = true; swap_frame = std::stoul(take()); swap_path = take(); }
@@ -186,7 +189,7 @@ int main(const int argc, char** const argv) {
 
     usb16x16::DspStage stage;
     try {
-        stage = usb16x16::DspStage::load(artifact_text.str());
+        stage = usb16x16::DspStage::load(artifact_text.str(), rate);
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 4;
@@ -202,7 +205,7 @@ int main(const int argc, char** const argv) {
         std::ostringstream update_text;
         update_text << update_file.rdbuf();
         try {
-            update = usb16x16::DspStage::load(update_text.str());
+            update = usb16x16::DspStage::load(update_text.str(), rate);
         } catch (const std::exception& error) {
             std::cerr << swap_path << ": " << error.what() << '\n';
             return 4;

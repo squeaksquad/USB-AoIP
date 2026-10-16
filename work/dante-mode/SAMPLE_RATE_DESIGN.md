@@ -178,6 +178,13 @@ and reports instead of looping.
    store keeps one artifact per rate; the arbiter picks the one for the
    new rate. A preset with no artifact for the requested rate makes the
    change refuse, never fall back silently.
+   2026-10-16: written and Mac-tested, nothing built on the Pi (RESULTS.md,
+   "Sample rate, step 3"): owner `--rate` and `owner/rate_check.hpp` (the
+   gadget's rate controls read before each open), `DspStage::load(text,
+   rate)` refusing another rate, the compiler and `compileDraftRates` per
+   rate, the start check's `--rate`, the pcap tool reading the rate from
+   the capture. 48 kHz artifacts byte-identical to before. Owed: the owner
+   built on the Pi with the service stopped and the 48 kHz battery.
 4. **The arbiter at 48 kHz.** `rate` request kind in the applier (or a
    separate service), wired from the owner. Check: a set to 48 kHz from
    Controller round-trips through the arbiter and restarts nothing (no

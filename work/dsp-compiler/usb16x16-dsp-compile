@@ -6,7 +6,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parsePreset } from '../web-ui/model.mjs';
-import { compile, fileDevices, alsaDevices } from './compile.mjs';
+import { compile, fileDevices, alsaDevices, SAMPLE_RATE } from './compile.mjs';
 import { toYaml } from './yaml.mjs';
 import { bridgeArtifact, delayLatency } from './bridge-artifact.mjs';
 
@@ -26,10 +26,12 @@ const usage = `usage: usb16x16-dsp-compile PRESET.json [options]
       --capture DEVICE    alsa target: capture device
       --playback DEVICE   alsa target: playback device
       --chunksize N       frames per chunk (default: 1024)
+      --rate HZ           sample rate to compile for, a Dante rate (default: 48000);
+                          the artifact names it and the Pi refuses it at any other
 `;
 
 function parseArgs(argv) {
-  const options = {target: 'file', in: 'in.raw', raw: 'out.raw', chunksize: 1024, shape: 'minimal'};
+  const options = {target: 'file', in: 'in.raw', raw: 'out.raw', chunksize: 1024, shape: 'minimal', rate: SAMPLE_RATE};
   const rest = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -51,6 +53,7 @@ function parseArgs(argv) {
     else if (arg === '--capture') options.capture = take();
     else if (arg === '--playback') options.playback = take();
     else if (arg === '--chunksize') options.chunksize = Number(take());
+    else if (arg === '--rate') options.rate = Number(take());
     else if (arg.startsWith('-')) throw new Error(`Unknown option ${arg}`);
     else rest.push(arg);
   }
@@ -70,13 +73,13 @@ function main() {
 
   let devices;
   if (options.target === 'file') {
-    devices = fileDevices(options.in, options.raw, options.format || 'S32_LE', options.chunksize);
+    devices = fileDevices(options.in, options.raw, options.format || 'S32_LE', options.chunksize, options.rate);
   } else if (options.target === 'alsa') {
     if (!options.capture || !options.playback) {
       process.stderr.write('The alsa target needs --capture and --playback.\n');
       return 2;
     }
-    devices = alsaDevices(options.capture, options.playback, options.format || 'S24_3_LE', options.chunksize);
+    devices = alsaDevices(options.capture, options.playback, options.format || 'S24_3_LE', options.chunksize, options.rate);
   } else {
     process.stderr.write(`Unknown target ${options.target}\n`);
     return 2;
@@ -124,7 +127,7 @@ function main() {
     try { writeFileSync(options.bridge, bridgeArtifact(result, {presetName: preset.name})); }
     catch (error) { process.stderr.write(`Could not write the bridge artifact: ${error.message}\n`); return 4; }
   }
-  const latency = delayLatency(preset);
+  const latency = delayLatency(preset, options.rate);
   if (latency.text) result.report.warnings.push(latency.text);
   result.report.delayLatency = latency;
   if (options.report) writeFileSync(options.report, `${JSON.stringify(result.report, null, 2)}\n`);

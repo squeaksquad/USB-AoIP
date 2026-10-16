@@ -6,6 +6,8 @@
 #   usb16x16-dante-startcheck               judge this start; restart on a short one (root)
 #   usb16x16-dante-startcheck --dry-run     judge and say what it would do; needs no root
 #   usb16x16-dante-startcheck --classify N  whole | short | idle for a rate of N frames a second
+#   --rate HZ before any of these: the endpoint's sample rate (default 48000,
+#   or USB16X16_STARTCHECK_RATE); a Dante rate
 #
 # Why (2026-10-12, RESULTS.md, "The holes are packets from the Ferrofish that
 # never reach the Pi" and the section after it): about one endpoint start in
@@ -26,6 +28,13 @@
 # This rests on the loss having the size it has had; a fault that removed
 # exactly 1,500 a second would pass.
 #
+# At another sample rate (SAMPLE_RATE_DESIGN.md, step 3) the grid is that
+# rate / 32 packets a second, which is not a whole number at 44.1, 88.2 or
+# 176.4 kHz (1,378.125 at 44.1), so the distance is worked in 32nds of a
+# packet: 32 x rate against multiples of the sample rate. At 48 kHz that is
+# exactly the arithmetic above. The tolerance and the idle floor stay in
+# packets a second; they were measured at 48 kHz only.
+#
 # What it will not do: judge before the flows are up (it waits, and with no
 # audio arriving at all it says so and leaves the endpoint alone); restart
 # more than MAX_RESTARTS times in an EPISODE; restart a start it did not
@@ -45,7 +54,7 @@ state_dir=${USB16X16_STARTCHECK_DIR:-/run/usb16x16-dante-startcheck}
 # ethtool lives in /usr/sbin, which is not on every PATH this is run with (an ssh session, for one).
 ethtool=${USB16X16_STARTCHECK_ETHTOOL:-$(command -v ethtool || echo /usr/sbin/ethtool)}
 systemctl=${USB16X16_STARTCHECK_SYSTEMCTL:-systemctl}
-grid=1500           # packets a second a whole flow is a multiple of
+sample_rate=${USB16X16_STARTCHECK_RATE:-48000}   # the endpoint's rate; --rate overrides
 tolerance=60        # distance from the multiple that still counts as whole
 floor=1000          # under this no audio flow is up
 window=${USB16X16_STARTCHECK_WINDOW:-10}          # seconds a reading
@@ -56,13 +65,17 @@ episode=900         # seconds after which the restart count starts again
 
 say() { echo "startcheck: $*"; }
 
+is_dante_rate() { case "$1" in 44100|48000|88200|96000|176400|192000) return 0 ;; esac; return 1; }
+
+# A whole flow is a multiple of sample_rate / 32 packets a second. In 32nds of
+# a packet, so the grid is the sample rate itself and stays a whole number.
 classify() {
   local rate=$1 over distance
   if [ "$rate" -lt "$floor" ]; then echo idle; return; fi
-  over=$(( rate % grid ))
+  over=$(( rate * 32 % sample_rate ))
   distance=$over
-  [ $(( grid - over )) -lt "$distance" ] && distance=$(( grid - over ))
-  if [ "$distance" -le "$tolerance" ]; then echo whole; else echo short; fi
+  [ $(( sample_rate - over )) -lt "$distance" ] && distance=$(( sample_rate - over ))
+  if [ "$distance" -le $(( tolerance * 32 )) ]; then echo whole; else echo short; fi
 }
 
 audio_frames() {   # received frames of 128 bytes and over, so far
@@ -82,11 +95,13 @@ rate() {   # frames a second over one window
 invocation() { "$systemctl" show -p InvocationID --value "$unit" 2>/dev/null; }
 
 mode=run
+if [ "${1:-}" = --rate ]; then sample_rate=${2:-}; shift 2 || true; fi
+is_dante_rate "$sample_rate" || { echo "$0: the sample rate must be a Dante rate, not '$sample_rate'" >&2; exit 2; }
 case "${1:-}" in
-  --classify) [[ ${2:-} =~ ^[0-9]+$ ]] || { echo "usage: $0 --classify RATE" >&2; exit 2; }; classify "$2"; exit 0 ;;
+  --classify) [[ ${2:-} =~ ^[0-9]+$ ]] || { echo "usage: $0 [--rate HZ] --classify RATE" >&2; exit 2; }; classify "$2"; exit 0 ;;
   --dry-run) mode=dry ;;
   "") ;;
-  *) echo "usage: $0 [--dry-run | --classify RATE]" >&2; exit 2 ;;
+  *) echo "usage: $0 [--rate HZ] [--dry-run | --classify RATE]" >&2; exit 2 ;;
 esac
 
 status() {   # one line for whoever wants to know: scripts, the page
@@ -146,20 +161,21 @@ if [ "$verdict" = whole ]; then
   exit 0
 fi
 
-short_by() { echo $(( grid - $1 % grid )); }   # below the next multiple of the grid
+short_by() { echo $(( (sample_rate - $1 * 32 % sample_rate) / 32 )); }   # packets below the next multiple of the grid
+grid_text=$(( sample_rate / 32 ))   # for the log; exact except at 44.1, 88.2 and 176.4 kHz
 if [ "$count" -ge "$max_restarts" ]; then
   echo "<3>startcheck: SHORT and giving up: $first and $second audio frames a second after $count restarts; the endpoint is left running with holes"
   status gave-up "$second" "$count"
   exit 0
 fi
 if [ "$mode" = dry ]; then
-  say "SHORT: $first and $second audio frames a second ($(short_by "$second") under a multiple of $grid); would restart $unit"
+  say "SHORT: $first and $second audio frames a second ($(short_by "$second") under a multiple of $grid_text); would restart $unit"
   exit 0
 fi
 [ "$count" -eq 0 ] && since=$(date +%s)
 count=$(( count + 1 ))
 mkdir -p "$state_dir" && echo "$count $since" > "$state_dir/restarts"
-echo "<4>startcheck: SHORT: $first and $second audio frames a second ($(short_by "$second") under a multiple of $grid); restarting $unit, restart $count of $max_restarts"
+echo "<4>startcheck: SHORT: $first and $second audio frames a second ($(short_by "$second") under a multiple of $grid_text); restarting $unit, restart $count of $max_restarts"
 status restarting "$second" "$count"
 "$systemctl" reset-failed "$unit" 2>/dev/null
 "$systemctl" --no-block restart "$unit"

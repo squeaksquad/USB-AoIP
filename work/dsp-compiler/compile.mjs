@@ -45,6 +45,15 @@ import { CHANNELS, validateConfig } from '../web-ui/model.mjs';
 import { polarityWarningText } from '../web-ui/crossover-notes.mjs';
 
 export const SAMPLE_RATE = 48000;
+// Every rate a Dante device can run at (SAMPLE_RATE_DESIGN.md). A preset
+// compiles at any of them: coefficients and delays are computed for the rate
+// in the devices section, and the artifact names it, so the Pi refuses one
+// compiled for a rate other than the one it runs at.
+export const DANTE_RATES = Object.freeze([44100, 48000, 88200, 96000, 176400, 192000]);
+// The rates the endpoint offers today: a rate joins only after its own
+// battery (design, step 6). The page compiles a preset at each of these, one
+// artifact per rate, because the Pi has no compiler of its own.
+export const OFFERED_RATES = Object.freeze([48000]);
 
 // Linkwitz-Riley order is twice the Butterworth order: 12 dB/oct is order 2.
 const SLOPE_ORDER = {12: 2, 24: 4, 48: 8};
@@ -235,7 +244,7 @@ function assignMixer(config, plan, fixed) {
 }
 
 /** Per-output PEQ, alignment delay, gain, polarity and mute. */
-function outputFilters(config, filters, fixed) {
+function outputFilters(config, filters, fixed, rate) {
   const steps = [];
   for (let output = 0; output < CHANNELS; output += 1) {
     const spec = config.outputs[output];
@@ -263,7 +272,7 @@ function outputFilters(config, filters, fixed) {
       });
     }
     // Whole-sample delay is the first engine implementation, per the README.
-    const samples = Math.round(spec.delayMs / 1000 * SAMPLE_RATE);
+    const samples = Math.round(spec.delayMs / 1000 * rate);
     if (samples > 0) {
       const name = `delay_out${output + 1}`;
       filters[name] = {
@@ -349,18 +358,18 @@ function collectWarnings(config, plan, levels) {
   return warnings;
 }
 
-export function fileDevices(inputPath, outputPath, format = 'S32_LE', chunksize = 1024) {
+export function fileDevices(inputPath, outputPath, format = 'S32_LE', chunksize = 1024, samplerate = SAMPLE_RATE) {
   return {
-    samplerate: SAMPLE_RATE,
+    samplerate,
     chunksize,
     capture: {type: 'RawFile', filename: inputPath, channels: CHANNELS, format},
     playback: {type: 'File', filename: outputPath, channels: CHANNELS, format},
   };
 }
 
-export function alsaDevices(captureDevice, playbackDevice, format = 'S24_3_LE', chunksize = 1024) {
+export function alsaDevices(captureDevice, playbackDevice, format = 'S24_3_LE', chunksize = 1024, samplerate = SAMPLE_RATE) {
   return {
-    samplerate: SAMPLE_RATE,
+    samplerate,
     chunksize,
     capture: {type: 'Alsa', device: captureDevice, channels: CHANNELS, format},
     playback: {type: 'Alsa', device: playbackDevice, channels: CHANNELS, format},
@@ -372,7 +381,8 @@ export function alsaDevices(captureDevice, playbackDevice, format = 'S24_3_LE', 
  *
  * Returns {config, plan, report}. `devices` must be supplied by the caller:
  * choosing capture and playback devices is an integration decision this
- * compiler has no basis to make.
+ * compiler has no basis to make. Its `samplerate` is the rate everything is
+ * compiled for, and must be a Dante rate.
  */
 export function compile(preset, devices, {shape = 'minimal'} = {}) {
   if (!SHAPES.includes(shape)) throw new Error(`Unknown shape ${shape}; use ${SHAPES.join(' or ')}`);
@@ -382,6 +392,10 @@ export function compile(preset, devices, {shape = 'minimal'} = {}) {
     throw new Error('Direct mode has no DSP path to compile. Switch the preset to DSP mode.');
   }
   if (!devices) throw new Error('Supply a devices section (fileDevices or alsaDevices)');
+  const rate = devices.samplerate;
+  if (!DANTE_RATES.includes(rate)) {
+    throw new Error(`Sample rate ${rate} is not a Dante rate (${DANTE_RATES.join(', ')})`);
+  }
 
   const plan = planChannels(config, fixed);
   if (!plan.channels.length) {
@@ -393,7 +407,7 @@ export function compile(preset, devices, {shape = 'minimal'} = {}) {
     {type: 'Mixer', name: 'expand'},
     ...branchFilters(config, plan, filters, fixed),
     {type: 'Mixer', name: 'assign'},
-    ...outputFilters(config, filters, fixed),
+    ...outputFilters(config, filters, fixed, rate),
   ];
   const levels = worstCase(config, plan);
 
@@ -415,6 +429,7 @@ export function compile(preset, devices, {shape = 'minimal'} = {}) {
     report: {
       preset: config.name,
       shape,
+      rate,
       internalChannels: plan.channels.length,
       channelMap: plan.channels.map((channel, index) => ({index, ...channel})),
       filterCount: Object.keys(filters).length,

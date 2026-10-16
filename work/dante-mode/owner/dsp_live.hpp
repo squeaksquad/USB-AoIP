@@ -89,7 +89,7 @@ public:
             return {Outcome::ignored, sha, "predates start"};
         }
         try {
-            pending_.emplace(DspStage::load(body));
+            pending_.emplace(DspStage::load(body, stage_.rate()));
         } catch (const std::exception& error) {
             ++refused_;
             write_status(sha, "refused", error.what());

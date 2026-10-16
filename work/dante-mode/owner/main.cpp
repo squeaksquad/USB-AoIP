@@ -31,6 +31,12 @@
 // Dante, what Dante returned) are published to that file by another such
 // thread (meter_tap.hpp); with or without a preset.
 //
+// --rate (default 48000) is the one rate the owner runs at, both PCMs and the
+// DSP preset alike (SAMPLE_RATE_DESIGN.md, step 3): a preset compiled for
+// another rate is refused at start, and the gadget is not joined while the
+// host's rate controls name another rate (rate_check.hpp). Queue depths and
+// periods stay in frames, so their length in time follows the rate.
+//
 // With --gap-trace US (diagnostic, off by default) every wake that comes US
 // microseconds or more after the one before is printed at once as a LOOPGAP
 // line: how much of the gap was spent waiting, how much in each stage of the
@@ -41,14 +47,15 @@
 //   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
 // (one line)
-// (the headers beside it; servo_test.cpp, dsp_path_test.cpp, dsp_live_test.cpp
-// and meter_tap_test.cpp are their tests and build anywhere)
+// (the headers beside it; servo_test.cpp, dsp_path_test.cpp, dsp_live_test.cpp,
+// meter_tap_test.cpp and rate_check_test.cpp are their tests and build anywhere)
 
 #include <alsa/asoundlib.h>
 
 #include "dsp_live.hpp"
 #include "dsp_path.hpp"
 #include "meter_tap.hpp"
+#include "rate_check.hpp"
 #include "servo.hpp"
 
 #include <dirent.h>
@@ -79,7 +86,6 @@
 namespace {
 
 constexpr unsigned kChannels = 16;
-constexpr unsigned kRate = 48000;
 constexpr std::int64_t kTickNs = 1000000;          // the loop's grid while no gadget drives it
 constexpr snd_pcm_uframes_t kResyncMargin = 16;    // the clock moves 4 to 5 frames during a forward (RESULTS.md)
 constexpr std::int64_t kPacketFrames = 32;         // the transmit thread reads this far ahead of the clock
@@ -101,6 +107,8 @@ std::int64_t now_ns() noexcept {
 
 struct Options {
     std::string pcm{"inferno"};
+    // The rate both PCMs are opened at and the DSP preset must be compiled for.
+    unsigned rate{usb16x16::owner::kDefaultRate};
     snd_pcm_uframes_t period{64};
     snd_pcm_uframes_t buffer{1024};
     snd_pcm_uframes_t tx_lead{128};
@@ -145,7 +153,7 @@ struct Options {
     if (message != nullptr) {
         std::fprintf(stderr, "%s\n", message);
     }
-    std::fputs("usb16x16-dante-owner [--no-usb] [--pcm inferno] [--period 64] [--buffer 1024] [--tx-lead 128]\n"
+    std::fputs("usb16x16-dante-owner [--no-usb] [--pcm inferno] [--rate 48000] [--period 64] [--buffer 1024] [--tx-lead 128]\n"
                "                     [--guard 256] [--priority 79] [--seconds 0] [--log-every 10]\n"
                "                     [--usb hw:CARD=UAC2Gadget,DEV=0] [--usb-period 48] [--usb-buffer 480]\n"
                "                     [--rx-queue 144] [--rx-slack 96] [--kp 0.5] [--ki 0.003] [--seed-ppm 0]\n"
@@ -155,6 +163,8 @@ struct Options {
                "                     [--gap-trace MICROSECONDS] [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
+               "  --rate      the sample rate of both halves and of the DSP preset (a Dante rate; default\n"
+               "              48000); the gadget is not joined while the host runs at another\n"
                "  --tx-lead   Inferno playback depth held after each gadget block (and the silent lead)\n"
                "  --rx-queue  gadget playback queue held after each write\n"
                "  --rx-slack  how far over --rx-queue the queue may go before incoming frames are dropped\n"
@@ -198,6 +208,7 @@ Options parse_options(int argc, char** argv) {
         if (a == "--help" || i + 1 >= argc) { usage(); }
         const char* v = argv[++i];
         if (a == "--pcm") o.pcm = v;
+        else if (a == "--rate") o.rate = static_cast<unsigned>(parse_number(v, "--rate"));
         else if (a == "--usb") o.usb = v;
         else if (a == "--usb-period") o.usb_period = parse_number(v, "--usb-period");
         else if (a == "--usb-buffer") o.usb_buffer = parse_number(v, "--usb-buffer");
@@ -224,6 +235,7 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--log-every") o.log_every = static_cast<unsigned>(parse_number(v, "--log-every"));
         else usage((std::string("unknown option ") + std::string(a)).c_str());
     }
+    if (!usb16x16::owner::is_dante_rate(o.rate)) usage("--rate must be a Dante rate: 44100, 48000, 88200, 96000, 176400 or 192000");
     if (o.usb_period < 16 || o.usb_period > 96) usage("--usb-period must be 16 to 96");
     if (o.rx_queue < 2 * o.usb_period || o.rx_queue + o.rx_slack + o.usb_period > o.usb_buffer || o.usb_buffer > 2048) {
         usage("--rx-queue, --rx-slack and --usb-buffer do not fit");
@@ -700,7 +712,7 @@ NetPcm open_net(const Options& o, snd_pcm_stream_t stream) {
     snd_pcm_sw_params_t* sw = nullptr;
     snd_pcm_hw_params_alloca(&hw);
     snd_pcm_sw_params_alloca(&sw);
-    unsigned rate = kRate;
+    unsigned rate = o.rate;
     int dir = 0;
     pcm.period = o.period;
     pcm.buffer = o.buffer;
@@ -718,9 +730,9 @@ NetPcm open_net(const Options& o, snd_pcm_stream_t stream) {
     const std::int64_t hw_us = (now_ns() - before) / 1000;
     snd_pcm_hw_params_get_period_size(hw, &pcm.period, &dir);
     snd_pcm_hw_params_get_buffer_size(hw, &pcm.buffer);
-    if (rate != kRate || pcm.period != o.period || pcm.buffer != o.buffer) {
+    if (rate != o.rate || pcm.period != o.period || pcm.buffer != o.buffer) {
         std::printf("FATAL %s negotiated rate=%u period=%lu buffer=%lu, asked %u/%lu/%lu\n", direction, rate,
-                    static_cast<unsigned long>(pcm.period), static_cast<unsigned long>(pcm.buffer), kRate,
+                    static_cast<unsigned long>(pcm.period), static_cast<unsigned long>(pcm.buffer), o.rate,
                     static_cast<unsigned long>(o.period), static_cast<unsigned long>(o.buffer));
         std::exit(1);
     }
@@ -954,7 +966,7 @@ int open_usb(const Options& o, snd_pcm_stream_t stream, UsbPcm& pcm, std::string
     snd_pcm_sw_params_t* sw = nullptr;
     snd_pcm_hw_params_alloca(&hw);
     snd_pcm_sw_params_alloca(&sw);
-    unsigned rate = kRate;
+    unsigned rate = o.rate;
     int dir = 0;
     pcm.period = o.usb_period;
     pcm.buffer = o.usb_buffer;
@@ -972,7 +984,7 @@ int open_usb(const Options& o, snd_pcm_stream_t stream, UsbPcm& pcm, std::string
     }
     snd_pcm_hw_params_get_period_size(hw, &pcm.period, &dir);
     snd_pcm_hw_params_get_buffer_size(hw, &pcm.buffer);
-    if (rate != kRate || pcm.buffer < o.rx_queue + o.rx_slack + pcm.period) {
+    if (rate != o.rate || pcm.buffer < o.rx_queue + o.rx_slack + pcm.period) {
         stage = "negotiated sizes";
         return -EINVAL;
     }
@@ -1047,6 +1059,29 @@ struct PitchControl {
     }
 };
 
+// The host's rate as the gadget shows it: the controls "Capture Rate" and
+// "Playback Rate" on its card, 0 while the host has that interface down. A
+// control that cannot be read is its negative ALSA error (a kernel without
+// them, or no gadget). Steward thread only: it opens the control device.
+void read_gadget_rates(const std::string& pcm_device, long& capture, long& playback) {
+    capture = -ENODEV;
+    playback = -ENODEV;
+    const auto comma = pcm_device.find(',');
+    const std::string device = comma == std::string::npos ? pcm_device : pcm_device.substr(0, comma);
+    snd_ctl_t* ctl = nullptr;
+    if (snd_ctl_open(&ctl, device.c_str(), 0) < 0) return;
+    const auto read = [ctl](const char* text) -> long {
+        snd_ctl_elem_value_t* value = nullptr;
+        snd_ctl_elem_value_alloca(&value);
+        PitchControl::name(value, text);
+        const int rc = snd_ctl_elem_read(ctl, value);
+        return rc < 0 ? rc : snd_ctl_elem_value_get_integer(value, 0);
+    };
+    capture = read("Capture Rate");
+    playback = read("Playback Rate");
+    snd_ctl_close(ctl);
+}
+
 // The learned clock offset between runs: one number in a small file, replaced
 // whole. Never called on the loop thread.
 bool read_ppm_file(const std::string& path, double& ppm) {
@@ -1086,6 +1121,9 @@ void* steward_entry(void* argument) {
     PitchControl pitch;
     std::int64_t next_try = 0;
     int last_reported = 1;   // not an ALSA error, so the first failure is printed
+    // The host rates last reported as refused, so a refusal is printed once and its end once.
+    long refused_capture = 0;
+    long refused_playback = 0;
     std::int64_t next_ppm_write = now_ns() + 60000000000LL;
     const auto close_all = [&]() {
         pitch.close();
@@ -1119,6 +1157,27 @@ void* steward_entry(void* argument) {
         }
         if (now_ns() < next_try) continue;
         next_try = now_ns() + 1000000000LL;
+        // The host's rate first: a host at another rate is never joined (rate_check.hpp).
+        long host_capture = 0;
+        long host_playback = 0;
+        read_gadget_rates(o.usb, host_capture, host_playback);
+        const auto host_rate = usb16x16::owner::judge_gadget_rate(host_capture, host_playback, o.rate);
+        if (host_rate == usb16x16::owner::GadgetRate::mismatch) {
+            if (host_capture != refused_capture || host_playback != refused_playback) {
+                std::printf("USBRATE refused host_capture=%ld host_playback=%ld rate=%u; the USB half stays closed\n",
+                            host_capture, host_playback, o.rate);
+                std::fflush(stdout);
+                refused_capture = host_capture;
+                refused_playback = host_playback;
+            }
+            continue;
+        }
+        if (refused_capture != 0 || refused_playback != 0) {
+            std::printf("USBRATE cleared host_capture=%ld host_playback=%ld rate=%u\n", host_capture, host_playback, o.rate);
+            std::fflush(stdout);
+            refused_capture = 0;
+            refused_playback = 0;
+        }
         std::string stage;
         int rc = open_usb(o, SND_PCM_STREAM_CAPTURE, usb.capture, stage);
         if (rc == 0) rc = open_usb(o, SND_PCM_STREAM_PLAYBACK, usb.playback, stage);
@@ -1142,9 +1201,12 @@ void* steward_entry(void* argument) {
             continue;
         }
         (void)pitch.write(kNominalPitch, kNominalPitch);
-        std::printf("USBOPEN device=%s capture period=%lu buffer=%lu playback period=%lu buffer=%lu\n", o.usb.c_str(),
-                    static_cast<unsigned long>(usb.capture.period), static_cast<unsigned long>(usb.capture.buffer),
-                    static_cast<unsigned long>(usb.playback.period), static_cast<unsigned long>(usb.playback.buffer));
+        std::printf("USBOPEN device=%s capture period=%lu buffer=%lu playback period=%lu buffer=%lu rate=%u host_rate=%s "
+                    "host_capture=%ld host_playback=%ld\n",
+                    o.usb.c_str(), static_cast<unsigned long>(usb.capture.period),
+                    static_cast<unsigned long>(usb.capture.buffer), static_cast<unsigned long>(usb.playback.period),
+                    static_cast<unsigned long>(usb.playback.buffer), o.rate, usb16x16::owner::gadget_rate_name(host_rate),
+                    host_capture, host_playback);
         std::fflush(stdout);
         last_reported = 1;
         t.usb_owner.store(static_cast<int>(UsbOwner::loop), std::memory_order_release);
@@ -1686,10 +1748,10 @@ int main(int argc, char** argv) {
     std::signal(SIGTERM, on_signal);
     std::setvbuf(stdout, nullptr, _IOLBF, 0);
 
-    std::printf("START usb16x16-dante-owner mode=%s pcm=%s period=%lu buffer=%lu tx_lead=%lu guard=%lu priority=%d "
+    std::printf("START usb16x16-dante-owner mode=%s pcm=%s rate=%u period=%lu buffer=%lu tx_lead=%lu guard=%lu priority=%d "
                 "mlock=%d rt=%d seconds=%u usb=%s usb_period=%lu usb_buffer=%lu rx_queue=%lu rx_slack=%lu kp=%g ki=%g "
                 "seed_ppm=%g seed_from_file=%d\n",
-                options.no_usb ? "no-usb" : "usb", options.pcm.c_str(), static_cast<unsigned long>(options.period),
+                options.no_usb ? "no-usb" : "usb", options.pcm.c_str(), options.rate, static_cast<unsigned long>(options.period),
                 static_cast<unsigned long>(options.buffer), static_cast<unsigned long>(options.tx_lead),
                 static_cast<unsigned long>(options.guard), options.priority, options.mlock ? 1 : 0,
                 options.realtime ? 1 : 0, options.seconds, options.usb.c_str(),
@@ -1710,13 +1772,13 @@ int main(int argc, char** argv) {
             return 2;
         }
         try {
-            dsp.load(preset_text.str());
+            dsp.load(preset_text.str(), options.rate);
         } catch (const std::exception& error) {
             std::printf("FATAL DSP preset %s: %s\n", options.dsp_preset.c_str(), error.what());
             return 2;
         }
-        std::printf("DSP loaded file=%s preset=\"%s\" internal=%zu biquads=%zu delay_frames=%zu shape=%s\n",
-                    options.dsp_preset.c_str(), dsp.stage().preset().c_str(), dsp.stage().internal_channels(),
+        std::printf("DSP loaded file=%s rate=%u preset=\"%s\" internal=%zu biquads=%zu delay_frames=%zu shape=%s\n",
+                    options.dsp_preset.c_str(), dsp.stage().rate(), dsp.stage().preset().c_str(), dsp.stage().internal_channels(),
                     dsp.stage().biquad_count(), dsp.stage().delay_samples(), dsp.stage().shape_key().c_str());
         if (!options.dsp_live_file.empty()) {
             std::printf("DSPLIVE following file=%s status=%s\n", options.dsp_live_file.c_str(),
@@ -1749,7 +1811,7 @@ int main(int argc, char** argv) {
     pthread_t dsp_live_thread{};
     const bool live_enabled = dsp.enabled() && !options.dsp_live_file.empty();
     if (live_enabled) dsp_live_thread = start_thread(dsp_live_entry, &dsp_live_context, "dsp live");
-    static usb16x16::owner::OwnerMeters meters;
+    static usb16x16::owner::OwnerMeters meters(options.rate);
     usb16x16::owner::MeterPublisher meter_publisher(meters, options.meter_file);
     MeterContext meter_context{&meter_publisher, &telemetry};
     pthread_t meter_thread{};

@@ -233,6 +233,57 @@ void test_dsp_refuses_what_it_cannot_read() {
     check(truncated_threw, "a truncated artifact is refused");
 }
 
+// SAMPLE_RATE_DESIGN.md, step 3: an artifact is compiled for one rate and the
+// stage runs only at that rate. 48 kHz is the default and is unchanged.
+std::string dsp_artifact_at(const unsigned rate, const std::string& body) {
+    return "usb16x16-dsp 1\npreset test\nrate " + std::to_string(rate) + "\nchannels 16\ninternal 1\nmaxdelay " +
+           std::to_string(usb16x16::DspStage::max_delay_samples(rate)) + "\n" + body + "end\n";
+}
+
+void test_dsp_refuses_an_artifact_for_another_rate() {
+    const auto refused = [](const std::string& text, const unsigned rate) {
+        try {
+            (void)usb16x16::DspStage::load(text, rate);
+        } catch (const std::runtime_error& error) {
+            return std::string(error.what()).find("running at " + std::to_string(rate)) != std::string::npos;
+        }
+        return false;
+    };
+    const std::string at48 = dsp_artifact(dsp_passthrough(0, 0, 1.0));
+    const std::string at96 = dsp_artifact_at(96000, dsp_passthrough(0, 0, 1.0));
+    check(usb16x16::DspStage::load(at48).rate() == 48000, "the default running rate is 48 kHz");
+    check(usb16x16::DspStage::load(at48, 48000).rate() == 48000, "a 48 kHz artifact loads at 48 kHz");
+    check(refused(at48, 96000), "a 48 kHz artifact is refused at 96 kHz, naming both rates");
+    check(refused(at96, 48000), "a 96 kHz artifact is refused at 48 kHz");
+    check(refused(dsp_artifact_at(44100, dsp_passthrough(0, 0, 1.0)), 48000), "a 44.1 kHz artifact is refused at 48 kHz");
+    auto stage96 = usb16x16::DspStage::load(at96, 96000);
+    check(stage96.rate() == 96000, "a 96 kHz artifact loads at 96 kHz");
+    check(stage96.shape().find("rate 96000\nchannels 16\ninternal 1\nmaxdelay 960\n") != std::string::npos,
+          "the shape carries the rate and its 10 ms delay ceiling");
+    check(stage96.shape_key() != usb16x16::DspStage::load(at48).shape_key(),
+          "the same pipeline at two rates is two shapes");
+
+    // 10 ms of delay is 960 samples at 96 kHz, and is the ceiling there.
+    auto delayed = usb16x16::DspStage::load(dsp_artifact_at(96000, dsp_passthrough(0, 0, 1.0, 960)), 96000);
+    std::vector<float> out = dsp_run(delayed, dsp_impulse(1000, 0, 1.0F));
+    check(std::abs(out[960 * usb16x16::kChannels] - 1.0F) < 1e-6F, "a 960-sample delay at 96 kHz lands at 960");
+    check(refused(dsp_artifact_at(96000, dsp_passthrough(0, 0, 1.0, 961)), 96000) == false,
+          "an over-ceiling delay is refused as malformed, not as a rate");
+    bool over_threw = false;
+    try {
+        (void)usb16x16::DspStage::load(dsp_artifact_at(96000, dsp_passthrough(0, 0, 1.0, 961)), 96000);
+    } catch (const std::runtime_error&) {
+        over_threw = true;
+    }
+    check(over_threw, "a delay over 10 ms at 96 kHz is refused");
+
+    // A live update compiled for another rate cannot be published into a running stage.
+    auto running = usb16x16::DspStage::load(at48);
+    std::string reason;
+    check(!running.publish(stage96, reason) && reason == "shape differs",
+          "a live update at another rate is refused");
+}
+
 void test_dsp_reset_clears_filter_state() {
     std::string body = "expand 1\n0 0 1\nbranch 0\nassign 1\n0 0 1\n";
     body += "output 1\n0 0 1 1\n"
@@ -1033,6 +1084,7 @@ int main() {
     test_dsp_crossover_branches_are_minus_six_at_the_corner();
     test_dsp_band_matches_its_design_gain();
     test_dsp_refuses_what_it_cannot_read();
+    test_dsp_refuses_an_artifact_for_another_rate();
     test_dsp_reset_clears_filter_state();
     test_dsp_is_block_size_agnostic();
     test_sha256_known_vectors();

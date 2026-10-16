@@ -476,17 +476,34 @@ function loadCompiler(importImpl = path => import(path)) {
  *  preset is the base of live coefficient updates, so every band and row is
  *  present and a value edit changes only numbers. `shapeKey` is the key the
  *  Pi compares against the installed preset's. */
-export async function compileDraft(config, importImpl, {shape = 'fixed'} = {}) {
+export async function compileDraft(config, importImpl, {shape = 'fixed', rate = 48000} = {}) {
   const compiler = await loadCompiler(importImpl);
-  const result = compiler.compile(config, compiler.fileDevices('in.raw', 'out.raw'), {shape});
+  const result = compiler.compile(config, compiler.fileDevices('in.raw', 'out.raw', 'S32_LE', 1024, rate), {shape});
   const artifact = compiler.bridgeArtifact(result, {presetName: config.name});
-  const delay = compiler.delayLatency(config);
+  const delay = compiler.delayLatency(config, rate);
   // Coefficient rows only: five numbers, of which the first is not an index.
   const sections = (artifact.match(/^-?\d*\.?\d+(e[-+]?\d+)? -?\S+ -?\S+ -?\S+ -?\S+$/gm) || [])
     .filter(line => !/^preset /.test(line)).length;
   const shapeKey = await compiler.artifactShapeKey(artifact);
   const sha256 = await compiler.sha256Hex(artifact);
   return {artifact, report: result.report, delay, sections, shapeKey, sha256};
+}
+
+/** One compiled draft per rate (SAMPLE_RATE_DESIGN.md, step 3): the Pi has
+ *  no compiler, so a preset is compiled here at every rate the endpoint
+ *  offers and the store keeps one artifact per rate, so a rate change finds
+ *  the preset ready or refuses. `rates` defaults to the compiler's
+ *  OFFERED_RATES, which is [48000] until another rate has its battery. A rate
+ *  the preset cannot compile at fails the whole call: a preset is never
+ *  stored with a rate missing. Not yet sent to the Pi; the applier takes one
+ *  artifact today, the 48 kHz one. */
+export async function compileDraftRates(config, importImpl, {shape = 'fixed', rates} = {}) {
+  const compiler = await loadCompiler(importImpl);
+  const wanted = rates ?? compiler.OFFERED_RATES;
+  if (!Array.isArray(wanted) || !wanted.length) throw new Error('No rate to compile at');
+  const byRate = {};
+  for (const rate of wanted) byRate[rate] = await compileDraft(config, importImpl, {shape, rate});
+  return byRate;
 }
 
 /** The confirm text for a compiled draft: what will run and what the compiler warns about. */
