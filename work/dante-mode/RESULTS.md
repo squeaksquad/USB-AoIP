@@ -4992,3 +4992,57 @@ Owed before patch 0004 can be installed: a decision on the DEVICE_ID change
 (Controller sees a new device ID under the same name; the Ferrofish
 subscribes by name and the Pi's subscriptions stay through STATE_ID), and
 the battery on it. Then steps 3 and 4 make a set do something.
+
+## Sample rate, step 2: the 48 kHz-only form through the battery and a loaded hour as a candidate, 356 / `daw_timeline` 544; installer staged (2026-10-16 16:30-18:03 UTC)
+
+The form to install: plugin d3a6b40a (patches 0001-0004, unchanged from
+step 1) with `config/asound-inferno-owner-rate48.conf` 7beabf1a, which is
+the installed config a91f5766 plus `DEVICE_ID 88a29e8b01e40000`, `STATE_ID
+5553423136783136`, `SUPPORTED_SAMPLE_RATES 48000`, `BOARD_FLAGS_17 18`.
+0x18 is sample-rate (0x08) and encoding (0x10) configuration and nothing
+else, from netaudio's decoding of the capability word (step 1's 0xdb read
+as 0x10DB: also identify 0x01 and bits 0x02, 0x40, 0x80, unnamed there).
+`STATE_ID` is kept, not a moved state directory: the installed file is the
+measured one, no root copy is needed, and the old ID's rollback shares the
+same subscriptions.
+
+Candidate start 16:30:54 UTC through `usb16x16-dante-candidate` with the
+service's own arguments (`--log-every 60 --rx-queue 96 --meter-file
+/run/usb16x16-dante/meters.txt`), gadget restart 16:32:06 for the anchor.
+netaudio afterwards: `sample_rate_hz` 48000, `supported_sample_rates_hz`
+[48000], capabilities 4120 (0x1018), `identify_supported` False, sample
+rate and encoding configurable. All on that anchor
+(`outputs/latency/rate48-candidate-*`):
+
+- Noise probe at 32 frames: clean.
+- 600 s sixteen-channel soak: PASS.
+- Four loaded 800-impulse runs: **all 356, spread 0, `daw_timeline` 544
+  (11.333 ms)**.
+- 3,600 s sixteen-channel soak (16:57:45): **PASS**.
+- 400 loaded impulses afterwards: all 356.
+
+The owner over the session (`outputs/latency/rate48-candidate-owner-20261016T163054Z.log`):
+worst loop gap 1,053 us, no resync, no lost frames either way, no re-prime,
+lowest return depth 45; one playback fault and one detach, both the gadget
+restart (t 60-120), whose four Inferno `tx lag of 132 samples` lines at
+16:32:06.884 are the only errors. One `out_holes` of 83 frames, the same
+83 in `back_holes`, between 17:58:54 and 17:59:54, the last minute of the
+400 impulses: an all-channel zero run in what the Mac sent, carried round
+the loop; the harness took all 400. Ferrofish neighbour entry REACHABLE.
+
+356 is 3 above the five draws of the same transport on 2026-10-12/13 (322
+to 353) and 13 above the point of record's 343; a control-plane patch has
+no path to the audio timing, so this reads as the anchor's draw, which an
+installed-form battery will show again or not.
+
+Service put back on its installed form at 18:01:28: start check `state=ok`
+(6015) at 18:02:33, noise probe clean at 18:02:45
+(`service-after-rate48-noise-ch2-32f-20261016T180245Z.json`).
+
+Staged: `service/install-dante-rate-status.sh` (the plugin 0ee61f2f ->
+d3a6b40a and the config a91f5766 -> 7beabf1a, old copies kept as
+`libasound_module_pcm_inferno.so.previous` and
+`asound-inferno-owner.conf.rate-previous` beside the start wrapper;
+`rollback` puts both back). Not installed: installs are the operator's.
+After it, `install-dante-service.sh` and `install-dante-lowlatency.sh` no
+longer find the plugin and config they pin.
