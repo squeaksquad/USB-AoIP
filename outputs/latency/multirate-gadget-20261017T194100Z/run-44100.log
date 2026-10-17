@@ -1,0 +1,12 @@
+=== 20261017T200657Z rate=44100 frames=32
+measure_exit=0
+   nonzero span 7325..1144415 (1137091 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 32 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=44100 values=44100 
+alsaloop=up
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000521 (min/max samples = -10/12)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000000 (min/max samples = -10/12)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 0.99999479 (min/max samples = -10/12)
+EXIT_MARKER

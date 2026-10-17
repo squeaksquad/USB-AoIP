@@ -1,0 +1,73 @@
+=== 20261017T194200Z rate=96000 frames=512
+measure_exit=0
+   nonzero span 3176..2491391 (2488216 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 512 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=96000 values=96000 
+alsaloop=up
+=== 20261017T194227Z rate=96000 frames=64
+measure_exit=0
+   nonzero span 2280..2491199 (2488920 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 64 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=96000 values=96000 
+alsaloop=up
+=== 20261017T194255Z rate=96000 frames=32
+measure_exit=0
+   nonzero span 2216..2491199 (2488984 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 32 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=96000 values=96000 
+alsaloop=up
+=== 20261017T194322Z rate=96000 frames=16
+measure_exit=0
+   nonzero span 2210..2491215 (2489006 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 16 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=96000 values=96000 
+alsaloop=up
+=== 20261017T194349Z rate=96000 frames=32
+measure_exit=0
+   nonzero span 2216..2491199 (2488984 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 32 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=96000 values=96000 
+alsaloop=up
+=== 20261017T194417Z rate=96000 frames=32
+measure_exit=0
+   nonzero span 2216..2491199 (2488984 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 32 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=96000 values=96000 
+alsaloop=up
+=== 20261017T194444Z rate=96000 frames=32
+measure_exit=0
+   nonzero span 2216..2491231 (2489016 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 32 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=96000 values=96000 
+alsaloop=up
+=== 20261017T194511Z rate=96000 frames=32
+measure_exit=0
+   nonzero span 2216..2491231 (2489016 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 32 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=96000 values=96000 
+alsaloop=up
+=== 20261017T194539Z rate=96000 frames=32
+measure_exit=0
+   nonzero span 2216..2491199 (2488984 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 32 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=96000 values=96000 
+alsaloop=up
+EXIT_MARKER

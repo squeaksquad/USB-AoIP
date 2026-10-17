@@ -13662,3 +13662,53 @@ page staged by `work/web-ui/stage-page.sh`. Level in service 345 /
 the 2026-10-16 and 2026-10-14 point of record, unchanged. Rollbacks as in the
 INSTALLED entry. Next: step 5, the multi-rate gadget experiment (a parallel
 setup script; the protected gadget untouched), with the operator at the Mac.
+
+**IMPLEMENTED 2026-10-17 (written, not staged, nothing run): sample-rate step 5,
+the multi-rate gadget script and its experiment plan.**
+`work/pi-tuning/setup-usb-16x16-multirate` (c420a0b8) is `b11fd358` with
+`p_srate`/`c_srate` set to one rate list (default `44100,48000,88200,96000`,
+identical both ways as the shared-clock patch requires). It refuses to start
+while `usb16x16-dante` or `usb16x16-aes67` is active, or on an unknown
+`usb_f_uac2`. Its `rollback` checks that the installed script is still
+`b11fd358` and restarts `usb-16x16.service`, then requires 48000 and
+`configured/high-speed`. It is never installed, and a reboot also restores
+the protected gadget. Found from the module source: with 96000 in the list,
+auto `hs_bint` gives bInterval 1 (624 bytes every 125 us) at every rate,
+48 kHz included, against bInterval 2 on the protected gadget. So 48 kHz on
+this gadget is a new point (the 2026-09-05 `bint1` descriptor). Harness
+`continuous` and `bitexact` are pinned to 48 kHz; `measure` follows the
+device's rate. The plan, Q1 to Q4 with phases, pass rules and the close, is
+`work/pi-tuning/MULTIRATE_GADGET_PLAN.md`. Nothing has touched the USB side.
+The swap and every sudo step are the operator's.
+
+**MEASURED 2026-10-17 19:38-22:13 UTC: the multi-rate gadget experiment (step 5).
+Q1, Q2 and Q4 answered; 96 kHz holds at 32 frames; 88.2 kHz fails silently; protected
+gadget restored and the Dante endpoint back clean.** Evidence and the full table:
+`outputs/latency/multirate-gadget-20261017T194100Z/SUMMARY.md`. The operator ran
+`setup-usb-16x16-multirate` (c420a0b8) by hand; USB-only loop (Pi `alsaloop`,
+endpoint stopped), harness noise probes (out 1 / in 2, 0.1 load).
+- Q1: every CoreAudio rate set (the AMS call, and Logic) reaches `Capture Rate` /
+  `Playback Rate` within ~1 s, both directions together, with no re-enumeration.
+  The controls read 0 with no stream open.
+- Q2: Logic 12.2 keeps the device through every change. An open project puts its own
+  rate back about 2 s after an outside set; a 96 kHz project sets the device to 96.
+- Q3: 96 kHz clean at 512, 64, 32 (six probes) and 29 frames (the Mac's minimum at 96,
+  asked for 16). 48 (bInterval 1) and 44.1 clean at 32. **88.2 kHz: 75 % zeros at 32
+  frames, 37 % at 512, with no CoreAudio flag, no alsaloop underrun and no kernel
+  message.** Cause and direction not found (a Pi `arecord` check read zeros at 96 too,
+  so the method was dropped). 88.2 is off the offered list.
+- Q4: after a re-enumeration, and after `killall coreaudiod`, the Mac sets the rate
+  last *chosen* for the device, not the clock's first-listed one. A rate forced by a
+  one-rate list is not stored as the choice. A list out of ascending order is accepted
+  (CoreAudio sorts it). On the first ever swap the Mac took the clock's first rate.
+- Rate-open: a gadget PCM open at the old rate keeps running after the host changes
+  rate, so the check at open is the only guard. `set_rate_near` against the gadget
+  returns the host's current rate without an error. The owner refuses a negotiated
+  rate other than `--rate`, so it is protected.
+- Close: rollback 22:08:33 UTC (48000, req 4, high speed). Phase 0 on the protected
+  gadget clean at 512/64/32. eth0 healthy (one TX stall at 20:22:00 UTC, none since).
+  `usb16x16-dante` started 22:10:38, start check ok 22:11:43, noise probe at 32 clean.
+- Owed: a ten-minute soak at 96 (harness `continuous` and `bitexact` are pinned to
+  48 kHz); the 88.2 cause; the owner on the multi-rate gadget at 48 (bInterval 1)
+  with its own battery before this gadget could replace the protected one; `status`
+  prints a blank module hash without root (`modinfo` is off the user's path; cosmetic).

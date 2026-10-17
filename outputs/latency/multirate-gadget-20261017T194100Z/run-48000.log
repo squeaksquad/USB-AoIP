@@ -1,0 +1,34 @@
+=== 20261017T200454Z rate=48000 frames=512
+measure_exit=0
+   nonzero span 2096..1245695 (1243600 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 512 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=48000 values=48000 
+alsaloop=up
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000521 (min/max samples = -10/12)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000000 (min/max samples = -10/12)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 0.99999479 (min/max samples = -10/12)
+=== 20261017T200521Z rate=48000 frames=64
+measure_exit=0
+   nonzero span 1200..1245631 (1244432 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 64 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=48000 values=48000 
+alsaloop=up
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000521 (min/max samples = -10/12)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000000 (min/max samples = -10/12)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 0.99999479 (min/max samples = -10/12)
+=== 20261017T200548Z rate=48000 frames=32
+measure_exit=0
+   nonzero span 1136..1245599 (1244464 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 32 (top 6): []
+   1 "inputDiscontinuities" : 0
+   1 "outputDiscontinuities" : 0
+pi: values=48000 values=48000 
+alsaloop=up
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000521 (min/max samples = -10/12)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000000 (min/max samples = -10/12)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 0.99999479 (min/max samples = -10/12)
+EXIT_MARKER

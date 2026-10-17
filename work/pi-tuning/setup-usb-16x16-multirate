@@ -1,0 +1,241 @@
+#!/bin/bash
+set -euo pipefail
+
+# Experiment 2026-10-17, sample-rate step 5 (work/dante-mode/SAMPLE_RATE_DESIGN.md,
+# plan in work/pi-tuning/MULTIRATE_GADGET_PLAN.md): the protected gadget with a
+# list of rates on its one shared clock instead of 48000 alone. Everything else
+# is b11fd358 (setup-usb-16x16-req, installed as /usr/local/sbin/setup-usb-16x16)
+# byte for byte: the same gadget path, strings, masks, sizes, req_number and
+# fb_max. Never installed: run by hand from ~/usb-16x16-work/gadget-multirate/.
+# Nothing persists, so a reboot or `rollback` brings the protected gadget back.
+#
+# Usage, as root:
+#   setup-usb-16x16-multirate start [RATES] [REQ_NUMBER]
+#       RATES: comma list from 44100,48000,88200,96000 (default all four,
+#       ascending). The kernel's clock reports the first entry as its rate
+#       until the host sets one, so the order is an experiment variable.
+#       REQ_NUMBER defaults to 4, as the protected script.
+#   setup-usb-16x16-multirate stop       unbind and remove the gadget
+#   setup-usb-16x16-multirate rollback   protected gadget back via usb-16x16.service
+#   setup-usb-16x16-multirate status     read-only: rates, controls, UDC, hashes
+#
+# Notes that decide the readings:
+#   * The installed module's shared-clock patch needs identical lists both
+#     ways, and one SET_CUR from the host sets both directions' rate.
+#   * With p_hs_bint = c_hs_bint = 0 the kernel sizes the endpoints for the
+#     largest listed rate. With 96000 listed that is 624 bytes every 125 us
+#     (bInterval 1) at every rate, 48 kHz included; the protected gadget is
+#     624 bytes every 250 us (bInterval 2). 88200 and 96000 do not fit at
+#     bInterval 2, so this is not a choice. 176400 and 192000 need more than
+#     one 1024-byte transaction a microframe and are refused here.
+
+G=/sys/kernel/config/usb_gadget/studio_audio
+F="$G/functions/uac2.usb0"
+C="$G/configs/c.1"
+LINK="$C/uac2.usb0"
+UDC=1000480000.usb
+CARD=UAC2Gadget
+MARKER=/run/usb16x16-gadget-multirate
+PROTECTED_SCRIPT=/usr/local/sbin/setup-usb-16x16
+PROTECTED_SCRIPT_SHA256=b11fd3589ff1b554cece30fa1ab89f1dbcb2d98ed86db26c2ab0f5becf58b769
+# The shared-clock module (protected baseline set) and the shared-clock plus
+# label module installed 2026-09-01 (work/uac2-discrete-channels).
+KNOWN_MODULES="8e9907d3363d80d3c93e8b24b5576e7dbd683cd6cb415580970364bc20c320e4 87989337bbfb7d39298bf44c2a4fb5e592b9ff03dc671f4fbfb9af62e8778b1e"
+ALLOWED_RATES="44100 48000 88200 96000"
+# Services that hold or feed the gadget PCM; start refuses while any is up.
+HOLDERS="usb16x16-dante.service usb16x16-aes67.service"
+
+ACTION=${1:-status}
+RATES=${2:-44100,48000,88200,96000}
+REQ_NUMBER=${3:-4}
+
+die() { echo "$1" >&2; exit "${2:-1}"; }
+
+validate_args() {
+	case "$REQ_NUMBER" in
+		''|*[!0-9]*) die "REQ_NUMBER must be an unsigned integer" 2 ;;
+	esac
+	local seen=" " rate list
+	[[ "$RATES" =~ ^[0-9]+(,[0-9]+)*$ ]] || die "RATES must be a comma list of rates, e.g. 44100,48000,88200,96000" 2
+	IFS=, read -r -a list <<< "$RATES"
+	(( ${#list[@]} >= 1 && ${#list[@]} <= 10 )) || die "RATES must list 1 to 10 rates" 2
+	for rate in "${list[@]}"; do
+		[[ " $ALLOWED_RATES " == *" $rate "* ]] || die "rate '$rate' not offered here (allowed: $ALLOWED_RATES)" 2
+		[[ "$seen" != *" $rate "* ]] || die "rate $rate listed twice" 2
+		seen+="$rate "
+	done
+}
+
+module_sha256() {
+	local path
+	path=$(modinfo -n usb_f_uac2 2>/dev/null) || return 1
+	sha256sum "$path" | cut -d' ' -f1
+}
+
+udc_state() { cat "/sys/class/udc/$UDC/state" 2>/dev/null || echo absent; }
+udc_speed() { cat "/sys/class/udc/$UDC/current_speed" 2>/dev/null || echo absent; }
+
+# Bound, then the host's enumeration: "configured" at high speed within 20 s.
+wait_configured() {
+	local i
+	for i in $(seq 1 20); do
+		if [[ "$(udc_state)" == configured && "$(udc_speed)" == high-speed ]]; then
+			return 0
+		fi
+		sleep 1
+	done
+	return 1
+}
+
+read_rate_controls() {
+	local name
+	for name in 'Capture Rate' 'Playback Rate'; do
+		printf '%s=%s ' "${name// /_}" \
+			"$(amixer -c "$CARD" cget iface=PCM,name="$name" 2>/dev/null | sed -n 's/^ *: values=//p' || true)"
+	done
+	echo
+}
+
+# The same teardown as the protected script.
+stop_gadget() {
+	if [[ ! -d "$G" ]]; then
+		return
+	fi
+
+	if [[ -f "$G/UDC" ]]; then
+		printf '\n' > "$G/UDC" || true
+	fi
+
+	if [[ -L "$LINK" ]]; then
+		unlink "$LINK"
+	fi
+
+	if [[ -d "$F" ]]; then
+		rmdir "$F"
+	fi
+
+	rmdir "$C/strings/0x409" 2>/dev/null || true
+	rmdir "$C" 2>/dev/null || true
+	rmdir "$G/strings/0x409" 2>/dev/null || true
+	rmdir "$G" 2>/dev/null || true
+}
+
+start_gadget() {
+	local unit module
+	for unit in $HOLDERS; do
+		if systemctl is-active --quiet "$unit"; then
+			die "refusing: $unit is active; stop it first (the experiment runs with the gadget PCM free)"
+		fi
+	done
+	module=$(module_sha256) || die "refusing: usb_f_uac2 not found by modinfo"
+	[[ " $KNOWN_MODULES " == *" $module "* ]] || die "refusing: usb_f_uac2 is $module, not a known shared-clock module"
+
+	if ! mountpoint -q /sys/kernel/config; then
+		mount -t configfs configfs /sys/kernel/config
+	fi
+
+	modprobe -r g_ether 2>/dev/null || true
+	modprobe libcomposite
+	modprobe usb_f_uac2
+
+	stop_gadget
+
+	if [[ ! -e "/sys/class/udc/$UDC" ]]; then
+		die "UDC $UDC is not available"
+	fi
+
+	mkdir -p "$G/strings/0x409"
+	mkdir -p "$C/strings/0x409"
+
+	# Prototype VID/PID only; obtain a production USB VID/PID before shipping.
+	printf '%s\n' 0x1d6b > "$G/idVendor"
+	printf '%s\n' 0x0104 > "$G/idProduct"
+	printf '%s\n' 0x0200 > "$G/bcdUSB"
+	printf '%s\n' 0x0100 > "$G/bcdDevice"
+
+	printf '%s\n' AUDDEV001 > "$G/strings/0x409/serialnumber"
+	printf '%s\n' 'Bryan DiMaio' > "$G/strings/0x409/manufacturer"
+	printf '%s\n' 'USB 16x16' > "$G/strings/0x409/product"
+	printf '%s\n' 'UAC2 Audio' > "$C/strings/0x409/configuration"
+
+	mkdir "$F"
+
+	printf '%s\n' 65535 > "$F/p_chmask"
+	printf '%s\n' "$RATES" > "$F/p_srate"
+	printf '%s\n' 3 > "$F/p_ssize"
+	printf '%s\n' 0 > "$F/p_hs_bint"
+
+	printf '%s\n' 65535 > "$F/c_chmask"
+	printf '%s\n' "$RATES" > "$F/c_srate"
+	printf '%s\n' 3 > "$F/c_ssize"
+	printf '%s\n' 0 > "$F/c_hs_bint"
+	printf '%s\n' async > "$F/c_sync"
+
+	printf '%s\n' "$REQ_NUMBER" > "$F/req_number"
+	printf '%s\n' 5 > "$F/fb_max"
+	printf '%s\n' 'USB 16x16' > "$F/function_name"
+	printf '%s\n' 'USB 16x16' > "$F/if_ctrl_name"
+
+	# The kernel keeps what it parsed; both lists must read back as written.
+	[[ "$(cat "$F/p_srate")" == "$RATES" && "$(cat "$F/c_srate")" == "$RATES" ]] ||
+		die "rate lists read back as p=$(cat "$F/p_srate") c=$(cat "$F/c_srate"), not $RATES"
+
+	ln -s "$F" "$LINK"
+	printf '%s\n' "$UDC" > "$G/UDC"
+	printf 'rates=%s req_number=%s at=%s\n' "$RATES" "$REQ_NUMBER" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$MARKER"
+}
+
+rollback() {
+	local sha
+	sha=$(sha256sum "$PROTECTED_SCRIPT" | cut -d' ' -f1)
+	[[ "$sha" == "$PROTECTED_SCRIPT_SHA256" ]] ||
+		die "refusing: $PROTECTED_SCRIPT is $sha, not the protected b11fd358; restore it from work/pi-tuning/setup-usb-16x16-req first"
+	# The unit's ExecStart is the protected script's plain start, which tears
+	# this gadget down first and rebuilds it at 48000 alone with req_number 4.
+	systemctl restart usb-16x16.service
+	rm -f "$MARKER"
+	wait_configured || die "rollback: usb-16x16.service restarted but UDC is $(udc_state)/$(udc_speed) after 20 s"
+	[[ "$(cat "$F/p_srate")" == 48000 && "$(cat "$F/c_srate")" == 48000 ]] ||
+		die "rollback: gadget reads p_srate=$(cat "$F/p_srate") c_srate=$(cat "$F/c_srate"), not 48000"
+	echo "protected gadget back: p_srate=48000 c_srate=48000 req_number=$(cat "$F/req_number") UDC $(udc_state)/$(udc_speed)"
+}
+
+status() {
+	echo "experiment: $(cat "$MARKER" 2>/dev/null || echo 'not active (protected gadget, or a reboot since)')"
+	if [[ -d "$F" ]]; then
+		echo "p_srate=$(cat "$F/p_srate") c_srate=$(cat "$F/c_srate") req_number=$(cat "$F/req_number") p_hs_bint=$(cat "$F/p_hs_bint") c_hs_bint=$(cat "$F/c_hs_bint")"
+	else
+		echo "no gadget function at $F"
+	fi
+	echo "udc=$(udc_state)/$(udc_speed)"
+	echo "controls: $(read_rate_controls)"
+	echo "module=$(module_sha256 | cut -c1-8) protected_script=$(sha256sum "$PROTECTED_SCRIPT" 2>/dev/null | cut -c1-8)"
+	echo "usb-16x16.service=$(systemctl is-active usb-16x16.service) $(for u in $HOLDERS; do printf '%s=%s ' "${u%.service}" "$(systemctl is-active "$u")"; done)"
+}
+
+case "$ACTION" in
+	start)
+		validate_args
+		start_gadget
+		if wait_configured; then
+			echo "gadget bound with rates=$(cat "$F/p_srate") req_number=$(cat "$F/req_number"); UDC configured/high-speed"
+		else
+			echo "gadget bound with rates=$RATES but UDC is $(udc_state)/$(udc_speed) after 20 s; roll back with: $0 rollback" >&2
+			exit 1
+		fi
+		;;
+	stop)
+		stop_gadget
+		rm -f "$MARKER"
+		;;
+	rollback)
+		rollback
+		;;
+	status)
+		status
+		;;
+	*)
+		echo "Usage: $0 {start [RATES] [REQ_NUMBER]|stop|rollback|status}" >&2
+		exit 2
+		;;
+esac

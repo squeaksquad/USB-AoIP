@@ -1,0 +1,31 @@
+2026-10-17T15:38:42.817595-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Playback: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T15:38:42.817983-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Capture: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T15:38:42.821031-04:00 audio-dev kernel: dwc2 1000480000.usb: bound driver configfs-gadget.studio_audio
+2026-10-17T15:38:42.975477-04:00 audio-dev kernel: dwc2 1000480000.usb: new device is high-speed
+2026-10-17T15:38:43.008829-04:00 audio-dev kernel: dwc2 1000480000.usb: new address 21
+2026-10-17T16:22:00.313003-04:00 audio-dev kernel: macb 1f00100000.ethernet eth0: TX stall detected on queue 0 (tail=1914689819 head=1914689820); re-kicking TSTART
+2026-10-17T17:27:21.963836-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Playback: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T17:27:21.964187-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Capture: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T17:27:21.964354-04:00 audio-dev kernel: dwc2 1000480000.usb: bound driver configfs-gadget.studio_audio
+2026-10-17T17:27:22.106570-04:00 audio-dev kernel: dwc2 1000480000.usb: new device is high-speed
+2026-10-17T17:27:22.139151-04:00 audio-dev kernel: dwc2 1000480000.usb: new address 9
+2026-10-17T17:38:16.641047-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Playback: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T17:38:16.641381-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Capture: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T17:38:16.641512-04:00 audio-dev kernel: dwc2 1000480000.usb: bound driver configfs-gadget.studio_audio
+2026-10-17T17:38:16.780003-04:00 audio-dev kernel: dwc2 1000480000.usb: new device is high-speed
+2026-10-17T17:38:16.812107-04:00 audio-dev kernel: dwc2 1000480000.usb: new address 10
+2026-10-17T18:04:27.789654-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Playback: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T18:04:27.789961-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Capture: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T18:04:27.790087-04:00 audio-dev kernel: dwc2 1000480000.usb: bound driver configfs-gadget.studio_audio
+2026-10-17T18:04:27.934927-04:00 audio-dev kernel: dwc2 1000480000.usb: new device is high-speed
+2026-10-17T18:04:27.966028-04:00 audio-dev kernel: dwc2 1000480000.usb: new address 9
+2026-10-17T18:06:26.994446-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Playback: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T18:06:26.994804-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Capture: Req. wMaxPacketSize 4656 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T18:06:26.994944-04:00 audio-dev kernel: dwc2 1000480000.usb: bound driver configfs-gadget.studio_audio
+2026-10-17T18:06:27.136274-04:00 audio-dev kernel: dwc2 1000480000.usb: new device is high-speed
+2026-10-17T18:06:27.168970-04:00 audio-dev kernel: dwc2 1000480000.usb: new address 10
+2026-10-17T18:08:33.181023-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Playback: Req. wMaxPacketSize 2352 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T18:08:33.181241-04:00 audio-dev kernel: configfs-gadget.studio_audio gadget.0: FS Capture: Req. wMaxPacketSize 2352 at bInterval 1 > max ISOC 1023, may drop data!
+2026-10-17T18:08:33.181358-04:00 audio-dev kernel: dwc2 1000480000.usb: bound driver configfs-gadget.studio_audio
+2026-10-17T18:08:33.580642-04:00 audio-dev kernel: dwc2 1000480000.usb: new device is high-speed
+2026-10-17T18:08:33.611139-04:00 audio-dev kernel: dwc2 1000480000.usb: new address 9

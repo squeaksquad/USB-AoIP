@@ -1,0 +1,62 @@
+!!!Scheduler set to Round Robin with priority 99 FAILED!
+Opened PCM element Playback Pitch 1000000 of hw:2, device 0, subdevice 0
+Opened PCM element Capture Pitch 1000000 of hw:2, device 0, subdevice 0
+Hardware PCM card 2 'UAC2_Gadget' device 0 subdevice 0
+Its setup is:
+  stream       : PLAYBACK
+  access       : RW_INTERLEAVED
+  format       : S24_3LE
+  subformat    : STD
+  channels     : 16
+  rate         : 88200
+  exact rate   : 88200 (88200/1)
+  msbits       : 24
+  buffer_size  : 5456
+  period_size  : 341
+  period_time  : 3866
+  tstamp_mode  : NONE
+  tstamp_type  : MONOTONIC
+  period_step  : 1
+  avail_min    : 4133
+  period_event : 0
+  start_threshold  : 2147483647
+  stop_threshold   : 5456
+  silence_threshold: 0
+  silence_size : 0
+  boundary     : 6142909891733356544
+  appl_ptr     : 0
+  hw_ptr       : 0
+Hardware PCM card 2 'UAC2_Gadget' device 0 subdevice 0
+Its setup is:
+  stream       : CAPTURE
+  access       : RW_INTERLEAVED
+  format       : S24_3LE
+  subformat    : STD
+  channels     : 16
+  rate         : 88200
+  exact rate   : 88200 (88200/1)
+  msbits       : 24
+  buffer_size  : 5456
+  period_size  : 341
+  period_time  : 3866
+  tstamp_mode  : NONE
+  tstamp_type  : MONOTONIC
+  period_step  : 1
+  avail_min    : 441
+  period_event : 0
+  start_threshold  : 2147483647
+  stop_threshold   : 5456
+  silence_threshold: 0
+  silence_size : 0
+  boundary     : 6142909891733356544
+  appl_ptr     : 0
+  hw_ptr       : 0
+Latency 1764 frames, 20000.000us, 20.000000ms (50.0000Hz)
+playback hw:UAC2Gadget/capture hw:UAC2Gadget sync type: CAPTRATESHIFT
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000000 (min/max samples = 0/0)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000000 (min/max samples = 0/0)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000000 (min/max samples = 0/0)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 0.99999433 (min/max samples = -1/0)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000000 (min/max samples = -1/1)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000567 (min/max samples = -1/4)
+New pitch for playback hw:UAC2Gadget/capture hw:UAC2Gadget: 1.00000567 (min/max samples = -1/4)
