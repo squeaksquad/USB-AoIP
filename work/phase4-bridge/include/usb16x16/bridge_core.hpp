@@ -145,18 +145,28 @@ private:
     struct Coefficients {
         std::vector<Section> sections;
         std::vector<std::uint8_t> unity;   // parallel to sections: 1 where the section is y = x
+        // The sections that run, chain by chain (branches, then the 16 outputs):
+        // chain i runs running[run_first[i] .. + run_count[i]]. A chain whose
+        // run_count is its whole length runs its sections in place instead, so a
+        // preset with no unity section pays nothing in the inner loop. Sized at load.
+        std::vector<std::uint32_t> running;
+        std::vector<std::uint32_t> run_first;
+        std::vector<std::uint32_t> run_count;
         std::vector<double> expand_gain;   // parallel to expand_
         std::vector<double> assign_gain;   // parallel to assign_
         std::array<double, kChannels> output_gain{};
         std::array<std::uint32_t, kChannels> output_delay{};
     };
 
-    void run_chain(const Coefficients& c, std::uint32_t first, std::uint32_t count,
-                   std::size_t chain, double& sample) noexcept;
+    // The sample by value: through a reference the compiler must assume each
+    // state store may change it, and keeps it in memory.
+    [[nodiscard]] double run_chain(const Coefficients& c, std::uint32_t first, std::uint32_t count,
+                                   std::size_t chain, double sample) noexcept;
     // On the audio thread, when `now` replaces `before`: history for each section
     // that `before` skipped and `now` runs.
     void adopt(const Coefficients& before, const Coefficients& now) noexcept;
-    static void mark_unity(Coefficients& c);
+    // Fills `unity` and the running lists from the sections. Off the audio thread.
+    void index_sections(Coefficients& c) const;
     void flush_denormals() noexcept;
     static std::string shape_text(const DspStage& stage);
 

@@ -5318,3 +5318,17 @@ the check out of that loop: a chain with no unity section runs the previous
 contiguous loop unchanged, and one with unity sections walks a list of its
 running sections built when the set is loaded or published (control thread,
 storage sized at load). Byte identity and both benches again.
+
+**The fix, Mac-tested (2026-10-17, same day):** the flag test is out of the
+inner loop. Each coefficient set carries, per chain, a list of its running
+sections (built at load and copied at publish, storage sized at load). A
+chain with no unity section runs its sections in place as before, and one
+with unity sections walks its list. The chain also takes and returns the
+sample by value instead of through a reference (which made the compiler keep
+it in memory around every state store). Tests pass, and the mutation check
+still fails at the first switch with the rebuild disabled. Against the
+pre-skip core (5a1714d): all 24 artifacts and both live switches
+byte-identical. Mac medians, old -> new: default fixed 33.3 -> 9.0 µs at
+48 kHz (3.7 times faster); transparent level (57.8 -> 57.5 at 96 kHz);
+loaded fixed 34.6 -> 35.7 at 48 kHz and loaded 137.8 -> 144.7 at 192 kHz
+(3 to 6 % slower). The Pi, which is what decides, is to be benched again.

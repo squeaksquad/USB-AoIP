@@ -229,7 +229,7 @@ DspStage DspStage::load(const std::string_view text, const unsigned running_rate
     }
     reader.expect("end");
 
-    mark_unity(numbers);
+    stage.index_sections(numbers);
     // The second set is sized now, so a publish never allocates.
     stage.sets_[1] = numbers;
     stage.states_.assign(numbers.sections.size(), State{});
@@ -301,6 +301,9 @@ bool DspStage::publish(const DspStage& other, std::string& reason) noexcept {
     // Same shape means same sizes: element copies into storage sized at load.
     std::copy(from.sections.begin(), from.sections.end(), inactive.sections.begin());
     std::copy(from.unity.begin(), from.unity.end(), inactive.unity.begin());
+    std::copy(from.running.begin(), from.running.end(), inactive.running.begin());
+    std::copy(from.run_first.begin(), from.run_first.end(), inactive.run_first.begin());
+    std::copy(from.run_count.begin(), from.run_count.end(), inactive.run_count.begin());
     std::copy(from.expand_gain.begin(), from.expand_gain.end(), inactive.expand_gain.begin());
     std::copy(from.assign_gain.begin(), from.assign_gain.end(), inactive.assign_gain.begin());
     inactive.output_gain = from.output_gain;
@@ -313,11 +316,27 @@ bool DspStage::publish(const DspStage& other, std::string& reason) noexcept {
     return true;
 }
 
-void DspStage::mark_unity(Coefficients& c) {
+void DspStage::index_sections(Coefficients& c) const {
     c.unity.assign(c.sections.size(), 0);
     for (std::size_t index = 0; index < c.sections.size(); ++index) {
         const Section& s = c.sections[index];
         c.unity[index] = s.b0 == 1.0 && s.b1 == 0.0 && s.b2 == 0.0 && s.a1 == 0.0 && s.a2 == 0.0;
+    }
+    const std::size_t chains = branches_.size() + kChannels;
+    c.running.assign(c.sections.size(), 0);
+    c.run_first.assign(chains, 0);
+    c.run_count.assign(chains, 0);
+    std::uint32_t used = 0;
+    const auto chain = [&](const std::size_t index, const std::uint32_t first, const std::uint32_t count) {
+        c.run_first[index] = used;
+        for (std::uint32_t section = first; section < first + count; ++section) {
+            if (!c.unity[section]) c.running[used++] = section;
+        }
+        c.run_count[index] = used - c.run_first[index];
+    };
+    for (std::size_t row = 0; row < branches_.size(); ++row) chain(row, branches_[row].first, branches_[row].count);
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        chain(branches_.size() + channel, outputs_[channel].first, outputs_[channel].count);
     }
 }
 
@@ -355,16 +374,15 @@ void DspStage::reset() noexcept {
     delay_write_.fill(0);
 }
 
-void DspStage::run_chain(const Coefficients& c, const std::uint32_t first,
-                         const std::uint32_t count, const std::size_t chain, double& sample) noexcept {
+double DspStage::run_chain(const Coefficients& c, const std::uint32_t first,
+                           const std::uint32_t count, const std::size_t chain, double sample) noexcept {
     State& history = inputs_[chain];
     history.x2 = history.x1;
     history.x1 = sample;
-    for (std::uint32_t index = 0; index < count; ++index) {
-        if (c.unity[first + index]) continue;   // y = x; its history is upstream's (adopt)
-        const Section& section = c.sections[first + index];
-        State& state = states_[first + index];
-        // Direct form I, the form the emitted coefficients are written for.
+    // Direct form I, the form the emitted coefficients are written for.
+    const auto step = [&](const std::uint32_t index) {
+        const Section& section = c.sections[index];
+        State& state = states_[index];
         const double input = sample;
         const double output = section.b0 * input + section.b1 * state.x1 +
                               section.b2 * state.x2 - section.a1 * state.y1 -
@@ -374,7 +392,16 @@ void DspStage::run_chain(const Coefficients& c, const std::uint32_t first,
         state.y2 = state.y1;
         state.y1 = output;
         sample = output;
+    };
+    const std::uint32_t running = c.run_count[chain];
+    if (running == count) {
+        for (std::uint32_t index = first; index < first + count; ++index) step(index);
+        return sample;
     }
+    // Unity sections are left out: y = x, and their history is upstream's (adopt).
+    const std::uint32_t* const list = c.running.data() + c.run_first[chain];
+    for (std::uint32_t index = 0; index < running; ++index) step(list[index]);
+    return sample;
 }
 
 void DspStage::flush_denormals() noexcept {
@@ -432,7 +459,7 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
         }
         for (std::size_t row = 0; row < branches_.size(); ++row) {
             const Chain& chain = branches_[row];
-            run_chain(c, chain.first, chain.count, row, internal[chain.channel]);
+            internal[chain.channel] = run_chain(c, chain.first, chain.count, row, internal[chain.channel]);
         }
         out.fill(0.0);
         for (std::size_t row = 0; row < assign_.size(); ++row) {
@@ -441,8 +468,7 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
         }
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
             const OutputSpec& spec = outputs_[channel];
-            double sample = out[channel];
-            run_chain(c, spec.first, spec.count, branches_.size() + channel, sample);
+            double sample = run_chain(c, spec.first, spec.count, branches_.size() + channel, out[channel]);
             const std::uint32_t delay = c.output_delay[channel];
             if (delay > 0) {
                 double* const line = delay_lines_.data() + channel * max_delay_;
