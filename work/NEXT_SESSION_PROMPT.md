@@ -1,5 +1,73 @@
 # Next-session pickup prompt
 
+## Current pickup — 2026-10-17: sample rate, step 5 (the multi-rate gadget). Start here.
+
+You are picking up the USB 16x16 project (Raspberry Pi 5 UAC2 gadget, 16x16,
+bridged to Dante through Inferno). Read `CLAUDE.md` (repo map), then
+`PROJECT_HANDOFF.md`'s tail from the last ACCEPTED entry (2026-10-17), then
+`work/dante-mode/SAMPLE_RATE_DESIGN.md` from "Transparent switching" to the
+end, then `work/dante-mode/RESULTS.md`'s 2026-10-17 sections. The handoff is
+authoritative where anything disagrees.
+
+**Where it stands.** Point of record ACCEPTED 2026-10-17: owner c8b484ac
+(`--rate`, the gadget-rate check, `--rate-request-file`, the unity-skip DSP
+core), Inferno plugin c6b012ae (patches 0001-0005), config 0a1688e1, start
+wrapper a6c3a197, `transport.conf` with `RATE_REQUESTS=1`, the rate path unit,
+usb16x16-apply 1.5.0 (the `rate` kind: the arbiter), usb16x16-web 1.6.0.
+Level 345 / `daw_timeline` 533 (11.104 ms). The whole stack is rate-aware but
+offers 48 kHz only. A set to 48 restarts nothing; any other rate is refused.
+Decided by the operator: the Mac decides the rate. Dante Switcher
+(`~/Development/Dante Switcher`, private repo `squeaksquad/dante-switcher`)
+owns the Mac side: it sets and watches the Metric Halo and the USB 16x16 and
+sets every Dante device. DSP presets are compiled at all six rates. About 10 s
+of dropout per change is acceptable. A DSP worker thread is acceptable only if
+used at every rate (benches say it is not needed).
+
+**The task: step 5, the multi-rate gadget, as an experiment.** The protected
+gadget (`work/protected-baseline-2026-08-31/`, and the installed
+`work/pi-tuning/setup-usb-16x16-req` that `usb-16x16.service` runs) offers
+48000 only and must not be edited. Write a parallel setup script under a new
+name (`setup-usb-16x16-multirate`: the same gadget with `c_srate` / `p_srate`
+listing 44100,48000,88200,96000), with its own rollback to the protected one.
+Then answer, by experiment with the operator at the Mac:
+1. Does a CoreAudio rate change (Audio MIDI Setup, the DAW, `dante-sync`'s
+   CoreAudio set) reach the gadget's `Capture Rate` / `Playback Rate` controls
+   (`amixer -c UAC2Gadget cget iface=PCM,name='Capture Rate'`) cleanly?
+2. Does the Mac re-open the device without it vanishing from the DAW?
+3. Does sixteen-channel 24-bit audio hold at 96 kHz at 32 frames without the
+   drops `req_number` fixed at 48 kHz (memory: "USB drops at small IO sizes")?
+4. Which way does the Mac follow after a re-enumeration (design options (a)
+   and (b))? "The Mac decides" makes this less important.
+
+Write the script and plan, and tell the operator before anything touches the
+USB side.
+
+**Rules that bit on 2026-10-17.**
+- Installs, the gadget swap and reboots are the operator's sudo.
+- Password-free: `systemctl` on usb16x16-dante, usb16x16-statime and
+  usb-16x16.service, and the candidate launcher.
+- Never build on the Pi while the service runs.
+- Candidate runs under `usb16x16-dante-candidate` cannot write
+  `/run/usb16x16-dante/` (the launcher has no runtime directory), so meters
+  and request files are exercised only on the installed form.
+- A wait loop that uses `pgrep -f` over ssh matches its own command line.
+- Today's anchors drew high (363, 379, 364 on the installed owner), so judge
+  a level against a same-day control.
+- The Mac occasionally misses two I/O cycles in both directions (one 64-frame
+  all-channel hole with both CoreAudio discontinuity flags). The owner's
+  counters tell it apart.
+- `run-headtohead.sh` rebuilds the offline runner in
+  `~/usb-16x16-work/dsp-verify/bridge-build/`, a path
+  `install-web-control.sh` pins.
+- The page must be staged with `work/web-ui/stage-page.sh`, only after the web
+  service it needs is installed.
+
+**Also owed, smaller:** the per-rate DSP cost estimate on the page
+(admission, design DSP item 5); something on the network has polled the Pi's
+ARC port with unknown opcodes since 2026-10-17 (control plane only,
+unidentified); the installed owner's spread-8 impulse reading of 14:30 UTC
+that day.
+
 ## Current pickup — 2026-10-13: the owner's stalls (closed 2026-10-14). Start here.
 
 **Added 2026-10-13 10:45 UTC: first read done; read RESULTS.md's last
