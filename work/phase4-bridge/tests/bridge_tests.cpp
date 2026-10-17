@@ -373,6 +373,111 @@ std::string dsp_one_band(const char* const section, const double output_gain = 1
            " " + std::to_string(output_gain) + " 1\n" + section + "\n";
 }
 
+// ---- unity sections are skipped (the fixed shape's empty band slots)
+//
+// The stage skips a section that is exactly y = x and rebuilds its history when
+// a live set switches it on. The reference here runs every section, unity
+// included, as plain direct form I with the coefficients switching at the same
+// sample; the stage must match it exactly, sample for sample.
+
+const char* const kUnity = "1 0 0 0 0";
+const char* const kLowish = "0.2 0.1 0.05 -0.5 0.1";
+const char* const kHighish = "0.6 -0.9 0.35 -0.3 0.2";
+
+std::array<double, 5> parse_section(const char* const text) {
+    std::array<double, 5> out{};
+    char* cursor = const_cast<char*>(text);
+    for (double& value : out) value = std::strtod(cursor, &cursor);
+    return out;
+}
+
+// One chain of sections, on output 0 (`branch` false) or on the branch of the
+// one internal channel (`branch` true), input 0 to output 0 at unity gain.
+std::string dsp_chain(const std::vector<const char*>& sections, const bool branch) {
+    std::string list;
+    for (const char* section : sections) list += std::string(section) + "\n";
+    const std::string count = std::to_string(sections.size());
+    if (branch) {
+        return "expand 1\n0 0 1\nbranch 1\n0 " + count + "\n" + list + "assign 1\n0 0 1\noutput 1\n0 0 1 0\n";
+    }
+    return "expand 1\n0 0 1\nbranch 0\nassign 1\n0 0 1\noutput 1\n0 0 1 " + count + "\n" + list;
+}
+
+void check_unity_skip_against_reference(const bool branch) {
+    const std::vector<std::vector<const char*>> sets{
+        {kUnity, kBellUp, kUnity, kUnity, kLowish},        // a run of unity between two bands
+        {kHighish, kBellUp, kUnity, kBellDown, kLowish},   // switched on at the head and after a band
+        {kHighish, kUnity, kUnity, kBellDown, kUnity},     // switched off, the tail included
+        {kUnity, kBellUp, kLowish, kUnity, kHighish},      // on again behind a band switched off
+        {kUnity, kUnity, kUnity, kUnity, kUnity},          // all off
+        {kBellUp, kHighish, kLowish, kBellDown, kBellUp},  // all on from nothing
+    };
+    auto stage = usb16x16::DspStage::load(dsp_artifact(dsp_chain(sets[0], branch)));
+    std::array<std::array<double, 4>, 5> state{};   // x1 x2 y1 y2, every section always run
+    unsigned seed = 12345;
+    const auto noise = [&seed]() {
+        seed = seed * 1103515245U + 12345U;
+        return static_cast<float>(static_cast<int>((seed >> 8) & 0xFFFF) - 32768) / 65536.0F;
+    };
+    bool exact = true;
+    std::size_t first_bad = 0;
+    std::size_t sample_index = 0;
+    for (std::size_t set = 0; set < sets.size(); ++set) {
+        if (set > 0) {
+            const auto update = usb16x16::DspStage::load(dsp_artifact(dsp_chain(sets[set], branch)));
+            std::string reason;
+            check(stage.publish(update, reason), "the next set publishes (same shape)");
+        }
+        std::array<std::array<double, 5>, 5> coefficients{};
+        for (std::size_t k = 0; k < 5; ++k) coefficients[k] = parse_section(sets[set][k]);
+        for (int block = 0; block < 5; ++block) {
+            std::vector<float> buffer(48 * usb16x16::kChannels, 0.0F);
+            for (std::size_t frame = 0; frame < 48; ++frame) buffer[frame * usb16x16::kChannels] = noise();
+            std::vector<float> expected(48);
+            for (std::size_t frame = 0; frame < 48; ++frame) {
+                double sample = static_cast<double>(buffer[frame * usb16x16::kChannels]);
+                for (std::size_t k = 0; k < 5; ++k) {
+                    const auto& c = coefficients[k];
+                    auto& h = state[k];
+                    const double output = c[0] * sample + c[1] * h[0] + c[2] * h[1] - c[3] * h[2] - c[4] * h[3];
+                    h = {sample, h[0], output, h[2]};
+                    sample = output;
+                }
+                expected[frame] = static_cast<float>(sample * 1.0);
+            }
+            stage.process(buffer.data(), 48);
+            for (std::size_t frame = 0; frame < 48; ++frame, ++sample_index) {
+                if (buffer[frame * usb16x16::kChannels] != expected[frame] && exact) {
+                    exact = false;
+                    first_bad = sample_index;
+                }
+            }
+        }
+    }
+    if (!exact) std::cerr << "  first difference at sample " << first_bad << '\n';
+    check(exact, branch ? "a branch chain with unity skipped matches every section run, through six live sets"
+                        : "an output chain with unity skipped matches every section run, through six live sets");
+}
+
+void test_dsp_unity_skip_is_exact() {
+    check_unity_skip_against_reference(false);
+    check_unity_skip_against_reference(true);
+}
+
+void test_dsp_unity_skip_survives_reset() {
+    // After a reset every history is silence, the chain input's included, so a
+    // band switched on next starts from silence as a loaded stage would.
+    auto stage = usb16x16::DspStage::load(dsp_artifact(dsp_chain({kUnity, kBellUp}, false)));
+    (void)dsp_run(stage, dsp_impulse(64, 0, 0.5F));
+    stage.reset();
+    std::string reason;
+    check(stage.publish(usb16x16::DspStage::load(dsp_artifact(dsp_chain({kLowish, kBellUp}, false))), reason),
+          "publish after reset");
+    auto fresh = usb16x16::DspStage::load(dsp_artifact(dsp_chain({kLowish, kBellUp}, false)));
+    check(dsp_run(stage, dsp_impulse(64, 0, 1.0F)) == dsp_run(fresh, dsp_impulse(64, 0, 1.0F)),
+          "a band switched on after a reset runs as from a fresh load");
+}
+
 void test_dsp_publish_keeps_filter_state() {
     // Reference: the same difference equation run in the test, switching
     // coefficients at the swap frame with the state carried over. The stage
@@ -1090,6 +1195,8 @@ int main() {
     test_sha256_known_vectors();
     test_dsp_shape_key_matches_the_pinned_vector();
     test_dsp_publish_keeps_filter_state();
+    test_dsp_unity_skip_is_exact();
+    test_dsp_unity_skip_survives_reset();
     test_dsp_publish_refuses_a_different_shape();
     test_dsp_publish_waits_for_the_audio_thread();
     test_dsp_publish_shrinking_delay_stays_in_bounds();

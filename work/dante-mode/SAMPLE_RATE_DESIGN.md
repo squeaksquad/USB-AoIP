@@ -256,7 +256,8 @@ plus the extra start the start check forces about one time in three or four.
 ### One source of truth: the Mac
 
 Most of the machinery already exists, on the Mac.
-`~/Development/Dante Switcher` (its PLAN.md, 2026-10-16) is a menu-bar agent
+`~/Development/Dante Switcher` (its PLAN.md, 2026-10-16; its own private
+repository since 2026-10-17, `github.com/squeaksquad/dante-switcher`) is a menu-bar agent
 that follows the Metric Halo's rate (CoreAudio listener, a 2 s debounce)
 and sets every Dante device's rate with the same `0x0081` settings packet
 Controller sends: the Pulse (the leader) first, a wait for its word clock
@@ -372,6 +373,10 @@ check:
    y = x). Expected to cut a typical preset's cost by more than half. The
    check: the existing DSP tests, the CamillaDSP head-to-head
    (`run-headtohead.sh`) unchanged, and the bench.
+   2026-10-17: written and Mac-tested (RESULTS.md, "step 4c (first half)"):
+   byte-identical output to the previous core, live switches included; the
+   default preset 2.6 to 2.7 times faster on the Mac, a fully loaded one
+   2 to 5 % slower. Pi bench and head-to-head owed.
 3. **Two channels at a time.** Run the per-channel chains for output pairs
    as NEON double2. Each channel's arithmetic order is unchanged, so the
    output is the same sample for sample; the head-to-head harness proves

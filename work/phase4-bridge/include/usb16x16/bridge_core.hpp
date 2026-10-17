@@ -47,6 +47,14 @@ std::string sha256_hex(std::string_view text);
 // stage of the same shape and switches the index with a release store. Filter
 // state is not part of a set and is kept across a switch, which is what makes
 // a gain or frequency move continuous rather than a restart from silence.
+//
+// Unity sections (b0 = 1, the rest 0: the fixed shape's empty band slots) are
+// skipped, arithmetic and state alike: a unity section's output is its input,
+// so its history is the signal's history at that point in its chain and need
+// not be kept. On the block that takes a new set, each section that was unity
+// and no longer is gets that history from the nearest section before it that
+// was running, or from the chain's own input history, so a band switched on
+// live starts exactly where it would have had it run all along.
 class DspStage {
 public:
     // Generous: the worst case a preset can reach is one main branch per
@@ -136,6 +144,7 @@ private:
     // Numbers: what a live update may change. Two copies, sized at load.
     struct Coefficients {
         std::vector<Section> sections;
+        std::vector<std::uint8_t> unity;   // parallel to sections: 1 where the section is y = x
         std::vector<double> expand_gain;   // parallel to expand_
         std::vector<double> assign_gain;   // parallel to assign_
         std::array<double, kChannels> output_gain{};
@@ -143,7 +152,11 @@ private:
     };
 
     void run_chain(const Coefficients& c, std::uint32_t first, std::uint32_t count,
-                   double& sample) noexcept;
+                   std::size_t chain, double& sample) noexcept;
+    // On the audio thread, when `now` replaces `before`: history for each section
+    // that `before` skipped and `now` runs.
+    void adopt(const Coefficients& before, const Coefficients& now) noexcept;
+    static void mark_unity(Coefficients& c);
     void flush_denormals() noexcept;
     static std::string shape_text(const DspStage& stage);
 
@@ -157,6 +170,9 @@ private:
     std::vector<MixEntry> assign_;
     std::vector<Chain> branches_;
     std::vector<State> states_;
+    // Each chain's last two inputs (x1, x2), branches first then the 16 outputs:
+    // the history a section switched on live at the head of its chain takes.
+    std::vector<State> inputs_;
     std::array<OutputSpec, kChannels> outputs_{};
     std::array<Coefficients, 2> sets_{};
     // Which set the audio thread reads, and the publish count on each side.
@@ -165,6 +181,8 @@ private:
     std::atomic<unsigned> active_{0};
     std::atomic<std::uint64_t> published_{0};
     std::atomic<std::uint64_t> seen_{0};
+    // The set the last block ran on. Audio thread only.
+    unsigned taken_{0};
     // One contiguous block, max_delay_ per output, so a delay line never
     // allocates and the whole stage is one cache-friendly region.
     std::vector<double> delay_lines_;

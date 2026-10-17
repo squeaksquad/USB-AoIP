@@ -5239,3 +5239,47 @@ stage's arithmetic at any rate. Whether 192 kHz fits in service depends on
 the whole loop, which only an owner run at 192 kHz can show. Unity skip
 first; the meters' cost per frame (one pass over 16 channels per tap) is
 next to look at.
+
+## Sample rate, step 4c (first half): unity sections skipped in the DSP stage, exact; Mac-tested, not on the Pi (2026-10-17)
+
+SAMPLE_RATE_DESIGN.md, DSP item 2. The bench above showed a fixed-shape
+user preset paying for its empty band slots. `DspStage` (bridge core, shared
+by the bridge and the owner) now marks each section that is exactly
+b0 = 1, b1 = b2 = a1 = a2 = 0 when a set is loaded or published, and the
+audio thread skips it: no arithmetic and no state update. Each chain keeps
+its last two inputs (two moves a sample). On the block that takes a new set,
+before `seen_` is released, each section that the old set skipped and the
+new one runs gets its history from the nearest section before it that the
+old set ran (its y1, y2), or from the chain's inputs. That is exactly the
+history it would have had, since a unity section's input and output are the
+signal at that point. One pass over the sections per live edit, no
+allocation. `reset()` clears the chain histories too.
+
+Checked on the Mac:
+
+- Bridge core tests, two new: a chain run through six live sets (bands
+  switched on at the head of the chain, behind a run of unity, behind a band
+  switched off, all off, all on), on an output chain and on a branch chain,
+  matches a reference that runs every section as plain direct form I,
+  **exactly, sample for sample**; and a band switched on after a reset runs
+  as from a fresh load. Mutation check: with the history rebuild disabled
+  the first test fails at sample 240, the first switch.
+- HEAD's core against this one, both `usb16x16-dsp-offline -O2`, 4 s of
+  16-channel noise: all 24 bench artifacts (four presets x six rates)
+  **byte-identical**. A live switch mid-stream on real presets (the default
+  preset in the fixed shape, and the same with six bands on across five
+  outputs, one shape key 064ef631), at frame 50,000 in both directions:
+  **byte-identical**, and different from the run without the switch.
+- Owner `dsp_path_test`, `dsp_live_test`, `meter_tap_test`; node 66 / 66.
+
+Cost on the Mac (Release, median µs per 1 ms block, old -> new): default
+preset in the fixed shape (302 sections, 256 unity) 32.9 -> 12.8 at 48 kHz
+and 137.0 -> 50.5 at 192 kHz (2.6 to 2.7 times faster); loaded fixed 34.2 ->
+35.7 and 139.7 -> 146.1, transparent 28.2 -> 28.7 (the per-section check
+costs a fully loaded preset 2 to 5 %). On the Pi not yet measured: that is
+the same bench with the endpoint stopped, the operator's go.
+
+Not built for or installed on the Pi. The installed owner and bridge are
+unchanged. The CamillaDSP head-to-head (`run-headtohead.sh`) is still owed
+before a candidate, though the byte-identity against the previous core
+already carries what it would show.

@@ -90,11 +90,13 @@ DspStage::DspStage(DspStage&& other) noexcept
       assign_(std::move(other.assign_)),
       branches_(std::move(other.branches_)),
       states_(std::move(other.states_)),
+      inputs_(std::move(other.inputs_)),
       outputs_(other.outputs_),
       sets_(std::move(other.sets_)),
       active_(other.active_.load(std::memory_order_relaxed)),
       published_(other.published_.load(std::memory_order_relaxed)),
       seen_(other.seen_.load(std::memory_order_relaxed)),
+      taken_(other.taken_),
       delay_lines_(std::move(other.delay_lines_)),
       delay_write_(other.delay_write_) {
     other.internal_channels_ = 0;
@@ -112,11 +114,13 @@ DspStage& DspStage::operator=(DspStage&& other) noexcept {
         assign_ = std::move(other.assign_);
         branches_ = std::move(other.branches_);
         states_ = std::move(other.states_);
+        inputs_ = std::move(other.inputs_);
         outputs_ = other.outputs_;
         sets_ = std::move(other.sets_);
         active_.store(other.active_.load(std::memory_order_relaxed), std::memory_order_relaxed);
         published_.store(other.published_.load(std::memory_order_relaxed), std::memory_order_relaxed);
         seen_.store(other.seen_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        taken_ = other.taken_;
         delay_lines_ = std::move(other.delay_lines_);
         delay_write_ = other.delay_write_;
         other.internal_channels_ = 0;
@@ -225,9 +229,11 @@ DspStage DspStage::load(const std::string_view text, const unsigned running_rate
     }
     reader.expect("end");
 
+    mark_unity(numbers);
     // The second set is sized now, so a publish never allocates.
     stage.sets_[1] = numbers;
     stage.states_.assign(numbers.sections.size(), State{});
+    stage.inputs_.assign(stage.branches_.size() + kChannels, State{});
     stage.delay_lines_.assign(kChannels * stage.max_delay_, 0.0);
     stage.delay_write_.fill(0);
     stage.shape_ = shape_text(stage);
@@ -294,6 +300,7 @@ bool DspStage::publish(const DspStage& other, std::string& reason) noexcept {
     const Coefficients& from = other.sets_[other.active_.load(std::memory_order_acquire)];
     // Same shape means same sizes: element copies into storage sized at load.
     std::copy(from.sections.begin(), from.sections.end(), inactive.sections.begin());
+    std::copy(from.unity.begin(), from.unity.end(), inactive.unity.begin());
     std::copy(from.expand_gain.begin(), from.expand_gain.end(), inactive.expand_gain.begin());
     std::copy(from.assign_gain.begin(), from.assign_gain.end(), inactive.assign_gain.begin());
     inactive.output_gain = from.output_gain;
@@ -306,17 +313,55 @@ bool DspStage::publish(const DspStage& other, std::string& reason) noexcept {
     return true;
 }
 
+void DspStage::mark_unity(Coefficients& c) {
+    c.unity.assign(c.sections.size(), 0);
+    for (std::size_t index = 0; index < c.sections.size(); ++index) {
+        const Section& s = c.sections[index];
+        c.unity[index] = s.b0 == 1.0 && s.b1 == 0.0 && s.b2 == 0.0 && s.a1 == 0.0 && s.a2 == 0.0;
+    }
+}
+
+void DspStage::adopt(const Coefficients& before, const Coefficients& now) noexcept {
+    const auto chain = [&](const std::uint32_t first, const std::uint32_t count, const std::size_t input) {
+        // The newest section `before` ran; null means the chain's input.
+        const State* upstream = nullptr;
+        for (std::uint32_t index = first; index < first + count; ++index) {
+            if (before.unity[index] && !now.unity[index]) {
+                // Under `before` this section's input was upstream's output (or the
+                // chain's input), and as y = x its output was the same signal.
+                const double h1 = upstream != nullptr ? upstream->y1 : inputs_[input].x1;
+                const double h2 = upstream != nullptr ? upstream->y2 : inputs_[input].x2;
+                states_[index] = State{h1, h2, h1, h2};
+            }
+            if (!before.unity[index]) upstream = &states_[index];
+        }
+    };
+    for (std::size_t row = 0; row < branches_.size(); ++row) {
+        chain(branches_[row].first, branches_[row].count, row);
+    }
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        chain(outputs_[channel].first, outputs_[channel].count, branches_.size() + channel);
+    }
+}
+
 void DspStage::reset() noexcept {
     for (auto& state : states_) {
         state = State{};
+    }
+    for (auto& history : inputs_) {
+        history = State{};
     }
     std::fill(delay_lines_.begin(), delay_lines_.end(), 0.0);
     delay_write_.fill(0);
 }
 
 void DspStage::run_chain(const Coefficients& c, const std::uint32_t first,
-                         const std::uint32_t count, double& sample) noexcept {
+                         const std::uint32_t count, const std::size_t chain, double& sample) noexcept {
+    State& history = inputs_[chain];
+    history.x2 = history.x1;
+    history.x1 = sample;
     for (std::uint32_t index = 0; index < count; ++index) {
+        if (c.unity[first + index]) continue;   // y = x; its history is upstream's (adopt)
         const Section& section = c.sections[first + index];
         State& state = states_[first + index];
         // Direct form I, the form the emitted coefficients are written for.
@@ -354,7 +399,15 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
     // publish count is read after the index so the value seen is at least
     // the one that went with this set; recording it releases the other set
     // back to the control thread.
-    const Coefficients& c = sets_[active_.load(std::memory_order_acquire)];
+    const unsigned active = active_.load(std::memory_order_acquire);
+    const Coefficients& c = sets_[active];
+    // A new set: give its newly running sections their history, from the old
+    // set's flags. Before `seen_` is stored, so the control thread cannot yet be
+    // writing into the old set.
+    if (active != taken_) {
+        adopt(sets_[taken_], c);
+        taken_ = active;
+    }
     seen_.store(published_.load(std::memory_order_relaxed), std::memory_order_release);
     // A delay that shrank under a live update: keep the write index inside
     // the new length. Up to `delay` stale samples come out of the line once.
@@ -377,8 +430,9 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
             const MixEntry& entry = expand_[row];
             internal[entry.dest] += c.expand_gain[row] * in[entry.source];
         }
-        for (const Chain& chain : branches_) {
-            run_chain(c, chain.first, chain.count, internal[chain.channel]);
+        for (std::size_t row = 0; row < branches_.size(); ++row) {
+            const Chain& chain = branches_[row];
+            run_chain(c, chain.first, chain.count, row, internal[chain.channel]);
         }
         out.fill(0.0);
         for (std::size_t row = 0; row < assign_.size(); ++row) {
@@ -388,7 +442,7 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
             const OutputSpec& spec = outputs_[channel];
             double sample = out[channel];
-            run_chain(c, spec.first, spec.count, sample);
+            run_chain(c, spec.first, spec.count, branches_.size() + channel, sample);
             const std::uint32_t delay = c.output_delay[channel];
             if (delay > 0) {
                 double* const line = delay_lines_.data() + channel * max_delay_;
