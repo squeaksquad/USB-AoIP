@@ -5332,3 +5332,38 @@ byte-identical. Mac medians, old -> new: default fixed 33.3 -> 9.0 µs at
 48 kHz (3.7 times faster); transparent level (57.8 -> 57.5 at 96 kHz);
 loaded fixed 34.6 -> 35.7 at 48 kHz and loaded 137.8 -> 144.7 at 192 kHz
 (3 to 6 % slower). The Pi, which is what decides, is to be benched again.
+
+## The corrected unity skip on the Pi: exact, and faster than the pre-skip core for every preset at every rate (2026-10-17 04:19-04:22 UTC)
+
+Operator's go. Endpoint stopped 04:19:06 UTC, started 04:21:46, linked both
+ways at once; start check `state=ok` at 04:22:51 (6,015 frames a second, no
+restart), `NRestarts` 0. Installed owner unchanged; no noise probe on this
+start.
+
+Core 48f871e built on the Pi with the service stopped (binary 914827ab,
+`bridge_core.cpp` bbaec39e, header c8558c99) in
+`~/usb-16x16-work/ratebench-unity2-20261017/`, run artifact by artifact
+beside the pre-skip binary 99ba5309, same procedure as before. Evidence:
+`outputs/dsp-verify/ratebench-unity2-20261017T041906Z.jsonl`.
+
+- **Identity on aarch64:** 24 of 24 artifacts byte-identical to the
+  pre-skip core.
+- **Cost, median µs per 1 ms block, pre-skip -> corrected (share of the
+  period, median / max, after):**
+
+| Preset | 48 kHz | 96 kHz | 192 kHz | new / old |
+|---|---|---|---|---|
+| default, fixed (256 of 302 unity) | 72.8 -> 21.4 (2.1 / 5.7 %) | 143.0 -> 41.5 (4.1 / 8.0 %) | 283.1 -> 81.6 (8.2 / 11.4 %) | 0.29 to 0.30 |
+| loaded, minimal | 71.6 -> 67.3 (6.7 / 9.7 %) | 142.2 -> 134.0 (13.4 / 16.9 %) | 282.6 -> 265.9 (26.6 / 29.8 %) | 0.94 |
+| loaded, fixed | 73.4 -> 69.5 | 147.7 -> 137.3 | 294.1 -> 273.6 (27.4 / 30.4 %) | 0.93 to 0.95 |
+| transparent | 59.4 -> 53.4 | 116.2 -> 106.3 | 235.9 -> 211.6 | 0.90 to 0.91 |
+
+So the 40 to 48 % penalty is gone, and presets with no unity section are 5
+to 10 % faster than before, which is the sample-by-value change; the Mac had
+shown the reverse. A typical user preset (the default in the fixed shape)
+costs 3.4 to 3.5 times less, 8 % of the period at 192 kHz. The heaviest
+preset at 192 kHz is 27 to 30 % of the period for the arithmetic.
+
+Not a candidate yet: the CamillaDSP head-to-head and an owner build with
+this core under the battery come first (the owner links the same
+`bridge_core.cpp`).
