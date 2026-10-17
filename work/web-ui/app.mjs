@@ -5,7 +5,7 @@ import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphoneP
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, stackTerms } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, stackTerms } from './backend.mjs';
 import { LiveQueue } from './live.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
@@ -736,7 +736,9 @@ async function applyDraft() {
   if (!confirm(presetSummary(compiled, config.name, health))) return;
   applyBusy = true; refreshSettingsLive();
   try {
-    const result = await requestPreset(config.name, compiled.artifact, live);
+    // The Dante endpoint keeps one artifact per rate; the AES67 bridge runs 48 kHz only.
+    const others = health?.stack === 'dante' ? await compileOtherRates(config) : null;
+    const result = await requestPreset(config.name, compiled.artifact, live, undefined, others);
     toast(`${result.replacing ? 'Replacing' : 'Installing'} ${result.profile} (artifact ${result.artifactSha256.slice(0, 8)}). ${result.note || ''}`);
     await saveDraftWithPreset('preset');
     applyStatus = {current: null, pending: true, inFlight: false};
@@ -750,9 +752,22 @@ async function commitLive() {
   const state = liveState(health, draftShapeKey);
   if (!state.previewing) { toast(`Nothing to commit: the ${terms().engine} is running the installed preset.`); return; }
   if (!confirm(`Make the coefficients the ${terms().engine} is running the installed ${state.profile}? No restart.`)) return;
+  // On the Dante stack the other rates' files are rewritten from this draft, so the
+  // draft must be what the owner applied; a rate not sent is removed as stale.
+  let others = null;
+  if (health?.stack === 'dante') {
+    try {
+      validateConfig(config);
+      if ((await compileDraft(config)).sha256 !== state.liveSha256) {
+        toast('The draft has changed since the last live update reached the owner; wait a moment and commit again.');
+        return;
+      }
+      others = await compileOtherRates(config);
+    } catch (e) { toast(`Cannot compile this draft at the other rates: ${e.message}`); return; }
+  }
   applyBusy = true; refreshSettingsLive();
   try {
-    const result = await requestCommit(state.profile, state.liveSha256);
+    const result = await requestCommit(state.profile, state.liveSha256, undefined, others);
     applyStatus = {current: null, pending: true, inFlight: false};
     refreshSettingsLive();
     const receipt = await awaitReceipt(result.id);

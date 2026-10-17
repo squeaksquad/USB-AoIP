@@ -506,6 +506,17 @@ export async function compileDraftRates(config, importImpl, {shape = 'fixed', ra
   return byRate;
 }
 
+/** The same draft at every Dante rate except `except` (48 kHz unless given),
+ *  as {rate: artifact text} for requestPreset / requestCommit's rateArtifacts:
+ *  the Dante applier stores one artifact per rate and the endpoint runs the one
+ *  for its rate (SAMPLE_RATE_DESIGN.md, step 4d). All six, not only the
+ *  offered ones, so a rate offered later finds every saved preset ready. */
+export async function compileOtherRates(config, importImpl, {shape = 'fixed', except = 48000} = {}) {
+  const compiler = await loadCompiler(importImpl);
+  const byRate = await compileDraftRates(config, importImpl, {shape, rates: compiler.DANTE_RATES.filter(rate => rate !== except)});
+  return Object.fromEntries(Object.entries(byRate).map(([rate, compiled]) => [rate, compiled.artifact]));
+}
+
 /** The confirm text for a compiled draft: what will run and what the compiler warns about. */
 export function presetSummary(compiled, name, health = null) {
   const r = compiled.report, terms = stackTerms(health);
@@ -521,11 +532,13 @@ export function presetSummary(compiled, name, health = null) {
   return lines.join('\n');
 }
 
-export async function requestPreset(name, artifact, expectedProfile, fetchImpl = globalThis.fetch) {
+export async function requestPreset(name, artifact, expectedProfile, fetchImpl = globalThis.fetch, rateArtifacts = null) {
+  const payload = {name, artifact, expectedProfile};
+  if (rateArtifacts && Object.keys(rateArtifacts).length) payload.rateArtifacts = rateArtifacts;
   const response = await fetchImpl('/api/apply/preset', {
     method: 'POST',
     headers: {'content-type': 'application/json', accept: 'application/json'},
-    body: JSON.stringify({name, artifact, expectedProfile}),
+    body: JSON.stringify(payload),
   });
   const body = await response.json().catch(() => null);
   if (!response.ok || !isObject(body) || body.ok !== true) {
@@ -598,11 +611,13 @@ export async function requestLive(artifact, expectedProfile, expectedLiveSha256,
   return result;
 }
 
-export async function requestCommit(expectedProfile, expectedLiveSha256, fetchImpl = globalThis.fetch) {
+export async function requestCommit(expectedProfile, expectedLiveSha256, fetchImpl = globalThis.fetch, rateArtifacts = null) {
+  const payload = {expectedProfile, expectedLiveSha256};
+  if (rateArtifacts && Object.keys(rateArtifacts).length) payload.rateArtifacts = rateArtifacts;
   const response = await fetchImpl('/api/apply/commit', {
     method: 'POST',
     headers: {'content-type': 'application/json', accept: 'application/json'},
-    body: JSON.stringify({expectedProfile, expectedLiveSha256}),
+    body: JSON.stringify(payload),
   });
   const result = await response.json().catch(() => null);
   if (!response.ok || !isObject(result) || result.ok !== true) {

@@ -444,6 +444,11 @@ items 2 and 3, or by the worker thread at every rate, as answered).
 4d. **Per-rate preset store and admission** (DSP items 5 and 6): the page
    compiles all six, the applier files them by rate, the start wrapper
    picks by `RATE`.
+   2026-10-17: the store written and Mac-tested, not installed (RESULTS.md,
+   "step 4d"): `rateArtifacts` from page to web service to applier,
+   `dante-<slug>@<rate>.dsp` beside the 48 kHz file, `RATE=` in owner.conf
+   passed as `--rate`, the running rate's file switched to and pinned.
+   Admission (the per-rate cost estimate) is still to do.
 5. **Multi-rate gadget** (as before, protected gadget untouched). The
    experiment shrinks to: does a CoreAudio rate set reach `Capture Rate`
    cleanly, does the Mac re-open without the device vanishing, and does

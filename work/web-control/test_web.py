@@ -2,6 +2,7 @@
 state reader and the request writer. Run: python3 -m unittest work/web-control/test_web.py"""
 import importlib.machinery
 import importlib.util
+import hashlib
 import json
 import os
 import tempfile
@@ -125,6 +126,33 @@ class WebPresetTests(unittest.TestCase):
         self.assertEqual(body["artifactFile"], f"{ident}.dsp")
         self.assertEqual((self.spool / "presets" / f"{ident}.dsp").read_bytes(), artifact)
         self.assertEqual(sorted(p.name for p in (self.spool / "presets").iterdir()), [f"{ident}.dsp"])
+
+
+    def test_preset_request_writes_every_rate_beside_it(self):
+        rates = {"96000": b"usb16x16-dsp 1\npreset x\nrate 96000\nend\n", "44100": b"usb16x16-dsp 1\npreset x\nrate 44100\nend\n"}
+        ident = self.web.write_apply_request("user-x", "dsp-direct", "bryan", extra={"kind": "preset"},
+                                             artifact=b"usb16x16-dsp 1\nend\n", rate_artifacts=rates)
+        body = json.loads((self.spool / "request.json").read_text())
+        self.assertEqual(body["rateArtifacts"], {
+            rate: {"file": f"{ident}-{rate}.dsp", "sha256": hashlib.sha256(data).hexdigest()} for rate, data in rates.items()})
+        for rate, data in rates.items():
+            self.assertEqual((self.spool / "presets" / f"{ident}-{rate}.dsp").read_bytes(), data)
+        self.assertEqual(len(list((self.spool / "presets").iterdir())), 3, "no temporaries left")
+
+    def test_rate_artifacts_are_checked_for_form(self):
+        text = "usb16x16-dsp 1\npreset x\nend\n"
+        self.assertEqual(self.web.rate_artifacts_from({}, self.web.OTHER_RATES), {})
+        self.assertEqual(self.web.rate_artifacts_from({"rateArtifacts": {"96000": text}}, self.web.OTHER_RATES),
+                         {"96000": text.encode()})
+        for given, reason in [({"48000": text}, "not a rate this request carries"), ({"32000": text}, "not a rate"),
+                              ({"96000": "nonsense"}, "not the compiler's"), ({"96000": 5}, "not the compiler's"),
+                              ({"96000": "usb16x16-dsp 1\n" + "x" * (1 << 18) + "end\n"}, "larger than"),
+                              ("not a map", "must map")]:
+            outcome = self.web.rate_artifacts_from({"rateArtifacts": given}, self.web.OTHER_RATES)
+            self.assertIsInstance(outcome, str, given)
+            self.assertIn(reason, outcome)
+        self.assertEqual(self.web.rate_artifacts_from({"rateArtifacts": {"48000": text}}, self.web.DANTE_RATE_KEYS),
+                         {"48000": text.encode()}, "a commit may carry 48 kHz")
 
 
 METERS_TEXT = (

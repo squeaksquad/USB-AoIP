@@ -16,6 +16,9 @@
 #   DSP_PRESET=PATH    a coefficient artifact under /etc/usb16x16/dsp/; empty: direct
 #   DSP_SHA256=HEX     required with DSP_PRESET: the file must hash to this
 #   DSP_LIVE=0|1       1: follow /run/usb16x16-dante/dsp-live.dsp (needs DSP_PRESET)
+#   RATE=HZ            --rate HZ, a Dante rate; absent: the owner's 48000. DSP_PRESET
+#                      must then be the artifact compiled for it (the owner refuses
+#                      another); the applier writes the two together
 #
 # A configuration that cannot be honoured is a refusal (exit 2), never a
 # quieter start: a system set up with crossovers must not come up without
@@ -33,6 +36,7 @@ meters=0
 preset=
 preset_sha=
 live=0
+rate=
 if [ -e "$conf" ]; then
   [ -r "$conf" ] || refuse "$conf cannot be read"
   while IFS= read -r line || [ -n "$line" ]; do
@@ -44,6 +48,8 @@ if [ -e "$conf" ]; then
       METERS)     [[ $value =~ ^[01]$ ]] || refuse "METERS must be 0 or 1"; meters=$value ;;
       DSP_LIVE)   [[ $value =~ ^[01]$ ]] || refuse "DSP_LIVE must be 0 or 1"; live=$value ;;
       DSP_PRESET) preset=$value ;;
+      RATE)       [[ $value =~ ^(44100|48000|88200|96000|176400|192000)$ ]] || refuse "RATE must be a Dante rate (44100, 48000, 88200, 96000, 176400 or 192000)"
+                  rate=$value ;;
       DSP_SHA256) [[ $value =~ ^[0-9a-f]{64}$ ]] || refuse "DSP_SHA256 must be 64 hex digits"; preset_sha=$value ;;
       *)          refuse "$conf: unknown key $key" ;;
     esac
@@ -53,6 +59,7 @@ fi
 sha256_of() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -c1-64; else shasum -a 256 "$1" | cut -c1-64; fi; }
 
 arguments=(--seconds 0 --ppm-file "$state_dir/usb16x16-dante-owner.ppm" --log-every 60)
+[ -n "$rate" ] && arguments+=(--rate "$rate")
 [ "$meters" = 1 ] && arguments+=(--meter-file "$run_dir/meters.txt")
 if [ -n "$preset" ]; then
   [[ $preset == "$dsp_dir"/*.dsp && $preset != *..* && ${preset#"$dsp_dir"/} != */* ]] ||

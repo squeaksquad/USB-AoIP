@@ -598,3 +598,34 @@ test('compileDraftRates compiles once per offered rate, 48 kHz only today', asyn
   await assert.rejects(compileDraftRates(preset, undefined, {rates: [48000, 32000]}), /not a Dante rate/);
   await assert.rejects(compileDraftRates(preset, undefined, {rates: []}), /No rate/);
 });
+
+// SAMPLE_RATE_DESIGN.md, step 4d: the other five rates ride along with a preset or a commit.
+import { compileOtherRates } from './backend.mjs';
+
+test('compileOtherRates gives the same draft at the five rates other than 48 kHz', async () => {
+  const preset = createConfig();
+  const others = await compileOtherRates(preset);
+  assert.deepEqual(Object.keys(others).map(Number).sort((a, b) => a - b), [44100, 88200, 96000, 176400, 192000]);
+  for (const [rate, text] of Object.entries(others)) {
+    assert.match(text, new RegExp(`^usb16x16-dsp 1\\npreset [^\\n]*\\nrate ${rate}\\n`));
+    assert.ok(text.endsWith('end\n'));
+  }
+  const around96 = await compileOtherRates(preset, undefined, {except: 96000});
+  assert.ok('48000' in around96 && !('96000' in around96), 'a commit at 96 kHz carries 48 kHz instead');
+});
+
+test('requestPreset and requestCommit carry rateArtifacts only when given', async () => {
+  const calls = [];
+  const fake = async (url, init) => { calls.push([url, JSON.parse(init.body)]); return ok({ok: true, id: 'x', profile: 'dante-a', artifactSha256: 'ab'}); };
+  await requestPreset('A', 'usb16x16-dsp 1\nend\n', 'direct', fake);
+  await requestPreset('A', 'usb16x16-dsp 1\nend\n', 'direct', fake, {96000: 'usb16x16-dsp 1\nrate 96000\nend\n'});
+  await requestCommit('dante-a', 'f'.repeat(64), fake);
+  await requestCommit('dante-a', 'f'.repeat(64), fake, {});
+  await requestCommit('dante-a', 'f'.repeat(64), fake, {96000: 'usb16x16-dsp 1\nrate 96000\nend\n'});
+  assert.equal('rateArtifacts' in calls[0][1], false, 'the body is what it was without rates');
+  assert.deepEqual(calls[1][1].rateArtifacts, {96000: 'usb16x16-dsp 1\nrate 96000\nend\n'});
+  assert.deepEqual(calls[2][1], {expectedProfile: 'dante-a', expectedLiveSha256: 'f'.repeat(64)});
+  assert.equal('rateArtifacts' in calls[3][1], false, 'an empty map is not sent');
+  assert.equal(calls[4][0], '/api/apply/commit');
+  assert.ok('96000' in calls[4][1].rateArtifacts);
+});

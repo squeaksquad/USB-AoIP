@@ -79,12 +79,29 @@ for a soak and the panel says so. Eight user presets at most; a re-apply of the
 same name replaces its block and file; a slug may not be another's dash-prefix.
 
 ```
-POST   /api/apply/preset            {"name", "artifact", "artifactSha256"?, "expectedProfile"} -> 202 {id, profile, slug, replacing}
+POST   /api/apply/preset            {"name", "artifact", "artifactSha256"?, "expectedProfile", "rateArtifacts"?} -> 202 {id, profile, slug, replacing}
 DELETE /api/apply/preset/<slug>     queue removal of a user preset that is not live -> 202 {id}
 POST   /api/apply/live              {"artifact", "artifactSha256"?, "expectedProfile", "expectedLiveSha256"?} -> 202 {id, profile, artifactSha256}
-POST   /api/apply/commit            {"expectedProfile", "expectedLiveSha256"?} -> 202 {id, profile, sha256}
+POST   /api/apply/commit            {"expectedProfile", "expectedLiveSha256"?, "rateArtifacts"?} -> 202 {id, profile, sha256}
 POST   /api/apply/shutdown          {"confirm": "shutdown", "expectedProfile"?} -> 202 {id, profile}
 ```
+
+### One artifact per rate (2026-10-17, web 1.6.0, applier 1.5.0)
+
+`rateArtifacts` is `{rate: artifact text}`: the same draft compiled at the
+other Dante rates (44100, 88200, 96000, 176400, 192000 for a preset; any rate
+for a commit). The page sends it on the Dante stack only
+(`compileOtherRates` in `work/web-ui/backend.mjs`). This process checks form
+and size and writes each beside the request as `<id>-<rate>.dsp`. The Dante
+applier checks each at its own rate (hash, guards, the offline runner with
+`--rate`) and installs them as `/etc/usb16x16/dsp/dante-<slug>@<rate>.dsp`
+beside the 48 kHz `dante-<slug>.dsp`, removing a rate a newer version does
+not carry. `owner.conf` may carry `RATE=`; the applier then switches to and
+pins the file for that rate, and refuses a preset that has none. A commit
+rewrites the rates it carries and removes the others as stale. A request
+without `rateArtifacts`, and an `owner.conf` without `RATE`, behave exactly
+as before. The AES67 applier ignores the field. SAMPLE_RATE_DESIGN.md, step
+4d. Staged in the repository, not installed.
 
 ### Shut down the Pi (2026-09-14)
 

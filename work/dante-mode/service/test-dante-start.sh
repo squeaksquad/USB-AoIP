@@ -52,6 +52,11 @@ run $'DSP_SHA256=xyz\n';                                                        
 run $'SOMETHING=1\n';                                                           expect "unknown key" 2 "unknown key"
 run $'METERS=1; rm -rf /\n';                                                    expect "nothing is executed" 2 "METERS must be"
 run $'export METERS=1\n';                                                       expect "not KEY=value" 2 "not KEY=value"
+run $'RATE=48000\n';                                                            expect "rate" 0 "--log-every 60 --rate 48000 "
+run "RATE=96000"$'\n'"METERS=1"$'\n'"DSP_PRESET=$work/dsp/a.dsp"$'\n'"DSP_SHA256=$sha"$'\n'
+expect "rate with a preset" 0 "--log-every 60 --rate 96000 --meter-file /run/x/meters.txt --dsp-preset $work/dsp/a.dsp "
+run $'RATE=32000\n';                                                            expect "not a Dante rate" 2 "RATE must be a Dante rate"
+run $'RATE=48000 \n';                                                           expect "rate with trailing text" 2 "RATE must be a Dante rate"
 if [ "${1:-}" = transport ]; then
   export USB16X16_DANTE_TRANSPORT=$work/transport.conf
   tr_run() { printf '%s' "$1" > "$work/transport.conf"; run "$2"; }
@@ -67,5 +72,7 @@ if [ "${1:-}" = transport ]; then
   tr_run $'TX_LEAD=96\n' "";                    expect "unknown transport key" 2 "unknown key"
   tr_run $'METERS=1\n' "";                      expect "owner.conf keys do not belong there" 2 "unknown key"
   tr_run $'RX_QUEUE=96\n' $'RX_QUEUE=96\n';     expect "transport keys do not belong in owner.conf" 2 "unknown key"
+  tr_run $'RX_QUEUE=96\n' $'RATE=96000\n';       expect "rate before the queue" 0 "--log-every 60 --rate 96000 --rx-queue 96 "
+  tr_run $'RATE=96000\n' "";                      expect "the rate belongs in owner.conf" 2 "unknown key"
 fi
 if [ "$failures" -eq 0 ]; then echo "test-dante-start: all passed"; else echo "test-dante-start: $failures FAILED"; exit 1; fi

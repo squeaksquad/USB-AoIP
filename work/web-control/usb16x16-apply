@@ -93,7 +93,7 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 
 SPOOL_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
 CONF_PATH = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
@@ -110,7 +110,12 @@ MAX_BIQUADS = 308
 MAX_ARTIFACT_BYTES = 1 << 18
 ARTIFACT_CHANNELS = 16
 ARTIFACT_MAX_INTERNAL = 64
-ARTIFACT_MAX_DELAY = 480
+ARTIFACT_MAX_DELAY = 480          # 10 ms at 48 kHz; rate // 100 at any rate
+# Every rate a Dante device runs at. An artifact is compiled for one of them
+# and names it; the owner refuses one whose rate is not the one it runs at
+# (SAMPLE_RATE_DESIGN.md, step 3). The bridge runs at 48 kHz only.
+DANTE_RATES = (44100, 48000, 88200, 96000, 176400, 192000)
+NOMINAL_RATE = 48000
 ARTIFACT_MAX_SECTIONS = 64
 USER_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,23}$")
 LABEL_FIELDS = ("DESCRIPTION", "STATUS", "COVER", "MEASURED", "DSP_PRESET", "DSP_SHA256", "DSP_LIVE")
@@ -127,6 +132,7 @@ RECEIPT_DIR = "receipts"
 PROFILE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 PRESET_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._·-]{0,63}$")
 REQUEST_ID = re.compile(r"^[a-f0-9]{8,32}$")
+RATE_ARTIFACT_FILE = re.compile(r"^[a-f0-9]{8,32}-(44100|48000|88200|96000|176400|192000)\.dsp$")
 REQUEST_MAX_AGE_S = 120.0
 START_TIMEOUT_S = 150.0     # cold start: module, daemon, PTP lock, sinks, bridge
 SETTLE_S = 30.0             # after STAGE running, with zero RECOVERs
@@ -291,8 +297,8 @@ class ArtifactReader:
         return rest
 
 
-def parse_artifact(text: str) -> dict:
-    """Walk the artifact exactly as DspStage::load does, with its bounds, and
+def parse_artifact(text: str, rate: int = NOMINAL_RATE) -> dict:
+    """Walk the artifact exactly as DspStage::load does at `rate`, with its bounds, and
     additionally require every biquad section to be stable (poles inside the
     unit circle: |a2| < 1 and |a1| < 1 + a2) and every gain to be sane. Returns
     the counts the block and the receipt record."""
@@ -305,8 +311,9 @@ def parse_artifact(text: str) -> dict:
     reader.expect("preset")
     preset = reader.rest_of_line()
     reader.expect("rate")
-    if reader.count("rate", 768000) != 48000:
-        raise Refused("artifact: rate is not 48000")
+    declared_rate = reader.count("rate", 768000)
+    if declared_rate != rate:
+        raise Refused(f"artifact: compiled for rate {declared_rate}, expected {rate}")
     reader.expect("channels")
     if reader.count("channels", ARTIFACT_CHANNELS) != ARTIFACT_CHANNELS:
         raise Refused("artifact: channel count is not 16")
@@ -315,7 +322,7 @@ def parse_artifact(text: str) -> dict:
     if internal == 0:
         raise Refused("artifact: no internal channels")
     reader.expect("maxdelay")
-    declared_delay = reader.count("maxdelay", ARTIFACT_MAX_DELAY)
+    declared_delay = reader.count("maxdelay", rate // 100)
     sections = 0
     max_gain = 0.0
 
@@ -358,7 +365,7 @@ def parse_artifact(text: str) -> dict:
         raise Refused(f"artifact: a gain of {max_gain:g} (over +40 dB) is refused")
     if sections > MAX_BIQUADS:
         raise Refused(f"artifact: {sections} biquads, over the {MAX_BIQUADS} the loaded soak passed")
-    return {"preset": preset, "internal": internal, "biquads": sections, "maxDelay": max_delay}
+    return {"preset": preset, "internal": internal, "biquads": sections, "maxDelay": max_delay, "rate": rate}
 
 
 def artifact_shape(text: str) -> str:
@@ -1191,6 +1198,13 @@ class Applier:
             artifact = request.get("artifactFile") if isinstance(request, dict) else None
             if isinstance(artifact, str) and re.match(r"^[a-f0-9]{8,32}\.dsp$", artifact):
                 (self.spool / "presets" / artifact).unlink(missing_ok=True)
+            # The other rates' artifacts a Dante preset or commit carries.
+            extra = request.get("rateArtifacts") if isinstance(request, dict) else None
+            if isinstance(extra, dict):
+                for entry in extra.values():
+                    name = entry.get("file") if isinstance(entry, dict) else None
+                    if isinstance(name, str) and RATE_ARTIFACT_FILE.match(name):
+                        (self.spool / "presets" / name).unlink(missing_ok=True)
 
 
 # ------------------------------------------------------------------ the Dante stack
@@ -1221,7 +1235,7 @@ DANTE_OWNER = Path(os.environ.get("USB16X16_DANTE_OWNER", "/usr/local/libexec/us
 DANTE_START = os.environ.get("USB16X16_DANTE_START", "/usr/local/libexec/usb16x16-dante/usb16x16-dante-start")
 DANTE_DIRECT = "direct"
 DANTE_PREFIX = "dante-"
-DANTE_CONF_KEYS = ("METERS", "DSP_PRESET", "DSP_SHA256", "DSP_LIVE")
+DANTE_CONF_KEYS = ("METERS", "DSP_PRESET", "DSP_SHA256", "DSP_LIVE", "RATE")
 # The unit waits up to 40 s for the clock before it starts the owner.
 DANTE_START_TIMEOUT_S = 75.0
 DANTE_SETTLE_S = 15.0
@@ -1240,20 +1254,38 @@ def parse_owner_conf(text: str) -> dict[str, str]:
     return values
 
 
-def render_owner_conf(meters: str, preset: Path | None, digest: str | None) -> str:
+def render_owner_conf(meters: str, preset: Path | None, digest: str | None, rate: str | None = None) -> str:
+    """`rate` is carried as it was found: absent stays absent (the owner's 48000),
+    so a 48 kHz configuration is written exactly as before rates existed."""
     lines = ["# /etc/usb16x16/dante/owner.conf: how usb16x16-dante.service starts the owner.",
              f"# Written by usb16x16-apply {utc()}; read by usb16x16-dante-start.",
              f"METERS={meters}"]
+    if rate:
+        lines.append(f"RATE={rate}")
     if preset is not None:
         lines += [f"DSP_PRESET={preset}", f"DSP_SHA256={digest}", "DSP_LIVE=1"]
     return "\n".join(lines) + "\n"
+
+
+def running_rate(conf: dict[str, str]) -> int:
+    value = conf.get("RATE") or str(NOMINAL_RATE)
+    if not value.isdigit() or int(value) not in DANTE_RATES:
+        raise Refused(f"owner.conf: RATE={value} is not a Dante rate")
+    return int(value)
+
+
+def rate_file(name: str, rate: int) -> Path:
+    """A Dante preset's artifact for one rate. 48 kHz keeps the name it has had
+    since before rates (dante-<slug>.dsp), so nothing installed needs moving;
+    any other rate sits beside it as dante-<slug>@<rate>.dsp."""
+    return DSP_DIR / (f"{name}.dsp" if rate == NOMINAL_RATE else f"{name}@{rate}.dsp")
 
 
 def dante_profile_of(conf: dict[str, str]) -> str:
     preset = conf.get("DSP_PRESET") or ""
     if not preset:
         return DANTE_DIRECT
-    return Path(preset).name.removesuffix(".dsp")
+    return re.sub(r"@\d+$", "", Path(preset).name.removesuffix(".dsp"))
 
 
 class DanteApplier(Applier):
@@ -1313,7 +1345,58 @@ class DanteApplier(Applier):
             slug = path.name[len(DANTE_PREFIX):-len(".dsp")]
             if USER_SLUG.match(slug):
                 found[DANTE_PREFIX + slug] = {"name": DANTE_PREFIX + slug, "dspPreset": str(path),
-                                             "dspSha256": sha256_of(path), "dspLive": True}
+                                             "dspSha256": sha256_of(path), "dspLive": True,
+                                             "rates": self.rates_of(DANTE_PREFIX + slug)}
+        return found
+
+    # ---- rates (SAMPLE_RATE_DESIGN.md, step 4d)
+    #
+    # The page compiles a preset at every Dante rate (the Pi has no compiler)
+    # and sends them together: the 48 kHz artifact as before, the others as
+    # `rateArtifacts` {rate: {file, sha256}}. Each is held to the same guards at
+    # its own rate. The endpoint runs the file for owner.conf's RATE; a preset
+    # with no file for that rate is refused, never run on another rate's
+    # coefficients.
+
+    @staticmethod
+    def rates_of(name: str) -> list[int]:
+        return [rate for rate in DANTE_RATES if rate_file(name, rate).is_file()]
+
+    @staticmethod
+    def at_rate(row: dict, rate: int) -> dict:
+        """The row with the artifact for `rate` in place of the 48 kHz one."""
+        if not row["dspPreset"] or rate == NOMINAL_RATE:
+            return row
+        path = rate_file(row["name"], rate)
+        if not path.is_file():
+            raise Refused(f"{row['name']} has no artifact for {rate} Hz; save the preset again from the page")
+        return {**row, "dspPreset": str(path), "dspSha256": sha256_of(path)}
+
+    def read_rate_artifacts(self, request: dict, exclude: int) -> dict[int, dict]:
+        extra = request.get("rateArtifacts")
+        if extra is None:
+            return {}
+        if not isinstance(extra, dict) or len(extra) >= len(DANTE_RATES):
+            raise Refused("rateArtifacts must map at most five rates to artifacts")
+        found: dict[int, dict] = {}
+        for key, entry in extra.items():
+            if not isinstance(key, str) or not key.isdigit() or int(key) not in DANTE_RATES or int(key) == exclude:
+                raise Refused(f"rateArtifacts: {str(key)[:12]} is not a rate this request can carry")
+            rate = int(key)
+            file_name = entry.get("file") if isinstance(entry, dict) else None
+            digest = entry.get("sha256") if isinstance(entry, dict) else None
+            if not isinstance(file_name, str) or not RATE_ARTIFACT_FILE.match(file_name) or not file_name.endswith(f"-{rate}.dsp"):
+                raise Refused(f"rateArtifacts {rate}: file must be <request id>-{rate}.dsp in the spool's presets directory")
+            if not isinstance(digest, str) or not re.match(r"^[0-9a-f]{64}$", digest):
+                raise Refused(f"rateArtifacts {rate}: sha256 must be 64 hex characters")
+            try:
+                data = (self.spool / "presets" / file_name).read_bytes()
+            except OSError:
+                raise Refused(f"rateArtifacts {rate}: {file_name} is missing from the spool")
+            if hashlib.sha256(data).hexdigest() != digest:
+                raise Refused(f"rateArtifacts {rate}: the artifact does not hash to its sha256")
+            stats = parse_artifact(data.decode("utf-8", errors="replace"), rate)
+            found[rate] = {"data": data, "digest": digest, "stats": stats}
         return found
 
     def check_expected(self, request: dict, live: str) -> None:
@@ -1331,12 +1414,13 @@ class DanteApplier(Applier):
         table = self.table()
         if name not in table:
             raise Refused(f"{name} is not installed; the Dante service has {', '.join(sorted(table))}")
-        row = table[name]
+        rate = running_rate(conf)
+        row = self.at_rate(table[name], rate)
         if row["dspPreset"]:
             text = read_text(Path(row["dspPreset"]), MAX_ARTIFACT_BYTES + 1)
             if text is None:
                 raise Refused(f"{row['dspPreset']} cannot be read")
-            parse_artifact(text)   # an installed file is still held to the guards
+            parse_artifact(text, rate)   # an installed file is still held to the guards
         live = dante_profile_of(conf)
         self.check_expected(request, live)
         if name == live and not reapply:
@@ -1366,6 +1450,10 @@ class DanteApplier(Applier):
         if hashlib.sha256(data).hexdigest() != digest:
             raise Refused("artifact hash does not match artifactSha256")
         stats = parse_artifact(data.decode("utf-8", errors="replace"))
+        rates = self.read_rate_artifacts(request, NOMINAL_RATE)
+        running = running_rate(conf)
+        if running != NOMINAL_RATE and running not in rates:
+            raise Refused(f"the endpoint runs at {running} Hz and the request carries no artifact for it")
         installed = [n for n in self.table() if n != DANTE_DIRECT]
         replacing = DANTE_PREFIX + slug in installed
         if not replacing and len(installed) >= USER_PROFILE_CAP:
@@ -1376,14 +1464,17 @@ class DanteApplier(Applier):
             raise Refused(f"{DANTE_UNIT} is {unit}; retry when it has settled")
         if not Path(OFFLINE_RUNNER).is_file():
             raise Refused(f"{OFFLINE_RUNNER} is not installed; presets cannot be load-checked")
-        return {"name": name, "slug": slug, "digest": digest, "data": data, "stats": stats, "replacing": replacing}
+        return {"name": name, "slug": slug, "digest": digest, "data": data, "stats": stats, "replacing": replacing,
+                "rates": rates}
 
-    def load_check(self, data: bytes, biquads: int) -> None:
-        self.step("checking", f"{OFFLINE_RUNNER} --bench 1 on the artifact ({biquads} biquads)")
+    def load_check(self, data: bytes, biquads: int, rate: int = NOMINAL_RATE) -> None:
+        # --rate only off 48 kHz: the installed runner may predate the option.
+        at = [] if rate == NOMINAL_RATE else ["--rate", str(rate)]
+        self.step("checking", f"{OFFLINE_RUNNER} --bench 1 {' '.join(at) + ' ' if at else ''}on the artifact ({biquads} biquads)")
         staged = self.spool / "presets" / f"check-{self.state['id']}.dsp"
         staged.write_bytes(data)
         try:
-            code, out = self.runner.run([OFFLINE_RUNNER, str(staged), "--bench", "1"], timeout=60)
+            code, out = self.runner.run([OFFLINE_RUNNER, str(staged), *at, "--bench", "1"], timeout=60)
         finally:
             staged.unlink(missing_ok=True)
         if code != 0:
@@ -1405,12 +1496,26 @@ class DanteApplier(Applier):
         os.replace(temporary, target)
 
     def install_preset(self, spec: dict, conf_text: str = "") -> str:
+        rates = spec.get("rates") or {}
         self.load_check(spec["data"], spec["stats"]["biquads"])
-        target = DSP_DIR / f"{DANTE_PREFIX}{spec['slug']}.dsp"
-        self.step("installing", str(target))
+        for rate, extra in sorted(rates.items()):
+            self.load_check(extra["data"], extra["stats"]["biquads"], rate)
+        name = DANTE_PREFIX + spec["slug"]
+        target = rate_file(name, NOMINAL_RATE)
+        self.step("installing", str(target) + (f" and {', '.join(str(r) for r in sorted(rates))} Hz beside it" if rates else ""))
         DSP_DIR.mkdir(mode=0o755, exist_ok=True)
+        # The other rates first and the 48 kHz file, the one the table lists, last.
+        # A rate this version does not carry is removed: an older version's file
+        # for it would be other coefficients.
+        for rate in DANTE_RATES:
+            if rate == NOMINAL_RATE:
+                continue
+            if rate in rates:
+                self.write_root_file(rate_file(name, rate), rates[rate]["data"], "tmp")
+            else:
+                rate_file(name, rate).unlink(missing_ok=True)
         self.write_root_file(target, spec["data"], "tmp")
-        return DANTE_PREFIX + spec["slug"]
+        return name
 
     def remove_preset(self, request: dict, conf: dict[str, str], conf_text: str = "") -> str:
         slug = request.get("slug")
@@ -1421,8 +1526,11 @@ class DanteApplier(Applier):
             raise Refused(f"{name} is not installed")
         if dante_profile_of(conf) == name:
             raise Refused(f"{name} is the live profile; switch away before removing it")
-        self.step("removing", f"{DSP_DIR}/{name}.dsp")
-        (DSP_DIR / f"{name}.dsp").unlink(missing_ok=True)
+        self.step("removing", f"{DSP_DIR}/{name}.dsp" + (" and its other rates" if len(self.rates_of(name)) > 1 else ""))
+        for rate in DANTE_RATES:
+            if rate != NOMINAL_RATE:
+                rate_file(name, rate).unlink(missing_ok=True)
+        rate_file(name, NOMINAL_RATE).unlink(missing_ok=True)
         return name
 
     # ---- live coefficient updates (no restart); validate_live and push_live are the bridge's
@@ -1433,6 +1541,7 @@ class DanteApplier(Applier):
         row = self.table().get(live)
         if row is None or not live.startswith(DANTE_PREFIX):
             raise Refused(f"{live} is not an installed preset; there is nothing to update live")
+        row = self.at_rate(row, running_rate(conf))
         if conf.get("DSP_LIVE") != "1":
             raise Refused(f"{live} runs without DSP_LIVE=1: the owner is not following a live file; re-apply the preset")
         if row["dspSha256"] != conf.get("DSP_SHA256"):
@@ -1459,20 +1568,40 @@ class DanteApplier(Applier):
         if data is None or hashlib.sha256(data).hexdigest() != digest:
             raise Refused("the live file no longer matches what the owner applied; push it again")
         text = data.decode("utf-8", errors="replace")
-        stats = parse_artifact(text)
+        running = running_rate(conf)
+        stats = parse_artifact(text, running)
         installed_path = Path(row["dspPreset"])
         if shape_key(read_text(installed_path, MAX_ARTIFACT_BYTES + 1) or "") != shape_key(text):
             raise Refused("the live file's shape differs from the installed preset; it cannot be committed")
-        if digest == row["dspSha256"]:
+        # The live file is at the running rate; the page sends the same draft
+        # compiled at the others. A rate it does not send is removed, because
+        # its file holds the coefficients from before the edit.
+        others = self.read_rate_artifacts(request, running)
+        if running != NOMINAL_RATE and NOMINAL_RATE not in others:
+            raise Refused(f"a commit at {running} Hz must carry the 48 kHz artifact, the file the preset is listed by")
+        for rate, extra in sorted(others.items()):
+            self.load_check(extra["data"], extra["stats"]["biquads"], rate)
+        stale = [rate for rate in self.rates_of(row["name"]) if rate != running and rate not in others]
+        changed = digest != row["dspSha256"]
+        if not changed and not others:
             self.step("committing", "the live coefficients already equal the installed file")
-            return {"profile": row["name"], "digest": digest, "stats": stats, "changed": False}
-        self.step("committing", f"{installed_path} <- live {digest[:12]}, pin rewritten, no restart")
-        # File first, then its pin: between the two the wrapper would refuse a
-        # start (the file no longer hashes to the old pin), which is the safe
-        # side of a crash here. The running owner is not touched by either.
-        self.write_root_file(installed_path, data, "commit")
-        self.replace_conf(render_owner_conf(conf.get("METERS", "0"), installed_path, digest))
-        return {"profile": row["name"], "digest": digest, "stats": stats, "changed": True}
+            return {"profile": row["name"], "digest": digest, "stats": stats, "changed": False, "rates": [running]}
+        for rate, extra in sorted(others.items()):
+            self.write_root_file(rate_file(row["name"], rate), extra["data"], "commit")
+        if changed:
+            for rate in stale:
+                rate_file(row["name"], rate).unlink(missing_ok=True)
+        self.step("committing", f"{installed_path} <- live {digest[:12]}, pin rewritten, no restart"
+                  + (f"; {', '.join(str(r) for r in sorted(others))} Hz written" if others else "")
+                  + (f"; {', '.join(str(r) for r in stale)} Hz removed as stale" if changed and stale else ""))
+        if changed:
+            # File first, then its pin: between the two the wrapper would refuse a
+            # start (the file no longer hashes to the old pin), which is the safe
+            # side of a crash here. The running owner is not touched by either.
+            self.write_root_file(installed_path, data, "commit")
+            self.replace_conf(render_owner_conf(conf.get("METERS", "0"), installed_path, digest, conf.get("RATE")))
+        return {"profile": row["name"], "digest": digest, "stats": stats, "changed": changed,
+                "rates": sorted([running, *others])}
 
     # ---- the configuration file
 
@@ -1580,6 +1709,8 @@ class DanteApplier(Applier):
             "state": "validating",
             "error": None,
         }
+        if isinstance(request.get("rateArtifacts"), dict):
+            self.state["request"]["rates"] = sorted(str(key)[:6] for key in request["rateArtifacts"])
         try:
             conf = self.conf()
             previous_text = read_text(self.conf_path) or ""
@@ -1615,6 +1746,7 @@ class DanteApplier(Applier):
                 self.state["profile"] = outcome["profile"]
                 self.state["stats"] = outcome["stats"]
                 self.state["committed"] = {"sha256": outcome["digest"], "changed": outcome["changed"]}
+                self.state["rates"] = outcome["rates"]
                 return self.finish("done")
             elif kind == "shutdown":
                 self.validate_envelope(request)
@@ -1631,7 +1763,8 @@ class DanteApplier(Applier):
         self.state["profile"] = target["name"]
         self.step("validating", f"{target['name']} is installed; live profile {previous}")
         new_text = render_owner_conf(conf.get("METERS", "0"),
-                                     Path(target["dspPreset"]) if target["dspPreset"] else None, target["dspSha256"])
+                                     Path(target["dspPreset"]) if target["dspPreset"] else None, target["dspSha256"],
+                                     conf.get("RATE"))
         reason = self.switch_to(new_text, target)
         if reason is None:
             return self.finish("done")

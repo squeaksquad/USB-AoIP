@@ -5367,3 +5367,47 @@ preset at 192 kHz is 27 to 30 % of the period for the arithmetic.
 Not a candidate yet: the CamillaDSP head-to-head and an owner build with
 this core under the battery come first (the owner links the same
 `bridge_core.cpp`).
+
+## Sample rate, step 4d: one artifact per rate from the page to the owner's command line; Mac-tested, not installed (2026-10-17)
+
+SAMPLE_RATE_DESIGN.md, step 4d. 48 kHz behaviour is unchanged by
+construction: a request without the new field, and an `owner.conf` without
+`RATE`, take exactly the paths they took before, and the 48 kHz load check is
+the command line the installed offline runner knows (`--rate` is passed only
+off 48 kHz).
+
+- **Start wrappers** (`usb16x16-dante-start` and the installed `-transport`
+  form, kept parallel): optional `RATE=` in `owner.conf`, a Dante rate, turned
+  into `--rate N`. Anything else is a refusal (exit 2). `test-dante-start.sh`
+  +4 cases in both forms, +2 for the transport form.
+- **Applier 1.5.0** (`work/web-control/usb16x16-apply`, Dante backend): a
+  preset carries `rateArtifacts` beside its 48 kHz artifact. Each one is
+  hash-checked, parsed with the guards at its own rate (`parse_artifact(text,
+  rate)`; maxdelay is rate / 100) and load-checked with `--rate`. They are
+  installed as `dante-<slug>@<rate>.dsp` beside `dante-<slug>.dsp`, which
+  keeps its name, so nothing installed moves. A rate a newer version does
+  not carry is removed. With `RATE` in `owner.conf` a switch runs and pins
+  that rate's file and keeps `RATE`. A preset without a file for the running
+  rate is refused ("no artifact for 96000 Hz"), as is a new preset that does
+  not carry it. A live commit rewrites the rates it carries and removes the
+  rest as stale (at a rate other than 48 kHz it must carry the 48 kHz file).
+  Removing a preset removes every rate. The spool's rate files are cleaned
+  up with the request. `test_dante_apply.py`: 7 new tests, 34 in all.
+- **Web service 1.6.0**: `rateArtifacts` accepted on `/api/apply/preset` and
+  `/api/apply/commit`, checked for form and size and written as
+  `<id>-<rate>.dsp` (`rate_artifacts_from`, two tests in `test_web.py`).
+- **Page**: `compileOtherRates` compiles the draft at the five other rates.
+  On the Dante stack Apply sends them, and Commit sends them only when the
+  draft's 48 kHz artifact is the one the owner reports applied (otherwise it
+  asks for a retry rather than pin other rates to other coefficients).
+  `backend.test.mjs` +2.
+
+All suites: node 184 / 184; `test_apply.py`, `test_dante_apply.py`,
+`test_dante_web.py`, `test_web.py` OK; both start-wrapper forms and the start
+check pass. Not run in a browser.
+
+Owed: the page assumes the running rate is 48 kHz (the health snapshot does
+not report `RATE`). Step 4's arbiter adds it, and then the commit's
+excluded rate follows it. The table's per-preset `rates` list is not shown on
+the page yet. Installing any of this means new hashes in
+`install-web-control.sh` and the Dante installers, and the operator's sudo.

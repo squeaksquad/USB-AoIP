@@ -57,7 +57,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -79,6 +79,11 @@ APPLY_TERMINAL = {"done", "rolled-back", "failed", "refused"}
 APPLY_STALE_SECONDS = 600.0
 REQUEST_MAX_AGE_SECONDS = 120.0
 PRESET_ARTIFACT_MAX = 1 << 18
+# The Dante rates a preset is also compiled at, besides the 48 kHz artifact it
+# has always carried (SAMPLE_RATE_DESIGN.md, step 4d). The applier checks each
+# at its own rate; this process only checks form and size.
+OTHER_RATES = ("44100", "88200", "96000", "176400", "192000")
+DANTE_RATE_KEYS = ("44100", "48000", "88200", "96000", "176400", "192000")
 USER_PRESET_CAP = 8
 USER_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,23}$")
 
@@ -985,8 +990,28 @@ def preset_slug(name: str) -> str:
     return slug if USER_SLUG.match(slug) else ""
 
 
+def rate_artifacts_from(body: dict, allowed: tuple[str, ...]) -> dict[str, bytes] | str:
+    """A request's `rateArtifacts` {rate: artifact text} as bytes, or the reason it is refused."""
+    given = body.get("rateArtifacts")
+    if given is None:
+        return {}
+    if not isinstance(given, dict) or len(given) > len(allowed):
+        return "rateArtifacts must map rates to artifact texts"
+    found: dict[str, bytes] = {}
+    for rate, text in given.items():
+        if rate not in allowed:
+            return f"rateArtifacts: {str(rate)[:12]} is not a rate this request carries ({', '.join(allowed)})"
+        if not isinstance(text, str) or not text.startswith("usb16x16-dsp 1\n") or not text.endswith("end\n"):
+            return f"rateArtifacts {rate}: not the compiler's bridge artifact text"
+        data = text.encode("utf-8")
+        if len(data) > PRESET_ARTIFACT_MAX:
+            return f"rateArtifacts {rate}: larger than {PRESET_ARTIFACT_MAX} bytes"
+        found[rate] = data
+    return found
+
+
 def write_apply_request(profile: str, expected: str | None, user: str | None, extra: dict | None = None,
-                        artifact: bytes | None = None) -> str:
+                        artifact: bytes | None = None, rate_artifacts: dict[str, bytes] | None = None) -> str:
     """The only write this process makes outside its preset store: one JSON
     request the path unit picks up (plus, for a preset, the artifact text it
     refers to, in the spool's presets/ directory). Atomic, so the applier
@@ -1009,6 +1034,19 @@ def write_apply_request(profile: str, expected: str | None, user: str | None, ex
             os.fsync(handle.fileno())
         os.replace(temporary, presets / f"{ident}.dsp")
         payload["artifactFile"] = f"{ident}.dsp"
+    if rate_artifacts:
+        presets = APPLY_DIR / "presets"
+        if not presets.is_dir():
+            raise PermissionError(f"{presets} does not exist; reinstall the Apply units")
+        payload["rateArtifacts"] = {}
+        for rate, data in sorted(rate_artifacts.items()):
+            temporary = presets / f"{ident}-{rate}.tmp"
+            with open(temporary, "wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, presets / f"{ident}-{rate}.dsp")
+            payload["rateArtifacts"][rate] = {"file": f"{ident}-{rate}.dsp", "sha256": hashlib.sha256(data).hexdigest()}
     target = APPLY_DIR / "request.json"
     temporary = APPLY_DIR / f"request.{ident}.tmp"
     with open(temporary, "w", encoding="utf-8") as handle:
@@ -1514,9 +1552,13 @@ class Handler(BaseHTTPRequestHandler):
         parses the artifact with the loader's bounds, loads it through the
         bridge's own code and writes the block. Nothing here is trusted by it.
         """
-        body = self.read_body(limit=PRESET_ARTIFACT_MAX + 65536)
+        body = self.read_body(limit=(1 + len(OTHER_RATES)) * PRESET_ARTIFACT_MAX + 65536)
         if not isinstance(body, dict):
             self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object")
+            return
+        rate_artifacts = rate_artifacts_from(body, OTHER_RATES)
+        if isinstance(rate_artifacts, str):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, rate_artifacts)
             return
         name = body.get("name")
         artifact = body.get("artifact")
@@ -1555,7 +1597,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             ident = write_apply_request(target, expected, self.current_user(),
                                         extra={"kind": "preset", "name": name, "slug": slug, "artifactSha256": computed},
-                                        artifact=data)
+                                        artifact=data, rate_artifacts=rate_artifacts)
         except OSError as error:
             self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
             return
@@ -1662,9 +1704,15 @@ class Handler(BaseHTTPRequestHandler):
     def api_apply_commit(self) -> None:
         """Make the coefficients the bridge is running the installed preset;
         no restart, since the running numbers already equal the file."""
-        body = self.read_body(limit=4096)
+        # The same draft compiled at the other rates may ride along (step 4d):
+        # the applier writes those and removes the rates it is not sent.
+        body = self.read_body(limit=len(DANTE_RATE_KEYS) * PRESET_ARTIFACT_MAX + 65536)
         if not isinstance(body, dict):
             self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object")
+            return
+        rate_artifacts = rate_artifacts_from(body, DANTE_RATE_KEYS)
+        if isinstance(rate_artifacts, str):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, rate_artifacts)
             return
         gate = self.live_gate(body.get("expectedProfile"), body.get("expectedLiveSha256"))
         if gate is None:
@@ -1676,7 +1724,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             ident = write_apply_request(live, body.get("expectedProfile"), self.current_user(),
-                                        extra={"kind": "commit", "expectedLiveSha256": body.get("expectedLiveSha256")})
+                                        extra={"kind": "commit", "expectedLiveSha256": body.get("expectedLiveSha256")},
+                                        rate_artifacts=rate_artifacts)
         except OSError as error:
             self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
             return

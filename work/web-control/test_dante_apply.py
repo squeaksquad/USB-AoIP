@@ -23,9 +23,9 @@ loader.exec_module(apply_module)
 START = REPO / "work/dante-mode/service/usb16x16-dante-start"
 
 
-def artifact(gain=1.0, inputs=16, name="straight"):
+def artifact(gain=1.0, inputs=16, name="straight", rate=48000):
     rows = lambda count, fmt: "".join(fmt(c) for c in range(count))
-    return ("usb16x16-dsp 1\npreset " + name + "\nrate 48000\nchannels 16\ninternal 16\nmaxdelay 480\n"
+    return ("usb16x16-dsp 1\npreset " + name + f"\nrate {rate}\nchannels 16\ninternal 16\nmaxdelay {rate // 100}\n"
             f"expand {inputs}\n" + rows(inputs, lambda c: f"{c} {c} {gain}\n") + "branch 0\nassign 16\n"
             + rows(16, lambda c: f"{c} {c} 1\n") + "output 16\n" + rows(16, lambda c: f"{c} 0 1 0\n") + "end\n").encode()
 
@@ -183,6 +183,19 @@ class DanteApplyTest(unittest.TestCase):
         (self.env.spool / "presets" / f"{request['id']}.dsp").write_bytes(data)
         request.update(artifactFile=f"{request['id']}.dsp", artifactSha256=sha(data))
         return request
+
+    def with_rates(self, request, rates):
+        """Add rateArtifacts {rate: data} to a request, files in the spool as the web service writes them."""
+        extra = {}
+        for rate, data in rates.items():
+            name = f"{request['id']}-{rate}.dsp"
+            (self.env.spool / "presets" / name).write_bytes(data)
+            extra[str(rate)] = {"file": name, "sha256": sha(data)}
+        request["rateArtifacts"] = extra
+        return request
+
+    def load_checks(self):
+        return [c[1:] for c in self.runner.calls if c[0] == apply_module.OFFLINE_RUNNER]
 
     def commands(self):
         return [" ".join(c[:2]) for c in self.runner.calls if c[0] == "systemctl" and c[1] in ("stop", "start", "poweroff")]
@@ -502,6 +515,118 @@ class DanteApplyTest(unittest.TestCase):
         self.assertFalse((self.env.spool / "request.json").exists())
         self.assertFalse((self.env.spool / "presets" / request["artifactFile"]).exists())
         self.assertIsNone(self.make().consume())
+
+    # ---- rates (SAMPLE_RATE_DESIGN.md, step 4d): one artifact per rate, the file for owner.conf's RATE run
+
+    def test_owner_conf_carries_the_rate_and_48k_is_written_as_before(self):
+        path = self.env.install("a", artifact())
+        self.assertNotIn("RATE", apply_module.render_owner_conf("1", path, sha(artifact())))
+        text = apply_module.render_owner_conf("1", self.env.dsp_dir / "dante-a@96000.dsp", "0" * 64, "96000")
+        values = apply_module.parse_owner_conf(text)
+        self.assertEqual(values["RATE"], "96000")
+        self.assertEqual(apply_module.dante_profile_of(values), "dante-a", "the @rate suffix is not part of the profile")
+        self.assertEqual(apply_module.running_rate({}), 48000)
+        with self.assertRaises(apply_module.Refused):
+            apply_module.running_rate({"RATE": "32000"})
+
+    def test_artifacts_are_checked_at_their_own_rate(self):
+        self.assertEqual(apply_module.parse_artifact(artifact(rate=96000).decode(), 96000)["rate"], 96000)
+        with self.assertRaises(apply_module.Refused) as caught:
+            apply_module.parse_artifact(artifact(rate=96000).decode())
+        self.assertIn("compiled for rate 96000, expected 48000", str(caught.exception))
+        # the delay ceiling is 10 ms at the artifact's rate
+        long_delay = artifact(rate=96000).replace(b"\n0 0 1 0\n", b"\n0 960 1 0\n", 1)
+        self.assertEqual(apply_module.parse_artifact(long_delay.decode(), 96000)["maxDelay"], 960)
+
+    def test_a_preset_with_every_rate_installs_each_beside_the_48k_file(self):
+        rates = {rate: artifact(0.5, rate=rate) for rate in (44100, 88200, 96000, 176400, 192000)}
+        request = self.with_rates(self.with_artifact(artifact(0.5), kind="preset", name="Room", slug="room",
+                                                     expectedProfile="direct"), rates)
+        result = self.make().apply(request)
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertEqual((self.env.dsp_dir / "dante-room.dsp").read_bytes(), artifact(0.5))
+        for rate, data in rates.items():
+            self.assertEqual((self.env.dsp_dir / f"dante-room@{rate}.dsp").read_bytes(), data)
+        self.assertEqual(self.env.conf_values()["DSP_PRESET"], str(self.env.dsp_dir / "dante-room.dsp"), "48 kHz runs the 48 kHz file")
+        self.assertNotIn("RATE", self.env.conf_values())
+        checks = self.load_checks()
+        self.assertEqual(len(checks), 6, "every rate is load-checked")
+        self.assertNotIn("--rate", checks[0], "the 48 kHz check is the command line the installed runner knows")
+        self.assertEqual(sorted(int(c[c.index("--rate") + 1]) for c in checks[1:]), sorted(rates))
+        self.assertEqual(result["request"]["rates"], ["176400", "192000", "44100", "88200", "96000"])
+        self.assertEqual(self.make().table()["dante-room"]["rates"], [44100, 48000, 88200, 96000, 176400, 192000])
+        # A later version without 44.1 removes the old 44.1 file rather than keep other coefficients.
+        request = self.with_rates(self.with_artifact(artifact(0.25), kind="preset", name="Room", slug="room",
+                                                     expectedProfile="dante-room"), {96000: artifact(0.25, rate=96000)})
+        self.assertEqual(self.make().apply(request)["state"], "done")
+        self.assertFalse((self.env.dsp_dir / "dante-room@44100.dsp").exists())
+        self.assertEqual((self.env.dsp_dir / "dante-room@96000.dsp").read_bytes(), artifact(0.25, rate=96000))
+        # Removing the preset removes every rate.
+        self.assertEqual(self.make().apply(self.request(profile="direct", expectedProfile="dante-room"))["state"], "done")
+        self.assertEqual(self.make().apply(self.request(kind="remove", slug="room"))["state"], "done")
+        self.assertEqual(list(self.env.dsp_dir.iterdir()), [])
+
+    def test_rate_artifact_refusals_install_nothing(self):
+        cases = [
+            ({96000: artifact(rate=48000)}, "compiled for rate 48000, expected 96000"),
+            ({48000: artifact()}, "not a rate this request can carry"),
+            ({32000: artifact()}, "not a rate this request can carry"),
+        ]
+        for rates, expected in cases:
+            result = self.make().apply(self.with_rates(self.with_artifact(artifact(), kind="preset", name="Room", slug="room"), rates))
+            self.assertEqual(result["state"], "refused", rates)
+            self.assertIn(expected, result["error"])
+        request = self.with_rates(self.with_artifact(artifact(), kind="preset", name="Room", slug="room"), {96000: artifact(rate=96000)})
+        request["rateArtifacts"]["96000"]["sha256"] = "0" * 64
+        self.assertIn("does not hash", self.make().apply(request)["error"])
+        request = self.with_rates(self.with_artifact(artifact(), kind="preset", name="Room", slug="room"), {96000: artifact(rate=96000)})
+        request["rateArtifacts"]["96000"]["file"] = f"{request['id']}-44100.dsp"
+        self.assertIn("must be <request id>-96000.dsp", self.make().apply(request)["error"])
+        self.assertEqual(list(self.env.dsp_dir.iterdir()), [])
+        self.assertEqual(self.commands(), [])
+
+    def test_at_a_running_rate_the_switch_runs_that_rates_file(self):
+        self.env.conf.write_text("METERS=1\nRATE=96000\n")
+        self.env.install("room", artifact())
+        at96 = self.env.dsp_dir / "dante-room@96000.dsp"
+        at96.write_bytes(artifact(rate=96000))
+        result = self.make().apply(self.request(profile="dante-room", expectedProfile="direct"))
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertEqual(self.env.conf_values(), {"METERS": "1", "RATE": "96000", "DSP_PRESET": str(at96),
+                                                  "DSP_SHA256": sha(artifact(rate=96000)), "DSP_LIVE": "1"})
+        self.assertEqual(self.env.live(), "dante-room")
+        # A preset with no file for the running rate is refused, never run on 48 kHz coefficients.
+        self.env.install("hall", artifact())
+        result = self.make().apply(self.request(profile="dante-hall", expectedProfile="dante-room"))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("no artifact for 96000 Hz", result["error"])
+        # And a new preset must carry the running rate.
+        result = self.make().apply(self.with_artifact(artifact(), kind="preset", name="Club", slug="club"))
+        self.assertIn("runs at 96000 Hz and the request carries no artifact for it", result["error"])
+
+    def test_commit_rewrites_the_rates_it_carries_and_removes_the_stale_ones(self):
+        request = self.with_rates(self.with_artifact(artifact(1.0), kind="preset", name="Room", slug="room"),
+                                  {44100: artifact(1.0, rate=44100), 96000: artifact(1.0, rate=96000)})
+        self.assertEqual(self.make().apply(request)["state"], "done")
+        runner = self.runner
+        new = artifact(0.5)
+        self.assertEqual(self.make(runner=runner).apply(self.with_artifact(new, kind="live", expectedProfile="dante-room"))["state"], "done")
+        commit = self.with_rates(self.request(kind="commit", expectedProfile="dante-room", expectedLiveSha256=sha(new)),
+                                 {96000: artifact(0.5, rate=96000)})
+        result = self.make(runner=runner).apply(commit)
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertEqual(result["committed"], {"sha256": sha(new), "changed": True})
+        self.assertEqual(result["rates"], [48000, 96000])
+        self.assertEqual((self.env.dsp_dir / "dante-room.dsp").read_bytes(), new)
+        self.assertEqual((self.env.dsp_dir / "dante-room@96000.dsp").read_bytes(), artifact(0.5, rate=96000))
+        self.assertFalse((self.env.dsp_dir / "dante-room@44100.dsp").exists(), "44.1 held the coefficients from before the edit")
+
+    def test_consume_takes_the_rate_artifacts_too(self):
+        request = self.with_rates(self.with_artifact(artifact(0.5), kind="preset", name="Room", slug="room"),
+                                  {96000: artifact(0.5, rate=96000)})
+        (self.env.spool / "request.json").write_text(json.dumps(request))
+        self.assertEqual(self.make().consume()["state"], "done")
+        self.assertEqual(list((self.env.spool / "presets").iterdir()), [])
 
 
 class FakeRunnerNoConf:
