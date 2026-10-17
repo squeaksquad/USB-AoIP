@@ -39,6 +39,7 @@ public struct ChannelActivity: Encodable, Sendable {
 public struct ContinuousLoadReport: Encodable, Sendable {
     public let kind = "continuous-activity-not-latency"
     public let device: CoreAudioDeviceSnapshot
+    public let sampleRate: Int
     public let seconds: Int
     public let amplitude: Float
     public let warmupSeconds = 2
@@ -54,6 +55,7 @@ public struct ContinuousLoadReport: Encodable, Sendable {
 
 final class ContinuousState: @unchecked Sendable {
     let totalFrames: Int
+    let warmupFrames: Int
     let amplitude: Float
     let finished = DispatchSemaphore(value: 0)
     var outputFrames = 0
@@ -69,8 +71,9 @@ final class ContinuousState: @unchecked Sendable {
     var expectedOutput: Double?
     var signaled = false
 
-    init(seconds: Int, amplitude: Float) {
-        totalFrames = seconds * 48_000
+    init(seconds: Int, amplitude: Float, sampleRate: Int = 48_000) {
+        totalFrames = seconds * sampleRate
+        warmupFrames = 2 * sampleRate
         self.amplitude = amplitude
     }
 
@@ -117,7 +120,7 @@ final class ContinuousState: @unchecked Sendable {
                 if continuityBroken { eventCapture.breakContinuity() }
                 let values = data.assumingMemoryBound(to: Float.self)
                 for frame in 0..<frames {
-                    let armed = inputFrames + frame >= 96_000
+                    let armed = inputFrames + frame >= warmupFrames
                     eventCapture.observe(values.advanced(by: frame * 16),
                         inputFrame: inputFrames + frame,
                         inputTime: validInputTime ? inputTime + Double(frame) : nil,
@@ -141,6 +144,33 @@ final class ContinuousState: @unchecked Sendable {
     }
 }
 
+// The rate `continuous` and `bitexact` run at is the device's: its nominal rate,
+// which every stream format must match. Only the four rates the multi-rate gadget
+// can offer are accepted; at 48 kHz the checks and the refusal are the old ones.
+enum SoakRate {
+    static let accepted = [44_100, 48_000, 88_200, 96_000]
+
+    static func validate(_ device: CoreAudioDeviceSnapshot, bufferFrames: UInt32) throws -> Int {
+        let nominal = device.nominalSampleRate
+        let rate = accepted.first { Double($0) == nominal }
+        guard let rate, device.input.channels == 16, device.output.channels == 16,
+              device.bufferFrameSize == bufferFrames,
+              (device.input.streams + device.output.streams).allSatisfy({
+                  $0.formatID == "lpcm" && $0.bitsPerChannel == 32 && $0.interleaved &&
+                  $0.bytesPerFrame == 64 && $0.sampleRate == nominal &&
+                  (UInt32($0.formatFlagsHex.replacingOccurrences(of: "0x", with: ""), radix: 16) ?? 0) & 1 == 1
+              }) else {
+            let label = rate.map { kHz($0) } ?? accepted.map { kHz($0) }.joined(separator: "/")
+            throw CoreAudioInspectionError.invalidProperty("\(label) kHz interleaved Float32 16x16")
+        }
+        return rate
+    }
+
+    static func kHz(_ rate: Int) -> String {
+        rate % 1000 == 0 ? "\(rate / 1000)" : "\(rate / 1000).\(rate % 1000 / 100)"
+    }
+}
+
 public enum ContinuousLoad {
     public static func run(deviceName: String, bufferFrames: UInt32,
                            seconds: Int, amplitude: Float) throws -> ContinuousLoadReport {
@@ -153,14 +183,8 @@ public enum ContinuousLoad {
         try CoreAudioInspector.setBufferFrameSize(bufferFrames, on: id)
         defer { try? CoreAudioInspector.setBufferFrameSize(before.bufferFrameSize, on: id) }
         let device = try CoreAudioInspector.snapshot(named: deviceName)
-        guard device.input.channels == 16, device.output.channels == 16,
-              device.nominalSampleRate == 48_000, device.bufferFrameSize == bufferFrames,
-              (device.input.streams + device.output.streams).allSatisfy({
-                  $0.formatID == "lpcm" && $0.bitsPerChannel == 32 && $0.interleaved &&
-                  $0.bytesPerFrame == 64 && $0.sampleRate == 48_000 &&
-                  (UInt32($0.formatFlagsHex.replacingOccurrences(of: "0x", with: ""), radix: 16) ?? 0) & 1 == 1
-              }) else { throw CoreAudioInspectionError.invalidProperty("48 kHz interleaved Float32 16x16") }
-        let state = ContinuousState(seconds: seconds, amplitude: amplitude)
+        let rate = try SoakRate.validate(device, bufferFrames: bufferFrames)
+        let state = ContinuousState(seconds: seconds, amplitude: amplitude, sampleRate: rate)
         var proc: AudioDeviceIOProcID?
         func check(_ status: OSStatus) throws {
             if status != noErr { throw LiveMeasurementError.io(status, operation: "continuous load") }
@@ -179,7 +203,7 @@ public enum ContinuousLoad {
             throw LiveMeasurementError.timedOut(callbacks: 0, outputFrames: state.outputFrames,
                                                inputStarted: state.inputFrames > 0, impulses: 0)
         }
-        return ContinuousLoadReport(device: device, seconds: seconds, amplitude: amplitude,
+        return ContinuousLoadReport(device: device, sampleRate: rate, seconds: seconds, amplitude: amplitude,
             outputFrames: state.outputFrames, inputFrames: state.inputFrames,
             inputDiscontinuities: state.inputDiscontinuities, outputDiscontinuities: state.outputDiscontinuities,
             invalidBuffers: state.invalidBuffers, invalidTimestamps: state.invalidTimestamps,

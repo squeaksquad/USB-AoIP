@@ -13712,3 +13712,17 @@ endpoint stopped), harness noise probes (out 1 / in 2, 0.1 load).
   48 kHz); the 88.2 cause; the owner on the multi-rate gadget at 48 (bInterval 1)
   with its own battery before this gadget could replace the protected one; `status`
   prints a blank module hash without root (`modinfo` is off the user's path; cosmetic).
+
+**IMPLEMENTED 2026-10-17: the harness's `continuous` and `bitexact` follow the device's
+rate** (for the owed ten-minute soak at 96 on the multi-rate gadget). Both now take the
+rate from the device's nominal rate, accept 44.1, 48, 88.2 and 96 kHz only, and still
+refuse when any stream format's rate differs from the nominal one, or on the old
+channel, buffer-size and format checks (one shared `SoakRate.validate` in
+`ContinuousLoad.swift`). `--seconds` stays wall time: frames = seconds x rate, the
+`continuous` warmup is two seconds of frames (96,000 at 48), and `bitexact` expects the
+full-scale codes once seconds x rate >= 360 x 48,000. Both JSON reports gain
+`sampleRate`. At 48 kHz the frame counts, warmup, full-scale rule and refusal text
+("48 kHz interleaved Float32 16x16") are unchanged. The harness does not set the rate;
+choose it in Audio MIDI Setup first. `swift test` 16/16 and `build-app.sh` clean on the
+Mac (binary e6ff8640); not run against the device. README and usage text updated.
+Nothing committed.

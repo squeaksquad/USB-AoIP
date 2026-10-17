@@ -137,6 +137,7 @@ public struct BitExactChannel: Encodable, Sendable {
 public struct BitExactReport: Encodable, Sendable {
     public let kind = "bit-exact-24"
     public let device: CoreAudioDeviceSnapshot
+    public let sampleRate: Int
     public let seconds: Int
     public let outputFrames: Int
     public let inputFrames: Int
@@ -165,7 +166,7 @@ final class BitExactState: @unchecked Sendable {
     var expectedOutput: Double?
     var signaled = false
 
-    init(seconds: Int) { totalFrames = seconds * 48_000 }
+    init(seconds: Int, sampleRate: Int = 48_000) { totalFrames = seconds * sampleRate }
 
     func process(_ input: UnsafePointer<AudioBufferList>, _ inputTime: Double,
                  _ output: UnsafeMutablePointer<AudioBufferList>, _ outputTime: Double) {
@@ -224,14 +225,8 @@ public enum BitExact {
         try CoreAudioInspector.setBufferFrameSize(bufferFrames, on: id)
         defer { try? CoreAudioInspector.setBufferFrameSize(before.bufferFrameSize, on: id) }
         let device = try CoreAudioInspector.snapshot(named: deviceName)
-        guard device.input.channels == 16, device.output.channels == 16,
-              device.nominalSampleRate == 48_000, device.bufferFrameSize == bufferFrames,
-              (device.input.streams + device.output.streams).allSatisfy({
-                  $0.formatID == "lpcm" && $0.bitsPerChannel == 32 && $0.interleaved &&
-                  $0.bytesPerFrame == 64 && $0.sampleRate == 48_000 &&
-                  (UInt32($0.formatFlagsHex.replacingOccurrences(of: "0x", with: ""), radix: 16) ?? 0) & 1 == 1
-              }) else { throw CoreAudioInspectionError.invalidProperty("48 kHz interleaved Float32 16x16") }
-        let state = BitExactState(seconds: seconds)
+        let rate = try SoakRate.validate(device, bufferFrames: bufferFrames)
+        let state = BitExactState(seconds: seconds, sampleRate: rate)
         var proc: AudioDeviceIOProcID?
         func check(_ status: OSStatus) throws {
             if status != noErr { throw LiveMeasurementError.io(status, operation: "bit-exact run") }
@@ -248,13 +243,14 @@ public enum BitExact {
             throw LiveMeasurementError.timedOut(callbacks: 0, outputFrames: state.outputFrames,
                                                inputStarted: state.inputFrames > 0, impulses: 0)
         }
-        let fullScaleDue = seconds >= 360
+        // One period of the sequence is 2^24 samples: 360 s covers it at 48 kHz.
+        let fullScaleDue = seconds * rate >= 360 * 48_000
         let pass = state.channels.enumerated().allSatisfy { index, channel in
             channel.source == index + 1 && channel.firstLockFrame >= 0 && channel.mismatchesAfterLock == 0 &&
                 channel.lostLocks == 0 && channel.offGridAfterLock == 0 &&
                 (!fullScaleDue || (channel.positiveLimit > 0 && channel.negativeLimit > 0))
         } && state.inputDiscontinuities == 0 && state.outputDiscontinuities == 0 && state.invalidBuffers == 0
-        return BitExactReport(device: device, seconds: seconds, outputFrames: state.outputFrames,
+        return BitExactReport(device: device, sampleRate: rate, seconds: seconds, outputFrames: state.outputFrames,
             inputFrames: state.inputFrames, inputDiscontinuities: state.inputDiscontinuities,
             outputDiscontinuities: state.outputDiscontinuities, invalidBuffers: state.invalidBuffers,
             channels: state.channels, pass: pass)

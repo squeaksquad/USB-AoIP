@@ -20,6 +20,20 @@ swift test
 swift build -c release
 ```
 
+## Sample rate of `continuous` and `bitexact`
+
+Both commands run at the device's nominal rate instead of a fixed 48 kHz, so a
+soak can run on the multi-rate gadget (`work/pi-tuning/setup-usb-16x16-multirate`).
+Accepted rates are 44.1, 48, 88.2 and 96 kHz; anything else, or any input or output
+stream format whose rate differs from the nominal rate, is refused before audio
+starts (`<rate> kHz interleaved Float32 16x16`). `--seconds` is wall time, so the
+frame count is seconds times the rate, the `continuous` warmup is two seconds of
+frames, and `bitexact` expects the full-scale codes once the run covers 2^24
+samples' worth of 48 kHz time (360 s). Both JSON reports carry `sampleRate`. At
+48 kHz the frame counts and refusals are the earlier ones. The harness does not
+set the rate: set it in Audio MIDI Setup first. `measure` already took its rate
+from the device.
+
 ## Continuous-load event capture
 
 The `continuous` command now includes `eventCapture` in its JSON report. After
