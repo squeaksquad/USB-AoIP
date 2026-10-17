@@ -445,7 +445,11 @@ items 2 and 3, or by the worker thread at every rate, as answered).
    its budget. Each rate joins `OFFERED_RATES` (page) and the arbiter's
    list only after its battery.
 7. **Transparent, both ways.** Dante Switcher sets the USB 16x16 and the
-   Pi, and the arbiter coalesces. Check: a rate change in Logic, in AMS
+   Pi, and the arbiter coalesces. Mac side written 2026-10-17 in
+   `~/Development/Dante Switcher` (its PLAN.md, Phase 3 step 2): the USB
+   16x16 is a CoreAudio target and a rate source, the Metric Halo follows
+   first when it is not the source, and `dante-sync watch` follows a change
+   that holds for 2 s; checked read-only, not run live. Check: a rate change in Logic, in AMS
    and in MIOConsole3d each brings the whole system to the new rate with
    no other action, audio back within the target, the preset in force at
    the new rate. A Controller set the Mac is not at is refused. A reboot
