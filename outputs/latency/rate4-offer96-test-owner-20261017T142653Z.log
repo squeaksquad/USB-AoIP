@@ -1,0 +1,99 @@
+START 20261017T142653Z seconds=candidate owner=c8b484ac plugin=c6b012ae config=/home/bdimaio/usb-16x16-work/dante-mode/config/test-offer96-arbiter.conf trial=no mode=usb cpus=all user=usb16x16-dante
+ARGS --seconds 0 --log-every 60 --rx-queue 96 --rate-request-file /dev/shm/usb16x16-rate-request-owner-test
+START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-15.48 seed_from_file=1
+THREADS stage=before-open count=3 [412691 owner OTHER/0] [412693 owner OTHER/0] [412694 owner OTHER/0]
+[2026-10-17T14:26:53.765612Z INFO  inferno_aoip::state_storage] using state directory: /var/lib/usb16x16-dante/inferno_aoip/5553423136783136
+[2026-10-17T14:26:53.766147Z INFO  inferno_aoip::device_server] clock path: None
+[2026-10-17T14:26:53.766185Z INFO  inferno_aoip::device_server] waiting for clock
+[2026-10-17T14:26:53.766194Z INFO  inferno_aoip::device_server] clock ready
+[2026-10-17T14:26:53.766221Z INFO  inferno_aoip::device_server] all common tasks spawned
+NETOPEN dir=capture period=64 buffer=1024 hw_params_us=251185 state=PREPARED
+NETOPEN dir=playback period=64 buffer=1024 hw_params_us=80 state=PREPARED
+NETTHREADS flows_rx=1 flows_tx=1 waited_ms=10
+THREADS stage=after-open count=7 [412691 owner OTHER/0] [412693 owner OTHER/0] [412694 owner OTHER/0] [412695 Inferno main OTHER/0] [412696 Inferno main OTHER/0] [412697 flows RX FIFO/80] [412698 flows TX OTHER/0]
+NETSTART capture=RUNNING playback=RUNNING
+THREADS stage=running count=7 [412691 owner FIFO/79] [412693 owner OTHER/0] [412694 owner OTHER/0] [412695 Inferno main OTHER/0] [412696 Inferno main OTHER/0] [412697 flows RX FIFO/80] [412698 flows TX FIFO/81]
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=91 t=0.300
+THREADS stage=usblink count=7 [412691 owner FIFO/79] [412693 owner OTHER/0] [412694 owner OTHER/0] [412695 Inferno main OTHER/0] [412696 Inferno main OTHER/0] [412697 flows RX FIFO/80] [412698 flows TX FIFO/81]
+[2026-10-17T14:26:57.029736Z INFO  inferno_aoip::device_server::flows_control_server] FF-PULSE-16-DX requesting flow 4 of channel indices [Some(14), Some(15), Some(10), Some(13)] at 48000Hz 24bit 32 fpp to 169.254.248.189:14385
+[2026-10-17T14:26:57.171768Z INFO  inferno_aoip::device_server::flows_control_server] FF-PULSE-16-DX requesting flow 3 of channel indices [Some(8), Some(9), Some(11), Some(12)] at 48000Hz 24bit 32 fpp to 169.254.248.189:14383
+[2026-10-17T14:26:57.212439Z INFO  inferno_aoip::device_server::flows_control_server] FF-PULSE-16-DX requesting flow 2 of channel indices [Some(4), Some(5), Some(6), Some(7)] at 48000Hz 24bit 32 fpp to 169.254.248.189:14381
+[2026-10-17T14:26:57.235295Z INFO  inferno_aoip::device_server::flows_control_server] FF-PULSE-16-DX requesting flow 1 of channel indices [Some(0), Some(1), Some(2), Some(3)] at 48000Hz 24bit 32 fpp to 169.254.248.189:14379
+[2026-10-17T14:26:57.388152Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:26:57.388160Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000af45c00000000"
+[2026-10-17T14:26:59.211332Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 1 and 0 aliases
+[2026-10-17T14:26:59.211353Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 16 and 0 aliases
+[2026-10-17T14:26:59.212198Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-17T14:26:59.212206Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729001011c922040000000100010000"
+[2026-10-17T14:26:59.263382Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:26:59.263392Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a17ce00000000"
+[2026-10-17T14:26:59.449519Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-17T14:26:59.449533Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729001011cd22040000000100010000"
+[2026-10-17T14:27:03.401506Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-17T14:27:03.401520Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729001011d122040000000100010000"
+[2026-10-17T14:27:03.832800Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:03.832815Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000af46600000000"
+[2026-10-17T14:27:04.393377Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 2 and 0 aliases
+[2026-10-17T14:27:04.393405Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=0, flow index=0 is receiving data (unicast)
+[2026-10-17T14:27:04.393408Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=1, flow index=0 is receiving data (unicast)
+[2026-10-17T14:27:04.393410Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=15, flow index=0 is receiving data (unicast)
+[2026-10-17T14:27:06.531437Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:06.531451Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a17da00000000"
+[2026-10-17T14:27:06.569987Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 3 and 0 aliases
+[2026-10-17T14:27:06.570007Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 13 and 0 aliases
+[2026-10-17T14:27:06.570015Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 14 and 0 aliases
+[2026-10-17T14:27:06.570024Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 15 and 0 aliases
+[2026-10-17T14:27:06.570038Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=2, flow index=0 is receiving data (unicast)
+[2026-10-17T14:27:06.570041Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=12, flow index=0 is receiving data (unicast)
+[2026-10-17T14:27:06.570043Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=13, flow index=0 is receiving data (unicast)
+[2026-10-17T14:27:06.570045Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=14, flow index=0 is receiving data (unicast)
+[2026-10-17T14:27:10.278720Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:10.278735Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000af47300000000"
+[2026-10-17T14:27:11.727226Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 4 and 0 aliases
+[2026-10-17T14:27:11.727252Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=3, flow index=0 is receiving data (unicast)
+[2026-10-17T14:27:11.729101Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-17T14:27:11.729110Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729001011e122040000000100010000"
+[2026-10-17T14:27:11.969224Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-17T14:27:11.969236Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729001011e722040000000100010000"
+[2026-10-17T14:27:13.798723Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:13.798737Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a17e500000000"
+[2026-10-17T14:27:14.218072Z WARN  inferno_aoip::device_server::info_mcast_server] sample rate set to 96000 requested by 169.254.26.52:65520 (running at 48000): handed to the arbiter in /dev/shm/usb16x16-rate-request-test
+[2026-10-17T14:27:15.926173Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-17T14:27:15.926187Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729001011eb22040000000100010000"
+[2026-10-17T14:27:16.732392Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:16.732406Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000af47c00000000"
+[2026-10-17T14:27:16.909576Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 5 and 0 aliases
+[2026-10-17T14:27:19.084529Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 6 and 0 aliases
+[2026-10-17T14:27:19.084551Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 7 and 0 aliases
+[2026-10-17T14:27:19.084560Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 8 and 0 aliases
+[2026-10-17T14:27:19.084568Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 9 and 0 aliases
+[2026-10-17T14:27:19.084577Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 10 and 0 aliases
+[2026-10-17T14:27:19.084586Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 11 and 0 aliases
+[2026-10-17T14:27:19.084594Z INFO  inferno_aoip::device_server::channels_subscriber] subscription successful, waiting for media: channel RX 12 and 0 aliases
+[2026-10-17T14:27:19.084610Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=4, flow index=1 is receiving data (unicast)
+[2026-10-17T14:27:19.084612Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=5, flow index=1 is receiving data (unicast)
+[2026-10-17T14:27:19.084614Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=6, flow index=1 is receiving data (unicast)
+[2026-10-17T14:27:19.084616Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=7, flow index=1 is receiving data (unicast)
+[2026-10-17T14:27:19.084618Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=8, flow index=1 is receiving data (unicast)
+[2026-10-17T14:27:19.084620Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=9, flow index=1 is receiving data (unicast)
+[2026-10-17T14:27:19.084622Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=10, flow index=1 is receiving data (unicast)
+[2026-10-17T14:27:19.084624Z INFO  inferno_aoip::device_server::channels_subscriber] channel index=11, flow index=1 is receiving data (unicast)
+[2026-10-17T14:27:21.066158Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:21.066183Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a17ef00000000"
+[2026-10-17T14:27:23.177883Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:23.177898Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000af48600000000"
+[2026-10-17T14:27:26.359703Z WARN  inferno_aoip::device_server::info_mcast_server] sample rate set to 48000 requested, not acted on (running at 48000); raw udp payload: ffff0028cf9500004cea4163338f0000417564696e617465073e008100000064000000010000bb80
+[2026-10-17T14:27:26.398487Z WARN  inferno_aoip::device_server::info_mcast_server] sample rate set to 44100 requested, not acted on (running at 48000, not a supported rate); raw udp payload: ffff0028940400004cea4163338f0000417564696e617465073e008100000064000000010000ac44
+[2026-10-17T14:27:28.332879Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:28.332894Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a17f600000000"
+[2026-10-17T14:27:29.623702Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:29.623719Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000af48d00000000"
+[2026-10-17T14:27:35.600553Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:35.600567Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a17fd00000000"
+[2026-10-17T14:27:36.069548Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:36.069562Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000af49400000000"
+[2026-10-17T14:27:42.514214Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:42.514229Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000af49a00000000"
+[2026-10-17T14:27:42.868406Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-17T14:27:42.868421Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a180400000000"
