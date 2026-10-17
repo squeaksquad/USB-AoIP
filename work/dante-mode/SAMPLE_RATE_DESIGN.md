@@ -185,6 +185,11 @@ and reports instead of looping.
    rate, the start check's `--rate`, the pcap tool reading the rate from
    the capture. 48 kHz artifacts byte-identical to before. Owed: the owner
    built on the Pi with the service stopped and the 48 kHz battery.
+   2026-10-17: candidate owner 6068cfd3 (step 3 + the unity-skip core) built
+   on the Pi; battery and loaded hour PASS at 48 kHz direct, 363 /
+   `daw_timeline` 551 on its anchor; the gadget-rate check read
+   `host_rate=match` and, after a gadget restart, `unknown` as designed.
+   Not installed (RESULTS.md, 2026-10-17 04:43).
 4. **The arbiter at 48 kHz.** `rate` request kind in the applier (or a
    separate service), wired from the owner. Check: a set to 48 kHz from
    Controller round-trips through the arbiter and restarts nothing (no

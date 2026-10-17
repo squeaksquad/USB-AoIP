@@ -5458,3 +5458,76 @@ So the unity-skip core is byte-identical to the previous one on the Mac and
 on the Pi, and indistinguishable from it against CamillaDSP. What is left
 before it can be part of a candidate is the owner built with it and the
 battery and hour.
+
+## Candidate owner 6068cfd3 (step 3 rate parameter + unity-skip core) through the battery and a loaded hour: PASS, 363 / `daw_timeline` 551 (2026-10-17 04:43-06:14 UTC)
+
+Operator's go. Service stopped 04:43:29 UTC. Built on the Pi with the
+service stopped, from `~/usb-16x16-work/dante-mode/owner/rate3/` (the
+owner's flags, one g++ line): owner `owner/usb16x16-dante-owner-rate3`
+**6068cfd3**, `main.cpp` 81f6089c, `bridge_core.cpp` bbaec39e (48f871e), core
+header c8558c99, `rate_check.hpp` 427ecd84, `meter_tap.hpp` c415af57,
+`dsp_path.hpp` dc89da5e, `dsp_live.hpp` e29dd558. The five owner test
+programs (servo, dsp_path, dsp_live, meter_tap, rate_check) passed on the Pi.
+Against the installed 62879558 it differs by step 3 (`--rate`, the
+gadget-rate check, the meters' window from the rate), the diagnostic
+`--gap-trace` and `--stack-prefault` options (both off by default), and the
+unity-skip core.
+
+Run through `usb16x16-dante-candidate` with the service's own arguments
+(`--log-every 60 --rx-queue 96 --meter-file /run/usb16x16-dante/meters.txt`),
+plugin d3a6b40a and the installed config, from 04:44:09; gadget restart
+04:44:22 for the anchor. The new start lines read as intended on the real
+kernel: `START ... rate=48000`; the first `USBOPEN ... rate=48000
+host_rate=match host_capture=48000 host_playback=48000`; after the gadget
+restart `host_rate=unknown host_capture=0 host_playback=0` (the Mac
+re-enumerating), open as designed, flowing both ways 1.4 s later. Return
+flows whole by the start check's own arithmetic, read by hand (6,016 frames
+a second, twice); Ferrofish neighbour entry REACHABLE. All on that anchor
+(`outputs/latency/rate3-candidate-*`):
+
+- Noise probe at 32 frames: **clean** (no zero run of 4 or more in 1.25 M
+  samples; xrun and lag lines +0).
+- 600 s sixteen-channel soak: **PASS** (longest zero run 1, no
+  discontinuity, peaks 0.1000).
+- Four loaded 800-impulse runs: **all 363, spread 0, `daw_timeline` 551
+  (11.479 ms)**, every run.
+- 3,600 s sixteen-channel soak from 05:11:03: **PASS** (no discontinuity,
+  peaks 0.1000). Longest zero run 3, on channels 5 to 12 only, 1 on the
+  rest. That is one return flow of eight channels: the owner moves sixteen
+  channels as whole frames and cannot zero eight of them, so this is the
+  return path's known per-flow loss (the Ferrofish packets of
+  2026-10-12, and the two single-flow holes of step 2's first installed
+  soak), under the run-of-4 limit.
+- 400 loaded impulses afterwards: all 363.
+
+The owner over 89 minutes
+(`outputs/latency/rate3-candidate-owner-20261017T044409Z.log`): worst loop
+gap 1,053 µs, no resync either way, nothing lost, no network error or offset
+mismatch, no re-prime; return depth 46 to 97 after the first minute (38 in
+the first); meters at most 41.9 µs a minute. One playback fault and a second
+link, both the gadget restart. Every ERROR line in the log (about 3,400) is
+Inferno's control server logging a packet it has no handler for: two clients
+polling the ARC port every 3 s or so with opcode 0x00 (`2729000a<seq>00000000`,
+two sequence families), and three 0x2204. None of these were in step 2's
+candidate log, so something on the network started polling since then
+(Dante Controller or another tool, not identified). Control plane only; the
+audio counters are clean through it.
+
+363 is 7 above step 2's candidate (356) and 20 above the point of record
+(343); the fresh draws of this transport were 322 to 356. The level of this
+transport is set at each anchor, and nothing in this candidate touches the
+audio timing at 48 kHz direct (the step-3 changes are a start-time check and
+parameters, and there is no DSP stage without a preset). So this reads as a
+high draw, which a battery on the installed form, if this is installed, will
+show again or not.
+
+Service put back on its installed form (owner 62879558) at 06:14:25: start
+check `state=ok` (6,015) at 06:15:27, noise probe clean at 06:15:27
+(`service-after-rate3-noise-ch2-32f-20261017T061527Z.json`; zero runs of 4
+or more 0, xrun and lag lines +0, and error lines +0 in the service's
+journal, where the control polling above does not show).
+
+Not installed. Installing it is `service/install-owner-update.sh` with a new
+pin (the operator's). The DSP stage was not exercised here: the installed
+form runs direct. A preset run (fixed-shape, unity-heavy) is the way to put
+the unity skip under audio.
