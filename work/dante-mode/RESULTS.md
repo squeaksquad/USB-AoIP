@@ -5283,3 +5283,38 @@ Not built for or installed on the Pi. The installed owner and bridge are
 unchanged. The CamillaDSP head-to-head (`run-headtohead.sh`) is still owed
 before a candidate, though the byte-identity against the previous core
 already carries what it would show.
+
+## Unity skip on the Pi: exact, and 2.15 times faster on the default preset, but 40 to 48 % SLOWER on presets with no unity sections (2026-10-17 04:09-04:14 UTC)
+
+Operator's go. Endpoint stopped 04:09:50 UTC, started 04:13:20; start check
+`state=ok` at 04:14:26 (6,018 frames a second, no restart), `NRestarts` 0,
+linked both ways at once. Installed owner unchanged. No noise probe on this
+start.
+
+New core built on the Pi with the service stopped (binary 39fbf90b,
+`bridge_core.cpp` 320c08b2, header d6f59987) in
+`~/usb-16x16-work/ratebench-unity-20261017/`. The earlier binary (99ba5309)
+was run beside it, artifact by artifact, so "old" below is this session's
+measurement of the previous core. It agrees with the 02:42 figures to within
+0.5 %. Same artifacts, blocks of 1 ms, 20,000 each, `taskset -c 3`.
+Evidence: `outputs/dsp-verify/ratebench-unity-20261017T040950Z.jsonl`.
+
+- **Identity on aarch64:** old and new over 2 s of 16-channel noise, all 24
+  artifacts: 24 byte-identical, 0 different.
+- **Cost, median µs per 1 ms block, old -> new (new as share of the period, median / max):**
+
+| Preset | 48 kHz | 96 kHz | 192 kHz | new / old |
+|---|---|---|---|---|
+| default, fixed (256 of 302 unity) | 72.8 -> 33.9 (3.4 / 5.5 %) | 143.1 -> 66.2 (6.6 / 9.5 %) | 283.3 -> 130.9 (13.1 / 15.8 %) | 0.46 to 0.47 |
+| loaded, minimal (no unity) | 71.6 -> 102.4 (10.2 / 13.4 %) | 141.8 -> 202.3 (20.2 / 23.4 %) | 283.1 -> 403.8 (40.4 / 43.9 %) | 1.43 to 1.44 |
+| loaded, fixed (no unity) | 73.4 -> 103.6 | 148.2 -> 207.8 | 294.0 -> 411.9 (41.2 / 44.4 %) | 1.40 to 1.42 |
+| transparent (no unity) | 59.4 -> 87.0 | 116.4 -> 171.3 | 235.8 -> 344.4 | 1.46 to 1.48 |
+
+The Mac measured that penalty at 2 to 5 %; the Pi pays 40 to 48 %. The
+per-section flag test in the innermost loop (a load and a branch for every
+section of every sample) is the obvious suspect: it costs the Pi's cores
+much more than Apple's. Not a candidate as it stands. The next form keeps
+the check out of that loop: a chain with no unity section runs the previous
+contiguous loop unchanged, and one with unity sections walks a list of its
+running sections built when the set is loaded or published (control thread,
+storage sized at load). Byte identity and both benches again.
