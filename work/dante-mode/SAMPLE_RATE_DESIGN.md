@@ -368,12 +368,18 @@ check:
    as NEON double2. Each channel's arithmetic order is unchanged, so the
    output is the same sample for sample; the head-to-head harness proves
    it. Roughly 1.6 to 2 times.
-4. **Only if 2 and 3 are not enough for a rate:** a DSP worker thread on a
+4. **Only if 2 and 3 are not enough for 192 kHz:** a DSP worker thread on a
    core of its own. It is created with the other threads before the device
    opens (rule 3: never a thread after capture start). One block of
-   pipeline costs one wake (about 1 ms) of added latency at that rate only.
-   It is a separate candidate with its own battery, and it is the last
-   resort because it adds latency.
+   pipeline costs one wake (about 1 ms) of added latency. Operator,
+   2026-10-16: acceptable if it is what makes 192 kHz possible, and then
+   **at every rate**, so the latency does not change with the rate (read as
+   one pipeline everywhere; at 48 kHz that is about 1 ms on top of today's
+   11.3 ms). It is a separate candidate with its own battery at 48 kHz as
+   well as at 192 kHz, and it is the last resort because it adds latency.
+   Decided by the bench (step 4b) and items 2 and 3: if they bring 192 kHz
+   inside the budget on the loop thread, there is no worker and no added
+   latency anywhere.
 5. **Admission, so a rate never runs a preset that does not fit.** The page
    estimates each artifact's cost per rate (active sections x frames a
    second x the measured cost per section-frame from item 1). When saving,
@@ -404,7 +410,8 @@ as 96 frames did at 48 kHz.
 - **DSP:** the table above.
 
 Realistically the offered list is 44.1, 48, 88.2 and 96 kHz. 176.4 and 192
-kHz only if the gadget, the domain and the DSP all clear them.
+kHz only if the gadget, the domain and the DSP all clear them (the DSP by
+items 2 and 3, or by the worker thread at every rate, as answered).
 
 ### Revised steps (1 to 3 as above)
 
@@ -437,6 +444,13 @@ kHz only if the gadget, the domain and the DSP all clear them.
    comes back at the last committed rate.
 
 ### Open questions for the operator (this plan)
+
+Answered 2026-10-16 (operator): (1) yes, Dante Switcher owns the Mac side,
+setting and watching the USB 16x16; (2) yes, the Mac decides, replacing the
+earlier answer (5): no gadget re-enumeration for a Controller change; (3)
+yes, about 10 s per change is acceptable, rate changes are infrequent; (4)
+192 kHz is worth a worker thread's 1 ms if that is what makes it possible,
+provided the latency is the same at every rate (DSP item 4 above).
 
 1. Dante Switcher becomes part of the path: it would set the USB 16x16's
    CoreAudio rate and watch it as a source beside the Metric Halo. Is that
