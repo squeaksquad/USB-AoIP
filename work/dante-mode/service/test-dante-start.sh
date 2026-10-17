@@ -74,5 +74,9 @@ if [ "${1:-}" = transport ]; then
   tr_run $'RX_QUEUE=96\n' $'RX_QUEUE=96\n';     expect "transport keys do not belong in owner.conf" 2 "unknown key"
   tr_run $'RX_QUEUE=96\n' $'RATE=96000\n';       expect "rate before the queue" 0 "--log-every 60 --rate 96000 --rx-queue 96 "
   tr_run $'RATE=96000\n' "";                      expect "the rate belongs in owner.conf" 2 "unknown key"
+  tr_run $'RX_QUEUE=96\nRATE_REQUESTS=1\n' $'METERS=1\n'
+  expect "rate requests" 0 "--rx-queue 96 --rate-request-file /run/x/rate-request --meter-file /run/x/meters.txt "
+  tr_run $'RATE_REQUESTS=0\n' "";               [ "$out" = "$base" ] || { echo "FAIL: RATE_REQUESTS=0: $out"; failures=$((failures + 1)); }
+  tr_run $'RATE_REQUESTS=yes\n' "";             expect "bad RATE_REQUESTS" 2 "RATE_REQUESTS must be"
 fi
 if [ "$failures" -eq 0 ]; then echo "test-dante-start: all passed"; else echo "test-dante-start: $failures FAILED"; exit 1; fi

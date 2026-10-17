@@ -506,6 +506,13 @@ export async function compileDraftRates(config, importImpl, {shape = 'fixed', ra
   return byRate;
 }
 
+/** The rate the endpoint runs at, from the health snapshot (owner.conf's RATE;
+ *  48 kHz when the snapshot does not say, as before rates existed). */
+export function runningRate(health) {
+  const rate = health?.profile?.rate;
+  return Number.isInteger(rate) && rate > 0 ? rate : 48000;
+}
+
 /** The same draft at every Dante rate except `except` (48 kHz unless given),
  *  as {rate: artifact text} for requestPreset / requestCommit's rateArtifacts:
  *  the Dante applier stores one artifact per rate and the endpoint runs the one

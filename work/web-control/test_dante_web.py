@@ -94,6 +94,21 @@ class DanteWebTests(unittest.TestCase):
         (self.root / "owner.conf").write_text(f"METERS=1\nDSP_PRESET={path}\nDSP_SHA256={'a' * 64}\nDSP_LIVE=0\n")
         self.assertFalse(self.web.dante_profiles(self.conf())[1][1]["dspLive"])
 
+    def test_rates_off_48k_name_the_running_file_and_list_each_presets_rates(self):
+        """SAMPLE_RATE_DESIGN.md, steps 4 and 4d."""
+        base = self.root / "dsp" / "dante-room-a.dsp"
+        base.write_text(ARTIFACT)
+        at96 = self.root / "dsp" / "dante-room-a@96000.dsp"
+        at96.write_text(ARTIFACT.replace("rate 48000", "rate 96000").replace("maxdelay 480", "maxdelay 960"))
+        selected, rows = self.web.dante_profiles(self.conf())
+        self.assertEqual([r["name"] for r in rows], ["direct", "dante-room-a"], "the @rate file is not a preset of its own")
+        self.assertEqual(rows[1]["rates"], [48000, 96000])
+        (self.root / "owner.conf").write_text(f"METERS=1\nRATE=96000\nDSP_PRESET={at96}\nDSP_SHA256={'b' * 64}\nDSP_LIVE=1\n")
+        selected, rows = self.web.dante_profiles(self.conf())
+        self.assertEqual(selected, "dante-room-a", "the profile is the preset, whatever rate it runs at")
+        self.assertEqual(rows[1]["dspShape"], self.web.installed_shape(str(at96)), "the running shape is the running file's")
+        self.assertNotEqual(rows[1]["dspShape"], self.web.installed_shape(str(base)))
+
     def test_owner_lines(self):
         owner = self.web.parse_owner_lines(JOURNAL, now=1791757734.0)
         self.assertTrue(owner["present"])

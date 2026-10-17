@@ -5,7 +5,7 @@ import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphoneP
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, stackTerms } from './backend.mjs';
+import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, stackTerms } from './backend.mjs';
 import { LiveQueue } from './live.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
@@ -152,7 +152,8 @@ async function scheduleLive() {
   const before = liveState(health, null);
   if (before.state !== 'live') return;
   let compiled;
-  try { validateConfig(config); compiled = await compileDraft(config); }
+  // At the rate the owner runs: an artifact for another rate is refused by it.
+  try { validateConfig(config); compiled = await compileDraft(config, undefined, {rate: runningRate(health)}); }
   catch (e) { liveLine = `Not sent: ${e.message}`; renderLiveState(); return; }
   draftShapeKey = compiled.shapeKey;
   const state = liveState(health, draftShapeKey);
@@ -758,11 +759,12 @@ async function commitLive() {
   if (health?.stack === 'dante') {
     try {
       validateConfig(config);
-      if ((await compileDraft(config)).sha256 !== state.liveSha256) {
+      const rate = runningRate(health);
+      if ((await compileDraft(config, undefined, {rate})).sha256 !== state.liveSha256) {
         toast('The draft has changed since the last live update reached the owner; wait a moment and commit again.');
         return;
       }
-      others = await compileOtherRates(config);
+      others = await compileOtherRates(config, undefined, {except: rate});
     } catch (e) { toast(`Cannot compile this draft at the other rates: ${e.message}`); return; }
   }
   applyBusy = true; refreshSettingsLive();

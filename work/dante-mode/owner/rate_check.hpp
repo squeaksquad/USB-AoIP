@@ -18,6 +18,7 @@
 #pragma once
 
 #include <array>
+#include <string>
 
 namespace usb16x16::owner {
 
@@ -40,6 +41,18 @@ enum class GadgetRate { match, unknown, mismatch };
     if (differs(capture) || differs(playback)) return GadgetRate::mismatch;
     if (capture == static_cast<long>(wanted) && playback == static_cast<long>(wanted)) return GadgetRate::match;
     return GadgetRate::unknown;
+}
+
+// The arbiter's request when the host is at another rate (--rate-request-file,
+// SAMPLE_RATE_DESIGN.md step 4): the line usb16x16-apply --rate-request reads.
+// Empty when there is nothing to ask for: the host matches or is not known, or
+// its two directions disagree with each other (no one rate was chosen).
+[[nodiscard]] inline std::string usb_rate_request_line(long capture, long playback, unsigned wanted, long long at) {
+    if (judge_gadget_rate(capture, playback, wanted) != GadgetRate::mismatch) return {};
+    if (capture > 0 && playback > 0 && capture != playback) return {};
+    const long rate = capture > 0 ? capture : playback;
+    if (!is_dante_rate(static_cast<unsigned>(rate))) return {};
+    return "rate=" + std::to_string(rate) + " source=usb at=" + std::to_string(at) + "\n";
 }
 
 [[nodiscard]] constexpr const char* gadget_rate_name(GadgetRate verdict) noexcept {

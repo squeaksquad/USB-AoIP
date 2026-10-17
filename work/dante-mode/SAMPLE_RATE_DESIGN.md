@@ -443,6 +443,11 @@ items 2 and 3, or by the worker thread at every rate, as answered).
    signals into one restart, and the "Mac decides" rule. Check: a set to 48
    from Controller or Dante Switcher restarts nothing; a set to 96 is
    refused with the reason; the old rate is re-sent.
+   2026-10-17: written and Mac-tested (RESULTS.md, "Sample rate, step 4"):
+   the applier's `rate` kind with verify and rollback of owner.conf and the
+   Inferno config together, Inferno patch 0005 (not compiled), the owner's
+   `--rate-request-file`, the path unit, health reporting the rate. Not
+   built on the Pi, not installed.
 4b. **DSP bench at every rate** (DSP item 1). Mac code exists. A Pi run
    with the service stopped, the operator's go.
 4c. **Unity skip, then NEON pairs** (DSP items 2 and 3), each a candidate

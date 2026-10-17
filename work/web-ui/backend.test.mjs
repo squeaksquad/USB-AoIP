@@ -600,7 +600,7 @@ test('compileDraftRates compiles once per offered rate, 48 kHz only today', asyn
 });
 
 // SAMPLE_RATE_DESIGN.md, step 4d: the other five rates ride along with a preset or a commit.
-import { compileOtherRates } from './backend.mjs';
+import { compileOtherRates, runningRate } from './backend.mjs';
 
 test('compileOtherRates gives the same draft at the five rates other than 48 kHz', async () => {
   const preset = createConfig();
@@ -628,4 +628,11 @@ test('requestPreset and requestCommit carry rateArtifacts only when given', asyn
   assert.equal('rateArtifacts' in calls[3][1], false, 'an empty map is not sent');
   assert.equal(calls[4][0], '/api/apply/commit');
   assert.ok('96000' in calls[4][1].rateArtifacts);
+});
+
+test('runningRate reads the snapshot and falls back to 48 kHz', () => {
+  assert.equal(runningRate(null), 48000);
+  assert.equal(runningRate({profile: {}}), 48000);
+  assert.equal(runningRate({profile: {rate: 96000}}), 96000);
+  assert.equal(runningRate({profile: {rate: 'x'}}), 48000);
 });

@@ -1,0 +1,18 @@
+[Unit]
+StartLimitIntervalSec=0
+Description=USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request)
+Documentation=file:///home/bdimaio/usb-16x16-work/dante-mode/SAMPLE_RATE_DESIGN.md
+# Started by usb16x16-dante-rate.path. The applier takes the request, refuses
+# it (a rate not offered, the Mac at another rate, a preset with no artifact
+# for it, a change straight back) or restarts the endpoint at the new rate
+# with owner.conf and the Inferno config moved together, verifies it, and puts
+# both back if it does not come up. It shares the page's applier and its lock,
+# so a rate change and a page request never run at once.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/usb16x16-apply --rate-request
+TimeoutStartSec=480
+SyslogIdentifier=usb16x16-dante-rate
+Nice=10
+IOSchedulingClass=idle

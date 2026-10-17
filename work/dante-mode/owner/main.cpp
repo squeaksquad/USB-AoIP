@@ -52,6 +52,7 @@
 
 #include <alsa/asoundlib.h>
 
+#include "atomic_file.hpp"
 #include "dsp_live.hpp"
 #include "dsp_path.hpp"
 #include "meter_tap.hpp"
@@ -136,6 +137,9 @@ struct Options {
     std::string dsp_live_status;
     // Level meter snapshot file. Empty means no tap: nothing is converted or measured for it.
     std::string meter_file;
+    // Where a host at another rate is turned into a request for the arbiter
+    // (usb16x16-apply --rate-request). Empty: the refusal is only logged.
+    std::string rate_request_file;
     // Test only: the loop sleeps once for stall_ms at stall_at seconds, to
     // exercise the paths a stall takes (resync, gadget overrun, re-prime).
     unsigned stall_at{0};
@@ -159,7 +163,7 @@ struct Options {
                "                     [--rx-queue 144] [--rx-slack 96] [--kp 0.5] [--ki 0.003] [--seed-ppm 0]\n"
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
-               "                     [--meter-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
+               "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
                "                     [--gap-trace MICROSECONDS] [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
@@ -176,6 +180,8 @@ struct Options {
                "                     into the running stage; needs --dsp-preset\n"
                "  --dsp-live-status  where the outcome of each live file is written (default: the\n"
                "                     live file with .status appended)\n"
+               "  --rate-request-file  when the host runs at another rate, ask the arbiter for it by writing\n"
+               "                     one line to PATH (by rename); without it the refusal is only logged\n"
                "  --meter-file       publish per-channel levels (usb-capture, dante-playback, dante-capture)\n"
                "                     to PATH, about twenty times a second while audio moves\n"
                "  --guard     frames behind the clock that are not cleared yet\n"
@@ -222,6 +228,7 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--dsp-live-file") o.dsp_live_file = v;
         else if (a == "--dsp-live-status") o.dsp_live_status = v;
         else if (a == "--meter-file") o.meter_file = v;
+        else if (a == "--rate-request-file") o.rate_request_file = v;
         else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
         else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
         else if (a == "--gap-trace") o.gap_trace_us = static_cast<unsigned>(parse_number(v, "--gap-trace"));
@@ -1166,6 +1173,19 @@ void* steward_entry(void* argument) {
             if (host_capture != refused_capture || host_playback != refused_playback) {
                 std::printf("USBRATE refused host_capture=%ld host_playback=%ld rate=%u; the USB half stays closed\n",
                             host_capture, host_playback, o.rate);
+                // Once per change in what the host reports: ask the arbiter for its rate.
+                if (!o.rate_request_file.empty()) {
+                    const std::string line = usb16x16::owner::usb_rate_request_line(
+                        host_capture, host_playback, o.rate, static_cast<long long>(::time(nullptr)));
+                    if (line.empty()) {
+                        std::printf("USBRATE no request: the host's rate is not one rate the endpoint could run at\n");
+                    } else if (usb16x16::owner::write_file_atomically(o.rate_request_file, line)) {
+                        std::printf("USBRATE requested %.*s from the arbiter in %s\n", static_cast<int>(line.size() - 1),
+                                    line.c_str(), o.rate_request_file.c_str());
+                    } else {
+                        std::printf("USBRATE could not write %s: %s\n", o.rate_request_file.c_str(), std::strerror(errno));
+                    }
+                }
                 std::fflush(stdout);
                 refused_capture = host_capture;
                 refused_playback = host_playback;

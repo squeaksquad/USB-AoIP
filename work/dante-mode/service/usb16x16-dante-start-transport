@@ -29,6 +29,10 @@
 #
 #   RX_QUEUE=N         --rx-queue N: the return queue's target depth in frames
 #                      (the owner's default is 144; it refuses under 96)
+#   RATE_REQUESTS=0|1  1: --rate-request-file /run/usb16x16-dante/rate-request, so a
+#                      host at another rate becomes a request for the arbiter
+#                      (usb16x16-dante-rate.path; SAMPLE_RATE_DESIGN.md step 4).
+#                      Needs an owner that has the option.
 #
 # A configuration that cannot be honoured is a refusal (exit 2), never a
 # quieter start: a system set up with crossovers must not come up without
@@ -68,6 +72,7 @@ if [ -e "$conf" ]; then
 fi
 
 rx_queue=
+rate_requests=0
 if [ -e "$transport" ]; then
   [ -r "$transport" ] || refuse "$transport cannot be read"
   while IFS= read -r line || [ -n "$line" ]; do
@@ -78,6 +83,7 @@ if [ -e "$transport" ]; then
     case "$key" in
       RX_QUEUE) [[ $value =~ ^[0-9]{2,4}$ ]] && [ "$value" -ge 96 ] && [ "$value" -le 384 ] || refuse "RX_QUEUE must be a number of frames from 96 to 384"
                 rx_queue=$value ;;
+      RATE_REQUESTS) [[ $value =~ ^[01]$ ]] || refuse "RATE_REQUESTS must be 0 or 1"; rate_requests=$value ;;
       *)        refuse "$transport: unknown key $key" ;;
     esac
   done < "$transport"
@@ -88,6 +94,7 @@ sha256_of() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut
 arguments=(--seconds 0 --ppm-file "$state_dir/usb16x16-dante-owner.ppm" --log-every 60)
 [ -n "$rate" ] && arguments+=(--rate "$rate")
 [ -n "$rx_queue" ] && arguments+=(--rx-queue "$rx_queue")
+[ "$rate_requests" = 1 ] && arguments+=(--rate-request-file "$run_dir/rate-request")
 [ "$meters" = 1 ] && arguments+=(--meter-file "$run_dir/meters.txt")
 if [ -n "$preset" ]; then
   [[ $preset == "$dsp_dir"/*.dsp && $preset != *..* && ${preset#"$dsp_dir"/} != */* ]] ||

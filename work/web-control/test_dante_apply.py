@@ -38,8 +38,13 @@ class FakeRunner:
     """systemd, the journal and the owner as a small model; the wrapper is the real one."""
 
     def __init__(self, env, fail_start_for=None, fatal_after_start_for=None, never_netstart_for=None,
-                 restart_during_settle_for=None, owner_ignores_live=False, owner_refuses_live=False):
+                 restart_during_settle_for=None, owner_ignores_live=False, owner_refuses_live=False,
+                 host=(48000, 48000), host_after=None, old_owner=False):
         self.env = env
+        self.host = host                # the gadget's Capture/Playback Rate; None: unreadable
+        self.host_after = host_after    # (seconds, rates): what the host reads once that much time has passed
+        self.old_owner = old_owner      # an owner without --rate (62879558): RATE in owner.conf is fatal
+        self.started_at = time.time()
         self.clock = time.time()
         self.unit = "active"
         self.invocation = 1
@@ -101,6 +106,10 @@ class FakeRunner:
                 self.log = ["usb16x16-dante-start: REFUSED: DSP_PRESET is missing or unreadable"]
                 return 0, ""
             self.unit = "active"
+            if self.old_owner and "RATE" in self.env.conf_values():
+                self.unit = "failed"
+                self.log = ["unknown option --rate"]
+                return 0, ""
             self.log = self.env.start_lines(live, netstart=self.never_netstart_for != live)
             return 0, ""
         if argv[0] == "journalctl":
@@ -113,6 +122,14 @@ class FakeRunner:
             return 0, "loaded preset internal=16 biquads=0"
         if argv[:2] == ["systemctl", "poweroff"]:
             return 0, ""
+        if argv[0] == "amixer":
+            host = self.host
+            if self.host_after and self.clock - self.started_at >= self.host_after[0]:
+                host = self.host_after[1]
+            if host is None:
+                return 1, "amixer: Cannot find the given element"
+            value = host[0] if "Capture" in argv[-1] else host[1]
+            return 0, f"numid=8,iface=PCM,name='x'\n  ; type=INTEGER\n  : values={value}\n"
         raise AssertionError(f"unexpected command {argv}")
 
 
@@ -127,6 +144,16 @@ class Env:
         self.dsp_dir.mkdir()
         self.conf = self.root / "owner.conf"
         self.conf.write_text("# as installed\nMETERS=1\n")
+        self.inferno = self.root / "asound-inferno-owner.conf"
+        self.set_inferno(48000, "48000")
+        self.rate_request = self.root / "run-rate-request"
+
+    def set_inferno(self, rate, supported):
+        self.inferno.write_text(f'pcm.inferno {{\n\ttype inferno\n\tSAMPLE_RATE "{rate}"\n'
+                                f'\t# patches/0004\n\tSUPPORTED_SAMPLE_RATES "{supported}"\n\tRX_CHANNELS "16"\n}}\n')
+
+    def inferno_rate(self):
+        return apply_module.inferno_rates(self.inferno.read_text())[0]
 
     def conf_values(self):
         return apply_module.parse_owner_conf(self.conf.read_text())
@@ -140,7 +167,8 @@ class Env:
         return path
 
     def start_lines(self, live, netstart=True):
-        lines = ["START usb16x16-dante-owner mode=usb pcm=inferno"]
+        rate = self.conf_values().get("RATE", "48000")
+        lines = [f"START usb16x16-dante-owner mode=usb pcm=inferno rate={rate} period=64"]
         if live != "direct":
             preset = self.conf_values()["DSP_PRESET"]
             lines += [f"DSP loaded file={preset} preset=\"x\" internal=16 biquads=0 delay_frames=0 shape=abc",
@@ -158,13 +186,17 @@ class DanteApplyTest(unittest.TestCase):
         self.env = Env(self.directory.name)
         runner_path = Path(self.directory.name) / "offline"
         runner_path.write_text("")
-        self.saved = (apply_module.DSP_DIR, apply_module.OFFLINE_RUNNER)
+        self.saved = (apply_module.DSP_DIR, apply_module.OFFLINE_RUNNER, apply_module.DANTE_INFERNO_CONF,
+                      apply_module.DANTE_RATE_REQUEST)
         apply_module.DSP_DIR = self.env.dsp_dir
         apply_module.OFFLINE_RUNNER = str(runner_path)
+        apply_module.DANTE_INFERNO_CONF = self.env.inferno
+        apply_module.DANTE_RATE_REQUEST = self.env.rate_request
         self.counter = 0
 
     def tearDown(self):
-        apply_module.DSP_DIR, apply_module.OFFLINE_RUNNER = self.saved
+        (apply_module.DSP_DIR, apply_module.OFFLINE_RUNNER, apply_module.DANTE_INFERNO_CONF,
+         apply_module.DANTE_RATE_REQUEST) = self.saved
         self.directory.cleanup()
 
     def make(self, runner=None, **options):
@@ -627,6 +659,134 @@ class DanteApplyTest(unittest.TestCase):
         (self.env.spool / "request.json").write_text(json.dumps(request))
         self.assertEqual(self.make().consume()["state"], "done")
         self.assertEqual(list((self.env.spool / "presets").iterdir()), [])
+
+
+    # ---- the arbiter (SAMPLE_RATE_DESIGN.md, step 4)
+
+    def rate(self, rate, source="usb", **fields):
+        return self.request(kind="rate", rate=rate, source=source, **fields)
+
+    def test_the_inferno_config_and_the_request_line_parse(self):
+        text = self.env.inferno.read_text()
+        self.assertEqual(apply_module.inferno_rates(text), (48000, [48000]))
+        moved = apply_module.with_inferno_rate(text, 96000)
+        self.assertEqual(apply_module.inferno_rates(moved), (96000, [48000]))
+        self.assertEqual(moved.replace("96000", "48000", 1), text, "only SAMPLE_RATE changes")
+        self.assertEqual(apply_module.inferno_rates('SAMPLE_RATE "44100"\n'), (44100, [44100]), "no list: the current rate only")
+        self.assertEqual(apply_module.parse_rate_request("rate=96000 source=dante from=169.254.26.52 at=1760700000\n"),
+                         {"rate": 96000, "source": "dante", "from": "169.254.26.52", "at": 1760700000.0})
+        for bad in ("rate=32000 source=usb", "rate=96000 source=elsewhere", "nonsense"):
+            with self.assertRaises(apply_module.Refused):
+                apply_module.parse_rate_request(bad)
+
+    def test_a_request_for_the_running_rate_restarts_nothing(self):
+        before = (self.env.conf.read_text(), self.env.inferno.read_text())
+        result = self.make().apply(self.rate(48000, source="dante"))
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertIn("nothing restarted", result["steps"][-1]["detail"])
+        self.assertEqual(self.commands(), [])
+        self.assertEqual((self.env.conf.read_text(), self.env.inferno.read_text()), before)
+
+    def test_a_rate_that_is_not_offered_is_refused(self):
+        before = (self.env.conf.read_text(), self.env.inferno.read_text())
+        result = self.make(host=(96000, 96000)).apply(self.rate(96000))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("96000 Hz is not an offered rate (offered: 48000)", result["error"])
+        self.assertEqual(self.commands(), [])
+        self.assertEqual((self.env.conf.read_text(), self.env.inferno.read_text()), before)
+
+    def test_an_offered_rate_moves_both_files_and_restarts_once(self):
+        self.env.set_inferno(48000, "48000,96000")
+        result = self.make(host=(96000, 96000)).apply(self.rate(96000))
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertEqual(self.env.conf_values(), {"METERS": "1", "RATE": "96000"})
+        self.assertEqual(self.env.inferno_rate(), 96000)
+        self.assertEqual(self.commands(), ["systemctl stop", "systemctl start"])
+        self.assertEqual(result["rate"], {"from": 48000, "to": 96000, "source": "usb"})
+        # The second signal of the same change on the Mac (Inferno's set) finds it done.
+        again = self.make(host=(96000, 96000)).apply(self.rate(96000, source="dante"))
+        self.assertEqual(again["state"], "done")
+        self.assertEqual(self.commands(), [], "one change, one restart")
+        # And back to 48 kHz, once the change is older than the tug-of-war window,
+        # writes owner.conf as it was before rates.
+        history = self.env.spool / "rate-history.json"
+        history.write_text(json.dumps({**json.loads(history.read_text()), "at": time.time() - apply_module.RATE_REVERSAL_S - 1}))
+        back = self.make(host=(48000, 48000)).apply(self.rate(48000))
+        self.assertEqual(back["state"], "done", back["error"])
+        self.assertEqual(self.env.conf_values(), {"METERS": "1"})
+        self.assertEqual(self.env.inferno_rate(), 48000)
+
+    def test_the_mac_decides(self):
+        self.env.set_inferno(48000, "48000,96000")
+        result = self.make(host=(48000, 48000)).apply(self.rate(96000, source="dante"))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("the Mac's USB 16x16 is at 48000 Hz; the Mac decides", result["error"])
+        self.assertEqual(self.commands(), [])
+        # The Mac's half of the same change arriving within the window is waited for.
+        result = self.make(host=(48000, 48000), host_after=(2, (96000, 96000))).apply(self.rate(96000, source="dante"))
+        self.assertEqual(result["state"], "done", result["error"])
+        # A host with the interface down (0) does not block, and neither do unreadable controls.
+        self.env.set_inferno(96000, "48000,96000,44100")
+        self.env.conf.write_text("METERS=1\nRATE=96000\n")
+        self.assertEqual(self.make(host=(0, 0)).apply(self.rate(44100, source="dante"))["state"], "done")
+
+    def test_a_preset_without_an_artifact_for_the_rate_is_refused(self):
+        self.env.set_inferno(48000, "48000,96000")
+        self.env.install("room", artifact())
+        self.assertEqual(self.make().apply(self.request(profile="dante-room"))["state"], "done")
+        result = self.make(host=(96000, 96000)).apply(self.rate(96000))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("no artifact for 96000 Hz", result["error"])
+        self.assertEqual(self.env.inferno_rate(), 48000)
+        at96 = self.env.dsp_dir / "dante-room@96000.dsp"
+        at96.write_bytes(artifact(rate=96000))
+        result = self.make(host=(96000, 96000)).apply(self.rate(96000))
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertEqual(self.env.conf_values()["DSP_PRESET"], str(at96))
+        self.assertEqual(self.env.conf_values()["DSP_SHA256"], sha(artifact(rate=96000)))
+
+    def test_an_owner_that_does_not_come_up_at_the_rate_rolls_both_files_back(self):
+        self.env.set_inferno(48000, "48000,96000")
+        before = (self.env.conf.read_text(), self.env.inferno.read_text())
+        result = self.make(host=(96000, 96000), old_owner=True).apply(self.rate(96000))
+        self.assertEqual(result["state"], "rolled-back", result["error"])
+        self.assertEqual((self.env.conf.read_text(), self.env.inferno.read_text()), before)
+        self.assertEqual(self.commands(), ["systemctl stop", "systemctl start", "systemctl stop", "systemctl start"])
+        # An owner that starts at another rate than asked is caught too.
+        class Liar(FakeRunner):
+            def run(self, argv, timeout=60.0, env=None):
+                code, out = super().run(argv, timeout, env)
+                if argv[:2] == ["systemctl", "start"]:
+                    self.log = [line.replace("rate=96000", "rate=48000") for line in self.log]
+                return code, out
+        result = self.make(runner=Liar(self.env, host=(96000, 96000))).apply(self.rate(96000))
+        self.assertEqual(result["state"], "rolled-back")
+        self.assertIn("started at 48000 Hz, not 96000", result["error"])
+
+    def test_a_change_straight_back_is_a_tug_of_war(self):
+        self.env.set_inferno(48000, "48000,96000")
+        self.assertEqual(self.make(host=(96000, 96000)).apply(self.rate(96000))["state"], "done")
+        result = self.make(host=(48000, 48000)).apply(self.rate(48000))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("tug-of-war", result["error"])
+        self.assertEqual(self.env.inferno_rate(), 96000)
+
+    def test_mismatched_configuration_is_refused(self):
+        self.env.set_inferno(96000, "48000,96000")
+        result = self.make().apply(self.rate(96000))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("owner.conf runs at 48000 Hz but", result["error"])
+
+    def test_the_request_file_is_consumed(self):
+        self.env.set_inferno(48000, "48000,96000")
+        self.env.rate_request.write_text(f"rate=96000 source=usb at={int(time.time())}\n")
+        result = self.make(host=(96000, 96000)).consume_rate_request()
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertFalse(self.env.rate_request.exists())
+        self.assertEqual(result["request"]["source"], "usb")
+        self.assertIsNone(self.make().consume_rate_request(), "nothing pending")
+        self.env.rate_request.write_text("rate=12345 source=usb\n")
+        self.assertEqual(self.make().consume_rate_request()["state"], "refused")
 
 
 class FakeRunnerNoConf:

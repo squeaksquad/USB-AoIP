@@ -42,11 +42,24 @@ void test_gadget_rate() {
     check(judge_gadget_rate(48000, 48000, 96000) == GadgetRate::mismatch, "a 48 kHz host is refused at 96 kHz");
 }
 
+void test_request_line() {
+    using usb16x16::owner::usb_rate_request_line;
+    check(usb_rate_request_line(96000, 96000, 48000, 1760700000) == "rate=96000 source=usb at=1760700000\n",
+          "a host at 96 kHz asks for 96 kHz");
+    check(usb_rate_request_line(44100, 0, 48000, 5) == "rate=44100 source=usb at=5\n", "one direction up is enough");
+    check(usb_rate_request_line(48000, 48000, 48000, 5).empty(), "a match asks for nothing");
+    check(usb_rate_request_line(0, 0, 48000, 5).empty(), "a host with the interface down asks for nothing");
+    check(usb_rate_request_line(-19, -19, 48000, 5).empty(), "unreadable controls ask for nothing");
+    check(usb_rate_request_line(96000, 44100, 48000, 5).empty(), "two directions at two rates are no one rate");
+    check(usb_rate_request_line(32000, 32000, 48000, 5).empty(), "a rate Dante does not have is not asked for");
+}
+
 }  // namespace
 
 int main() {
     test_dante_rates();
     test_gadget_rate();
+    test_request_line();
     std::printf(failures == 0 ? "rate_check_test: all passed\n" : "rate_check_test: %d FAILED\n", failures);
     return failures == 0 ? 0 : 1;
 }

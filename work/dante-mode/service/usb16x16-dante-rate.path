@@ -1,0 +1,17 @@
+[Unit]
+# SAMPLE_RATE_DESIGN.md, step 4: a rate request from the endpoint. The owner
+# writes it when the Mac's USB 16x16 is at another rate (--rate-request-file,
+# with RATE_REQUESTS=1 in transport.conf); Inferno writes it when Dante
+# Controller or Dante Switcher sets an offered rate (patches/0005,
+# RATE_REQUEST_FILE in its config). Both write by rename.
+StartLimitIntervalSec=0
+Description=USB 16x16 Dante rate request watcher
+Documentation=file:///home/bdimaio/usb-16x16-work/dante-mode/SAMPLE_RATE_DESIGN.md
+
+[Path]
+PathChanged=/run/usb16x16-dante/rate-request
+Unit=usb16x16-dante-rate.service
+MakeDirectory=no
+
+[Install]
+WantedBy=multi-user.target

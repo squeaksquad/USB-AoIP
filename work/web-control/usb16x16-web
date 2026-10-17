@@ -422,7 +422,8 @@ def dante_profiles(conf: dict[str, str]) -> tuple[str, list[dict]]:
     dante-<slug>.dsp. The same row shape as conf_profiles, so the page's
     panel is one panel."""
     preset = conf.get("DSP_PRESET") or ""
-    selected = Path(preset).name.removesuffix(".dsp") if preset else DANTE_DIRECT
+    # At a rate other than 48 kHz the running file is dante-<slug>@<rate>.dsp.
+    selected = re.sub(r"@\d+$", "", Path(preset).name.removesuffix(".dsp")) if preset else DANTE_DIRECT
     rows = [{
         "name": DANTE_DIRECT, "status": "accepted", "accepted": True,
         "description": "Direct: no DSP stage, samples pass through unchanged",
@@ -447,8 +448,13 @@ def dante_profiles(conf: dict[str, str]) -> tuple[str, list[dict]]:
             # A preset always starts with live following on; for the running
             # one, what the configuration actually says.
             "dspLive": conf.get("DSP_LIVE") == "1" if live else True,
+            # The rates this preset has an artifact for (SAMPLE_RATE_DESIGN.md, step 4d).
+            "rates": [rate for rate in (44100, 48000, 88200, 96000, 176400, 192000)
+                      if (path if rate == 48000 else path.with_name(f"{name}@{rate}.dsp")).is_file()],
             "dspSha256": conf.get("DSP_SHA256") if live else None,
-            "dspShape": installed_shape(str(path)),
+            # The running preset's shape is its running file's: off 48 kHz that is
+            # the @<rate> artifact, whose shape names its rate.
+            "dspShape": installed_shape(preset if live and preset else str(path)),
         })
     return selected, rows
 
@@ -623,8 +629,12 @@ class Collector:
         if dante:
             conf_text = read_text(DANTE_CONF, 1 << 16)
             if conf_text is not None:
-                selected, rows = dante_profiles(parse_owner_conf(conf_text))
-                state["profile"] = {"selected": selected, "profiles": rows}
+                owner_conf = parse_owner_conf(conf_text)
+                selected, rows = dante_profiles(owner_conf)
+                rate = owner_conf.get("RATE", "48000")
+                # The rate the endpoint runs at (owner.conf's RATE; absent is 48 kHz).
+                state["profile"] = {"selected": selected, "profiles": rows,
+                                    "rate": int(rate) if rate.isdigit() else None}
             else:
                 state["profile"] = {"selected": None, "profiles": [], "reason": f"{DANTE_CONF} unreadable"}
         else:

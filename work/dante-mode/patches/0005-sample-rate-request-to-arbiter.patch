@@ -1,0 +1,149 @@
+diff --git a/inferno_aoip/src/device_info.rs b/inferno_aoip/src/device_info.rs
+index 9ddd860..a13fc0e 100644
+--- a/inferno_aoip/src/device_info.rs
++++ b/inferno_aoip/src/device_info.rs
+@@ -43,6 +43,9 @@ pub struct DeviceInfo {
+   pub board_flags_17: u8,
+   /// Names the state directory; the device ID's hex unless STATE_ID is set.
+   pub state_id: String,
++  /// Where a set to another supported rate is handed on (RATE_REQUEST_FILE);
++  /// None: a set to another rate is refused, as before.
++  pub rate_request_file: Option<String>,
+ 
+   pub arc_port: u16,
+   pub cmc_port: u16,
+@@ -85,6 +88,7 @@ mod tests {
+       supported_sample_rates: Vec::new(),
+       board_flags_17: 0,
+       state_id: String::new(),
++      rate_request_file: None,
+       arc_port: 0,
+       cmc_port: 0,
+       flows_control_port: 0,
+diff --git a/inferno_aoip/src/device_server/info_mcast_server.rs b/inferno_aoip/src/device_server/info_mcast_server.rs
+index bd3eb53..d434bf4 100644
+--- a/inferno_aoip/src/device_server/info_mcast_server.rs
++++ b/inferno_aoip/src/device_server/info_mcast_server.rs
+@@ -419,6 +419,46 @@ impl<'s> Multicaster<'s> {
+   }
+ }
+ 
++// The arbiter's request (usb16x16-apply rate): one line of key=value fields,
++// the same form the owner writes for a host at another rate.
++fn rate_request_line(rate: u32, from: &std::net::SocketAddr, at: u64) -> String {
++  format!("rate={rate} source=dante from={} at={at}\n", from.ip())
++}
++
++fn unix_now() -> u64 {
++  std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
++}
++
++// Write by rename, so the arbiter's path unit never reads half a line.
++fn write_rate_request(path: &str, line: &str) -> std::io::Result<()> {
++  let temporary = format!("{path}.tmp");
++  std::fs::write(&temporary, line)?;
++  std::fs::rename(&temporary, path)
++}
++
++#[cfg(test)]
++mod rate_request_tests {
++  use super::*;
++
++  #[test]
++  fn the_line_is_what_the_arbiter_parses() {
++    let from: std::net::SocketAddr = "169.254.26.52:8700".parse().unwrap();
++    assert_eq!(rate_request_line(96000, &from, 1760700000), "rate=96000 source=dante from=169.254.26.52 at=1760700000\n");
++  }
++
++  #[test]
++  fn the_file_is_written_whole() {
++    let dir = std::env::temp_dir().join(format!("inferno-rate-request-{}", std::process::id()));
++    std::fs::create_dir_all(&dir).unwrap();
++    let path = dir.join("rate-request");
++    let path = path.to_str().unwrap();
++    write_rate_request(path, "rate=96000 source=dante from=1.2.3.4 at=1\n").unwrap();
++    assert_eq!(std::fs::read_to_string(path).unwrap(), "rate=96000 source=dante from=1.2.3.4 at=1\n");
++    assert!(!std::path::Path::new(&format!("{path}.tmp")).exists());
++    std::fs::remove_dir_all(&dir).unwrap();
++  }
++}
++
+ pub async fn run_server(
+   self_info: Arc<DeviceInfo>,
+   mut rx: mpsc::Receiver<MulticastMessage>,
+@@ -470,11 +510,24 @@ pub async fn run_server(
+             // answered with the current status, which is a refusal to Controller.
+             let word = |at: usize| request_buf.get(at..at + 4).map(|b| u32::from_be_bytes(b.try_into().unwrap()));
+             match (word(32), word(36)) {
+-              (Some(1), Some(rate)) => warn!(
+-                "sample rate set to {rate} requested, not acted on (running at {}); raw udp payload: {}",
+-                mcaster.self_info.sample_rate,
+-                hex::encode(request_buf)
+-              ),
++              (Some(1), Some(rate)) => {
++                // A set to another supported rate is handed to the arbiter, which
++                // restarts the endpoint at it or refuses. The status sent below
++                // still says the current rate: until the restart, it is the truth.
++                let current = mcaster.self_info.sample_rate;
++                let offered = mcaster.self_info.supported_sample_rates.contains(&rate);
++                match (&mcaster.self_info.rate_request_file, offered && rate != current) {
++                  (Some(path), true) => match write_rate_request(path, &rate_request_line(rate, &_src, unix_now())) {
++                    Ok(()) => warn!("sample rate set to {rate} requested by {_src} (running at {current}): handed to the arbiter in {path}"),
++                    Err(e) => error!("sample rate set to {rate} requested by {_src}: could not write {path}: {e}"),
++                  },
++                  _ => warn!(
++                    "sample rate set to {rate} requested, not acted on (running at {current}{}); raw udp payload: {}",
++                    if offered || rate == current { "" } else { ", not a supported rate" },
++                    hex::encode(request_buf)
++                  ),
++                }
++              }
+               _ => info!("sample rate query; raw udp payload: {}", hex::encode(request_buf)),
+             }
+             mcaster.send_sample_rate_status().await;
+diff --git a/inferno_aoip/src/device_server/settings.rs b/inferno_aoip/src/device_server/settings.rs
+index ff2697f..72a2c83 100644
+--- a/inferno_aoip/src/device_server/settings.rs
++++ b/inferno_aoip/src/device_server/settings.rs
+@@ -98,6 +98,9 @@ fn create_self_info(
+   // unless STATE_ID names another, so the advertised ID can change and keep them.
+   let state_id = settings.get("STATE_ID").cloned().unwrap_or_else(|| hex::encode(devid));
+ 
++  // The arbiter's request file (usb16x16-apply rate, SAMPLE_RATE_DESIGN.md step 4).
++  let rate_request_file = settings.get("RATE_REQUEST_FILE").cloned().filter(|s| !s.is_empty());
++
+   let mut netmask = Ipv4Addr::new(0, 0, 0, 0);
+   let mut gateway = Ipv4Addr::new(0, 0, 0, 0);
+   let mut mac_address = MacAddr::zero();
+@@ -160,6 +163,7 @@ fn create_self_info(
+     supported_sample_rates,
+     board_flags_17,
+     state_id,
++    rate_request_file,
+ 
+     arc_port: ARC_PORT,
+     cmc_port: CMC_PORT,
+diff --git a/inferno_aoip/src/protocol/flows_control.rs b/inferno_aoip/src/protocol/flows_control.rs
+index 6a98b59..582f336 100644
+--- a/inferno_aoip/src/protocol/flows_control.rs
++++ b/inferno_aoip/src/protocol/flows_control.rs
+@@ -227,6 +227,7 @@ mod tests {
+       supported_sample_rates: Vec::new(),
+       board_flags_17: 0,
+       state_id: String::new(),
++      rate_request_file: None,
+       arc_port: 0,
+       cmc_port: 0,
+       flows_control_port: 0,
+diff --git a/inferno_aoip/src/protocol/proto_arc.rs b/inferno_aoip/src/protocol/proto_arc.rs
+index 9895cc6..55dbf53 100644
+--- a/inferno_aoip/src/protocol/proto_arc.rs
++++ b/inferno_aoip/src/protocol/proto_arc.rs
+@@ -497,6 +497,7 @@ mod tests {
+       supported_sample_rates: Vec::new(),
+       board_flags_17: 0,
+       state_id: String::new(),
++      rate_request_file: None,
+       arc_port: 4440,
+       cmc_port: 8800,
+       flows_control_port: 4455,

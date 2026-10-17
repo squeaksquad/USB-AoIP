@@ -5531,3 +5531,79 @@ Not installed. Installing it is `service/install-owner-update.sh` with a new
 pin (the operator's). The DSP stage was not exercised here: the installed
 form runs direct. A preset run (fixed-shape, unity-heavy) is the way to put
 the unity skip under audio.
+
+## Sample rate, step 4: the arbiter, written and Mac-tested; Inferno patch 0005 not compiled; nothing built on the Pi or installed (2026-10-17)
+
+SAMPLE_RATE_DESIGN.md, step 4, to the operator's answers ("the Mac
+decides"). A rate request becomes one verified restart or a refusal.
+
+**Who asks.**
+- Inferno, `patches/0005-sample-rate-request-to-arbiter.patch`: a set
+  (0x0081 mode 1) to a rate in `SUPPORTED_SAMPLE_RATES` other than the
+  current one, with `RATE_REQUEST_FILE` in the config, writes `rate=R
+  source=dante from=<ip> at=<unix>` to that file by rename and logs it. The
+  status it answers with still says the current rate until the restart.
+  Without the key, or for a rate not offered, it refuses as 0004 did. Two
+  Rust unit tests. 0001 to 0005 apply cleanly in order to upstream 9767558
+  (checked on a copy); **not compiled**: there is no Rust toolchain on the
+  Mac, and the Pi builds only with the service stopped.
+  `config/asound-inferno-owner-rate48-arbiter.conf` is the installed config
+  plus that key. With 48000 the only rate offered, it hands nothing on.
+- The owner, `--rate-request-file PATH`: when the host is at another rate
+  (the `USBRATE refused` case), the steward writes `rate=R source=usb
+  at=<unix>` once per change in what the host reports. It sends nothing for a
+  host whose two directions disagree or that is at a rate Dante does not
+  have (`usb_rate_request_line` in `rate_check.hpp`, tested). The transport
+  start wrapper passes the option with `RATE_REQUESTS=1` in `transport.conf`.
+- `service/usb16x16-dante-rate.path` / `.service` (staged): the file's
+  appearance runs `usb16x16-apply --rate-request`.
+
+**The applier's `rate` kind** (`usb16x16-apply`, Dante backend), in order:
+1. A Dante rate and a known source (dante, usb, page).
+2. `owner.conf`'s RATE and the Inferno config's SAMPLE_RATE must agree, or
+   it is refused before anything.
+3. The rate already running is done, with nothing restarted. This is how
+   the two signals of one change on the Mac become one restart.
+4. Not in `SUPPORTED_SAMPLE_RATES`: refused ("a rate is offered only after
+   its battery").
+5. Straight back to the rate it just left, within 30 s: refused as a
+   tug-of-war.
+6. The Mac decides: the gadget's `Capture Rate` / `Playback Rate` (through
+   `amixer ... iface=PCM`, readable unprivileged, checked on the Pi) are
+   waited on for up to 5 s to read the rate or 0, then a Mac at another
+   rate is refused.
+7. The running preset needs its artifact for the rate (4d's files) or the
+   change is refused.
+
+Then `owner.conf` (RATE, absent at 48 kHz so that form is unchanged; the
+preset file and pin for the rate) and the Inferno config (SAMPLE_RATE only)
+are written together. The endpoint is restarted and must come up at that
+rate: the owner's START line is checked for `rate=R`, so an owner without
+`--rate` refuses the option, fails, and rolls back. Any failure puts both
+files back and restarts. One lock in the spool serialises this with the
+page's requests. `test_dante_apply.py`: 10 new tests (44 in all), covering:
+the 48 kHz no-op; 96 not offered; offered with one restart for two signals;
+back to 48 with owner.conf as before rates; the Mac-decides wait and
+refusal; a preset with no artifact for the rate; rollback on an old owner
+and on an owner at the wrong rate; the tug-of-war; mismatched
+configuration; the request file consumed.
+
+**Health and page.** `usb16x16-web` reports `profile.rate`, each preset's
+`rates`, the running preset by name whatever its rate, and the running
+preset's shape from its running file (off 48 kHz that is the `@rate` file,
+whose shape names its rate, so a live edit would otherwise have been
+misjudged). The page compiles the live push, the commit's check and the
+commit's other rates at `runningRate(health)`.
+
+Step 4's check, as the design states it, holds by construction at 48 kHz:
+a set to 48 from Controller is acknowledged by Inferno and, through the
+arbiter, restarts nothing; a set to 96 is refused by Inferno (not supported)
+and by the arbiter (not offered). It cannot be watched end to end until a
+second rate is offered, after step 5's gadget. All suites: node 185 / 185;
+the four web-control Python suites; both start-wrapper forms; the start
+check; the five owner test programs; the bridge core tests.
+
+Owed on the Pi, the operator's: build the plugin with 0001 to 0005 and the
+owner with `--rate-request-file` (service stopped); install applier, web
+service, the two units, the arbiter config and `RATE_REQUESTS=1`; then Dante
+Controller's set to 48 kHz read through to "nothing restarted" in a receipt.

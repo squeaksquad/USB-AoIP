@@ -1239,6 +1239,15 @@ DANTE_CONF_KEYS = ("METERS", "DSP_PRESET", "DSP_SHA256", "DSP_LIVE", "RATE")
 # The unit waits up to 40 s for the clock before it starts the owner.
 DANTE_START_TIMEOUT_S = 75.0
 DANTE_SETTLE_S = 15.0
+# The arbiter (SAMPLE_RATE_DESIGN.md, step 4): the Inferno config whose
+# SAMPLE_RATE moves with owner.conf's RATE, the request file the owner and
+# Inferno write, and how long a request waits for the other end to agree.
+DANTE_INFERNO_CONF = Path(os.environ.get("USB16X16_DANTE_INFERNO_CONF", "/etc/usb16x16/dante/asound-inferno-owner.conf"))
+DANTE_RATE_REQUEST = Path(os.environ.get("USB16X16_DANTE_RATE_REQUEST", "/run/usb16x16-dante/rate-request"))
+GADGET_CARD = "UAC2Gadget"
+RATE_HOST_WAIT_S = 5.0
+RATE_REVERSAL_S = 30.0
+RATE_SOURCES = ("dante", "usb", "page")
 
 
 def parse_owner_conf(text: str) -> dict[str, str]:
@@ -1279,6 +1288,40 @@ def rate_file(name: str, rate: int) -> Path:
     since before rates (dante-<slug>.dsp), so nothing installed needs moving;
     any other rate sits beside it as dante-<slug>@<rate>.dsp."""
     return DSP_DIR / (f"{name}.dsp" if rate == NOMINAL_RATE else f"{name}@{rate}.dsp")
+
+
+def inferno_rates(text: str) -> tuple[int, list[int]]:
+    """SAMPLE_RATE and SUPPORTED_SAMPLE_RATES (patches/0004) from the Inferno
+    config. With no supported list the only rate offered is the current one."""
+    current = re.findall(r'(?m)^\s*SAMPLE_RATE\s+"(\d+)"\s*$', text)
+    if len(current) != 1:
+        raise Refused(f"{DANTE_INFERNO_CONF}: expected one SAMPLE_RATE line, found {len(current)}")
+    rate = int(current[0])
+    listed = re.findall(r'(?m)^\s*SUPPORTED_SAMPLE_RATES\s+"([\d, ]+)"\s*$', text)
+    supported = [int(r) for r in listed[0].split(",") if r.strip()] if listed else [rate]
+    return rate, supported
+
+
+def with_inferno_rate(text: str, rate: int) -> str:
+    """The same config with SAMPLE_RATE changed and nothing else."""
+    new, count = re.subn(r'(?m)^(\s*SAMPLE_RATE\s+")\d+("\s*)$', lambda m: f"{m.group(1)}{rate}{m.group(2)}", text)
+    if count != 1:
+        raise Refused(f"{DANTE_INFERNO_CONF}: expected one SAMPLE_RATE line, found {count}")
+    return new
+
+
+def parse_rate_request(text: str) -> dict:
+    """The line the owner or Inferno writes: rate=N source=dante|usb [from=...] [at=unix]."""
+    fields = dict(part.split("=", 1) for part in text.split() if "=" in part)
+    rate = fields.get("rate", "")
+    if not rate.isdigit() or int(rate) not in DANTE_RATES:
+        raise Refused(f"rate request: {rate[:12]!r} is not a Dante rate")
+    source = fields.get("source", "")
+    if source not in RATE_SOURCES:
+        raise Refused(f"rate request: source must be one of {', '.join(RATE_SOURCES)}")
+    at = fields.get("at", "")
+    return {"rate": int(rate), "source": source, "from": fields.get("from", "")[:64],
+            "at": float(at) if at.isdigit() else None}
 
 
 def dante_profile_of(conf: dict[str, str]) -> str:
@@ -1603,6 +1646,128 @@ class DanteApplier(Applier):
         return {"profile": row["name"], "digest": digest, "stats": stats, "changed": changed,
                 "rates": sorted([running, *others])}
 
+    # ---- the arbiter (SAMPLE_RATE_DESIGN.md, step 4)
+    #
+    # A rate request comes from Inferno (a set from Dante Controller or Dante
+    # Switcher, patches/0005), from the owner (the Mac's USB 16x16 at another
+    # rate), or from the page. The Mac decides: a rate the Mac is not at is
+    # refused, and a request for the rate already running restarts nothing, so
+    # the two signals one change on the Mac sends become one restart. A change
+    # is a transaction: owner.conf's RATE, the Inferno config's SAMPLE_RATE and
+    # the preset file for the new rate are written together, the endpoint is
+    # restarted and must come up at that rate, and anything else puts all of
+    # it back.
+
+    def host_rates(self) -> tuple[int, int] | None:
+        """The gadget's Capture Rate and Playback Rate (0 while the host has the
+        interface down); None when they cannot be read."""
+        found = []
+        for name in ("Capture Rate", "Playback Rate"):
+            code, out = self.runner.run(["amixer", "-c", GADGET_CARD, "cget", f"iface=PCM,name={name}"], timeout=10)
+            match = re.search(r": values=(\d+)", out) if code == 0 else None
+            if not match:
+                return None
+            found.append(int(match.group(1)))
+        return found[0], found[1]
+
+    def rate_history(self) -> dict:
+        try:
+            return json.loads((self.spool / "rate-history.json").read_text())
+        except (OSError, ValueError):
+            return {}
+
+    def validate_rate(self, request: dict, conf: dict[str, str]) -> dict | None:
+        """The change to make, or None when the rate asked for is running."""
+        rate = request.get("rate")
+        if not isinstance(rate, int) or rate not in DANTE_RATES:
+            raise Refused(f"rate must be a Dante rate ({', '.join(str(r) for r in DANTE_RATES)})")
+        source = request.get("source")
+        if source not in RATE_SOURCES:
+            raise Refused(f"source must be one of {', '.join(RATE_SOURCES)}")
+        running = running_rate(conf)
+        inferno_text = read_text(DANTE_INFERNO_CONF)
+        if inferno_text is None:
+            raise Refused(f"cannot read {DANTE_INFERNO_CONF}")
+        inferno_rate, offered = inferno_rates(inferno_text)
+        if inferno_rate != running:
+            raise Refused(f"owner.conf runs at {running} Hz but {DANTE_INFERNO_CONF} says {inferno_rate}; "
+                          "fix the configuration before changing the rate")
+        if rate == running:
+            return None
+        if rate not in offered:
+            raise Refused(f"{rate} Hz is not an offered rate (offered: {', '.join(str(r) for r in offered)}); "
+                          "a rate is offered only after its battery")
+        history = self.rate_history()
+        if history.get("from") == rate and self.runner.now() - float(history.get("at", 0)) < RATE_REVERSAL_S:
+            raise Refused(f"the rate moved {history['from']} -> {history['to']} "
+                          f"{self.runner.now() - float(history['at']):.0f} s ago; going straight back looks like a "
+                          "tug-of-war between the two ends, so nothing changes")
+        # The Mac decides: wait a little for its USB 16x16 to agree (the other
+        # half of one change on the Mac), then refuse if it is at another rate.
+        deadline = self.runner.now() + RATE_HOST_WAIT_S
+        while True:
+            host = self.host_rates()
+            if host is None or all(value in (0, rate) for value in host):
+                break
+            if self.runner.now() >= deadline:
+                raise Refused(f"the Mac's USB 16x16 is at {max(host)} Hz; the Mac decides the rate: change it there "
+                              "(Audio MIDI Setup, the DAW, or Dante Switcher)")
+            self.runner.sleep(self.poll)
+        live = dante_profile_of(conf)
+        row = self.table().get(live)
+        if row is None:
+            raise Refused(f"{live} is not installed")
+        target = {**self.at_rate(row, rate), "rate": rate}
+        if target["dspPreset"]:
+            parse_artifact(read_text(Path(target["dspPreset"]), MAX_ARTIFACT_BYTES + 1) or "", rate)
+        unit = self.unit_state()
+        if unit not in ("active", "inactive", "failed"):
+            raise Refused(f"{DANTE_UNIT} is {unit}; retry when it has settled")
+        return {"rate": rate, "running": running, "source": source, "host": host, "target": target,
+                "inferno": with_inferno_rate(inferno_text, rate), "previousInferno": inferno_text}
+
+    def change_rate(self, spec: dict, conf: dict[str, str], previous_text: str) -> dict:
+        target = spec["target"]
+        rate = spec["rate"]
+        self.state["previousProfile"] = target["name"]
+        self.state["profile"] = target["name"]
+        self.state["rate"] = {"from": spec["running"], "to": rate, "source": spec["source"]}
+        self.step("validating", f"{spec['running']} -> {rate} Hz asked by {spec['source']}; "
+                                f"{target['name']}{' at ' + Path(target['dspPreset']).name if target['dspPreset'] else ''}; "
+                                f"USB host {'unread' if spec['host'] is None else '/'.join(str(v) for v in spec['host'])}")
+        new_text = render_owner_conf(conf.get("METERS", "0"),
+                                     Path(target["dspPreset"]) if target["dspPreset"] else None, target["dspSha256"],
+                                     None if rate == NOMINAL_RATE else str(rate))
+        reason = self.switch_to(new_text, target, inferno_text=spec["inferno"])
+        if reason is None:
+            write_atomic(self.spool / "rate-history.json", {"from": spec["running"], "to": rate, "at": self.runner.now()})
+            return self.finish("done")
+        self.step("rolling-back", f"{reason}; returning to {spec['running']} Hz", ok=False)
+        rollback_target = {"name": target["name"], "dspPreset": conf.get("DSP_PRESET") or None, "rate": spec["running"]}
+        rollback_reason = self.switch_to(previous_text, rollback_target, inferno_text=spec["previousInferno"])
+        if rollback_reason is None:
+            return self.finish("rolled-back", reason)
+        return self.finish("failed", f"{reason}; rollback to {spec['running']} Hz also failed: {rollback_reason}")
+
+    def consume_rate_request(self) -> dict | None:
+        """One trigger of the rate-request path unit: take the line, act on it."""
+        try:
+            text = DANTE_RATE_REQUEST.read_text()
+        except OSError:
+            return None
+        DANTE_RATE_REQUEST.unlink(missing_ok=True)
+        ident = hashlib.sha256(f"{text}{self.runner.now()}".encode()).hexdigest()[:16]
+        try:
+            fields = parse_rate_request(text)
+        except Refused as error:
+            self.state = {"version": VERSION, "stack": "dante", "id": ident, "kind": "rate", "request": None,
+                          "startedAt": utc(self.runner.now()), "steps": [], "previousProfile": None,
+                          "profile": None, "state": "validating", "error": None}
+            return self.finish("refused", str(error))
+        at = fields["at"] if fields["at"] is not None else self.runner.now()
+        return self.apply({"id": ident, "kind": "rate", "rate": fields["rate"], "source": fields["source"],
+                           "from": fields["from"], "requestedAt": at, "requestedBy": f"{fields['source']} {fields['from']}".strip()})
+
     # ---- the configuration file
 
     def check_conf_text(self, text: str) -> None:
@@ -1620,17 +1785,23 @@ class DanteApplier(Applier):
 
     # ---- the operation
 
-    def switch_to(self, text: str, target: dict) -> str | None:
-        """Stop, write owner.conf, start, verify. Returns None or the reason."""
+    def switch_to(self, text: str, target: dict, inferno_text: str | None = None) -> str | None:
+        """Stop, write owner.conf (and the Inferno config, for a rate change),
+        start, verify. Returns None or the reason."""
         self.step("stopping", f"systemctl stop {DANTE_UNIT}")
         code, out = self.runner.run(["systemctl", "stop", DANTE_UNIT], timeout=60)
         if code != 0:
             return f"stop failed: {out}"
-        self.step("switching", f"{self.conf_path} -> {target['name']}")
+        self.step("switching", f"{self.conf_path} -> {target['name']}"
+                  + (f" at {target['rate']} Hz, {DANTE_INFERNO_CONF.name} with it" if inferno_text is not None else ""))
         try:
             self.check_conf_text(text)
+            if inferno_text is not None:
+                inferno_rates(inferno_text)
         except Refused as error:
             return str(error)
+        if inferno_text is not None:
+            self.write_root_file(DANTE_INFERNO_CONF, inferno_text.encode("utf-8"), "rate")
         self.replace_conf(text)
         self.step("starting", f"systemctl start {DANTE_UNIT}")
         self.runner.run(["systemctl", "reset-failed", DANTE_UNIT], timeout=10)
@@ -1658,6 +1829,11 @@ class DanteApplier(Applier):
             return f"the owner loaded another preset: {loaded[0][:120]}"
         if not preset and loaded:
             return "a preset was loaded on a profile without one"
+        rate = target.get("rate")
+        start = next((v for v in log if v.startswith("START usb16x16-dante-owner ")), "")
+        said = re.search(r" rate=(\d+) ", start)
+        if rate and start and (int(said.group(1)) if said else NOMINAL_RATE) != rate:
+            return f"the owner started at {said.group(1) if said else 'its default 48000'} Hz, not {rate}"
         if not any(v.startswith("NETSTART capture=RUNNING playback=RUNNING") for v in log):
             return "waiting for the owner to start both streams"
         if preset and not loaded:
@@ -1701,7 +1877,7 @@ class DanteApplier(Applier):
             "id": ident,
             "kind": kind,
             "request": {k: request.get(k) for k in ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
-                                                     "name", "slug", "artifactSha256", "expectedLiveSha256", "revert")},
+                                                     "name", "slug", "artifactSha256", "expectedLiveSha256", "revert", "rate", "source", "from")},
             "startedAt": utc(self.runner.now()),
             "steps": [],
             "previousProfile": None,
@@ -1751,6 +1927,14 @@ class DanteApplier(Applier):
             elif kind == "shutdown":
                 self.validate_envelope(request)
                 return self.shutdown(conf)
+            elif kind == "rate":
+                self.validate_envelope(request)
+                spec = self.validate_rate(request, conf)
+                if spec is None:
+                    self.state["profile"] = dante_profile_of(conf)
+                    self.step("validating", f"already at {running_rate(conf)} Hz (asked by {request.get('source')}); nothing restarted")
+                    return self.finish("done")
+                return self.change_rate(spec, conf, previous_text)
             elif kind == "profile":
                 target = self.validate(request, conf)
             else:
@@ -1812,6 +1996,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true",
                         help="validate the pending request against the live configuration and exit; no changes")
     parser.add_argument("--spool", default=str(SPOOL_DIR))
+    parser.add_argument("--rate-request", action="store_true",
+                        help=f"act on {DANTE_RATE_REQUEST} (the owner's or Inferno's rate request) instead of the spool")
     arguments = parser.parse_args(argv)
     stack = detect_stack()
     applier = (DanteApplier if stack == "dante" else Applier)(spool=Path(arguments.spool))
@@ -1828,6 +2014,20 @@ def main(argv: list[str] | None = None) -> int:
     if os.geteuid() != 0:
         print("run as root (the path unit does)", file=sys.stderr)
         return 2
+    # One operation at a time, whichever unit started this: the page's spool and
+    # the rate request both restart the endpoint, and must not do it at once.
+    import fcntl
+    Path(arguments.spool).mkdir(mode=0o755, exist_ok=True)
+    lock = open(Path(arguments.spool) / "apply.lock", "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    if arguments.rate_request:
+        if stack != "dante":
+            print("rate requests are the Dante stack's", file=sys.stderr)
+            return 2
+        result = applier.consume_rate_request()
+        print("no rate request pending" if result is None else
+              f"{result['id']}: {result['state']}{' — ' + result['error'] if result.get('error') else ''}")
+        return 0
     # Drain: live updates arrive about one a second, and a fresh process per
     # request is what tripped systemd's start burst limit on 2026-09-13. One
     # invocation takes every request that lands while it runs, bounded.
