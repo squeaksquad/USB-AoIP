@@ -95,7 +95,7 @@ int usage() {
 // the right number for the question it answers, which is whether the stage can
 // fit in a cycle at all. The maximum is the figure that decides that; a mean
 // hides exactly the cycle that would have missed.
-int benchmark(usb16x16::DspStage& stage, const std::size_t block, const std::size_t runs) {
+int benchmark(usb16x16::DspStage& stage, const std::size_t block, const std::size_t runs, const unsigned rate) {
     std::vector<float> buffer(block * kChannels);
     // Real signal rather than silence: an IIR fed zeros settles into denormals,
     // and the cost measured would be the denormal handling.
@@ -103,7 +103,7 @@ int benchmark(usb16x16::DspStage& stage, const std::size_t block, const std::siz
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
             buffer[frame * kChannels + channel] = static_cast<float>(
                 0.25 * std::sin(2.0 * M_PI * (55.0 * static_cast<double>(channel + 1)) *
-                                static_cast<double>(frame) / 48000.0));
+                                static_cast<double>(frame) / static_cast<double>(rate)));
         }
     }
     std::vector<double> spent;
@@ -116,8 +116,8 @@ int benchmark(usb16x16::DspStage& stage, const std::size_t block, const std::siz
     }
     std::sort(spent.begin(), spent.end());
     const double total = std::accumulate(spent.begin(), spent.end(), 0.0);
-    const double audio_us = static_cast<double>(block) / 48.0 * 1000.0;
-    std::cout << "{\"block\":" << block
+    const double audio_us = static_cast<double>(block) / static_cast<double>(rate) * 1.0e6;
+    std::cout << "{\"rate\":" << rate << ",\"block\":" << block
               << ",\"runs\":" << runs
               << ",\"audio_us\":" << audio_us
               << ",\"min_us\":" << spent.front()
@@ -224,7 +224,7 @@ int main(const int argc, char** const argv) {
               << (bypass ? " BYPASSED" : "") << '\n';
 
     if (bench > 0) {
-        return benchmark(stage, block, bench);
+        return benchmark(stage, block, bench, rate);
     }
 
     std::ifstream input(input_path, std::ios::binary);

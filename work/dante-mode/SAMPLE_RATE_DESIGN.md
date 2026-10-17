@@ -345,6 +345,14 @@ Extrapolated, **not measured**, as a share of one core's real time:
 | 88.2 / 96 kHz | 19 % | 34 % | 60 % |
 | 176.4 / 192 kHz | 38 % | 68 % | 120 % (misses the deadline) |
 
+MEASURED 2026-10-17 (RESULTS.md, "Sample rate, step 4b"): the table above
+was pessimistic. On the Pi the stage's arithmetic alone, heaviest preset, is
+7 % of the period at 48 kHz, 15 % at 96, 29 to 33 % at 192 (median to max),
+linear in the rate. With conversions and meters scaled the same way, about
+25 to 30 % at 96 kHz and 50 to 55 % at 192 kHz before the loop's other
+work. The worker thread (item 4) is probably not needed; an owner run at
+192 kHz decides.
+
 So 96 kHz probably fits as things are, with less margin than anything
 accepted so far, and 192 kHz does not fit on the loop thread. The plan, in
 order of risk (least first). Each item is a change on its own with its own

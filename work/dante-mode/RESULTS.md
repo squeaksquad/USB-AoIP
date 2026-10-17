@@ -5181,3 +5181,61 @@ check). Installing the start check means re-pinning its hash in
 `install-dante-startcheck.sh` (it is now 53ab187a; the installed one is
 058e9177). The page change needs a web-control reinstall to reach the Pi,
 and is inert there until step 4.
+
+## Sample rate, step 4b: the DSP stage's cost at every Dante rate, benched on the Pi; 192 kHz fits on the loop thread by arithmetic (2026-10-17 02:42-02:45 UTC)
+
+Operator's go to stop the endpoint for this. `usb16x16-dante` was stopped
+02:42:12 UTC and started 02:44:13 UTC (Statime left up). Start check
+`state=ok` at 02:45:18 (6,016 frames a second, no restart), `NRestarts` 0,
+both directions linked in 0.4 s. The installed owner is unchanged. No noise
+probe was taken on this start (the operator's call, before any measurement).
+
+What ran: `usb16x16-dsp-offline --bench` built on the Pi from this
+repository's step-3 core (`g++ -O2`, the owner's flags; binary 99ba5309,
+`bridge_core.cpp` ef6e1f4e, `dsp_offline.cpp` 54580af3, header eeef6916).
+The bench now takes the rate for its duty figure and its test tone. It was
+in `~/usb-16x16-work/ratebench-20261017/`, apart from every staged tree.
+Each preset was compiled on the Mac at each rate; the block is 1 ms of
+audio at that rate (44, 48, 88, 96, 176, 192 frames); 20,000 blocks;
+`taskset -c 3`; unprivileged (SCHED_OTHER), governor `performance`.
+Sixteen channels of sines, so no denormals. The stage's arithmetic only:
+no S32 conversion (12 µs a 48-frame block, measured 2026-10-11), no meters,
+no transport, buffers in cache. Evidence:
+`outputs/dsp-verify/ratebench-20261017T024212Z.jsonl`.
+
+Share of real time (median / p99 / max over 20,000 blocks of 1 ms):
+
+| Preset (sections) | 44.1 | 48 | 88.2 | 96 | 176.4 | 192 kHz |
+|---|---|---|---|---|---|---|
+| transparent, minimal (256) | 5.4 / 5.5 / 6.7 % | 6.0 / 6.1 / * | 10.7 / 10.9 / 13.2 | 11.6 / 11.8 / 14.4 | 21.7 / 21.9 / * | 23.6 / 23.8 / 27.0 |
+| loaded, minimal (308) | 6.6 / 6.8 / * | 7.2 / 7.3 / 10.2 | 13.1 / 13.3 / 15.9 | 14.2 / 14.4 / 17.6 | 26.0 / 26.2 / 29.1 | 28.2 / 28.4 / 32.0 |
+| loaded, fixed (308) | 6.8 / 6.9 / 10.4 | 7.3 / 7.5 / 9.5 | 13.4 / 13.6 / 16.4 | 14.8 / 14.9 / 17.4 | 26.6 / 26.9 / 29.9 | 29.4 / 29.7 / 32.7 |
+| default, fixed (302, mostly unity) | 6.6 / 6.8 / 9.3 | 7.3 / 7.4 / 9.6 | 13.2 / 13.3 / 16.4 | 14.3 / 14.5 / 16.9 | 26.4 / 26.6 / 30.2 | 28.3 / 28.5 / 31.5 |
+
+\* one block in 20,000 took 3.2 to 5.4 ms: a preemption of an unprivileged
+process, not the arithmetic (the p99 beside it is unchanged). The owner's
+loop is FIFO 79.
+
+Read:
+
+- **Cost is linear in the rate** to within a few per cent: 192 kHz is 3.9 to
+  4.0 times 48 kHz for every preset. The design's table (written from the
+  in-service `dsp_us`, which includes conversions and scheduling) was
+  pessimistic. At 192 kHz the heaviest preset's arithmetic takes 29 to 33 %
+  of the period, not the 68 to 120 % extrapolated.
+- **The default preset in the fixed shape costs as much as the loaded one**,
+  though nearly all of its 302 sections are unity: every user preset pays
+  for its empty band slots. Skipping unity sections (design, DSP item 2) is
+  the largest saving available for real presets.
+- **The rest of the loop scales too.** At 192 kHz the conversions would be
+  about 48 µs (4 x 12) and the three meter taps about 180 to 220 µs (4 x the
+  46 to 54 µs measured in service), so DSP plus meters plus conversions is
+  about 50 to 55 % of each period at 192 kHz, before the loop's own Inferno
+  and gadget work and its jitter. 96 kHz: about 25 to 30 %. The meters
+  become the second-largest cost at high rates.
+
+So the worker thread (design, DSP item 4) does not look necessary for the
+stage's arithmetic at any rate. Whether 192 kHz fits in service depends on
+the whole loop, which only an owner run at 192 kHz can show. Unity skip
+first; the meters' cost per frame (one pass over 16 channels per tap) is
+next to look at.
