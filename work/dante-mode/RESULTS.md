@@ -5607,3 +5607,128 @@ Owed on the Pi, the operator's: build the plugin with 0001 to 0005 and the
 owner with `--rate-request-file` (service stopped); install applier, web
 service, the two units, the arbiter config and `RATE_REQUESTS=1`; then Dante
 Controller's set to 48 kHz read through to "nothing restarted" in a receipt.
+
+## Step-4 candidate (owner c8b484ac, plugin c6b012ae): battery PASS but the hour soak FAILED on one 64-frame all-channel hole the Mac flagged; patch 0005 seen to hand a 96 kHz set to the file; installers staged (2026-10-17 12:04-14:36 UTC)
+
+Operator's choice (option 1: one candidate with step 4, then one installer set).
+
+**Builds, service stopped 12:04:18 UTC.**
+- Plugin **c6b012ae** by `build-patched.sh xrun-option-retry1-confirm-rate-arbiter
+  0001 0002 0003 0004 0005` (pinned tree and stock build restored by the
+  script; 90 warnings, as every build of this tree, none in 0005's code).
+- Patch 0005's two Rust unit tests passed on the Pi, run in a separate
+  copy and target directory (`~/usb-16x16-work/inferno-test-0005/`).
+- Owner **c8b484ac** (`main.cpp` 2b63918c, core bbaec39e, `rate_check.hpp`
+  326b20f7), the five owner test programs passing on the Pi.
+
+My wait for the Rust test build matched its own command line and never
+ended, so the endpoint stayed stopped about 50 minutes longer than needed.
+
+**Candidate, 12:56:58 UTC**, in the form to install:
+- plugin c6b012ae;
+- `config/asound-inferno-owner-rate48-arbiter.conf` (0a1688e1);
+- the service's arguments plus `--rate-request-file
+  /run/usb16x16-dante/rate-request`.
+
+`START ... rate=48000`, `USBOPEN ... host_rate=match`, linked in 0.4 s.
+Gadget restart 12:57:12 for the anchor; return flows whole (6,016 twice);
+Ferrofish REACHABLE (`outputs/latency/rate4-candidate-*`):
+
+- Noise probe at 32 frames: **clean**.
+- 600 s soak: **PASS** (longest zero run 1).
+- Four loaded 800-impulse runs: **all 379, spread 0, `daw_timeline` 567
+  (11.812 ms)**.
+- 3,600 s soak from 13:23:41: **FAIL**. One zero run of 64 frames on all
+  sixteen channels at 3,473.6 s (about 14:21:35 UTC), with
+  `inputDiscontinuities=1` and `outputDiscontinuities=1`; the longest run
+  everywhere else is 1. The owner saw nothing in that minute: worst loop gap
+  1,019 us, no resync, no lost frames, no overflow, no new fault, return
+  depth 47 to 62, frame counts equal both ways. 64 frames is two of the
+  Mac's 32-frame buffers, on every channel, coinciding with CoreAudio's own
+  discontinuity flags on input and output. That reads as the Mac missing
+  two I/O cycles in both directions (the class of event recorded in the
+  memory's Mac USB hole notes), not as the endpoint. It is still a failure
+  by the battery's rule, so this candidate is not ACCEPTED-ready on its own
+  battery; the installed-form battery has to show the hour again.
+- 400 loaded impulses afterwards: all 379.
+
+Owner over 89 minutes (`outputs/latency/rate4-candidate-owner-20261017T125658Z.log`):
+- worst loop gap 1,095 µs after the first two minutes (1,164 in the
+  first), no resync, nothing lost, no network error, no re-prime, no
+  overflow;
+- return depth at least 45 after the first two minutes;
+- meters at most 81.6 µs in one minute (41.9 this morning);
+- no `USBRATE` line;
+- one playback fault and a detach, both the gadget restart.
+
+**Not seen by any candidate run (procedure gap, not these builds):** the
+launcher has no runtime directory, so with the service stopped
+`/run/usb16x16-dante/` does not exist and the candidate's meter file (and
+here its request file) cannot be written. Meters are computed (their cost
+is in every `METER` line) but not published. This has been so since the
+meter tap first ran under the launcher. The installed-form battery is where
+the file is exercised.
+
+**Patch 0005 on the device (14:26-14:28 UTC).** The candidate was
+restarted on a test copy of the config offering `48000,96000`, with
+`RATE_REQUEST_FILE` in `/dev/shm`. Three sets were then sent from the Mac's
+Dante interface to the Pi's settings port only, in Dante Controller's
+captured packet form (`scratchpad/set_pi_rate.py`, from Dante Switcher's
+`dvs_set_rate.py`):
+- **96000:** Inferno logged "handed to the arbiter" and wrote
+  `rate=96000 source=dante from=169.254.26.52 at=1792247234` by rename,
+  with no temporary file left.
+- **48000:** acknowledged ("not acted on (running at 48000)").
+- **44100:** refused ("not a supported rate").
+
+The file's mtime shows the second and third sets did not write. The rate
+never changed, and nothing consumed the file (the arbiter units are not
+installed). The line parses with the applier's `parse_rate_request`.
+`outputs/latency/rate4-offer96-test-owner-20261017T142653Z.log`. One file
+is left behind, owned by the service user in sticky `/dev/shm`
+(`/dev/shm/usb16x16-rate-request-test`); it goes at the next reboot.
+
+**Service back 14:27:50 UTC** (owner 62879558): start check `state=ok`
+(6,016) at 14:28:52. **Control on the installed owner, same day:**
+- gadget restart 14:28:53, return flows whole;
+- noise probe clean;
+- 800 loaded impulses **364, spread 8** (356 to 364, score 0.849,
+  `daw_timeline` 552).
+
+So today's anchors draw high whoever owns them (installed 364, candidates
+363 and 379), and the candidates are not the cause of the level. The
+installed owner's spread 8, the dropped-impulse signature, was not seen on
+either candidate.
+
+**Staged, nothing installed** (sources copied to the Pi; every pin checked
+there against the staged source, and every replaced file against what is
+installed):
+- `work/web-control/install-web-control.sh`: usb16x16-web 1.6.0
+  (6b98e7cf), usb16x16-apply 1.5.0 with the rate kind (4a4aef82), and the
+  offline runner 4492a19c. That runner is the unity-skip core with
+  `--rate`; `run-headtohead.sh` rebuilt it in place this morning, so the
+  old pin 8469c2e8 would now refuse.
+- `work/dante-mode/service/install-dante-rate-arbiter.sh`, with `rollback`:
+  - owner 62879558 -> c8b484ac;
+  - plugin d3a6b40a -> c6b012ae;
+  - Inferno config 7beabf1a -> 0a1688e1;
+  - start wrapper 882f48ac -> a6c3a197;
+  - `transport.conf` 821bc306 -> 1434f79f (`transport-rate-requests.conf`:
+    `RATE_REQUESTS=1`);
+  - the two rate units, new, path unit enabled.
+
+  It refuses unless the installed applier has `--rate-request`.
+- `work/web-ui/stage-page.sh`: copies the page and its compiler modules to
+  the served directory. It refuses unless web 1.6 is installed, because
+  the new page's six-artifact requests are larger than 1.5.0 accepts.
+
+Install order (the operator's sudo):
+1. On the Pi: `cd ~/usb-16x16-work/web-control && sudo ./install-web-control.sh`,
+   then `sudo systemctl restart usb16x16-web`.
+2. From the Mac: `work/web-ui/stage-page.sh`.
+3. On the Pi: `cd ~/usb-16x16-work/dante-mode/service && sudo ./install-dante-rate-arbiter.sh`.
+4. `sudo systemctl restart usb16x16-dante`, a gadget restart, then the
+   installed-form battery and hour.
+
+Rollback: `install-dante-rate-arbiter.sh rollback`; the web-control
+installer's own rollback.

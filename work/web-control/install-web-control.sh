@@ -13,6 +13,12 @@
 # Since 1.4.0 (2026-10-11) the same program serves the Dante service when
 # usb16x16-dante.service is the unit enabled at boot: it rewrites
 # /etc/usb16x16/dante/owner.conf and restarts that unit instead (its header).
+# 2026-10-17: applier 1.5.0 adds the Dante rate kind (usb16x16-apply
+# --rate-request, run by ../dante-mode/service/usb16x16-dante-rate.path) and
+# one DSP artifact per rate; usb16x16-web 1.6.0 takes every rate's artifact and
+# reports the running rate; the offline runner is the unity-skip core with
+# --rate (rebuilt in dsp-verify by run-headtohead.sh that day). Install this
+# before ../dante-mode/service/install-dante-rate-arbiter.sh.
 # usb16x16-web 1.5.0 reads the same stack: the owner's configuration, its
 # installed presets, its journal lines and its meter and live files under
 # /run/usb16x16-dante/, and tells the page which stack it is on so the page's
@@ -50,11 +56,11 @@ preset_dir=/home/bdimaio/usb-16x16-work/web-presets
 static_dir=/home/bdimaio/usb-16x16-work/web-ui
 auth_file=/home/bdimaio/usb-16x16-work/web-auth
 
-expected_service_sha256=28ba45016fe4aca472d2eccfbe63af1e461daabe08cfcf530eaaebec197a2875
+expected_service_sha256=6b98e7cfc171fb9c41d113dcdd1ad015f19b649b9289626a8e25cf4d4db71f8c
 expected_unit_sha256=f7c7d48cab8b12b9b7ed9f5a920efc497e9874760cc9434c979c25ee68b59761
-expected_apply_sha256=e453d50fedc58f2b4da852def417f1ad17fb93b6b68ead021239f368e06ecd49
+expected_apply_sha256=4a4aef8233a8bd07ba9cd606f575455042915a9c9a5f09a78a292fdfa296bffe
 expected_apply_unit_sha256=23cb5b2e371fa47af288f4f4867bd4c4b55b9f0d2133ea08ed864a97697f9dd2
-expected_offline_sha256=8469c2e83b617b7c39918ecf7a86f3032cda91de48eb926569cc061c416c6641
+expected_offline_sha256=4492a19c0bcfae838cd6bac88fb38867690f88ea9d4ec2b91a9fec50ec467acf
 expected_apply_path_sha256=6d53b053014a3cb7203de36f9e7472d370ccced6aee2c1d9a6d309b2d35bec61
 
 sha256_of() { sha256sum "$1" | awk '{print $1}'; }
