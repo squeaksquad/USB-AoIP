@@ -1,0 +1,157 @@
+{
+  "format": "f64le",
+  "reference": "camilladsp",
+  "candidate": "bridge",
+  "frames": 16384,
+  "referenceFrames": 16384,
+  "candidateFrames": 16384,
+  "channels": [
+    {
+      "channel": 1,
+      "peakDbfs": -12.17,
+      "worstDiffDbfs": -168.372,
+      "worstDiffRelDb": -156.202,
+      "worstAtFrame": 64,
+      "differingSamples": 16320,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 2,
+      "peakDbfs": -61.175,
+      "worstDiffDbfs": -210.792,
+      "worstDiffRelDb": -149.617,
+      "worstAtFrame": 332,
+      "differingSamples": 16320,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 3,
+      "peakDbfs": -12.132,
+      "worstDiffDbfs": -174.644,
+      "worstDiffRelDb": -162.512,
+      "worstAtFrame": 64,
+      "differingSamples": 16320,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 4,
+      "peakDbfs": -60.327,
+      "worstDiffDbfs": -210.724,
+      "worstDiffRelDb": -150.398,
+      "worstAtFrame": 164,
+      "differingSamples": 16320,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 5,
+      "peakDbfs": -12.132,
+      "worstDiffDbfs": -174.644,
+      "worstDiffRelDb": -162.512,
+      "worstAtFrame": 64,
+      "differingSamples": 16320,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 6,
+      "peakDbfs": -60.327,
+      "worstDiffDbfs": -210.724,
+      "worstDiffRelDb": -150.398,
+      "worstAtFrame": 164,
+      "differingSamples": 16320,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 7,
+      "peakDbfs": -12.635,
+      "worstDiffDbfs": -164.946,
+      "worstDiffRelDb": -152.311,
+      "worstAtFrame": 64,
+      "differingSamples": 16320,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 8,
+      "peakDbfs": -53.621,
+      "worstDiffDbfs": -198.81,
+      "worstDiffRelDb": -145.189,
+      "worstAtFrame": 304,
+      "differingSamples": 16320,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 9,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 10,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 11,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 12,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 13,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 14,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 15,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 16384
+    },
+    {
+      "channel": 16,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 16384
+    }
+  ],
+  "worstRelativeDb": -145.189,
+  "worstRelativeChannel": 8,
+  "identical": false
+}

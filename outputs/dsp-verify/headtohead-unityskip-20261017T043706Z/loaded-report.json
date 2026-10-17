@@ -1,0 +1,179 @@
+{
+  "preset": "Immersive · stereo subs",
+  "shape": "minimal",
+  "rate": 48000,
+  "internalChannels": 26,
+  "channelMap": [
+    {
+      "index": 0,
+      "kind": "main",
+      "input": 0
+    },
+    {
+      "index": 1,
+      "kind": "main",
+      "input": 1
+    },
+    {
+      "index": 2,
+      "kind": "main",
+      "input": 2
+    },
+    {
+      "index": 3,
+      "kind": "main",
+      "input": 4
+    },
+    {
+      "index": 4,
+      "kind": "main",
+      "input": 5
+    },
+    {
+      "index": 5,
+      "kind": "main",
+      "input": 6
+    },
+    {
+      "index": 6,
+      "kind": "main",
+      "input": 7
+    },
+    {
+      "index": 7,
+      "kind": "main",
+      "input": 8
+    },
+    {
+      "index": 8,
+      "kind": "main",
+      "input": 9
+    },
+    {
+      "index": 9,
+      "kind": "main",
+      "input": 10
+    },
+    {
+      "index": 10,
+      "kind": "main",
+      "input": 11
+    },
+    {
+      "index": 11,
+      "kind": "main",
+      "input": 12
+    },
+    {
+      "index": 12,
+      "kind": "main",
+      "input": 13
+    },
+    {
+      "index": 13,
+      "kind": "main",
+      "input": 14
+    },
+    {
+      "index": 14,
+      "kind": "bass",
+      "input": 0,
+      "lfe": false
+    },
+    {
+      "index": 15,
+      "kind": "bass",
+      "input": 1,
+      "lfe": false
+    },
+    {
+      "index": 16,
+      "kind": "bass",
+      "input": 2,
+      "lfe": false
+    },
+    {
+      "index": 17,
+      "kind": "bass",
+      "input": 3,
+      "lfe": true
+    },
+    {
+      "index": 18,
+      "kind": "bass",
+      "input": 4,
+      "lfe": false
+    },
+    {
+      "index": 19,
+      "kind": "bass",
+      "input": 5,
+      "lfe": false
+    },
+    {
+      "index": 20,
+      "kind": "bass",
+      "input": 6,
+      "lfe": false
+    },
+    {
+      "index": 21,
+      "kind": "bass",
+      "input": 7,
+      "lfe": false
+    },
+    {
+      "index": 22,
+      "kind": "bass",
+      "input": 8,
+      "lfe": false
+    },
+    {
+      "index": 23,
+      "kind": "bass",
+      "input": 9,
+      "lfe": false
+    },
+    {
+      "index": 24,
+      "kind": "bass",
+      "input": 10,
+      "lfe": false
+    },
+    {
+      "index": 25,
+      "kind": "bass",
+      "input": 11,
+      "lfe": false
+    }
+  ],
+  "filterCount": 282,
+  "biquadCount": 256,
+  "placeholderCount": 0,
+  "crossoverCount": 26,
+  "headroomDb": -18,
+  "worstCaseDbfs": [
+    -18,
+    -18,
+    -18,
+    -2.43,
+    -18,
+    -18,
+    -18,
+    -18,
+    -18,
+    -18,
+    -18,
+    -18,
+    -2.43,
+    -18,
+    -18,
+    -18
+  ],
+  "warnings": [],
+  "delayLatency": {
+    "samples": 0,
+    "ms": 0,
+    "text": null
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "format": "s32le",
+  "reference": "camilladsp",
+  "candidate": "bridge",
+  "frames": 19000,
+  "referenceFrames": 19000,
+  "candidateFrames": 19000,
+  "channels": [
+    {
+      "channel": 1,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 1000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 2,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 2000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 3,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 3000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 4,
+      "peakDbfs": -73.154,
+      "worstDiffDbfs": -186.639,
+      "worstDiffRelDb": -113.484,
+      "worstAtFrame": 1001,
+      "differingSamples": 5937,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 5,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 5000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 6,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 6000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 7,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 7000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 8,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 8000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 9,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 9000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 10,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 10000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 11,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 11000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 12,
+      "peakDbfs": -24.149,
+      "worstDiffDbfs": -174.597,
+      "worstDiffRelDb": -150.448,
+      "worstAtFrame": 12000,
+      "differingSamples": 1199,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 13,
+      "peakDbfs": -73.154,
+      "worstDiffDbfs": -186.639,
+      "worstDiffRelDb": -113.484,
+      "worstAtFrame": 2001,
+      "differingSamples": 5724,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 14,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 15,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 19000
+    },
+    {
+      "channel": 16,
+      "peakDbfs": null,
+      "worstDiffDbfs": null,
+      "worstDiffRelDb": null,
+      "worstAtFrame": null,
+      "differingSamples": 0,
+      "totalSamples": 19000
+    }
+  ],
+  "worstRelativeDb": -113.484,
+  "worstRelativeChannel": 4,
+  "identical": false
+}

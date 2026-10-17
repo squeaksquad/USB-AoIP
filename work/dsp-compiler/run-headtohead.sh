@@ -50,16 +50,22 @@ mkdir -p "$out_dir"
 # ---------------------------------------------------------------- compile
 compile="$repo_root/work/dsp-compiler/usb16x16-dsp-compile"
 presets="$repo_root/work/dsp-compiler/verify-presets.mjs"
-# name:format -- the format each preset's comparison runs in.
-cases=(crossover:f64le phones:s32le loaded:s32le)
+# name:format[:shape] -- the format each preset's comparison runs in, and the
+# compiler's shape (minimal unless given). default:s32le:fixed is the shipped
+# layout in the fixed shape: 256 empty band slots as unity sections, which the
+# bridge skips since 2026-10-17 and CamillaDSP runs as Free biquads.
+cases=(crossover:f64le phones:s32le loaded:s32le default:s32le:fixed)
+case_name() { local preset=${1%%:*} rest=${1#*:}; [[ $rest == *:fixed ]] && print -r -- "$preset-fixed" || print -r -- "$preset"; }
+case_format() { local rest=${1#*:}; print -r -- "${rest%%:*}"; }
 for entry in $cases; do
-  name=${entry%%:*}; format=${entry##*:}
-  node "$presets" "$name" > "$out_dir/$name.json" || { print -r -- "exit=3"; exit 3; }
+  preset=${entry%%:*}; name=$(case_name $entry); format=$(case_format $entry)
+  shape=$([[ $entry == *:fixed ]] && echo fixed || echo minimal)
+  node "$presets" "$preset" > "$out_dir/$name.json" || { print -r -- "exit=3"; exit 3; }
   camilla_format=$([[ $format == f64le ]] && echo F64_LE || echo S32_LE)
   "$compile" "$out_dir/$name.json" -o "$out_dir/$name.yml" \
     --bridge "$out_dir/$name.dsp" --report "$out_dir/$name-report.json" \
     --in "$pi_dir/$name-in.raw" --raw "$pi_dir/$name-camilla.raw" \
-    --format "$camilla_format" >/dev/null 2>&1
+    --format "$camilla_format" --shape "$shape" >/dev/null 2>&1
 done
 
 # ---------------------------------------------------------------- build
@@ -68,10 +74,24 @@ pi "mkdir -p $pi_dir/src $pi_dir/include/usb16x16 $pi_dir/tests"
 put "$repo_root/work/phase4-bridge/CMakeLists.txt" "$pi_dir/"
 put "$repo_root/work/phase4-bridge/src/bridge_core.cpp" "$pi_dir/src/"
 put "$repo_root/work/phase4-bridge/src/dsp_offline.cpp" "$pi_dir/src/"
+# Every source CMakeLists.txt names, or the configure step fails and the build
+# directory keeps whatever an earlier run left (2026-10-17: a run read the
+# September binaries this way).
+put "$repo_root/work/phase4-bridge/src/meter_bench.cpp" "$pi_dir/src/"
+put "$repo_root/work/phase4-bridge/src/main.cpp" "$pi_dir/src/"
 put "$repo_root/work/phase4-bridge/include/usb16x16/bridge_core.hpp" "$pi_dir/include/usb16x16/"
 put "$repo_root/work/phase4-bridge/tests/bridge_tests.cpp" "$pi_dir/tests/"
-build_log=$(pi "cd $pi_dir && cmake -S . -B bridge-build -DCMAKE_BUILD_TYPE=Release >/dev/null && cmake --build bridge-build --target usb16x16-dsp-offline usb16x16_bridge_tests 2>&1 | tail -4")
+pi "rm -f $offline $pi_build/usb16x16_bridge_tests"
+build_log=$(pi "cd $pi_dir && cmake -S . -B bridge-build -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -3 && cmake --build bridge-build --target usb16x16-dsp-offline usb16x16_bridge_tests 2>&1 | tail -4; echo build=\$?")
 print -r -- "$build_log"
+# Both binaries must exist now, made by this build from the sources just copied.
+built=$(pi "cd $pi_dir && [ -x $offline ] && [ -x $pi_build/usb16x16_bridge_tests ] && [ $offline -nt src/bridge_core.cpp ] && echo yes")
+if [[ $built != yes ]]; then
+  print -r -- "the build did not produce fresh binaries; nothing is compared"
+  print -r -- "exit=6"
+  exit 6
+fi
+print -r -- "core under test: bridge_core.cpp $(pi "sha256sum $pi_dir/src/bridge_core.cpp" | cut -c1-8), runner $(pi "sha256sum $offline" | cut -c1-8)"
 print -r -- "--- the core suite, on the Pi"
 pi "$pi_build/usb16x16_bridge_tests" || { print -r -- "core tests failed on the Pi"; print -r -- "exit=5"; exit 5; }
 
@@ -79,14 +99,14 @@ for file in bridge-engine-shim compare-engines.py verify-crossover.py verify-run
   put "$repo_root/work/dsp-compiler/$file" "$pi_dir/"
 done
 for entry in $cases; do
-  name=${entry%%:*}
+  name=$(case_name $entry)
   put "$out_dir/$name.yml" "$pi_dir/"
   put "$out_dir/$name.dsp" "$pi_dir/"
 done
 
 # ---------------------------------------------------------------- run
 for entry in $cases; do
-  name=${entry%%:*}; format=${entry##*:}
+  name=$(case_name $entry); format=$(case_format $entry)
   print -r -- "--- $name ($format)"
   # The input is written once, by whichever harness generates it, and both
   # engines are then given that same file. Nothing regenerates it in between.

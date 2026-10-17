@@ -1,0 +1,412 @@
+{
+  "frames": 19000,
+  "amplitude": 1073741824,
+  "outputs": [
+    {
+      "channel": 0,
+      "events": [
+        {
+          "sample": 1000,
+          "fromInput": 0,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 1191,
+          "fromInput": 0,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 1458,
+          "fromInput": 0,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 1,
+      "events": [
+        {
+          "sample": 2000,
+          "fromInput": 1,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 2191,
+          "fromInput": 1,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 2458,
+          "fromInput": 1,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 2,
+      "events": [
+        {
+          "sample": 3000,
+          "fromInput": 2,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 3191,
+          "fromInput": 2,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 3458,
+          "fromInput": 2,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 3,
+      "events": [
+        {
+          "sample": 1276,
+          "fromInput": 0,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        },
+        {
+          "sample": 3276,
+          "fromInput": 2,
+          "ratio": 0.00022,
+          "db": -73.134,
+          "inverted": false
+        },
+        {
+          "sample": 4184,
+          "fromInput": 3,
+          "ratio": 0.000332,
+          "db": -69.583,
+          "inverted": false
+        },
+        {
+          "sample": 5276,
+          "fromInput": 4,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        },
+        {
+          "sample": 7276,
+          "fromInput": 6,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        },
+        {
+          "sample": 9276,
+          "fromInput": 8,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        },
+        {
+          "sample": 11276,
+          "fromInput": 10,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "channel": 4,
+      "events": [
+        {
+          "sample": 5000,
+          "fromInput": 4,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 5191,
+          "fromInput": 4,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 5458,
+          "fromInput": 4,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 5,
+      "events": [
+        {
+          "sample": 6000,
+          "fromInput": 5,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 6191,
+          "fromInput": 5,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 6458,
+          "fromInput": 5,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 6,
+      "events": [
+        {
+          "sample": 7000,
+          "fromInput": 6,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 7191,
+          "fromInput": 6,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 7458,
+          "fromInput": 6,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 7,
+      "events": [
+        {
+          "sample": 8000,
+          "fromInput": 7,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 8191,
+          "fromInput": 7,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 8458,
+          "fromInput": 7,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 8,
+      "events": [
+        {
+          "sample": 9000,
+          "fromInput": 8,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 9191,
+          "fromInput": 8,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 9458,
+          "fromInput": 8,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 9,
+      "events": [
+        {
+          "sample": 10000,
+          "fromInput": 9,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 10191,
+          "fromInput": 9,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 10458,
+          "fromInput": 9,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 10,
+      "events": [
+        {
+          "sample": 11000,
+          "fromInput": 10,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 11191,
+          "fromInput": 10,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 11458,
+          "fromInput": 10,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 11,
+      "events": [
+        {
+          "sample": 12000,
+          "fromInput": 11,
+          "ratio": 0.124042,
+          "db": -18.129,
+          "inverted": false
+        },
+        {
+          "sample": 12191,
+          "fromInput": 11,
+          "ratio": 0.000406,
+          "db": -67.822,
+          "inverted": false
+        },
+        {
+          "sample": 12458,
+          "fromInput": 11,
+          "ratio": -0.0001,
+          "db": -79.989,
+          "inverted": true
+        }
+      ]
+    },
+    {
+      "channel": 12,
+      "events": [
+        {
+          "sample": 2276,
+          "fromInput": 1,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        },
+        {
+          "sample": 3275,
+          "fromInput": 2,
+          "ratio": 0.000222,
+          "db": -73.079,
+          "inverted": false
+        },
+        {
+          "sample": 4184,
+          "fromInput": 3,
+          "ratio": 0.000332,
+          "db": -69.583,
+          "inverted": false
+        },
+        {
+          "sample": 6276,
+          "fromInput": 5,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        },
+        {
+          "sample": 8276,
+          "fromInput": 7,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        },
+        {
+          "sample": 10276,
+          "fromInput": 9,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        },
+        {
+          "sample": 12276,
+          "fromInput": 11,
+          "ratio": 0.00044,
+          "db": -67.134,
+          "inverted": false
+        }
+      ]
+    },
+    {
+      "channel": 13,
+      "events": []
+    },
+    {
+      "channel": 14,
+      "events": []
+    },
+    {
+      "channel": 15,
+      "events": []
+    }
+  ]
+}

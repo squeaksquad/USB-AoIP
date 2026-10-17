@@ -380,7 +380,9 @@ check:
    cost presets without unity 40 to 48 %; the corrected form (48f871e,
    running-section lists, sample by value) is exact and faster for every
    preset at every rate on the Pi: default 3.4 to 3.5 times, loaded 5 to 7 %,
-   transparent 9 to 10 % (RESULTS.md, 2026-10-17 04:19). Head-to-head owed.
+   transparent 9 to 10 % (RESULTS.md, 2026-10-17 04:19). Head-to-head
+   against CamillaDSP on the Pi (04:38): every figure identical to the
+   pre-skip core and to September's, the fixed shape included.
 3. **Two channels at a time.** Run the per-channel chains for output pairs
    as NEON double2. Each channel's arithmetic order is unchanged, so the
    output is the same sample for sample; the head-to-head harness proves

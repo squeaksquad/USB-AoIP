@@ -1,0 +1,7 @@
+This run did not test the core it was meant to. CMake's configure step failed on
+the Pi (src/meter_bench.cpp was not copied), and run-headtohead.sh carried on
+with the binaries already in bridge-build/ from 2026-09-10. Its bridge side is
+therefore the pre-skip core. It is kept because, read that way, it is a
+same-inputs control: every figure in it equals the corrected run's
+(headtohead-unityskip-20261017T043847Z). See work/dante-mode/RESULTS.md,
+2026-10-17 04:37-04:40 UTC.

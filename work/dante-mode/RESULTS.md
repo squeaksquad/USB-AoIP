@@ -5411,3 +5411,50 @@ not report `RATE`). Step 4's arbiter adds it, and then the commit's
 excluded rate follows it. The table's per-preset `rates` list is not shown on
 the page yet. Installing any of this means new hashes in
 `install-web-control.sh` and the Dante installers, and the operator's sudo.
+
+## CamillaDSP head-to-head on the unity-skip core: every figure unchanged; the first run read stale binaries (2026-10-17 04:37-04:40 UTC)
+
+Operator's go. `work/dsp-compiler/run-headtohead.sh` builds the bridge core
+and offline runner on the Pi, runs the core test suite there, and compares
+CamillaDSP 4.1.3 with the bridge's stage sample by sample on the same inputs.
+A fourth case was added for this: the shipped layout (`default`) in the fixed
+shape, whose 256 empty band slots are unity sections the bridge now skips and
+CamillaDSP runs as Free biquads.
+
+**The first run (endpoint stopped 04:37:00, started 04:37:26) did not test
+the new core.** CMake's configure step failed: the script never copied
+`src/meter_bench.cpp`, which `CMakeLists.txt` names. It then carried on with
+the binaries left in `bridge-build/` from 2026-09-10 (timestamps checked).
+Its figures equal the September baseline exactly, as stale binaries would.
+The script now copies every source `CMakeLists.txt` names, deletes the old
+binaries first, treats a build without fresh binaries as fatal (exit 6), and
+prints the hashes of the core it tested. The stale run's directory is kept
+with a note in it: it is the pre-skip core on the same inputs, which makes
+it a control. That start's check read `ok` at 04:38:31 (6,015 frames a
+second, no restart).
+
+**The corrected run (endpoint stopped 04:38:42, started 04:39:15):** fresh
+build of core bbaec39e (48f871e), runner 4492a19c. The core test suite on
+the Pi passed, unity-skip tests included. CamillaDSP against the bridge,
+worst difference relative to the signal that made it:
+
+| Case | Frames | This run | Pre-skip core, same inputs | September baseline |
+|---|---|---|---|---|
+| crossover (f64le) | 16,384 | -145.189 dB | -145.189 | -145.189 |
+| phones (s32le) | 19,000 | -151.716 | -151.716 | -151.716 |
+| loaded (s32le) | 19,000 | -114.073 | -114.073 | -114.073 |
+| default, fixed shape (s32le, 256 unity) | 19,000 | -113.484 | -113.484 | (new case) |
+
+Every per-channel figure (peak, worst difference, samples differing) is
+identical across the three, case by case. The -114 dB worst cases are on
+outputs peaking near -70 dBFS, where the absolute difference is -187 dBFS,
+as in September. Recovers 0, AES67 service inactive throughout. Start check
+after the restart `ok` at 04:40:20 (6,016 frames a second, no restart),
+`NRestarts` 0; installed owner unchanged, no noise probe. Evidence:
+`outputs/dsp-verify/headtohead-unityskip-20261017T043847Z/` (and the
+control beside it).
+
+So the unity-skip core is byte-identical to the previous one on the Mac and
+on the Pi, and indistinguishable from it against CamillaDSP. What is left
+before it can be part of a candidate is the owner built with it and the
+battery and hour.
