@@ -13612,3 +13612,41 @@ the same files passed clean (356 / 544). Everything else is the
 newest first: `install-dante-rate-status.sh rollback`, then those of the
 2026-10-14 and 2026-10-13 entries. Next: steps 3 and 4 (a rate-aware
 stack and the arbiter), and step 5's experiment on the Mac.
+
+**INSTALLED 2026-10-17 (operator, 16:22 and 17:12 UTC), and MEASURED
+17:13-18:42 UTC: sample-rate steps 3 and 4, the rate-aware stack and the
+arbiter, still offering 48 kHz only.** Record `work/dante-mode/RESULTS.md`,
+the 2026-10-17 sections; design `work/dante-mode/SAMPLE_RATE_DESIGN.md`
+(steps 3, 4, 4b, 4c, 4d, and "Transparent switching"). Installed:
+- by `work/web-control/install-web-control.sh`: usb16x16-web 1.6.0
+  (6b98e7cf), usb16x16-apply 1.5.0 (4a4aef82; the rate kind and one DSP
+  artifact per rate), offline runner 4492a19c (the unity-skip core);
+- the page, by `work/web-ui/stage-page.sh`;
+- by `work/dante-mode/service/install-dante-rate-arbiter.sh`: owner
+  c8b484ac (`--rate`, the gadget-rate check, `--rate-request-file`, the
+  unity-skip DSP core), Inferno plugin c6b012ae (patches 0001 to 0005),
+  config 0a1688e1 (`RATE_REQUEST_FILE`), start wrapper a6c3a197 (RATE,
+  RATE_REQUESTS), `transport.conf` 1434f79f (`RATE_REQUESTS=1`), and
+  `usb16x16-dante-rate.path` / `.service`.
+
+At 48 kHz nothing audible changes: a set to 48 is acknowledged and
+restarts nothing, any other rate is refused.
+
+Battery on the 17:13:55 UTC anchor of the 17:12:11 start: noise probe
+clean; 600 s soak PASS; four loaded 800-impulse runs all 345,
+`daw_timeline` 533 (11.104 ms); 3,600 s soak PASS; 400 impulses all 345.
+Owner: worst gap 1,100 µs after the gadget restart's minute, no resync but
+that restart's 29 frames, meters written and at most 56.3 µs.
+
+As a candidate earlier the same day the set passed everything except its
+hour, which failed on one 64-frame all-channel hole flagged by CoreAudio
+on both directions, with nothing in the owner's counters. The installed
+hour above is clean. Awaiting the operator's ACCEPTED.
+
+Rollbacks, newest first:
+- `install-dante-rate-arbiter.sh rollback`;
+- `install-web-control.sh`'s rollback to web 1.5.0 / applier 1.4.0;
+- then the 2026-10-16 entry's.
+
+Next on the list: the multi-rate gadget experiment (step 5, needs the
+operator at the Mac), then 96 kHz end to end.

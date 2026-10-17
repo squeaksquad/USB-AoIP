@@ -5732,3 +5732,64 @@ Install order (the operator's sudo):
 
 Rollback: `install-dante-rate-arbiter.sh rollback`; the web-control
 installer's own rollback.
+
+## Steps 3 and 4 installed (the operator, 2026-10-17 16:22 and 17:12 UTC): the installed-form battery and the hour PASS, 345 / `daw_timeline` 533
+
+Installed by the operator in the order given:
+1. `install-web-control.sh`: usb16x16-web 6b98e7cf (1.6.0), usb16x16-apply
+   4a4aef82 (1.5.0), offline runner 4492a19c. Web service restarted, active
+   at 16:22:21, serving 1.6.0.
+2. The page staged from the Mac by `work/web-ui/stage-page.sh`; every file
+   matched afterwards.
+3. `install-dante-rate-arbiter.sh`: owner c8b484ac, plugin c6b012ae, config
+   0a1688e1, wrapper a6c3a197, `transport.conf` 1434f79f, the rate units
+   (path unit enabled, waiting).
+4. `systemctl restart usb16x16-dante`: started 17:12:11 with `START ...
+   rate=48000`, `--rate-request-file /run/usb16x16-dante/rate-request` on
+   the command line, `USBOPEN ... host_rate=match`.
+
+Start check `state=ok` (6,016) at 17:13:16. The meter file was written
+(1,623 writes by then): the first time this owner's meters have been
+exercised end to end, since no candidate run could (previous section).
+
+Step 4's check on the installed form: a Controller-form set to 48000 and
+one to 96000, sent from the Mac to the Pi's settings port, wrote no request
+file, ran no rate unit, and did not restart the endpoint (InvocationID
+unchanged). The service's journal does not carry Inferno's warn lines, so
+the evidence is that absence. The 96 kHz hand-off itself was seen on the
+device earlier today on a test config.
+
+Gadget restart 17:13:55 for the anchor (one Inferno `XRUN -29` there, the
+one transmit resync of the session); return flows whole (6,016 twice);
+Ferrofish REACHABLE. Battery (`outputs/latency/rate4-installed-*`):
+
+- Noise probe at 32 frames: **clean**.
+- 600 s sixteen-channel soak: **PASS** (longest zero run 1).
+- Four loaded 800-impulse runs: **all 345, spread 0, `daw_timeline` 533
+  (11.104 ms)**.
+- 3,600 s sixteen-channel soak from 17:40:25: **PASS** (longest zero run 1
+  on every channel, no discontinuity, peaks 0.1000).
+- 400 loaded impulses afterwards: all 345.
+
+The owner over 90 minutes
+(`outputs/latency/rate4-installed-service-journal-20261017T171211Z.txt`):
+- worst loop gap 1,100 µs, apart from 3,271 µs in the gadget restart's
+  minute (the 3-4 ms gap a gadget restart costs about one time in three on
+  every build);
+- no receive resync, no network error, no overflow, no re-prime;
+- return depth at least 42;
+- meters at most 56.3 µs;
+- no `USBRATE` line; the rate unit never ran;
+- `NRestarts` 0, Ferrofish REACHABLE at the end.
+
+345 is 2 above the point of record's 343. With the installed owner's
+control this afternoon reading 364 and the two candidates 363 and 379, it
+confirms that today's high readings were the anchors' draw.
+
+The point of record is now 2026-10-14's plus 2026-10-16's (sample-rate
+status) plus this set, if the operator accepts it. Rollback, newest first:
+- `install-dante-rate-arbiter.sh rollback`;
+- the web-control installer's rollback for the applier and web service (the
+  1.5.0 web service and 1.4.0 applier).
+
+Then the 2026-10-16 entry's.
