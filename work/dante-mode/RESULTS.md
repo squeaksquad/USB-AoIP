@@ -5793,3 +5793,12 @@ status) plus this set, if the operator accepts it. Rollback, newest first:
   1.5.0 web service and 1.4.0 applier).
 
 Then the 2026-10-16 entry's.
+
+## ACCEPTED 2026-10-17: sample-rate steps 3 and 4 are part of the Dante point of record
+
+Operator's ACCEPTED after the installed-form battery and hour (previous
+section). Owner c8b484ac, plugin c6b012ae, config 0a1688e1, wrapper a6c3a197,
+`transport.conf` 1434f79f, the rate units, applier 1.5.0, web 1.6.0, offline
+runner 4492a19c. Level in service 345 / `daw_timeline` 533 (11.104 ms) on the
+17:13:55 UTC anchor. The rest of the point of record is the 2026-10-16 and
+2026-10-14 sets.

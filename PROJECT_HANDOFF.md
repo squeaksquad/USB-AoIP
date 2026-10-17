@@ -13650,3 +13650,15 @@ Rollbacks, newest first:
 
 Next on the list: the multi-rate gadget experiment (step 5, needs the
 operator at the Mac), then 96 kHz end to end.
+
+**ACCEPTED 2026-10-17 (operator, after the 18:42 UTC battery): sample-rate
+steps 3 and 4 are part of the Dante point of record.** The set of the
+INSTALLED entry above: owner c8b484ac, Inferno plugin c6b012ae (patches 0001
+to 0005), config 0a1688e1, start wrapper a6c3a197, `transport.conf`
+1434f79f, `usb16x16-dante-rate.path` / `.service`, usb16x16-apply 1.5.0
+(4a4aef82), usb16x16-web 1.6.0 (6b98e7cf), offline runner 4492a19c, and the
+page staged by `work/web-ui/stage-page.sh`. Level in service 345 /
+`daw_timeline` 533 (11.104 ms) on the 17:13:55 UTC anchor. Everything else is
+the 2026-10-16 and 2026-10-14 point of record, unchanged. Rollbacks as in the
+INSTALLED entry. Next: step 5, the multi-rate gadget experiment (a parallel
+setup script; the protected gadget untouched), with the operator at the Mac.

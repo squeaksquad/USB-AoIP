@@ -451,7 +451,7 @@ items 2 and 3, or by the worker thread at every rate, as answered).
    INSTALLED 2026-10-17 17:12 UTC by the operator with steps 3 and 4d
    (owner c8b484ac, plugin c6b012ae with 0005, applier 1.5.0, web 1.6.0):
    battery and hour PASS, 345 / `daw_timeline` 533; a set to 48 restarts
-   nothing and a set to 96 is refused. Awaiting ACCEPTED.
+   nothing and a set to 96 is refused. ACCEPTED 2026-10-17 (operator).
 4b. **DSP bench at every rate** (DSP item 1). Mac code exists. A Pi run
    with the service stopped, the operator's go.
 4c. **Unity skip, then NEON pairs** (DSP items 2 and 3), each a candidate
