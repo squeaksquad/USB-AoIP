@@ -13782,3 +13782,97 @@ gadget at 48 kHz has a full battery and a clean hour on one start and one anchor
 (328 / `daw_timeline` 480). Owed before this gadget could replace the protected one:
 more anchors for the level, and the 88.2 cause (or 88.2 off the list). Still on
 the multi-rate gadget with the endpoint running.
+
+**FOUND 2026-10-18 02:33-02:59 UTC: 88.2 kHz on the multi-rate gadget fails on Pi->Mac
+only, and only when the rate is changed within about a second of a stream at the old
+rate ending; cause not located.** Evidence `outputs/latency/rate882-dirtest-20261018/`
+(the scripts used are copied in beside the runs). Dante stopped throughout, restarted
+02:58:20, start check ok 02:59:25, noise probe at 32 clean
+(`mr48owner-after882-noise-ch2-32f-20261018T025934Z`).
+- Direction (`dirtest.sh`: the Pi `aplay`s low-level noise to the Mac while `arecord`
+  takes what the Mac's `continuous` sends): validated at 96 (both clean). At 88.2 in a
+  bad state Mac->Pi is clean (0.0 % zero frames) and Pi->Mac has holes (848 zero
+  events in 15 s). Pi pointers in a bad state: gadget playback 88,199 frames/s,
+  capture 88,200, 13-16 ms queued, no underrun: the Pi sends the right amount.
+- Trigger: a probe at the old rate, then `pkill alsaloop`, a CoreAudio rate set within
+  ~1 s, alsaloop at 88.2, probe: **bad 5 of 5** (from 44.1, 48, 96; 75-96 % zeros,
+  8 ms cycle, runs of 530-680). The same change after 8 s idle at 48, with or
+  without a Pi stream running through it (`changeTest.sh` X/Y): **clean 4 of 4**.
+  A bad state persists across Mac harness re-opens on one alsaloop (95 % three times)
+  and across a switch to `aplay`; it recovered over restarts (1.8 %, then clean).
+  No rate change, either start order (`orderTest.sh`): clean 4 of 4. 44.1, 48, 96
+  clean throughout.
+- Ruled out by these runs: stream start order; the gadget's idle IN packets
+  (fixed 11 frames per microframe, 88,000/s, at 88.2) poisoning the change.
+  `u_audio.c` (6.18) sizes 88.2 packets generically (11.025/microframe, residue).
+- Seen in passing: with no Pi playback running the gadget sends that fixed 88,000/s
+  at 88.2 and the Mac logs timestamp discontinuities (10 in ~5 s; none at 96).
+- Next to locate it needs root: the gadget's dynamic debug (`u_audio`, `f_uac2`:
+  alt-setting starts/stops and SET_CUR order around a quick change). Until then 88.2
+  should be treated as broken on this gadget; a list without it keeps everything
+  else measured.
+
+**FOUND 2026-10-18 03:03-03:08 UTC, under a kprobe trace of the gadget
+(`rate882-dirtest-20261018/trace.sh` c358def3, operator's sudo; `trace-seqT.log`):
+the quick and the slow change are the same on the gadget; the 88.2 failure is still
+not located, and the gadget's idle packets are ruled out twice.**
+- Reproduced under the trace: quick change 96.3 % zeros, slow change clean.
+- Every CoreAudio rate set does, in ~1.1 s: stop capture, stop playback (alt 0, every
+  request dequeued, ret 0), SET_CUR (both rates set), start playback, start
+  capture, stop both again ~0.19 s later, start both again ~0.2 s after that. The
+  sequence is the same for quick and slow changes and for 48 and 88.2.
+- A harness open or close causes no gadget event at all: the Mac keeps both streaming
+  interfaces at alt 1 between clients.
+- So the only difference between bad and clean is when the Pi PCM and the Mac client
+  start after the final stream start: quick 0.55 s / ~2.5 s, slow 6.4 s / ~9 s.
+- Bridging the quick change with a running Pi playback stream (zeros, `quickY.sh`) is
+  still bad, 96.6 % and 97.1 %, so the gadget's idle packets (fixed 11/microframe at
+  88.2) are not the trigger.
+- Where the latched state lives (the gadget's stream since its last start, or the
+  Mac's engine) is not settled by these runs; neither restarts during a bad probe.
+Three hypotheses tried and refuted (start order, idle packets in a slow change, idle
+packets in a quick change). Next needs a different instrument: what is on the wire
+in a bad state (a Mac-side USB capture, or a gadget-side kprobe sampling IN packet
+lengths and content), or a Linux host at 88.2 to see whether it is Mac-specific.
+Close: trace off by the operator (no reader left), Mac at 48000,
+`usb16x16-dante` started 03:09:24 UTC on the multi-rate gadget, start check ok
+03:10:30, noise probe at 32 clean (`mr48owner-aftertrace-noise-ch2-32f-20261018T031036Z`).
+
+**FOUND 2026-10-18 03:13-03:15 UTC: in the 88.2 bad state the gadget's USB streams
+are correct in both directions; the Mac sends zeros.** Per-packet kprobe on
+`u_audio_iso_complete` (`trace2.sh` dfece5ee, operator's sudo; 3 s windows 12 s into
+each probe; `trace2-seqP-summary.txt`, `trace2-seqP.log.gz`, reader `iso-read.py`).
+Bad quick change (probe 98.1 % zeros) against good slow change (clean), 3 s each:
+- Both endpoints, both states: 8,000 completions/s, status 0 on every packet, frame
+  number +1 every completion (no missed microframe), largest gap 0.14 ms.
+- IN (Pi->Mac) lengths 528 B x 23,408 and 576 B x 601 (11.025 frames per microframe),
+  identical in both states; OUT (Mac->Pi) actuals the same split, so the Mac paces
+  correctly; 4.2337 MB/s each way in both.
+- Content: in the good state the sampled bytes (ch 2-4 of frame 0 and of frame 5) are
+  never zero. In the bad state the **OUT packets from the Mac are zero at those
+  offsets in 92 % and 99 % of packets**, and the IN packets are zero to the same degree
+  (alsaloop loops what it gets).
+So in a bad state the Mac's engine moves the right number of bytes at the right times
+but its client data does not reach the wire, and (from the direction test) what the
+gadget sends does not reach the client: the engine's position model is off from its
+own DMA. The gadget is not losing data. It is a macOS (AppleUSBAudio / CoreAudio)
+state drawn when a client starts within ~2-3 s of an 88.2 stream (re)start after a
+rate change. Untested: whether `killall coreaudiod` clears a bad state, whether a
+Linux host shows it, and whether anything in the gadget's feedback or packet
+pattern provokes it.
+Close: `trace2.sh off` by the operator (no trace process left), Mac at 48000,
+`usb16x16-dante` started 03:16:50 UTC on the multi-rate gadget, start check ok
+03:17:55, noise probe at 32 clean (`mr48owner-aftertrace2-noise-ch2-32f-20261018T032351Z`).
+
+**DONE 2026-10-18: the 88.2 kHz workaround is waiting, not a fix (operator's choice).**
+Rule: wait 10 s after switching the USB 16x16 to 88.2 kHz before any audio starts on
+it; recovery from a bad state is 48 kHz, 10 s, 88.2 kHz, 10 s. Documented in
+`work/pi-tuning/MULTIRATE_GADGET_PLAN.md`, "88.2 kHz and macOS" (the reference), with
+pointers in `work/dante-mode/SAMPLE_RATE_DESIGN.md` (the arbiter must respect it),
+`work/latency-harness/README.md` and `CLAUDE.md`. Dante Switcher
+(`~/Development/Dante Switcher`): `dante-sync sync` holds `--usb882-settle` (default 10 s)
+after the USB 16x16 is verified at 88.2k, before it reports; `watch` warns when an app
+set 88.2k itself, since a DAW opening an 88.2 project starts audio at once and cannot be
+made to wait. `swift test` 7/7 and `sync --rate 88200 --dry-run` there; the hold has not
+run live (a live 88.2k sync moves every Dante device a band up and the Pi's Dante side
+refuses anything but 48k). 88.2 stays on the multi-rate list.

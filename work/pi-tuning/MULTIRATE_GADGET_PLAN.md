@@ -213,3 +213,42 @@ during one.
 - Q1 fails (controls do not follow): the owner's gadget-rate check and the
   arbiter's USB signal have no source. Rate changes would have to come from
   Dante Switcher's packet alone.
+
+## 88.2 kHz and macOS: wait 10 s after switching (found 2026-10-18)
+
+**The rule.** After the USB 16x16 is switched to 88.2 kHz, wait at least 10 seconds
+before anything starts audio on it. That includes a DAW, the harness, RTL Utility
+and the Dante endpoint's USB half. 44.1, 48 and 96 kHz need no wait.
+
+**Why.** macOS (AppleUSBAudio / CoreAudio) can get into a state where it passes
+silence on the USB 16x16 in both directions. When that happens, the USB stream keeps
+running perfectly: right packet sizes, right timing, no errors. The data just never
+reaches the app, so most samples are zero (75-98 % in the runs, in an 8 ms
+cycle). The Pi is not at fault. A per-packet trace of the gadget showed its IN and
+OUT streams identical in good and bad states, except that in a bad state the
+packets the Mac sends carry zeros. It happens only at 88.2 kHz, and only when audio
+starts within a few seconds of the switch: bad 7 of 7 with audio starting about
+2.5 s after the set, clean every time from about 7 s. Once in the bad state it stays
+there across app restarts until the rate is changed again. Evidence:
+`outputs/latency/rate882-dirtest-20261018/` and `PROJECT_HANDOFF.md`, the 2026-10-18
+FOUND entries.
+
+**What does the waiting.**
+- **Dante Switcher** (`~/Development/Dante Switcher`): `dante-sync sync` holds 10 s
+  (`--usb882-settle`) after the USB 16x16 is verified at 88.2 kHz, before it reports
+  done. Start audio only after the sync finishes.
+- **A DAW that sets 88.2 kHz itself** (opening an 88.2 project) starts audio at
+  once, so nothing can make it wait. `dante-sync watch` logs a warning when this
+  happens.
+- **By hand** (Audio MIDI Setup, the harness): wait the 10 s yourself.
+
+**If audio on the USB 16x16 at 88.2 kHz is silent or full of holes**, recover it:
+stop audio on the device, set it to 48 kHz, wait 10 s, set 88.2 kHz, wait 10 s,
+then start audio. The slow change came out clean every time, including straight
+after a bad state. Untested with a DAW holding the device open; quitting the app
+first is the safe form.
+
+**Not known.** Why macOS does this; whether a Linux host does it too; whether
+`killall coreaudiod` clears a bad state; whether anything the gadget does
+(feedback value, packet pattern) provokes it. Recheck after a macOS update with
+`quickwin.sh` and `slowwin.sh` in the evidence directory, run without the trace.

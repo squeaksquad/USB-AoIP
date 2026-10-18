@@ -32,7 +32,9 @@ frames, and `bitexact` expects the full-scale codes once the run covers 2^24
 samples' worth of 48 kHz time (360 s). Both JSON reports carry `sampleRate`. At
 48 kHz the frame counts and refusals are the earlier ones. The harness does not
 set the rate: set it in Audio MIDI Setup first. `measure` already took its rate
-from the device.
+from the device. At 88.2 kHz, wait 10 s after the switch before running anything:
+macOS can pass silence on the device if audio starts sooner, and the run would
+measure that (`work/pi-tuning/MULTIRATE_GADGET_PLAN.md`, "88.2 kHz and macOS").
 
 ## Continuous-load event capture
 

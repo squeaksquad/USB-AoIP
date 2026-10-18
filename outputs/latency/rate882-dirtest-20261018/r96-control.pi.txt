@@ -1,0 +1,3 @@
+aplay=0  arecord: 
+mac->pi capture: 768000 frames (8.00 s), all-channel zero runs>=4: 0, zero frames 0.0 %, run lengths min/median/max 0/0/0
+first runs (frame, len): []

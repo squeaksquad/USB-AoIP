@@ -433,7 +433,12 @@ as 96 frames did at 48 kHz.
   Dante Switcher already reports "unsupported" for each device.
 - **DSP:** the table above.
 
-Realistically the offered list is 44.1, 48, 88.2 and 96 kHz. 176.4 and 192
+Realistically the offered list is 44.1, 48, 88.2 and 96 kHz. 88.2 has a
+macOS-side condition: nothing may start audio on the USB 16x16 for 10 s
+after a switch to it, or macOS can pass only silence until the next change
+(`work/pi-tuning/MULTIRATE_GADGET_PLAN.md`, "88.2 kHz and macOS"; Dante
+Switcher holds that long). The arbiter's restart of the endpoint after an
+88.2 change has to respect the same wait. 176.4 and 192
 kHz only if the gadget, the domain and the DSP all clear them (the DSP by
 items 2 and 3, or by the worker thread at every rate, as answered).
 

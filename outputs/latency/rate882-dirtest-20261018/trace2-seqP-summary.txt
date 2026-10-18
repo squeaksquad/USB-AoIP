@@ -1,0 +1,12 @@
+seqP-bad-r882 ep 604c80: 24009 completions in 3.001 s (8000/s), bytes/s by act 4233666
+   len {624: 24009}  act {528: 23409, 576: 600}  status {0: 24009}
+   content zero at +3: 22074/24009, at +243: 23870/24009; gap max 0.14 ms; frame-number steps {1: 24008}
+seqP-bad-r882 ep 605280: 24009 completions in 3.001 s (8000/s), bytes/s by act 4233674
+   len {528: 23408, 576: 601}  act {528: 23408, 576: 601}  status {0: 24009}
+   content zero at +3: 22241/24009, at +243: 23868/24009; gap max 0.14 ms; frame-number steps {1: 24008}
+seqP-good-r882 ep 604c80: 24008 completions in 3.001 s (8000/s), bytes/s by act 4233681
+   len {624: 24008}  act {528: 23408, 576: 600}  status {0: 24008}
+   content zero at +3: 0/24008, at +243: 0/24008; gap max 0.14 ms; frame-number steps {1: 24007}
+seqP-good-r882 ep 605280: 24008 completions in 3.001 s (8000/s), bytes/s by act 4233678
+   len {528: 23407, 576: 601}  act {528: 23407, 576: 601}  status {0: 24008}
+   content zero at +3: 0/24008, at +243: 0/24008; gap max 0.14 ms; frame-number steps {1: 24007}
