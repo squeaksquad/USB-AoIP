@@ -13726,3 +13726,59 @@ full-scale codes once seconds x rate >= 360 x 48,000. Both JSON reports gain
 choose it in Audio MIDI Setup first. `swift test` 16/16 and `build-app.sh` clean on the
 Mac (binary e6ff8640); not run against the device. README and usage text updated.
 Nothing committed.
+
+**MEASURED 2026-10-17 23:03-23:21 UTC: 96 kHz on the multi-rate gadget passes the
+ten-minute sixteen-channel soak and a bit-exact run at 32 frames** (step 5's owed
+soak; evidence `outputs/latency/multirate-soak96-20261017T230351Z/`). Gadget
+`setup-usb-16x16-multirate start` (c420a0b8, default list, req 4) bound 22:46:24 UTC
+by the operator with the Dante endpoint stopped. CoreAudio did not publish the
+device after that enumeration (USB matched, no audio device for 4 min); the
+operator's `sudo killall coreaudiod` brought it back at 48000, the Mac's remembered
+rate. Set to 96000 by a CoreAudio nominal-rate set; both Pi controls 96000. USB-only
+loop: Pi `alsaloop ... -r 96000 -t 20000` (user, no RT), harness alone, monitors
+muted, harness binary e6ff8640 (rate-following `continuous`/`bitexact`).
+- Noise probe, 100 impulses, out 1 / in 2: 0.0 % zeros, no runs, no discontinuities.
+- `continuous` 600 s, 0.1 load on all sixteen: **PASS**, 57.408 M samples per
+  channel, longest zero run 1, peaks 0.1000, no discontinuity, invalid buffer or
+  timestamp, no captured event.
+- `bitexact` 360 s (two sequence periods at 96): **PASS**, every channel locked on
+  its own source at frame 2206 and never lost it, 0 mismatches, 0 off-grid, both
+  full-scale limits seen on every channel (36-41 each).
+alsaloop logged nothing; kernel log quiet after the bind. Mac set back to 48000.
+Left on the multi-rate gadget for the owner's run at 48 (the plan's Phase E,
+operator's go).
+
+**MEASURED 2026-10-17 23:52 - 2026-10-18 01:21 UTC: the Dante endpoint (installed
+point of record, owner c8b484ac) on the multi-rate gadget at 48 kHz (bInterval 1):
+battery PASS, hour FAIL on one return-flow hole** (plan Phase E, operator's go;
+evidence `outputs/latency/mr48owner-*`, journal
+`mr48owner-service-journal-20261017T235203Z.txt`). Gadget as the entry above (bound
+22:46:24, Mac anchor the operator's coreaudiod kill), `systemctl start
+usb16x16-dante` 23:52:03, owner `USBOPEN ... host_rate=match` at 48000, start check
+`state=ok` 23:53:08 (6015 frames/s), eth0 TX ~6,000/s.
+- Noise probe at 32: clean.
+- 600 s sixteen-channel soak: **PASS**.
+- Four loaded 800-impulse runs: **all 328, spread 0, `daw_timeline` 480
+  (10.000 ms)**; the IOProc offset is 152 here against 188 on the protected
+  gadget, and the lag 17 below the point of record's 345 (one anchor only).
+- 3,600 s soak from 00:19: **FAIL**, one event 1,428.9 s in (~00:43 UTC): a
+  16-frame zero run on channels 1-4 and 13-16 only, at one input frame, no
+  discontinuity. Eight channels of sixteen, one 16-sample packet: one of the
+  Ferrofish's two 8-channel return flows, the per-flow loss of 2026-10-12/14/16
+  (the owner moves whole frames and cannot zero eight channels). Not attributed
+  to the gadget.
+- 400 loaded impulses afterwards: all 328.
+Owner over the run: worst loop gap 1,070 us, no resync, loss or net error,
+return depth at least 42, meters at most 58.1 us, no USBRATE or XRUN line,
+capture/playback faults 0, `NRestarts` 0. Ferrofish neighbour REACHABLE.
+Still on the multi-rate gadget with the endpoint running; not an acceptance.
+
+**MEASURED 2026-10-18 01:23-02:24 UTC: re-run of the hour on the same start
+(operator's call): PASS.** `mr48owner-soak-3600s-32f-20261018T012337Z.json`: 3,600 s sixteen-channel soak, longest zero
+run 1 on every channel, peaks 0.1000, no discontinuity; owner xrun/lag/error lines
++0, worst loop gap 1,053 us, no resync or loss, faults 0, return depth at least 42,
+same InvocationID, `NRestarts` 0. With the entry above, the owner on the multi-rate
+gadget at 48 kHz has a full battery and a clean hour on one start and one anchor
+(328 / `daw_timeline` 480). Owed before this gadget could replace the protected one:
+more anchors for the level, and the 88.2 cause (or 88.2 off the list). Still on
+the multi-rate gadget with the endpoint running.

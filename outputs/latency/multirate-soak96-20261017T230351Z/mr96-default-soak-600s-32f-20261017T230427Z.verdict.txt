@@ -1,0 +1,4 @@
+rate=96000 channels=16 seconds=600 samples/ch=57408000
+longest zero run max=1 peak min=0.1000 max=0.1000
+discontinuities in=0 out=0 invalid buffers=0 timestamps=0 events=0
+soak: PASS

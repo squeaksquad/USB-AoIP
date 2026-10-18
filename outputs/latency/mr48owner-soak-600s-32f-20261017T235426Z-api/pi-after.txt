@@ -1,0 +1,7 @@
+aes67=inactive statime=1 endpoint=1 udc=configured
+log=/dev/shm/dante-service-journal.txt
+START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-15.46 seed_from_file=1
+xrun_lines=0 lag_lines=0 error_lines=0 lines=50
+pcm0c state: RUNNING delay : 12 
+pcm0p state: RUNNING delay : 91 
+pitch values=1000016 values=1000015
