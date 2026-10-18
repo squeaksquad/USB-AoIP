@@ -1,0 +1,504 @@
+           <...>-482042  [003] d.... 352176.058201: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482042  [003] d.... 352176.058317: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482042  [003] d..1. 352176.058562: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+           <...>-482042  [003] d..1. 352176.058567: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+        alsaloop-482042  [000] d..1. 352205.039508: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+        alsaloop-482042  [000] d..1. 352205.039538: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+          <idle>-0       [000] d.h3. 352206.264973: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352206.264977: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352206.264985: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352206.264986: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352206.264991: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352206.264992: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352206.264992: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352206.264993: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352206.264993: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352206.264995: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352206.268786: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352206.268787: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352206.268788: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352206.268789: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352206.268790: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352206.268790: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352206.268791: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352206.268793: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h1. 352206.282471: sam_freq: (uac2_cs_control_sam_freq+0x0/0xb8 [usb_f_uac2])
+          <idle>-0       [000] d.h1. 352206.282473: p_srate: (u_audio_set_playback_srate+0x0/0xa8 [u_audio]) srate=88200
+          <idle>-0       [000] d.h1. 352206.282474: c_srate: (u_audio_set_capture_srate+0x0/0xa0 [u_audio]) srate=88200
+          <idle>-0       [000] d.h3. 352206.955024: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352206.955028: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352206.955030: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352206.955036: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352206.958283: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352206.958284: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352206.958284: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352206.958287: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352206.958289: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352207.141252: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352207.141253: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352207.141259: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352207.141260: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352207.141264: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352207.141265: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352207.141266: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352207.141266: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352207.141267: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352207.141268: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352207.148876: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352207.148877: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352207.148878: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352207.148879: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352207.148880: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352207.148880: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352207.148880: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352207.148883: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352207.351208: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352207.351209: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352207.351210: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352207.351212: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352207.356889: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352207.356889: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352207.356890: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352207.356891: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352207.356894: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+           <...>-482110  [003] d.... 352207.907156: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482110  [003] d.... 352207.907265: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482110  [003] d..1. 352207.907542: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+           <...>-482110  [003] d..1. 352207.907547: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+        alsaloop-482110  [001] d..1. 352237.091176: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+        alsaloop-482110  [001] d..1. 352237.091200: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+          <idle>-0       [000] d.h3. 352239.341930: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352239.341934: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352239.341941: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352239.341942: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352239.341948: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352239.341949: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352239.341950: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352239.341951: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352239.341951: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352239.341952: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352239.349748: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352239.349749: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352239.349750: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352239.349751: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352239.349752: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352239.349752: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352239.349753: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352239.349754: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h1. 352239.365378: sam_freq: (uac2_cs_control_sam_freq+0x0/0xb8 [usb_f_uac2])
+          <idle>-0       [000] d.h1. 352239.365379: p_srate: (u_audio_set_playback_srate+0x0/0xa8 [u_audio]) srate=48000
+          <idle>-0       [000] d.h1. 352239.365380: c_srate: (u_audio_set_capture_srate+0x0/0xa0 [u_audio]) srate=48000
+          <idle>-0       [000] d.h3. 352240.037610: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352240.037613: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352240.037615: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352240.037620: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352240.045963: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352240.045964: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352240.045965: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352240.045967: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352240.045969: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352240.233958: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352240.233959: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352240.233965: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352240.233965: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352240.233970: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352240.233971: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352240.233972: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352240.233972: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352240.233973: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352240.233974: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352240.241824: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352240.241824: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352240.241825: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352240.241826: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352240.241826: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352240.241827: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352240.241827: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352240.241830: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352240.440056: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352240.440058: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352240.440059: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352240.440062: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352240.445813: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352240.445814: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352240.445815: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352240.445818: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352240.445820: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352249.078386: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352249.078391: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352249.078402: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352249.078403: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352249.078408: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352249.078409: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352249.078410: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352249.078410: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352249.078411: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352249.078412: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352249.086114: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352249.086115: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352249.086116: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352249.086117: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352249.086118: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352249.086118: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352249.086119: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352249.086120: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h1. 352249.101025: sam_freq: (uac2_cs_control_sam_freq+0x0/0xb8 [usb_f_uac2])
+          <idle>-0       [000] d.h1. 352249.101026: p_srate: (u_audio_set_playback_srate+0x0/0xa8 [u_audio]) srate=88200
+          <idle>-0       [000] d.h1. 352249.101027: c_srate: (u_audio_set_capture_srate+0x0/0xa0 [u_audio]) srate=88200
+          <idle>-0       [000] d.h3. 352249.773564: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352249.773567: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352249.773569: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352249.773573: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352249.782179: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352249.782180: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352249.782181: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352249.782183: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352249.782185: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352250.006225: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352250.006227: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352250.006234: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352250.006235: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352250.006239: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352250.006240: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352250.006241: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352250.006241: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352250.006242: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352250.006243: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352250.014061: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352250.014062: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352250.014063: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352250.014063: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352250.014064: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352250.014065: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352250.014065: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352250.014066: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352250.208285: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352250.208288: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352250.208289: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352250.208293: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352250.214036: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352250.214037: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352250.214038: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352250.214040: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352250.214042: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+           <...>-482200  [002] d.... 352256.578418: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482200  [002] d.... 352256.578561: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482200  [002] d..1. 352256.578817: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+        alsaloop-482200  [002] d..1. 352256.578823: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+        alsaloop-482200  [001] d..1. 352323.809171: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+        alsaloop-482200  [001] d..1. 352323.809194: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+          <idle>-0       [000] d.h3. 352325.044491: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352325.044495: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352325.044502: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352325.044504: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352325.044508: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.044509: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.044510: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.044510: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352325.044511: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352325.044512: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352325.052241: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352325.052243: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352325.052244: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.052244: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.052245: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.052246: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352325.052246: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352325.052247: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h1. 352325.066795: sam_freq: (uac2_cs_control_sam_freq+0x0/0xb8 [usb_f_uac2])
+          <idle>-0       [000] d.h1. 352325.066797: p_srate: (u_audio_set_playback_srate+0x0/0xa8 [u_audio]) srate=48000
+          <idle>-0       [000] d.h1. 352325.066798: c_srate: (u_audio_set_capture_srate+0x0/0xa0 [u_audio]) srate=48000
+          <idle>-0       [000] d.h3. 352325.738375: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352325.738379: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352325.738381: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352325.738386: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352325.744382: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352325.744383: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352325.744383: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352325.744385: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352325.744387: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352325.932388: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352325.932390: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352325.932397: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352325.932398: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352325.932405: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.932405: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.932406: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.932407: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352325.932407: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352325.932408: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352325.936245: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352325.936246: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352325.936247: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.936247: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.936248: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352325.936249: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352325.936249: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352325.936252: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352326.130634: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352326.130635: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352326.130636: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352326.130639: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352326.132817: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352326.132818: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352326.132818: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352326.132820: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352326.132822: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+           <...>-482348  [003] d.... 352326.700403: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482348  [003] d.... 352326.700519: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482348  [003] d..1. 352326.700767: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+           <...>-482348  [003] d..1. 352326.700772: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+        alsaloop-482348  [002] d..1. 352355.632430: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+        alsaloop-482348  [002] d..1. 352355.632453: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+           <...>-482401  [002] d.... 352355.635113: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482401  [002] d..1. 352355.635286: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+          <idle>-0       [000] d.h3. 352356.165319: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352356.165323: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352356.165334: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352356.165335: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352356.165340: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352356.165341: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352356.165342: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352356.165342: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352356.165343: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352356.165344: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352356.173057: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352356.173058: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352356.173059: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352356.173060: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352356.173061: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352356.173061: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352356.173062: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352356.173063: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h1. 352356.189703: sam_freq: (uac2_cs_control_sam_freq+0x0/0xb8 [usb_f_uac2])
+          <idle>-0       [000] d.h1. 352356.189704: p_srate: (u_audio_set_playback_srate+0x0/0xa8 [u_audio]) srate=88200
+          <idle>-0       [000] d.h1. 352356.189705: c_srate: (u_audio_set_capture_srate+0x0/0xa0 [u_audio]) srate=88200
+           aplay-482401  [001] d..1. 352356.763861: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+          <idle>-0       [000] d.h3. 352356.862263: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352356.862267: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352356.862269: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352356.862275: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352356.869259: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352356.869261: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352356.869261: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352356.869263: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352356.869266: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352357.073260: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352357.073262: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352357.073267: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352357.073269: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352357.073273: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352357.073274: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352357.073275: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352357.073276: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352357.073276: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352357.073277: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352357.081113: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352357.081114: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352357.081115: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352357.081115: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352357.081116: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352357.081117: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352357.081117: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352357.081118: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352357.280345: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352357.280346: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352357.280347: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352357.280350: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352357.289111: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352357.289112: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352357.289113: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352357.289115: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352357.289117: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+           <...>-482415  [000] d.... 352357.829967: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482415  [000] d.... 352357.830091: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482415  [000] d..1. 352357.830364: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+           <...>-482415  [000] d..1. 352357.830370: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+        alsaloop-482415  [001] d..1. 352387.012892: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+        alsaloop-482415  [001] d..1. 352387.012913: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+          <idle>-0       [000] d.h3. 352388.238172: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352388.238177: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352388.238184: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352388.238185: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352388.238190: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352388.238191: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352388.238191: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352388.238192: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352388.238192: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352388.238194: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352388.242029: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352388.242030: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352388.242031: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352388.242032: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352388.242032: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352388.242033: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352388.242033: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352388.242035: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h1. 352388.259916: sam_freq: (uac2_cs_control_sam_freq+0x0/0xb8 [usb_f_uac2])
+          <idle>-0       [000] d.h1. 352388.259918: p_srate: (u_audio_set_playback_srate+0x0/0xa8 [u_audio]) srate=48000
+          <idle>-0       [000] d.h1. 352388.259919: c_srate: (u_audio_set_capture_srate+0x0/0xa0 [u_audio]) srate=48000
+          <idle>-0       [000] d.h3. 352388.932316: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352388.932320: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352388.932322: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352388.932329: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352388.935825: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352388.935826: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352388.935827: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352388.935829: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352388.935831: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352389.122194: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352389.122196: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352389.122204: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352389.122205: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352389.122209: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352389.122210: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352389.122211: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352389.122211: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352389.122212: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352389.122213: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352389.126054: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352389.126055: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352389.126056: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352389.126057: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352389.126058: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352389.126058: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352389.126059: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352389.126060: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352389.330329: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352389.330331: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352389.330332: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352389.330335: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352389.334743: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352389.334744: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352389.334744: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352389.334746: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352389.334748: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+           <...>-482483  [001] d.... 352389.884715: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482483  [001] d.... 352389.884832: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482483  [001] d..1. 352389.885080: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+           <...>-482483  [001] d..1. 352389.885086: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+        alsaloop-482483  [003] d..1. 352418.812691: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+        alsaloop-482483  [003] d..1. 352418.812714: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+           <...>-482537  [003] d.... 352418.815544: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482537  [003] d..1. 352418.815716: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+          <idle>-0       [000] d.h3. 352419.335097: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352419.335101: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352419.335109: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352419.335110: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352419.335116: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352419.335117: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352419.335118: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352419.335118: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352419.335119: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352419.335120: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352419.342913: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352419.342914: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352419.342915: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352419.342916: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352419.342917: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352419.342917: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352419.342918: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352419.342919: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h1. 352419.360689: sam_freq: (uac2_cs_control_sam_freq+0x0/0xb8 [usb_f_uac2])
+          <idle>-0       [000] d.h1. 352419.360690: p_srate: (u_audio_set_playback_srate+0x0/0xa8 [u_audio]) srate=88200
+          <idle>-0       [000] d.h1. 352419.360691: c_srate: (u_audio_set_capture_srate+0x0/0xa0 [u_audio]) srate=88200
+           aplay-482537  [002] d..1. 352419.928647: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+          <idle>-0       [000] d.h3. 352420.032699: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352420.032704: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352420.032706: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352420.032712: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352420.039085: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352420.039086: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352420.039087: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352420.039089: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352420.039091: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352420.255140: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352420.255142: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352420.255148: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352420.255149: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352420.255155: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352420.255155: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352420.255156: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352420.255157: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352420.255157: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352420.255158: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352420.262905: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352420.262907: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352420.262908: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352420.262909: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352420.262910: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352420.262911: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352420.262911: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352420.262914: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352420.460939: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352420.460941: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352420.460942: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352420.460946: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352420.466912: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352420.466913: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352420.466913: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352420.466915: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352420.466917: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+           <...>-482553  [001] d.... 352420.992929: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482553  [001] d.... 352420.993044: pcm_open: (uac_pcm_open+0x0/0x160 [u_audio])
+           <...>-482553  [001] d..1. 352420.993307: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+           <...>-482553  [001] d..1. 352420.993312: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=1
+        alsaloop-482553  [000] d..1. 352481.473667: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+        alsaloop-482553  [000] d..1. 352481.473692: trigger: (uac_pcm_trigger+0x0/0xd8 [u_audio]) cmd=0
+          <idle>-0       [000] d.h3. 352490.721093: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352490.721098: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352490.721106: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352490.721107: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352490.721112: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352490.721113: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352490.721113: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352490.721114: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352490.721114: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352490.721116: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352490.724916: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352490.724917: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352490.724918: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352490.724919: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352490.724919: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352490.724920: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352490.724920: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352490.724923: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h1. 352490.741343: sam_freq: (uac2_cs_control_sam_freq+0x0/0xb8 [usb_f_uac2])
+          <idle>-0       [000] d.h1. 352490.741345: p_srate: (u_audio_set_playback_srate+0x0/0xa8 [u_audio]) srate=48000
+          <idle>-0       [000] d.h1. 352490.741346: c_srate: (u_audio_set_capture_srate+0x0/0xa0 [u_audio]) srate=48000
+          <idle>-0       [000] d.h3. 352491.418849: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352491.418853: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352491.418855: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352491.418861: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352491.422220: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352491.422221: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352491.422222: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352491.422224: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352491.422227: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352491.629245: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+          <idle>-0       [000] d.h3. 352491.629248: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+          <idle>-0       [000] d.h4. 352491.629254: dequeue_ret: (u_audio_stop_capture+0x8c/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352491.629255: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352491.629262: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352491.629263: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352491.629263: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352491.629264: dequeue_ret: (u_audio_stop_capture+0x100/0x1c0 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352491.629264: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010604c80
+          <idle>-0       [000] d.h4. 352491.629266: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352491.632991: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+          <idle>-0       [000] d.h3. 352491.632992: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+          <idle>-0       [000] d.h4. 352491.632993: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352491.632994: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352491.632995: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h4. 352491.632995: dequeue_ret: (u_audio_stop_playback+0xc4/0x140 [u_audio] <- usb_ep_dequeue) ret=0
+          <idle>-0       [000] d.h3. 352491.632996: ep_disable: (usb_ep_disable+0x0/0xf0) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352491.632997: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352491.963147: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+          <idle>-0       [000] d.h3. 352491.963148: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+          <idle>-0       [000] d.h3. 352491.963149: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010605280
+          <idle>-0       [000] d.h4. 352491.963153: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
+          <idle>-0       [000] d.h3. 352491.965595: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+          <idle>-0       [000] d.h3. 352491.965595: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+          <idle>-0       [000] d.h3. 352491.965596: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604c80
+          <idle>-0       [000] d.h3. 352491.965598: ep_enable: (usb_ep_enable+0x0/0x190) ep=0xffff800010604e80
+          <idle>-0       [000] d.h4. 352491.965600: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) ret=0
