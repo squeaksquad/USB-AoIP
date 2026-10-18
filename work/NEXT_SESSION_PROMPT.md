@@ -1,5 +1,84 @@
 # Next-session pickup prompt
 
+## Current pickup — 2026-10-18: sample rate, step 6 (96 kHz end to end). Start here.
+
+You are picking up the USB 16x16 project (Raspberry Pi 5 UAC2 gadget, 16x16,
+bridged to Dante through Inferno). Read `CLAUDE.md` (repo map), then
+`PROJECT_HANDOFF.md`'s tail from the 2026-10-17 ACCEPTED entries to the end
+(the multi-rate gadget, the 88.2 kHz finding, the 2026-10-18 ACCEPTED entry),
+then `work/dante-mode/SAMPLE_RATE_DESIGN.md` from "Transparent switching" to the
+end, then `work/pi-tuning/MULTIRATE_GADGET_PLAN.md` (its last section is the
+88.2 kHz rule). The handoff is authoritative where anything disagrees. The
+operator was away for a few days from 2026-10-18; nothing was left running.
+
+**Where it stands.** Point of record ACCEPTED 2026-10-18: the 2026-10-17 Dante
+set (owner c8b484ac, plugin c6b012ae with patches 0001-0005, config 0a1688e1,
+wrapper a6c3a197, `transport.conf` `RATE_REQUESTS=1`, the rate path unit,
+applier 1.5.0, web 1.6.0) on the **multi-rate gadget**: `usb-16x16.service` runs
+`/usr/local/sbin/setup-usb-16x16-rates` (d4f0ee7b, rates
+`48000,44100,88200,96000`, bInterval 1) through the drop-in
+`usb-16x16.service.d/10-rates.conf`, installed by
+`work/pi-tuning/install-gadget-rates.sh` (its `rollback` restores the protected
+48 kHz gadget, which it never writes). Level 338 / `daw_timeline` 490
+(10.208 ms); five other anchors 328-350. The USB side offers four rates; the
+Dante side still runs and offers 48 kHz only, so a Mac at another rate gives the
+endpoint no USB audio (its USB half waits, `host_rate=mismatch`). Left at the
+close: Mac at 48000, gadget, Statime and endpoint active, start check ok.
+
+**The task: step 6, 96 kHz end to end** (design, "Revised steps", item 6): the
+domain at 96 via Dante Switcher, the full battery and an hour on the loaded
+preset, DSP inside its budget; only then does 96 join the arbiter's list and
+the page's `OFFERED_RATES`. Start by surveying, read-only, what is missing on
+the Pi side for the endpoint to run at 96: an Inferno config at 96 (only
+`config/asound-inferno-owner-rate48*.conf` exist), the owner's `--rate 96000`
+(step 3 made it a parameter; run it as a candidate through
+`usb16x16-dante-candidate`), the DSP artifact at 96 (step 4d's per-rate store is
+written, not installed), the arbiter's offered list, and the transport knobs per
+rate (design, "Transport per rate"). Write that plan and tell the operator before
+anything changes. Moving the domain is an outward change to every Dante device
+(`dante-sync sync --rate 96000 --allow-band-up`; the Pulse, DVS, the D2USB and
+the Pi's Inferno all move a band up and may drop channels): the operator's go,
+at the Mac. Back to 48 the same way at the end.
+
+**Measurement tools need two fixes before any reading at 96.**
+`work/dante-mode/measure-candidate.sh` hard-codes 48 kHz: the soak's "short"
+check (`(seconds - 3) * 48000`, line ~140, which would pass a short capture at
+96) and the `daw_timeline` milliseconds (`/ 48`, line ~218). The harness itself
+follows the rate since 2026-10-17 (`continuous`, `bitexact` and `measure` all
+report `sampleRate`); take the rate from the JSON. Harness `measure` at 96 was
+used for the 2026-10-17 noise probes and works.
+
+**Rules that bit on 2026-10-17/18.**
+- At 88.2 kHz nothing may start audio for 10 s after a switch, or macOS passes
+  silence on the device both ways until the next change (a macOS fault; the
+  gadget's streams are correct). Dante Switcher's `sync` holds 10 s. 96 is not
+  affected.
+- After a reboot or gadget restart the Mac restores its last chosen rate; when
+  it has none it takes the first listed (48000, which is why it is first).
+- After a gadget re-enumeration CoreAudio once did not publish the device until
+  the operator's `sudo killall coreaudiod` on the Mac.
+- `systemctl restart usb-16x16.service` (password-free, the standard anchor) now
+  restarts the multi-rate gadget. `sudo killall coreaudiod` is an accepted
+  anchor too (used for the 2026-10-18 anchors).
+- `daw_timeline` = lag + 152 on this gadget (it was + 188 on the protected one).
+- Installs, gadget swaps, reboots, kernel tracing and `killall coreaudiod` are
+  the operator's sudo. Password-free: `systemctl` on usb16x16-dante,
+  usb16x16-statime and usb-16x16.service, and the candidate launcher.
+- The gadget can be traced without rebuilding: `trace.sh` / `trace2.sh` in
+  `outputs/latency/rate882-dirtest-20261018/` (kprobes: alt settings, stream
+  starts, rate sets, and windowed per-packet IN/OUT length and content; the
+  operator runs `on`/`off` with sudo). `setrate.swift` and `hold.swift` there set
+  the Mac's rate and hold the device open with zeros.
+- Monitors expire after 30 minutes; re-arm them for an hour soak.
+- Never build on the Pi while the service runs. No transfers to or from the Pi
+  during a measurement.
+
+**Also owed, smaller:** a 17 MB root-owned `trace2.log` and `trace.log` in the
+Pi's `/dev/shm/rate882/` (the operator can `sudo rm -r /dev/shm/rate882`; a reboot
+clears it too); the per-rate DSP cost estimate on the page (admission); the
+unidentified poller of the Pi's ARC port (since 2026-10-17); Dante Switcher's
+88.2k hold has never run live.
+
 ## Current pickup — 2026-10-17: sample rate, step 5 (the multi-rate gadget). Start here.
 
 You are picking up the USB 16x16 project (Raspberry Pi 5 UAC2 gadget, 16x16,

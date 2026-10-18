@@ -13943,3 +13943,12 @@ b11fd358) is unchanged on the Pi and remains the rollback:
 is the 2026-10-17 point of record. Standing conditions: the Dante side runs 48 kHz only
 (sample-rate step 6 is next), and at 88.2 kHz nothing may start audio for 10 s after a
 switch (`work/pi-tuning/MULTIRATE_GADGET_PLAN.md`, "88.2 kHz and macOS").
+
+**DONE 2026-10-18, session close (operator away a few days): state left and the next
+step.** Checked at the close: Mac at 48000; `usb-16x16`, `usb16x16-statime` and
+`usb16x16-dante` active, `usb16x16-aes67` inactive; start check `state=ok`; no
+alsaloop/aplay/arecord, no trace reader or kprobe poller left; the Pi's
+`/dev/shm/rate882/` emptied except two root-owned trace logs (17 MB). Next: sample-rate
+step 6, 96 kHz end to end; `work/NEXT_SESSION_PROMPT.md`'s top section (rewritten
+today) is the pickup, including the two 48 kHz pins in `measure-candidate.sh` to fix
+before any reading at 96.
