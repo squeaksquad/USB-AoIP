@@ -1,0 +1,137 @@
+#!/bin/bash
+set -euo pipefail
+
+# The multi-rate gadget as a service (2026-10-18, sample-rate step 5): the
+# protected setup-usb-16x16-req (b11fd358, installed as
+# /usr/local/sbin/setup-usb-16x16) with one change, the rate list below on
+# its shared clock, both directions, read back after writing. The rest is
+# b11fd358 byte for byte, so a restart under the running Dante endpoint (the
+# usual anchor) works as before. Installed as
+# /usr/local/sbin/setup-usb-16x16-rates by install-gadget-rates.sh, which
+# points usb-16x16.service at it with a drop-in and leaves the protected
+# unit and script untouched; `install-gadget-rates.sh rollback` removes both.
+#
+# With 88200 or 96000 listed the kernel sizes the endpoints for 96 kHz: 624
+# bytes every 125 us (bInterval 1) at every rate, 48 kHz included. Measured
+# in MULTIRATE_GADGET_PLAN.md and the handoff, 2026-10-17/18. 88.2 kHz needs
+# a 10 s wait after each switch before audio starts (the plan, "88.2 kHz and
+# macOS"); it is a macOS fault, not this gadget's.
+#
+# 48000 is listed first: until the host sets a rate the clock reports the first
+# entry, and on 2026-10-18 the Mac took 44100 from the ascending list after the
+# install's restart, which the Dante endpoint (48 kHz only) cannot open. macOS
+# accepts a list out of order and offers it sorted (the plan's Q4, arm A2).
+RATES=48000,44100,88200,96000
+
+G=/sys/kernel/config/usb_gadget/studio_audio
+F="$G/functions/uac2.usb0"
+C="$G/configs/c.1"
+LINK="$C/uac2.usb0"
+UDC=1000480000.usb
+
+# Experiment 2026-09-04: the number of queued USB requests per direction.
+# The installed script writes 2 (the kernel default). At 64 CoreAudio frames
+# and below the Mac's USB audio driver drops isochronous data in both
+# directions (75% zeros at 64, 87% at 32, 0% at 128 and 512, measured with
+# the harness's channel-2 noise probe with the bridge clean). Two queued
+# requests at 125 us microframes is 250 us of slack against the host's
+# scheduling. Usage: setup-usb-16x16 start [REQ_NUMBER]; default 4.
+REQ_NUMBER=${2:-4}
+case "$REQ_NUMBER" in
+	''|*[!0-9]*) echo "REQ_NUMBER must be an unsigned integer" >&2; exit 2 ;;
+esac
+
+stop_gadget() {
+	if [[ ! -d "$G" ]]; then
+		return
+	fi
+
+	if [[ -f "$G/UDC" ]]; then
+		printf '\n' > "$G/UDC" || true
+	fi
+
+	if [[ -L "$LINK" ]]; then
+		unlink "$LINK"
+	fi
+
+	if [[ -d "$F" ]]; then
+		rmdir "$F"
+	fi
+
+	rmdir "$C/strings/0x409" 2>/dev/null || true
+	rmdir "$C" 2>/dev/null || true
+	rmdir "$G/strings/0x409" 2>/dev/null || true
+	rmdir "$G" 2>/dev/null || true
+}
+
+start_gadget() {
+	if ! mountpoint -q /sys/kernel/config; then
+		mount -t configfs configfs /sys/kernel/config
+	fi
+
+	modprobe -r g_ether 2>/dev/null || true
+	modprobe libcomposite
+	modprobe usb_f_uac2
+
+	stop_gadget
+
+	if [[ ! -e "/sys/class/udc/$UDC" ]]; then
+		echo "UDC $UDC is not available" >&2
+		exit 1
+	fi
+
+	mkdir -p "$G/strings/0x409"
+	mkdir -p "$C/strings/0x409"
+
+	# Prototype VID/PID only; obtain a production USB VID/PID before shipping.
+	printf '%s\n' 0x1d6b > "$G/idVendor"
+	printf '%s\n' 0x0104 > "$G/idProduct"
+	printf '%s\n' 0x0200 > "$G/bcdUSB"
+	printf '%s\n' 0x0100 > "$G/bcdDevice"
+
+	printf '%s\n' AUDDEV001 > "$G/strings/0x409/serialnumber"
+	printf '%s\n' 'Bryan DiMaio' > "$G/strings/0x409/manufacturer"
+	printf '%s\n' 'USB 16x16' > "$G/strings/0x409/product"
+	printf '%s\n' 'UAC2 Audio' > "$C/strings/0x409/configuration"
+
+	mkdir "$F"
+
+	printf '%s\n' 65535 > "$F/p_chmask"
+	printf '%s\n' "$RATES" > "$F/p_srate"
+	printf '%s\n' 3 > "$F/p_ssize"
+	printf '%s\n' 0 > "$F/p_hs_bint"
+
+	printf '%s\n' 65535 > "$F/c_chmask"
+	printf '%s\n' "$RATES" > "$F/c_srate"
+	printf '%s\n' 3 > "$F/c_ssize"
+	printf '%s\n' 0 > "$F/c_hs_bint"
+	printf '%s\n' async > "$F/c_sync"
+
+	printf '%s\n' "$REQ_NUMBER" > "$F/req_number"
+	printf '%s\n' 5 > "$F/fb_max"
+	printf '%s\n' 'USB 16x16' > "$F/function_name"
+	printf '%s\n' 'USB 16x16' > "$F/if_ctrl_name"
+
+	# The shared-clock patch needs both lists identical; the kernel keeps what it parsed.
+	if [[ "$(cat "$F/p_srate")" != "$RATES" || "$(cat "$F/c_srate")" != "$RATES" ]]; then
+		echo "rate lists read back as p=$(cat "$F/p_srate") c=$(cat "$F/c_srate"), not $RATES" >&2
+		exit 1
+	fi
+
+	ln -s "$F" "$LINK"
+	printf '%s\n' "$UDC" > "$G/UDC"
+}
+
+case "${1:-start}" in
+	start)
+		start_gadget
+		echo "gadget bound with rates=$(cat "$F/p_srate") req_number=$(cat "$F/req_number") fb_max=$(cat "$F/fb_max")"
+		;;
+	stop)
+		stop_gadget
+		;;
+	*)
+		echo "Usage: $0 {start|stop}" >&2
+		exit 2
+		;;
+esac

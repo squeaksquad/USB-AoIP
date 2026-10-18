@@ -13900,3 +13900,46 @@ first anchor was its draw. The gain is the Mac's IOProc offset, 152 here against
 the protected gadget: `daw_timeline` mean 488 (10.167 ms) against 531-533 (11.06-11.10
 ms), about 0.9 ms lower on every anchor, from bInterval 1. Still on the multi-rate gadget
 with the endpoint running; not an acceptance.
+
+**INSTALLED 2026-10-18 12:01-12:02 UTC (operator): the multi-rate gadget is the
+service's gadget, and MEASURED 12:03-13:31 UTC: battery and hour PASS on the installed
+form, 338 / `daw_timeline` 490 (10.208 ms).** `work/pi-tuning/install-gadget-rates.sh`
+(ebcc006d; staged in `~/usb-16x16-work/gadget-rates/`) checks the protected unit
+(99c87e86) and script (b11fd358) and leaves both untouched, installs
+`/usr/local/sbin/setup-usb-16x16-rates` (d4f0ee7b: b11fd358 with the rate list
+`48000,44100,88200,96000` both ways, read back after writing) and the drop-in
+`/etc/systemd/system/usb-16x16.service.d/10-rates.conf` (2310e8f1) that points
+the unit's ExecStart/ExecStop at it, then restarts the gadget and checks the host
+configured it. Rollback: `sudo ./install-gadget-rates.sh rollback` (removes both,
+restarts the protected 48 kHz gadget). The Dante endpoint stayed up through both
+restarts (its USB half closed and rejoined; `NRestarts` 0).
+- First install (script 29230296, ascending list): the Mac came up at 44100, the
+  first-listed rate, and the endpoint's USB half refused it ("negotiated sizes",
+  retrying) until a CoreAudio set to 48000. So 48000 is now listed first; the
+  re-install (08:02 EDT) came up at 48000 by itself. macOS normally restores its
+  last chosen rate; the first-listed rate is the fallback when it has none.
+- Battery on the re-install's anchor (`outputs/latency/rates-installed-*`, journal
+  `rates-installed-service-journal-20261018T120117Z.txt`): noise probe clean; 600 s
+  sixteen-channel soak PASS; four loaded 800-impulse runs all 338, spread 0,
+  `daw_timeline` 490; 3,600 s soak PASS; 400 loaded impulses all 338.
+- Owner: worst loop gap 1,101 us, no resync, loss or net error, return depth at
+  least 41, meters at most 50.8 us, playback faults only the two install restarts',
+  Ferrofish REACHABLE.
+Against the point of record on the protected gadget (345 / 533, 11.104 ms): the
+round trip is the same within the draw, `daw_timeline` about 0.9 ms lower (IOProc
+offset 152 against 188). The Dante side still runs 48 kHz only: a Mac left at another
+rate gives the endpoint no USB audio until it is set back to 48k. Awaiting the
+operator's ACCEPTED.
+
+**ACCEPTED 2026-10-18 (operator, after the 13:31 UTC battery): the multi-rate gadget is
+part of the point of record.** `usb-16x16.service` runs `/usr/local/sbin/setup-usb-16x16-rates`
+(d4f0ee7b, rates `48000,44100,88200,96000`, req_number 4, bInterval 1) through the drop-in
+`usb-16x16.service.d/10-rates.conf` (2310e8f1), installed by
+`work/pi-tuning/install-gadget-rates.sh` (ebcc006d). Level in service 338 /
+`daw_timeline` 490 (10.208 ms) on the 12:02 UTC anchor; five earlier anchors 328-350.
+The protected set (`work/protected-baseline-2026-08-31/`, unit 99c87e86, script
+b11fd358) is unchanged on the Pi and remains the rollback:
+`sudo ~/usb-16x16-work/gadget-rates/install-gadget-rates.sh rollback`. Everything else
+is the 2026-10-17 point of record. Standing conditions: the Dante side runs 48 kHz only
+(sample-rate step 6 is next), and at 88.2 kHz nothing may start audio for 10 s after a
+switch (`work/pi-tuning/MULTIRATE_GADGET_PLAN.md`, "88.2 kHz and macOS").
