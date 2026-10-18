@@ -13876,3 +13876,27 @@ set 88.2k itself, since a DAW opening an 88.2 project starts audio at once and c
 made to wait. `swift test` 7/7 and `sync --rate 88200 --dry-run` there; the hold has not
 run live (a live 88.2k sync moves every Dante device a band up and the Pi's Dante side
 refuses anything but 48k). 88.2 stays on the multi-rate list.
+
+**MEASURED 2026-10-18 11:41-11:55 UTC: four more anchors for the Dante endpoint on the
+multi-rate gadget at 48 kHz (five with 2026-10-17's).** Anchor here is the operator's
+`sudo killall coreaudiod` on the Mac, not the usual gadget restart, which on this
+gadget would roll back to the protected one. Per anchor: 30 s, the noise probe, 400 loaded
+impulses at 32 frames (`outputs/latency/mr48anchor{1..4}-*`, journal
+`mr48anchor-service-journal-20261018T114123Z.txt`). Endpoint active through all four,
+`NRestarts` 0, start check ok.
+
+| Anchor | Level | `daw_timeline` | Noise probe |
+|---|---|---|---|
+| 2026-10-17 23:53 (gadget bind + coreaudiod kill) | 328 | 480 (10.000 ms) | clean |
+| 11:41:23 | 332 | 484 (10.083 ms) | clean |
+| 11:45:18 | 330 | 482 (10.042 ms) | clean |
+| 11:48:37 | 350 | 502 (10.458 ms) | clean |
+| 11:51:50 | 340 | 492 (10.250 ms) | clean |
+
+Mean level 336, band 328-350; every run spread 0, no discontinuity. The protected
+gadget's point of record reads 343-345 (ten anchors of the low-latency set: 322-353),
+so **the round trip itself is the same within the draw**; the 17-sample gain read on the
+first anchor was its draw. The gain is the Mac's IOProc offset, 152 here against 188 on
+the protected gadget: `daw_timeline` mean 488 (10.167 ms) against 531-533 (11.06-11.10
+ms), about 0.9 ms lower on every anchor, from bInterval 1. Still on the multi-rate gadget
+with the endpoint running; not an acceptance.
