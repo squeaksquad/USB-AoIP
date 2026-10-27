@@ -13952,3 +13952,39 @@ alsaloop/aplay/arecord, no trace reader or kprobe poller left; the Pi's
 step 6, 96 kHz end to end; `work/NEXT_SESSION_PROMPT.md`'s top section (rewritten
 today) is the pickup, including the two 48 kHz pins in `measure-candidate.sh` to fix
 before any reading at 96.
+
+**FOUND 2026-10-27 (read 12:30 UTC; event 2026-10-22 18:49 UTC): the Pulse coming back
+after days off stepped PTP time back 14 days and cost one endpoint restart, recovered
+unattended.** The installed owner c8b484ac exited after 401,535 s (4.6 days): eth0 link
+up 18:48:55 UTC (no "Link is Down" line), Statime `GUARD: detected abrupt change:
+-1215012810098037 ns` (about 14 days back), Inferno `severe clock discontinuity`,
+capture XRUN, `NETERROR -32`, `FATAL`, exit 3. Every owner counter was clean in the
+minutes before. systemd restarted it 6 s later (`NRestarts=1`); the start check judged
+the new start whole (6019 / 6014 frames a second, no restart). Cause, operator: the
+Pulse (the domain leader) had been powered off for several days and was powered on
+when the operator came home on 2026-10-22. So a leader that returns with a reset clock is one
+endpoint restart (about 6 s plus subscriptions), not an outage; nothing to change.
+
+**DECIDED 2026-10-27 (operator): sample-rate step 6 at 96 kHz, the plan's answers.**
+`work/dante-mode/RATE96_PLAN.md` (written today, read-only survey of the Pi) is the
+plan. Answers: every Dante device, the Ferrofish's Dante card included, keeps 16
+channels each way at 96 kHz; the first candidate runs with every depth doubled (the
+same time as at 48), and depths come back toward the 48 kHz frame figures one at a
+time only after that passes; the hour is on `loaded`; the domain may sit at 96 today,
+with the operator at the Mac from about 4-5 hours after 12:30 UTC. Phase 0 (Mac side:
+the four 48 kHz pins in the measurement tools, the candidate Inferno config at 96, the
+two presets compiled at 96000) goes first.
+
+**IMPLEMENTED 2026-10-27 (Mac side, nothing on the Pi): sample-rate step 6, phase 0 of
+`work/dante-mode/RATE96_PLAN.md`.** The measurement tools follow the capture's rate:
+`measure-candidate.sh` (soak short check from `sampleRate`, `daw_timeline` from
+`deviceDuring.nominalSampleRate`; checked on the 2026-10-17 96 kHz soak, PASS at 96000,
+and on the 2026-10-18 anchor, still 338 / 490 = 10.208 ms), `soak_reference.py` (rate
+from the report, passed to the exporter) and `owner/reference_export.cpp` (`RATE`
+argument, default 48000; hour limit at that rate); `test_soak_reference.py` 14 pass.
+Staged in the repo for the candidate: `config/asound-inferno-owner-rate96-candidate.conf`
+(7892fd04: the installed 0a1688e1 with `SAMPLE_RATE` and `SUPPORTED_SAMPLE_RATES` 96000
+and no request file), `config/dsp-loaded@96000.dsp` (89759207) and
+`config/dsp-transparent@96000.dsp` (cc2511ac); the same compile at 48000 reproduces the
+installed `loaded.dsp` and `transparent.dsp` byte for byte. Next: phase 1 (copy these
+to the Pi), then the operator moves the domain to 96.

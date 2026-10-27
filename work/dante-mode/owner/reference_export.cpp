@@ -3,8 +3,10 @@
 // preset, by the owner's own path. Modelled on
 // work/dsp-service/reference-export.cpp, which does this for the bridge.
 //
-//   reference_export ARTIFACT RANGES
+//   reference_export ARTIFACT RANGES [RATE]
 //
+// RATE: the rate ARTIFACT was compiled for and the capture ran at (a Dante
+// rate, default 48000); the load refuses an artifact compiled for another.
 // RANGES: sorted, non-overlapping "first last" frame pairs (last exclusive)
 // of the stimulus, one per line. Stdout: little-endian int32 24-bit codes,
 // 16 per frame, the ranges in order.
@@ -20,6 +22,7 @@
 // Build anywhere (no ALSA):
 //   c++ -std=c++20 -O2 -I . -I ../../phase4-bridge/include -o /tmp/reference_export reference_export.cpp ../../phase4-bridge/src/bridge_core.cpp
 #include "dsp_path.hpp"
+#include "rate_check.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -38,15 +41,17 @@
 int main(int argc, char** argv) {
     try {
         static_assert(std::endian::native == std::endian::little);
-        if (argc != 3) throw std::runtime_error("expected ARTIFACT RANGES");
+        if (argc != 3 && argc != 4) throw std::runtime_error("expected ARTIFACT RANGES [RATE]");
+        const unsigned rate = argc == 4 ? static_cast<unsigned>(std::stoul(argv[3])) : 48000U;
+        if (!usb16x16::owner::is_dante_rate(rate)) throw std::runtime_error("RATE must be a Dante rate");
         std::ifstream artifact(argv[1], std::ios::binary), range_file(argv[2]);
         if (!artifact || !range_file) throw std::runtime_error("unreadable input");
         std::ostringstream text;
         text << artifact.rdbuf();
         auto dsp = std::make_unique<usb16x16::owner::OutDsp>();
-        dsp->load(text.str());
+        dsp->load(text.str(), rate);
 
-        constexpr long long kMaxFrames = 3600LL * 48000;
+        const long long kMaxFrames = 3600LL * static_cast<long long>(rate);   // an hour
         std::vector<std::pair<long long, long long>> ranges;
         std::string line;
         long long total = 0;

@@ -57,6 +57,7 @@ POLICY = {'id': 'dante-event-reference-v1', 'maximumErrorLSB': 2.0, 'maximumSear
           'zeroRunRule': 'exact predicted zero codes with nonzero boundaries',
           'coverage': 'retained event windows only', 'wholeRunValidated': False,
           'maximumSeconds': 3600}
+DANTE_RATES = (44100, 48000, 88200, 96000, 176400, 192000)
 
 
 class EvidenceError(ValueError):
@@ -85,18 +86,27 @@ def decode(frame):
     return [v * 8388608 for v in values]
 
 
+def report_rate(report):
+    """The rate the capture ran at: the device's nominal rate, which the
+    harness's own sampleRate (since 2026-10-17) must agree with."""
+    rate = report['device']['nominalSampleRate']
+    require(rate in DANTE_RATES, 'unsupported sample rate')
+    require(report.get('sampleRate', rate) == rate, 'sampleRate and the device rate disagree')
+    return int(rate)
+
+
 def validate_evidence(report):
     """The capture is whole and its event records are self-consistent. Returns the events."""
     require(report.get('kind') == 'continuous-activity-not-latency', 'unsupported stimulus report')
     require(report['amplitude'] == 0.1 and report['warmupSeconds'] == 2, 'unsupported amplitude/warmup')
     require(integer(report['seconds'], 5, POLICY['maximumSeconds']), 'unsupported duration')
-    total = report['seconds'] * 48000
-    warmup = report['warmupSeconds'] * 48000
+    rate = report_rate(report)
+    total = report['seconds'] * rate
+    warmup = report['warmupSeconds'] * rate
     require(report['inputFrames'] == report['outputFrames'] == total, 'incomplete frame counts')
     for key in ('inputDiscontinuities', 'outputDiscontinuities', 'invalidBuffers', 'invalidTimestamps'):
         require(report[key] == 0, 'capture integrity error: ' + key)
     device = report['device']
-    require(device['nominalSampleRate'] == 48000, 'unsupported sample rate')
     for direction in ('input', 'output'):
         require(device[direction]['channels'] == 16, 'unsupported channel count')
     ec = report['eventCapture']
@@ -256,7 +266,7 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def export_reference(artifact, spans, work):
+def export_reference(artifact, spans, work, rate):
     """Build the exporter and run it over `spans`. Returns (bytes, provenance)."""
     binary = work / 'reference_export'
     command = ['c++', '-std=c++20', '-O2', '-Wall', '-Wextra', '-Wpedantic', '-Werror', '-I', str(EXPORTER.parent),
@@ -264,7 +274,7 @@ def export_reference(artifact, spans, work):
     subprocess.run(command, check=True, capture_output=True, text=True, timeout=180)
     ranges = work / 'ranges.txt'
     ranges.write_text(''.join(f'{lo} {hi}\n' for lo, hi in spans))
-    done = subprocess.run([str(binary), str(artifact), str(ranges)], check=True, capture_output=True, timeout=1800)
+    done = subprocess.run([str(binary), str(artifact), str(ranges), str(rate)], check=True, capture_output=True, timeout=1800)
     provenance = {'exporterSHA256': sha(EXPORTER), 'coreSHA256': sha(CORE), 'artifactSHA256': sha(artifact),
                   'referenceSHA256': hashlib.sha256(done.stdout).hexdigest(),
                   'compiler': subprocess.check_output(['c++', '--version'], text=True).splitlines()[0]}
@@ -279,7 +289,7 @@ def analyze(report_path, artifact, work):
         result['evidenceComplete'] = True
         if events:
             spans = reference_ranges(events, report['outputFrames'])
-            data, provenance = export_reference(artifact, spans, work)
+            data, provenance = export_reference(artifact, spans, work, report_rate(report))
             result = check_windows(report, events, Reference(spans, data))
             result.update(evidenceComplete=True, provenance=provenance, ranges=spans)
         else:

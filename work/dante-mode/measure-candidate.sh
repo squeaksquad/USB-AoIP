@@ -133,11 +133,12 @@ if [[ $mode == soak ]]; then
     /usr/bin/python3 - "$result_path" <<'PYEOF'
 import json, sys
 d = json.load(open(sys.argv[1])); bad = []; zero_runs = []
+rate = d["sampleRate"]    # the device's rate as the harness ran it (2026-10-17), not 48000
 for key in ("inputDiscontinuities", "outputDiscontinuities"):
     if d.get(key): bad.append(f"{key}={d[key]}")
 for i, c in enumerate(d["channels"], 1):
     why = []
-    if c["samples"] < (d["seconds"] - 3) * 48000: why.append("short")
+    if c["samples"] < (d["seconds"] - 3) * rate: why.append("short")
     if c["peak"] < 1e-8: why.append("silent")
     if c["longestZeroRun"] >= 4: zero_runs.append(f"ch{i}: zero run {c['longestZeroRun']}")
     if c.get("nonFinite"): why.append("non-finite")
@@ -145,7 +146,7 @@ for i, c in enumerate(d["channels"], 1):
     if why: bad.append(f"ch{i}: " + ", ".join(why))
 runs = [c["longestZeroRun"] for c in d["channels"]]
 peaks = [c["peak"] for c in d["channels"]]
-print(f"channels={len(d['channels'])} seconds={d['seconds']} longest zero run max={max(runs)} peak min={min(peaks):.4f} max={max(peaks):.4f}")
+print(f"rate={rate} channels={len(d['channels'])} seconds={d['seconds']} longest zero run max={max(runs)} peak min={min(peaks):.4f} max={max(peaks):.4f}")
 print(f"discontinuities in={d.get('inputDiscontinuities')} out={d.get('outputDiscontinuities')}")
 if bad:
     print("soak: FAIL " + "; ".join(bad + zero_runs)); raise SystemExit(1)
@@ -215,7 +216,8 @@ lo, hi, med = d.get('ioOffsetMinimumSamples'), d.get('ioOffsetMaximumSamples'), 
 if lo is not None and med is not None:
     # What RTL Utility and a DAW read: the device-timeline lag plus the IOProc's output-minus-input offset.
     steady = "steady" if lo == hi else f"VARIED {lo}..{hi}"
-    print(f"daw_timeline={(med + lo) / 48:.3f} ms ({med + lo}) = {med} + io_offset {lo} ({steady})")
+    rate = d["deviceDuring"]["nominalSampleRate"]
+    print(f"daw_timeline={(med + lo) * 1000 / rate:.3f} ms ({med + lo}) = {med} + io_offset {lo} ({steady}) at {rate:g} Hz")
 PYEOF
   else
     print -r -- "harness stderr: $(head -c 300 "$api_dir/measure.log")"

@@ -61,20 +61,22 @@ def event(channel, start_input, length, zero_runs, lag=LAG, noise=0.0):
             'windowComplete': True, 'windowCapacityReached': False, 'frames': frames}
 
 
-def report(events, longest=None):
+def report(events, longest=None, rate=48000):
     longest = longest or {}
+    total = SECONDS * rate
     for e in events:
         longest[e['channel'] - 1] = max(longest.get(e['channel'] - 1, 0), e['zeroFrames'])
     return {
         'kind': 'continuous-activity-not-latency', 'amplitude': 0.1, 'warmupSeconds': 2, 'seconds': SECONDS,
-        'inputFrames': TOTAL, 'outputFrames': TOTAL, 'inputDiscontinuities': 0, 'outputDiscontinuities': 0,
+        'inputFrames': total, 'outputFrames': total, 'inputDiscontinuities': 0, 'outputDiscontinuities': 0,
         'invalidBuffers': 0, 'invalidTimestamps': 0,
-        'device': {'nominalSampleRate': 48000, 'input': {'channels': 16}, 'output': {'channels': 16}},
+        'sampleRate': rate,
+        'device': {'nominalSampleRate': rate, 'input': {'channels': 16}, 'output': {'channels': 16}},
         'eventCapture': {'version': 1, 'stimulus': 'xorshift32-interleaved-float32', 'stimulusSeed': 0x9e3779b9,
                          'beforeFrames': 16, 'afterFrames': 16, 'thresholdFrames': 4, 'frameLimitPerEvent': 96,
                          'eventLimit': 32, 'omittedEvents': 0, 'continuityBreaks': 0,
                          'triggeredEvents': len(events), 'events': events},
-        'channels': [{'samples': TOTAL - 96000, 'nonFinite': 0, 'fullScaleSamples': 0, 'peak': 0.02, 'rms': 0.005,
+        'channels': [{'samples': total - 2 * rate, 'nonFinite': 0, 'fullScaleSamples': 0, 'peak': 0.02, 'rms': 0.005,
                       'longestZeroRun': longest.get(c, 1)} for c in range(16)],
     }
 
@@ -160,6 +162,21 @@ class EvidenceTests(unittest.TestCase):
         late = event(3, 200000, 5, {3: [(200000 - 20000, 5)]}, lag=20000)   # further back than the search allows
         self.assertEqual(check(report([late]), {3: [(200000 - 20000, 5)]})['status'], 'mismatch')
 
+    def test_the_capture_rate_comes_from_the_report(self):
+        self.assertEqual(check(report(good_events(), rate=96000))['status'], 'matched-events')
+        # A 48 kHz capture's frame counts read as 96 kHz ones are incomplete, not a pass.
+        short = report(good_events())
+        short['device']['nominalSampleRate'] = short['sampleRate'] = 96000
+        self.assertIn('incomplete frame counts', check(short)['reason'])
+        odd = report([], rate=22050)
+        self.assertIn('unsupported sample rate', check(odd)['reason'])
+        disagree = report([])
+        disagree['sampleRate'] = 96000
+        self.assertIn('disagree', check(disagree)['reason'])
+        older = report(good_events())
+        del older['sampleRate']        # reports from before 2026-10-17 carry only the device's rate
+        self.assertEqual(check(older)['status'], 'matched-events')
+
     def test_ranges_merge_and_cover_each_window(self):
         events = sr.validate_evidence(report(good_events()))
         spans = sr.reference_ranges(events, TOTAL)
@@ -173,7 +190,7 @@ class ExporterTests(unittest.TestCase):
     def test_the_exporter_reproduces_the_stimulus_through_a_unity_preset(self):
         unity = HERE / 'config' / 'dsp-unity.dsp'
         with tempfile.TemporaryDirectory() as scratch:
-            data, provenance = sr.export_reference(unity, [(0, 4), (1000, 1002)], Path(scratch))
+            data, provenance = sr.export_reference(unity, [(0, 4), (1000, 1002)], Path(scratch), 48000)
         self.assertEqual(len(data), 6 * 64)
         self.assertEqual(provenance['artifactSHA256'], sr.sha(unity))
         # An independent xorshift32 in Python, float32 arithmetic by round-tripping through struct.
@@ -193,6 +210,25 @@ class ExporterTests(unittest.TestCase):
             for c in range(16):
                 self.assertLessEqual(abs(got[index][c] - expected[frame][c]), 1, (frame, c))   # ties may round either way
         self.assertTrue(all(abs(v) <= 838861 for row in got for v in row))
+
+    def test_the_artifact_must_be_compiled_for_the_capture_rate(self):
+        unity48 = (HERE / 'config' / 'dsp-unity.dsp').read_text()
+        self.assertIn('\nrate 48000\n', unity48)
+        with tempfile.TemporaryDirectory() as scratch:
+            unity96 = Path(scratch) / 'unity96.dsp'
+            unity96.write_text(unity48.replace('\nrate 48000\n', '\nrate 96000\n'))
+            at96, _ = sr.export_reference(unity96, [(0, 4)], Path(scratch), 96000)
+            at48, _ = sr.export_reference(HERE / 'config' / 'dsp-unity.dsp', [(0, 4)], Path(scratch), 48000)
+            self.assertEqual(at96, at48)      # unity is the stimulus at any rate
+            with self.assertRaises(subprocess.CalledProcessError) as raised:
+                sr.export_reference(HERE / 'config' / 'dsp-unity.dsp', [(0, 4)], Path(scratch), 96000)
+            self.assertIn(b'compiled for rate 48000', raised.exception.stderr)
+            # Through analyze: a 96 kHz capture against the 48 kHz artifact is inconclusive, never a pass.
+            rep = Path(scratch) / 'report.json'
+            rep.write_text(json.dumps(report(good_events(), rate=96000)))
+            result = sr.analyze(rep, HERE / 'config' / 'dsp-unity.dsp', Path(scratch))
+        self.assertEqual(result['status'], 'inconclusive')
+        self.assertIn('compiled for rate 48000', result['reason'])
 
     def test_a_bad_artifact_is_inconclusive(self):
         with tempfile.TemporaryDirectory() as scratch:
