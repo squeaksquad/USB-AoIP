@@ -249,3 +249,7 @@ USB 16x16 moves to 96. The Dante domain, the Metric Halo and the Pulse stay at
 Inferno drops its own mDNS answers and advertises no self-subscription. The 96
 network half ran clean under the 48 leader with nothing subscribed. Next options:
 a second Inferno instance as a reflector, or a patch to the self-filter.
+
+**Result 2026-10-27 (handoff, 21:11):** 96 kHz end to end through DVS as the far
+end: the candidate is clean at 96 (nothing it sent had a hole), the loop's holes
+come from DVS, and the figure (about 1900 / 19.8 ms) includes DVS's latency.

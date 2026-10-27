@@ -1,0 +1,14 @@
+01 <- FF-PULSE-16-DX Output 03
+02 <- FF-PULSE-16-DX Output 04
+03 <- FF-PULSE-16-DX Output 05
+04 <- FF-PULSE-16-DX Output 06
+05 <- FF-PULSE-16-DX Output 07
+06 <- FF-PULSE-16-DX Output 08
+07 <- FF-PULSE-16-DX Output 09
+08 <- FF-PULSE-16-DX Output 10
+09 <- FF-PULSE-16-DX Output 11
+10 <- FF-PULSE-16-DX Output 12
+11 <- FF-PULSE-16-DX Output 13
+12 <- FF-PULSE-16-DX Output 14
+13 <- FF-PULSE-16-DX Output 15
+14 <- FF-PULSE-16-DX Output 16

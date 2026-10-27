@@ -14120,3 +14120,32 @@ impulses 341 / `daw_timeline` 493. A 96 internal loop needs a second Inferno ins
 (a reflector: its own PROCESS_ID, ALT_PORT and name, receiving the candidate's TX and sending it
 back, e.g. by `alsaloop`, which adds its own latency to the figure), or a patch to Inferno's
 self-filter. Operator's choice; not started.
+
+**MEASURED 2026-10-27 21:11-21:41 UTC: 96 kHz end to end through Dante Virtual Soundcard as the
+far end. The Pi side runs clean at 96; the loop's holes are on the DVS side; no 96 figure is
+comparable to 48.** The one-instance self-loop being impossible (above), the operator started
+DVS 4.5.2.3 on this Mac at 96 kHz, 16 x 16, 4 ms, on en12 (netaudio lists DVS at 192.168.1.67,
+en0, because the Mac answers mDNS on both; DVS is really on 169.254.253.98). Loop: USB 16x16 at
+96 -> candidate c8b484ac as `USB-16x16-Inferno-96` (self-loop config b1c44411, arm A) -> DVS RX
+1-16 -> `outputs/latency/dvs96-20261027/passthrough.swift` (copies DVS's inputs to its outputs in
+one IOProc, 128 frames; 1.29 M callbacks, none mismatched) -> DVS TX 1-16 -> candidate RX 1-16 ->
+USB. The domain, MHLink, the Pulse and the D2USB stayed at 48.
+- Noise probe three times: return holes of 600 and 1260, then 180 and 2160, then none (lengths
+  all multiples of 60 samples).
+- Four loaded 800-impulse runs: 1665 / 1664 / 1678 / 1689, spread 8 / 0 / 8 / 0;
+  `daw_timeline` 1901 / 1900 / 1914 / 1925 (19.80 to 20.05 ms; io_offset 236). The figure holds
+  DVS's 4 ms, the candidate's receive latency for DVS's flows and the passthrough's buffer, so
+  it says 96 works, not how fast.
+- 600 s soak FAIL: one 31,320-sample (326 ms) hole on all sixteen channels, no discontinuity.
+- Owner for the whole session: `out_holes=0/0` (what the Pi sent to Dante was whole),
+  `back_holes=14/4260` (what came back from DVS), no resync, loss or fault, gap at most 1.06 ms.
+  The owner never saw a hole as long as the soak's 326 ms one, so where that one arose is not
+  settled. `bitexact` and the hour were not run: DVS's holes would fail them and say nothing about
+  the Pi.
+Restored 21:41: candidate stopped, USB 16x16 to 48, `dante-sync sync --source usb16x16` moved
+DVS to 48 (direct settings packet to port 38700, verified by heartbeat); `netaudio subscription
+add` had replaced DVS's receive routing, so it was put back from Dante Switcher's 2026-10-16
+inventory (`dvs96-20261027/dvs-rx-subscriptions-20261016.txt`: DVS 01-14 <- Pulse `Output
+03-16`, 15-16 empty); endpoint started, start check ok, 64 subscriptions all connected, noise
+probe clean, 400 loaded impulses 365 / `daw_timeline` 517. Evidence `outputs/latency/dvs96-*`,
+`dvs96-20261027/` (owner log, passthrough and its log).
