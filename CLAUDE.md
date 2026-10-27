@@ -21,14 +21,14 @@ Hosts and paths that every script assumes:
 - Pi AoIP interface: `eth0` at `169.254.92.97`. SSH working says nothing about AoIP health.
 - Pi work directory: `/home/bdimaio/usb-16x16-work` (staging for everything installed).
 - Installed service names: `usb-16x16.service` (gadget, protected), `usb16x16-aes67.service` (bridge), `usb16x16-governor.service`.
-- Remote: `github.com/squeaksquad/usb-16x16-aes67`, branch `main`.
+- Remote: `github.com/squeaksquad/USB-AoIP` (renamed from `usb-16x16-aes67` on 2026-10-27; older entries cite the old name, which GitHub redirects), branch `main`.
 
 ## Top level
 
 | Path | What it is | Read it when |
 |---|---|---|
 | `PROJECT_HANDOFF.md` | Authoritative, append-only chronological log, ~4,500 lines and growing. | Always, but by section (see below). Never whole. |
-| `README.md` | Four-line pointer to the handoff. Its "next priority" sentence is stale. | Never needed. |
+| `README.md` | Human-facing overview: what it is, state as of 2026-10-18, hardware, layout, operation. | Orienting a person, not a session. |
 | `work/` | Everything that runs: bridge source, service, web UI and its backend, wrappers, harness, tuning. | Doing anything. |
 | `outputs/latency/` | Measurement evidence, ~500 top-level entries, ~4,400 files. Cited by the handoff by run timestamp. | Verifying a number or re-analysing a run. |
 | `outputs/architecture.md`, `outputs/pi-baseline.md` | 2026-08-30 snapshots (CamillaDSP-era design, first Pi inspection). Superseded. | Historical context only. |
