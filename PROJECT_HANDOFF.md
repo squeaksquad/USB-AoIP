@@ -13988,3 +13988,55 @@ and no request file), `config/dsp-loaded@96000.dsp` (89759207) and
 `config/dsp-transparent@96000.dsp` (cc2511ac); the same compile at 48000 reproduces the
 installed `loaded.dsp` and `transparent.dsp` byte for byte. Next: phase 1 (copy these
 to the Pi), then the operator moves the domain to 96.
+
+**MEASURED 2026-10-27 16:52 UTC: same-day control at 48 kHz on the installed endpoint,
+359 / `daw_timeline` 511 (10.646 ms).** 400 loaded impulses, spread 0
+(`outputs/latency/ctl48-20261027-*`). The harness app had to be rebuilt first: its
+gitignored `.build/` was gone after the repo moved to `~/Development/USB-AoIP`. Rebuilt by
+`build-app.sh` from the clean tree, binary ed4a79ac (e6ff8640 on 2026-10-17, same source;
+the build path differs). Input access still granted.
+
+**FOUND 2026-10-27 16:54-17:03 UTC: at 96 kHz the Pulse's Dante card has 32 channels each
+way, so the loop's channels 49-64 do not exist there, and the Pulse dropped its
+subscriptions above 32 for good.** Sequence (operator's go, monitors muted):
+`systemctl stop usb16x16-dante`; the USB 16x16 to 96000 (`setrate.swift`); `dante-sync sync
+--source usb16x16 --allow-band-up --exclude USB-16x16-Inferno` (MHLink, the Pulse and the
+D2USB to 96, each verified, Pulse word clock locked; a plain `--rate 96000` would leave the
+Metric Halo, the Pulse's clock source, at 48). Candidate owner c8b484ac through
+`usb16x16-dante-candidate` with `config/asound-inferno-owner-rate96-candidate.conf`, `--rate
+96000 --buffer 2048 --tx-lead 256 --guard 512 --usb-period 96 --usb-buffer 960 --rx-queue 192
+--rx-slack 192` (arm A, every depth doubled; `--period` stays 64, since the owner takes only
+32 or 64 and it is Inferno's packet period, not a depth). It came up clean at 96000 (both
+PCMs running, USB 96/960, loop gap at most 1.03 ms, no resync, loss or fault in 482 s), and
+the impulse reached Dante (`out_peak=2097152`). But nothing came back (`back_peak=0,0`;
+eth0 at about 0.9 kB/s out and 2.8 kB/s in), and the noise probe never saw a return. netaudio:
+the Pulse reports 32 receivers and 32 transmitters at 96 (64 / 64 at 48), and the Pi's saved
+subscriptions (`RX 1-16` <- Pulse `Output 49-64`) were all UNRESOLVED. The loop is Pi `TX
+1-16` -> Pulse `Input 49-64` -> MADI -> Metric Halo -> MADI -> Pulse `Output 49-64` -> Pi `RX
+1-16`, so none of it exists at 96. No 96 kHz reading was possible; arm A is untested.
+Rolled back: candidate stopped, the USB 16x16 and the domain to 48 the same way, the endpoint
+started 17:04 UTC (start check ok). Back at 48 the Pi's subscriptions resolved by themselves,
+but the Pulse's `Input 49-64` had **no subscription left** (its receive flows 1, against 9 in
+Dante Switcher's 2026-10-16 inventory). Restored by `netaudio subscription add --tx
+USB-16x16-Inferno --rx FF-PULSE-16-DX --count 16 --offset-rx 48` (Input 48+n <- TX n, all
+connected). Then noise probe clean (`back48-20261027-noise-*`), 400 loaded impulses 365 /
+`daw_timeline` 517 (10.771 ms), spread 0. Subscriptions now: Pulse <- D2USB 1-2, Pulse <-
+Bryans-MBP-M2-Max 3-16 (unresolved, that Mac is off), Pulse <- Inferno 49-64, D2USB <- Pulse
+1-2, Inferno <- Pulse 1-16. Whether the Pulse had other receive subscriptions above 32 that
+went the same way is not known (nothing records them); the operator should check Controller.
+So any rate above 48 needs the loop moved inside the Pulse's first 32 channels, and the MADI
+side changes with it (MADI at 96k carries half the channels). That is the operator's routing.
+
+**FOUND 2026-10-27 17:15-17:25 UTC: the Mac no longer applies its 0.999998 gain on the USB
+16x16, so `bitexact` (which predicts it) cannot pass; its 360 s FAIL at 48 says nothing
+about the path.** `bitexact` 360 s at 32 frames
+(`outputs/latency/back48-20261027-bitexact-360s-32f-*`): no channel ever locked (matches
+about 0.5 % and lost locks about 82,000 per channel, off-grid 6.9 M of 17.3 M), while the
+impulse correlates at score 1.000. The returned impulse peak is exactly 0.25 today, in this
+morning's control too, before anything moved (0.24999902 = 0.25 x 0.999998^2 on 2026-10-18).
+And the Pi received the 0.25 impulse as code 2097152 (2^21 arrived as 2097148 on 2026-10-10).
+So both directions now pass at unity. macOS is still 26.5.2 (25F84). The Mac has rebooted since
+(2026-10-19), and installs since 10-18 are Jump Desktop Connect (10-20), ChronoSync (10-23)
+and Google Drive (10-26). The cause is not identified. `BitExactSequence.hostGain` (and
+`soak_reference.py`'s `HOST_GAIN`) model 0.999998 and need to follow the device, by
+measurement or a parameter, before either can judge again. Not changed.
