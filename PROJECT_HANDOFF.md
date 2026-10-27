@@ -14040,3 +14040,26 @@ So both directions now pass at unity. macOS is still 26.5.2 (25F84). The Mac has
 and Google Drive (10-26). The cause is not identified. `BitExactSequence.hostGain` (and
 `soak_reference.py`'s `HOST_GAIN`) model 0.999998 and need to follow the device, by
 measurement or a parameter, before either can judge again. Not changed.
+
+**IMPLEMENTED and MEASURED 2026-10-27 17:30-17:44 UTC: the harness measures the Mac's gain
+through the loop; with it, the Dante path at 48 kHz is bit-exact again.** New
+`work/latency-harness/Sources/USB16x16LatencyCore/HostGain.swift`: 2 s of constant levels
+on all sixteen channels (two steps of small codes, which the Mac's output rounding cannot
+move, give the input gain; two near full scale then give the output gain; each reading's
+interval is intersected, and inconsistent readings are a refusal). `bitexact` runs it
+first and defines its sequence on the measured gains; `usb16x16-latency hostgain` runs it
+alone. Tests: 19 pass, the full-range wire test at 0.999998 and at unity, float and double
+host arithmetic. Harness binary a930c982. On the device: **output and input gain 1.0**
+(widths 1.2e-7 and 6e-8; limit 8388607;
+`outputs/latency/hostgain-20261027-32f-20261027T173732Z.json`). `bitexact` 360 s at 32
+frames on the installed endpoint (`gain48-20261027-bitexact-360s-32f-20261027T173746Z`):
+**PASS**, every channel locked on its own number by frame 511 and held to the end, 17,279,486
+matches each, no mismatch, loss or off-grid sample, both full-scale limits returned on all
+sixteen, no discontinuity. So the earlier FAIL was the stale gain model, not the path. The
+soak criterion follows: `soak_reference.py` (d02a3d7f) is now `dante-event-reference-v2`
+and requires `--host-gain` (a `hostgain` or `bitexact` report at the capture's rate); the
+exporter (6261ddb5) takes `OUTPUT_GAIN`; `measure-candidate.sh soak` measures the gain
+right after a preset soak that has zero runs. `test_soak_reference.py` 16 pass.
+Operator, same day: test 48 and 44.1 kHz on the real loop, find an internal way to test 96,
+and no re-mapping of the Ferrofish. Dante Switcher's 44.1 capture shows the Pulse at 64 x 64
+there, so the loop's channels exist at 44.1.

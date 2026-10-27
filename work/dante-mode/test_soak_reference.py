@@ -17,6 +17,14 @@ HERE = Path(__file__).resolve().parent
 SECONDS = 10
 TOTAL = SECONDS * 48000
 LAG = 600          # stimulus frame = input frame - LAG
+GAIN = struct.unpack('<f', struct.pack('<f', 0.999998))[0]   # the Mac's gain each way on 2026-10-10
+
+
+def gain_file(directory, output=GAIN, input_=GAIN, rate=48000, kind='host-gain'):
+    path = Path(directory) / f'gain-{output}-{input_}-{rate}-{kind}.json'
+    path.write_text(json.dumps({'kind': kind, 'sampleRate': rate,
+                                'hostGain': {'outputGain': output, 'inputGain': input_}}))
+    return path
 
 
 def reference_codes(first, count, zero_runs):
@@ -47,7 +55,7 @@ def bits(value):
 
 def capture_frame(input_frame, row, noise=0.0):
     """What the Mac records for a reference row: the host's gain, as float32."""
-    values = [(code * sr.HOST_GAIN + (noise if code else 0.0)) / 8388608 for code in row]
+    values = [(code * GAIN + (noise if code else 0.0)) / 8388608 for code in row]
     return {'inputFrame': input_frame, 'inputSampleTime': input_frame + 1000,
             'outputCallbackFirstFrame': (input_frame - 16) // 32 * 32, 'outputCallbackFrames': 32,
             'outputCallbackSampleTime': (input_frame - 16) // 32 * 32 + 1000 + 200,
@@ -93,7 +101,7 @@ def check(rep, runs=RUNS):
         events = sr.validate_evidence(rep)
     except sr.EvidenceError as error:
         return {'status': 'inconclusive', 'reason': str(error)}
-    return sr.check_windows(rep, events, FakeReference(runs))
+    return sr.check_windows(rep, events, FakeReference(runs), GAIN)
 
 
 class EvidenceTests(unittest.TestCase):
@@ -190,7 +198,7 @@ class ExporterTests(unittest.TestCase):
     def test_the_exporter_reproduces_the_stimulus_through_a_unity_preset(self):
         unity = HERE / 'config' / 'dsp-unity.dsp'
         with tempfile.TemporaryDirectory() as scratch:
-            data, provenance = sr.export_reference(unity, [(0, 4), (1000, 1002)], Path(scratch), 48000)
+            data, provenance = sr.export_reference(unity, [(0, 4), (1000, 1002)], Path(scratch), 48000, GAIN)
         self.assertEqual(len(data), 6 * 64)
         self.assertEqual(provenance['artifactSHA256'], sr.sha(unity))
         # An independent xorshift32 in Python, float32 arithmetic by round-tripping through struct.
@@ -203,7 +211,7 @@ class ExporterTests(unittest.TestCase):
                 state ^= (state << 13) & 0xffffffff; state ^= state >> 17; state ^= (state << 5) & 0xffffffff
                 signed = state - (1 << 32) if state & 0x80000000 else state
                 sent = f32(max(-1.0, min(1.0, f32(f32(float(signed)) / f32(float(2**31 - 1))))) * f32(0.1))
-                row.append(round(sent * sr.HOST_GAIN * 8388608))
+                row.append(round(sent * GAIN * 8388608))
             expected[frame] = row
         got = [list(struct.unpack_from('<16i', data, i * 64)) for i in range(6)]
         for index, frame in enumerate([0, 1, 2, 3, 1000, 1001]):
@@ -217,18 +225,48 @@ class ExporterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as scratch:
             unity96 = Path(scratch) / 'unity96.dsp'
             unity96.write_text(unity48.replace('\nrate 48000\n', '\nrate 96000\n'))
-            at96, _ = sr.export_reference(unity96, [(0, 4)], Path(scratch), 96000)
-            at48, _ = sr.export_reference(HERE / 'config' / 'dsp-unity.dsp', [(0, 4)], Path(scratch), 48000)
+            at96, _ = sr.export_reference(unity96, [(0, 4)], Path(scratch), 96000, GAIN)
+            at48, _ = sr.export_reference(HERE / 'config' / 'dsp-unity.dsp', [(0, 4)], Path(scratch), 48000, GAIN)
             self.assertEqual(at96, at48)      # unity is the stimulus at any rate
             with self.assertRaises(subprocess.CalledProcessError) as raised:
-                sr.export_reference(HERE / 'config' / 'dsp-unity.dsp', [(0, 4)], Path(scratch), 96000)
+                sr.export_reference(HERE / 'config' / 'dsp-unity.dsp', [(0, 4)], Path(scratch), 96000, GAIN)
             self.assertIn(b'compiled for rate 48000', raised.exception.stderr)
             # Through analyze: a 96 kHz capture against the 48 kHz artifact is inconclusive, never a pass.
             rep = Path(scratch) / 'report.json'
             rep.write_text(json.dumps(report(good_events(), rate=96000)))
-            result = sr.analyze(rep, HERE / 'config' / 'dsp-unity.dsp', Path(scratch))
+            result = sr.analyze(rep, HERE / 'config' / 'dsp-unity.dsp', Path(scratch), gain_file(scratch, rate=96000))
         self.assertEqual(result['status'], 'inconclusive')
         self.assertIn('compiled for rate 48000', result['reason'])
+
+    def test_the_exporter_follows_the_measured_output_gain(self):
+        unity = HERE / 'config' / 'dsp-unity.dsp'
+        with tempfile.TemporaryDirectory() as scratch:
+            then, _ = sr.export_reference(unity, [(0, 64)], Path(scratch), 48000, GAIN)
+            now, _ = sr.export_reference(unity, [(0, 64)], Path(scratch), 48000, 1.0)
+            with self.assertRaises(subprocess.CalledProcessError):
+                sr.export_reference(unity, [(0, 4)], Path(scratch), 48000, 0.5)
+        then = struct.unpack(f'<{64 * 16}i', then)
+        now = struct.unpack(f'<{64 * 16}i', now)
+        self.assertNotEqual(then, now)    # 0.1 full scale is 838,861 codes: 2e-6 of it is a code or two
+        self.assertLessEqual(max(abs(a - b) for a, b in zip(then, now)), 2)
+        self.assertTrue(all(abs(b) >= abs(a) for a, b in zip(then, now)))
+
+    def test_the_host_gain_must_be_a_measurement_at_the_capture_rate(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            self.assertEqual(sr.host_gain(gain_file(scratch, 1.0, 1.0), 48000), (1.0, 1.0))
+            self.assertEqual(sr.host_gain(gain_file(scratch, kind='bit-exact-24'), 48000), (GAIN, GAIN))
+            for bad, reason in ((gain_file(scratch, rate=96000), 'another rate'),
+                                (gain_file(scratch, 0.5, 1.0), 'not near unity'),
+                                (gain_file(scratch, kind='continuous-activity-not-latency'), 'unsupported')):
+                with self.assertRaises(sr.EvidenceError) as raised:
+                    sr.host_gain(bad, 48000)
+                self.assertIn(reason, str(raised.exception))
+            rep = Path(scratch) / 'report.json'
+            rep.write_text(json.dumps(report([])))
+            result = sr.analyze(rep, HERE / 'config' / 'dsp-unity.dsp', Path(scratch), gain_file(scratch, 1.0, 1.0))
+            self.assertEqual(result['status'], 'no-events')
+            self.assertEqual(result['hostGain'], {'output': 1.0, 'input': 1.0})
+            self.assertEqual(result['policy']['id'], 'dante-event-reference-v2')
 
     def test_a_bad_artifact_is_inconclusive(self):
         with tempfile.TemporaryDirectory() as scratch:
@@ -236,7 +274,7 @@ class ExporterTests(unittest.TestCase):
             bad.write_text('not an artifact\n')
             rep = Path(scratch) / 'report.json'
             rep.write_text(json.dumps(report(good_events())))
-            result = sr.analyze(rep, bad, Path(scratch))
+            result = sr.analyze(rep, bad, Path(scratch), gain_file(scratch))
         self.assertEqual(result['status'], 'inconclusive')
         self.assertIn('reference export failed', result['reason'])
 

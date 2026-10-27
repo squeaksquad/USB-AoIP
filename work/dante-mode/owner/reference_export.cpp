@@ -3,17 +3,20 @@
 // preset, by the owner's own path. Modelled on
 // work/dsp-service/reference-export.cpp, which does this for the bridge.
 //
-//   reference_export ARTIFACT RANGES [RATE]
+//   reference_export ARTIFACT RANGES [RATE [OUTPUT_GAIN]]
 //
 // RATE: the rate ARTIFACT was compiled for and the capture ran at (a Dante
 // rate, default 48000); the load refuses an artifact compiled for another.
+// OUTPUT_GAIN: the Mac's gain on the way out, as the harness's `hostgain`
+// measured it (default 0.999998 as a float, the 2026-10-10 figure; unity on
+// 2026-10-27).
 // RANGES: sorted, non-overlapping "first last" frame pairs (last exclusive)
 // of the stimulus, one per line. Stdout: little-endian int32 24-bit codes,
 // 16 per frame, the ranges in order.
 //
 // The stimulus is the harness's: xorshift32 from 0x9e3779b9, one draw per
 // sample in interleaved order from frame 0, scaled to +/-0.1. Between it and
-// the Pi sits macOS, which multiplies by 0.999998 on this device and rounds
+// the Pi sits macOS, which multiplies by OUTPUT_GAIN on this device and rounds
 // to 24 bits (the same model `bitexact` uses, RESULTS.md 2026-10-10); then
 // the owner: 24 bits in an S32, OutDsp, 24 bits out. Filters start from
 // silence at frame 0, as they do not on the Pi; the harness's two-second
@@ -41,8 +44,10 @@
 int main(int argc, char** argv) {
     try {
         static_assert(std::endian::native == std::endian::little);
-        if (argc != 3 && argc != 4) throw std::runtime_error("expected ARTIFACT RANGES [RATE]");
-        const unsigned rate = argc == 4 ? static_cast<unsigned>(std::stoul(argv[3])) : 48000U;
+        if (argc < 3 || argc > 5) throw std::runtime_error("expected ARTIFACT RANGES [RATE [OUTPUT_GAIN]]");
+        const unsigned rate = argc >= 4 ? static_cast<unsigned>(std::stoul(argv[3])) : 48000U;
+        const double host_gain = argc == 5 ? std::stod(argv[4]) : static_cast<double>(0.999998F);
+        if (!(std::abs(host_gain - 1.0) < 1e-4)) throw std::runtime_error("OUTPUT_GAIN must be within 1e-4 of unity");
         if (!usb16x16::owner::is_dante_rate(rate)) throw std::runtime_error("RATE must be a Dante rate");
         std::ifstream artifact(argv[1], std::ios::binary), range_file(argv[2]);
         if (!artifact || !range_file) throw std::runtime_error("unreadable input");
@@ -70,7 +75,6 @@ int main(int argc, char** argv) {
         if (ranges.empty()) throw std::runtime_error("no reference ranges");
 
         constexpr std::size_t kBlock = 48, kChannels = 16;
-        const double host_gain = static_cast<double>(0.999998F);
         std::vector<std::int32_t> block(kBlock * kChannels);
         std::int32_t codes[kChannels];
         std::uint32_t state = 0x9e3779b9;

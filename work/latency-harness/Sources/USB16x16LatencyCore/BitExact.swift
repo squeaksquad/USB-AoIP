@@ -7,20 +7,20 @@ import Foundation
 // period is 2^24 samples (349.5 s at 48 kHz). The same idea as the Pi probe's
 // pattern check (work/dante-mode/probe), from the other end of the path.
 //
-// macOS is not bit-exact on this device by itself: it multiplies by 0.999998
-// on the way out and again on the way in (measured 2026-10-10 with constant
-// levels read back on the Pi: 2^23-1 arrives as 8388590, 2^21 as 2097148,
-// 2^17 as itself). So the sequence is defined on the codes that reach the
-// wire: each float is chosen to land on its code after that gain, and each
-// returned float is divided by the gain to recover the code it came from.
-// Codes beyond +/-8388590 cannot be sent by a Mac at all; the sequence clamps
-// there, and a sample after a clamped one is passed over, not judged.
+// macOS is not always bit-exact on this device by itself. On 2026-10-10 it
+// multiplied by 0.999998 on the way out and again on the way in (2^23-1
+// arrived on the Pi as 8388590, 2^21 as 2097148, 2^17 as itself); on
+// 2026-10-27 it was unity both ways. So each run first measures the gain
+// through the loop (HostGain.swift), and the sequence is defined on the codes
+// that reach the wire: each float is chosen to land on its code after that
+// gain, and each returned float is divided by the gain to recover the code it
+// came from. Codes beyond the gain's limit (+/-8388590 at 0.999998) cannot be
+// sent by a Mac at all; the sequence clamps there, and a sample after a
+// clamped one is passed over, not judged.
 public enum BitExactSequence {
     static let multiplier: UInt32 = 1_664_525          // 1 mod 4, with an odd increment: full period mod 2^24
     static let mask: UInt32 = 0x00FF_FFFF
     static let scale: Float = 8_388_608
-    static let hostGain: Float = 0.999998
-    static let limit: Int32 = 8_388_590                // the largest code the host's gain lets through
 
     static func increment(channel: Int) -> UInt32 { (1_013_904_223 &+ UInt32(2 * channel)) & mask }
     static func next(_ code: UInt32, channel: Int) -> UInt32 {
@@ -30,26 +30,26 @@ public enum BitExactSequence {
         code >= 0x0080_0000 ? Int32(code) - 0x0100_0000 : Int32(code)
     }
     /// The code a sequence value is sent as: itself, held at the limit.
-    static func wire(_ code: UInt32) -> Int32 { max(-limit, min(limit, signed(code))) }
-    static func atLimit(_ code: UInt32) -> Bool { abs(signed(code)) >= limit }
+    static func wire(_ code: UInt32, _ gain: HostGain) -> Int32 { max(-gain.limit, min(gain.limit, signed(code))) }
+    static func atLimit(_ code: UInt32, _ gain: HostGain) -> Bool { abs(signed(code)) >= gain.limit }
 
     /// The float that the host's gain and rounding turn into `wire`. Runs in
     /// the IOProc: no allocation.
-    static func sample(wire: Int32) -> Float {
-        let target = Float(wire)
-        let ideal = Float(Double(wire) / (Double(hostGain) * Double(scale)))
+    static func sample(wire: Int32, _ gain: HostGain) -> Float {
+        let target = Double(wire), product = gain.outputGain * Double(scale)
+        let ideal = Float(target / product)
         var best = ideal
-        var bestError = abs(ideal * hostGain * scale - target)
+        var bestError = abs(Double(ideal) * product - target)
         let up = ideal.nextUp
-        let upError = abs(up * hostGain * scale - target)
+        let upError = abs(Double(up) * product - target)
         if upError < bestError { best = up; bestError = upError }
         let down = ideal.nextDown
-        if abs(down * hostGain * scale - target) < bestError { best = down }
+        if abs(Double(down) * product - target) < bestError { best = down }
         return best
     }
     /// The code a returned float came from, and how far from a whole code it was.
-    static func received(_ value: Float) -> (code: Int32, error: Double) {
-        let codes = Double(value) * Double(scale) / Double(hostGain)
+    static func received(_ value: Float, _ gain: HostGain) -> (code: Int32, error: Double) {
+        let codes = Double(value) * Double(scale) / gain.inputGain
         let rounded = codes.rounded()
         return (Int32(max(-8_388_608, min(8_388_607, rounded))), abs(codes - rounded))
     }
@@ -70,6 +70,7 @@ public struct BitExactChannel: Encodable, Sendable {
     /// Samples passed over because the one before them was a clamped code.
     public private(set) var unjudged = 0
     public private(set) var longestZeroRunAfterLock = 0
+    private let gain: HostGain
     private var previous: UInt32?
     private var locked = false
     private var zeroRun = 0
@@ -79,8 +80,10 @@ public struct BitExactChannel: Encodable, Sendable {
         case positiveLimit, negativeLimit, unjudged, longestZeroRunAfterLock
     }
 
+    init(gain: HostGain) { self.gain = gain }
+
     mutating func observe(_ value: Float, frame: Int) {
-        let (wire, error) = value.isFinite ? BitExactSequence.received(value) : (0, 1)
+        let (wire, error) = value.isFinite ? BitExactSequence.received(value, gain) : (0, 1)
         if error > 0.3 {
             if firstLockFrame >= 0 { offGridAfterLock += 1; mismatchesAfterLock += 1 }
             if locked { lostLocks += 1; lastLostLockFrame = frame; locked = false }
@@ -95,26 +98,26 @@ public struct BitExactChannel: Encodable, Sendable {
         guard let previous else {
             // Nothing to predict from. A clamped code does not say which value it was.
             if locked { unjudged += 1 }
-            self.previous = abs(wire) >= BitExactSequence.limit ? nil : code
+            self.previous = abs(wire) >= gain.limit ? nil : code
             return
         }
         if locked {
             let expected = BitExactSequence.next(previous, channel: source - 1)
-            if wire == BitExactSequence.wire(expected) {
+            if wire == BitExactSequence.wire(expected, gain) {
                 matched(expected)
             } else {
                 mismatchesAfterLock += 1
                 lostLocks += 1
                 lastLostLockFrame = frame
                 locked = false
-                self.previous = abs(wire) >= BitExactSequence.limit ? nil : code
+                self.previous = abs(wire) >= gain.limit ? nil : code
             }
             return
         }
         // Not locked: whose sequence, if anyone's, does this pair of samples belong to?
         for channel in 0..<16 {
             let expected = BitExactSequence.next(previous, channel: channel)
-            guard wire == BitExactSequence.wire(expected), !BitExactSequence.atLimit(expected) else { continue }
+            guard wire == BitExactSequence.wire(expected, gain), !BitExactSequence.atLimit(expected, gain) else { continue }
             source = channel + 1
             locked = true
             if firstLockFrame < 0 { firstLockFrame = frame }
@@ -122,15 +125,15 @@ public struct BitExactChannel: Encodable, Sendable {
             return
         }
         if firstLockFrame >= 0 { mismatchesAfterLock += 1 }
-        self.previous = abs(wire) >= BitExactSequence.limit ? nil : code
+        self.previous = abs(wire) >= gain.limit ? nil : code
     }
 
     private mutating func matched(_ expected: UInt32) {
         matches += 1
         let value = BitExactSequence.signed(expected)
-        if value >= BitExactSequence.limit { positiveLimit += 1 }
-        if value <= -BitExactSequence.limit { negativeLimit += 1 }
-        previous = BitExactSequence.atLimit(expected) ? nil : expected
+        if value >= gain.limit { positiveLimit += 1 }
+        if value <= -gain.limit { negativeLimit += 1 }
+        previous = BitExactSequence.atLimit(expected, gain) ? nil : expected
     }
 }
 
@@ -145,8 +148,9 @@ public struct BitExactReport: Encodable, Sendable {
     public let outputDiscontinuities: Int
     public let invalidBuffers: Int
     public let channels: [BitExactChannel]
-    public let hostGain = BitExactSequence.hostGain
-    public let largestCode = BitExactSequence.limit
+    /// Measured through the loop just before the sequence ran.
+    public let hostGain: HostGain
+    public let largestCode: Int32
     /// Every input locked on its own output's sequence and never left it, nothing off
     /// the 24-bit grid, and the largest codes of both signs came back on every channel.
     public let pass: Bool
@@ -160,13 +164,18 @@ final class BitExactState: @unchecked Sendable {
     var inputDiscontinuities = 0
     var outputDiscontinuities = 0
     var invalidBuffers = 0
-    var channels = [BitExactChannel](repeating: BitExactChannel(), count: 16)
+    let gain: HostGain
+    var channels: [BitExactChannel]
     var codes: [UInt32] = (0..<16).map { UInt32($0) &* 0x0001_0001 }
     var expectedInput: Double?
     var expectedOutput: Double?
     var signaled = false
 
-    init(seconds: Int, sampleRate: Int = 48_000) { totalFrames = seconds * sampleRate }
+    init(seconds: Int, sampleRate: Int = 48_000, gain: HostGain) {
+        totalFrames = seconds * sampleRate
+        self.gain = gain
+        channels = [BitExactChannel](repeating: BitExactChannel(gain: gain), count: 16)
+    }
 
     func process(_ input: UnsafePointer<AudioBufferList>, _ inputTime: Double,
                  _ output: UnsafeMutablePointer<AudioBufferList>, _ outputTime: Double) {
@@ -187,7 +196,7 @@ final class BitExactState: @unchecked Sendable {
         for frame in 0..<count {
             for channel in 0..<16 {
                 codes[channel] = BitExactSequence.next(codes[channel], channel: channel)
-                samples[frame * 16 + channel] = BitExactSequence.sample(wire: BitExactSequence.wire(codes[channel]))
+                samples[frame * 16 + channel] = BitExactSequence.sample(wire: BitExactSequence.wire(codes[channel], gain), gain)
             }
         }
         outputFrames += count
@@ -226,7 +235,8 @@ public enum BitExact {
         defer { try? CoreAudioInspector.setBufferFrameSize(before.bufferFrameSize, on: id) }
         let device = try CoreAudioInspector.snapshot(named: deviceName)
         let rate = try SoakRate.validate(device, bufferFrames: bufferFrames)
-        let state = BitExactState(seconds: seconds, sampleRate: rate)
+        let gain = try HostGainCalibration.measure(id: id, rate: rate)
+        let state = BitExactState(seconds: seconds, sampleRate: rate, gain: gain)
         var proc: AudioDeviceIOProcID?
         func check(_ status: OSStatus) throws {
             if status != noErr { throw LiveMeasurementError.io(status, operation: "bit-exact run") }
@@ -253,6 +263,6 @@ public enum BitExact {
         return BitExactReport(device: device, sampleRate: rate, seconds: seconds, outputFrames: state.outputFrames,
             inputFrames: state.inputFrames, inputDiscontinuities: state.inputDiscontinuities,
             outputDiscontinuities: state.outputDiscontinuities, invalidBuffers: state.invalidBuffers,
-            channels: state.channels, pass: pass)
+            channels: state.channels, hostGain: gain, largestCode: gain.limit, pass: pass)
     }
 }

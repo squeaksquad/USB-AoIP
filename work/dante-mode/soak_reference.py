@@ -25,11 +25,14 @@ for every run:
 It is the bridge's "loaded event reference criterion v1"
 (work/dsp-service/REFERENCE_VALIDATION.md, reference_check.py) carried to the
 Dante owner, with three differences: any artifact, not one pinned preset;
-captures up to an hour; and macOS's fixed gain of 0.999998 each way modelled
-rather than left to the tolerance. Like v1 it is an activity criterion, not
-whole-stream verification: samples outside the windows are not compared.
+captures up to an hour; and macOS's gain each way modelled rather than left
+to the tolerance. v2 (2026-10-27) takes that gain from a measurement (the
+harness's `hostgain` report, or a `bitexact` one) instead of the fixed
+0.999998 of v1, because the Mac's gain on this device has been 0.999998
+(2026-10-10) and unity (2026-10-27). Like v1 it is an activity criterion,
+not whole-stream verification: samples outside the windows are not compared.
 
-  soak_reference.py REPORT.json ARTIFACT.dsp [--output DIR]
+  soak_reference.py REPORT.json ARTIFACT.dsp --host-gain GAIN.json [--output DIR]
 
 Exit 0 only for `matched-events` or `no-events` with the capture's own
 integrity checks passing; 1 for a mismatch; 2 for evidence that cannot
@@ -49,10 +52,9 @@ HERE = Path(__file__).resolve().parent
 EXPORTER = HERE / 'owner' / 'reference_export.cpp'
 CORE = HERE.parent / 'phase4-bridge' / 'src' / 'bridge_core.cpp'
 INCLUDE = HERE.parent / 'phase4-bridge' / 'include'
-HOST_GAIN = struct.unpack('<f', struct.pack('<f', 0.999998))[0]
-POLICY = {'id': 'dante-event-reference-v1', 'maximumErrorLSB': 2.0, 'maximumSearchLagFrames': 9600,
-          'minimumAnchorRangeLSB': 256, 'inputModel': 'host gain 0.999998, nearest 24-bit',
-          'returnModel': 'host gain 0.999998', 'gainFitting': False,
+POLICY = {'id': 'dante-event-reference-v2', 'maximumErrorLSB': 2.0, 'maximumSearchLagFrames': 9600,
+          'minimumAnchorRangeLSB': 256, 'inputModel': 'measured host output gain, nearest 24-bit',
+          'returnModel': 'measured host input gain', 'gainFitting': False,
           'alignment': 'one integer offset for all channels and events',
           'zeroRunRule': 'exact predicted zero codes with nonzero boundaries',
           'coverage': 'retained event windows only', 'wholeRunValidated': False,
@@ -84,6 +86,19 @@ def decode(frame):
     values = [struct.unpack('<f', struct.pack('<I', b))[0] for b in bits]
     require(all(math.isfinite(v) and abs(v) < 1 for v in values), 'invalid or full-scale sample')
     return [v * 8388608 for v in values]
+
+
+def host_gain(path, rate):
+    """(output gain, input gain) from the harness's `hostgain` or `bitexact` report, measured
+    at the capture's rate."""
+    gain_report = json.loads(Path(path).read_text())
+    require(gain_report.get('kind') in ('host-gain', 'bit-exact-24'), 'unsupported host gain report')
+    require(gain_report.get('sampleRate') == rate, 'the host gain was measured at another rate')
+    gain = gain_report['hostGain']
+    output, input_ = gain['outputGain'], gain['inputGain']
+    require(all(type(g) in (int, float) and abs(g - 1) < 1e-4 for g in (output, input_)),
+            'host gain missing or not near unity')
+    return float(output), float(input_)
 
 
 def report_rate(report):
@@ -206,7 +221,7 @@ class Reference:
         raise EvidenceError('reference does not cover requested source frame')
 
 
-def check_windows(report, events, reference):
+def check_windows(report, events, reference, input_gain):
     """Every event against the reference. Returns the result; raises nothing."""
     result = {'policy': POLICY, 'status': 'inconclusive', 'wholeRunValidated': False,
               'coveredInputFrames': 0, 'events': []}
@@ -226,7 +241,7 @@ def check_windows(report, events, reference):
             anchor = anchors[0]   # fixed channel order, chosen without looking at the reference
             lo, hi = search_bounds(event, report['outputFrames'])
             matches = [first for first in range(lo, hi)
-                       if all(abs(values[i][anchor] - reference.row(first + i)[anchor] * HOST_GAIN) <= limit for i in range(16))]
+                       if all(abs(values[i][anchor] - reference.row(first + i)[anchor] * input_gain) <= limit for i in range(16))]
             if not matches:
                 raise SignalMismatch(f'channel {channel + 1} at input frame {event["startInputFrame"]}: '
                                      'the frames before the zero run are not the stimulus through this preset')
@@ -240,7 +255,7 @@ def check_windows(report, events, reference):
             worst = 0.0
             for i, row in enumerate(values):
                 expected = reference.row(first + i)
-                error = max(abs(row[c] - expected[c] * HOST_GAIN) for c in range(16))
+                error = max(abs(row[c] - expected[c] * input_gain) for c in range(16))
                 worst = max(worst, error)
                 if error > limit:
                     raise SignalMismatch(f'unexplained sample at input frame {event["frames"][i]["inputFrame"]} '
@@ -266,7 +281,7 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def export_reference(artifact, spans, work, rate):
+def export_reference(artifact, spans, work, rate, output_gain):
     """Build the exporter and run it over `spans`. Returns (bytes, provenance)."""
     binary = work / 'reference_export'
     command = ['c++', '-std=c++20', '-O2', '-Wall', '-Wextra', '-Wpedantic', '-Werror', '-I', str(EXPORTER.parent),
@@ -274,27 +289,29 @@ def export_reference(artifact, spans, work, rate):
     subprocess.run(command, check=True, capture_output=True, text=True, timeout=180)
     ranges = work / 'ranges.txt'
     ranges.write_text(''.join(f'{lo} {hi}\n' for lo, hi in spans))
-    done = subprocess.run([str(binary), str(artifact), str(ranges), str(rate)], check=True, capture_output=True, timeout=1800)
+    done = subprocess.run([str(binary), str(artifact), str(ranges), str(rate), repr(output_gain)], check=True, capture_output=True, timeout=1800)
     provenance = {'exporterSHA256': sha(EXPORTER), 'coreSHA256': sha(CORE), 'artifactSHA256': sha(artifact),
                   'referenceSHA256': hashlib.sha256(done.stdout).hexdigest(),
                   'compiler': subprocess.check_output(['c++', '--version'], text=True).splitlines()[0]}
     return done.stdout, provenance
 
 
-def analyze(report_path, artifact, work):
+def analyze(report_path, artifact, work, gain_path):
     result = {'policy': POLICY, 'status': 'inconclusive', 'wholeRunValidated': False}
     try:
         report = json.loads(Path(report_path).read_text())
         events = validate_evidence(report)
+        output_gain, input_gain = host_gain(gain_path, report_rate(report))
         result['evidenceComplete'] = True
         if events:
             spans = reference_ranges(events, report['outputFrames'])
-            data, provenance = export_reference(artifact, spans, work, report_rate(report))
-            result = check_windows(report, events, Reference(spans, data))
+            data, provenance = export_reference(artifact, spans, work, report_rate(report), output_gain)
+            result = check_windows(report, events, Reference(spans, data), input_gain)
             result.update(evidenceComplete=True, provenance=provenance, ranges=spans)
         else:
-            result = check_windows(report, events, None)
+            result = check_windows(report, events, None, input_gain)
             result['evidenceComplete'] = True
+        result.update(hostGain={'output': output_gain, 'input': input_gain}, hostGainSHA256=sha(gain_path))
         result.update(reportSHA256=sha(report_path), checkerSHA256=sha(__file__), artifact=str(artifact),
                       seconds=report['seconds'],
                       longestZeroRuns=[c['longestZeroRun'] for c in report['channels']])
@@ -310,10 +327,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('report', type=Path, help="the harness's continuous report (a soak's JSON)")
     parser.add_argument('artifact', type=Path, help='the preset the endpoint ran, as installed')
+    parser.add_argument('--host-gain', type=Path, required=True,
+                        help="the harness's hostgain (or bitexact) report, measured at the capture's rate")
     parser.add_argument('--output', type=Path, help='write result.json here (the directory is created)')
     args = parser.parse_args(argv)
     with tempfile.TemporaryDirectory() as scratch:
-        result = analyze(args.report, args.artifact, Path(scratch))
+        result = analyze(args.report, args.artifact, Path(scratch), args.host_gain)
     if args.output:
         args.output.mkdir(parents=True, exist_ok=True)
         (args.output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')

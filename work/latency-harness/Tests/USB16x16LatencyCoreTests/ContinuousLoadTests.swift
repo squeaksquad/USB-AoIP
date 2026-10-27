@@ -52,7 +52,7 @@ import CoreAudio
     #expect(at48.totalFrames == 240_000 && at48.warmupFrames == 96_000)
     let at96 = ContinuousState(seconds: 5, amplitude: 0.1, sampleRate: 96_000)
     #expect(at96.totalFrames == 480_000 && at96.warmupFrames == 192_000)
-    #expect(BitExactState(seconds: 5).totalFrames == 240_000)
-    #expect(BitExactState(seconds: 5, sampleRate: 88_200).totalFrames == 441_000)
+    #expect(BitExactState(seconds: 5, gain: .unity).totalFrames == 240_000)
+    #expect(BitExactState(seconds: 5, sampleRate: 88_200, gain: .unity).totalFrames == 441_000)
     #expect(SoakRate.accepted.map(SoakRate.kHz) == ["44.1", "48", "88.2", "96"])
 }

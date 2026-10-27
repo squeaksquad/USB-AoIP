@@ -106,7 +106,10 @@ private enum CLIError: Error, CustomStringConvertible {
                   [--seconds 5...3600] --other-channel-load-amplitude 0.1 [--output FILE]
               usb16x16-latency bitexact [--device NAME] [--buffer-frames 32|64]
                   [--seconds 5...3600] [--output FILE]
-                  continuous and bitexact run at the device's rate (44.1, 48, 88.2 or 96 kHz)
+              usb16x16-latency hostgain [--device NAME] [--buffer-frames 32|64] [--output FILE]
+                  the gain macOS applies each way, measured through the loop in 2 s
+                  (bitexact measures it first itself)
+                  continuous, bitexact and hostgain run at the device's rate (44.1, 48, 88.2 or 96 kHz)
               usb16x16-latency measure [--device NAME] [--buffer-frames N]
                   [--input-channel N] [--output-channel N] [--impulses N]
                   [--maximum-lag-ms N] [--other-channel-load-amplitude 0...0.25]
@@ -164,6 +167,9 @@ do {
         try emit(encoded(ContinuousLoad.run(deviceName: arguments.deviceName,
             bufferFrames: arguments.bufferFrames, seconds: arguments.seconds,
             amplitude: arguments.otherChannelLoadAmplitude)), to: arguments.outputPath)
+    case "hostgain":
+        try emit(encoded(HostGainCalibration.run(deviceName: arguments.deviceName,
+            bufferFrames: arguments.bufferFrames)), to: arguments.outputPath)
     case "bitexact":
         try emit(encoded(BitExact.run(deviceName: arguments.deviceName,
             bufferFrames: arguments.bufferFrames, seconds: arguments.seconds)), to: arguments.outputPath)

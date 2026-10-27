@@ -169,7 +169,11 @@ grep -m1 "^DSP loaded file=" "$f" 2>/dev/null | cut -d" " -f3 | cut -d= -f2-')
         measure_exit=7
       else
         print -r -- "preset $preset ($(shasum -a 256 "$api_dir/preset.dsp" | cut -c1-8)): checking each zero run against it"
-        /usr/bin/python3 "$script_dir/soak_reference.py" "$result_path" "$api_dir/preset.dsp" --output "$api_dir/reference"
+        # The Mac's gain each way, which the reference models: measured now, on the same device and rate (2026-10-27).
+        "$app_binary" hostgain --device "USB 16x16" --buffer-frames "$frames" --output "$api_dir/host-gain.json" \
+          >/dev/null 2>>"$api_dir/measure.log" || print -r -- "host gain could not be measured; see ${api_dir:t}/measure.log"
+        /usr/bin/python3 "$script_dir/soak_reference.py" "$result_path" "$api_dir/preset.dsp" \
+          --host-gain "$api_dir/host-gain.json" --output "$api_dir/reference"
         case $? in
           0) print -r -- "soak: PASS, every zero run is the preset's own (reference in ${api_dir:t}/reference)" ;;
           1) print -r -- "soak: FAIL, a zero run the preset does not produce"; measure_exit=7 ;;
