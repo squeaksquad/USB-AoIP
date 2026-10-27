@@ -14149,3 +14149,32 @@ inventory (`dvs96-20261027/dvs-rx-subscriptions-20261016.txt`: DVS 01-14 <- Puls
 03-16`, 15-16 empty); endpoint started, start check ok, 64 subscriptions all connected, noise
 probe clean, 400 loaded impulses 365 / `daw_timeline` 517. Evidence `outputs/latency/dvs96-*`,
 `dvs96-20261027/` (owner log, passthrough and its log).
+
+**ROOT CAUSE and FIXED (candidate) 2026-10-27 22:40-23:07 UTC: the 44.1 kHz start slips were the
+return queue resuming at its ceiling after a host pause shorter than `kIdleWakes`; owner
+2578c73d (`usb16x16-dante-owner-rate5`, source c52cd9c4) re-primes it at once, and the slips are
+gone.** From the 44.1 session's owner log: `bitexact` closes the device after its 2 s gain
+calibration and reopens it for the run. At 44.1 that pause was 0.1 s every time, under the 100
+wakes after which the return direction counts as stopped, so it stayed `flowing`, the queue
+filled to `rx_queue + rx_slack` (192), and the Mac resumed against it. At the ceiling every wake
+that brought more Dante frames than the Mac had just taken dropped the excess (`rx_overflow`
++7,041 in the 400 s run, +9,317 over the three short ones), each drop a slip on all channels; the
+depth filter held the 96-frame step back as an artefact for its five seconds (`servo_rejected`
++5 per start), so the servo did nothing meanwhile. At 48 the same pause was 0.3 s in the run
+that passed: the direction went idle, was re-primed to 96, and the Mac resumed at the target
+(`rx_primes` +1, `servo_rejected` 0). So the fault is any host pause under 100 ms at any rate;
+44.1's uneven blocks (44 to 50) made it drop on every wake. Fix (`owner/main.cpp`, `service_rx`):
+a flowing return direction that sees no pull while its queue is already at the limit counts as
+stopped now, not after 100 wakes (normal flow at 44.1 peaks near 91 of the 192). Built on the Pi
+from `owner/rate5/` (the `rate4` tree with only `main.cpp` changed; the same g++ line rebuilds
+`rate4` to c8b484ac exactly). At 44.1 on the real loop (loop moved again by `dante-sync`, DVS
+with it): noise clean; three 20 s `bitexact` PASS, 0 lost locks (c8b484ac: 80 / 64 / 64); 400 s
+`bitexact` PASS, 0 lost locks, 17.6 M matches a channel, `servo_rejected` 0; the 0.1 s pauses
+now show as `rx_primes` +1. Not changed by it: the level per harness open still varies, 474 /
+483 / 495 / 545 `daw_timeline` over four 400-impulse runs (the open item "the level is a draw").
+At 48 `rate5` was started (installed config's staged copy 0a1688e1, the service's transport) and
+the loop came up (64 connected), but no measurement was taken: the operator needs the Metric
+Halo at 48 for Pro Tools work, so testing stopped and the installed endpoint was restored 23:07
+(start check ok, 64 / 64 connected, every device 48 kHz). `rate5` needs the 48 battery (four
+loaded 800-impulse runs, the soak, the hour) before it can be installed; the operator asked for
+no rate changes for now. Evidence `outputs/latency/r44fix-*`, `rx-pause-20261027/`.
