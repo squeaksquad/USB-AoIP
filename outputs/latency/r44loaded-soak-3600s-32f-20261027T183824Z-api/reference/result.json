@@ -1,0 +1,163 @@
+{
+  "policy": {
+    "id": "dante-event-reference-v2",
+    "maximumErrorLSB": 2.0,
+    "maximumSearchLagFrames": 9600,
+    "minimumAnchorRangeLSB": 256,
+    "inputModel": "measured host output gain, nearest 24-bit",
+    "returnModel": "measured host input gain",
+    "gainFitting": false,
+    "alignment": "one integer offset for all channels and events",
+    "zeroRunRule": "exact predicted zero codes with nonzero boundaries",
+    "coverage": "retained event windows only",
+    "wholeRunValidated": false,
+    "maximumSeconds": 3600
+  },
+  "status": "matched-events",
+  "wholeRunValidated": false,
+  "coveredInputFrames": 292,
+  "events": [
+    {
+      "channel": 13,
+      "startInputFrame": 28480603,
+      "referenceStartFrame": 28480090,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 35271182,
+      "referenceStartFrame": 35270669,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 57876880,
+      "referenceStartFrame": 57876367,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 58349091,
+      "referenceStartFrame": 58348578,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 109043723,
+      "referenceStartFrame": 109043210,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 112642353,
+      "referenceStartFrame": 112641840,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 0.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 117911038,
+      "referenceStartFrame": 117910525,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 141345246,
+      "referenceStartFrame": 141344733,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    }
+  ],
+  "inputIndexMinusSourceIndex": 513,
+  "evidenceComplete": true,
+  "provenance": {
+    "exporterSHA256": "6261ddb55d03a108ef61b82596d964d89213c83386cc23465ccfb88cdc496393",
+    "coreSHA256": "bbaec39ef0cab29bd9a493db9eefaff47507f4fa916389a3c5d01612e41453f2",
+    "artifactSHA256": "81a9eed69bf53ed65f511e9e3f0bd2e4b3445d8786c915fbd6760cf72ff1cb11",
+    "referenceSHA256": "ab996ee9be39218bd877135cc105535bbb73975aefdba69267c8293deb073a60",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)"
+  },
+  "ranges": [
+    [
+      28470842,
+      28480479
+    ],
+    [
+      35261421,
+      35271058
+    ],
+    [
+      57867119,
+      57876755
+    ],
+    [
+      58339330,
+      58348966
+    ],
+    [
+      109033962,
+      109043599
+    ],
+    [
+      112632592,
+      112642229
+    ],
+    [
+      117901277,
+      117910913
+    ],
+    [
+      141335485,
+      141345121
+    ]
+  ],
+  "hostGain": {
+    "output": 1.0,
+    "input": 1.0
+  },
+  "hostGainSHA256": "8182802cd657d656e466d51cffe0d3704f05175c2a76c4f8d085e91449e59568",
+  "reportSHA256": "68947567d4a7e98f44ab75e666d9c2c2042bb1ff1708360cb432aafcbeb9bab0",
+  "checkerSHA256": "d02a3d7ffa09568b5ef2d63c96f5811267975150ef9715228eca4de5ea8eb987",
+  "artifact": "r44loaded-soak-3600s-32f-20261027T183824Z-api/preset.dsp",
+  "seconds": 3600,
+  "longestZeroRuns": [
+    1,
+    1,
+    1,
+    5,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    5,
+    1,
+    1,
+    1
+  ]
+}

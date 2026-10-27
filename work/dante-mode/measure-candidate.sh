@@ -19,7 +19,10 @@
 #                                                    are put to soak_reference.py: a
 #                                                    low-passed output crosses zero
 #                                                    slowly, and each run must be one
-#                                                    the preset produces
+#                                                    the preset produces; the Mac's
+#                                                    gain for that check comes from
+#                                                    USB16X16_HOST_GAIN (a direct run's
+#                                                    hostgain or bitexact report)
 # USB16X16_OTHER_LOAD=0.1 loads the other 15 channels in the impulse run.
 # Close RTL Utility first: the harness and RTL never share the device.
 set -uo pipefail
@@ -169,9 +172,14 @@ grep -m1 "^DSP loaded file=" "$f" 2>/dev/null | cut -d" " -f3 | cut -d= -f2-')
         measure_exit=7
       else
         print -r -- "preset $preset ($(shasum -a 256 "$api_dir/preset.dsp" | cut -c1-8)): checking each zero run against it"
-        # The Mac's gain each way, which the reference models: measured now, on the same device and rate (2026-10-27).
-        "$app_binary" hostgain --device "USB 16x16" --buffer-frames "$frames" --output "$api_dir/host-gain.json" \
-          >/dev/null 2>>"$api_dir/measure.log" || print -r -- "host gain could not be measured; see ${api_dir:t}/measure.log"
+        # The Mac's gain each way, which the reference models. It cannot be measured now: the calibration's
+        # constant codes go through the preset, which filters them (2026-10-27, loaded at 44.1). So it is the
+        # hostgain or bitexact report of a direct or transparent run at this rate, named by USB16X16_HOST_GAIN.
+        if [[ -n "${USB16X16_HOST_GAIN:-}" ]]; then
+          cp "$USB16X16_HOST_GAIN" "$api_dir/host-gain.json"
+        else
+          print -r -- "host gain not given: set USB16X16_HOST_GAIN to a hostgain or bitexact report at this rate, from a direct run"
+        fi
         /usr/bin/python3 "$script_dir/soak_reference.py" "$result_path" "$api_dir/preset.dsp" \
           --host-gain "$api_dir/host-gain.json" --output "$api_dir/reference"
         case $? in

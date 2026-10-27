@@ -244,3 +244,8 @@ USB 16x16 moves to 96. The Dante domain, the Metric Halo and the Pulse stay at
     time, not rate, and Dante allows mixed rates in one domain).
 - If self-subscription fails, the fallback is Dante Virtual Soundcard on the
   Mac at 96 as the far end, with a Mac-side loop. It has more moving parts.
+
+**Result 2026-10-27 (handoff, 19:49):** the one-instance self-loop is impossible:
+Inferno drops its own mDNS answers and advertises no self-subscription. The 96
+network half ran clean under the 48 leader with nothing subscribed. Next options:
+a second Inferno instance as a reflector, or a patch to the self-filter.

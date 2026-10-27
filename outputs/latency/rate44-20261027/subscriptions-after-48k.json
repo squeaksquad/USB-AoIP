@@ -1,0 +1,1352 @@
+[
+  {
+    "rx_channel": "P16 OUT 1",
+    "rx_channel_number": 1,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "CH1",
+    "tx_device": "D2USB-6152f1",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 2",
+    "rx_channel_number": 2,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "CH2",
+    "tx_device": "D2USB-6152f1",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 3",
+    "rx_channel_number": 3,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "01",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 4",
+    "rx_channel_number": 4,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "02",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 5",
+    "rx_channel_number": 5,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "03",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 6",
+    "rx_channel_number": 6,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "04",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 7",
+    "rx_channel_number": 7,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "05",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 8",
+    "rx_channel_number": 8,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "06",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 9 ",
+    "rx_channel_number": 9,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "07",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 10",
+    "rx_channel_number": 10,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "08",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 11",
+    "rx_channel_number": 11,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "09",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 12",
+    "rx_channel_number": 12,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "10",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 13",
+    "rx_channel_number": 13,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "11",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 14",
+    "rx_channel_number": 14,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "12",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 15",
+    "rx_channel_number": 15,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "13",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "P16 OUT 16",
+    "rx_channel_number": 16,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": null,
+      "code": 1,
+      "receiver_status_code": 0,
+      "status": "UNRESOLVED",
+      "state": "unresolved",
+      "severity": "error",
+      "settled": true,
+      "label": "Unresolved",
+      "detail": "The transmitting device isn't currently on the network.",
+      "observed_summary": "ERROR",
+      "interpretation": "observed",
+      "icon": "\u001b[31m\u2298\u001b[0m"
+    },
+    "tx_channel": "14",
+    "tx_device": "Bryans-MBP-M2-Max",
+    "rx_channel_status": {
+      "code": 0,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 49",
+    "rx_channel_number": 49,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 1",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 50",
+    "rx_channel_number": 50,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 2",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 51",
+    "rx_channel_number": 51,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 3",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 52",
+    "rx_channel_number": 52,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 4",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 53",
+    "rx_channel_number": 53,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 5",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 54",
+    "rx_channel_number": 54,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 6",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 55",
+    "rx_channel_number": 55,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 7",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 56",
+    "rx_channel_number": 56,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 8",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 57",
+    "rx_channel_number": 57,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 9",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 58",
+    "rx_channel_number": 58,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 10",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 59",
+    "rx_channel_number": 59,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 11",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 60",
+    "rx_channel_number": 60,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 12",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 61",
+    "rx_channel_number": 61,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 13",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 62",
+    "rx_channel_number": 62,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 14",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 63",
+    "rx_channel_number": 63,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 15",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "Input 64",
+    "rx_channel_number": 64,
+    "rx_device": "FF-PULSE-16-DX",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "TX 16",
+    "tx_device": "USB-16x16-Inferno",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "CH1",
+    "rx_channel_number": 1,
+    "rx_device": "D2USB-6152f1",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 01",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "CH2",
+    "rx_channel_number": 2,
+    "rx_device": "D2USB-6152f1",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 02",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 1",
+    "rx_channel_number": 1,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 49",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 2",
+    "rx_channel_number": 2,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 50",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 3",
+    "rx_channel_number": 3,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 51",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 4",
+    "rx_channel_number": 4,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 52",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 5",
+    "rx_channel_number": 5,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 53",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 6",
+    "rx_channel_number": 6,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 54",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 7",
+    "rx_channel_number": 7,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 55",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 8",
+    "rx_channel_number": 8,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 56",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 9",
+    "rx_channel_number": 9,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 57",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 10",
+    "rx_channel_number": 10,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 58",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 11",
+    "rx_channel_number": 11,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 59",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 12",
+    "rx_channel_number": 12,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 60",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 13",
+    "rx_channel_number": 13,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 61",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 14",
+    "rx_channel_number": 14,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 62",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 15",
+    "rx_channel_number": 15,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 63",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  },
+  {
+    "rx_channel": "RX 16",
+    "rx_channel_number": 16,
+    "rx_device": "USB-16x16-Inferno",
+    "status": {
+      "transport": "unicast",
+      "code": 9,
+      "receiver_status_code": 257,
+      "status": "DYNAMIC",
+      "state": "connected",
+      "severity": "ok",
+      "settled": true,
+      "label": "Subscribed (unicast)",
+      "detail": "Active subscription to an automatically configured source flow",
+      "observed_summary": "CONNECTED",
+      "interpretation": "observed",
+      "icon": "\u001b[32m\u25cf\u001b[0m"
+    },
+    "tx_channel": "Output 64",
+    "tx_device": "FF-PULSE-16-DX",
+    "rx_channel_status": {
+      "code": 257,
+      "detail": null,
+      "label": "Unknown receiver status",
+      "state": "uncharacterized"
+    }
+  }
+]

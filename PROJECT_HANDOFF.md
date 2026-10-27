@@ -14063,3 +14063,60 @@ right after a preset soak that has zero runs. `test_soak_reference.py` 16 pass.
 Operator, same day: test 48 and 44.1 kHz on the real loop, find an internal way to test 96,
 and no re-mapping of the Ferrofish. Dante Switcher's 44.1 capture shows the Pulse at 64 x 64
 there, so the loop's channels exist at 44.1.
+
+**MEASURED 2026-10-27 18:00-19:42 UTC: the 44.1 kHz battery on the real loop, candidate owner
+c8b484ac, passes every item except a start transient: each stream start slips frames for a few
+seconds.** Move: the endpoint stopped, the USB 16x16 to 44100 (`setrate.swift`), `dante-sync
+sync --source usb16x16 --exclude USB-16x16-Inferno` (MHLink, the Pulse and the D2USB, each
+verified). Subscriptions saved first (`outputs/latency/rate44-20261027/subscriptions-before-48k.json`,
+50, 36 connected); the Pulse keeps 64 x 64 at 44.1, so the loop stayed whole. Candidate through
+`usb16x16-dante-candidate` with `config/asound-inferno-owner-rate44-candidate.conf` (b33fb685),
+`--rate 44100` and the 48 kHz frame figures (`--period 64 --buffer 1024 --tx-lead 128 --guard 256
+--usb-period 48 --usb-buffer 480 --rx-queue 96 --rx-slack 96`). Evidence `outputs/latency/r44-*`,
+`r44loaded-*`, owner logs in `rate44-20261027/`.
+- Noise probe clean. Four loaded 800-impulse runs 356 / 344 / 327 / 322, each spread 0;
+  `daw_timeline` 501 / 489 / 472 / 467 (11.361 to 10.590 ms; io_offset 145). The level steps
+  down at each harness open, by 12, 17, 5: the gadget's blocks at 44.1 are 44, 49 or 50 frames
+  and `tx_prime_found` lands anywhere from 83 to 118. Not seen at 48, where the blocks are 48.
+- 600 s sixteen-channel soak (direct) PASS: no zero run over 1, no discontinuity.
+- `bitexact` 400 s (direct, measured gain unity both ways): bit-exact in steady state on all 16,
+  but one all-channel slip 1.618 s after the stream start (32 lost locks). Three 20 s runs all
+  slipped on every channel 4 to 6 s after start (80 / 64 / 64 lost locks), with the owner's
+  `servo_rejected` up 5 per start and `out_holes` / `back_holes` rising with it. So at 44.1 each
+  stream start has some seconds of frame slips, most likely the owner's servo against the uneven
+  USB blocks, before it settles. Not fixed; no code changed. At 48 the same check passes from
+  the first second.
+- The hour on `loaded@44100` (81a9eed6, seed -14.5 ppm): no discontinuity, eight zero runs of at
+  most 5 (ch4 and ch13), all matched to the preset's own output by `soak_reference.py`
+  (`dante-event-reference-v2`, worst error 1 code, one alignment for all eight). PASS, judged
+  offline: the wrapper's host-gain calibration ran through the preset and failed (`channel 10 did
+  not return a steady level in step 4`; the preset filters the constant codes), so the reference
+  was run on the same capture with the gain from the 400 s `bitexact` (unity, same rate, same Mac,
+  two hours earlier). `measure-candidate.sh` fixed: with a preset running it no longer
+  calibrates, and takes `USB16X16_HOST_GAIN` (a direct run's `hostgain` or `bitexact` report).
+- 400 loaded impulses after the hour: 336 / `daw_timeline` 481 (10.907 ms), spread 0.
+- Owner counters for the whole session: no resync, loss, capture or playback fault; gap at most
+  1.07 ms.
+Back to 48 at 19:43 the same way: start check ok, all 50 subscriptions present and 36 connected
+(the Pulse's `Input 56-62` took about a minute to reconnect), noise probe clean, 400 loaded
+impulses 353 / `daw_timeline` 505.
+
+**FOUND 2026-10-27 19:49-19:53 UTC: the 96 kHz internal self-loop cannot work with one Inferno
+instance; Inferno ignores its own mDNS answers.** Only the Mac's USB 16x16 went to 96; the domain
+stayed at 48. Candidate under its own identity (`config/asound-inferno-owner-rate96-selfloop.conf`,
+b1c44411: `USB-16x16-Inferno-96`, its own DEVICE_ID and STATE_ID) with arm A (`--rate 96000
+--period 64 --buffer 2048 --tx-lead 256 --guard 512 --usb-period 96 --usb-buffer 960 --rx-queue 192
+--rx-slack 192`). It came up and advertised 96 kHz, 16 x 16. `netaudio subscription add --tx
+USB-16x16-Inferno-96 --rx USB-16x16-Inferno-96` refused: "receiver channel 1 does not advertise
+self-connection support" (Inferno reports `can_subscribe_self` false). And Inferno would not
+resolve it anyway: `inferno_aoip/src/mdns_client.rs` drops any answer carrying its own response
+origin ("got answer from self, ignoring this response"); its own loopback test
+(`tests/loopback_trx.rs`) uses two instances. What the run did show: the network half at 96 under
+a 48 kHz leader runs clean, 5.76 M frames per 60 s each way (96 kHz), no resync or loss in 240 s,
+gap at most 1.03 ms, USB opened at 96000 / 96 / 960. No audio crossed it (the Mac never
+streamed; nothing to return). Log `rate44-20261027/selfloop96-owner-20261027T194910Z.log`.
+Restored 19:54: Mac at 48, endpoint started, start check ok, 50 / 36 subscriptions, 400 loaded
+impulses 341 / `daw_timeline` 493. A 96 internal loop needs a second Inferno instance on the Pi
+(a reflector: its own PROCESS_ID, ALT_PORT and name, receiving the candidate's TX and sending it
+back, e.g. by `alsaloop`, which adds its own latency to the figure), or a patch to Inferno's
+self-filter. Operator's choice; not started.
