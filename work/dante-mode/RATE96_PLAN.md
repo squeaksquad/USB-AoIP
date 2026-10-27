@@ -198,3 +198,49 @@ side included. That is the operator's routing (handoff, FOUND 2026-10-27).
    hours. When suits?
 5. **The 2026-10-22 clock step.** Anything on the domain that day (Pulse power
    cycle, switch reboot, a Controller change)?
+
+## Revised 2026-10-27 (operator): 48 and 44.1 on the loop, 96 on an internal loop
+
+Operator: test 48 and 44.1 kHz for now, find an internal way to test 96, and
+no re-mapping of the Ferrofish on the fly.
+
+**48 kHz** is the point of record. With the measured host gain, `bitexact`
+passes there (handoff, 2026-10-27 17:44), so the 48 battery stands as
+accepted plus that check.
+
+**44.1 kHz on the real loop.** The Pulse keeps 64 x 64 at 44.1 (Dante
+Switcher's `captures/pulse-matched-44k1.json`), so `Input/Output 49-64`
+exist and nothing is re-mapped. Same band as 48, so the Pulse should not drop
+subscriptions. This is checked after the return all the same.
+- Mac side: `config/asound-inferno-owner-rate44-candidate.conf` (the 96 one at
+  44100), `transparent` and `loaded` compiled at 44100.
+- Transport: the 48 kHz frame figures unchanged (at 44.1 each lasts 8.8 %
+  longer, the safe side).
+- Move: the USB 16x16 to 44100, then `dante-sync sync --source usb16x16
+  --exclude USB-16x16-Inferno` (Metric Halo, Pulse and D2USB). Candidate
+  `--rate 44100`. Battery: noise probe, four loaded 800-impulse runs, 600 s
+  soak, `bitexact` 360 s, the hour on `loaded`, 400 impulses after. Then back
+  to 48 the same way, the Pulse's subscriptions checked, and a 48 anchor.
+
+**96 kHz on an internal loop: the Pi subscribes to itself.** Only the Mac's
+USB 16x16 moves to 96. The Dante domain, the Metric Halo and the Pulse stay at
+48 and are not touched.
+- The candidate runs under its own identity: `NAME
+  "USB-16x16-Inferno-96"`, its own `DEVICE_ID` and `STATE_ID`. The real
+  endpoint's saved subscriptions and the Pulse's subscriptions to it are left
+  alone. The Pulse sees the real endpoint offline, as during any service stop.
+- The candidate's `RX 1-16` is subscribed to its own `TX 1-16`
+  (`netaudio subscription add --tx USB-16x16-Inferno-96 --rx
+  USB-16x16-Inferno-96`), saved in its own state directory.
+- What it tests: the gadget at 96, the owner and its buffer depths at 96, the
+  DSP stage's cost at 96 on `loaded`, Inferno transmit and receive at 96,
+  bit-exactness, the soak and the hour.
+- What it does not test: the eth0 wire, the switch and the Pulse. A flow to
+  the Pi's own address goes through the kernel's loopback, not the NIC. Its
+  latency is the Pi's own path, not comparable to the point of record.
+- Open until tried:
+  - does Inferno accept a subscription to itself;
+  - does an endpoint at 96 run cleanly under a 48 kHz PTP leader (PTP carries
+    time, not rate, and Dante allows mixed rates in one domain).
+- If self-subscription fails, the fallback is Dante Virtual Soundcard on the
+  Mac at 96 as the far end, with a Mac-side loop. It has more moving parts.
