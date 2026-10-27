@@ -181,6 +181,13 @@ Answered 2026-10-27 (operator): (1) yes, every device keeps 16 each way at
 12:30 UTC; (5) the Pulse had been powered off for several days and was powered
 back on on 2026-10-22, which is the clock step (handoff, FOUND 2026-10-27).
 
+CORRECTION 2026-10-27, by measurement: (1) holds for the count but not for the
+loop's channels. The Pulse has 32 channels each way at 96, and the loop uses
+its channels 49-64, so phase 3 found no return path. The Pulse also dropped its
+receive subscriptions above 32, which had to be restored at 48. Phase 3 is
+blocked until the loop is moved inside the Pulse's first 32 channels, the MADI
+side included. That is the operator's routing (handoff, FOUND 2026-10-27).
+
 1. **Channel counts at 96.** Does every device keep 16 each way at 96 kHz, in
    particular the Ferrofish's Dante card (the digital loop return)? If it
    halves, the battery cannot run sixteen channels.
