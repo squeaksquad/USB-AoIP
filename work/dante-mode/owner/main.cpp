@@ -93,6 +93,7 @@ constexpr std::int64_t kPacketFrames = 32;         // the transmit thread reads 
 constexpr std::size_t kScratchFrames = 1024;
 constexpr unsigned kIdleWakes = 100;               // wakes without movement before a direction counts as stopped
 constexpr unsigned kFaultHoldoffWakes = 50;        // after a gadget PCM error, leave that direction alone this long
+constexpr std::int64_t kHostRateChanged = -ERANGE; // the detach code when the host's rate moved under an open gadget
 constexpr int kNominalPitch = 1000000;
 
 std::atomic<bool> stop_requested{false};
@@ -398,6 +399,9 @@ struct Telemetry {
 
     // The USB half.
     std::atomic<int> usb_owner{static_cast<int>(UsbOwner::steward_absent)};
+    // Set by the steward when the host's rate moved while the loop owns the gadget;
+    // taken by the loop, which hands the gadget back (kHostRateChanged).
+    std::atomic<bool> usb_rate_changed{false};
     std::atomic<int> tx_state{static_cast<int>(TxState::idle)};
     std::atomic<bool> rx_flowing{false};
     std::atomic<int> wanted_capture_pitch{kNominalPitch};
@@ -1132,6 +1136,7 @@ void* steward_entry(void* argument) {
     long refused_capture = 0;
     long refused_playback = 0;
     std::int64_t next_ppm_write = now_ns() + 60000000000LL;
+    std::int64_t next_rate_check = 0;
     const auto close_all = [&]() {
         pitch.close();
         if (usb.playback.handle != nullptr) { snd_pcm_close(usb.playback.handle); usb.playback.handle = nullptr; }
@@ -1150,6 +1155,24 @@ void* steward_entry(void* argument) {
             const int rc = pitch.write(t.wanted_capture_pitch.load(std::memory_order_relaxed),
                                        t.wanted_playback_pitch.load(std::memory_order_relaxed));
             if (rc < 0) t.pitch_write_errors.fetch_add(1, std::memory_order_relaxed);
+            // The host's rate, while open too: with the multi-rate gadget a rate
+            // change on the Mac never closes the gadget PCM, so the check before
+            // opening never ran again and the owner ran a 44.1 kHz host at 48
+            // (2026-10-28). A mismatch hands the gadget back, and the check
+            // before the next open refuses it and asks the arbiter.
+            if (now_ns() >= next_rate_check && !t.usb_rate_changed.load(std::memory_order_acquire)) {
+                next_rate_check = now_ns() + 1000000000LL;
+                long host_capture = 0;
+                long host_playback = 0;
+                read_gadget_rates(o.usb, host_capture, host_playback);
+                if (usb16x16::owner::judge_gadget_rate(host_capture, host_playback, o.rate) ==
+                    usb16x16::owner::GadgetRate::mismatch) {
+                    std::printf("USBRATE changed host_capture=%ld host_playback=%ld rate=%u while open; "
+                                "handing the USB half back\n", host_capture, host_playback, o.rate);
+                    std::fflush(stdout);
+                    t.usb_rate_changed.store(true, std::memory_order_release);
+                }
+            }
             continue;
         }
         if (owner == UsbOwner::steward_closing) {
@@ -1229,6 +1252,9 @@ void* steward_entry(void* argument) {
                     host_capture, host_playback);
         std::fflush(stdout);
         last_reported = 1;
+        // A change seen under the last open was dealt with by the check above.
+        t.usb_rate_changed.store(false, std::memory_order_release);
+        next_rate_check = now_ns() + 1000000000LL;
         t.usb_owner.store(static_cast<int>(UsbOwner::loop), std::memory_order_release);
     }
     // The loop has returned; whatever is open is ours to close.
@@ -1706,6 +1732,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
         const int rc = snd_pcm_start(handles.capture.handle);
         if (rc < 0) detach_usb(usb, rc, t);
     }
+    if (usb.attached && t.usb_rate_changed.load(std::memory_order_acquire)) detach_usb(usb, kHostRateChanged, t);
 
     const long received = take_capture(net, usb.attached ? usb.rx_scratch.data() : nullptr, t);
     if (received < 0) return false;

@@ -1,0 +1,839 @@
+START 20261028T034032Z seconds=candidate owner=0facc5ad plugin=c6b012ae config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner-rate44-48-arbiter.conf trial=no mode=usb cpus=all user=usb16x16-dante
+ARGS --seconds 0 --rate 48000 --period 64 --buffer 1024 --tx-lead 128 --guard 256 --usb-period 48 --usb-buffer 480 --rx-queue 96 --rx-slack 96 --log-every 60 --rate-request-file /run/usb16x16-dante/rate-request
+START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-16.21 seed_from_file=1
+THREADS stage=before-open count=3 [1691137 owner OTHER/0] [1691139 owner OTHER/0] [1691140 owner OTHER/0]
+NETOPEN dir=capture period=64 buffer=1024 hw_params_us=251231 state=PREPARED
+NETOPEN dir=playback period=64 buffer=1024 hw_params_us=87 state=PREPARED
+NETTHREADS flows_rx=1 flows_tx=1 waited_ms=10
+THREADS stage=after-open count=7 [1691137 owner OTHER/0] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX OTHER/0]
+NETSTART capture=RUNNING playback=RUNNING
+THREADS stage=running count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=unknown host_capture=0 host_playback=0
+USBLINK usb=open tx=idle rx=idle tx_links=0 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=0 tx_prime_found=0 t=0.300
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:40:34.261626Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:40:34.261643Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abdd900000000"
+[2026-10-28T03:40:37.858410Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-28T03:40:37.858423Z ERROR inferno_aoip::device_server::arc_server] whole packet: "272900100a2622040000000100010000"
+[2026-10-28T03:40:38.993177Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-28T03:40:38.993191Z ERROR inferno_aoip::device_server::arc_server] whole packet: "272900100a3122040000000100010000"
+[2026-10-28T03:40:42.017467Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:40:42.017481Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abde300000000"
+[2026-10-28T03:40:42.977374Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-28T03:40:42.977387Z ERROR inferno_aoip::device_server::arc_server] whole packet: "272900100a3322040000000100010000"
+[2026-10-28T03:40:49.773180Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:40:49.773194Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abdf100000000"
+[2026-10-28T03:40:50.433860Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-28T03:40:50.433874Z ERROR inferno_aoip::device_server::arc_server] whole packet: "272900100a4322040000000100010000"
+[2026-10-28T03:40:51.570177Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-28T03:40:51.570191Z ERROR inferno_aoip::device_server::arc_server] whole packet: "272900100a4722040000000100010000"
+[2026-10-28T03:40:55.554737Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-28T03:40:55.554752Z ERROR inferno_aoip::device_server::arc_server] whole packet: "272900100a4922040000000100010000"
+[2026-10-28T03:40:57.528518Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:40:57.528533Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abdfc00000000"
+[2026-10-28T03:41:02.865857Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-28T03:41:02.865871Z ERROR inferno_aoip::device_server::arc_server] whole packet: "272900100a5922040000000100010000"
+[2026-10-28T03:41:04.001354Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-28T03:41:04.001368Z ERROR inferno_aoip::device_server::arc_server] whole packet: "272900100a5d22040000000100010000"
+[2026-10-28T03:41:05.283463Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:05.283479Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe0700000000"
+[2026-10-28T03:41:07.985341Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x2204, content 000100010000
+[2026-10-28T03:41:07.985355Z ERROR inferno_aoip::device_server::arc_server] whole packet: "272900100a6322040000000100010000"
+[2026-10-28T03:41:13.039548Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:13.039564Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe0f00000000"
+[2026-10-28T03:41:20.794745Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:20.794761Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe1700000000"
+[2026-10-28T03:41:25.147912Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390021000f4240
+[2026-10-28T03:41:25.147926Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff002005ba00004cea4163338f0000417564696e61746507390021000f4240
+[2026-10-28T03:41:25.381502Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 073900c1000f4240
+[2026-10-28T03:41:25.381515Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff002005bc00004cea4163338f0000417564696e617465073900c1000f4240
+[2026-10-28T03:41:25.381607Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07391008000f4240
+[2026-10-28T03:41:25.381610Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff002005bd00004cea4163338f0000417564696e61746507391008000f4240
+[2026-10-28T03:41:25.381613Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390013000f4240
+[2026-10-28T03:41:25.381615Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff002005be00004cea4163338f0000417564696e61746507390013000f4240
+[2026-10-28T03:41:25.381723Z WARN  inferno_aoip::device_server::info_mcast_server] unknown request to multicast port: opcode: 07390081000f4240
+[2026-10-28T03:41:25.381725Z WARN  inferno_aoip::device_server::info_mcast_server] raw udp payload: ffff002005bf00004cea4163338f0000417564696e61746507390081000f4240
+[2026-10-28T03:41:28.537434Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:28.537447Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f2700000000"
+[2026-10-28T03:41:28.549845Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:28.549848Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe1f00000000"
+OWNER t=60.0 wakes=59768 gap_us_max=1034 tx_depth=75..81 rx_avail_max=53 tx_frames=2868992 rx_frames=2868864 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=2868608 offset_mismatches=0 net_errors=0
+USB t=60.0 usb=open tx=idle rx=idle tx_mean=0.0 rx_mean=0.0 rx_depth=96..96 pitch_c=1000000 pitch_p=1000000 tx_i=0.00 rx_i=0.00 usb_tx=0 usb_rx=49 tx_links=0 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=2868043 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=0,0 back_peak=0,0 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:41:34.945287Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:34.945302Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f2a00000000"
+[2026-10-28T03:41:36.305846Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:36.305861Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe2800000000"
+USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=102 t=65.336
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=1 rx_primes=2 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=102 t=68.337
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:41:41.351916Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:41.351931Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f2c00000000"
+USBLINK usb=open tx=flow rx=flow tx_links=2 rx_primes=2 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=69.938
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:41:44.060970Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:44.060985Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe2f00000000"
+USBLINK usb=open tx=idle rx=idle tx_links=2 rx_primes=4 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=72.940
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=3 rx_primes=4 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=115 t=74.541
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:41:47.759612Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:47.759628Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f2f00000000"
+USBLINK usb=open tx=idle rx=idle tx_links=3 rx_primes=5 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=115 t=77.543
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=4 rx_primes=5 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=87 t=78.143
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:41:51.817268Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:51.817283Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe3600000000"
+[2026-10-28T03:41:54.166627Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:54.166642Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f3200000000"
+[2026-10-28T03:41:59.573307Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:41:59.573325Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe4000000000"
+[2026-10-28T03:42:00.574075Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:00.574092Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f3400000000"
+[2026-10-28T03:42:06.981294Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:06.981310Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f3700000000"
+[2026-10-28T03:42:07.328904Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:07.328916Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe4700000000"
+[2026-10-28T03:42:13.388349Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:13.388364Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f3a00000000"
+[2026-10-28T03:42:15.084165Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:15.084181Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe4f00000000"
+USBLINK usb=open tx=idle rx=idle tx_links=4 rx_primes=7 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=87 t=104.057
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=armed rx=idle tx_links=4 rx_primes=7 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=87 t=104.658
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=4 rx_primes=7 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=87 t=104.758
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=5 rx_primes=7 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=87 t=105.759
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:42:19.796169Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:19.796184Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f3c00000000"
+USBLINK usb=open tx=idle rx=idle tx_links=5 rx_primes=8 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=87 t=108.761
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=6 rx_primes=8 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=110.362
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:42:22.840336Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:22.840348Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe5700000000"
+USBLINK usb=open tx=idle rx=idle tx_links=6 rx_primes=9 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=113.363
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:42:26.203983Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:26.203998Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f3f00000000"
+USBLINK usb=open tx=idle rx=flow tx_links=6 rx_primes=9 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=114.864
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=7 rx_primes=9 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=104 t=114.964
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=7 rx_primes=10 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=104 t=117.866
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:42:30.596175Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:30.596190Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe5e00000000"
+USBLINK usb=open tx=flow rx=flow tx_links=8 rx_primes=10 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=98 t=118.467
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+OWNER t=120.1 wakes=60040 gap_us_max=1057 tx_depth=30..128 rx_avail_max=51 tx_frames=2881680 rx_frames=2881680 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=5750288 offset_mismatches=0 net_errors=0
+USB t=120.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=138.0 rx_depth=53..192 pitch_c=1000016 pitch_p=1000040 tx_i=-16.25 rx_i=19.46 usb_tx=2175105 usb_rx=2189172 tx_links=8 tx_reprimes=0 rx_primes=10 rx_overflow=295 rx_idle_discards=3559873 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:42:32.611462Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:32.611475Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f4200000000"
+[2026-10-28T03:42:38.351913Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:38.351929Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe6700000000"
+[2026-10-28T03:42:39.019404Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:39.019421Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f4400000000"
+[2026-10-28T03:42:45.426279Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:45.426294Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f4700000000"
+[2026-10-28T03:42:46.107995Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:46.108010Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe6f00000000"
+[2026-10-28T03:42:51.832707Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:51.832722Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f4900000000"
+[2026-10-28T03:42:53.863700Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:53.863716Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe7700000000"
+[2026-10-28T03:42:58.240071Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:42:58.240085Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000a1f4c00000000"
+[2026-10-28T03:43:01.619642Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:43:01.619658Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe7e00000000"
+[2026-10-28T03:43:09.375417Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:43:09.375433Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe8800000000"
+[2026-10-28T03:43:17.130642Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:43:17.130658Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe8f00000000"
+[2026-10-28T03:43:24.886310Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:43:24.886326Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe9600000000"
+OWNER t=180.1 wakes=60035 gap_us_max=1018 tx_depth=78..81 rx_avail_max=49 tx_frames=2881538 rx_frames=2881538 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=8631826 offset_mismatches=0 net_errors=0
+USB t=180.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=95.7 rx_depth=47..111 pitch_c=1000016 pitch_p=1000022 tx_i=-16.27 rx_i=22.40 usb_tx=5056643 usb_rx=5070710 tx_links=8 tx_reprimes=0 rx_primes=10 rx_overflow=295 rx_idle_discards=3559873 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:43:32.641324Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:43:32.641338Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abe9f00000000"
+[2026-10-28T03:43:40.397098Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:43:40.397113Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abea600000000"
+[2026-10-28T03:43:48.151934Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:43:48.151950Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abeaf00000000"
+[2026-10-28T03:43:55.906667Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:43:55.906682Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abeb700000000"
+[2026-10-28T03:44:03.662707Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:44:03.662721Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abebe00000000"
+[2026-10-28T03:44:11.418121Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:44:11.418136Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abec600000000"
+[2026-10-28T03:44:19.173437Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:44:19.173452Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abecf00000000"
+[2026-10-28T03:44:26.942708Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:44:26.942723Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abed700000000"
+OWNER t=240.0 wakes=59933 gap_us_max=1013 tx_depth=79..81 rx_avail_max=49 tx_frames=2876732 rx_frames=2876731 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=11508557 offset_mismatches=0 net_errors=0
+USB t=240.0 usb=open tx=flow rx=flow tx_mean=128.4 rx_mean=85.7 rx_depth=37..89 pitch_c=1000016 pitch_p=1000016 tx_i=-16.25 rx_i=21.16 usb_tx=7933375 usb_rx=7947441 tx_links=8 tx_reprimes=0 rx_primes=10 rx_overflow=295 rx_idle_discards=3559873 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838861 back_peak=2097152,838861 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:44:34.684682Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:44:34.684696Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abede00000000"
+[2026-10-28T03:44:42.441018Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:44:42.441034Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abee700000000"
+[2026-10-28T03:44:50.196513Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:44:50.196529Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abeee00000000"
+[2026-10-28T03:44:57.951343Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:44:57.951359Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abef600000000"
+[2026-10-28T03:45:05.705885Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:45:05.705901Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abeff00000000"
+[2026-10-28T03:45:13.460936Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:45:13.460951Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf0600000000"
+[2026-10-28T03:45:21.215904Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:45:21.215920Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf0e00000000"
+[2026-10-28T03:45:28.971758Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:45:28.971774Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf1600000000"
+OWNER t=300.1 wakes=60033 gap_us_max=1017 tx_depth=79..82 rx_avail_max=49 tx_frames=2881538 rx_frames=2881537 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=14390094 offset_mismatches=0 net_errors=0
+USB t=300.1 usb=open tx=flow rx=flow tx_mean=130.0 rx_mean=85.5 rx_depth=37..85 pitch_c=1000015 pitch_p=1000014 tx_i=-16.10 rx_i=19.24 usb_tx=10814913 usb_rx=10828978 tx_links=8 tx_reprimes=0 rx_primes=10 rx_overflow=295 rx_idle_discards=3559873 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:45:36.726974Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:45:36.726991Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf1e00000000"
+[2026-10-28T03:45:44.482161Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:45:44.482188Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf2600000000"
+USBLINK usb=open tx=idle rx=idle tx_links=8 rx_primes=12 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=98 t=319.475
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:45:52.237207Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:45:52.237230Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf2e00000000"
+USBLINK usb=open tx=armed rx=idle tx_links=8 rx_primes=12 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=98 t=319.876
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=8 rx_primes=12 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=98 t=319.976
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=9 rx_primes=12 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=104 t=320.876
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=9 rx_primes=14 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=104 t=323.878
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=10 rx_primes=14 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=325.479
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:45:59.993188Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:45:59.993203Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf3600000000"
+USBLINK usb=open tx=idle rx=idle tx_links=10 rx_primes=15 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=328.381
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=11 rx_primes=15 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=329.982
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=11 rx_primes=16 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=332.984
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=12 rx_primes=16 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=333.584
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:46:07.748105Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:46:07.748121Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf3e00000000"
+[2026-10-28T03:46:15.503577Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:46:15.503600Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf4700000000"
+[2026-10-28T03:46:23.258582Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:46:23.258599Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf4e00000000"
+[2026-10-28T03:46:31.014096Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:46:31.014111Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf5500000000"
+OWNER t=360.1 wakes=60036 gap_us_max=1060 tx_depth=31..110 rx_avail_max=51 tx_frames=2881655 rx_frames=2881656 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=17271750 offset_mismatches=0 net_errors=0
+USB t=360.1 usb=open tx=flow rx=flow tx_mean=129.0 rx_mean=101.0 rx_depth=37..192 pitch_c=1000015 pitch_p=1000023 tx_i=-15.94 rx_i=20.18 usb_tx=13446192 usb_rx=13467907 tx_links=12 tx_reprimes=0 rx_primes=16 rx_overflow=472 rx_idle_discards=3802135 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:46:38.768822Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:46:38.768837Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf5e00000000"
+[2026-10-28T03:46:46.523598Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:46:46.523614Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf6600000000"
+[2026-10-28T03:46:54.278985Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:46:54.279000Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf6e00000000"
+[2026-10-28T03:47:02.034571Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:47:02.034587Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf7600000000"
+[2026-10-28T03:47:09.790579Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:47:09.790595Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf7d00000000"
+[2026-10-28T03:47:17.546160Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:47:17.546176Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf8600000000"
+[2026-10-28T03:47:25.301300Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:47:25.301316Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf8e00000000"
+OWNER t=420.0 wakes=59933 gap_us_max=1013 tx_depth=80..85 rx_avail_max=49 tx_frames=2876732 rx_frames=2876729 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=20148479 offset_mismatches=0 net_errors=0
+USB t=420.0 usb=open tx=flow rx=flow tx_mean=132.0 rx_mean=88.0 rx_depth=40..93 pitch_c=1000013 pitch_p=1000016 tx_i=-15.49 rx_i=19.60 usb_tx=16322924 usb_rx=16344636 tx_links=12 tx_reprimes=0 rx_primes=16 rx_overflow=472 rx_idle_discards=3802135 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:47:33.056869Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:47:33.056898Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf9600000000"
+[2026-10-28T03:47:40.812407Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:47:40.812424Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abf9d00000000"
+[2026-10-28T03:47:48.568398Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:47:48.568414Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfa600000000"
+[2026-10-28T03:47:56.323096Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:47:56.323125Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfae00000000"
+[2026-10-28T03:48:04.078757Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:48:04.078782Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfb500000000"
+[2026-10-28T03:48:11.834417Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:48:11.834438Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfbe00000000"
+[2026-10-28T03:48:19.590110Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:48:19.590126Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfc500000000"
+[2026-10-28T03:48:27.346310Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:48:27.346326Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfce00000000"
+OWNER t=480.1 wakes=60032 gap_us_max=1022 tx_depth=82..85 rx_avail_max=49 tx_frames=2881539 rx_frames=2881540 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=23030019 offset_mismatches=0 net_errors=0
+USB t=480.1 usb=open tx=flow rx=flow tx_mean=131.0 rx_mean=87.0 rx_depth=38..46 pitch_c=1000013 pitch_p=1000013 tx_i=-14.87 rx_i=18.00 usb_tx=19204463 usb_rx=19226176 tx_links=12 tx_reprimes=0 rx_primes=16 rx_overflow=472 rx_idle_discards=3802135 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838861 back_peak=2097152,838861 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:48:35.101806Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:48:35.101822Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfd600000000"
+[2026-10-28T03:48:42.858111Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:48:42.858128Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfdd00000000"
+[2026-10-28T03:48:50.613342Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:48:50.613358Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfe500000000"
+[2026-10-28T03:48:58.370874Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:48:58.370892Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abfed00000000"
+[2026-10-28T03:49:06.126370Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:49:06.126389Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abff600000000"
+[2026-10-28T03:49:13.882437Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:49:13.882453Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000abffd00000000"
+[2026-10-28T03:49:21.638495Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:49:21.638545Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac00600000000"
+USBLINK usb=open tx=idle rx=idle tx_links=12 rx_primes=16 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=534.493
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=armed rx=idle tx_links=12 rx_primes=18 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=534.893
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=12 rx_primes=18 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=534.993
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=flow tx_links=12 rx_primes=18 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=535.894
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=13 rx_primes=18 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=105 t=535.994
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:49:29.395313Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:49:29.395330Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac00d00000000"
+USBLINK usb=open tx=idle rx=idle tx_links=13 rx_primes=20 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=105 t=538.896
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+OWNER t=540.1 wakes=60034 gap_us_max=1061 tx_depth=32..105 rx_avail_max=51 tx_frames=2881620 rx_frames=2881623 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=25911642 offset_mismatches=0 net_errors=0
+USB t=540.1 usb=open tx=idle rx=idle tx_mean=128.0 rx_mean=124.0 rx_depth=38..192 pitch_c=1000000 pitch_p=1000000 tx_i=-14.45 rx_i=16.91 usb_tx=21958391 usb_rx=21982935 tx_links=13 tx_reprimes=0 rx_primes=20 rx_overflow=572 rx_idle_discards=3926707 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+USBLINK usb=open tx=flow rx=flow tx_links=14 rx_primes=20 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=86 t=540.497
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=14 rx_primes=22 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=86 t=543.499
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:49:37.149721Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:49:37.149736Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac01500000000"
+USBLINK usb=open tx=flow rx=flow tx_links=15 rx_primes=22 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=122 t=545.100
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=16 rx_primes=23 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=81 t=548.102
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=17 rx_primes=23 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=123 t=548.702
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:49:44.905808Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:49:44.905825Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac01e00000000"
+[2026-10-28T03:49:52.663606Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:49:52.663625Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac02500000000"
+[2026-10-28T03:50:00.418630Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:50:00.418647Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac02d00000000"
+[2026-10-28T03:50:08.175051Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:50:08.175067Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac03500000000"
+[2026-10-28T03:50:15.932166Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:50:15.932180Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac03d00000000"
+[2026-10-28T03:50:23.687693Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:50:23.687721Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac04500000000"
+[2026-10-28T03:50:31.444267Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:50:31.444284Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac04d00000000"
+OWNER t=600.0 wakes=59935 gap_us_max=1031 tx_depth=31..123 rx_avail_max=50 tx_frames=2876790 rx_frames=2876788 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=28788430 offset_mismatches=0 net_errors=0
+USB t=600.0 usb=open tx=flow rx=flow tx_mean=129.7 rx_mean=93.9 rx_depth=45..192 pitch_c=1000014 pitch_p=1000017 tx_i=-14.36 rx_i=17.71 usb_tx=24707689 usb_rx=24739985 tx_links=17 tx_reprimes=0 rx_primes=23 rx_overflow=646 rx_idle_discards=4046227 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:50:39.199284Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:50:39.199299Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac05500000000"
+[2026-10-28T03:50:46.955057Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:50:46.955072Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac05c00000000"
+[2026-10-28T03:50:54.711854Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:50:54.711869Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac06600000000"
+[2026-10-28T03:51:02.468510Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:51:02.468527Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac06d00000000"
+[2026-10-28T03:51:10.224512Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:51:10.224528Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac07400000000"
+[2026-10-28T03:51:17.979807Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:51:17.979822Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac07d00000000"
+[2026-10-28T03:51:25.736139Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:51:25.736155Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac08500000000"
+OWNER t=660.1 wakes=60034 gap_us_max=1021 tx_depth=80..82 rx_avail_max=49 tx_frames=2881581 rx_frames=2881582 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=31670012 offset_mismatches=0 net_errors=0
+USB t=660.1 usb=open tx=flow rx=flow tx_mean=129.9 rx_mean=90.0 rx_depth=41..91 pitch_c=1000013 pitch_p=1000014 tx_i=-14.08 rx_i=16.85 usb_tx=27589270 usb_rx=27621567 tx_links=17 tx_reprimes=0 rx_primes=23 rx_overflow=646 rx_idle_discards=4046227 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838861 back_peak=2097152,838861 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:51:33.494103Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:51:33.494118Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac08d00000000"
+[2026-10-28T03:51:41.250648Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:51:41.250663Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac09500000000"
+[2026-10-28T03:51:49.005695Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:51:49.005710Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac09c00000000"
+[2026-10-28T03:51:56.762080Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:51:56.762096Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0a400000000"
+[2026-10-28T03:52:04.518228Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:52:04.518244Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0ad00000000"
+[2026-10-28T03:52:12.274844Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:52:12.274860Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0b500000000"
+[2026-10-28T03:52:20.033021Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:52:20.033037Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0bc00000000"
+[2026-10-28T03:52:27.790221Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:52:27.790237Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0c500000000"
+OWNER t=720.1 wakes=60034 gap_us_max=1033 tx_depth=79..82 rx_avail_max=49 tx_frames=2881586 rx_frames=2881587 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=34551599 offset_mismatches=0 net_errors=0
+USB t=720.1 usb=open tx=flow rx=flow tx_mean=128.8 rx_mean=91.0 rx_depth=41..90 pitch_c=1000013 pitch_p=1000013 tx_i=-13.88 rx_i=15.79 usb_tx=30470856 usb_rx=30503154 tx_links=17 tx_reprimes=0 rx_primes=23 rx_overflow=646 rx_idle_discards=4046227 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:52:35.545305Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:52:35.545320Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0cd00000000"
+[2026-10-28T03:52:43.300055Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:52:43.300070Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0d400000000"
+[2026-10-28T03:52:51.056382Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:52:51.056397Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0dd00000000"
+[2026-10-28T03:52:58.812536Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:52:58.812552Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0e400000000"
+USBLINK usb=open tx=idle rx=idle tx_links=17 rx_primes=25 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=123 t=749.711
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=armed rx=idle tx_links=17 rx_primes=25 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=123 t=750.112
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=17 rx_primes=25 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=123 t=750.212
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=18 rx_primes=25 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=109 t=751.112
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=flow tx_links=18 rx_primes=25 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=109 t=754.014
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=19 rx_primes=26 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=754.114
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:53:06.569184Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:53:06.569196Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0ec00000000"
+USBLINK usb=open tx=flow rx=flow tx_links=20 rx_primes=26 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=122 t=755.715
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=20 rx_primes=28 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=122 t=758.717
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=21 rx_primes=28 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=122 t=760.318
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:53:14.324133Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:53:14.324152Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0f500000000"
+USBLINK usb=open tx=idle rx=idle tx_links=21 rx_primes=30 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=122 t=763.320
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=flow tx_links=21 rx_primes=30 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=122 t=763.820
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=22 rx_primes=30 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=763.920
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:53:22.079682Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:53:22.079697Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac0fc00000000"
+[2026-10-28T03:53:29.835792Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:53:29.835808Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac10400000000"
+OWNER t=780.0 wakes=59939 gap_us_max=1059 tx_depth=32..122 rx_avail_max=51 tx_frames=2876835 rx_frames=2876834 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=37428433 offset_mismatches=0 net_errors=0
+USB t=780.0 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=107.0 rx_depth=42..192 pitch_c=1000014 pitch_p=1000022 tx_i=-13.79 rx_i=16.78 usb_tx=33092521 usb_rx=33135781 tx_links=22 tx_reprimes=0 rx_primes=30 rx_overflow=867 rx_idle_discards=4289877 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:53:37.594695Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:53:37.594711Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac10c00000000"
+[2026-10-28T03:53:45.349830Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:53:45.349845Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac11500000000"
+[2026-10-28T03:53:53.106287Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:53:53.106302Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac11c00000000"
+[2026-10-28T03:54:00.861712Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:54:00.861728Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac12500000000"
+[2026-10-28T03:54:08.617754Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:54:08.617769Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac12c00000000"
+[2026-10-28T03:54:16.374367Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:54:16.374389Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac13300000000"
+[2026-10-28T03:54:24.131031Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:54:24.131047Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac13d00000000"
+[2026-10-28T03:54:31.888183Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:54:31.888199Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac14400000000"
+OWNER t=840.1 wakes=60033 gap_us_max=1012 tx_depth=79..81 rx_avail_max=49 tx_frames=2881539 rx_frames=2881539 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=40309972 offset_mismatches=0 net_errors=0
+USB t=840.1 usb=open tx=flow rx=flow tx_mean=128.6 rx_mean=92.6 rx_depth=44..99 pitch_c=1000013 pitch_p=1000015 tx_i=-13.67 rx_i=17.18 usb_tx=35974060 usb_rx=36017320 tx_links=22 tx_reprimes=0 rx_primes=30 rx_overflow=867 rx_idle_discards=4289877 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:54:39.646282Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:54:39.646300Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac14c00000000"
+[2026-10-28T03:54:47.403270Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:54:47.403285Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac15400000000"
+[2026-10-28T03:54:55.159976Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:54:55.159991Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac15c00000000"
+[2026-10-28T03:55:02.917096Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:55:02.917112Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac16400000000"
+[2026-10-28T03:55:10.673656Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:55:10.673672Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac16c00000000"
+[2026-10-28T03:55:18.428830Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:55:18.428845Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac17400000000"
+[2026-10-28T03:55:26.186718Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:55:26.186734Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac17b00000000"
+OWNER t=900.1 wakes=60034 gap_us_max=1016 tx_depth=79..81 rx_avail_max=49 tx_frames=2881580 rx_frames=2881581 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=43191553 offset_mismatches=0 net_errors=0
+USB t=900.1 usb=open tx=flow rx=flow tx_mean=128.8 rx_mean=90.0 rx_depth=42..91 pitch_c=1000013 pitch_p=1000013 tx_i=-13.57 rx_i=16.29 usb_tx=38855640 usb_rx=38898901 tx_links=22 tx_reprimes=0 rx_primes=30 rx_overflow=867 rx_idle_discards=4289877 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838861 back_peak=2097152,838861 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:55:33.941852Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:55:33.941869Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac18500000000"
+[2026-10-28T03:55:41.698527Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:55:41.698546Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac18c00000000"
+[2026-10-28T03:55:49.454749Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:55:49.454766Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac19300000000"
+[2026-10-28T03:55:57.211905Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:55:57.211922Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac19c00000000"
+[2026-10-28T03:56:04.968350Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:56:04.968366Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1a400000000"
+[2026-10-28T03:56:12.724881Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:56:12.724897Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1ac00000000"
+[2026-10-28T03:56:20.480792Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:56:20.480807Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1b400000000"
+[2026-10-28T03:56:28.237069Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:56:28.237091Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1bb00000000"
+OWNER t=960.0 wakes=59933 gap_us_max=1016 tx_depth=79..81 rx_avail_max=49 tx_frames=2876738 rx_frames=2876739 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=46068292 offset_mismatches=0 net_errors=0
+USB t=960.0 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=92.0 rx_depth=42..91 pitch_c=1000013 pitch_p=1000013 tx_i=-13.49 rx_i=15.36 usb_tx=41732378 usb_rx=41775640 tx_links=22 tx_reprimes=0 rx_primes=30 rx_overflow=867 rx_idle_discards=4289877 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:56:35.994448Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:56:35.994474Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1c300000000"
+USBLINK usb=open tx=idle rx=idle tx_links=22 rx_primes=32 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=964.829
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=armed rx=idle tx_links=22 rx_primes=32 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=965.229
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=22 rx_primes=32 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=965.329
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=flow tx_links=22 rx_primes=32 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=966.230
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=23 rx_primes=32 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=107 t=966.330
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=23 rx_primes=33 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=107 t=969.231
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=24 rx_primes=33 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=970.832
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:56:43.751103Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:56:43.751119Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1cc00000000"
+USBLINK usb=open tx=idle rx=idle tx_links=24 rx_primes=35 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=973.834
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=flow tx_links=24 rx_primes=35 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=110 t=975.335
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=25 rx_primes=35 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=92 t=975.435
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=25 rx_primes=36 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=92 t=978.336
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=26 rx_primes=36 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=123 t=978.737
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T03:56:51.506370Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:56:51.506386Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1d400000000"
+[2026-10-28T03:56:59.261478Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:56:59.261494Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1db00000000"
+[2026-10-28T03:57:07.018249Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:57:07.018264Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1e400000000"
+[2026-10-28T03:57:14.775997Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:57:14.776013Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1eb00000000"
+[2026-10-28T03:57:22.532112Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:57:22.532127Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1f300000000"
+[2026-10-28T03:57:30.289042Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:57:30.289064Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac1fc00000000"
+OWNER t=1020.1 wakes=60033 gap_us_max=1049 tx_depth=30..123 rx_avail_max=51 tx_frames=2881480 rx_frames=2881479 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=48949771 offset_mismatches=0 net_errors=0
+USB t=1020.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=95.0 rx_depth=43..192 pitch_c=1000014 pitch_p=1000016 tx_i=-13.51 rx_i=16.17 usb_tx=44372362 usb_rx=44423166 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838860 back_peak=2097152,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:57:38.045715Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:57:38.045730Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac20300000000"
+[2026-10-28T03:57:45.801604Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:57:45.801619Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac20b00000000"
+[2026-10-28T03:57:53.558480Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:57:53.558495Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac21400000000"
+[2026-10-28T03:58:01.315350Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:58:01.315367Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac21b00000000"
+[2026-10-28T03:58:09.070325Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:58:09.070345Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac22300000000"
+[2026-10-28T03:58:16.828135Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:58:16.828151Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac22b00000000"
+[2026-10-28T03:58:24.585215Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:58:24.585230Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac23300000000"
+[2026-10-28T03:58:32.341523Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:58:32.341539Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac23b00000000"
+OWNER t=1080.1 wakes=60030 gap_us_max=1017 tx_depth=79..81 rx_avail_max=49 tx_frames=2881346 rx_frames=2881346 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=51831117 offset_mismatches=0 net_errors=0
+USB t=1080.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=92.0 rx_depth=43..93 pitch_c=1000013 pitch_p=1000014 tx_i=-13.48 rx_i=15.59 usb_tx=47253708 usb_rx=47304512 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838861,838860 back_peak=838861,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:58:40.097974Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:58:40.097990Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac24400000000"
+[2026-10-28T03:58:47.854301Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:58:47.854315Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac24b00000000"
+[2026-10-28T03:58:55.610950Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:58:55.610974Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac25200000000"
+[2026-10-28T03:59:03.368570Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:59:03.368586Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac25c00000000"
+[2026-10-28T03:59:11.125915Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:59:11.125929Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac26300000000"
+[2026-10-28T03:59:18.882940Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:59:18.882972Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac26b00000000"
+[2026-10-28T03:59:26.639397Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:59:26.639412Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac27300000000"
+OWNER t=1140.0 wakes=59931 gap_us_max=1023 tx_depth=78..81 rx_avail_max=49 tx_frames=2876588 rx_frames=2876588 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=54707705 offset_mismatches=0 net_errors=0
+USB t=1140.0 usb=open tx=flow rx=flow tx_mean=127.9 rx_mean=92.9 rx_depth=43..92 pitch_c=1000014 pitch_p=1000013 tx_i=-13.49 rx_i=14.88 usb_tx=50130296 usb_rx=50181100 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838860,838860 back_peak=838860,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T03:59:34.394564Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:59:34.394585Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac27a00000000"
+[2026-10-28T03:59:42.149737Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:59:42.149753Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac28300000000"
+[2026-10-28T03:59:49.905025Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:59:49.905040Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac28b00000000"
+[2026-10-28T03:59:57.660867Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T03:59:57.660888Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac29300000000"
+[2026-10-28T04:00:05.417028Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:00:05.417043Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac29a00000000"
+[2026-10-28T04:00:13.174065Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:00:13.174080Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2a400000000"
+[2026-10-28T04:00:20.930068Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:00:20.930083Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2ab00000000"
+[2026-10-28T04:00:28.685255Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:00:28.685271Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2b200000000"
+OWNER t=1200.0 wakes=60030 gap_us_max=1013 tx_depth=79..81 rx_avail_max=49 tx_frames=2881343 rx_frames=2881343 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=57589048 offset_mismatches=0 net_errors=0
+USB t=1200.0 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=94.7 rx_depth=44..94 pitch_c=1000013 pitch_p=1000014 tx_i=-13.50 rx_i=14.44 usb_tx=53011639 usb_rx=53062443 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838861,838860 back_peak=838861,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T04:00:36.442204Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:00:36.442224Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2bb00000000"
+[2026-10-28T04:00:44.198747Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:00:44.198769Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2c200000000"
+[2026-10-28T04:00:51.955386Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:00:51.955402Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2cb00000000"
+[2026-10-28T04:00:59.712536Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:00:59.712552Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2d300000000"
+[2026-10-28T04:01:07.468506Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:01:07.468529Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2da00000000"
+[2026-10-28T04:01:15.224808Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:01:15.224823Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2e200000000"
+[2026-10-28T04:01:22.979130Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:01:22.979146Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2eb00000000"
+[2026-10-28T04:01:30.735949Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:01:30.735964Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2f300000000"
+OWNER t=1260.1 wakes=60030 gap_us_max=1014 tx_depth=79..81 rx_avail_max=49 tx_frames=2881397 rx_frames=2881397 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=60470445 offset_mismatches=0 net_errors=0
+USB t=1260.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=95.6 rx_depth=46..96 pitch_c=1000014 pitch_p=1000014 tx_i=-13.50 rx_i=14.28 usb_tx=55893036 usb_rx=55943840 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838860,838861 back_peak=838860,838861 out_holes=0/0 back_holes=0/0
+[2026-10-28T04:01:38.493005Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:01:38.493020Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac2fa00000000"
+[2026-10-28T04:01:46.249997Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:01:46.250012Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac30300000000"
+[2026-10-28T04:01:54.006980Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:01:54.006995Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac30a00000000"
+[2026-10-28T04:02:01.764387Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:02:01.764402Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac31200000000"
+[2026-10-28T04:02:09.520104Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:02:09.520120Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac31b00000000"
+[2026-10-28T04:02:17.275417Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:02:17.275432Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac32200000000"
+[2026-10-28T04:02:25.032107Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:02:25.032124Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac32a00000000"
+OWNER t=1320.1 wakes=60028 gap_us_max=1022 tx_depth=79..81 rx_avail_max=49 tx_frames=2881344 rx_frames=2881344 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=63351789 offset_mismatches=0 net_errors=0
+USB t=1320.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=96.7 rx_depth=47..55 pitch_c=1000013 pitch_p=1000015 tx_i=-13.50 rx_i=14.35 usb_tx=58774380 usb_rx=58825184 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838861,838860 back_peak=838861,838860 out_holes=0/0 back_holes=0/0
+[2026-10-28T04:02:32.789010Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:02:32.789025Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac33200000000"
+[2026-10-28T04:02:40.543726Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:02:40.543743Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac33a00000000"
+[2026-10-28T04:02:48.300120Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:02:48.300135Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac34200000000"
+[2026-10-28T04:02:56.054717Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:02:56.054733Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac34a00000000"
+[2026-10-28T04:03:03.811818Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:03:03.811832Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac35200000000"
+[2026-10-28T04:03:11.568971Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:03:11.568986Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac35a00000000"
+[2026-10-28T04:03:19.325706Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:03:19.325721Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac36300000000"
+[2026-10-28T04:03:27.080912Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:03:27.080927Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac36a00000000"
+OWNER t=1380.0 wakes=59932 gap_us_max=1030 tx_depth=78..81 rx_avail_max=50 tx_frames=2876539 rx_frames=2876539 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=66228328 offset_mismatches=0 net_errors=0
+USB t=1380.0 usb=open tx=flow rx=flow tx_mean=128.9 rx_mean=96.0 rx_depth=48..97 pitch_c=1000013 pitch_p=1000014 tx_i=-13.50 rx_i=14.45 usb_tx=61650919 usb_rx=61701723 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838861,838861 back_peak=838861,838861 out_holes=0/0 back_holes=0/0
+[2026-10-28T04:03:34.837410Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:03:34.837432Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac37100000000"
+[2026-10-28T04:03:42.593328Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:03:42.593343Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac37a00000000"
+[2026-10-28T04:03:50.348724Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:03:50.348739Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac38200000000"
+[2026-10-28T04:03:58.104390Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:03:58.104405Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac38a00000000"
+[2026-10-28T04:04:05.860932Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:04:05.860947Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac39200000000"
+[2026-10-28T04:04:13.617318Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:04:13.617333Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac39900000000"
+[2026-10-28T04:04:21.374634Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:04:21.374650Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3a200000000"
+[2026-10-28T04:04:29.132077Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:04:29.132093Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3aa00000000"
+OWNER t=1440.1 wakes=60030 gap_us_max=1029 tx_depth=78..81 rx_avail_max=50 tx_frames=2881393 rx_frames=2881393 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=69109721 offset_mismatches=0 net_errors=0
+USB t=1440.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=96.9 rx_depth=48..97 pitch_c=1000014 pitch_p=1000015 tx_i=-13.50 rx_i=14.52 usb_tx=64532312 usb_rx=64583116 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838861,838861 back_peak=838861,838861 out_holes=0/0 back_holes=0/0
+[2026-10-28T04:04:36.887670Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:04:36.887685Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3b200000000"
+[2026-10-28T04:04:44.644717Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:04:44.644733Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3b900000000"
+[2026-10-28T04:04:52.400514Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:04:52.400529Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3c200000000"
+[2026-10-28T04:05:00.155058Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:05:00.155072Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3ca00000000"
+[2026-10-28T04:05:07.913339Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:05:07.913356Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3d100000000"
+[2026-10-28T04:05:15.669079Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:05:15.669095Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3da00000000"
+[2026-10-28T04:05:23.424768Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:05:23.424783Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3e100000000"
+[2026-10-28T04:05:31.180747Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:05:31.180763Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3ea00000000"
+OWNER t=1500.1 wakes=60028 gap_us_max=1025 tx_depth=78..81 rx_avail_max=50 tx_frames=2881345 rx_frames=2881345 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=71991066 offset_mismatches=0 net_errors=0
+USB t=1500.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=96.0 rx_depth=47..55 pitch_c=1000014 pitch_p=1000015 tx_i=-13.51 rx_i=14.54 usb_tx=67413657 usb_rx=67464461 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838861,838861 back_peak=838861,838861 out_holes=0/0 back_holes=0/0
+[2026-10-28T04:05:38.937209Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:05:38.937224Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3f200000000"
+[2026-10-28T04:05:46.691587Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:05:46.691603Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac3f900000000"
+[2026-10-28T04:05:54.448711Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:05:54.448726Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac40100000000"
+[2026-10-28T04:06:02.204317Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:06:02.204331Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac40900000000"
+[2026-10-28T04:06:09.961283Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:06:09.961298Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac41200000000"
+[2026-10-28T04:06:17.717819Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:06:17.717834Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac41a00000000"
+[2026-10-28T04:06:25.473058Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:06:25.473072Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac42200000000"
+OWNER t=1560.0 wakes=59929 gap_us_max=1051 tx_depth=78..81 rx_avail_max=50 tx_frames=2876544 rx_frames=2876544 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=74867610 offset_mismatches=0 net_errors=0
+USB t=1560.0 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=96.0 rx_depth=47..96 pitch_c=1000014 pitch_p=1000015 tx_i=-13.50 rx_i=14.54 usb_tx=70290201 usb_rx=70341005 tx_links=26 tx_reprimes=0 rx_primes=36 rx_overflow=1009 rx_idle_discards=4523400 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838861,838861 back_peak=838861,838861 out_holes=0/0 back_holes=0/0
+[2026-10-28T04:06:33.229009Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:06:33.229024Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac42900000000"
+[2026-10-28T04:06:40.984036Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:06:40.984050Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac43200000000"
+[2026-10-28T04:06:48.740480Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:06:48.740495Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac43a00000000"
+USBLINK usb=open tx=idle rx=flow tx_links=26 rx_primes=36 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=123 t=1578.721
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=26 rx_primes=37 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=123 t=1578.821
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=armed rx=idle tx_links=26 rx_primes=37 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=123 t=1579.021
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=26 rx_primes=37 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=123 t=1579.121
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=27 rx_primes=37 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=106 t=1579.421
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=flow tx_links=27 rx_primes=37 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=106 t=1581.423
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=28 rx_primes=38 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=116 t=1581.623
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T04:06:56.497280Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:06:56.497295Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac44100000000"
+[2026-10-28T04:07:04.255370Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:07:04.255386Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac44a00000000"
+[2026-10-28T04:07:12.012383Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:07:12.012398Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac45100000000"
+USBLINK usb=open tx=idle rx=idle tx_links=28 rx_primes=39 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=116 t=1601.633
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=29 rx_primes=39 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=86 t=1602.033
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=29 rx_primes=40 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=86 t=1604.034
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=30 rx_primes=40 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=105 t=1604.134
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T04:07:19.767550Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:07:19.767565Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac45900000000"
+[2026-10-28T04:07:27.523508Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:07:27.523524Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac46200000000"
+OWNER t=1620.0 wakes=60033 gap_us_max=1056 tx_depth=31..116 rx_avail_max=51 tx_frames=2881489 rx_frames=2881489 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=77749100 offset_mismatches=0 net_errors=0
+USB t=1620.0 usb=open tx=flow rx=flow tx_mean=127.5 rx_mean=112.0 rx_depth=47..192 pitch_c=1000014 pitch_p=1000024 tx_i=-13.52 rx_i=16.29 usb_tx=73107371 usb_rx=73165461 tx_links=30 tx_reprimes=0 rx_primes=40 rx_overflow=1215 rx_idle_discards=4580035 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388606,8388591 back_peak=8388606,8388591 out_holes=4/550 back_holes=0/0
+[2026-10-28T04:07:35.280017Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:07:35.280038Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac46900000000"
+USBLINK usb=open tx=idle rx=idle tx_links=30 rx_primes=41 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=105 t=1624.144
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=flow tx_links=30 rx_primes=41 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=105 t=1624.444
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=31 rx_primes=41 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=1624.544
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=flow tx_links=31 rx_primes=42 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=80 t=1626.545
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=32 rx_primes=42 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=117 t=1626.646
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T04:07:43.038846Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:07:43.038862Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac47100000000"
+[2026-10-28T04:07:50.795026Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:07:50.795042Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac47a00000000"
+[2026-10-28T04:07:58.552885Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:07:58.552900Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac48200000000"
+USBLINK usb=open tx=idle rx=idle tx_links=32 rx_primes=43 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=117 t=1646.655
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=33 rx_primes=43 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=117 t=1647.055
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=33 rx_primes=44 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=117 t=1649.057
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=flow rx=flow tx_links=34 rx_primes=44 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=86 t=1649.157
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T04:08:06.310383Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:08:06.310398Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac48900000000"
+[2026-10-28T04:08:14.066997Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:08:14.067011Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac49100000000"
+[2026-10-28T04:08:21.823207Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:08:21.823222Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac49900000000"
+[2026-10-28T04:08:29.579345Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:08:29.579365Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4a100000000"
+OWNER t=1680.1 wakes=60032 gap_us_max=1017 tx_depth=30..117 rx_avail_max=49 tx_frames=2881412 rx_frames=2881412 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=80630511 offset_mismatches=0 net_errors=0
+USB t=1680.1 usb=open tx=flow rx=flow tx_mean=128.1 rx_mean=96.4 rx_depth=48..192 pitch_c=1000014 pitch_p=1000018 tx_i=-13.57 rx_i=17.43 usb_tx=75940874 usb_rx=76006118 tx_links=34 tx_reprimes=0 rx_primes=44 rx_overflow=1362 rx_idle_discards=4620451 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388606,8388591 back_peak=8388606,8388591 out_holes=8/550 back_holes=0/0
+[2026-10-28T04:08:37.336336Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:08:37.336351Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4aa00000000"
+[2026-10-28T04:08:45.092337Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:08:45.092360Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4b100000000"
+[2026-10-28T04:08:52.848591Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:08:52.848607Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4b800000000"
+[2026-10-28T04:09:00.605581Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:09:00.605601Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4c100000000"
+[2026-10-28T04:09:08.362049Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:09:08.362065Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4c900000000"
+[2026-10-28T04:09:16.119878Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:09:16.119893Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4d100000000"
+[2026-10-28T04:09:23.877067Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:09:23.877082Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4d900000000"
+[2026-10-28T04:09:31.633890Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:09:31.633905Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4e100000000"
+OWNER t=1740.1 wakes=60028 gap_us_max=1021 tx_depth=79..81 rx_avail_max=49 tx_frames=2881345 rx_frames=2881345 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=83511856 offset_mismatches=0 net_errors=0
+USB t=1740.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=93.0 rx_depth=44..54 pitch_c=1000014 pitch_p=1000016 tx_i=-13.57 rx_i=17.08 usb_tx=78822219 usb_rx=78887463 tx_links=34 tx_reprimes=0 rx_primes=44 rx_overflow=1362 rx_idle_discards=4620451 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388602,8388607 back_peak=8388602,8388607 out_holes=8/550 back_holes=0/0
+[2026-10-28T04:09:39.392029Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:09:39.392047Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4e900000000"
+[2026-10-28T04:09:47.148045Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:09:47.148060Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4f100000000"
+[2026-10-28T04:09:54.905148Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:09:54.905162Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac4f900000000"
+[2026-10-28T04:10:02.663264Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:10:02.663284Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac50000000000"
+[2026-10-28T04:10:10.419077Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:10:10.419093Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac50900000000"
+[2026-10-28T04:10:18.177339Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:10:18.177354Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac51100000000"
+[2026-10-28T04:10:25.932629Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:10:25.932644Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac51900000000"
+OWNER t=1800.0 wakes=59929 gap_us_max=1014 tx_depth=79..81 rx_avail_max=49 tx_frames=2876594 rx_frames=2876593 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=86388449 offset_mismatches=0 net_errors=0
+USB t=1800.0 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=92.9 rx_depth=44..51 pitch_c=1000014 pitch_p=1000015 tx_i=-13.56 rx_i=16.40 usb_tx=81698813 usb_rx=81764056 tx_links=34 tx_reprimes=0 rx_primes=44 rx_overflow=1362 rx_idle_discards=4620451 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388605,8388605 back_peak=8388605,8388605 out_holes=8/550 back_holes=0/0
+[2026-10-28T04:10:33.689647Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:10:33.689663Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac52100000000"
+[2026-10-28T04:10:41.446890Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:10:41.446905Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac52800000000"
+[2026-10-28T04:10:49.202808Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:10:49.202822Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac53100000000"
+[2026-10-28T04:10:56.957843Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:10:56.957860Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac53900000000"
+[2026-10-28T04:11:04.712713Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:11:04.712736Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac54100000000"
+[2026-10-28T04:11:12.469997Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:11:12.470012Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac54800000000"
+[2026-10-28T04:11:20.227074Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:11:20.227089Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac55000000000"
+[2026-10-28T04:11:27.981342Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:11:27.981356Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac55900000000"
+OWNER t=1860.1 wakes=60029 gap_us_max=1015 tx_depth=79..81 rx_avail_max=49 tx_frames=2881345 rx_frames=2881345 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=89269794 offset_mismatches=0 net_errors=0
+USB t=1860.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=94.0 rx_depth=44..93 pitch_c=1000014 pitch_p=1000015 tx_i=-13.55 rx_i=15.85 usb_tx=84580158 usb_rx=84645401 tx_links=34 tx_reprimes=0 rx_primes=44 rx_overflow=1362 rx_idle_discards=4620451 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388607,8388604 back_peak=8388607,8388604 out_holes=8/550 back_holes=0/0
+[2026-10-28T04:11:35.738831Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:11:35.738846Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac56000000000"
+[2026-10-28T04:11:43.494639Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:11:43.494655Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac56900000000"
+[2026-10-28T04:11:51.252853Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:11:51.252868Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac57000000000"
+[2026-10-28T04:11:59.008999Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:11:59.009015Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac57900000000"
+[2026-10-28T04:12:06.765669Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:12:06.765684Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac58100000000"
+[2026-10-28T04:12:14.522702Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:12:14.522720Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac58800000000"
+[2026-10-28T04:12:22.279003Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:12:22.279027Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac59000000000"
+[2026-10-28T04:12:30.033744Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:12:30.033760Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac59800000000"
+OWNER t=1920.1 wakes=60030 gap_us_max=1012 tx_depth=79..81 rx_avail_max=49 tx_frames=2881393 rx_frames=2881394 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=92151188 offset_mismatches=0 net_errors=0
+USB t=1920.1 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=94.0 rx_depth=45..94 pitch_c=1000014 pitch_p=1000014 tx_i=-13.55 rx_i=15.47 usb_tx=87461551 usb_rx=87526795 tx_links=34 tx_reprimes=0 rx_primes=44 rx_overflow=1362 rx_idle_discards=4620451 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388604,8388607 back_peak=8388604,8388607 out_holes=8/550 back_holes=0/0
+[2026-10-28T04:12:37.788058Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:12:37.788073Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5a100000000"
+[2026-10-28T04:12:45.543368Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:12:45.543383Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5a800000000"
+[2026-10-28T04:12:53.300817Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:12:53.300835Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5b000000000"
+[2026-10-28T04:13:01.057370Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:13:01.057385Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5b800000000"
+[2026-10-28T04:13:08.813304Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:13:08.813321Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5c000000000"
+[2026-10-28T04:13:16.569887Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:13:16.569903Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5c900000000"
+[2026-10-28T04:13:24.326025Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:13:24.326049Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5d000000000"
+[2026-10-28T04:13:32.080502Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:13:32.080517Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5d800000000"
+OWNER t=1980.0 wakes=59931 gap_us_max=1013 tx_depth=79..81 rx_avail_max=49 tx_frames=2876539 rx_frames=2876539 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=95027727 offset_mismatches=0 net_errors=0
+USB t=1980.0 usb=open tx=flow rx=flow tx_mean=128.0 rx_mean=95.0 rx_depth=46..95 pitch_c=1000014 pitch_p=1000015 tx_i=-13.54 rx_i=15.22 usb_tx=90338090 usb_rx=90403334 tx_links=34 tx_reprimes=0 rx_primes=44 rx_overflow=1362 rx_idle_discards=4620451 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388607,8388607 back_peak=8388607,8388607 out_holes=8/550 back_holes=0/0
+[2026-10-28T04:13:39.837378Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:13:39.837394Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5e000000000"
+[2026-10-28T04:13:47.593820Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:13:47.593835Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5e800000000"
+[2026-10-28T04:13:55.350916Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:13:55.350930Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5f000000000"
+USBLINK usb=open tx=idle rx=flow tx_links=34 rx_primes=44 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=86 t=2009.127
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+USBLINK usb=open tx=idle rx=idle tx_links=34 rx_primes=45 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=86 t=2009.227
+THREADS stage=usblink count=7 [1691137 owner FIFO/79] [1691139 owner OTHER/0] [1691140 owner OTHER/0] [1691141 Inferno main OTHER/0] [1691142 Inferno main OTHER/0] [1691143 flows RX FIFO/80] [1691146 flows TX FIFO/81]
+[2026-10-28T04:14:03.107401Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:14:03.107415Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac5f800000000"
+[2026-10-28T04:14:10.865092Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:14:10.865107Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac60000000000"
+[2026-10-28T04:14:18.622020Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:14:18.622040Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac60800000000"
+[2026-10-28T04:14:26.377235Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:14:26.377251Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac61000000000"
+OWNER t=2040.0 wakes=60029 gap_us_max=1094 tx_depth=31..85 rx_avail_max=53 tx_frames=2881348 rx_frames=2881348 tx_resyncs=0 tx_lost=0 rx_resyncs=0 rx_lost=0 cleared=97909075 offset_mismatches=0 net_errors=0
+USB t=2040.0 usb=open tx=idle rx=idle tx_mean=128.0 rx_mean=95.0 rx_depth=46..192 pitch_c=1000000 pitch_p=1000000 tx_i=-13.54 rx_i=15.13 usb_tx=91735037 usb_rx=91800984 tx_links=34 tx_reprimes=0 rx_primes=45 rx_overflow=1380 rx_idle_discards=6104083 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388606,8388598 back_peak=8388606,8388598 out_holes=8/550 back_holes=0/0
+[2026-10-28T04:14:34.132718Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:14:34.132733Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac61800000000"
+[2026-10-28T04:14:41.888355Z ERROR inferno_aoip::device_server::arc_server] received unknown opcode1 0x00, content 
+[2026-10-28T04:14:41.888369Z ERROR inferno_aoip::device_server::arc_server] whole packet: "2729000ac61f00000000"

@@ -14320,3 +14320,28 @@ mismatch detach it so the existing refused-and-request path runs. A second weakn
 but worth knowing: with no app streaming the gadget reads 0, which the arbiter takes as agreeing,
 so a Dante-side set is accepted then even when the Mac's nominal rate differs. Evidence
 `outputs/latency/rate44-live-*`, `rate44-live-20261028/` (the Pi's journal for the session).
+
+**MEASURED 2026-10-28 03:40-04:16 UTC: owner `rate7` (0facc5ad) at 48 kHz: the open-half rate
+check does no harm; whether it catches a real change is not yet seen. Not installed.** The fix for
+the FOUND above, in `owner/main.cpp` (source 7ee7f67f, `rate5`'s c52cd9c4 plus 27 lines; built on
+the Pi from `owner/rate7/`, `rate_check_test` passing there): while the loop owns the gadget the
+steward reads its `Capture Rate` / `Playback Rate` once a second (off the loop thread, beside the
+pitch writes) and on a mismatch prints `USBRATE changed ... while open` and raises
+`usb_rate_changed`; the loop takes it at its next wake and detaches the half with code
+`kHostRateChanged` (-ERANGE), so the steward closes it, and the check before the next open refuses
+the host and writes the arbiter's request as it always could. The flag is cleared at each
+successful open. A host with its interface down reads 0, which is not a mismatch, so idle and
+harness opens at the same rate leave it alone. Run in place of the service at 48 kHz (config
+19da7c70, the service's transport, `--rate-request-file` as installed), rates unchanged as the
+operator asked:
+- Noise probe clean. Four loaded 800-impulse runs 372 / 348 / 341 / 348, spread 0 each. 600 s soak
+  PASS, no discontinuity. `bitexact` three 20 s and one 360 s: all pass, no discontinuity.
+- Owner over the 35 minutes: no `USBRATE` and no `USBCLOSE` line, `detaches` 0, `tx_reprimes` 0,
+  no capture or playback fault, `servo_rejected` 0; harness opens came and went as idle/flow
+  (about 40 of them). `out_holes` 8/550, all inside the two minutes of the three short `bitexact`
+  runs (their stimulus: `rate5`'s 48 kHz battery session, 231039Z, counted 16/570 over the same
+  checks), none in steady flow.
+Owed before installing: one session with a rate change made on the Mac alone (Audio MIDI Setup
+48 -> 44.1 -> 48, no Dante Switcher), reading `USBRATE changed`, the detach, the request and the
+arbiter's `done`, then the hour. Restored 04:15: `usb16x16-dante` (2578c73d), start check ok, 64 / 64
+subscribed, at 48. Evidence `outputs/latency/rate7-*`, owner log in `rate7-20261028/`.
