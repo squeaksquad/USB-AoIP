@@ -14226,3 +14226,21 @@ t=120 and after 3720), as in every session. 400 loaded impulses after: 332, spre
 for 2578c73d, hash-pinned like `install-owner-update.sh`) is the operator's call. Evidence
 `outputs/latency/rate5-48loaded2-*` (the hour's `-api/` holds the owner log, the preset, the host
 gain and the reference).
+
+**INSTALLED and ACCEPTED 2026-10-28 02:06 UTC: owner `rate5` 2578c73d is the Dante point of
+record's owner, in place of c8b484ac; nothing else changed.** Installed by the operator with
+`work/dante-mode/service/install-owner-rate5.sh` (90fbe20c): it checks the new binary against
+2578c73d and the installed one against c8b484ac, keeps c8b484ac as
+`/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner.rate5-previous` (its own name, so the
+`.previous` and `.arbiter-previous` the earlier installers' rollbacks use are untouched), and
+restarts `usb16x16-dante`; `install-owner-rate5.sh rollback` puts c8b484ac back after checking
+that file's hash. Units, plugin c6b012ae, Statime, the Inferno config 0a1688e1, `transport.conf`,
+`owner.conf` and the start check unchanged; the service's command line is the same as before.
+Acceptance: the 48 kHz battery on the candidate (the two entries above: four loaded 800-impulse
+runs, the 600 s soak, `bitexact`, and the loaded hour on rerun); and on the service after the
+swap: start check ok (rate 6015, 0 restarts), 64 / 64 subscribed, noise probe clean (no zero
+run of 4 or more), 400 loaded impulses 359, spread 0, `daw_timeline` 511. What `rate5` changes
+for the operator: a host that pauses for under 100 ms (an app closing and reopening the device)
+no longer comes back to a full return queue; at 44.1 that was slips on every channel until the
+servo caught up. Still open: the level per harness open is a draw (488 to 518 at 48 over this
+battery). Evidence `outputs/latency/rate5-installed-*`.
