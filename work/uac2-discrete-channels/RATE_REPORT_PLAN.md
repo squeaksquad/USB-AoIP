@@ -1,6 +1,7 @@
 # The gadget reports the Mac's last set rate (plan, 2026-10-28)
 
-Status: plan; step 1 (the trace) DONE 2026-10-28 18:36-18:40 UTC with a clear
+Status: steps 1-4 DONE (trace; patch, build and arbiter guard written and built, see
+"Built" at the end); the bounded test is staged, not run. Step 1 (the trace) DONE 2026-10-28 18:36-18:40 UTC with a clear
 answer, and the operator's answers are in (see "Results and decisions" at the
 end, which amends the steps above it). Nothing is built or installed.
 Open item 1 of `work/NEXT_SESSION_PROMPT.md` (2026-10-28), the operator's
@@ -221,7 +222,7 @@ module's provenance. `build-rate-report.sh` (new, in this directory):
 First contact is bounded, like the label module's `test-on-pi.sh`:
 `test-rate-report.sh CANDIDATE_DIR [WINDOW_SECONDS]` (root) refuses unless both
 candidate hashes, the installed `usb_f_uac2.ko` (87989337), the stock
-`u_audio.ko.xz` (dde02c49), `setup-usb-16x16` (d3031e22) and
+`u_audio.ko.xz` (dde02c49), `setup-usb-16x16` (b11fd358, the req_number script installed 2026-09-04; d3031e22 is the 2026-08-31 baseline copy) and
 `setup-usb-16x16-rates` (d4f0ee7b) all match; stops `usb16x16-dante` and
 `usb-16x16.service`; `rmmod usb_f_uac2 u_audio`; `insmod` the candidate
 `u_audio.ko` then `usb_f_uac2.ko`; starts the gadget; requires
@@ -377,3 +378,53 @@ are refused, the endpoint stays at 44.1, the USB half closed) and the Mac is
 set to 44.1 by hand (the half opens, no arbiter move). The guard ships in the
 same step as the module, since the module alone causes the tug-of-war. (b) The
 Mac-follow experiment as its own plan section once (a) is accepted.
+
+## Built (2026-10-28, evening)
+
+**Step 2 and 4 DONE.** `uac2-rate-report-6.18.34.patch` (f_uac2.c +1 line,
+u_audio.c, u_audio.h) as specified in step 2, with `set_srate()` and
+`forget_srate()` as the two helpers. Built on the Pi by `build-rate-report.sh`
+in `~/usb-16x16-work/gadget-ratereport/build/` (no root, the kernel tree only
+read):
+
+- Provenance: the tree's `f_uac2.c` is the shared-clock source only; the label
+  source is `f_uac2.c.before-shared-clock` plus the two committed patches, and
+  the control build of exactly that **reproduces the installed label module
+  byte for byte** (87989337, srcversion E40AF448...). The control `u_audio.ko`
+  (d93a088c, srcversion 773071F7...) differs from the stock in-tree one
+  (srcversion 0F2DD68C...): an out-of-tree build, same source file.
+- Candidate: `u_audio.ko` **b2f5c6cd**7c4e25a0d62f6e603ce974b598a269688a3ef79db8c884c7994b4446
+  (srcversion DD2DD5108A06E3270F336AF), `usb_f_uac2.ko`
+  **fa8bed12**4e6755695f056a24b448d2fda0027ef1e19fe2fa512533eb3db1f093
+  (srcversion C647475B059D8F6DB983CED), vermagic 6.18.34+rpt-rpi-2712, no
+  warnings. The exported CRCs of every existing `u_audio_*` symbol equal the
+  kernel's Module.symvers; the only addition is `u_audio_forget_srate`
+  (0x9093d4c9).
+
+**Step 5, the bounded test, staged:** `test-rate-report.sh` (7cb4bf6c) beside
+the build. It pins both candidates, the installed label module, the stock
+`u_audio.ko.xz`, both setup scripts and the loaded srcversions; stops
+`usb16x16-dante` and the gadget, swaps the modules by `insmod`, starts both
+again, holds the window, and restores by `rmmod` + `modprobe` (on the window's
+end, Ctrl-C, or `touch /dev/shm/rate-report-test.end`). Writes nothing under
+`/lib/modules`. Not run.
+
+**The arbiter guard, written and Mac-tested:** `usb16x16-apply` 1.6.0
+(c3c14505; installed is 1.5.0 4a4aef82). `validate_rate`: a `dante` or `page`
+change is taken even when the Mac stays at another rate through the 5 s wait,
+and that rate goes into `rate-history.json` as `overrode`; a `usb` request for
+the `overrode` rate is refused ("the Mac has not followed yet") until the
+owner's journal for the running start has `USBOPEN ... host_rate=match`
+(`mac_followed`), which is the owner joining the Mac at the new rate. A `usb`
+request with the Mac at a third rate is refused as before. Tests:
+`test_a_dante_set_overrides_the_mac_and_waits_for_it_to_follow`,
+`test_a_mac_request_the_mac_no_longer_agrees_with_is_refused`,
+`test_a_host_with_no_known_rate_overrides_nothing` replace
+`test_the_mac_decides`; 46 pass, and `test_apply`, `test_web`,
+`test_dante_web`. Known limit: "followed" is read from the running start only,
+so after a restart for another reason, a Mac that had followed and then went
+back to the overridden rate is refused until a Dante-side or page change; the
+operator can set the rate from the Dante side then.
+
+Next: the bounded test (operator's sudo), then `install-rate-report.sh` (the
+modules and applier 1.6.0 together, each with its rollback) and the battery.

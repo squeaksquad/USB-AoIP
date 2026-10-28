@@ -716,19 +716,53 @@ class DanteApplyTest(unittest.TestCase):
         self.assertEqual(self.env.conf_values(), {"METERS": "1"})
         self.assertEqual(self.env.inferno_rate(), 48000)
 
-    def test_the_mac_decides(self):
+    def test_a_dante_set_overrides_the_mac_and_waits_for_it_to_follow(self):
+        # The Mac's half of the same change arriving within the window is waited
+        # for (Dante Switcher sets the Mac beside the Dante devices): nothing overridden.
         self.env.set_inferno(48000, "48000,96000")
-        result = self.make(host=(48000, 48000)).apply(self.rate(96000, source="dante"))
-        self.assertEqual(result["state"], "refused")
-        self.assertIn("the Mac's USB 16x16 is at 48000 Hz; the Mac decides", result["error"])
-        self.assertEqual(self.commands(), [])
-        # The Mac's half of the same change arriving within the window is waited for.
         result = self.make(host=(48000, 48000), host_after=(2, (96000, 96000))).apply(self.rate(96000, source="dante"))
         self.assertEqual(result["state"], "done", result["error"])
-        # A host with the interface down (0) does not block, and neither do unreadable controls.
+        history = self.env.spool / "rate-history.json"
+        self.assertNotIn("overrode", json.loads(history.read_text()))
+        # A Mac that stays at another rate no longer blocks a Dante-side set
+        # (operator, 2026-10-28: the Mac follows Dante); its rate is recorded.
+        self.env.set_inferno(48000, "48000,96000")
+        self.env.conf.write_text("METERS=1\n")
+        result = self.make(host=(48000, 48000)).apply(self.rate(96000, source="dante"))
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertEqual(self.env.inferno_rate(), 96000)
+        self.assertEqual(json.loads(history.read_text())["overrode"], 48000)
+        # The owner asking for the Mac's old rate is refused while the Mac has not
+        # followed, also once the reversal window is over.
+        history.write_text(json.dumps({**json.loads(history.read_text()), "at": time.time() - apply_module.RATE_REVERSAL_S - 1}))
+        result = self.make(host=(48000, 48000)).apply(self.rate(48000))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("the Mac has not followed yet", result["error"])
+        self.assertEqual(self.commands(), [])
+        self.assertEqual(self.env.inferno_rate(), 96000)
+        # Once the owner has joined the Mac at 96 kHz, the Mac going to 48 is a new choice.
+        applier = self.make(host=(48000, 48000))
+        self.runner.log.append("USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 "
+                               "buffer=480 rate=96000 host_rate=match host_capture=96000 host_playback=96000")
+        result = applier.apply(self.rate(48000))
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertEqual(self.env.inferno_rate(), 48000)
+        self.assertNotIn("overrode", json.loads(history.read_text()))
+
+    def test_a_mac_request_the_mac_no_longer_agrees_with_is_refused(self):
+        self.env.set_inferno(48000, "48000,96000")
+        result = self.make(host=(44100, 44100)).apply(self.rate(96000))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("the Mac's USB 16x16 is at 44100 Hz, not the 96000 Hz asked for", result["error"])
+        self.assertEqual(self.commands(), [])
+
+    def test_a_host_with_no_known_rate_overrides_nothing(self):
+        # Interface down on the stock module, or after a disconnect on the
+        # rate-report module (0), and unreadable controls, record nothing.
         self.env.set_inferno(96000, "48000,96000,44100")
         self.env.conf.write_text("METERS=1\nRATE=96000\n")
         self.assertEqual(self.make(host=(0, 0)).apply(self.rate(44100, source="dante"))["state"], "done")
+        self.assertNotIn("overrode", json.loads((self.env.spool / "rate-history.json").read_text()))
 
     def test_a_preset_without_an_artifact_for_the_rate_is_refused(self):
         self.env.set_inferno(48000, "48000,96000")

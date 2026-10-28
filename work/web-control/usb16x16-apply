@@ -93,7 +93,7 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 SPOOL_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
 CONF_PATH = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
@@ -1676,6 +1676,13 @@ class DanteApplier(Applier):
         except (OSError, ValueError):
             return {}
 
+    def mac_followed(self) -> bool:
+        """Whether the owner has joined the Mac at the running rate since this
+        start: its USBOPEN line with host_rate=match. Every rate change restarts
+        the unit, so this start is the one after the last move or a later one."""
+        invocation = self.invocation() if self.unit_state() == "active" else ""
+        return any(line.startswith("USBOPEN ") and " host_rate=match " in f"{line} " for line in self.owner_log(invocation))
+
     def validate_rate(self, request: dict, conf: dict[str, str]) -> dict | None:
         """The change to make, or None when the rate asked for is running."""
         rate = request.get("rate")
@@ -1698,20 +1705,32 @@ class DanteApplier(Applier):
             raise Refused(f"{rate} Hz is not an offered rate (offered: {', '.join(str(r) for r in offered)}); "
                           "a rate is offered only after its battery")
         history = self.rate_history()
+        if source == "usb" and history.get("overrode") == rate and not self.mac_followed():
+            raise Refused(f"the endpoint moved to {running} Hz on the Dante side over the Mac's {rate} Hz and the Mac "
+                          f"has not followed yet; its {rate} Hz is the old rate, not a new choice, so nothing changes")
         if history.get("from") == rate and self.runner.now() - float(history.get("at", 0)) < RATE_REVERSAL_S:
             raise Refused(f"the rate moved {history['from']} -> {history['to']} "
                           f"{self.runner.now() - float(history['at']):.0f} s ago; going straight back looks like a "
                           "tug-of-war between the two ends, so nothing changes")
-        # The Mac decides: wait a little for its USB 16x16 to agree (the other
-        # half of one change on the Mac), then refuse if it is at another rate.
+        # Wait a little for the Mac's USB 16x16 to agree (the other half of one
+        # change made on the Mac, or Dante Switcher setting the Mac beside the
+        # Dante devices). A change asked from the Mac is refused if the Mac is
+        # then at another rate. A change made on the Dante side is taken anyway
+        # and the Mac is expected to follow (operator, 2026-10-28); the Mac's
+        # rate it overrode is recorded, so the owner asking for it again before
+        # the Mac follows is not taken for a new choice (mac_followed).
+        overrode = None
         deadline = self.runner.now() + RATE_HOST_WAIT_S
         while True:
             host = self.host_rates()
             if host is None or all(value in (0, rate) for value in host):
                 break
             if self.runner.now() >= deadline:
-                raise Refused(f"the Mac's USB 16x16 is at {max(host)} Hz; the Mac decides the rate: change it there "
-                              "(Audio MIDI Setup, the DAW, or Dante Switcher)")
+                if source == "usb":
+                    raise Refused(f"the Mac's USB 16x16 is at {max(host)} Hz, not the {rate} Hz asked for; "
+                                  "the Mac changed again, nothing changes")
+                overrode = max(host)
+                break
             self.runner.sleep(self.poll)
         live = dante_profile_of(conf)
         row = self.table().get(live)
@@ -1723,7 +1742,7 @@ class DanteApplier(Applier):
         unit = self.unit_state()
         if unit not in ("active", "inactive", "failed"):
             raise Refused(f"{DANTE_UNIT} is {unit}; retry when it has settled")
-        return {"rate": rate, "running": running, "source": source, "host": host, "target": target,
+        return {"rate": rate, "running": running, "source": source, "host": host, "overrode": overrode, "target": target,
                 "inferno": with_inferno_rate(inferno_text, rate), "previousInferno": inferno_text}
 
     def change_rate(self, spec: dict, conf: dict[str, str], previous_text: str) -> dict:
@@ -1740,7 +1759,10 @@ class DanteApplier(Applier):
                                      None if rate == NOMINAL_RATE else str(rate))
         reason = self.switch_to(new_text, target, inferno_text=spec["inferno"])
         if reason is None:
-            write_atomic(self.spool / "rate-history.json", {"from": spec["running"], "to": rate, "at": self.runner.now()})
+            history = {"from": spec["running"], "to": rate, "at": self.runner.now(), "source": spec["source"]}
+            if spec["overrode"] is not None:
+                history["overrode"] = spec["overrode"]
+            write_atomic(self.spool / "rate-history.json", history)
             return self.finish("done")
         self.step("rolling-back", f"{reason}; returning to {spec['running']} Hz", ok=False)
         rollback_target = {"name": target["name"], "dspPreset": conf.get("DSP_PRESET") or None, "rate": spec["running"]}

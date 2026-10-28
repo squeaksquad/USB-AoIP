@@ -1,0 +1,136 @@
+--- a/drivers/usb/gadget/function/f_uac2.c
++++ b/drivers/usb/gadget/function/f_uac2.c
+@@ -1555,6 +1555,7 @@
+ 	uac2->as_out_alt = 0;
+ 	u_audio_stop_capture(&uac2->g_audio);
+ 	u_audio_stop_playback(&uac2->g_audio);
++	u_audio_forget_srate(&uac2->g_audio);
+ 	if (uac2->int_ep)
+ 		usb_ep_disable(uac2->int_ep);
+ }
+--- a/drivers/usb/gadget/function/u_audio.c
++++ b/drivers/usb/gadget/function/u_audio.c
+@@ -65,6 +65,7 @@
+ 
+ 	struct snd_ctl_elem_id snd_kctl_rate_id; /* read-only current rate */
+ 	int srate; /* selected samplerate */
++	bool srate_set; /* the host set srate on this connection */
+ 	int active; /* playback/capture running */
+ 
+   spinlock_t lock; /* lock for control transfers */
+@@ -505,21 +506,38 @@
+ 	spin_unlock_irqrestore(&prm->lock, flags);
+ }
+ 
++/*
++ * Store the rate the host set (SET_CUR on the clock) and remember that it set
++ * one on this connection, so the Rate control reports it while the stream is
++ * idle too. u_audio_forget_srate() ends that at a disconnect or bus reset.
++ */
++static void set_srate(struct uac_rtd_params *prm, int srate)
++{
++	unsigned long flags;
++	bool changed;
++
++	spin_lock_irqsave(&prm->lock, flags);
++	changed = !prm->srate_set || prm->srate != srate;
++	prm->srate = srate;
++	prm->srate_set = true;
++	if (changed && !prm->active)
++		snd_ctl_notify(prm->uac->card, SNDRV_CTL_EVENT_MASK_VALUE,
++				&prm->snd_kctl_rate_id);
++	spin_unlock_irqrestore(&prm->lock, flags);
++}
++
+ int u_audio_set_capture_srate(struct g_audio *audio_dev, int srate)
+ {
+ 	struct uac_params *params = &audio_dev->params;
+ 	struct snd_uac_chip *uac = audio_dev->uac;
+ 	struct uac_rtd_params *prm;
+ 	int i;
+-	unsigned long flags;
+ 
+ 	dev_dbg(&audio_dev->gadget->dev, "%s: srate %d\n", __func__, srate);
+ 	prm = &uac->c_prm;
+ 	for (i = 0; i < UAC_MAX_RATES; i++) {
+ 		if (params->c_srates[i] == srate) {
+-			spin_lock_irqsave(&prm->lock, flags);
+-			prm->srate = srate;
+-			spin_unlock_irqrestore(&prm->lock, flags);
++			set_srate(prm, srate);
+ 			return 0;
+ 		}
+ 		if (params->c_srates[i] == 0)
+@@ -550,15 +568,12 @@
+ 	struct snd_uac_chip *uac = audio_dev->uac;
+ 	struct uac_rtd_params *prm;
+ 	int i;
+-	unsigned long flags;
+ 
+ 	dev_dbg(&audio_dev->gadget->dev, "%s: srate %d\n", __func__, srate);
+ 	prm = &uac->p_prm;
+ 	for (i = 0; i < UAC_MAX_RATES; i++) {
+ 		if (params->p_srates[i] == srate) {
+-			spin_lock_irqsave(&prm->lock, flags);
+-			prm->srate = srate;
+-			spin_unlock_irqrestore(&prm->lock, flags);
++			set_srate(prm, srate);
+ 			return 0;
+ 		}
+ 		if (params->p_srates[i] == 0)
+@@ -791,6 +806,33 @@
+ }
+ EXPORT_SYMBOL_GPL(u_audio_suspend);
+ 
++static void forget_srate(struct uac_rtd_params *prm)
++{
++	unsigned long flags;
++
++	spin_lock_irqsave(&prm->lock, flags);
++	if (prm->srate_set) {
++		prm->srate_set = false;
++		if (!prm->active)
++			snd_ctl_notify(prm->uac->card, SNDRV_CTL_EVENT_MASK_VALUE,
++					&prm->snd_kctl_rate_id);
++	}
++	spin_unlock_irqrestore(&prm->lock, flags);
++}
++
++/* The host is gone (disconnect, bus reset, new configuration): its rate is no longer known. */
++void u_audio_forget_srate(struct g_audio *audio_dev)
++{
++	struct uac_params *params = &audio_dev->params;
++	struct snd_uac_chip *uac = audio_dev->uac;
++
++	if (params->c_chmask)
++		forget_srate(&uac->c_prm);
++	if (params->p_chmask)
++		forget_srate(&uac->p_prm);
++}
++EXPORT_SYMBOL_GPL(u_audio_forget_srate);
++
+ int u_audio_get_volume(struct g_audio *audio_dev, int playback, s16 *val)
+ {
+ 	struct snd_uac_chip *uac = audio_dev->uac;
+@@ -1130,10 +1172,10 @@
+ 	unsigned long flags;
+ 
+ 	spin_lock_irqsave(&prm->lock, flags);
+-	if (prm->active)
++	if (prm->active || prm->srate_set)
+ 		ucontrol->value.integer.value[0] = prm->srate;
+ 	else
+-		/* not active: reporting zero rate */
++		/* no stream and no rate set on this connection: reporting zero rate */
+ 		ucontrol->value.integer.value[0] = 0;
+ 	spin_unlock_irqrestore(&prm->lock, flags);
+ 	return 0;
+--- a/drivers/usb/gadget/function/u_audio.h
++++ b/drivers/usb/gadget/function/u_audio.h
+@@ -131,5 +131,6 @@
+ int u_audio_set_mute(struct g_audio *g_audio, int playback, int val);
+ 
+ void u_audio_suspend(struct g_audio *g_audio);
++void u_audio_forget_srate(struct g_audio *g_audio);
+ 
+ #endif /* __U_AUDIO_H */
