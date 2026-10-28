@@ -10,6 +10,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 check=$here/usb16x16-dante-startcheck
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
+# Never the machine's own owner.conf: the rate comes from the test's own unless named.
+export USB16X16_STARTCHECK_OWNER_CONF=$work/no-owner.conf
 failures=0
 expect() {   # name, wanted, got
   if [ "$2" = "$3" ]; then echo "ok    $1"; else echo "FAIL  $1: wanted '$2', got '$3'"; failures=$((failures + 1)); fi
@@ -101,6 +103,13 @@ expect "44.1 kHz: two flows at 4 frames (22050)"  whole "$("$check" --rate 44100
 expect "44.1 kHz: 16 frames, a fraction (2756)"   whole "$("$check" --rate 44100 --classify 2756)"
 expect "44.1 kHz: one flow losing 800 (1956)"     short "$("$check" --rate 44100 --classify 1956)"
 expect "the rate from the environment too"        whole "$(USB16X16_STARTCHECK_RATE=96000 "$check" --classify 12003)"
+printf 'METERS=1\nRATE=44100\n' > "$work/owner-44.conf"
+printf '# no RATE: 48 kHz\nMETERS=1\n' > "$work/owner-48.conf"
+expect "owner.conf's RATE= sets it (2756 at 44.1)" whole "$(USB16X16_STARTCHECK_OWNER_CONF=$work/owner-44.conf "$check" --classify 2756)"
+expect "owner.conf's RATE= sets it (6005 at 44.1)" short "$(USB16X16_STARTCHECK_OWNER_CONF=$work/owner-44.conf "$check" --classify 6005)"
+expect "owner.conf with no RATE= is 48 kHz"       whole "$(USB16X16_STARTCHECK_OWNER_CONF=$work/owner-48.conf "$check" --classify 6005)"
+expect "the environment wins over owner.conf"     whole "$(USB16X16_STARTCHECK_OWNER_CONF=$work/owner-44.conf USB16X16_STARTCHECK_RATE=48000 "$check" --classify 6005)"
+expect "--rate wins over owner.conf"              whole "$(USB16X16_STARTCHECK_OWNER_CONF=$work/owner-44.conf "$check" --rate 48000 --classify 6005)"
 expect "a rate Dante does not have is refused"    2    "$("$check" --rate 32000 --classify 6005 >/dev/null 2>&1; echo $?)"
 fresh; out=$(run 12003 --rate 96000 --dry-run)
 expect "a whole 96 kHz start judged as a whole"   1    "$(echo "$out" | grep -c "startcheck: whole")"

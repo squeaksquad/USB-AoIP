@@ -14278,3 +14278,45 @@ device open avoided (the entry above); the Pi has nothing that sees it. Owner co
 session (`servo_rejected` 0, no holes, `rx_overflow` only at opens, about 36 per prime as with
 `rate5`). Restored 03:03: `usb16x16-dante` (2578c73d), start check ok, 64 / 64 subscribed.
 Evidence `outputs/latency/rate6-*`, owner log in `rate6-avail-20261028/`.
+
+**INSTALLED 2026-10-28 03:13 UTC and MEASURED 03:15-03:35: 44.1 kHz is an offered rate; a change
+reached through Dante (Dante Switcher or Controller) moves the installed stack 48 -> 44.1 -> 48
+through the arbiter, the Mac deciding. A change made on the Mac alone does not reach the arbiter
+(FOUND below).** Installed by the operator with `work/dante-mode/service/install-dante-rate44.sh`
+(15a784d1), two files: the Inferno config `config/asound-inferno-owner-rate44-48-arbiter.conf`
+(19da7c70; the installed 0a1688e1 with `SUPPORTED_SAMPLE_RATES "44100,48000"`), and the start
+check fccfdd62, the step-3 rate-aware script never installed until now plus one addition: with no
+`--rate` or environment it takes the rate from owner.conf's `RATE=` (absent: 48000), so it follows
+the arbiter with its unit unchanged (`test-dante-startcheck.sh`, 5 new cases, all passed on the Mac
+and the Pi). The installed 058e9177 judged every start by the 48 kHz grid: the 5,528 frames a
+second of a whole 44.1 start would have read SHORT and restarted the endpoint four times. Both
+old files kept as `/usr/local/libexec/usb16x16-dante/*.rate44-previous`; `rollback` refuses
+unless owner.conf has no `RATE=` (the applier rewrites `SAMPLE_RATE` off 48). Owner 2578c73d,
+plugin c6b012ae, applier 4a4aef82 (44 tests pass) and the units unchanged; profile `direct`.
+- To 44.1: Mac's USB 16x16 to 44100 (`setrate.swift`), `dante-sync sync --source usb16x16`
+  (MHLink, Pulse, DVS, D2USB and then the Pi each verified), with a silent client holding the
+  device (`holdopen-20261028/hold.swift`) so the gadget reports the Mac's rate. Inferno handed the
+  set to the arbiter (patch 0005), which wrote `RATE=44100` and `SAMPLE_RATE "44100"` together and
+  restarted the endpoint: `44012e5bc4820ed8: done`; owner `START ... rate=44100`, `USBOPEN ...
+  host_rate=match`. Start check `whole: 5528 and 5528` (0 restarts), 64 / 64 subscribed, noise
+  probe clean, 400 loaded impulses 322, spread 0, `daw_timeline` 467 (10.590 ms).
+- Dante side asks for 48 while the Mac stays at 44.1 (one 0x0081 set to the Pi alone,
+  `rate44-live-20261028/set-rate-one.py`, the bytes Dante Switcher sends; the client holding the
+  device): `f2b337ba8a748137: refused - the Mac's USB 16x16 is at 44100 Hz; the Mac decides the
+  rate`; the endpoint was not restarted. (`netaudio device config sample-rate` does not reach this
+  path: "transmitter-flow protocol did not respond".)
+- Back to 48 the same way as the move out: `4c3b689e20144e17: done`; owner.conf without `RATE=`,
+  the Inferno config byte for byte 19da7c70 again, `START ... rate=48000`, start check `whole: 6015
+  and 6017` (0 restarts), 64 / 64, every device 48k by heartbeat, Mac's USB 16x16 48000, noise
+  probe clean, 400 loaded impulses 341, spread 0, `daw_timeline` 493.
+**FOUND, same session: the owner checks the host's rate only while its USB half is closed, and
+with the multi-rate gadget a rate change on the Mac never closes it.** The Mac at 44.1 left the
+gadget PCM open (`usb=open` throughout), so the steward never re-read the rate controls, wrote no
+request, and joined the 44.1 stream at 48 (prime blocks 49 and 50, about 80 links in a second)
+until the Dante-side set moved the stack. So "change it on the Mac and the Pi follows" works only
+through Dante Switcher (which sets the Pi too) or an owner restart, not by itself. Fix (not
+written): read the gadget's rate controls once a second while the USB half is open too, and on a
+mismatch detach it so the existing refused-and-request path runs. A second weakness, by design
+but worth knowing: with no app streaming the gadget reads 0, which the arbiter takes as agreeing,
+so a Dante-side set is accepted then even when the Mac's nominal rate differs. Evidence
+`outputs/latency/rate44-live-*`, `rate44-live-20261028/` (the Pi's journal for the session).
