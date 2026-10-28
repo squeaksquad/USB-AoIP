@@ -14178,3 +14178,33 @@ Halo at 48 for Pro Tools work, so testing stopped and the installed endpoint was
 (start check ok, 64 / 64 connected, every device 48 kHz). `rate5` needs the 48 battery (four
 loaded 800-impulse runs, the soak, the hour) before it can be installed; the operator asked for
 no rate changes for now. Evidence `outputs/latency/r44fix-*`, `rx-pause-20261027/`.
+
+**MEASURED 2026-10-27 23:10 - 2026-10-28 00:50 UTC: owner `rate5` (2578c73d) at 48 kHz passes
+everything but the hour; the hour FAILED on one Mac-side skipped IO cycle, so it is owed again.
+`rate5` is not installed.** The operator allowed testing at 48 (nothing in their Pro Tools work
+routes through anything the Pi touches); no rate was changed. Candidate started on the installed
+config's staged copy (`config/asound-inferno-owner-rate48-arbiter.conf`, 0a1688e1) with the
+service's transport, `--rate 48000`; 64 subscriptions connected.
+- Direct: noise probe clean; four loaded 800-impulse runs 360 / 336 / 366 / 336, spread 0 each,
+  `daw_timeline` 512 / 488 / 518 / 488 (io_offset 152); 600 s soak PASS (longest zero run 1,
+  no discontinuity); three 20 s `bitexact` and one 360 s, all PASS, 0 lost locks,
+  `servo_rejected` 0 (the gain-step pauses each show as one `rx_primes`).
+- Loaded (`config/dsp-loaded@48000.dsp`, 2b6baa04, 308 biquads, compiled `--rate 48000` like the
+  44.1 pair): the hour FAILED, `inputDiscontinuities=1`, `outputDiscontinuities=1`, and 15 zero runs
+  of 4 to 9 frames (13 on ch13, 3 on ch4). `soak_reference.py` refuses any capture with a break
+  ("inconclusive - capture integrity error"), so whether those runs are the preset's own is not
+  settled by this run; the wrapper's verdict failed on the discontinuities before reaching it.
+  400 loaded impulses after: 368 / `daw_timeline` 520, spread 0.
+- Where the break was: the owner, for the whole hour, had no USB link change, reprime, resync,
+  loss, fault or servo rejection, gap at most 1.105 ms. One counter moved: `out_holes` 0/0 ->
+  2/35 between owner t=3000 and 3060 (two all-zero runs on all sixteen channels in what the Mac
+  sent, the longest 35 frames, about one 32-frame IO cycle). The harness counts a discontinuity
+  as a jump in CoreAudio's sample time between IOProc calls. Read together: the Mac skipped an
+  IO cycle (its driver sending zeros for it) and the Pi carried that faithfully. Not proven: the
+  Mac's log keeps no coreaudiod record for the hour, and the harness does not timestamp the break.
+  The operator was working in Pro Tools on this Mac during the hour.
+Restored 00:50: candidate stopped, `usb16x16-dante` started, start check ok (rate 6015, 0
+restarts), 64 / 64 subscribed. Before `rate5` can be installed: the loaded hour again (and,
+optionally, the zero runs checked against the reference on a clean capture). Evidence
+`outputs/latency/rate5-48*` (the hour's `-api/` holds the fetched preset, the host gain used and
+the inconclusive reference attempt).
