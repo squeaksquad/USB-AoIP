@@ -14208,3 +14208,21 @@ restarts), 64 / 64 subscribed. Before `rate5` can be installed: the loaded hour 
 optionally, the zero runs checked against the reference on a clean capture). Evidence
 `outputs/latency/rate5-48*` (the hour's `-api/` holds the fetched preset, the host gain used and
 the inconclusive reference attempt).
+
+**MEASURED 2026-10-28 00:54-02:02 UTC: the loaded hour on `rate5` at 48 kHz, again: PASS.
+`rate5` (2578c73d) has now passed the whole 48 kHz battery; not installed.** Same candidate
+start as the entry above (config 0a1688e1, service transport, `dsp-loaded@48000.dsp` 2b6baa04,
+308 biquads; 64 connected), the Mac otherwise quiet. Hour: no discontinuity, no invalid buffer,
+no continuity break; 15 zero runs (longest 9 on ch13, 4 on ch4, 2 on ch9), and
+`soak_reference.py` (`dante-event-reference-v2`) matched every one to the artifact's own output
+from the deterministic stimulus, at most 1 LSB off (`status matched-events`,
+`evidenceComplete True`). They fall at the same stimulus frames as in the failed hour, so those
+were the preset's too and the earlier failure was the Mac's skipped cycle alone. Owner over the
+hour: no USB link change, reprime, resync, loss or fault, `servo_rejected` 0, `out_holes` 0/0,
+gap at most 1.123 ms; `rx_overflow` and `back_holes` moved only at harness opens (before owner
+t=120 and after 3720), as in every session. 400 loaded impulses after: 332, spread 0,
+`daw_timeline` 484. Restored 02:02: candidate stopped, `usb16x16-dante` started, start check ok
+(rate 6015, 0 restarts), 64 / 64 subscribed. Installing `rate5` (an owner-only swap of c8b484ac
+for 2578c73d, hash-pinned like `install-owner-update.sh`) is the operator's call. Evidence
+`outputs/latency/rate5-48loaded2-*` (the hour's `-api/` holds the owner log, the preset, the host
+gain and the reference).
