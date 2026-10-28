@@ -14244,3 +14244,20 @@ for the operator: a host that pauses for under 100 ms (an app closing and reopen
 no longer comes back to a full return queue; at 44.1 that was slips on every channel until the
 servo caught up. Still open: the level per harness open is a draw (488 to 518 at 48 over this
 battery). Evidence `outputs/latency/rate5-installed-*`.
+
+**FOUND 2026-10-28 02:17-02:55 UTC: the level drawn at each harness open is drawn when the USB
+stream starts; with a client holding USB 16x16 open, every harness open reads one figure.**
+Installed service (owner 2578c73d), 48 kHz, 400 loaded impulses a run, each run its own harness
+open. `outputs/latency/holdopen-20261028/hold.swift` keeps the device running with a silent
+IOProc (outputs zeroed, buffer 32) until killed.
+- Control, no hold, four opens: `daw_timeline` 511 / 511 / 518 / 481 (37 samples, 0.77 ms).
+- Hold started (the owner saw one new stream, link 29), four opens: 524 / 524 / 524 / 524.
+  The owner counted no link, prime or fault during them.
+- Hold restarted (link 30), three opens: 501 / 501 / 501.
+So a figure is fixed for as long as the stream between the Mac and the Pi keeps running, and a
+new one is drawn when it starts again; between clients the Mac stops sending, the owner goes idle
+and primes both directions on the next start. The test removes the Mac's IO restart and the
+owner's prime together, so which of the two sets the figure is not settled. Operational use: a
+silent client holding the device (a login item, say) makes every app open on the Mac read the
+same latency at no latency cost, the draw then happening only at the hold's own start (and at
+each owner start, the 2026-10-09 draw). Not installed; the operator decides.
