@@ -1,0 +1,41 @@
+T3 hold start 18:38:19
+  : values=48000   : values=48000 18:38:23.735
+hold killed 18:38:29
+  : values=0   : values=0 18:38:29.989
+  : values=0   : values=0 18:38:35.227
+  : values=0   : values=0 18:38:40.477
+  : values=0   : values=0 18:38:45.709
+  : values=0   : values=0 18:38:50.941
+  : values=0   : values=0 18:38:56.172
+  : values=0   : values=0 18:39:01.405
+  : values=0   : values=0 18:39:06.649
+  : values=0   : values=0 18:39:11.975
+  : values=0   : values=0 18:39:17.211
+  : values=0   : values=0 18:39:22.450
+  : values=0   : values=0 18:39:27.689
+  : values=0   : values=0 18:39:32.922
+  : values=0   : values=0 18:39:38.314
+  : values=0   : values=0 18:39:43.553
+  : values=0   : values=0 18:39:48.788
+  : values=0   : values=0 18:39:54.035
+  : values=0   : values=0 18:39:59.261
+  : values=0   : values=0 18:40:04.486
+  : values=0   : values=0 18:40:09.722
+  : values=0   : values=0 18:40:14.953
+  : values=0   : values=0 18:40:20.189
+  : values=0   : values=0 18:40:25.444
+  : values=0   : values=0 18:40:30.687
+<idle>-0       [000] d.h3. 1272286.228518: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=1
+<idle>-0       [000] d.h3. 1272286.228522: start_p: (u_audio_start_playback+0x0/0x280 [u_audio])
+<idle>-0       [000] d.h4. 1272286.228530: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) r
+<idle>-0       [000] d.h3. 1272286.231495: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=1
+<idle>-0       [000] d.h3. 1272286.231497: start_c: (u_audio_start_capture+0x0/0x370 [u_audio])
+<idle>-0       [000] d.h4. 1272286.231502: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) r
+<idle>-0       [000] d.h3. 1272296.083516: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=1 alt=0
+<idle>-0       [000] d.h3. 1272296.083521: stop_c: (u_audio_stop_capture+0x0/0x1c0 [u_audio])
+<idle>-0       [000] d.h4. 1272296.083533: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) r
+<idle>-0       [000] d.h3. 1272296.087411: set_alt: (afunc_set_alt+0x0/0x160 [usb_f_uac2]) intf=2 alt=0
+<idle>-0       [000] d.h3. 1272296.087412: stop_p: (u_audio_stop_playback+0x0/0x140 [u_audio])
+<idle>-0       [000] d.h4. 1272296.087415: set_alt_ret: (composite_setup+0x4f0/0x1920 [libcomposite] <- afunc_set_alt) r
+
+[exited with code 0]

@@ -1,6 +1,8 @@
 # The gadget reports the Mac's last set rate (plan, 2026-10-28)
 
-Status: plan only. Nothing is built, staged or installed; the Pi was only read.
+Status: plan; step 1 (the trace) DONE 2026-10-28 18:36-18:40 UTC with a clear
+answer, and the operator's answers are in (see "Results and decisions" at the
+end, which amends the steps above it). Nothing is built or installed.
 Open item 1 of `work/NEXT_SESSION_PROMPT.md` (2026-10-28), the operator's
 question "can the gadget just report the last set sample rate?".
 
@@ -296,3 +298,82 @@ srcversions and the evidence directory; `CLAUDE.md`'s map gets the new files.
 2. Keep the rate through a USB suspend (planned), or clear it there too?
 3. When to run the step 1 trace (needs your sudo and about 10 minutes with the
    endpoint stopped; T4 needs a cable pull and is optional).
+
+## Results and decisions (2026-10-28, later the same day)
+
+**Step 1 DONE, 18:36-18:40 UTC: an idle Mac sends SET_CUR on every rate set.**
+Evidence `outputs/latency/rate-report-trace-20261028/` (`trace.sh` 2b89117a,
+operator's sudo on and off; `trace.txt` is the kprobe log, `controls-T3.txt` the
+control reads). Endpoint stopped 18:35:53 for it, Mac idle at 48000 with both
+controls at 0.
+
+| # | Mac | Gadget | Controls |
+|---|---|---|---|
+| T1 | 48 -> 44.1, idle | `sam_freq`, `p_srate`/`c_srate srate=44100`, nothing else (no `set_alt`, no stream start) | 0 / 0 |
+| T2 | 44.1 -> 48, idle | the same with 48000 | 0 / 0 |
+| T3 | hold client opened | `set_alt alt=1` on both interfaces, both streams start; **no SET_CUR** before them | 48000 / 48000 |
+| T3 | hold client killed | `set_alt alt=0` on both within 4 ms | 0 at once |
+
+So the kernel receives the Mac's rate whenever it changes and only the getter
+hides it: the patch closes both gaps. Two corrections to what was assumed:
+
+- The Mac sends the rate only when it changes, not at a stream start. The
+  patch's "remember since the last SET_CUR" is therefore required, not an
+  optimisation (a getter that asked the Mac would get nothing).
+- An idle Mac does not keep the interfaces at alt 1: they drop the moment the
+  last client closes (the 2026-10-18 note "the Mac keeps both streaming
+  interfaces at alt 1 between clients" held for clients seconds apart, not for
+  an idle Mac). That is why the controls read 0 with nothing open.
+
+No `afunc_disable` or suspend fired (none was provoked; T4, the cable pull,
+was skipped). They are checked in the battery (B3). Close: trace off by the
+operator (no reader left), `usb16x16-dante` started 22:58:46 UTC, start check
+ok 22:59:51, noise probe at 32 clean
+(`ratereport-aftertrace-noise-ch2-32f-20261028T230009Z`: no zero runs, no
+discontinuities). Mac at 48000.
+
+**Operator's answers.**
+
+1. **"No, if Dante changes the Mac side should change."** The arbiter must keep
+   accepting a Dante-side set with the Mac idle at another rate, and the Mac
+   should then follow. This amends step 3: with the patch alone, an idle Mac
+   at 48 after a Dante set to 44.1 reads 48, the owner refuses and asks the
+   arbiter for 48 (`source=usb`), and rate8's retry moves the endpoint back
+   once the 30 s reversal guard lifts: a tug-of-war the Mac would win. Two
+   parts are needed:
+   - **The guard (with the patch, required).** At each Dante-sourced move the
+     arbiter records the host's rate as it read it (`rate-history.json` gains
+     `host`). A later `source=usb` request for that same rate is refused while
+     the controls still show it, with "the Mac has not changed since the Dante
+     set; waiting for it to follow". A Mac that is set again (a new SET_CUR to
+     a different rate) is a new choice and wins as now. The 5 s host wait in
+     `validate_rate` is dropped for `source=dante`. Small change in
+     `usb16x16-apply` with tests beside `test_dante_apply.py`; the owner is not
+     changed (its retries are refused cheaply). Until the Mac follows, the USB
+     half stays closed: USB audio never plays at a rate the two ends disagree on.
+   - **Making the Mac follow (experiment, after the patch is accepted).** The
+     gadget already has the means: `f_uac2.c` has an interrupt endpoint and
+     `afunc_notify(agdev, unit_id, cs)` (used today for volume and mute
+     changes made on the Pi), and it answers the Mac's GET_CUR on the clock
+     from `u_audio`'s `srate`. A second patch would add a writable control
+     (for example `Device Rate Request`) that stores the new rate as `srate`
+     and sends the clock source's SAM_FREQ interrupt, as an interface does
+     when it follows external clock; the arbiter writes it after a Dante move.
+     Whether macOS (AppleUSBAudio) re-reads the clock and changes its nominal
+     rate on that interrupt is unknown and is the experiment's question, run
+     with the bounded test (`test-rate-report.sh` pattern) before anything is
+     installed. If macOS ignores it, the fallback is on the Mac: Dante
+     Switcher (which already sets the USB 16x16) or a small agent that follows
+     the Pi's rate from `/api/health`.
+2. **Suspend: keep the rate if it works.** As planned; B3 checks a sleep and
+   wake, and if the rate comes back wrong the forget moves to
+   `afunc_suspend` too.
+3. **Trace: done** (above).
+
+**Order from here.** (a) The report patch, build, bounded test, installer and
+battery as in steps 2-6, with B5 changed: a Dante-side set with the Mac idle at
+48 is accepted, then the guard is checked (the owner's `source=usb` asks for 48
+are refused, the endpoint stays at 44.1, the USB half closed) and the Mac is
+set to 44.1 by hand (the half opens, no arbiter move). The guard ships in the
+same step as the module, since the module alone causes the tug-of-war. (b) The
+Mac-follow experiment as its own plan section once (a) is accepted.
