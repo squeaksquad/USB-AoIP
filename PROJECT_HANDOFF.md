@@ -14410,3 +14410,28 @@ Candidate fixes, neither written: the owner rewrites its request while it is sti
 few seconds, so the first one after the guard lapses is accepted), or the arbiter defers a
 reversal to the end of its guard instead of refusing it. Until then: after moving the Mac's rate,
 wait at least 30 s after the stack follows before moving it again.
+
+**MEASURED 2026-10-28 15:16-15:45 UTC: owner `rate8` (a15a9d84) asks again while a refusal stands;
+the 48 kHz battery is clean. Not installed; installer staged.** The fix for the FOUND of 11:49, in
+`owner/main.cpp` (source 6fe705ba, rate7's 7ee7f67f plus 30 changed lines; built on the Pi from
+`owner/rate8/`): in the steward's closed-half check, while the host's reported rates stay the ones
+already refused, the request is written again (fresh `at=`, printed `USBRATE still refused ...;
+asking again`) after 10 s, then 20, 40 and so on up to 5 minutes; a new refusal restarts at 10 s,
+and a clear, an unrepresentable host rate or no `--rate-request-file` stops the retries. So a
+request the arbiter refuses inside its 30 s reversal guard is followed by one it accepts, and a
+refusal that never lifts costs one arbiter run every 5 minutes. Run in place of the service at 48 kHz
+(the rate7 candidate arguments, `loaded` preset, `--rate-request-file /dev/shm/rate8-rate-request`,
+so the arbiter was not driven and the Pi stayed at 48):
+- Mac alone to 44.1 at 15:17:09 with the hold client streaming: `USBRATE changed ... while open`,
+  `USBCLOSE reason=-34`, `USBRATE refused`, request at=...633, then `still refused ... asking again`
+  with requests at ...643, ...663, ...703 (+10, +30, +70 s). Mac back to 48 at 15:18:37: `USBRATE
+  cleared`, `USBOPEN ... host_rate=match`, no further request.
+- Battery at 48 after it: noise probe clean; four loaded 800-impulse runs 363 / 350 / 362 / 354
+  (`daw_timeline` 515 / 502 / 514 / 506), spread 0 each; 600 s soak PASS, discontinuities 0 / 0.
+  Owner after the test: no `USBRATE` or `USBCLOSE`, faults 0, `tx_reprimes` 0, `servo_rejected` 0
+  (`detaches` 1 is the test's).
+Not run: the loaded hour, and the retry against the installed arbiter (a reversal inside the guard
+that ends in `done` without help). Restored 15:45: `usb16x16-dante` (0facc5ad), start check ok at
+6015, at 48. Staged `service/install-owner-rate8.sh` (c35bb1a9): owner-only swap 0facc5ad ->
+a15a9d84, keeps `.rate8-previous`, `rollback` back to 0facc5ad. Evidence `outputs/latency/rate8-*`,
+owner log and the retry lines in `rate8-retry-20261028/`.

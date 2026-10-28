@@ -1,0 +1,16 @@
+12:USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=unknown host_capture=0 host_playback=0
+45:USBRATE changed host_capture=44100 host_playback=44100 rate=48000 while open; handing the USB half back
+46:USBCLOSE reason=-34 (Numerical result out of range)
+49:USBRATE refused host_capture=44100 host_playback=44100 rate=48000; the USB half stays closed
+50:USBRATE requested rate=44100 source=usb at=1793200633 from the arbiter in /dev/shm/rate8-rate-request
+55:USBRATE still refused host_capture=44100 host_playback=44100 rate=48000; asking again
+56:USBRATE requested rate=44100 source=usb at=1793200643 from the arbiter in /dev/shm/rate8-rate-request
+64:USBRATE still refused host_capture=44100 host_playback=44100 rate=48000; asking again
+65:USBRATE requested rate=44100 source=usb at=1793200663 from the arbiter in /dev/shm/rate8-rate-request
+76:USBRATE still refused host_capture=44100 host_playback=44100 rate=48000; asking again
+77:USBRATE requested rate=44100 source=usb at=1793200703 from the arbiter in /dev/shm/rate8-rate-request
+86:USBRATE cleared host_capture=48000 host_playback=48000 rate=48000
+87:USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+
+rate=44100 source=usb at=1793200703
+2026-10-28 11:18:23.503757139 -0400

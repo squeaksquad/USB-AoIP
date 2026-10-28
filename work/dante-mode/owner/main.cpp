@@ -1135,6 +1135,9 @@ void* steward_entry(void* argument) {
     // The host rates last reported as refused, so a refusal is printed once and its end once.
     long refused_capture = 0;
     long refused_playback = 0;
+    // When to ask the arbiter again while that refusal stands, and the wait before it (0: never).
+    std::int64_t next_request = 0;
+    std::int64_t request_wait = 0;
     std::int64_t next_ppm_write = now_ns() + 60000000000LL;
     std::int64_t next_rate_check = 0;
     const auto close_all = [&]() {
@@ -1193,21 +1196,39 @@ void* steward_entry(void* argument) {
         read_gadget_rates(o.usb, host_capture, host_playback);
         const auto host_rate = usb16x16::owner::judge_gadget_rate(host_capture, host_playback, o.rate);
         if (host_rate == usb16x16::owner::GadgetRate::mismatch) {
-            if (host_capture != refused_capture || host_playback != refused_playback) {
-                std::printf("USBRATE refused host_capture=%ld host_playback=%ld rate=%u; the USB half stays closed\n",
-                            host_capture, host_playback, o.rate);
-                // Once per change in what the host reports: ask the arbiter for its rate.
+            const bool changed = host_capture != refused_capture || host_playback != refused_playback;
+            // Asked again while the same refusal stands: the arbiter refuses a
+            // reversal within 30 s of its last move, and a Mac that went straight
+            // back was otherwise left closed until something else asked
+            // (2026-10-28). 10 s, doubling to 5 minutes, so a refusal that never
+            // lifts costs one arbiter run every 5 minutes.
+            const bool again = !changed && request_wait != 0 && now_ns() >= next_request;
+            if (changed || again) {
+                if (changed) {
+                    std::printf("USBRATE refused host_capture=%ld host_playback=%ld rate=%u; the USB half stays closed\n",
+                                host_capture, host_playback, o.rate);
+                    request_wait = 10000000000LL;
+                } else {
+                    std::printf("USBRATE still refused host_capture=%ld host_playback=%ld rate=%u; asking again\n",
+                                host_capture, host_playback, o.rate);
+                    request_wait = std::min<std::int64_t>(request_wait * 2, 300000000000LL);
+                }
+                next_request = now_ns() + request_wait;
+                // Ask the arbiter for the host's rate.
                 if (!o.rate_request_file.empty()) {
                     const std::string line = usb16x16::owner::usb_rate_request_line(
                         host_capture, host_playback, o.rate, static_cast<long long>(::time(nullptr)));
                     if (line.empty()) {
                         std::printf("USBRATE no request: the host's rate is not one rate the endpoint could run at\n");
+                        request_wait = 0;   // nothing to ask, so nothing to ask again
                     } else if (usb16x16::owner::write_file_atomically(o.rate_request_file, line)) {
                         std::printf("USBRATE requested %.*s from the arbiter in %s\n", static_cast<int>(line.size() - 1),
                                     line.c_str(), o.rate_request_file.c_str());
                     } else {
                         std::printf("USBRATE could not write %s: %s\n", o.rate_request_file.c_str(), std::strerror(errno));
                     }
+                } else {
+                    request_wait = 0;   // no arbiter to ask
                 }
                 std::fflush(stdout);
                 refused_capture = host_capture;
@@ -1220,6 +1241,7 @@ void* steward_entry(void* argument) {
             std::fflush(stdout);
             refused_capture = 0;
             refused_playback = 0;
+            request_wait = 0;
         }
         std::string stage;
         int rc = open_usb(o, SND_PCM_STREAM_CAPTURE, usb.capture, stage);
