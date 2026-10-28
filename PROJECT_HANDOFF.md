@@ -14459,3 +14459,8 @@ Restored 18:03: `usb16x16-dante` (a15a9d84), start check ok at 6015, at 48 (no `
 "48000"`), the Mac's USB 16x16 at 48000. `sudo ./install-owner-rate8.sh rollback` returns to
 0facc5ad. Evidence `outputs/latency/rate8-*` (owner logs in `rate8-retry-20261028/`, the arbiter
 journal in `rate8-arbiter-20261028/`).
+
+**ACCEPTED 2026-10-28 (operator): rate8 a15a9d84 confirmed as the Dante point of record's owner**,
+with the first hour's unexplained 8-sample hole on ch5 to ch12 left open: if another one-flow hole
+appears, on any owner, take an eth0 capture of the Dante flows through a loaded hour
+(`diag/dante-pcap-zeros.py`) to see whether the packet reached the Pi.
