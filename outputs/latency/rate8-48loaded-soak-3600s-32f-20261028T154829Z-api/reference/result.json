@@ -1,0 +1,204 @@
+{
+  "policy": {
+    "id": "dante-event-reference-v2",
+    "maximumErrorLSB": 2.0,
+    "maximumSearchLagFrames": 9600,
+    "minimumAnchorRangeLSB": 256,
+    "inputModel": "measured host output gain, nearest 24-bit",
+    "returnModel": "measured host input gain",
+    "gainFitting": false,
+    "alignment": "one integer offset for all channels and events",
+    "zeroRunRule": "exact predicted zero codes with nonzero boundaries",
+    "coverage": "retained event windows only",
+    "wholeRunValidated": false,
+    "maximumSeconds": 3600
+  },
+  "status": "mismatch",
+  "wholeRunValidated": false,
+  "coveredInputFrames": 0,
+  "events": [
+    {
+      "channel": 13,
+      "startInputFrame": 32425839,
+      "referenceStartFrame": 32425337,
+      "zeroFrames": 9,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 41
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 39566342,
+      "referenceStartFrame": 39565840,
+      "zeroFrames": 9,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 41
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 52232695,
+      "referenceStartFrame": 52232193,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 70147015,
+      "referenceStartFrame": 70146513,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 71194649,
+      "referenceStartFrame": 71194147,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 96746582,
+      "referenceStartFrame": 96746080,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 98334226,
+      "referenceStartFrame": 98333724,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 106310819,
+      "referenceStartFrame": 106310317,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 121402321,
+      "referenceStartFrame": 121401819,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    }
+  ],
+  "reason": "unexplained sample at input frame 122044308 (110317.00 codes from the reference)",
+  "evidenceComplete": true,
+  "provenance": {
+    "exporterSHA256": "6261ddb55d03a108ef61b82596d964d89213c83386cc23465ccfb88cdc496393",
+    "coreSHA256": "bbaec39ef0cab29bd9a493db9eefaff47507f4fa916389a3c5d01612e41453f2",
+    "artifactSHA256": "2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c",
+    "referenceSHA256": "8bfd10b9200c43e25dba7e12169facfb6d57e53a2e3ec99bff6aaa2b9da88554",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)"
+  },
+  "ranges": [
+    [
+      32416071,
+      32425712
+    ],
+    [
+      39556574,
+      39566215
+    ],
+    [
+      52222927,
+      52232563
+    ],
+    [
+      70137247,
+      70146883
+    ],
+    [
+      71184881,
+      71194517
+    ],
+    [
+      96736814,
+      96746450
+    ],
+    [
+      98324458,
+      98334095
+    ],
+    [
+      106301051,
+      106310687
+    ],
+    [
+      121392553,
+      121402189
+    ],
+    [
+      122034548,
+      122044188
+    ],
+    [
+      145490006,
+      145499645
+    ],
+    [
+      149501292,
+      149510928
+    ],
+    [
+      156690699,
+      156700335
+    ],
+    [
+      159420039,
+      159429677
+    ],
+    [
+      161633441,
+      161643078
+    ],
+    [
+      164882417,
+      164892053
+    ]
+  ],
+  "hostGain": {
+    "output": 1.0,
+    "input": 1.0
+  },
+  "hostGainSHA256": "e3f855db74c56f3e186be6a6837a693ff6dec5ad3baf8c73e2ec0103167924f9",
+  "reportSHA256": "9a6a643bbc0ebad785fee9320ddf54c026bab1df24d3d5cb2c5f551cdc32868f",
+  "checkerSHA256": "d02a3d7ffa09568b5ef2d63c96f5811267975150ef9715228eca4de5ea8eb987",
+  "artifact": "/Users/bryandimaio/Development/USB-AoIP/outputs/latency/rate8-48loaded-soak-3600s-32f-20261028T154829Z-api/preset.dsp",
+  "seconds": 3600,
+  "longestZeroRuns": [
+    1,
+    1,
+    1,
+    4,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    8,
+    9,
+    1,
+    1,
+    1
+  ]
+}

@@ -1,0 +1,254 @@
+{
+  "policy": {
+    "id": "dante-event-reference-v2",
+    "maximumErrorLSB": 2.0,
+    "maximumSearchLagFrames": 9600,
+    "minimumAnchorRangeLSB": 256,
+    "inputModel": "measured host output gain, nearest 24-bit",
+    "returnModel": "measured host input gain",
+    "gainFitting": false,
+    "alignment": "one integer offset for all channels and events",
+    "zeroRunRule": "exact predicted zero codes with nonzero boundaries",
+    "coverage": "retained event windows only",
+    "wholeRunValidated": false,
+    "maximumSeconds": 3600
+  },
+  "status": "matched-events",
+  "wholeRunValidated": false,
+  "coveredInputFrames": 557,
+  "events": [
+    {
+      "channel": 13,
+      "startInputFrame": 32425821,
+      "referenceStartFrame": 32425337,
+      "zeroFrames": 9,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 41
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 39566324,
+      "referenceStartFrame": 39565840,
+      "zeroFrames": 9,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 41
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 52232677,
+      "referenceStartFrame": 52232193,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 70146997,
+      "referenceStartFrame": 70146513,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 71194631,
+      "referenceStartFrame": 71194147,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 96746564,
+      "referenceStartFrame": 96746080,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 98334208,
+      "referenceStartFrame": 98333724,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 106310801,
+      "referenceStartFrame": 106310317,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 121402303,
+      "referenceStartFrame": 121401819,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 145499756,
+      "referenceStartFrame": 145499272,
+      "zeroFrames": 7,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 39
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 149511042,
+      "referenceStartFrame": 149510558,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 156700449,
+      "referenceStartFrame": 156699965,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 159429789,
+      "referenceStartFrame": 159429305,
+      "zeroFrames": 6,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 38
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 161643191,
+      "referenceStartFrame": 161642707,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 13,
+      "startInputFrame": 164892167,
+      "referenceStartFrame": 164891683,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    }
+  ],
+  "inputIndexMinusSourceIndex": 484,
+  "evidenceComplete": true,
+  "provenance": {
+    "exporterSHA256": "6261ddb55d03a108ef61b82596d964d89213c83386cc23465ccfb88cdc496393",
+    "coreSHA256": "bbaec39ef0cab29bd9a493db9eefaff47507f4fa916389a3c5d01612e41453f2",
+    "artifactSHA256": "2b6baa0484a7d9a7d7a39f189d772a6864a473163c6e8098723954b652bb456c",
+    "referenceSHA256": "ce679bf1fb08621a8faa83da466a8636415ad8ee11f399c4b91c5c8832b3c5ec",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)"
+  },
+  "ranges": [
+    [
+      32416053,
+      32425694
+    ],
+    [
+      39556556,
+      39566197
+    ],
+    [
+      52222909,
+      52232545
+    ],
+    [
+      70137229,
+      70146865
+    ],
+    [
+      71184863,
+      71194499
+    ],
+    [
+      96736796,
+      96746432
+    ],
+    [
+      98324440,
+      98334077
+    ],
+    [
+      106301033,
+      106310669
+    ],
+    [
+      121392535,
+      121402171
+    ],
+    [
+      145489988,
+      145499627
+    ],
+    [
+      149501274,
+      149510910
+    ],
+    [
+      156690681,
+      156700317
+    ],
+    [
+      159420021,
+      159429659
+    ],
+    [
+      161633423,
+      161643060
+    ],
+    [
+      164882399,
+      164892035
+    ]
+  ],
+  "hostGain": {
+    "output": 1.0,
+    "input": 1.0
+  },
+  "hostGainSHA256": "e3f855db74c56f3e186be6a6837a693ff6dec5ad3baf8c73e2ec0103167924f9",
+  "reportSHA256": "c502f181fca508ddbb37d457886ab11ea9808945aed0013bfbc878764e3ea51f",
+  "checkerSHA256": "d02a3d7ffa09568b5ef2d63c96f5811267975150ef9715228eca4de5ea8eb987",
+  "artifact": "/Users/bryandimaio/Development/USB-AoIP/outputs/latency/rate8-48loaded-rerun-soak-3600s-32f-20261028T165758Z-api/preset.dsp",
+  "seconds": 3600,
+  "longestZeroRuns": [
+    1,
+    1,
+    1,
+    4,
+    1,
+    1,
+    1,
+    1,
+    2,
+    1,
+    1,
+    1,
+    9,
+    1,
+    1,
+    1
+  ]
+}

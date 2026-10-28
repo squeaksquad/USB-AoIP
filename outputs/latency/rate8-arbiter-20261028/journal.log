@@ -1,0 +1,126 @@
+Oct 28 12:53:22 audio-dev systemd[1]: Starting usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+Oct 28 12:53:22 audio-dev systemd[1]: Started usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+Oct 28 12:53:22 audio-dev usb16x16-dante[1757729]: START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-15.96 seed_from_file=1
+Oct 28 12:53:22 audio-dev usb16x16-dante[1757729]: THREADS stage=before-open count=4 [1757729 usb16x16-dante- OTHER/0] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0]
+Oct 28 12:53:23 audio-dev usb16x16-dante[1757729]: NETOPEN dir=capture period=64 buffer=1024 hw_params_us=251523 state=PREPARED
+Oct 28 12:53:23 audio-dev usb16x16-dante[1757729]: NETOPEN dir=playback period=64 buffer=1024 hw_params_us=79 state=PREPARED
+Oct 28 12:53:23 audio-dev usb16x16-dante[1757729]: NETTHREADS flows_rx=1 flows_tx=1 waited_ms=10
+Oct 28 12:53:23 audio-dev usb16x16-dante[1757729]: THREADS stage=after-open count=8 [1757729 usb16x16-dante- OTHER/0] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX OTHER/0]
+Oct 28 12:53:23 audio-dev usb16x16-dante[1757729]: NETSTART capture=RUNNING playback=RUNNING
+Oct 28 12:53:23 audio-dev usb16x16-dante[1757729]: THREADS stage=running count=8 [1757729 usb16x16-dante- FIFO/79] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX FIFO/81]
+Oct 28 12:53:23 audio-dev usb16x16-dante[1757729]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=unknown host_capture=0 host_playback=0
+Oct 28 12:53:23 audio-dev usb16x16-dante[1757729]: USBLINK usb=open tx=idle rx=idle tx_links=0 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=0 tx_prime_found=0 t=0.300
+Oct 28 12:53:23 audio-dev usb16x16-dante[1757729]: THREADS stage=usblink count=8 [1757729 usb16x16-dante- FIFO/79] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX FIFO/81]
+Oct 28 12:54:22 audio-dev usb16x16-dante[1757729]: USB t=60.0 usb=open tx=idle rx=idle tx_mean=0.0 rx_mean=0.0 rx_depth=96..96 pitch_c=1000000 pitch_p=1000000 tx_i=0.00 rx_i=0.00 usb_tx=0 usb_rx=48 tx_links=0 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=2867993 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=0,0 back_peak=0,0 out_holes=0/0 back_holes=0/0
+Oct 28 12:54:22 audio-dev usb16x16-dante[1757729]: METER t=60.0 meter_us_max=29.1 meter_us_mean=3.5 meter_calls=59751
+Oct 28 12:55:22 audio-dev usb16x16-dante[1757729]: USB t=120.1 usb=open tx=idle rx=idle tx_mean=0.0 rx_mean=0.0 rx_depth=96..96 pitch_c=1000000 pitch_p=1000000 tx_i=0.00 rx_i=0.00 usb_tx=0 usb_rx=48 tx_links=0 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=5749523 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=0,0 back_peak=0,0 out_holes=0/0 back_holes=0/0
+Oct 28 12:55:22 audio-dev usb16x16-dante[1757729]: METER t=120.1 meter_us_max=14.9 meter_us_mean=3.6 meter_calls=60032
+Oct 28 12:55:23 audio-dev usb16x16-dante[1757729]: USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=116 t=120.565
+Oct 28 12:55:23 audio-dev usb16x16-dante[1757729]: THREADS stage=usblink count=8 [1757729 usb16x16-dante- FIFO/79] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX FIFO/81]
+Oct 28 12:55:26 audio-dev usb16x16-dante[1757729]: USBLINK usb=open tx=idle rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=116 t=123.466
+Oct 28 12:55:26 audio-dev usb16x16-dante[1757729]: THREADS stage=usblink count=8 [1757729 usb16x16-dante- FIFO/79] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX FIFO/81]
+Oct 28 12:55:26 audio-dev usb16x16-dante[1757729]: USBLINK usb=open tx=idle rx=idle tx_links=1 rx_primes=2 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=116 t=123.566
+Oct 28 12:55:26 audio-dev usb16x16-dante[1757729]: THREADS stage=usblink count=8 [1757729 usb16x16-dante- FIFO/79] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX FIFO/81]
+Oct 28 12:55:27 audio-dev usb16x16-dante[1757729]: USBLINK usb=open tx=idle rx=flow tx_links=1 rx_primes=2 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=116 t=124.167
+Oct 28 12:55:27 audio-dev usb16x16-dante[1757729]: THREADS stage=usblink count=8 [1757729 usb16x16-dante- FIFO/79] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX FIFO/81]
+Oct 28 12:55:27 audio-dev usb16x16-dante[1757729]: USBLINK usb=open tx=flow rx=flow tx_links=24 rx_primes=2 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=49 tx_prime_found=119 t=124.367
+Oct 28 12:55:27 audio-dev usb16x16-dante[1757729]: THREADS stage=usblink count=8 [1757729 usb16x16-dante- FIFO/79] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX FIFO/81]
+Oct 28 12:55:27 audio-dev usb16x16-dante[1757729]: USBRATE changed host_capture=44100 host_playback=44100 rate=48000 while open; handing the USB half back
+Oct 28 12:55:27 audio-dev usb16x16-dante[1757729]: USBCLOSE reason=-34 (Numerical result out of range)
+Oct 28 12:55:27 audio-dev usb16x16-dante[1757729]: USBLINK usb=absent tx=idle rx=idle tx_links=59 rx_primes=2 capture_faults=0 playback_faults=0 last_fault=-34 tx_prime_block=50 tx_prime_found=118 t=124.668
+Oct 28 12:55:27 audio-dev usb16x16-dante[1757729]: THREADS stage=usblink count=8 [1757729 usb16x16-dante- FIFO/79] [1757735 usb16x16-dante- OTHER/0] [1757736 usb16x16-dante- OTHER/0] [1757737 usb16x16-dante- OTHER/0] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX FIFO/81]
+Oct 28 12:55:28 audio-dev usb16x16-dante[1757729]: USBRATE refused host_capture=44100 host_playback=44100 rate=48000; the USB half stays closed
+Oct 28 12:55:28 audio-dev usb16x16-dante[1757729]: USBRATE requested rate=44100 source=usb at=1793206528 from the arbiter in /run/usb16x16-dante/rate-request
+Oct 28 12:55:28 audio-dev systemd[1]: Starting usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request)...
+Oct 28 12:55:28 audio-dev systemd[1]: Stopping usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+Oct 28 12:55:28 audio-dev usb16x16-dante[1757729]: METERS stopped writes=2538 failures=0
+Oct 28 12:55:28 audio-dev usb16x16-dante[1757729]: USBSUMMARY usb_tx=154496 usb_rx=162570 tx_links=59 tx_reprimes=0 rx_primes=2 rx_overflow=1749 rx_idle_discards=5804338 capture_faults=0 playback_faults=0 detaches=1 pitch_write_errors=0 servo_rejected=0 tx_integral_ppm=-15.96 rx_integral_ppm=16.31 out_holes=0/0 back_holes=0/0
+Oct 28 12:55:28 audio-dev usb16x16-dante[1757729]: THREADS stage=before-close count=5 [1757729 usb16x16-dante- FIFO/79] [1757738 Inferno main OTHER/0] [1757739 Inferno main OTHER/0] [1757740 flows RX FIFO/80] [1757756 flows TX FIFO/81]
+Oct 28 12:55:28 audio-dev usb16x16-dante[1757729]: [2026-10-28T16:55:28.772066Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for playback stream
+Oct 28 12:55:28 audio-dev usb16x16-dante[1757729]: [2026-10-28T16:55:28.772121Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for capture stream
+Oct 28 12:55:28 audio-dev systemd[1]: usb16x16-dante.service: Deactivated successfully.
+Oct 28 12:55:28 audio-dev systemd[1]: Stopped usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+Oct 28 12:55:28 audio-dev systemd[1]: usb16x16-dante.service: Consumed 8.333s CPU time.
+Oct 28 12:55:28 audio-dev systemd[1]: Starting usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+Oct 28 12:55:28 audio-dev systemd[1]: Started usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+Oct 28 12:55:28 audio-dev usb16x16-dante[1758057]: START usb16x16-dante-owner mode=usb pcm=inferno rate=44100 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-15.96 seed_from_file=1
+Oct 28 12:55:28 audio-dev usb16x16-dante[1758057]: THREADS stage=before-open count=4 [1758057 usb16x16-dante- OTHER/0] [1758063 usb16x16-dante- OTHER/0] [1758064 usb16x16-dante- OTHER/0] [1758065 usb16x16-dante- OTHER/0]
+Oct 28 12:55:29 audio-dev usb16x16-dante[1758057]: NETOPEN dir=capture period=64 buffer=1024 hw_params_us=251360 state=PREPARED
+Oct 28 12:55:29 audio-dev usb16x16-dante[1758057]: NETOPEN dir=playback period=64 buffer=1024 hw_params_us=90 state=PREPARED
+Oct 28 12:55:29 audio-dev usb16x16-dante[1758057]: NETTHREADS flows_rx=1 flows_tx=1 waited_ms=10
+Oct 28 12:55:29 audio-dev usb16x16-dante[1758057]: THREADS stage=after-open count=8 [1758057 usb16x16-dante- OTHER/0] [1758063 usb16x16-dante- OTHER/0] [1758064 usb16x16-dante- OTHER/0] [1758065 usb16x16-dante- OTHER/0] [1758070 Inferno main OTHER/0] [1758071 Inferno main OTHER/0] [1758072 flows RX FIFO/80] [1758088 flows TX OTHER/0]
+Oct 28 12:55:29 audio-dev usb16x16-dante[1758057]: NETSTART capture=RUNNING playback=RUNNING
+Oct 28 12:55:29 audio-dev usb16x16-dante[1758057]: THREADS stage=running count=8 [1758057 usb16x16-dante- FIFO/79] [1758063 usb16x16-dante- OTHER/0] [1758064 usb16x16-dante- OTHER/0] [1758065 usb16x16-dante- OTHER/0] [1758070 Inferno main OTHER/0] [1758071 Inferno main OTHER/0] [1758072 flows RX FIFO/80] [1758088 flows TX FIFO/81]
+Oct 28 12:55:29 audio-dev usb16x16-dante[1758057]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=44100 host_rate=match host_capture=44100 host_playback=44100
+Oct 28 12:55:29 audio-dev usb16x16-dante[1758057]: USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=50 tx_prime_found=118 t=0.300
+Oct 28 12:55:29 audio-dev usb16x16-dante[1758057]: THREADS stage=usblink count=8 [1758057 usb16x16-dante- FIFO/79] [1758063 usb16x16-dante- OTHER/0] [1758064 usb16x16-dante- OTHER/0] [1758065 usb16x16-dante- OTHER/0] [1758070 Inferno main OTHER/0] [1758071 Inferno main OTHER/0] [1758072 flows RX FIFO/80] [1758088 flows TX FIFO/81]
+Oct 28 12:55:34 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:34.334201Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000101000301
+Oct 28 12:55:34 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:34.334222Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:55:39 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:39.483442Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000201000301
+Oct 28 12:55:39 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:39.483461Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:55:44 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:44.639046Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000301000301
+Oct 28 12:55:44 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:44.639064Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:55:45 audio-dev usb16x16-dante-rate[1758026]: af03a155748e8b85: done
+Oct 28 12:55:45 audio-dev systemd[1]: usb16x16-dante-rate.service: Deactivated successfully.
+Oct 28 12:55:45 audio-dev systemd[1]: Finished usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request).
+Oct 28 12:55:48 audio-dev usb16x16-dante[1758057]: USBLINK usb=open tx=idle rx=idle tx_links=1 rx_primes=2 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=50 tx_prime_found=118 t=19.211
+Oct 28 12:55:48 audio-dev usb16x16-dante[1758057]: THREADS stage=usblink count=8 [1758057 usb16x16-dante- FIFO/79] [1758063 usb16x16-dante- OTHER/0] [1758064 usb16x16-dante- OTHER/0] [1758065 usb16x16-dante- OTHER/0] [1758070 Inferno main OTHER/0] [1758071 Inferno main OTHER/0] [1758072 flows RX FIFO/80] [1758088 flows TX FIFO/81]
+Oct 28 12:55:48 audio-dev usb16x16-dante[1758057]: USBLINK usb=open tx=flow rx=idle tx_links=2 rx_primes=2 capture_faults=0 playback_faults=1 last_fault=-32 tx_prime_block=48 tx_prime_found=123 t=19.911
+Oct 28 12:55:48 audio-dev usb16x16-dante[1758057]: THREADS stage=usblink count=8 [1758057 usb16x16-dante- FIFO/79] [1758063 usb16x16-dante- OTHER/0] [1758064 usb16x16-dante- OTHER/0] [1758065 usb16x16-dante- OTHER/0] [1758070 Inferno main OTHER/0] [1758071 Inferno main OTHER/0] [1758072 flows RX FIFO/80] [1758088 flows TX FIFO/81]
+Oct 28 12:55:49 audio-dev usb16x16-dante[1758057]: USBRATE changed host_capture=48000 host_playback=48000 rate=44100 while open; handing the USB half back
+Oct 28 12:55:49 audio-dev usb16x16-dante[1758057]: USBCLOSE reason=-34 (Numerical result out of range)
+Oct 28 12:55:49 audio-dev usb16x16-dante[1758057]: USBLINK usb=absent tx=idle rx=idle tx_links=4 rx_primes=9 capture_faults=0 playback_faults=8 last_fault=-34 tx_prime_block=48 tx_prime_found=127 t=20.412
+Oct 28 12:55:49 audio-dev usb16x16-dante[1758057]: THREADS stage=usblink count=8 [1758057 usb16x16-dante- FIFO/79] [1758063 usb16x16-dante- OTHER/0] [1758064 usb16x16-dante- OTHER/0] [1758065 usb16x16-dante- OTHER/0] [1758070 Inferno main OTHER/0] [1758071 Inferno main OTHER/0] [1758072 flows RX FIFO/80] [1758088 flows TX FIFO/81]
+Oct 28 12:55:49 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:49.842941Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000401000301
+Oct 28 12:55:49 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:49.842958Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:55:50 audio-dev usb16x16-dante[1758057]: USBRATE refused host_capture=48000 host_playback=48000 rate=44100; the USB half stays closed
+Oct 28 12:55:50 audio-dev usb16x16-dante[1758057]: USBRATE requested rate=48000 source=usb at=1793206550 from the arbiter in /run/usb16x16-dante/rate-request
+Oct 28 12:55:50 audio-dev systemd[1]: Starting usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request)...
+Oct 28 12:55:50 audio-dev usb16x16-dante-rate[1758298]: 5bd3be2a6fad6fd0: refused — the rate moved 48000 -> 44100 5 s ago; going straight back looks like a tug-of-war between the two ends, so nothing changes
+Oct 28 12:55:50 audio-dev systemd[1]: usb16x16-dante-rate.service: Deactivated successfully.
+Oct 28 12:55:50 audio-dev systemd[1]: Finished usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request).
+Oct 28 12:55:54 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:54.992815Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000501000301
+Oct 28 12:55:54 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:55:54.992832Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:56:00 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:00.178762Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000601000301
+Oct 28 12:56:00 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:00.178788Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:56:00 audio-dev usb16x16-dante[1758057]: USBRATE still refused host_capture=48000 host_playback=48000 rate=44100; asking again
+Oct 28 12:56:00 audio-dev usb16x16-dante[1758057]: USBRATE requested rate=48000 source=usb at=1793206560 from the arbiter in /run/usb16x16-dante/rate-request
+Oct 28 12:56:00 audio-dev systemd[1]: Starting usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request)...
+Oct 28 12:56:00 audio-dev usb16x16-dante-rate[1758358]: 0fecd9aba72e1319: refused — the rate moved 48000 -> 44100 15 s ago; going straight back looks like a tug-of-war between the two ends, so nothing changes
+Oct 28 12:56:00 audio-dev systemd[1]: usb16x16-dante-rate.service: Deactivated successfully.
+Oct 28 12:56:00 audio-dev systemd[1]: Finished usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request).
+Oct 28 12:56:02 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:02.455832Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000701000301
+Oct 28 12:56:02 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:02.455851Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:56:07 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:07.614983Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000801000301
+Oct 28 12:56:07 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:07.614996Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:56:12 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:12.772583Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000901000301
+Oct 28 12:56:12 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:12.772600Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:56:17 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:17.926364Z ERROR inferno_aoip::protocol::flows_control] server returned error: 1102000a000a01000301
+Oct 28 12:56:17 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:17.926382Z ERROR inferno_aoip::device_server::channels_subscriber] failed to request flow from 169.254.248.189:4455: Kind(InvalidData)
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758057]: USBRATE still refused host_capture=48000 host_playback=48000 rate=44100; asking again
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758057]: USBRATE requested rate=48000 source=usb at=1793206580 from the arbiter in /run/usb16x16-dante/rate-request
+Oct 28 12:56:20 audio-dev systemd[1]: Starting usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request)...
+Oct 28 12:56:20 audio-dev systemd[1]: Stopping usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758057]: METERS stopped writes=447 failures=0
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758057]: USBSUMMARY usb_tx=852155 usb_rx=837590 tx_links=4 tx_reprimes=2 rx_primes=9 rx_overflow=26 rx_idle_discards=30782 capture_faults=0 playback_faults=8 detaches=1 pitch_write_errors=0 servo_rejected=0 tx_integral_ppm=-16.00 rx_integral_ppm=15.96 out_holes=0/0 back_holes=0/0
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758057]: THREADS stage=before-close count=5 [1758057 usb16x16-dante- FIFO/79] [1758070 Inferno main OTHER/0] [1758071 Inferno main OTHER/0] [1758072 flows RX FIFO/80] [1758088 flows TX FIFO/81]
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:20.547481Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for playback stream
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758057]: [2026-10-28T16:56:20.547524Z WARN  asound_module_pcm_inferno] plugin_stop called more than once for capture stream
+Oct 28 12:56:20 audio-dev systemd[1]: usb16x16-dante.service: Deactivated successfully.
+Oct 28 12:56:20 audio-dev systemd[1]: Stopped usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+Oct 28 12:56:20 audio-dev systemd[1]: Starting usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+Oct 28 12:56:20 audio-dev systemd[1]: Started usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758514]: START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-15.96 seed_from_file=1
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758514]: THREADS stage=before-open count=4 [1758514 usb16x16-dante- OTHER/0] [1758519 usb16x16-dante- OTHER/0] [1758520 usb16x16-dante- OTHER/0] [1758521 usb16x16-dante- OTHER/0]
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758514]: NETOPEN dir=capture period=64 buffer=1024 hw_params_us=251688 state=PREPARED
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758514]: NETOPEN dir=playback period=64 buffer=1024 hw_params_us=84 state=PREPARED
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758514]: NETTHREADS flows_rx=1 flows_tx=1 waited_ms=10
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758514]: THREADS stage=after-open count=8 [1758514 usb16x16-dante- OTHER/0] [1758519 usb16x16-dante- OTHER/0] [1758520 usb16x16-dante- OTHER/0] [1758521 usb16x16-dante- OTHER/0] [1758522 Inferno main OTHER/0] [1758523 Inferno main OTHER/0] [1758525 flows RX FIFO/80] [1758545 flows TX OTHER/0]
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758514]: NETSTART capture=RUNNING playback=RUNNING
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758514]: THREADS stage=running count=8 [1758514 usb16x16-dante- FIFO/79] [1758519 usb16x16-dante- OTHER/0] [1758520 usb16x16-dante- OTHER/0] [1758521 usb16x16-dante- OTHER/0] [1758522 Inferno main OTHER/0] [1758523 Inferno main OTHER/0] [1758525 flows RX FIFO/80] [1758545 flows TX FIFO/81]
+Oct 28 12:56:20 audio-dev usb16x16-dante[1758514]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+Oct 28 12:56:21 audio-dev usb16x16-dante[1758514]: USBLINK usb=open tx=flow rx=flow tx_links=1 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=48 tx_prime_found=83 t=0.300
+Oct 28 12:56:21 audio-dev usb16x16-dante[1758514]: THREADS stage=usblink count=8 [1758514 usb16x16-dante- FIFO/79] [1758519 usb16x16-dante- OTHER/0] [1758520 usb16x16-dante- OTHER/0] [1758521 usb16x16-dante- OTHER/0] [1758522 Inferno main OTHER/0] [1758523 Inferno main OTHER/0] [1758525 flows RX FIFO/80] [1758545 flows TX FIFO/81]
+Oct 28 12:56:37 audio-dev usb16x16-dante-rate[1758482]: 2834335a9ae069f1: done
+Oct 28 12:56:37 audio-dev systemd[1]: usb16x16-dante-rate.service: Deactivated successfully.
+Oct 28 12:56:37 audio-dev systemd[1]: Finished usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request).

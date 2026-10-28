@@ -14435,3 +14435,27 @@ that ends in `done` without help). Restored 15:45: `usb16x16-dante` (0facc5ad), 
 6015, at 48. Staged `service/install-owner-rate8.sh` (c35bb1a9): owner-only swap 0facc5ad ->
 a15a9d84, keeps `.rate8-previous`, `rollback` back to 0facc5ad. Evidence `outputs/latency/rate8-*`,
 owner log and the retry lines in `rate8-retry-20261028/`.
+
+**INSTALLED 2026-10-28 15:46:56 UTC: owner `rate8` a15a9d84 by `service/install-owner-rate8.sh`
+(operator ran it; 0facc5ad kept as `usb16x16-dante-owner.rate8-previous`). MEASURED the same
+afternoon; ACCEPTED: rate8 is the Dante point of record's owner.**
+- First loaded hour (candidate a15a9d84, `loaded` preset, 15:48-16:48): FAIL on one zero run the
+  preset does not produce: 8 samples on ch5 to ch12 together, at capture frame 122044308 (about
+  2542 s in), no discontinuity. The owner logged nothing there (no resync, no lost frame, no fault,
+  its `back_holes` level through the soak) and printed no `USBRATE` line, so the new code never
+  ran; the rest of the source is rate7's, which passed its hour. One return flow's eight channels at
+  once reads as one lost Dante packet from the Ferrofish (the class of 2026-10-12, there 4 frames),
+  not located. Counted as a failure, not explained.
+- On the installed service (16:55-16:57), the case the FOUND of 11:49 named: Mac alone to 44.1 at
+  16:55:24, `af03a155748e8b85: done` at :45; Mac straight back to 48 at :47; the owner asked at :50
+  (refused, 5 s into the guard), again at 16:56:00 (refused, 15 s), again at :20 (accepted): owner
+  `rate=48000`, `USBOPEN host_rate=match`, `2834335a9ae069f1: done` at :37. No Dante-side help.
+- Rerun hour (candidate a15a9d84, `loaded`, 16:58-17:58): 3600 s soak PASS, discontinuities 0 / 0,
+  every zero run the preset's own (ch4 3 runs, ch13 12, longest 9); 400 loaded impulses after 355 /
+  `daw_timeline` 507, spread 0. Owner: no `USBRATE`, `USBCLOSE` or RECOVER, faults 0.
+- Battery before it (15:16-15:45, entry above): noise clean, four 800-impulse runs spread 0, 600 s
+  soak PASS.
+Restored 18:03: `usb16x16-dante` (a15a9d84), start check ok at 6015, at 48 (no `RATE=`, `SAMPLE_RATE
+"48000"`), the Mac's USB 16x16 at 48000. `sudo ./install-owner-rate8.sh rollback` returns to
+0facc5ad. Evidence `outputs/latency/rate8-*` (owner logs in `rate8-retry-20261028/`, the arbiter
+journal in `rate8-arbiter-20261028/`).
