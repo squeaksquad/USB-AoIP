@@ -14345,3 +14345,28 @@ Owed before installing: one session with a rate change made on the Mac alone (Au
 48 -> 44.1 -> 48, no Dante Switcher), reading `USBRATE changed`, the detach, the request and the
 arbiter's `done`, then the hour. Restored 04:15: `usb16x16-dante` (2578c73d), start check ok, 64 / 64
 subscribed, at 48. Evidence `outputs/latency/rate7-*`, owner log in `rate7-20261028/`.
+
+**MEASURED 2026-10-28 10:26-11:36 UTC: owner `rate7` (0facc5ad) catches a rate change made on the
+Mac alone, and holds a loaded hour at 48. Installer staged, not installed.** The session the entry
+above owed, as a candidate in place of the service (the same arguments, the `loaded` preset,
+`--rate-request-file /dev/shm/rate7-rate-request` so the installed arbiter was not driven), with
+the silent hold client streaming so the gadget reported the Mac's rate:
+- Mac to 44.1 in Audio MIDI Setup's place (`setrate.swift`, no Dante Switcher) at 10:28:13: `USBRATE
+  changed host_capture=44100 host_playback=44100 rate=48000 while open; handing the USB half back`,
+  `USBCLOSE reason=-34`, then the closed-half check `USBRATE refused` and `USBRATE requested
+  rate=44100 source=usb`; the request file read `rate=44100 source=usb at=1793183296`. Before the
+  once-a-second check came round the half re-primed about 57 times (`tx_links` to 58) in under a
+  second: the cost of the check's period, audio was already wrong at that point.
+- Mac back to 48 at 10:28:29: `USBRATE cleared host_capture=0 host_playback=0 rate=48000`, the half
+  reopened and flowed. Noise probe clean; 400 loaded impulses 330 / `daw_timeline` 482, spread 0.
+  Dante side and the Metric Halo stayed at 48 throughout.
+- Fresh candidate start at 10:31 for the hour: 3600 s soak PASS, discontinuities 0 / 0, every zero
+  run matched to the preset (ch4 3 runs, ch13 12, longest 9). 400 loaded impulses after: 349 /
+  `daw_timeline` 501, spread 0. Owner log over the 65 minutes: no `USBRATE`, no `USBCLOSE`, no
+  RECOVER, capture and playback faults 0, `tx_links` 9 / `rx_primes` 12 (the harness opens).
+Not seen: the installed arbiter's `done` for a Mac-originated request (the path unit watches
+`/run/usb16x16-dante/rate-request`, which the candidate did not write); that is the first check after
+install. Restored 11:37: `usb16x16-dante` (2578c73d), start check ok at 6016, at 48 (no `RATE=`,
+`SAMPLE_RATE "48000"`). Staged `service/install-owner-rate7.sh` (358f59f0) on the Pi: owner-only swap
+2578c73d -> 0facc5ad, keeps `.rate7-previous`, `rollback` back to 2578c73d. Evidence
+`outputs/latency/rate7-mac-*`, `rate7-48loaded-*`, owner logs in `rate7-mac-20261028/`.
