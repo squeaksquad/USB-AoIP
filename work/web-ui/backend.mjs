@@ -493,10 +493,9 @@ export async function compileDraft(config, importImpl, {shape = 'fixed', rate = 
  *  no compiler, so a preset is compiled here at every rate the endpoint
  *  offers and the store keeps one artifact per rate, so a rate change finds
  *  the preset ready or refuses. `rates` defaults to the compiler's
- *  OFFERED_RATES, which is [48000] until another rate has its battery. A rate
- *  the preset cannot compile at fails the whole call: a preset is never
- *  stored with a rate missing. Not yet sent to the Pi; the applier takes one
- *  artifact today, the 48 kHz one. */
+ *  OFFERED_RATES (44.1 and 48 kHz since 2026-10-28). A rate the preset cannot
+ *  compile at fails the whole call: a preset is never stored with a rate
+ *  missing. The page itself sends every Dante rate (compileOtherRates). */
 export async function compileDraftRates(config, importImpl, {shape = 'fixed', rates} = {}) {
   const compiler = await loadCompiler(importImpl);
   const wanted = rates ?? compiler.OFFERED_RATES;

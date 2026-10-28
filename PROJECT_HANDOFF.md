@@ -14464,3 +14464,11 @@ journal in `rate8-arbiter-20261028/`).
 with the first hour's unexplained 8-sample hole on ch5 to ch12 left open: if another one-flow hole
 appears, on any owner, take an eth0 capture of the Dante flows through a loaded hour
 (`diag/dante-pcap-zeros.py`) to see whether the packet reached the Pi.
+
+**ACCEPTED 2026-10-28 (operator): 44.1 kHz as an offered rate of the Dante point of record.** The
+set `install-dante-rate44.sh` installed (Inferno config 19da7c70 offering `44100,48000`, start check
+fccfdd62), on owner `rate8` a15a9d84. Behind it: the 44.1 battery on the loop (2026-10-27), the live
+moves through Dante 48 -> 44.1 -> 48 and the refused Dante-side set (03:15-03:35), and the Mac-only
+moves through the arbiter on rate7 and rate8 (11:48, 16:55). Not part of it: the page and the
+compiler still offer 48 only (`OFFERED_RATES`), so a DSP preset has no 44.1 artifact and the
+arbiter refuses 44.1 while one runs; the service runs `direct`.

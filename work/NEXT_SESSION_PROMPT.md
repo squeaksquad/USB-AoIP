@@ -1,6 +1,96 @@
 # Next-session pickup prompt
 
-## Current pickup — 2026-10-18: sample rate, step 6 (96 kHz end to end). Start here.
+## Current pickup — 2026-10-28: rates 44.1 and 48 on the Dante point of record; nothing owed. Start here.
+
+You are picking up the USB 16x16 project (Raspberry Pi 5 UAC2 gadget, 16x16,
+bridged to Dante through Inferno). Read `CLAUDE.md` (repo map), then
+`PROJECT_HANDOFF.md`'s tail from "INSTALLED 2026-10-28 03:13 UTC" (the 44.1 offer)
+to the end. The handoff is authoritative where anything disagrees; the sections
+below this one are history.
+
+**Where it stands (ACCEPTED 2026-10-28).** The Dante point of record on the
+multi-rate gadget (`setup-usb-16x16-rates` d4f0ee7b, `48000,44100,88200,96000`):
+owner `rate8` a15a9d84 (`/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner`;
+`install-owner-rate8.sh rollback` returns to rate7 0facc5ad), plugin c6b012ae,
+Inferno config 19da7c70 offering `44100,48000`, start check fccfdd62 (takes the
+rate from owner.conf's `RATE=`), applier 4a4aef82, `transport.conf`
+`RX_QUEUE=96` `RATE_REQUESTS=1`, the rate path unit, profile `direct` with
+meters. Level about 330-365 / `daw_timeline` 480-515 at 48, drawn per USB open
+(settled: not removable from the Pi without a client app, which the operator
+rules out). Left at the close: everything at 48, Mac included; service active,
+start check ok; nothing running.
+
+**How a rate change works now.** The Mac decides. A change made on the Mac alone
+(Audio MIDI Setup, or any app) is caught by the owner within a second while the
+USB half is open (rate7), which hands the half back, refuses the reopen and
+writes `rate=N source=usb` to `/run/usb16x16-dante/rate-request`; the arbiter
+(`usb16x16-apply --rate-request`) checks it, rewrites owner.conf's `RATE=` and
+Inferno's `SAMPLE_RATE` together and restarts the endpoint (about 20 s to
+`done`). A request it refuses, notably a reversal within 30 s of its last move,
+is asked again at 10 s, doubling to 5 minutes (rate8). A Dante-side set (Dante
+Switcher, Controller) reaches the same arbiter through patch 0005. Only 44.1 and
+48 are offered; the page stores every Dante preset at all six Dante rates, so a
+rate added to Inferno's list needs no resave (`OFFERED_RATES` in
+`work/dsp-compiler/compile.mjs` is `[44100, 48000]`, a label kept in step).
+
+**Open, by the operator's call on 2026-10-28.**
+1. The gadget reports the Mac's last rate (operator: "can the gadget just report
+   the last set sample rate?"). The rate controls read 0 whenever the Mac is not
+   streaming, so with nothing open a Dante-side set is accepted against the Mac's
+   choice, and a Mac-side change reaches the Pi only when an app next opens. The
+   kernel already has the rate: every CoreAudio rate set sends SET_CUR, which
+   calls `u_audio_set_{capture,playback}_srate` (2026-10-18 kprobe trace,
+   `outputs/latency/rate882-dirtest-20261018/trace.sh`, handoff FOUND 03:03); the
+   stock 6.18 `u_audio` rate getter returns it only while the stream is active.
+   A patched `u_audio.ko` that returns the last set rate while the gadget is
+   connected (0 again after a disconnect or bus reset, so a stale Mac never
+   blocks the Dante side) would close both gaps. It is a kernel module beside the
+   protected baseline: own name, hash-pinned installer, rollback to the stock
+   module, the full battery. First, read-only: confirm with the trace (operator
+   runs it with sudo) that a rate change with the Mac idle still sends SET_CUR,
+   and read the Pi's 6.18 `u_audio.c` getter. Plan before building.
+2. Faster detection of a Mac-side change (operator: worth doing, not urgent).
+   The owner reads the rate controls once a second while open, and in that
+   second the USB half re-primes about 57 times at the wrong rate. Checking every
+   100 ms in the steward (off the loop thread) would cut it tenfold; fold it into
+   the next owner build rather than spend a battery on it alone.
+3. 96 kHz (and 88.2) on the real loop. Blocked on routing, not software: the
+   loop is Pi `TX 1-16` -> Pulse (FF-PULSE-16-DX) `Input 49-64` -> MADI -> Metric
+   Halo -> MADI -> Pulse `Output 49-64` -> Pi `RX 1-16`, and above 48 the Pulse's
+   Dante card has 32 channels each way and MADI half its channels, so channels
+   49-64 do not exist (handoff FOUND 2026-10-27 16:54). Dante subscriptions can be
+   moved from a session (`netaudio subscription add/remove`, in Dante Switcher's
+   tooling), but the Pulse's Dante-to-MADI routing and the Metric Halo's MADI
+   loop cannot be reached through Dante. Ways forward: the operator routes one
+   loop on channels that exist at every rate (Pulse Dante 17-32 or below, and the
+   MADI and Metric Halo legs to match), left in place permanently so nothing is
+   re-mapped on the fly; or a far end that is Dante only (DVS was tried
+   2026-10-27: clean from the Pi, holes and about 19.8 ms from DVS itself), or a
+   second Inferno instance as a reflector (the self-loop is impossible: Inferno
+   ignores its own mDNS). `work/dante-mode/RATE96_PLAN.md` has the phases and the
+   operator's answers; the 96 kHz candidate files exist
+   (`config/asound-inferno-owner-rate96-candidate.conf`, `dsp-*@96000.dsp`).
+4. Watch item: the first rate8 loaded hour (2026-10-28 15:48) had one 8-sample
+   zero run on ch5-12 together, unexplained, no owner counter moved. If another
+   one-flow hole appears on any owner, capture eth0's Dante flows through a loaded
+   hour (`work/dante-mode/diag/dante-pcap-zeros.py`).
+
+**Rules that bit on 2026-10-28.**
+- The gadget's rate controls report the Mac's rate only while it streams; for any
+  rate test keep the silent hold client running (`outputs/latency/holdopen-20261028/
+  hold.swift`, `usb-hold "USB 16x16" 32`), and set the Mac with `setrate.swift`.
+- The arbiter's 30 s reversal guard counts from its own `done`, not from the Mac's
+  change; rate8 retries, but a test that waits for `done` must match the newest
+  result, not an older one in the journal window.
+- The arbiter drives `usb16x16-dante` only; a candidate's `--rate-request-file`
+  must point elsewhere (`/dev/shm/...`), so the arbiter path is tested on the
+  installed service.
+- `journalctl --since` with an absolute time reads it as the Pi's local time
+  (EDT); use `-Nmin`.
+- The soak fails on any Mac-side skipped IO cycle (`discontinuities` non-zero);
+  rerun it, it is not the Pi.
+
+## Current pickup — 2026-10-18: sample rate, step 6 (96 kHz end to end). (history).
 
 You are picking up the USB 16x16 project (Raspberry Pi 5 UAC2 gadget, 16x16,
 bridged to Dante through Inferno). Read `CLAUDE.md` (repo map), then

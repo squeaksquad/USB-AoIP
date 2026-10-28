@@ -587,10 +587,10 @@ test('compileDraft at 48 kHz is unchanged, and at another rate names that rate',
   assert.notEqual(at96.shapeKey, plain.shapeKey, 'a rate is part of the shape');
 });
 
-test('compileDraftRates compiles once per offered rate, 48 kHz only today', async () => {
+test('compileDraftRates compiles once per offered rate, 44.1 and 48 kHz today', async () => {
   const preset = createConfig();
   const offered = await compileDraftRates(preset);
-  assert.deepEqual(Object.keys(offered), ['48000']);
+  assert.deepEqual(Object.keys(offered), ['44100', '48000']);
   assert.equal(offered[48000].artifact, (await compileDraft(preset)).artifact);
   const several = await compileDraftRates(preset, undefined, {rates: [44100, 48000, 96000]});
   assert.deepEqual(Object.keys(several).map(Number).sort((a, b) => a - b), [44100, 48000, 96000]);

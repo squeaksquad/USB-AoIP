@@ -382,9 +382,9 @@ test('the LFE branch is scored on the LFE slope, not its input\'s', () => {
 
 import { DANTE_RATES, OFFERED_RATES } from './compile.mjs';
 
-test('48 kHz is the default rate and the only one offered today', () => {
+test('48 kHz is the default rate; 44.1 and 48 kHz are offered today', () => {
   assert.equal(SAMPLE_RATE, 48000);
-  assert.deepEqual(OFFERED_RATES, [48000]);
+  assert.deepEqual(OFFERED_RATES, [44100, 48000]);
   assert.ok(OFFERED_RATES.every(rate => DANTE_RATES.includes(rate)), 'every offered rate is a Dante rate');
   assert.equal(fileDevices('in.raw', 'out.raw').samplerate, 48000);
   const preset = createConfig();
