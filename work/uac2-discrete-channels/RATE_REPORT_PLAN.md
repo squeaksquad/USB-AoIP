@@ -1,7 +1,8 @@
 # The gadget reports the Mac's last set rate (plan, 2026-10-28)
 
 Status: steps 1-4 DONE (trace; patch, build and arbiter guard written and built, see
-"Built" at the end); the bounded test is staged, not run. Step 1 (the trace) DONE 2026-10-28 18:36-18:40 UTC with a clear
+"Built" at the end); the bounded test PASSED 2026-10-28 23:22-23:26 UTC (see "Bounded test" at the
+end). Step 1 (the trace) DONE 2026-10-28 18:36-18:40 UTC with a clear
 answer, and the operator's answers are in (see "Results and decisions" at the
 end, which amends the steps above it). Nothing is built or installed.
 Open item 1 of `work/NEXT_SESSION_PROMPT.md` (2026-10-28), the operator's
@@ -428,3 +429,40 @@ operator can set the rate from the Dante side then.
 
 Next: the bounded test (operator's sudo), then `install-rate-report.sh` (the
 modules and applier 1.6.0 together, each with its rollback) and the battery.
+
+## Bounded test (2026-10-28 23:22-23:26 UTC): PASSED
+
+`test-rate-report.sh build/rate-report 600` (7cb4bf6c), operator's sudo; ended
+early with the end file. Evidence `outputs/latency/rate-report-bounded-20261028/`
+(`journal.txt`, the endpoint, arbiter and gadget units; times there are EDT)
+and the two noise probes named below. Owner rate8 and applier 1.5.0 as
+installed; no Dante-side set was made.
+
+- Load: candidates in at 23:22:32 (srcversions DD2DD510... / C647475B...), USB
+  configured/high-speed, `usb16x16-dante` started.
+- After enumeration, nothing open on the Mac: controls **48000/48000** (the Mac
+  sends its rate at enumeration; the stock module reads 0 here). The owner
+  opened with `host_rate=match`.
+- B1 + B4, Mac idle, 48 -> 44.1 at 23:22:52: controls 44100 within 2 s; the
+  owner (half open) logged `USBRATE changed ... while open`, handed the half
+  back, refused the reopen and asked for 44100; the arbiter `done` and the owner
+  restarted at 44100 by 23:22:56 and opened with `host_rate=match`. **A Mac-side
+  change with no app open moved the endpoint in about 4 s.**
+- Back, Mac idle, 44.1 -> 48 at 23:24:36 (past the 30 s guard): `done`, owner
+  at 48000, `host_rate=match`, by 23:24:40.
+- B2: the hold client open reads 48000; closed, it still reads 48000/48000
+  (the stock module drops to 0 at once).
+- Noise probe at 32 on the candidates: clean
+  (`ratereport-candidate-noise-ch2-32f-20261028T232528Z`: no zero runs, no xrun
+  lines).
+- Restore at 23:26:38: stock `u_audio` 0F2DD68C... and label `usb_f_uac2`
+  E40AF448... loaded, configured/high-speed, endpoint active, nothing under
+  `/lib/modules` changed (87989337, 8e9907d3 only); start check ok 23:27:42;
+  idle controls 0/0 again; owner.conf at 48 (no `RATE=`); noise probe at 32
+  clean (`ratereport-afterrestore-noise-ch2-32f-20261028T232742Z`). Mac at 48000.
+
+Not covered: B3 (disconnect needs a cable pull or Mac reboot; restarting the
+gadget unit builds a new function instance and would prove nothing), B5/B6
+(need the guard, applier 1.6.0, installed), B7 (the full battery).
+Next: `install-rate-report.sh` (modules and applier 1.6.0 together, each
+with its rollback), then B3, B5, B6 and B7 on the installed set.

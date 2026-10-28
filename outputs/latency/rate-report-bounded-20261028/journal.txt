@@ -1,0 +1,48 @@
+2026-10-28T19:22:13.145034-04:00 audio-dev systemd[1]: Stopping usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+2026-10-28T19:22:13.231290-04:00 audio-dev systemd[1]: Stopped usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-28T19:22:13.240308-04:00 audio-dev systemd[1]: Stopping usb-16x16.service - USB 16x16 UAC2 gadget...
+2026-10-28T19:22:13.341572-04:00 audio-dev systemd[1]: Stopped usb-16x16.service - USB 16x16 UAC2 gadget.
+2026-10-28T19:22:13.437718-04:00 audio-dev systemd[1]: Starting usb-16x16.service - USB 16x16 UAC2 gadget...
+2026-10-28T19:22:14.771000-04:00 audio-dev systemd[1]: Starting usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+2026-10-28T19:22:14.808508-04:00 audio-dev systemd[1]: Started usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-28T19:22:14.847891-04:00 audio-dev usb16x16-dante[1791158]: START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-13.58 seed_from_file=1
+2026-10-28T19:22:15.148352-04:00 audio-dev usb16x16-dante[1791158]: NETSTART capture=RUNNING playback=RUNNING
+2026-10-28T19:22:15.151789-04:00 audio-dev usb16x16-dante[1791158]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+2026-10-28T19:22:53.252426-04:00 audio-dev usb16x16-dante[1791158]: USBRATE changed host_capture=44100 host_playback=44100 rate=48000 while open; handing the USB half back
+2026-10-28T19:22:53.272525-04:00 audio-dev usb16x16-dante[1791158]: USBCLOSE reason=-34 (Numerical result out of range)
+2026-10-28T19:22:54.275096-04:00 audio-dev usb16x16-dante[1791158]: USBRATE refused host_capture=44100 host_playback=44100 rate=48000; the USB half stays closed
+2026-10-28T19:22:54.275394-04:00 audio-dev usb16x16-dante[1791158]: USBRATE requested rate=44100 source=usb at=1793229774 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-28T19:22:54.282297-04:00 audio-dev systemd[1]: Starting usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request)...
+2026-10-28T19:22:54.473773-04:00 audio-dev systemd[1]: Stopping usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+2026-10-28T19:22:54.606336-04:00 audio-dev systemd[1]: Stopped usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-28T19:22:54.671115-04:00 audio-dev systemd[1]: Starting usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+2026-10-28T19:22:54.703667-04:00 audio-dev systemd[1]: Started usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-28T19:22:54.716530-04:00 audio-dev usb16x16-dante[1791379]: START usb16x16-dante-owner mode=usb pcm=inferno rate=44100 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-13.58 seed_from_file=1
+2026-10-28T19:22:54.983383-04:00 audio-dev usb16x16-dante[1791379]: NETSTART capture=RUNNING playback=RUNNING
+2026-10-28T19:22:54.998752-04:00 audio-dev usb16x16-dante[1791379]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=44100 host_rate=match host_capture=44100 host_playback=44100
+2026-10-28T19:23:11.283614-04:00 audio-dev usb16x16-dante-rate[1791326]: fb48267872b33a40: done
+2026-10-28T19:23:11.295390-04:00 audio-dev systemd[1]: Finished usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request).
+2026-10-28T19:24:37.282009-04:00 audio-dev usb16x16-dante[1791379]: USBRATE changed host_capture=48000 host_playback=48000 rate=44100 while open; handing the USB half back
+2026-10-28T19:24:37.302109-04:00 audio-dev usb16x16-dante[1791379]: USBCLOSE reason=-34 (Numerical result out of range)
+2026-10-28T19:24:38.304862-04:00 audio-dev usb16x16-dante[1791379]: USBRATE refused host_capture=48000 host_playback=48000 rate=44100; the USB half stays closed
+2026-10-28T19:24:38.305204-04:00 audio-dev usb16x16-dante[1791379]: USBRATE requested rate=48000 source=usb at=1793229878 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-28T19:24:38.306722-04:00 audio-dev systemd[1]: Starting usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request)...
+2026-10-28T19:24:38.468535-04:00 audio-dev systemd[1]: Stopping usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+2026-10-28T19:24:38.530161-04:00 audio-dev systemd[1]: Stopped usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-28T19:24:38.583011-04:00 audio-dev systemd[1]: Starting usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+2026-10-28T19:24:38.627328-04:00 audio-dev systemd[1]: Started usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-28T19:24:38.640954-04:00 audio-dev usb16x16-dante[1792155]: START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-13.58 seed_from_file=1
+2026-10-28T19:24:38.907068-04:00 audio-dev usb16x16-dante[1792155]: NETSTART capture=RUNNING playback=RUNNING
+2026-10-28T19:24:38.922902-04:00 audio-dev usb16x16-dante[1792155]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+2026-10-28T19:24:55.113616-04:00 audio-dev usb16x16-dante-rate[1792102]: 1ef0d486ce867b63: done
+2026-10-28T19:24:55.125218-04:00 audio-dev systemd[1]: Finished usb16x16-dante-rate.service - USB 16x16 Dante rate change: the arbiter (usb16x16-apply --rate-request).
+2026-10-28T19:26:36.082883-04:00 audio-dev systemd[1]: Stopping usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+2026-10-28T19:26:36.159086-04:00 audio-dev systemd[1]: Stopped usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-28T19:26:36.169881-04:00 audio-dev systemd[1]: Stopping usb-16x16.service - USB 16x16 UAC2 gadget...
+2026-10-28T19:26:36.184639-04:00 audio-dev systemd[1]: Stopped usb-16x16.service - USB 16x16 UAC2 gadget.
+2026-10-28T19:26:36.304971-04:00 audio-dev systemd[1]: Starting usb-16x16.service - USB 16x16 UAC2 gadget...
+2026-10-28T19:26:37.380728-04:00 audio-dev systemd[1]: Starting usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner)...
+2026-10-28T19:26:37.427120-04:00 audio-dev systemd[1]: Started usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-28T19:26:37.441073-04:00 audio-dev usb16x16-dante[1792877]: START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-13.58 seed_from_file=1
+2026-10-28T19:26:37.706116-04:00 audio-dev usb16x16-dante[1792877]: NETSTART capture=RUNNING playback=RUNNING
+2026-10-28T19:26:37.722080-04:00 audio-dev usb16x16-dante[1792877]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=unknown host_capture=0 host_playback=0
