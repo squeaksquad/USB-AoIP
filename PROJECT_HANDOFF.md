@@ -14261,3 +14261,20 @@ owner's prime together, so which of the two sets the figure is not settled. Oper
 silent client holding the device (a login item, say) makes every app open on the Mac read the
 same latency at no latency cost, the draw then happening only at the hold's own start (and at
 each owner start, the 2026-10-09 draw). Not installed; the operator decides.
+
+**MEASURED 2026-10-28 02:44-03:03 UTC: reading the gadget capture per packet does not remove the
+level drawn at each harness open; the draw is not the Pi's capture phase. Not adopted.**
+Candidate `rate6` (7142c69e): `rate5` with one change, `read_gadget` on `snd_pcm_avail` in place
+of `snd_pcm_avail_update` (`outputs/latency/rate6-avail-20261028/capture-avail.patch`; source
+reverted, nothing installed). Run in place of the service at 48 kHz, direct, the service's
+transport; 64 connected; noise probe clean. Eight harness opens, 400 loaded impulses each, each
+spread 0: `daw_timeline` 494 / 518 / 525 / 519 / 506 / 511 / 489 / 482, range 43 (control the same
+night, `rate5`, four opens: 481 to 518, 37). The change did what it was for: the prime blocks
+became packet-sized (48 or 54) and the Dante depth each prime found was 79 or 80 at every open
+(80 to 127 with `rate5`), so the Pi's pickup phase is now the same each time and the level still
+moves as much. With both of the owner's primes fixed to a packet, what is left is the Mac
+re-anchoring its input and output timelines when its IO starts, which only a client holding the
+device open avoided (the entry above); the Pi has nothing that sees it. Owner counters as in any
+session (`servo_rejected` 0, no holes, `rx_overflow` only at opens, about 36 per prime as with
+`rate5`). Restored 03:03: `usb16x16-dante` (2578c73d), start check ok, 64 / 64 subscribed.
+Evidence `outputs/latency/rate6-*`, owner log in `rate6-avail-20261028/`.

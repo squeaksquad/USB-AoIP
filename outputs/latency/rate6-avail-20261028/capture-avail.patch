@@ -1,0 +1,18 @@
+diff --git a/work/dante-mode/owner/main.cpp b/work/dante-mode/owner/main.cpp
+index 63a9ac7..0332378 100644
+--- a/work/dante-mode/owner/main.cpp
++++ b/work/dante-mode/owner/main.cpp
+@@ -1324,8 +1324,12 @@ void playback_fault(UsbHalf& usb, UsbHandles& handles, std::int64_t code, Teleme
+ 
+ // Gadget capture (packed 24-bit) into interleaved S32, newest frames last.
+ // Returns frames read, 0 for none, or a negative ALSA error.
++// snd_pcm_avail, not avail_update, for the reason service_rx gives: avail_update
++// only moves at a period, so every block was a whole 48 and the host's frames
++// waited up to a period for it, by a phase drawn at each stream start (the level
++// drawn at each harness open, 2026-10-28). snd_pcm_avail takes them per packet.
+ long read_gadget(UsbPcm& pcm, std::int32_t* destination) noexcept {
+-    snd_pcm_sframes_t available = snd_pcm_avail_update(pcm.handle);
++    snd_pcm_sframes_t available = snd_pcm_avail(pcm.handle);
+     if (available <= 0) return available == -EAGAIN ? 0 : static_cast<long>(available);
+     if (static_cast<std::size_t>(available) > kScratchFrames) {
+         // More than the scratch holds can only follow a long stall: keep the newest.
