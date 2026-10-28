@@ -14370,3 +14370,12 @@ install. Restored 11:37: `usb16x16-dante` (2578c73d), start check ok at 6016, at
 `SAMPLE_RATE "48000"`). Staged `service/install-owner-rate7.sh` (358f59f0) on the Pi: owner-only swap
 2578c73d -> 0facc5ad, keeps `.rate7-previous`, `rollback` back to 2578c73d. Evidence
 `outputs/latency/rate7-mac-*`, `rate7-48loaded-*`, owner logs in `rate7-mac-20261028/`.
+
+**INSTALLED 2026-10-28 11:41 UTC: owner `rate7` 0facc5ad by `service/install-owner-rate7.sh`
+(operator ran it).** Installed owner 0facc5ad, 2578c73d kept as
+`usb16x16-dante-owner.rate7-previous`; `usb16x16-dante`, Statime and `usb16x16-dante-rate.path`
+active; start check ok at 6018, restarts 0; at 48 (no `RATE=`, `SAMPLE_RATE "48000"`). Noise probe
+clean (no zero run of four or more); 400 loaded impulses 329 / `daw_timeline` 481, spread 0; no
+`USBRATE` line. Still owed for ACCEPTED: one Mac-only rate change against the installed service,
+reading the arbiter's `done` (and its move back to 48). `sudo ./install-owner-rate7.sh rollback`
+returns to 2578c73d.
