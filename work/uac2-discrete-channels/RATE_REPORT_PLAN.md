@@ -466,3 +466,32 @@ gadget unit builds a new function instance and would prove nothing), B5/B6
 (need the guard, applier 1.6.0, installed), B7 (the full battery).
 Next: `install-rate-report.sh` (modules and applier 1.6.0 together, each
 with its rollback), then B3, B5, B6 and B7 on the installed set.
+
+## Installer staged (2026-10-28)
+
+`install-rate-report.sh` (a4de9995), staged in
+`~/usb-16x16-work/gadget-ratereport/` with the applier copy `usb16x16-apply`
+(1.6.0, c3c14505) beside `build/rate-report/`. Not run.
+
+- `install`: pins the kernel, both candidates, the applier copy, the installed
+  label module (87989337) and applier 1.5.0 (4a4aef82), the stock
+  `u_audio.ko.xz`, both setup scripts and the loaded srcversions; refuses while
+  an AES67 candidate, `test-rate-report.sh`, or an apply or rate operation
+  (`usb16x16-apply.service`, `usb16x16-dante-rate.service`) is running. Keeps
+  `updates/usb-16x16/usb_f_uac2.ko.pre-rate-report` and
+  `/usr/local/bin/usb16x16-apply.pre-rate-report` (0644); stops the endpoint
+  and the gadget; `rmmod`; writes `updates/usb-16x16/u_audio.ko` and
+  `usb_f_uac2.ko` and the applier by temp-and-rename; `depmod`; `modprobe`;
+  requires the candidate srcversions, configured/high-speed in 20 s and, if
+  the endpoint was running, its start check `ok` for the new start within
+  150 s. Any failure puts all three back.
+- `rollback`: refuses unless both kept files verify and the installed module
+  and applier are one of the two known versions; removes the patched
+  `u_audio.ko`, restores the label module and applier 1.5.0, `depmod`,
+  reloads, requires the stock srcversions, healthy USB and the start check.
+- `status` (no root): hashes on disk, which pair is loaded, USB state, the two
+  controls, the endpoint.
+
+Install command (operator's sudo):
+`cd ~/usb-16x16-work/gadget-ratereport && sudo ./install-rate-report.sh install`.
+Then B3, B5, B6, B7 on the installed set.
