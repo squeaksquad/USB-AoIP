@@ -14379,3 +14379,34 @@ clean (no zero run of four or more); 400 loaded impulses 329 / `daw_timeline` 48
 `USBRATE` line. Still owed for ACCEPTED: one Mac-only rate change against the installed service,
 reading the arbiter's `done` (and its move back to 48). `sudo ./install-owner-rate7.sh rollback`
 returns to 2578c73d.
+
+**MEASURED 2026-10-28 11:48-11:52 UTC: on the installed service, a rate change made on the Mac alone
+moves the stack, and the arbiter does it. ACCEPTED: owner `rate7` 0facc5ad is the Dante point of
+record's owner (with the FOUND below).** The silent hold client streaming at 48, the Dante domain
+left at 48, nothing sent from the Dante side:
+- Mac to 44.1 at 11:48:27 (`setrate.swift`): 11:48:30 `USBRATE changed ... while open`, `USBCLOSE
+  reason=-34`; 11:48:31 `USBRATE refused`, `USBRATE requested rate=44100 source=usb` into
+  `/run/usb16x16-dante/rate-request`, the owner restarted `rate=44100` and the USB half opened with
+  `host_rate=match`; 11:48:48 the arbiter `3a7c8f6fe1f68e58: done` (owner.conf `RATE=44100`, Inferno
+  `SAMPLE_RATE "44100"`). The Ferrofish, still at 48, drew `sample rate mismatch` from Inferno while
+  the Pi sat at 44.1, as it should.
+- Mac back to 48 at 11:49:07: caught at :09 and requested at :10, but the arbiter refused at :11
+  (`d9c4b0eeff025b28: refused — the rate moved 48000 -> 44100 23 s ago`): its 30 s reversal guard
+  counts from its own `done`, not from the Mac's change, and the operator's move came 19 s after it.
+  Recovered with one Dante-side set (`set-rate-one.py 169.254.92.97 48000`) at 11:49:45: owner
+  `rate=48000`, USB `host_rate=match`, `006c40adcd86e00d: done` at 11:50:02.
+- After: owner.conf no `RATE=`, Inferno `SAMPLE_RATE "48000"`, the Mac's USB 16x16 at 48000, start
+  check ok at 6018, no mismatch after the 48 kHz start. Noise probe clean; 400 loaded impulses 353 /
+  `daw_timeline` 505, spread 0. Evidence `outputs/latency/rate7-arbiter-*` (journal extracts in
+  `rate7-arbiter-20261028/`).
+
+**FOUND 2026-10-28 11:49 UTC: a refused USB-side request is never retried, so a Mac that reverses
+within the arbiter's 30 s guard leaves the endpoint closed to USB.** The owner writes its request
+once per refusal and the arbiter refuses it; with the Mac at 48 and the stack at 44.1 nothing moves
+again until another request arrives (a Dante-side set, or another Mac change), and the USB half
+stays closed (silence on USB 16x16) meanwhile. Not new with rate7: the closed-half check of rate4 and
+rate5 has the same one-shot request; rate7 only makes the case reachable from the Mac alone.
+Candidate fixes, neither written: the owner rewrites its request while it is still refused (every
+few seconds, so the first one after the guard lapses is accepted), or the arbiter defers a
+reversal to the end of its guard instead of refusing it. Until then: after moving the Mac's rate,
+wait at least 30 s after the stack follows before moving it again.
