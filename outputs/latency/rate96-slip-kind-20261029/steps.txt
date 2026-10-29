@@ -10,3 +10,5 @@ inactive
 15:01:36 seq-catch.sh 4 (tmpfs ring of the Pulse -> Pi flows, stopped 2 s after the first SEQ back line)
 15:08:44 seq-catch.sh 4, catch2: trigger on dropped|repeated at point=back only, tcpdump at nice 19
 16:18:58 seq-catch.sh 4 both, catch3: both directions in the ring, tcpdump at nice 19
+16:36:15 bitexact 360 s after MH reboot + lighter preset -> outputs/latency/loop8-96mhpreset-bitexact-360s-32f-20261029T163615Z.json
+16:42:34 bitexact 360 s, second run on the lighter MH preset -> outputs/latency/loop8-96mhpreset2-bitexact-360s-32f-20261029T164234Z.json

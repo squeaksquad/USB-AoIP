@@ -1,0 +1,10 @@
+Dante interface en12 169.254.253.98 (4c:ea:41:63:33:8f)
+Clock master MHLink [49057]: 96k
+USB 16x16: 96k (offers 44.1k, 48k, 88.2k, 96k)
+Leader FF-PULSE-16-DX: word clock LOCKED (state 3, stratum 41)
+
+Device                IP               Rate    Port   Heartbeat
+Bryans-MBP-M2-Max     169.254.253.98   96k     38700  1.2s ago  (DVS)
+D2USB-6152f1          169.254.242.82   96k     8700   1.9s ago
+FF-PULSE-16-DX        169.254.248.189  96k     8700   1.1s ago
+USB-16x16-Inferno     169.254.92.97    96k     8700   1.1s ago

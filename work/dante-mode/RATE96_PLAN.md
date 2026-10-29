@@ -538,3 +538,25 @@ MADI, the Metric Halo strips).** Evidence `outputs/latency/rate96-slip-kind-2026
   strips at 96. One routing change splits them: the Pulse's MADI out 25-32 straight back to its MADI
   in 25-32 (no Metric Halo), the rest as now; if the slip goes, it is the Metric Halo (or its MADI
   port) at 96; if it stays, the Pulse.
+
+**MEASURED 2026-10-29 16:22-16:48 UTC: after the operator rebooted the Metric Halo and loaded a
+lighter monitor output (far from the unit's DSP limit at 96k), `bitexact --loop-channels 8` PASSES at
+96 kHz, twice.** Evidence `outputs/latency/rate96-slip-kind-20261029/` (`status-after-mh-reboot.txt`,
+`subscriptions-after-mh-reboot.json`, `owner-candidate-seq.log`).
+- After the reboot: every device at 96k, MHLink the clock master at 96k, the Pulse's word clock locked,
+  64 subscriptions as `subscriptions-before.json`; candidate rate8seq still running.
+- Noise probe at 32, first after the reboot: 6 zero runs >= 4 (four of 64 frames, one of 20, one of 8),
+  arriving in what Dante returned (owner `back_holes` 19 -> 23 at 16:33:35), no owner fault, re-prime
+  or resync (`loop8-96mhreboot-noise-ch2-32f-20261029T163315Z`). A second probe a minute later: 0
+  (`loop8-96mhreboot2-noise-*`). Read as the far loop settling after the reboot; not shown.
+- `bitexact --loop-channels 8`, 360 s, host gain unity: PASS (`loop8-96mhpreset-bitexact-360s-32f-
+  20261029T163615Z`) and PASS (`loop8-96mhpreset2-bitexact-360s-32f-20261029T164234Z`): 34.56 M
+  matches per channel each, no mismatch, no lost lock, longest zero run 1. The owner's sequence check
+  agrees (no SEQ line inside either run but the stream's stop); no owner fault, re-prime or resync.
+- Weight: without a capture, the five failing runs before (04:xx twice, 10:55, 14:29, 14:50) had 6
+  misplaced blocks, about 1.2 per 360 s; two clean runs by chance at that rate is about 9 %.
+- Two things changed at once, the reboot and the lighter preset (DSP load at 96k), and these runs do not
+  separate them. With the earlier finding (the Pi sends the sequence intact and the Pulse returns it
+  misplaced), the misplaced 16-frame block is most likely the Metric Halo's processing at 96k under a
+  heavy DSP load, or a state it was in before the reboot. To separate them: the heavier preset again
+  without a reboot (the slip should return if it is the load).
