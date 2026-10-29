@@ -43,6 +43,13 @@
 // wake before it, the CPU either side, and the thread's context switches and
 // page faults over the gap. It costs the loop two system calls a wake.
 //
+// With --event-trace (diagnostic, off by default) the telemetry thread prints
+// an EVENT line within 100 ms of any change to the counters that move frames
+// by a step (re-primes, primes, overflow and idle discards, resyncs, faults),
+// and a SERVO line once a second with both pitches and mean depths. Both carry
+// the wall clock (CLOCK_REALTIME) as well as t, to align them with what the
+// Mac's `bitexact` records. Nothing is added to the loop.
+//
 // Build on the Pi (the bridge core is the one source file DspStage lives in):
 //   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
@@ -147,6 +154,8 @@ struct Options {
     unsigned stall_ms{0};
     // Diagnostic: report every wake this many microseconds or more after the last. 0 is off.
     unsigned gap_trace_us{0};
+    // Diagnostic: EVENT and SERVO lines with the wall clock (telemetry thread only).
+    bool event_trace{false};
     // Experiment (2026-10-13): touch this many kilobytes of the loop thread's stack before it
     // turns real-time, so the loop never grows its stack (a page fault that can sleep). 0 is off.
     unsigned stack_prefault_kb{0};
@@ -165,7 +174,7 @@ struct Options {
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
-               "                     [--gap-trace MICROSECONDS] [--stack-prefault KILOBYTES]\n"
+               "                     [--gap-trace MICROSECONDS] [--event-trace] [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
                "  --rate      the sample rate of both halves and of the DSP preset (a Dante rate; default\n"
@@ -189,6 +198,7 @@ struct Options {
                "  --seconds   stop after this long; 0 runs until a signal\n"
                "  --stall-at, --stall-ms   test only: stall the loop once, MS long, SECONDS after it starts\n"
                "  --gap-trace   diagnostic: print a LOOPGAP line for every wake this late or later\n"
+               "  --event-trace diagnostic: an EVENT line at each step counter change, a SERVO line a second\n"
                "  --stack-prefault   experiment: touch this much of the loop's stack before it turns real-time\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
@@ -212,6 +222,7 @@ Options parse_options(int argc, char** argv) {
         if (a == "--no-usb") { o.no_usb = true; continue; }
         if (a == "--no-mlock") { o.mlock = false; continue; }
         if (a == "--no-rt") { o.realtime = false; continue; }
+        if (a == "--event-trace") { o.event_trace = true; continue; }
         if (a == "--help" || i + 1 >= argc) { usage(); }
         const char* v = argv[++i];
         if (a == "--pcm") o.pcm = v;
@@ -471,6 +482,21 @@ struct TelemetryContext {
     Telemetry* telemetry;
     unsigned log_every;
     bool no_usb;
+    bool event_trace;
+};
+
+double wall_seconds() noexcept {
+    timespec ts{};
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1e9;
+}
+
+// --event-trace: the counters that only move when frames are dropped, skipped or primed.
+struct StepCounters {
+    std::uint64_t values[11]{};
+    static constexpr const char* names[11] = {"tx_reprimes", "tx_links", "rx_primes", "rx_overflow", "rx_idle_discards",
+                                              "tx_resyncs", "tx_lost", "rx_resyncs", "rx_lost", "capture_faults",
+                                              "playback_faults"};
 };
 
 const char* tx_state_name(int state) noexcept {
@@ -494,6 +520,9 @@ void* telemetry_entry(void* argument) {
     int link_owner = -1;
     int link_tx = -1;
     int link_rx = -1;
+    StepCounters steps;
+    std::int64_t next_servo_line = started;
+    if (context.event_trace) std::printf("EVENTTRACE started wall=%.6f t=0\n", wall_seconds());
     while (!stop_requested.load(std::memory_order_relaxed)) {
         timespec nap{0, 100000000};
         nanosleep(&nap, nullptr);
@@ -519,6 +548,32 @@ void* telemetry_entry(void* argument) {
                         g.woke == 0 ? "grid" : g.woke == 1 ? "frames" : "timeout", g.other_us, g.stage_us[0],
                         g.stage_us[1], g.stage_us[2], g.stage_us[3], g.stage_us[4], g.cpu_before, g.cpu_after,
                         g.voluntary, g.involuntary, g.minor_faults, g.major_faults);
+            std::fflush(stdout);
+        }
+        if (context.event_trace) {
+            const std::uint64_t current[11] = {
+                t.tx_reprimes.load(std::memory_order_relaxed), t.tx_links.load(std::memory_order_relaxed),
+                t.rx_primes.load(std::memory_order_relaxed), t.rx_overflow.load(std::memory_order_relaxed),
+                t.rx_idle_discards.load(std::memory_order_relaxed), t.tx_resyncs.load(std::memory_order_relaxed),
+                t.tx_lost.load(std::memory_order_relaxed), t.rx_resyncs.load(std::memory_order_relaxed),
+                t.rx_lost.load(std::memory_order_relaxed), t.usb_capture_faults.load(std::memory_order_relaxed),
+                t.usb_playback_faults.load(std::memory_order_relaxed)};
+            for (int i = 0; i < 11; ++i) {
+                if (current[i] == steps.values[i]) continue;
+                std::printf("EVENT wall=%.6f t=%.3f %s=%" PRIu64 " (+%" PRIu64 ")\n", wall_seconds(), seconds,
+                            StepCounters::names[i], current[i], current[i] - steps.values[i]);
+                steps.values[i] = current[i];
+            }
+            if (now >= next_servo_line) {
+                next_servo_line += 1000000000LL;
+                std::printf("SERVO wall=%.6f t=%.3f pitch_c=%d pitch_p=%d tx_mean=%.3f rx_mean=%.3f tx_i=%.3f rx_i=%.3f\n",
+                            wall_seconds(), seconds, t.wanted_capture_pitch.load(std::memory_order_relaxed),
+                            t.wanted_playback_pitch.load(std::memory_order_relaxed),
+                            static_cast<double>(t.tx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
+                            static_cast<double>(t.rx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
+                            static_cast<double>(t.tx_integral_milli.load(std::memory_order_relaxed)) / 1000.0,
+                            static_cast<double>(t.rx_integral_milli.load(std::memory_order_relaxed)) / 1000.0);
+            }
             std::fflush(stdout);
         }
         if (const std::uint64_t errors = t.net_errors.load(std::memory_order_relaxed); errors != reported_errors) {
@@ -1877,7 +1932,7 @@ int main(int argc, char** argv) {
     usb.tx_servo.restart(options.seed_ppm);
     usb.rx_servo.restart(-options.seed_ppm);
     if (dsp.enabled()) usb.dsp = &dsp;
-    TelemetryContext telemetry_context{&telemetry, options.log_every, options.no_usb};
+    TelemetryContext telemetry_context{&telemetry, options.log_every, options.no_usb, options.event_trace};
     StewardContext steward_context{&options, &telemetry, &handles};
     const pthread_t telemetry_thread = start_thread(telemetry_entry, &telemetry_context, "telemetry");
     pthread_t steward_thread{};
