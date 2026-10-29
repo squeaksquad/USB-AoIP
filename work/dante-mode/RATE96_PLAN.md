@@ -619,3 +619,35 @@ three moments; not located.** `loop8-96dsphour2-soak-3600s-32f-20261029T220456Z`
   channel (`diag/dante-pcap-zeros.py`); the SEQ trigger cannot be used with a preset running.
 - DSP cost this hour: `dsp_us_mean` 150, `dsp_us_max` over 300 in 11 of 362 windows, worst 384; none
   over the operator's 45 % (450 µs).
+
+**DEFERRED 2026-10-29 (operator): back to 48 for now; the 96 kHz loaded-hour holes are to be caught
+later.** The plan for that session:
+1. Domain to 96 as before (two syncs), reboot the Metric Halo after the move (the operating note above),
+   candidate a15a9d84 with `--dsp-preset dsp-loaded@96000.dsp`, noise probe.
+2. Trigger without SEQ: the harness's own event capture sees the holes only after the run, so the
+   trigger is on the wire. A watcher on the Pi reads the Pulse -> Pi flows live (or the owner gains a
+   per-channel `back` zero-run line: runs of 16+ frames on fewer than 16 channels, which `back_holes`
+   does not count) and stops a `/dev/shm` tcpdump ring (nice 19, Pulse -> Pi only, as catch2) 2 s after.
+   The owner line is the cheaper and surer trigger; it is a candidate build, never installed.
+3. Read the ring with `diag/dante-pcap-zeros.py` per channel: zeros already in the Pulse's packets put
+   the holes in the far loop (Pulse, MADI, Metric Halo); clean packets put them in Inferno receive or
+   the owner.
+4. Mind the capture's own cost: catch2/catch3 caused owner playback faults about every 32.7 s; keep the
+   ring Pulse -> Pi only and at nice 19, and count faults against the captured moments.
+5. Also look at the one ch4 run `soak_reference.py` called off by 1 code (dsphour2, input frame
+   118909759).
+
+**DONE 2026-10-29 23:14-23:22 UTC: back to 48 on the service.** Candidate stopped (its log kept on the Pi
+as `~/usb-16x16-work/dante-owner-dsphour96-20261029T210003Z.log`). `dante-sync sync --rate 48000
+--source usb16x16 --exclude USB-16x16-Inferno` (MHLink, the Pulse with word clock locked, the MBP and
+D2USB, each verified), then `dante-sync sync --rate 48000 --exclude USB-16x16-Inferno` (USB 16x16 96k
+-> 48k by CoreAudio). `systemctl start usb16x16-dante`: START rate=48000 with the installed transport
+figures, NETSTART, `USBOPEN host_rate=match`; start check `state=ok rate=6020 restarts=0`. 64
+subscriptions, all 64 as `subscriptions-before.json` (`subscriptions-back48.json`).
+- Noise probe at 32: no zero run of 4+ (`back48-noise-ch2-32f-*`).
+- 100 impulses at 32: 391 / `daw_timeline` 543 (11.312 ms), spread 0
+  (`back48-roundtrip-32f-20261029T232005Z`). FOUND: above every 48 kHz reference so far (329-379 across
+  days; 353 / 505 after the 44.1 day). Not located: the level is drawn at each owner start (RESULTS.md,
+  "The level is a draw at each owner start"), and the Metric Halo was rebooted at 96 and moved to 48
+  since the last reference, so the far loop's own delay may have changed too. A service restart and a
+  second 100 would tell the draw from a lasting change.
