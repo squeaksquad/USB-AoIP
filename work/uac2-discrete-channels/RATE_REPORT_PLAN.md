@@ -523,3 +523,35 @@ B5, Mac idle at 48, Dante-side set to 44.1 (`set-rate-one.py 169.254.92.97
 Still owed: B3/B6 (a cable pull; two loggers ran 4 and 20 minutes without one),
 B7 (four loaded 800-impulse runs, the ten-minute soak, bitexact, one loaded run
 at 44.1, labels). Rollback: `sudo ./install-rate-report.sh rollback`.
+
+## B3 and B7 on the installed set (2026-10-29 00:29-01:08 UTC)
+
+**B3: the Pi never sees an unplug.** Two cable reseats by the operator
+(00:29:51 and 00:32:18 UTC, `dwc2 ... new device is high-speed` in the kernel
+log). A 0.5 s logger across the second (`b3-controls.txt`, 1,764 reads
+00:30:40-00:45:39) read `configured` and 48000/48000 throughout: the gadget's
+dwc2 (peripheral mode, the Pi on PoE) has no VBUS sense, so a pulled cable
+is not a disconnect; only the replug's bus reset is seen. That reset runs
+`afunc_disable` (and the forget), and the Mac sends its rate again within
+milliseconds of enumerating, too fast for the logger: **the forget is not
+observed**. A kprobe on `u_audio_forget_srate` (operator's sudo) would show it.
+Consequence: while the cable is out the controls keep the Mac's last rate
+(the stock module does too if the Mac was streaming when pulled). Under the
+operator's rule this blocks nothing: a Dante-side set is taken regardless,
+and the guard refuses the Mac's old rate until the owner joins the Mac. The
+endpoint rode through both reseats (no USBCLOSE, no faults, no restart).
+
+**B7 (`b7.log`).** Four loaded 800-impulse runs at 32, clean on the Pi (no
+xrun, lag or error lines): 329 (two levels, 323 x389) / `daw_timeline` 481,
+372 / 524, 359 / 511, 335 / 487. Run 2 is 7 samples above the
+point of record's 330-365 (480-515); the level is drawn per USB open and the
+patch does not touch the data path.
+Soak 1 (00:47:29): FAIL on a Mac-side skipped IO cycle (discontinuities 1/1,
+a 36-sample run on all 16 channels together): rerun by the rule.
+Soak 2 (00:57:57): **FAIL, a 32-sample zero run on 12 of 16 channels (not 2,
+4, 8, 12), no Mac discontinuity**, no xrun, lag or error lines; the owner's
+cumulative counters did not move during it (`out_holes` 2/36, `back_holes`
+3/36, `playback_faults` 1, `tx_lost` 22 all from before 00:57). Unexplained;
+32 frames is one Mac IO buffer. Not ACCEPTED: owed a clean soak (with an eth0
+capture of the Dante flows if it repeats, `diag/dante-pcap-zeros.py`),
+bitexact (monitors muted), one loaded run at 44.1, and the labels.
