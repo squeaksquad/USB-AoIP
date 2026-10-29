@@ -555,3 +555,30 @@ cumulative counters did not move during it (`out_holes` 2/36, `back_holes`
 32 frames is one Mac IO buffer. Not ACCEPTED: owed a clean soak (with an eth0
 capture of the Dante flows if it repeats, `diag/dante-pcap-zeros.py`),
 bitexact (monitors muted), one loaded run at 44.1, and the labels.
+
+## Soak 3 under an eth0 capture (2026-10-29 01:44-01:57 UTC)
+
+Operator's sudo (`sudo -v`, then `sudo -n tcpdump` from the session); the
+capture of every Dante flow to and from 169.254.248.189 (the Pulse's Dante
+card) was streamed over wlan0 to the Mac (`soak.pcap`, 4.1 GB, 9,119,149
+packets, 0 dropped by the kernel; gitignored, kept on the Mac). Read per
+channel by `channel-zeros.py` (new, beside it: `dante-pcap-zeros.py` looks for
+runs of zero bytes, so it misses a hole that leaves neighbouring channels of a
+packet alive); `channel-zeros.txt.gz` is its output.
+
+Soak 3: FAIL, longest zero run 96 on all 16 channels, no Mac discontinuity, no
+xrun lines; the owner's `back_holes` (all 16 zero, 8+ frames, in what Dante
+returns) went 6 -> 7,741 during it (it did not move in soak 2).
+
+| On the wire | Events | Shape | Says |
+|---|---|---|---|
+| Pi receives | 15,599 from the first second | 32 or 64 samples; 16 channels, or 12, 8, 4 | the far side: none of it in what the Pi sends. A 12-channel run of 32 is soak 2's hole. |
+| Pi sends | 7,099 from about t+240 s, densest 330-540 s | 4 samples, always all 16 channels | the Pi's transmit side (Mac -> USB -> owner -> Inferno); below the owner's 8-frame hole floor |
+
+The received zeros are the return loop (Pulse -> MADI -> Metric Halo -> MADI
+-> Pulse) delivering silence; the operator restarted the Ferrofish for an
+unrelated issue at 01:58 (Inferno: flow timeouts, then resumed), and a noise
+probe at 32 after it is clean (`ratereport-afterff-noise-ch2-32f-20261029T020758Z`).
+The 4-sample send-side runs are open: they start minutes into the soak and
+may be the capture's own load (tcpdump plus 4.8 MB/s over ssh on the Pi).
+Soak 4 without the capture follows.
