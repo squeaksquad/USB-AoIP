@@ -469,6 +469,16 @@ before it (the Pulse, the MADI loop through the Metric Halo).** Evidence
   moment of a SEQ line. With the SEQ line as the trigger, a tmpfs ring of only the Pulse -> Pi
   flows can run until an event and be cut 2 s after it, rather than catching one by chance.
 
+**CORRECTION (added 16:35 UTC the same day): "catch2 ... no owner fault in three runs" below is wrong.**
+The owner's EVENT lines (`owner-candidate-seq.log`) show 10 USB playback faults in catch2's second
+run, 15:15:23 to 15:20:53, about 32.7 s apart (15:15:23.99, 15:15:56.71, 15:16:29.53, 15:17:02.25, ...),
+with re-primes and transmit resyncs at most of them; the Mac saw each as an `other` burst or a
+`repeated 960`. Runs 1 and 3 had none near the caught block (the nearest fault is 15:20:53, the block
+is at 15:23:38). Faults came only while a capture ran: none in the 14:29 or 14:50 runs, nor in catch2's
+first run. So nice 19 did not stop the capture's harm; the steady 32.7 s period, the same at 5 and at
+10 MB/s, points at the capture's tmpfs writes (memory pressure, as the compaction stalls of
+2026-10-13), not tcpdump's CPU. Not shown. The block and the wire reading below are unaffected.
+
 **MEASURED 2026-10-29 15:01-15:24 UTC: the misplaced block is already in the Pulse's packets on the
 wire. Inferno's receive is cleared with the owner; left are what the Pi sends (Inferno's transmit)
 and the far loop (the Pulse, MADI, the Metric Halo strips).** Evidence
@@ -495,6 +505,14 @@ the pcaps are gitignored).
   a ring of about 30 s). If what the Pi sends is clean at the matching moment, the shift is made in the
   far loop; MADI and the Metric Halo can then be split by routing the Pulse's MADI out straight back to
   its MADI in, without the strips.
+
+**CORRECTION (added 16:35 UTC the same day): two statements below are wrong.** "no owner fault": the
+owner had USB playback faults at 16:19:52, 16:20:58 and 16:21:30 (re-primes and transmit resyncs at
+the first two), the capture's load as in catch2's correction. And the outgoing flows' 16-channel
+break at 16:20:58.1 (sample 31 on all four flows) is the fault at 16:20:58.16 (`tx_resyncs` +2), not
+the stream's start. Neither is within 13 s of the caught block (16:21:11.49), and the outgoing flows
+are unbroken from 16:21:08.66 to 16:21:13.07, so the finding stands. The same `bitexact` run also had
+a second misplaced block at 16:22:15, after the ring had stopped.
 
 **MEASURED 2026-10-29 16:19-16:21 UTC: what the Pi sends is clean at the moment the Pulse returns the
 block misplaced. The whole Pi side is cleared; the 96 kHz slip is made in the far loop (the Pulse,
