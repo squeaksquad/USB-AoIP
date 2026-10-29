@@ -166,6 +166,42 @@ class EvidenceTests(unittest.TestCase):
         for name, rep in cases.items():
             self.assertEqual(check(rep)['status'], 'inconclusive', name)
 
+    def test_a_narrower_loop_judges_only_its_channels(self):
+        # 2026-10-29: 8 channels looped at 96 kHz. Channels 9-16 return silence: the
+        # harness opens one capped event on each, and their statistics read silent.
+        runs = {3: RUNS[3]}
+        events = [event(3, 200000, 5, runs), event(3, 300000, 9, runs)]
+        for e in events:
+            for frame in e['frames']:
+                frame['sampleBits'][8:] = [0] * 8
+        silent = []
+        for c in range(8, 16):
+            frames = [capture_frame(96000 - 16 + i, [0] * 16) for i in range(96)]
+            silent.append({'channel': c + 1, 'startInputFrame': 96000, 'zeroFrames': TOTAL - 96000,
+                           'termination': 'captureEnd', 'windowComplete': False, 'windowCapacityReached': True,
+                           'frames': frames})
+        rep = report(events)
+        rep['eventCapture']['events'] = events + silent
+        rep['eventCapture']['triggeredEvents'] = len(events) + len(silent)
+        for c in range(8, 16):
+            rep['channels'][c].update(peak=0.0, longestZeroRun=TOTAL - 96000)
+        self.assertEqual(check(rep, runs)['status'], 'inconclusive')
+        looped = sr.validate_evidence(rep, loop=8)
+        self.assertEqual([e['channel'] for e in looped], [4, 4])
+        result = sr.check_windows(rep, looped, FakeReference(runs), GAIN, loop=8)
+        self.assertEqual(result['status'], 'matched-events', result.get('reason'))
+        # A hole on a looped channel is still a hole.
+        hole = event(5, 220000, 5, {5: [(220000 - LAG, 5)]})
+        for frame in hole['frames']:
+            frame['sampleBits'][8:] = [0] * 8
+        rep['eventCapture']['events'].append(hole)
+        rep['eventCapture']['triggeredEvents'] += 1
+        rep['channels'][5]['longestZeroRun'] = 5
+        looped = sr.validate_evidence(rep, loop=8)
+        self.assertEqual(sr.check_windows(rep, looped, FakeReference(runs), GAIN, loop=8)['status'], 'mismatch')
+        with self.assertRaises(sr.EvidenceError):
+            sr.validate_evidence(rep, loop=0)
+
     def test_search_is_bounded(self):
         late = event(3, 200000, 5, {3: [(200000 - 20000, 5)]}, lag=20000)   # further back than the search allows
         self.assertEqual(check(report([late]), {3: [(200000 - 20000, 5)]})['status'], 'mismatch')

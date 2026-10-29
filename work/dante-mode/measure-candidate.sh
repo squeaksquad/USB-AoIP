@@ -27,8 +27,8 @@
 # USB16X16_LOOP_CHANNELS=N (soak): only channels 1..N are looped back, so only they
 #                                  are judged; all 16 are still loaded. For a loop
 #                                  narrower than the device (2026-10-29: 8 channels at
-#                                  96 kHz, where MADI halves). Default 16. A preset's
-#                                  zero-run check (soak_reference.py) needs all 16.
+#                                  96 kHz, where MADI halves). Default 16. Passed
+#                                  to a preset's zero-run check (soak_reference.py).
 # Close RTL Utility first: the harness and RTL never share the device.
 set -uo pipefail
 
@@ -170,10 +170,7 @@ if zero_runs:
 print("soak: PASS")
 PYEOF
     verdict=$?
-    if (( verdict == 3 )) && (( ${USB16X16_LOOP_CHANNELS:-16} < 16 )); then
-      print -r -- "soak: FAIL the zero runs above; a preset's zero runs cannot be checked on a loop narrower than 16 channels"
-      measure_exit=7
-    elif (( verdict == 3 )); then
+    if (( verdict == 3 )); then
       # Which preset the endpoint ran, from its own log; the artifact is fetched now that the audio has closed.
       preset=$(pi 'f=$(ls -t /dev/shm/dante-alsaloop-*.log /dev/shm/dante-owner-*.log 2>/dev/null | head -1)
 [ "$(systemctl is-active usb16x16-dante 2>/dev/null)" = active ] && f=/dev/shm/dante-service-journal.txt
@@ -195,7 +192,8 @@ grep -m1 "^DSP loaded file=" "$f" 2>/dev/null | cut -d" " -f3 | cut -d= -f2-')
           print -r -- "host gain not given: set USB16X16_HOST_GAIN to a hostgain or bitexact report at this rate, from a direct run"
         fi
         /usr/bin/python3 "$script_dir/soak_reference.py" "$result_path" "$api_dir/preset.dsp" \
-          --host-gain "$api_dir/host-gain.json" --output "$api_dir/reference"
+          --host-gain "$api_dir/host-gain.json" --output "$api_dir/reference" \
+          --loop-channels "${USB16X16_LOOP_CHANNELS:-16}"
         case $? in
           0) print -r -- "soak: PASS, every zero run is the preset's own (reference in ${api_dir:t}/reference)" ;;
           1) print -r -- "soak: FAIL, a zero run the preset does not produce"; measure_exit=7 ;;

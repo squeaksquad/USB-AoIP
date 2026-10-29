@@ -110,8 +110,11 @@ def report_rate(report):
     return int(rate)
 
 
-def validate_evidence(report):
-    """The capture is whole and its event records are self-consistent. Returns the events."""
+def validate_evidence(report, loop=16):
+    """The capture is whole and its event records are self-consistent. Returns the events.
+    Only channels 1..loop are looped back (2026-10-29: 8 at 96 kHz, where MADI halves):
+    the rest return silence, so their events and statistics are not evidence and are left out."""
+    require(integer(loop, 1, 16), 'unsupported loop width')
     require(report.get('kind') == 'continuous-activity-not-latency', 'unsupported stimulus report')
     require(report['amplitude'] == 0.1 and report['warmupSeconds'] == 2, 'unsupported amplitude/warmup')
     require(integer(report['seconds'], 5, POLICY['maximumSeconds']), 'unsupported duration')
@@ -138,10 +141,14 @@ def validate_evidence(report):
     origin = None
     identities = set()
     seen = {}
+    looped = []
     for event in events:
         c, start, run = event['channel'], event['startInputFrame'], event['zeroFrames']
-        require(integer(c, 1, 16) and integer(start, warmup, total - 1) and integer(run, 4, 64),
-                'invalid event coordinates')
+        require(integer(c, 1, 16), 'invalid event coordinates')
+        if c > loop:
+            continue
+        looped.append(event)
+        require(integer(start, warmup, total - 1) and integer(run, 4, 64), 'invalid event coordinates')
         require((c, start) not in identities, 'duplicate event')
         identities.add((c, start))
         require(event['windowComplete'] is True and event['windowCapacityReached'] is False and
@@ -172,13 +179,13 @@ def validate_evidence(report):
                 'zero-run metadata contradicts sample bits')
         longest[c - 1] = max(longest[c - 1], run)
     require(len(report['channels']) == 16, 'missing aggregate channels')
-    for c, stats in enumerate(report['channels']):
+    for c, stats in enumerate(report['channels'][:loop]):
         require(stats['samples'] == total - warmup and stats['nonFinite'] == stats['fullScaleSamples'] == 0,
                 f'channel {c + 1}: short, non-finite or full-scale')
         require(math.isfinite(stats['peak']) and 1e-8 <= stats['peak'] < 1, f'channel {c + 1}: silent or invalid')
         if longest[c] or stats['longestZeroRun'] >= 4:
             require(stats['longestZeroRun'] == longest[c], f'channel {c + 1}: its longest zero run has no event record')
-    return events
+    return looped
 
 
 def search_bounds(event, total):
@@ -221,7 +228,7 @@ class Reference:
         raise EvidenceError('reference does not cover requested source frame')
 
 
-def check_windows(report, events, reference, input_gain):
+def check_windows(report, events, reference, input_gain, loop=16):
     """Every event against the reference. Returns the result; raises nothing."""
     result = {'policy': POLICY, 'status': 'inconclusive', 'wholeRunValidated': False,
               'coveredInputFrames': 0, 'events': []}
@@ -235,7 +242,7 @@ def check_windows(report, events, reference, input_gain):
         for event in events:
             values = [decode(f) for f in event['frames']]
             channel, run = event['channel'] - 1, event['zeroFrames']
-            anchors = [c for c in range(16) if c != channel and
+            anchors = [c for c in range(loop) if c != channel and
                        max(v[c] for v in values[:16]) - min(v[c] for v in values[:16]) >= POLICY['minimumAnchorRangeLSB']]
             require(anchors, 'no other channel carries enough signal to align on')
             anchor = anchors[0]   # fixed channel order, chosen without looking at the reference
@@ -255,7 +262,7 @@ def check_windows(report, events, reference, input_gain):
             worst = 0.0
             for i, row in enumerate(values):
                 expected = reference.row(first + i)
-                error = max(abs(row[c] - expected[c] * input_gain) for c in range(16))
+                error = max(abs(row[c] - expected[c] * input_gain) for c in range(loop))
                 worst = max(worst, error)
                 if error > limit:
                     raise SignalMismatch(f'unexplained sample at input frame {event["frames"][i]["inputFrame"]} '
@@ -296,22 +303,23 @@ def export_reference(artifact, spans, work, rate, output_gain):
     return done.stdout, provenance
 
 
-def analyze(report_path, artifact, work, gain_path):
+def analyze(report_path, artifact, work, gain_path, loop=16):
     result = {'policy': POLICY, 'status': 'inconclusive', 'wholeRunValidated': False}
     try:
         report = json.loads(Path(report_path).read_text())
-        events = validate_evidence(report)
+        events = validate_evidence(report, loop)
         output_gain, input_gain = host_gain(gain_path, report_rate(report))
         result['evidenceComplete'] = True
         if events:
             spans = reference_ranges(events, report['outputFrames'])
             data, provenance = export_reference(artifact, spans, work, report_rate(report), output_gain)
-            result = check_windows(report, events, Reference(spans, data), input_gain)
+            result = check_windows(report, events, Reference(spans, data), input_gain, loop)
             result.update(evidenceComplete=True, provenance=provenance, ranges=spans)
         else:
-            result = check_windows(report, events, None, input_gain)
+            result = check_windows(report, events, None, input_gain, loop)
             result['evidenceComplete'] = True
-        result.update(hostGain={'output': output_gain, 'input': input_gain}, hostGainSHA256=sha(gain_path))
+        result.update(hostGain={'output': output_gain, 'input': input_gain}, hostGainSHA256=sha(gain_path),
+                      loopChannels=loop)
         result.update(reportSHA256=sha(report_path), checkerSHA256=sha(__file__), artifact=str(artifact),
                       seconds=report['seconds'],
                       longestZeroRuns=[c['longestZeroRun'] for c in report['channels']])
@@ -330,9 +338,11 @@ def main(argv=None):
     parser.add_argument('--host-gain', type=Path, required=True,
                         help="the harness's hostgain (or bitexact) report, measured at the capture's rate")
     parser.add_argument('--output', type=Path, help='write result.json here (the directory is created)')
+    parser.add_argument('--loop-channels', type=int, default=16,
+                        help='only channels 1..N are looped back and judged (default 16)')
     args = parser.parse_args(argv)
     with tempfile.TemporaryDirectory() as scratch:
-        result = analyze(args.report, args.artifact, Path(scratch), args.host_gain)
+        result = analyze(args.report, args.artifact, Path(scratch), args.host_gain, args.loop_channels)
     if args.output:
         args.output.mkdir(parents=True, exist_ok=True)
         (args.output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
