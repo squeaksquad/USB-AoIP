@@ -582,3 +582,16 @@ probe at 32 after it is clean (`ratereport-afterff-noise-ch2-32f-20261029T020758
 The 4-sample send-side runs are open: they start minutes into the soak and
 may be the capture's own load (tcpdump plus 4.8 MB/s over ssh on the Pi).
 Soak 4 without the capture follows.
+
+## Soak 4 stopped; the battery for this kind of change (2026-10-29 02:13 UTC)
+
+Soak 4 (no capture, started 02:08) stopped by the operator's call at 02:13,
+just after its readiness probes, so it gives no result. The operator ruled
+that a change which leaves the audio path unchanged, as this one does, does
+not need the full battery; `CLAUDE.md`'s working rules now say so: its own
+behavioural checks, a noise probe at 32 and one two-minute sixteen-channel
+soak, and any failure located before it is blamed on the change.
+For this patch: behaviour B1, B2, B4, B5 passed; B3 (the forget) is
+unobservable on this hardware (no VBUS sense); noise probes at 32 clean,
+the latest after the Ferrofish restart (02:07:58). Owed under the new rule:
+the two-minute soak.
