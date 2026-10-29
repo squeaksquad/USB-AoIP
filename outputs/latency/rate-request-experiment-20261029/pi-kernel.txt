@@ -1,0 +1,21 @@
+2026-10-28T22:23:27,719525-04:00 dwc2 1000480000.usb: bound driver configfs-gadget.studio_audio
+2026-10-28T22:23:27,966039-04:00 dwc2 1000480000.usb: new device is high-speed
+2026-10-28T22:23:27,996891-04:00 dwc2 1000480000.usb: new address 6
+2026-10-28T22:23:28,024046-04:00 configfs-gadget.studio_audio gadget.0: rate request: host GET_CUR clock 7: 48000
+2026-10-28T22:23:28,031435-04:00 configfs-gadget.studio_audio gadget.0: rate request: host SET_CUR clock 7: 48000
+2026-10-28T22:23:28,031560-04:00 configfs-gadget.studio_audio gadget.0: rate request: host GET_CUR clock 7: 48000
+2026-10-28T22:23:39,631247-04:00 configfs-gadget.studio_audio gadget.0: rate request: device rate 44100, clock 7 SAM_FREQ interrupt queued: 0
+2026-10-28T22:23:39,632231-04:00 configfs-gadget.studio_audio gadget.0: rate request: interrupt wIndex 0x0700 wValue 0x0100 done: status 0 actual 6
+2026-10-28T22:23:39,637612-04:00 configfs-gadget.studio_audio gadget.0: rate request: host GET_CUR clock 7: 44100
+2026-10-28T22:24:00,060024-04:00 configfs-gadget.studio_audio gadget.0: rate request: device rate 48000, clock 7 SAM_FREQ interrupt queued: 0
+2026-10-28T22:24:00,060821-04:00 configfs-gadget.studio_audio gadget.0: rate request: interrupt wIndex 0x0700 wValue 0x0100 done: status 0 actual 6
+2026-10-28T22:24:00,061281-04:00 configfs-gadget.studio_audio gadget.0: rate request: host GET_CUR clock 7: 48000
+2026-10-28T22:24:25,583231-04:00 configfs-gadget.studio_audio gadget.0: rate request: device rate 44100, clock 7 SAM_FREQ interrupt queued: 0
+2026-10-28T22:24:25,583564-04:00 configfs-gadget.studio_audio gadget.0: rate request: interrupt wIndex 0x0700 wValue 0x0100 done: status 0 actual 6
+2026-10-28T22:24:25,583962-04:00 configfs-gadget.studio_audio gadget.0: rate request: host GET_CUR clock 7: 44100
+2026-10-28T22:24:46,019467-04:00 configfs-gadget.studio_audio gadget.0: rate request: device rate 48000, clock 7 SAM_FREQ interrupt queued: 0
+2026-10-28T22:24:46,020155-04:00 configfs-gadget.studio_audio gadget.0: rate request: interrupt wIndex 0x0700 wValue 0x0100 done: status 0 actual 6
+2026-10-28T22:24:46,020601-04:00 configfs-gadget.studio_audio gadget.0: rate request: host GET_CUR clock 7: 48000
+2026-10-28T22:25:10,039356-04:00 dwc2 1000480000.usb: bound driver configfs-gadget.studio_audio
+2026-10-28T22:25:10,416123-04:00 dwc2 1000480000.usb: new device is high-speed
+2026-10-28T22:25:10,447972-04:00 dwc2 1000480000.usb: new address 6

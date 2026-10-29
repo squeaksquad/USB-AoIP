@@ -605,3 +605,147 @@ Two-minute soak PASS (`ratereport-soak120-soak-120s-32f-20261029T021348Z`, 02:13
 point of record; the handoff tail has the entry. Open: the 4-sample all-channel
 runs seen in what the Pi sent under the capture; the Mac-follow experiment
 (the clock interrupt) is the next step for "the Mac should follow Dante".
+
+## Mac-follow experiment (plan, 2026-10-29)
+
+Question: after a Dante-side rate change, can the gadget make macOS change the
+`USB 16x16`'s nominal rate by itself, the way an interface following external
+clock does? Answer 1 above ("if Dante changes, the Mac side should change").
+Nothing here is installed; the experiment runs only inside a bounded test.
+
+**What the source says (read 2026-10-29 on the Pi, the rate-report sources in
+`~/usb-16x16-work/gadget-ratereport/build/rate-report/`).**
+
+- The interrupt endpoint exists only when a feature unit does
+  (`FUOUT_EN || FUIN_EN` in `afunc_bind`); the gadget has mute and volume on
+  both directions (configfs `*_mute_present` / `*_volume_present` = 1), so it
+  has one (`hs_ep_int_desc`, bInterval 4, 6-byte packets) and `agdev->notify =
+  afunc_notify`. The composite layer's SET_CONFIGURATION calls `afunc_set_alt`
+  on the AC interface, which enables the endpoint.
+- `afunc_notify(agdev, unit_id, cs)` queues one UAC2 interrupt data message:
+  `bInfo` 0 (class, interface), `bAttribute` CUR, `wValue` = CS << 8, `wIndex`
+  = entity << 8 | AC interface. At most `UAC2_DEF_INT_REQ_NUM` are in flight;
+  more are dropped silently. Today only the mute and volume `put`s call it.
+- With the shared clock there is one Clock Source (`in_clk_src_desc`,
+  `bmControls` = SAM_FREQ read/write, type internal fixed). `in_rq_cur`
+  answers GET_CUR SAM_FREQ from `u_audio_get_playback_srate`, i.e. `p_prm.srate`,
+  and CLOCK_VALID with 1.
+- `srate` is read live by the stream code (the playback packet size and the
+  capture feedback in the iso completions), not only at stream start. So
+  moving it while the Mac streams changes the data rate at once, as a device
+  whose clock moved would.
+
+**The patch** (`uac2-rate-request-experiment-6.18.34.patch`, on top of the
+three committed ones; f_uac2.c, u_audio.c, u_audio.h):
+
+- `struct uac_params` gains `clk_id`, filled by `f_uac2` with the shared
+  clock's ID (the way it fills `p_fu.id` / `c_fu.id`). `u_audio` adds the
+  control only when `clk_id` and `notify` are set, so UAC1 is unaffected.
+- A writable control `Device Rate Request` (iface PCM, reads the last value
+  written, 0 before). Writing a listed rate sets `srate` in both directions
+  (`srate_set` untouched; the Rate controls' ALSA event fires if what they
+  report changed) and calls `notify(clk_id, UAC2_CS_CONTROL_SAM_FREQ)`.
+  Writing the same rate again resends the interrupt. An unlisted rate is
+  refused with `-EINVAL`.
+- Experiment-only `dev_info` lines, all starting `rate request:` : the write
+  and the queue result; each interrupt's completion (`status 0` means the Mac
+  read it); the host's GET_CUR on the clock (rate-limited) and its SET_CUR.
+  These are what the experiment reads on the Pi side.
+- The struct change moves the modversions CRCs of `u_audio`'s exports, so the
+  pair loads only together, which is how the bounded test loads it.
+
+**Build** (`build-rate-request.sh`, as `bdimaio`, in
+`~/usb-16x16-work/gadget-raterequest/`): the control build of the three
+committed patches reproduces the installed rate-report pair byte for byte
+(b2f5c6cd / fa8bed12); the candidate is `u_audio.ko` **0e724e75**bb96b0ba0afdb48f14ad0f51b1ba7e14a0a5df63c2095cb1a105e22b
+(srcversion D4EA8C97F9638D0B57D14D6) and `usb_f_uac2.ko`
+**dd00bcc9**bdd846fb03905393ed220fdea38a0fbe52dc653d4ada78f6de093528 (srcversion
+F689FE37BB73173DC75F691), vermagic 6.18.34+rpt-rpi-2712, no warnings.
+
+**Bounded test** (`test-rate-request.sh build/rate-request 600`, operator's
+sudo): the `test-rate-report.sh` pattern against the installed rate-report
+pair (pins both candidates, both installed modules, both setup scripts, the
+loaded srcversions); `usb16x16-dante` stays stopped for the whole window so the
+owner and arbiter cannot react to the controls; restore by `rmmod` +
+`modprobe` and the endpoint started again. Mac side,
+`outputs/latency/rate-request-experiment-20261029/run.sh` (setrate and hold
+compiled from the 2026-10-18 and 2026-10-28 sources), 20 s apart:
+
+| # | Mac | Pi writes | Yes looks like |
+|---|---|---|---|
+| R1 | idle at 48000 | 44100 | interrupt `status 0`, a GET_CUR reading 44100, the Mac's nominal 44100 (with or without a SET_CUR 44100) |
+| R2 | idle | 48000 | the same back to 48000 |
+| R3 | hold client streaming | 44100 | the same, the stream restarted at 44100 |
+| R4 | streaming | 48000 | back |
+
+Reading: the answer is **yes** if the Mac's nominal rate follows in R1/R2
+(the idle case is the one the arbiter needs). **No** if the interrupt completes
+but the Mac never re-reads the clock, or re-reads it and sets its own rate back
+(a SET_CUR 48000 after the GET_CUR). If the interrupt never completes, the Mac
+does not poll the endpoint at all, which is also a no for this route. The Mac
+is set back to 48000 at the end whatever happened.
+
+## Mac-follow experiment: YES (2026-10-29 02:23-02:26 UTC)
+
+**macOS follows the gadget's clock.** A SAM_FREQ interrupt on the clock source
+makes AppleUSBAudio re-read the clock at once, and CoreAudio changes the
+`USB 16x16`'s nominal rate to what it reads, idle or streaming, with no SET_CUR
+back. Evidence `outputs/latency/rate-request-experiment-20261029/`
+(`test-output.txt` the Pi side of `test-rate-request.sh`, `run.sh` and
+`steps.txt` the sequence, `mac-rate.txt` the Mac's nominal rate every 0.5 s,
+`mac-log.txt` coreaudiod and AppleUSBAudio, `pi-kernel.txt` the gadget's
+`rate request:` lines). Operator's sudo for the test; endpoint stopped for the
+window, nothing written under `/lib/modules`.
+
+| # | Mac | Pi wrote | Gadget (pi-kernel.txt) | Mac nominal (mac-rate.txt, coreaudiod) |
+|---|---|---|---|---|
+| — | enumeration | — | GET_CUR 48000, SET_CUR 48000, GET_CUR 48000 | 48000 |
+| R1 | idle | 44100 | interrupt `status 0` 1.0 ms after the write, GET_CUR -> 44100 6.4 ms after it; no SET_CUR | 44100 at the next 0.5 s read; coreaudiod rebuilt its nodes at 44100 |
+| R2 | idle | 48000 | interrupt 0.8 ms, GET_CUR 1.3 ms; no SET_CUR | 48000 |
+| R3 | hold client streaming | 44100 | interrupt 0.3 ms, GET_CUR 0.7 ms; no SET_CUR | 44100 |
+| R4 | streaming | 48000 | interrupt 0.7 ms, GET_CUR 1.1 ms; no SET_CUR | 48000 |
+
+- The interrupt endpoint is polled by the Mac (every completion `status 0,
+  actual 6`); one GET_CUR on the clock follows each interrupt and nothing else
+  (no CLOCK_VALID read, no SET_CUR, no re-enumeration).
+- The Mac **never sends SET_CUR when it follows**: the gadget's own write is
+  the only record of the new rate. With the rate-report module that is what
+  the Rate controls then show (the request sets `srate`), which is correct
+  for a device that owns its clock.
+- Not observed (no `set_alt` probe in this build): whether the stream in R3/R4
+  stopped and restarted at the new rate; the hold client kept running and the
+  Mac's nominal rate moved. Not covered: 88.2 and 96 (the 88.2 rule of
+  2026-10-18 may apply to this route too), an app other than the hold client
+  (Pro Tools' reaction to a device rate change), and the Mac asleep.
+- The `dmesg --time-format iso` stamps run about 16 s ahead of the Mac's clock
+  (the kernel's boot-time conversion, not wall time); intervals above are
+  within the Pi log.
+- Close: restore at 02:24:53 (end file), rate-report pair DD2DD510... /
+  C647475B... loaded, configured/high-speed, `usb16x16-dante` started, start
+  check `ok` 02:25:59; noise probe at 32 clean
+  (`raterequest-afterrestore-noise-ch2-32f-20261029T022607Z`: zero runs >= 4:
+  0, no xrun, lag or error lines). Mac at 48000.
+
+**Proposal: how the arbiter would use it** (not built; operator to decide).
+
+1. A production patch, `uac2-rate-request-6.18.34.patch`, replacing the
+   experiment: the `Device Rate Request` control and `clk_id` as tested; the
+   `dev_info` lines dropped (or one `dev_dbg` for the write). Writing it while
+   the Mac streams moves the data rate at once, which is what an interface
+   on external clock does and what the Mac followed in R3/R4. Build, bounded
+   test and a hash-pinned installer with rollback in the rate-report pattern;
+   the module and the applier go together. Behavioural checks plus a noise
+   probe at 32 and a two-minute soak (CLAUDE.md, a change outside the audio
+   path; the data path is untouched, `srate` already moves on a Mac set).
+2. `usb16x16-apply`: after a `dante` or `page` rate move is `done` (owner
+   restarted at N), write `Device Rate Request` N (the applier runs as root;
+   the control is on the gadget card). Then the Mac reads N, the Rate controls
+   read N, the owner's next check is `match` and the USB half opens. The
+   `overrode` guard stays as the fallback for a Mac that does not follow
+   (module rolled back, Mac asleep), and is cleared when the controls reach N.
+   A `usb` request is unchanged: a Mac-side set still sends SET_CUR and wins.
+3. Ordering: write the control only after the endpoint is at N, never before,
+   so the USB half never opens at a rate Dante is not running. Checks: B5 again
+   (Dante set with the Mac idle: the Mac follows within a second, no `refused`
+   loop), the same with Pro Tools open at 48, and 44.1 <-> 48 only until
+   88.2/96 are tried on this route.

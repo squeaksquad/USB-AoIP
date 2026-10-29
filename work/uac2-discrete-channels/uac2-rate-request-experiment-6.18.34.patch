@@ -1,0 +1,210 @@
+--- a/drivers/usb/gadget/function/f_uac2.c
++++ b/drivers/usb/gadget/function/f_uac2.c
+@@ -1383,6 +1383,9 @@
+ 
+ 	if (FUOUT_EN(uac2_opts) || FUIN_EN(uac2_opts))
+     agdev->notify = afunc_notify;
++	/* the rate request's interrupt (experiment): shared clock only */
++	if (SHARED_CLK_EN(uac2_opts) && agdev->notify)
++		agdev->params.clk_id = USB_IN_CLK_ID;
+ 
+ 	ret = g_audio_setup(agdev, "UAC2 PCM", "UAC2_Gadget");
+ 	if (ret)
+@@ -1406,7 +1409,12 @@
+ {
+ 	struct g_audio *agdev = req->context;
+ 	struct f_uac2 *uac2 = func_to_uac2(&agdev->func);
++	struct uac2_interrupt_data_msg *msg = req->buf;
+ 
++	dev_info(&agdev->gadget->dev,
++		 "rate request: interrupt wIndex 0x%04x wValue 0x%04x done: status %d actual %u\n",
++		 le16_to_cpu(msg->wIndex), le16_to_cpu(msg->wValue),
++		 req->status, req->actual);
+ 	atomic_dec(&uac2->int_count);
+ 	kfree(req->buf);
+ 	usb_ep_free_request(_ep, req);
+@@ -1595,6 +1603,9 @@
+ 				c.dCUR = cpu_to_le32(p_srate);
+ 			else if (entity_id == USB_OUT_CLK_ID)
+ 				c.dCUR = cpu_to_le32(c_srate);
++			dev_info_ratelimited(&agdev->gadget->dev,
++				"rate request: host GET_CUR clock %u: %u\n",
++				entity_id, le32_to_cpu(c.dCUR));
+ 
+ 			value = min_t(unsigned int, w_length, sizeof(c));
+ 			memcpy(req->buf, &c, value);
+@@ -1761,6 +1772,8 @@
+ 
+ 	val = le32_to_cpu(*((__le32 *)req->buf));
+ 	dev_dbg(&agdev->gadget->dev, "%s val: %d.\n", __func__, val);
++	dev_info(&agdev->gadget->dev, "rate request: host SET_CUR clock %d: %u\n",
++		 uac2->clock_id, val);
+ 	if (SHARED_CLK_EN(opts)) {
+ 		u_audio_set_playback_srate(agdev, val);
+ 		u_audio_set_capture_srate(agdev, val);
+--- a/drivers/usb/gadget/function/u_audio.c
++++ b/drivers/usb/gadget/function/u_audio.c
+@@ -20,6 +20,7 @@
+ #include <sound/control.h>
+ #include <sound/tlv.h>
+ #include <linux/usb/audio.h>
++#include <linux/usb/audio-v2.h>
+ 
+ #include "u_audio.h"
+ 
+@@ -33,6 +34,7 @@
+ 	UAC_MUTE_CTRL,
+ 	UAC_VOLUME_CTRL,
+ 	UAC_RATE_CTRL,
++	UAC_RATE_REQ_CTRL,
+ };
+ 
+ /* Runtime data params for one stream */
+@@ -80,6 +82,8 @@
+ 
+ 	struct snd_card *card;
+ 	struct snd_pcm *pcm;
++
++	int rate_request; /* last rate written to Device Rate Request, 0: none */
+ 
+ 	/* pre-calculated values for playback iso completion */
+ 	unsigned long long p_residue_mil;
+@@ -1178,9 +1182,92 @@
+ 		/* no stream and no rate set on this connection: reporting zero rate */
+ 		ucontrol->value.integer.value[0] = 0;
+ 	spin_unlock_irqrestore(&prm->lock, flags);
++	return 0;
++}
++
++/*
++ * Device Rate Request (experiment, RATE_REPORT_PLAN.md "Mac-follow"): the
++ * device's clock moves to a listed rate, as an interface following external
++ * clock does. srate takes the new rate in each direction, so the host's next
++ * GET_CUR on the clock reads it, and the clock source's SAM_FREQ interrupt goes
++ * to the host. Writing the same rate again resends the interrupt.
++ */
++static bool rate_listed(const int *srates, int srate)
++{
++	int i;
++
++	for (i = 0; i < UAC_MAX_RATES && srates[i]; i++)
++		if (srates[i] == srate)
++			return true;
++	return false;
++}
++
++static int u_audio_rate_req_info(struct snd_kcontrol *kcontrol,
++				struct snd_ctl_elem_info *uinfo)
++{
++	struct snd_uac_chip *uac = snd_kcontrol_chip(kcontrol);
++	struct uac_params *params = &uac->audio_dev->params;
++	const int *srates = params->p_chmask ? params->p_srates : params->c_srates;
++
++	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
++	uinfo->count = 1;
++	uinfo->value.integer.min = 0;
++	uinfo->value.integer.max = get_max_srate(srates);
+ 	return 0;
+ }
+ 
++static int u_audio_rate_req_get(struct snd_kcontrol *kcontrol,
++				struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_uac_chip *uac = snd_kcontrol_chip(kcontrol);
++
++	ucontrol->value.integer.value[0] = READ_ONCE(uac->rate_request);
++	return 0;
++}
++
++static void request_srate(struct uac_rtd_params *prm, int srate)
++{
++	unsigned long flags;
++	bool reported;
++	int old;
++
++	spin_lock_irqsave(&prm->lock, flags);
++	old = prm->srate;
++	prm->srate = srate;
++	reported = prm->active || prm->srate_set;
++	if (reported && old != srate)
++		snd_ctl_notify(prm->uac->card, SNDRV_CTL_EVENT_MASK_VALUE,
++				&prm->snd_kctl_rate_id);
++	spin_unlock_irqrestore(&prm->lock, flags);
++}
++
++static int u_audio_rate_req_put(struct snd_kcontrol *kcontrol,
++				struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_uac_chip *uac = snd_kcontrol_chip(kcontrol);
++	struct g_audio *audio_dev = uac->audio_dev;
++	struct uac_params *params = &audio_dev->params;
++	int srate = ucontrol->value.integer.value[0];
++	int ret;
++
++	if ((params->p_chmask && !rate_listed(params->p_srates, srate)) ||
++	    (params->c_chmask && !rate_listed(params->c_srates, srate)))
++		return -EINVAL;
++
++	WRITE_ONCE(uac->rate_request, srate);
++	if (params->p_chmask)
++		request_srate(&uac->p_prm, srate);
++	if (params->c_chmask)
++		request_srate(&uac->c_prm, srate);
++
++	ret = audio_dev->notify(audio_dev, params->clk_id,
++				UAC2_CS_CONTROL_SAM_FREQ);
++	dev_info(&audio_dev->gadget->dev,
++		 "rate request: device rate %d, clock %d SAM_FREQ interrupt queued: %d\n",
++		 srate, params->clk_id, ret);
++	return 1;
++}
++
+ static struct snd_kcontrol_new u_audio_controls[]  = {
+ 	[UAC_FBACK_CTRL] = {
+     .iface =        SNDRV_CTL_ELEM_IFACE_PCM,
+@@ -1217,6 +1304,13 @@
+ 		.info =		u_audio_rate_info,
+ 		.get =		u_audio_rate_get,
+ 	},
++	[UAC_RATE_REQ_CTRL] = {
++		.iface =	SNDRV_CTL_ELEM_IFACE_PCM,
++		.name =		"Device Rate Request",
++		.info =		u_audio_rate_req_info,
++		.get =		u_audio_rate_req_get,
++		.put =		u_audio_rate_req_put,
++	},
+ };
+ 
+ int g_audio_setup(struct g_audio *g_audio, const char *pcm_name,
+@@ -1451,6 +1545,21 @@
+ 		if (err < 0)
+ 			goto snd_fail;
+ 		prm->snd_kctl_rate_id = kctl->id;
++	}
++
++	if (params->clk_id && g_audio->notify) {
++		kctl = snd_ctl_new1(&u_audio_controls[UAC_RATE_REQ_CTRL], uac);
++		if (!kctl) {
++			err = -ENOMEM;
++			goto snd_fail;
++		}
++
++		kctl->id.device = pcm->device;
++		kctl->id.subdevice = 0;
++
++		err = snd_ctl_add(card, kctl);
++		if (err < 0)
++			goto snd_fail;
+ 	}
+ 
+ 	strscpy(card->driver, card_name);
+--- a/drivers/usb/gadget/function/u_audio.h
++++ b/drivers/usb/gadget/function/u_audio.h
+@@ -52,6 +52,7 @@
+ 	struct uac_fu_params c_fu;	/* Feature Unit parameters */
+ 
+ 	/* rates are dynamic, in uac_rtd_params */
++	int clk_id;	/* Clock Source ID for the rate request's interrupt, 0: none */
+ 
+ 	int req_number; /* number of preallocated requests */
+ 	int fb_max;	/* upper frequency drift feedback limit per-mil */

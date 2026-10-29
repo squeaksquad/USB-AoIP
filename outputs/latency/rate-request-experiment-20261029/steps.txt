@@ -1,0 +1,13 @@
+02:23:22 R0 Mac idle: USB 16x16 nominal=48000
+02:23:23 R1 request 44100, Mac idle: capture rate 44100
+02:23:43 R1 after 20s: USB 16x16 nominal=44100
+02:23:43 R2 request 48000, Mac idle: capture rate 48000
+02:24:03 R2 after 20s: USB 16x16 nominal=48000
+02:24:03 R3 hold client open
+02:24:08 R3 request 44100, streaming: capture rate 44100
+02:24:29 R3 after 20s: USB 16x16 nominal=44100
+02:24:29 R4 request 48000, streaming: capture rate 48000
+02:24:49 R4 after 20s: USB 16x16 nominal=48000
+02:24:49 R4 hold client closed
+02:24:53 end: USB 16x16 nominal=48000
+02:24:53 end file touched

@@ -1,0 +1,14 @@
+Filtering the log data using "senderImagePath CONTAINS[c] "AppleUSBAudio" OR (process == "coreaudiod" AND composedMessage CONTAINS[c] "sample rate")"
+Timestamp               Ty Process[PID:TID]
+2026-10-28 22:23:23.210 Df coreaudiod[45837:118acb3] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Output with nodeID 33852 - reporting period = 10.000000, sample rate = 44100.000000
+2026-10-28 22:23:23.210 Df coreaudiod[45837:118acb3] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Input with nodeID 33853 - reporting period = 10.000000, sample rate = 44100.000000
+2026-10-28 22:23:43.625 Df coreaudiod[45837:118b142] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Output with nodeID 33852 - reporting period = 10.000000, sample rate = 48000.000000
+2026-10-28 22:23:43.625 Df coreaudiod[45837:118b142] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Input with nodeID 33853 - reporting period = 10.000000, sample rate = 48000.000000
+2026-10-28 22:24:09.128 Df coreaudiod[45837:118b069] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Output with nodeID 33852 - reporting period = 10.000000, sample rate = 44100.000000
+2026-10-28 22:24:09.129 Df coreaudiod[45837:118b069] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Input with nodeID 33853 - reporting period = 10.000000, sample rate = 44100.000000
+2026-10-28 22:24:29.628 Df coreaudiod[45837:118bd51] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Output with nodeID 33852 - reporting period = 10.000000, sample rate = 48000.000000
+2026-10-28 22:24:29.629 Df coreaudiod[45837:118bd51] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Input with nodeID 33853 - reporting period = 10.000000, sample rate = 48000.000000
+2026-10-28 22:24:53.853 Df kernel[0:118c6a9] (AppleUSBAudio) probe OverrideWantsHidden returned false
+2026-10-28 22:24:53.853 Df kernel[0:118c6a9] (AppleUSBAudio) probe OverrideWantsHidden returned false
+2026-10-28 22:24:53.896 Df coreaudiod[45837:118c643] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Output with nodeID 38494 - reporting period = 10.000000, sample rate = 48000.000000
+2026-10-28 22:24:53.897 Df coreaudiod[45837:118c643] [com.apple.coreaudio:aid] [Detector.cpp:154   rtaid::Detector:0x817ee4600] Created node -Input with nodeID 38495 - reporting period = 10.000000, sample rate = 48000.000000
