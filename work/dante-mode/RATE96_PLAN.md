@@ -411,3 +411,38 @@ So on the same routing (MADI 25-32 through the Metric Halo strips), 48 is bit-ex
 or repeats one frame about every 90 s. Suspects for 96, untested: arm A's doubled depths and the
 owner's servo at 96 (one frame of drift corrected by a step, not a pitch), Inferno's 96k flows, the
 Pulse's 96k receive. The `daw_timeline` 916 at 96 and the soaks stand; `bitexact` at 96 does not.
+
+**MEASURED 2026-10-29 14:26-14:36 UTC: the 96 kHz slip is not one frame. It is a 16-frame block
+returned 8 frames early (8 dropped, then 8 repeated 16 frames later) on all 8 channels together,
+with no owner event near it.** Evidence `outputs/latency/rate96-slip-kind-20261029/` (`steps.txt`,
+`dante-sync-to96*.txt`, `subscriptions-at96.json`, `owner-candidate.log`, `slip-align.py`,
+`clock-offset-start.txt`).
+- Tools (step 1 of the pickup): `bitexact` records every lost lock and names it (`slips`: frame,
+  `dropped` / `repeated` / `other` / `offGrid`, frames), plus `inputStartUnixTime` (84e73ac; tests
+  `bitExactSequenceStepsBackExactly`, `bitExactNamesEachSlipADropOrARepeat`, 23 pass, app rebuilt).
+  Owner `--event-trace` (62037e2): an EVENT line with the wall clock at each change of the step
+  counters (re-primes, primes, overflow, idle discards, resyncs, faults), a SERVO line a second.
+  Candidate `usb16x16-dante-owner-rate8trace` c065b40f: rate8's source plus that; the same build line
+  gives a15a9d84 from rate8's source, so the trace is the only difference. Not installed.
+- Move to 96 as before (two `dante-sync` runs, MHLink to 96 by the second); candidate rate8trace,
+  arm A, `--event-trace`; `USBOPEN ... host_rate=match`; 64 subscriptions as `subscriptions-before.json`
+  (`subs-compare.py`); noise probe at 32 clean (`loop8-96trace-noise-ch2-32f-20261029T142816Z`,
+  zero runs >= 4: 0). Pi clock about 0.08 s ahead of the Mac (ssh round trips, +-0.1 s).
+- `bitexact --loop-channels 8`, 360 s, host gain unity: FAIL as before
+  (`loop8-96trace-bitexact-360s-32f-20261029T142918Z`), one event at 229.292 s: on every channel
+  at the same frame, 8 frames dropped, then 16 frames later 8 frames repeated (2 mismatches and 2
+  lost locks per channel, 34.56 M matches). So the loop returned 16 frames that belong 8 frames
+  later and then carried on in place: no frame lost or added overall, a block misplaced, not two
+  clocks drifting. The "about one per 90 s" of the earlier runs counted lost locks; one event is
+  two of them.
+- The owner: no EVENT line within 1 s of it (none from first flow to the end), SERVO steady (pitch
+  1000016 both ways, tx_mean 255, rx_mean 191).
+- Where 16 frames comes from at 96: the Pulse's flows to the Pi are 8 channels x 16 frames a packet
+  (`rate96-slip-capture-20261029/sequence-slips-115428Z.txt`); the Pi's own are 32 frames, the USB
+  side 12 a microframe. So the block is one Pulse packet, placed half a packet early, either by
+  the Pulse (or the loop behind it) or by Inferno's receive. Not yet shown which.
+- Next (one variable, no capture): owner `--seq-check 8` (d3691b8; `seq_check.hpp`,
+  `seq_check_test.cpp` with the shifted-block case; candidate `usb16x16-dante-owner-rate8seq`
+  5f8a45b6, not installed) checks `bitexact`'s sequence where the owner sees it, as the gadget
+  delivers it and as Inferno delivers it, with a SEQ line per lost lock. If Inferno's output shows
+  the shift, it was made upstream of the owner (Inferno receive, the Pulse, the MADI loop).
