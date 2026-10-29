@@ -328,3 +328,23 @@ faster than 48 on the same path.** Evidence `outputs/latency/rate96-loop8-202610
   lag, fault, overflow or re-prime in the owner's counters.
 Not yet run at 96: the four loaded 800-impulse runs, the ten-minute soak, `bitexact
 --loop-channels 8`, the hour on `loaded`, `dsp_us_max`.
+
+**MEASURED 2026-10-29 04:36-05:14 UTC, same session: the 96 battery on direct; `bitexact` FAILS
+on steady single-frame slips, not located.**
+- Four loaded 800-impulse runs (`USB16X16_OTHER_LOAD=0.1`): 680 / 680 / 680 / 680, spread 0,
+  `daw_timeline` 916 (9.542 ms) each (`loop8-96-loaded{1..4}-*`).
+- 600 s soak, `USB16X16_LOOP_CHANNELS=8`: PASS, longest zero run 1, discontinuities 0/0
+  (`loop8-96-soak-600s-32f-20261029T045023Z`). Owner after it: `out_holes` 0/0, `back_holes` 0/0,
+  no fault, overflow or re-prime.
+- `bitexact --loop-channels 8`, 360 s, host gain unity both ways, twice: **FAIL**. Every channel
+  locked on its own sequence (34.56 M matches each), nothing off the 24-bit grid, no discontinuity
+  or invalid buffer, but all 8 channels lost lock together: 2 events in the first run (last at
+  172.13 s, `loop8-96-bitexact-360s-32f-20261029T050057Z`), 4 in the second (last at 354.54 s,
+  `loop8-96-bitexact2-360s-32f-20261029T050734Z`). Each event is one wrong but valid code, then the
+  sequence re-locks at once: a dropped or repeated frame on the whole flow, about one every 90 s.
+  The owner logged nothing then (10 s lines: no fault, overflow, re-prime or depth jump). Zero-run
+  checks cannot see a slip, which is why the soaks pass. Two nearly-locked clocks somewhere in the
+  loop would do this. Not located; owed: an eth0 capture of the Dante flows during a `bitexact`
+  run at 96 (which side slips), and `bitexact --loop-channels 8` at 48 on this same path (the rate
+  or the new routing through the Metric Halo strips). At 48 and 44.1 on the 49-64 loop, also
+  through the Metric Halo, `bitexact` passed (handoff, 2026-10-27/28).
