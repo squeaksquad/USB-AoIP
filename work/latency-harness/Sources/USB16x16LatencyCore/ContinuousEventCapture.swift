@@ -43,7 +43,7 @@ final class ContinuousEventCapture {
     static let before = 16
     static let after = 16
     static let window = 96
-    static let limit = 32
+    static let limit = 512
     private static let historySize = before + threshold
 
     private struct Stamp {

@@ -94,11 +94,12 @@ private func feed(_ capture: ContinuousEventCapture, start: Int, count: Int,
     #expect(!long.report().events[0].windowComplete)
 
     let repeated = ContinuousEventCapture()
-    feed(repeated, start: 0, count: 20 + 40 * 40) { f, c in
+    let runs = ContinuousEventCapture.limit + 8
+    feed(repeated, start: 0, count: 20 + runs * 40) { f, c in
         c == 3 && f >= 20 && (f - 20) % 40 < 4 ? 0 : 0.1
     }
     let result = repeated.report()
-    #expect(result.events.count == 32 && result.triggeredEvents == 40 && result.omittedEvents == 8)
+    #expect(result.events.count == ContinuousEventCapture.limit && result.triggeredEvents == runs && result.omittedEvents == 8)
     #expect(result.events.allSatisfy { $0.windowComplete && $0.frames.count == 36 })
 }
 
