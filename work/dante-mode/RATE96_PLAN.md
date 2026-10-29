@@ -446,3 +446,25 @@ with no owner event near it.** Evidence `outputs/latency/rate96-slip-kind-202610
   5f8a45b6, not installed) checks `bitexact`'s sequence where the owner sees it, as the gadget
   delivers it and as Inferno delivers it, with a SEQ line per lost lock. If Inferno's output shows
   the shift, it was made upstream of the owner (Inferno receive, the Pulse, the MADI loop).
+
+**MEASURED 2026-10-29 14:48-14:57 UTC: the shifted block is already in what Inferno delivers to
+the owner. The owner, the gadget and the Mac are cleared; the shift is made in Inferno's receive or
+before it (the Pulse, the MADI loop through the Metric Halo).** Evidence
+`outputs/latency/rate96-slip-kind-20261029/` (`owner-candidate-seq.log`, `subscriptions-at96-seq.json`).
+- Candidate `rate8seq` 5f8a45b6 (arm A, `--event-trace --seq-check 8`), started 14:48:55;
+  `host_rate=match`, 64 subscriptions as before, noise probe at 32 clean (`loop8-96seq-noise-*`,
+  zero runs >= 4: 0).
+- `bitexact --loop-channels 8`, 360 s: FAIL, one event at 59.600 s
+  (`loop8-96seq-bitexact-360s-32f-20261029T145036Z`): all 8 channels, 8 dropped, then 8 frames later
+  8 repeated (this time the misplaced window is 8 frames, half a Pulse packet; at 14:29 it was 16).
+- The owner's SEQ lines at the same moment (0.08 s before the Mac's time, inside the clock
+  offset's error): `point=back` (as Inferno delivers it), all 8 channels, `dropped 8` then
+  `repeated 8` 8 frames later, the same shape as the Mac's. `point=out` (as the gadget delivers
+  the Mac's output): clean throughout. The only other SEQ lines are `other` at the stream's start
+  and stop. No EVENT line in the run, SERVO steady (pitch 1000016 both ways).
+- So the misplaced block reaches the owner already misplaced: the owner's queue, the gadget, USB
+  and CoreAudio do not make it. Left: Inferno's receive (where it writes a packet in its ring), or
+  the Pulse's packets themselves (or the loop through MADI / the Metric Halo before them). An eth0
+  capture tells those apart: the audio in the Pulse's packets against their Dante timestamps at the
+  moment of a SEQ line. With the SEQ line as the trigger, a tmpfs ring of only the Pulse -> Pi
+  flows can run until an event and be cut 2 s after it, rather than catching one by chance.

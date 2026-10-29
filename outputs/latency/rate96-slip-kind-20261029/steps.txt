@@ -4,3 +4,6 @@ inactive
 14:27:01 dante-sync sync --source usb16x16 --exclude USB-16x16-Inferno
 14:27:13 candidate start rate8trace c065b40f, rate96-candidate config, arm A, --event-trace
 14:29:18 bitexact 360 s -> outputs/latency/loop8-96trace-bitexact-360s-32f-20261029T142918Z.json
+14:48:54 candidate stop (rate8trace)
+14:48:55 candidate start rate8seq 5f8a45b6, rate96-candidate config, arm A, --event-trace --seq-check 8
+14:50:36 bitexact 360 s -> outputs/latency/loop8-96seq-bitexact-360s-32f-20261029T145036Z.json
