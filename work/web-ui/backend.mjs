@@ -410,6 +410,7 @@ const danteStepWords = {
   verifying: 'Waiting for the endpoint to start', settling: 'Settling on one clean start',
   checking: 'Loading the preset through the endpoint\'s loader', installing: 'Installing the preset',
   removing: 'Removing the preset', pushing: 'Handing the coefficients to the endpoint', committing: 'Committing the preview',
+  'host-follow': 'Asking the Mac to follow the rate',
 };
 /** A step of an Apply receipt in words. `stack` is the receipt's own (current.stack), or the Pi's. */
 export const applyStepLabel = (name, stack) => (stack === 'dante' ? danteStepWords : stepWords)[name] || name;

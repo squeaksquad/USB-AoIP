@@ -749,3 +749,70 @@ window, nothing written under `/lib/modules`.
    (Dante set with the Mac idle: the Mac follows within a second, no `refused`
    loop), the same with Pro Tools open at 48, and 44.1 <-> 48 only until
    88.2/96 are tried on this route.
+
+## Rate request: the production set (built 2026-10-29, not installed)
+
+The proposal above, built and Mac-tested; staged in
+`~/usb-16x16-work/gadget-raterequest/`. Nothing loaded or installed.
+
+**Modules.** `uac2-rate-request-6.18.34.patch` is the experiment patch without
+its `dev_info` lines (one `dev_dbg` on the control write). Built by
+`build-rate-request.sh production` into `build/rate-request-production/`; the
+control build again reproduces the installed rate-report pair byte for byte.
+Candidate `u_audio.ko` **ed539ca8**98298b3d90863db51808153f83a702f4f330d08bb12753ed7b9baf57
+(srcversion 681145C2E4636CAF77983DE), `usb_f_uac2.ko`
+**505c6ad0**bad44f92f5487988d2f192efd9bd7018b7fc60e45e86c90080e20fe2 (srcversion
+3373101B95DBCD81E04F33F), vermagic 6.18.34+rpt-rpi-2712, no warnings.
+
+**Arbiter.** `usb16x16-apply` 1.7.0 (**1a85bd3d**b2490107ef906595cd62b8dc9d38942983bf32c2f7d1a9cebf918b10;
+installed is 1.6.0 c3c14505). In `change_rate`, after a `dante` or `page` move
+is verified at N (the endpoint restarted and running at N) and the history
+written, and only when the Mac's controls are not already at N, it runs
+`amixer -c UAC2Gadget cset iface=PCM,name='Device Rate Request' N` and records
+a `host-follow` step (`asked the Mac to follow to N Hz`, or `could not ask the
+Mac to follow (...)` with `ok: false` when the control is missing). The move is
+`done` either way. A `usb` move never writes it (the Mac chose). The `overrode`
+guard is unchanged and stays as the fallback; it lifts when the owner opens
+with `host_rate=match`, which the follow causes. Tests in `test_dante_apply.py`:
+`test_a_dante_set_asks_the_mac_to_follow_after_the_move` (one write, after the
+restart), `test_without_the_control_a_dante_set_still_stands`,
+`test_no_follow_request_when_the_mac_chose_or_already_agrees`; 125 pass with
+`test_apply`, `test_web`, `test_dante_web`. `work/web-ui/backend.mjs` names the
+step ("Asking the Mac to follow the rate"); the UI's 119 tests pass. No
+sandboxing in `usb16x16-dante-rate.service` or `usb16x16-apply.service` stands
+between the applier (root) and `/dev/snd`.
+
+**Bounded test.** `test-rate-request.sh build/rate-request-production 600`
+(operator's sudo) pins the production pair, loads it by `insmod` over the
+installed rate-report pair, and with this pair starts `usb16x16-dante` in the
+window as before. Checks there: the `Device Rate Request` control is present
+and reads 0, idle controls 48000/48000, start check `ok`, a noise probe at 32.
+The control is not written in the window (the installed applier is 1.6.0).
+
+**Installer.** `install-rate-request.sh install|rollback|status`, the
+`install-rate-report.sh` pattern on top of it: pins the kernel, both
+candidates, the applier copy, the installed rate-report pair (b2f5c6cd /
+fa8bed12) and applier 1.6.0 (c3c14505), both setup scripts and the loaded
+srcversions; keeps `u_audio.ko.pre-rate-request`,
+`usb_f_uac2.ko.pre-rate-request` and `usb16x16-apply.pre-rate-request`; any
+failure puts all three back. `rollback` returns to the rate-report set, and
+must come before `install-rate-report.sh rollback` (which refuses while these
+modules are installed: neither of its two known hashes).
+
+Script hashes as staged: `install-rate-request.sh` 745f2b9a,
+`test-rate-request.sh` d38b521d, `build-rate-request.sh` 0139ad74, patch 45beecea.
+
+**Battery after the install** (a change outside the audio path: behaviour, a
+noise probe at 32, a two-minute soak):
+
+- F1: Mac idle at 48, Dante-side set to 44.1 (`set-rate-one.py 169.254.92.97
+  44100`): `done` with a `host-follow` step `ok`; the Mac's nominal 44100 within
+  a second of it; the owner `USBOPEN ... host_rate=match` with no `refused`
+  requests after the follow. Back to 48 from the Dante side after the 30 s
+  guard: the same.
+- F2: the same with an app holding the device (the hold client, then Pro
+  Tools at 48 if the operator wants it).
+- F3: a Mac-side change still wins (Audio MIDI Setup 48 -> 44.1: `done`
+  source `usb`, no `host-follow` step); back to 48.
+- Noise probe at 32 after F1-F3, then `measure-candidate.sh soak 120 32`.
+  Mac left at 48000.

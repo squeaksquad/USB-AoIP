@@ -93,7 +93,7 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 SPOOL_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
 CONF_PATH = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
@@ -1245,6 +1245,10 @@ DANTE_SETTLE_S = 15.0
 DANTE_INFERNO_CONF = Path(os.environ.get("USB16X16_DANTE_INFERNO_CONF", "/etc/usb16x16/dante/asound-inferno-owner.conf"))
 DANTE_RATE_REQUEST = Path(os.environ.get("USB16X16_DANTE_RATE_REQUEST", "/run/usb16x16-dante/rate-request"))
 GADGET_CARD = "UAC2Gadget"
+# The gadget's writable rate control (uac2-rate-request patch): writing a rate
+# moves the gadget's clock and sends the Mac the clock's SAM_FREQ interrupt, and
+# the Mac re-reads the clock and follows (RATE_REPORT_PLAN.md, Mac-follow).
+GADGET_RATE_REQUEST = "Device Rate Request"
 RATE_HOST_WAIT_S = 5.0
 RATE_REVERSAL_S = 30.0
 RATE_SOURCES = ("dante", "usb", "page")
@@ -1670,6 +1674,18 @@ class DanteApplier(Applier):
             found.append(int(match.group(1)))
         return found[0], found[1]
 
+    def ask_host_to_follow(self, rate: int) -> tuple[bool, str]:
+        """Write the gadget's Device Rate Request, so the Mac follows a move made
+        on the Dante side. Only after the endpoint runs at `rate`, so the USB half
+        never opens at a rate Dante is not running. Without the control (the
+        module rolled back) the move stands and the Mac is left to follow by hand;
+        the overrode guard covers that case."""
+        code, out = self.runner.run(["amixer", "-c", GADGET_CARD, "cset", f"iface=PCM,name={GADGET_RATE_REQUEST}",
+                                     str(rate)], timeout=10)
+        if code != 0:
+            return False, f"could not ask the Mac to follow ({out.strip().splitlines()[-1] if out.strip() else code})"
+        return True, f"asked the Mac to follow to {rate} Hz (gadget clock interrupt)"
+
     def rate_history(self) -> dict:
         try:
             return json.loads((self.spool / "rate-history.json").read_text())
@@ -1763,6 +1779,10 @@ class DanteApplier(Applier):
             if spec["overrode"] is not None:
                 history["overrode"] = spec["overrode"]
             write_atomic(self.spool / "rate-history.json", history)
+            host = spec["host"]
+            if spec["source"] != "usb" and (host is None or any(value != rate for value in host)):
+                asked, detail = self.ask_host_to_follow(rate)
+                self.step("host-follow", detail, ok=asked)
             return self.finish("done")
         self.step("rolling-back", f"{reason}; returning to {spec['running']} Hz", ok=False)
         rollback_target = {"name": target["name"], "dspPreset": conf.get("DSP_PRESET") or None, "rate": spec["running"]}

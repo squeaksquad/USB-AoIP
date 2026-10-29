@@ -39,9 +39,10 @@ class FakeRunner:
 
     def __init__(self, env, fail_start_for=None, fatal_after_start_for=None, never_netstart_for=None,
                  restart_during_settle_for=None, owner_ignores_live=False, owner_refuses_live=False,
-                 host=(48000, 48000), host_after=None, old_owner=False):
+                 host=(48000, 48000), host_after=None, old_owner=False, rate_request=False):
         self.env = env
         self.host = host                # the gadget's Capture/Playback Rate; None: unreadable
+        self.rate_request = rate_request  # the gadget has Device Rate Request (the Mac then follows)
         self.host_after = host_after    # (seconds, rates): what the host reads once that much time has passed
         self.old_owner = old_owner      # an owner without --rate (62879558): RATE in owner.conf is fatal
         self.started_at = time.time()
@@ -121,6 +122,12 @@ class FakeRunner:
         if argv[0] == apply_module.OFFLINE_RUNNER:
             return 0, "loaded preset internal=16 biquads=0"
         if argv[:2] == ["systemctl", "poweroff"]:
+            return 0, ""
+        if argv[0] == "amixer" and argv[3] == "cset":
+            if not self.rate_request:
+                return 1, "amixer: Cannot find the given element"
+            self.host = (int(argv[-1]), int(argv[-1]))
+            self.host_after = None
             return 0, ""
         if argv[0] == "amixer":
             host = self.host
@@ -748,6 +755,41 @@ class DanteApplyTest(unittest.TestCase):
         self.assertEqual(result["state"], "done", result["error"])
         self.assertEqual(self.env.inferno_rate(), 48000)
         self.assertNotIn("overrode", json.loads(history.read_text()))
+
+    def test_a_dante_set_asks_the_mac_to_follow_after_the_move(self):
+        self.env.set_inferno(48000, "48000,96000")
+        runner = FakeRunner(self.env, host=(48000, 48000), rate_request=True)
+        result = self.make(runner=runner).apply(self.rate(96000, source="dante"))
+        self.assertEqual(result["state"], "done", result["error"])
+        writes = [c for c in runner.calls if c[:1] == ["amixer"] and c[3] == "cset"]
+        self.assertEqual(writes, [["amixer", "-c", "UAC2Gadget", "cset", "iface=PCM,name=Device Rate Request", "96000"]])
+        # written after the restart, so the USB half never opens before Dante runs at the rate
+        self.assertGreater(runner.calls.index(writes[0]), max(i for i, c in enumerate(runner.calls) if c[:2] == ["systemctl", "start"]))
+        follow = [s for s in result["steps"] if s["name"] == "host-follow"]
+        self.assertEqual([(s["ok"], s["detail"]) for s in follow], [(True, "asked the Mac to follow to 96000 Hz (gadget clock interrupt)")])
+        self.assertEqual(runner.host, (96000, 96000))
+        # The overrode guard stays as the fallback; it lifts when the owner joins the Mac.
+        self.assertEqual(json.loads((self.env.spool / "rate-history.json").read_text())["overrode"], 48000)
+
+    def test_without_the_control_a_dante_set_still_stands(self):
+        self.env.set_inferno(48000, "48000,96000")
+        result = self.make(host=(48000, 48000)).apply(self.rate(96000, source="dante"))
+        self.assertEqual(result["state"], "done", result["error"])
+        follow = [s for s in result["steps"] if s["name"] == "host-follow"]
+        self.assertEqual(len(follow), 1)
+        self.assertFalse(follow[0]["ok"])
+        self.assertIn("could not ask the Mac to follow", follow[0]["detail"])
+        self.assertEqual(self.env.inferno_rate(), 96000)
+
+    def test_no_follow_request_when_the_mac_chose_or_already_agrees(self):
+        self.env.set_inferno(48000, "48000,96000")
+        runner = FakeRunner(self.env, host=(96000, 96000), rate_request=True)
+        self.assertEqual(self.make(runner=runner).apply(self.rate(96000))["state"], "done")
+        self.env.set_inferno(48000, "48000,96000")
+        self.env.conf.write_text("METERS=1\n")
+        (self.env.spool / "rate-history.json").unlink()
+        self.assertEqual(self.make(runner=runner).apply(self.rate(96000, source="dante"))["state"], "done")
+        self.assertEqual([c for c in runner.calls if c[:1] == ["amixer"] and c[3] == "cset"], [])
 
     def test_a_mac_request_the_mac_no_longer_agrees_with_is_refused(self):
         self.env.set_inferno(48000, "48000,96000")

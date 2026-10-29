@@ -8,10 +8,12 @@
 #
 #   sudo ./test-rate-request.sh CANDIDATE_DIR [WINDOW_SECONDS]
 #
-# CANDIDATE_DIR is build/rate-request from build-rate-request.sh. usb16x16-dante stays
-# stopped for the whole window, so neither the owner nor the arbiter reacts to the
-# rate controls; it is started again after the restore if it was running. In the
-# window, as the normal user:
+# CANDIDATE_DIR is build/rate-request (the experiment) or build/rate-request-production
+# from build-rate-request.sh. With the experiment usb16x16-dante stays stopped for the
+# whole window, so neither the owner nor the arbiter reacts to the rate controls; with
+# the production pair it runs in the window as it did before (for the noise probe), so
+# leave the control alone then. Either way it is started again after the restore if it
+# was running. In the experiment's window, as the normal user:
 #   amixer -c UAC2Gadget cset iface=PCM,name='Device Rate Request' 44100
 # and read the Mac's nominal rate with setrate.swift. The kernel's "rate request:"
 # lines (the control write, the interrupt's completion, the host's GET_CUR and
@@ -27,9 +29,19 @@ kernel_release=$(uname -r)
 updates=/lib/modules/$kernel_release/updates/usb-16x16
 end_file=/dev/shm/rate-request-test.end
 expected_kernel_release=6.18.34+rpt-rpi-2712
-expected_candidate_u_audio=0e724e75bb96b0ba0afdb48f14ad0f51b1ba7e14a0a5df63c2095cb1a105e22b
-expected_candidate_f_uac2=dd00bcc9bdd846fb03905393ed220fdea38a0fbe52dc653d4ada78f6de093528
-expected_candidate_srcversions=D4EA8C97F9638D0B57D14D6/F689FE37BB73173DC75F691
+case "$(basename "$candidate_dir")" in
+  rate-request)
+    expected_candidate_u_audio=0e724e75bb96b0ba0afdb48f14ad0f51b1ba7e14a0a5df63c2095cb1a105e22b
+    expected_candidate_f_uac2=dd00bcc9bdd846fb03905393ed220fdea38a0fbe52dc653d4ada78f6de093528
+    expected_candidate_srcversions=D4EA8C97F9638D0B57D14D6/F689FE37BB73173DC75F691
+    dante_in_window=0;;
+  rate-request-production)
+    expected_candidate_u_audio=ed539ca898298b3d90863db51808153f83a702f4f330d08bb12753ed7b9baf57
+    expected_candidate_f_uac2=505c6ad0bad44f92f5487988d2f192efd9bd7018b7fc60e45e86c90080e20fe2
+    expected_candidate_srcversions=681145C2E4636CAF77983DE/3373101B95DBCD81E04F33F
+    dante_in_window=1;;
+  *) echo "CANDIDATE_DIR must be build/rate-request or build/rate-request-production" >&2; exit 2;;
+esac
 expected_installed_u_audio=b2f5c6cd7c4e25a0d62f6e603ce974b598a269688a3ef79db8c884c7994b4446
 expected_installed_f_uac2=fa8bed124e6755695f056a24b448d2fda0027ef1e19fe2fa512533eb3db1f093
 expected_installed_srcversions=DD2DD5108A06E3270F336AF/C647475B059D8F6DB983CED
@@ -110,8 +122,9 @@ swap_out
   { echo "candidate modules did not load: $(srcversions)" >&2; exit 10; }
 systemctl start usb-16x16.service
 wait_for_usb 10 || { echo "candidate gadget did not enumerate configured/high-speed" >&2; exit 11; }
+if [ "$dante_in_window" -eq 1 ] && [ "$dante_was_active" -eq 1 ]; then systemctl start usb16x16-dante; fi
 
-echo "CANDIDATE READY for $window_seconds s at $(date -u +%T) UTC: rates $(rates); dante $(systemctl is-active usb16x16-dante) (stopped for the window)"
+echo "CANDIDATE READY for $window_seconds s at $(date -u +%T) UTC: rates $(rates); dante $(systemctl is-active usb16x16-dante)"
 echo "end early: touch $end_file (or Ctrl-C)"
 for second in $(seq 1 "$window_seconds"); do
   [ -e "$end_file" ] && { echo "end file seen"; break; }

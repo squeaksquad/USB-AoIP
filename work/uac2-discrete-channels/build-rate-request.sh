@@ -1,17 +1,26 @@
 #!/bin/bash
-# build-rate-request.sh: build the Mac-follow experiment (RATE_REPORT_PLAN.md,
-# "Mac-follow experiment") on the Pi, as the normal user, without touching the
-# kernel source tree or anything installed. Run from the directory holding this
-# script and the four patches (staged as ~/usb-16x16-work/gadget-raterequest/).
+# build-rate-request.sh [experiment|production]: build the Device Rate Request
+# modules (RATE_REPORT_PLAN.md, "Mac-follow experiment" and "Rate request: the
+# production set") on the Pi, as the normal user, without touching the kernel
+# source tree or anything installed. Run from the directory holding this script
+# and the patches (staged as ~/usb-16x16-work/gadget-raterequest/).
 #
 # Two builds in build/, from copies of the tree's sources, as build-rate-report.sh:
 #   control/       the label sources plus uac2-rate-report-6.18.34.patch: says whether
 #                  this build reproduces the installed rate-report pair.
-#   rate-request/  the same plus uac2-rate-request-experiment-6.18.34.patch: the
-#                  experiment candidate, for test-rate-request.sh only, never installed.
+#   rate-request/  experiment (the default): the same plus
+#                  uac2-rate-request-experiment-6.18.34.patch, with its kernel log
+#                  lines; for test-rate-request.sh only, never installed.
+#   rate-request-production/  production: the same plus uac2-rate-request-6.18.34.patch,
+#                  the candidate for install-rate-request.sh.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
+case "${1:-experiment}" in
+  experiment) request_patch=uac2-rate-request-experiment-6.18.34.patch; out=rate-request;;
+  production) request_patch=uac2-rate-request-6.18.34.patch; out=rate-request-production;;
+  *) echo "usage: $0 [experiment|production]" >&2; exit 2;;
+esac
 tree=${KERNEL_TREE:-$HOME/src/linux-6.18.34}/drivers/usb/gadget/function
 kdir=/lib/modules/$(uname -r)/build
 expected_kernel_release=6.18.34+rpt-rpi-2712
@@ -20,7 +29,7 @@ installed_f_uac2_sha256=fa8bed124e6755695f056a24b448d2fda0027ef1e19fe2fa512533eb
 
 [ "$(uname -r)" = "$expected_kernel_release" ] || { echo "kernel is $(uname -r), not $expected_kernel_release" >&2; exit 3; }
 for f in uac2-shared-clock-6.18.34.patch uac2-discrete-channel-names-6.18.34.patch \
-         uac2-rate-report-6.18.34.patch uac2-rate-request-experiment-6.18.34.patch; do
+         uac2-rate-report-6.18.34.patch "$request_patch"; do
   [ -r "$here/$f" ] || { echo "missing $here/$f" >&2; exit 2; }
 done
 
@@ -58,10 +67,10 @@ else
   echo "  control differs from the installed rate-report pair (b2f5c6cd / fa8bed12)"
 fi
 
-echo "rate-request build"
-prepare "$here/build/rate-request"
-patch -s -p5 -d "$here/build/rate-request" < "$here/uac2-rate-request-experiment-6.18.34.patch"
-make -s -C "$kdir" M="$here/build/rate-request" modules >"$here/build/rate-request.log" 2>&1 || { tail -20 "$here/build/rate-request.log"; exit 5; }
-if grep -E 'warning|error' "$here/build/rate-request.log"; then echo "the build has warnings; see build/rate-request.log" >&2; exit 6; fi
-report "$here/build/rate-request"
-echo "  usb_f_uac2 needs: $(/usr/sbin/modinfo -F depends "$here/build/rate-request/usb_f_uac2.ko")"
+echo "$out build ($request_patch)"
+prepare "$here/build/$out"
+patch -s -p5 -d "$here/build/$out" < "$here/$request_patch"
+make -s -C "$kdir" M="$here/build/$out" modules >"$here/build/$out.log" 2>&1 || { tail -20 "$here/build/$out.log"; exit 5; }
+if grep -E 'warning|error' "$here/build/$out.log"; then echo "the build has warnings; see build/$out.log" >&2; exit 6; fi
+report "$here/build/$out"
+echo "  usb_f_uac2 needs: $(/usr/sbin/modinfo -F depends "$here/build/$out/usb_f_uac2.ko")"
