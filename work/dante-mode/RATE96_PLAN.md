@@ -651,3 +651,12 @@ subscriptions, all 64 as `subscriptions-before.json` (`subscriptions-back48.json
   "The level is a draw at each owner start"), and the Metric Halo was rebooted at 96 and moved to 48
   since the last reference, so the far loop's own delay may have changed too. A service restart and a
   second 100 would tell the draw from a lasting change.
+
+**MEASURED 2026-10-29 23:27-23:32 UTC: after a service restart the 48 kHz level is higher again, 403 /
+`daw_timeline` 555 (11.562 ms), spread 0** (`back48r-roundtrip-32f-*`; start check ok, noise probe clean,
+`back48r-noise-ch2-32f-*`). Two starts, 391 and 403, both above every earlier 48 kHz reference (329-379),
+so not one unlucky draw. The Pi side reads as usual: the owner's means at their set depths (tx 127.5,
+rx 102.0) and `tx_prime_found` 79-103 across today's opens. Most likely the far loop's own delay changed
+with the Metric Halo's reboot at 96 and move to 48 (a buffer or latency setting it came back with); not
+shown. To check: the Metric Halo's settings against a known state, or a reboot of it at 48 and 100
+impulses.
