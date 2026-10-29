@@ -1,0 +1,17 @@
+2026-10-29T02:46:28+00:00 audio-dev systemd[1]: Started usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-29T02:46:28+00:00 audio-dev usb16x16-dante[1875036]: USBRATE refused host_capture=44100 host_playback=44100 rate=48000; the USB half stays closed
+2026-10-29T02:46:28+00:00 audio-dev usb16x16-dante[1875036]: USBRATE requested rate=44100 source=usb at=1793241988 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-29T02:46:38+00:00 audio-dev usb16x16-dante[1875036]: USBRATE still refused host_capture=44100 host_playback=44100 rate=48000; asking again
+2026-10-29T02:46:38+00:00 audio-dev usb16x16-dante[1875036]: USBRATE requested rate=44100 source=usb at=1793241998 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-29T02:46:44+00:00 audio-dev usb16x16-dante-rate[1874987]: 6dd4361eb639919f: done
+2026-10-29T02:46:45+00:00 audio-dev usb16x16-dante[1875036]: USBRATE cleared host_capture=48000 host_playback=48000 rate=48000
+2026-10-29T02:46:45+00:00 audio-dev usb16x16-dante[1875036]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+receipt done {'from': 44100, 'source': 'dante', 'to': 48000} None
+  2026-10-29T02:46:28Z validating True 44100 -> 48000 Hz asked by dante; direct; USB host 44100/44100
+  2026-10-29T02:46:28Z stopping True systemctl stop usb16x16-dante.service
+  2026-10-29T02:46:28Z switching True /etc/usb16x16/dante/owner.conf -> direct at 48000 Hz, asound-inferno-owner.conf with it
+  2026-10-29T02:46:28Z starting True systemctl start usb16x16-dante.service
+  2026-10-29T02:46:28Z verifying True waiting up to 75 s for the owner to start both streams
+  2026-10-29T02:46:29Z settling True 15 s on one start with nothing fatal
+  2026-10-29T02:46:44Z host-follow True asked the Mac to follow to 48000 Hz (gadget clock interrupt)
+history {"at":1793242004.912635,"from":44100,"overrode":44100,"source":"dante","to":48000}

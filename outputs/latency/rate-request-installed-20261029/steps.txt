@@ -1,0 +1,14 @@
+02:42:48 F1 set 44100
+02:46:22 f1-back set 48000
+02:46:22.988 USB 16x16 nominal=44100
+02:46:44.928 USB 16x16 nominal=48000
+02:47:38 F2 hold client open (pid 35800)
+02:47:38 f2-to441 set 44100
+02:47:38.621 USB 16x16 nominal=48000
+02:48:00.691 USB 16x16 nominal=44100
+02:50:51 f2-to48 set 48000
+02:50:51.538 USB 16x16 nominal=44100
+02:51:13.686 USB 16x16 nominal=48000
+02:51:34 F2 hold client closed
+02:52:05 F3 Mac set 44100: USB 16x16 nominal=44100
+02:55:20 F3 Mac set 48000: USB 16x16 nominal=48000

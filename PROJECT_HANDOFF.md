@@ -14501,3 +14501,24 @@ rate until the owner has joined the Mac at the new one (`overrode` in `rate-hist
 Rollback: `cd ~/usb-16x16-work/gadget-ratereport && sudo ./install-rate-report.sh rollback` (the
 label module, the stock `u_audio`, applier 1.5.0 4a4aef82); it must come before any older module
 rollback.
+
+**INSTALLED 2026-10-29 02:41 UTC: the rate-request set (the Mac follows a Dante-side rate
+change); behaviour, noise probe and two-minute soak PASSED, awaiting the operator's
+acceptance.** `work/uac2-discrete-channels/install-rate-request.sh` (745f2b9a) installed
+`u_audio.ko` ed539ca8 and `usb_f_uac2.ko` 505c6ad0 under `updates/usb-16x16/` (the rate-report
+sources plus `uac2-rate-request-6.18.34.patch`; srcversions 681145C2... / 3373101B...) and
+`usb16x16-apply` 1.7.0 1a85bd3d. The gadget has a writable `Device Rate Request` control:
+writing a rate moves the gadget's clock and sends the clock source's SAM_FREQ interrupt, and
+macOS re-reads the clock and changes the `USB 16x16`'s nominal rate, idle or streaming, with no
+SET_CUR back. The arbiter writes it after a Dante-side or page move is verified at the new rate.
+- FOUND (experiment, 2026-10-29 02:23, bounded test, nothing installed): the interrupt reaches the
+  Mac in under 1 ms and one GET_CUR on the clock follows in 1-6 ms; idle and streaming alike.
+- F1/F2 (Dante 48 <-> 44.1, Mac idle, then with a client streaming): the Mac followed within
+  about 1 s of the arbiter's `host-follow` step each time, owner `host_rate=match` at once. F3: a
+  Mac-side change still wins (source `usb`, no follow write). Noise probe at 32 clean; soak PASS
+  (`raterequest-soak120-soak-120s-32f-20261029T025730Z`). The follow waits for the applier's 15 s
+  settle (USB half closed ~16 s per move); a candidate refinement.
+Plan, results and evidence: `work/uac2-discrete-channels/RATE_REPORT_PLAN.md` (last sections),
+`outputs/latency/rate-request-*-20261029/`.
+Rollback: `cd ~/usb-16x16-work/gadget-raterequest && sudo ./install-rate-request.sh rollback`
+(the rate-report set, applier 1.6.0); it must come before `install-rate-report.sh rollback`.

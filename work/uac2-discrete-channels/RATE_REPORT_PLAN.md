@@ -844,3 +844,54 @@ endpoint and gadget units; times in UTC) and the two noise probes below.
 
 Next: `sudo ./install-rate-request.sh install` (operator), then F1-F3, a noise
 probe at 32 and the two-minute soak.
+
+## INSTALLED 2026-10-29 (02:41 UTC); F1-F3, noise probe and soak PASSED
+
+`sudo ./install-rate-request.sh install` (745f2b9a) by the operator: `u_audio.ko`
+ed539ca8 and `usb_f_uac2.ko` 505c6ad0 under `updates/usb-16x16/`, `usb16x16-apply`
+1.7.0 1a85bd3d; kept `*.pre-rate-request` (b2f5c6cd, fa8bed12, c3c14505). Loaded
+681145C2... / 3373101B..., configured, start check `ok`. Evidence
+`outputs/latency/rate-request-installed-20261029/` (`install-output.txt`;
+`steps.txt` and `check.sh`, the Dante-side set with the Mac's nominal rate logged
+every 0.25 s; `*-mac-rate.txt`, `*-pi.txt`, `f3-*.txt`; the six arbiter
+`receipts/`; `journal.txt` the endpoint, arbiter and start check, UTC). Sets made
+with `set-rate-one.py` to the Pi alone, so at 44.1 the start check reads `idle`
+(the Pulse stays at 48 and sends nothing): expected, as in B5.
+
+| # | Mac | Change | Arbiter | Mac nominal | Owner |
+|---|---|---|---|---|---|
+| F1 | idle | Dante 48 -> 44.1 (02:42:48) | `done` 02:43:10, `host-follow` ok | 44100 at 02:43:11.1 | `USBOPEN ... rate=44100 host_rate=match` 02:43:11 |
+| F1 | idle | Dante 44.1 -> 48 (02:46:22) | `done` 02:46:44, `host-follow` ok | 48000 at 02:46:44.9 | match 02:46:45 |
+| F2 | hold client streaming | Dante 48 -> 44.1 (02:47:38) | `done` 02:48:00, `host-follow` ok | 44100 at 02:48:00.7 | match 02:48:01; client still running |
+| F2 | hold client streaming | Dante 44.1 -> 48 (02:50:51) | `done` 02:51:13, `host-follow` ok | 48000 at 02:51:13.7 | match 02:51:14; client still running |
+| F3 | idle | Mac 48 -> 44.1 (02:52:05) | `done` 02:52:24, source `usb`, no `host-follow` | 44100 (set) | match 02:52:08 |
+| F3 | idle | Mac 44.1 -> 48 (02:55:20) | `done` 02:55:39, source `usb`, no `host-follow` | 48000 (set) | match 02:55:23 |
+
+- Every Dante-side move: the Mac's nominal rate followed within about one
+  second of the `host-follow` step, and the owner opened at once with
+  `host_rate=match`; no `refused` request after the follow, no tug-of-war.
+- Noise probe at 32 after F3: clean
+  (`raterequest-installed-noise-ch2-32f-20261029T025631Z`: zero runs >= 4: 0, no
+  xrun, lag or error lines). Two-minute soak: **PASS**
+  (`raterequest-soak120-soak-120s-32f-20261029T025730Z`: 16 channels, longest zero
+  run 1, discontinuities 0/0, no xrun, lag or error lines). Mac at 48000.
+
+Seen, not changed:
+- **The follow waits for the applier's 15 s settle.** The control is written
+  after `settling`, so the USB half stays closed for about 16 s after the
+  restart, and the owner asks for the old rate twice (0 and 10 s) meanwhile.
+  Writing it once `verifying` has passed (the endpoint runs at N) would cut
+  that to about 1 s; the settle's rollback would then also have to set the Mac
+  back. Left as is; a candidate refinement.
+- **A rate request written while the arbiter runs is not seen.** The owner's
+  last request (for the old rate, written during the settle) stays in
+  `/run/usb16x16-dante/rate-request` because the path unit does not trigger
+  for a change made while its service is active. Harmless here (the next
+  write replaces the file whole, and a stale request for the old rate would
+  be refused by the guard or the host wait), and older than this change.
+
+Not covered: 88.2 / 96 on this route; Pro Tools open during a Dante-side move;
+Dante Switcher's parallel Mac set racing the follow (both set the same rate).
+Awaiting the operator's acceptance. Rollback:
+`cd ~/usb-16x16-work/gadget-raterequest && sudo ./install-rate-request.sh rollback`
+(the rate-report set), before `install-rate-report.sh rollback`.

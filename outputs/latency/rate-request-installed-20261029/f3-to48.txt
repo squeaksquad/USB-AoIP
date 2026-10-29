@@ -1,0 +1,8 @@
+2026-10-29T02:55:21+00:00 audio-dev usb16x16-dante[1876201]: USBRATE changed host_capture=48000 host_playback=48000 rate=44100 while open; handing the USB half back
+2026-10-29T02:55:21+00:00 audio-dev usb16x16-dante[1876201]: USBCLOSE reason=-34 (Numerical result out of range)
+2026-10-29T02:55:22+00:00 audio-dev usb16x16-dante[1876201]: USBRATE refused host_capture=48000 host_playback=48000 rate=44100; the USB half stays closed
+2026-10-29T02:55:22+00:00 audio-dev usb16x16-dante[1876201]: USBRATE requested rate=48000 source=usb at=1793242522 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-29T02:55:23+00:00 audio-dev systemd[1]: Started usb16x16-dante.service - USB 16x16 Dante endpoint (usb16x16-dante-owner).
+2026-10-29T02:55:23+00:00 audio-dev usb16x16-dante[1876783]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+2026-10-29T02:55:39+00:00 audio-dev usb16x16-dante-rate[1876751]: a393762e9800a386: done
+receipt done {'from': 44100, 'source': 'usb', 'to': 48000} None ['validating', 'stopping', 'switching', 'starting', 'verifying', 'settling']

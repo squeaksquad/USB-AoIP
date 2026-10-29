@@ -1,0 +1,8 @@
+(sudo ./install-rate-request.sh install on the Pi, 745f2b9a, operator, terminal output)
+installed the rate-request set: u_audio ed539ca8, usb_f_uac2 505c6ad0, usb16x16-apply 1.7.0 1a85bd3d
+kept for rollback: /lib/modules/6.18.34+rpt-rpi-2712/updates/usb-16x16/u_audio.ko.pre-rate-request, /lib/modules/6.18.34+rpt-rpi-2712/updates/usb-16x16/usb_f_uac2.ko.pre-rate-request, /usr/local/bin/usb16x16-apply.pre-rate-request
+u_audio.ko (updates): ed539ca8  kept: b2f5c6cd
+usb_f_uac2.ko: 505c6ad0  kept: fa8bed12
+usb16x16-apply: 1a85bd3d  kept: c3c14505
+loaded: rate-request (681145C2E4636CAF77983DE/3373101B95DBCD81E04F33F)
+usb: configured/high-speed  rates: 48000/48000/0  dante: active
