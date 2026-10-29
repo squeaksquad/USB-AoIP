@@ -595,3 +595,13 @@ For this patch: behaviour B1, B2, B4, B5 passed; B3 (the forget) is
 unobservable on this hardware (no VBUS sense); noise probes at 32 clean,
 the latest after the Ferrofish restart (02:07:58). Owed under the new rule:
 the two-minute soak.
+
+## ACCEPTED 2026-10-29 02:16 UTC (operator)
+
+Two-minute soak PASS (`ratereport-soak120-soak-120s-32f-20261029T021348Z`, 02:13:48:
+16 channels, longest zero run 1, discontinuities 0/0, no xrun, lag or error lines,
+`out_holes` / `back_holes` unchanged). The rate-report set (`u_audio` b2f5c6cd,
+`usb_f_uac2` fa8bed12, `usb16x16-apply` 1.6.0 c3c14505) is part of the Dante
+point of record; the handoff tail has the entry. Open: the 4-sample all-channel
+runs seen in what the Pi sent under the capture; the Mac-follow experiment
+(the clock interrupt) is the next step for "the Mac should follow Dante".

@@ -34,7 +34,9 @@ rate added to Inferno's list needs no resave (`OFFERED_RATES` in
 `work/dsp-compiler/compile.mjs` is `[44100, 48000]`, a label kept in step).
 
 **Open, by the operator's call on 2026-10-28.**
-1. The gadget reports the Mac's last rate (operator: "can the gadget just report
+1. DONE, ACCEPTED 2026-10-29 02:16 UTC (handoff tail; `work/uac2-discrete-channels/RATE_REPORT_PLAN.md`):
+   the rate-report modules and applier 1.6.0 are installed. Below is the item as it was opened.
+   The gadget reports the Mac's last rate (operator: "can the gadget just report
    the last set sample rate?"). The rate controls read 0 whenever the Mac is not
    streaming, so with nothing open a Dante-side set is accepted against the Mac's
    choice, and a Mac-side change reaches the Pi only when an app next opens. The

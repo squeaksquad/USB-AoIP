@@ -14472,3 +14472,32 @@ moves through Dante 48 -> 44.1 -> 48 and the refused Dante-side set (03:15-03:35
 moves through the arbiter on rate7 and rate8 (11:48, 16:55). Not part of it: the page and the
 compiler still offer 48 only (`OFFERED_RATES`), so a DSP preset has no 44.1 artifact and the
 arbiter refuses 44.1 while one runs; the service runs `direct`.
+
+**ACCEPTED 2026-10-29 02:16 UTC (operator): the rate-report set is part of the Dante point of
+record.** `work/uac2-discrete-channels/install-rate-report.sh` (a4de9995) installed `u_audio.ko`
+b2f5c6cd and `usb_f_uac2.ko` fa8bed12 under `updates/usb-16x16/` (the label module plus
+`uac2-rate-report-6.18.34.patch`; srcversions DD2DD510... / C647475B...; the stock `u_audio.ko.xz`
+never written) and `usb16x16-apply` 1.6.0 c3c14505. The gadget's `Capture Rate` / `Playback Rate`
+now report the Mac's last SET_CUR until a disconnect or bus reset, not 0 whenever the Mac is idle,
+so a Mac-side rate change with no app open moves the endpoint (about 4 s). The arbiter takes a
+Dante-side set over an idle Mac at another rate and refuses the owner's request for the Mac's old
+rate until the owner has joined the Mac at the new one (`overrode` in `rate-history.json`,
+`mac_followed`). Plan, results and evidence: `work/uac2-discrete-channels/RATE_REPORT_PLAN.md`.
+- FOUND (trace, 2026-10-28 18:36): an idle Mac sends SET_CUR on every rate change and at
+  enumeration, never at a stream start; its interfaces drop to alt 0 as the last client closes.
+- FOUND: the Pi never sees a USB unplug (dwc2 without VBUS sense): the controls keep the last rate
+  while the cable is out; the replug's reset is seen. The forget at that reset is not observable
+  (the Mac re-sends within milliseconds).
+- FOUND (2026-10-29 01:44, soak under an eth0 capture read per channel by
+  `outputs/latency/rate-report-capture-20261029/channel-zeros.py`): soak 2's and 3's holes were
+  zeros arriving from the far loop (32/64 samples, 4-16 channels); cleared by the operator's
+  Ferrofish restart at 01:58. Open: 4-sample all-channel zero runs in what the Pi sent, from
+  minutes into that soak, possibly the capture's own load.
+- Behaviour B1, B2, B4, B5 passed; four loaded runs clean on the Pi (329 / 372 / 359 / 335,
+  `daw_timeline` 481-524); noise probes at 32 clean; the two-minute soak PASS 02:13
+  (`ratereport-soak120-soak-120s-32f-20261029T021348Z`). Accepted under the rule added to
+  `CLAUDE.md` the same night: a change outside the audio path needs its behavioural checks, a
+  noise probe and a two-minute soak, not the full battery.
+Rollback: `cd ~/usb-16x16-work/gadget-ratereport && sudo ./install-rate-report.sh rollback` (the
+label module, the stock `u_audio`, applier 1.5.0 4a4aef82); it must come before any older module
+rollback.
