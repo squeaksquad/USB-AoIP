@@ -392,3 +392,22 @@ to `/dev/shm` (nothing streamed), host gain 3 of 3 under it each time, then 25-3
 - The slip, one frame dropped or repeated on every looped channel, is still not located. Two
   facts narrow it: `bitexact` cannot tell a drop from a repeat (both re-lock after one mismatch),
   and every capture so far either breaks the loop (streamed) or adds its own events (tmpfs).
+
+**MEASURED 2026-10-29 12:31-12:41 UTC, same session: back to 48 on the service; `bitexact` on
+the same 8-channel path PASSES at 48, so the slip belongs to the 96 operating point, not the
+routing.** Steps in `outputs/latency/rate96-loop8-20261029/steps.txt`: candidate stopped,
+`dante-sync sync --rate 48000 --source usb16x16` (MHLink, Pulse, DVS, D2USB to 48k, verified),
+then `dante-sync sync --rate 48000` for the USB 16x16 (the source is not set by the first), then
+`usb16x16-dante` started; start check `state=ok rate=6015 restarts=0`; the 64 subscriptions
+identical to `subscriptions-before.json` (`subscriptions-after48.json`). The candidate's last log
+is `owner-candidate-final.log`.
+- Noise probe at 32: zero runs >= 4: 0 (`loop8-back48-noise-ch2-32f-20261029T123328Z`).
+- 100 impulses: 379 / `daw_timeline` 531 (11.062 ms), against 530 (11.042 ms) on this path before 96.
+- `bitexact --loop-channels 8`, 360 s, host gain unity: **PASS** (`loop8-48-bitexact-360s-32f-
+  20261029T123450Z`): 17.28 M matches per channel, no mismatch, no lost lock, nothing off the grid.
+- Service counters: `back_holes` 0/0, `capture_faults` 0; `rx_overflow` 391 then 427, moving only
+  with `rx_primes` at the harness's opens, as recorded before.
+So on the same routing (MADI 25-32 through the Metric Halo strips), 48 is bit-exact and 96 drops
+or repeats one frame about every 90 s. Suspects for 96, untested: arm A's doubled depths and the
+owner's servo at 96 (one frame of drift corrected by a step, not a pitch), Inferno's 96k flows, the
+Pulse's 96k receive. The `daw_timeline` 916 at 96 and the soaks stand; `bitexact` at 96 does not.
