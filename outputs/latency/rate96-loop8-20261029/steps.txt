@@ -1,0 +1,4 @@
+04:29:03 stop usb16x16-dante
+04:29:03 dante-sync sync --rate 96000 --allow-band-up --exclude USB-16x16-Inferno
+04:29:35 dante-sync sync --source usb16x16 --exclude USB-16x16-Inferno (MH was left at 48)
+04:29:54 candidate start rate8 a15a9d84, rate96-candidate config, arm A

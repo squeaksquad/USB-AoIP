@@ -298,3 +298,33 @@ keep the 16-channel loop and the full battery.
 `USB16X16_LOOP_CHANNELS=8` soak 120 on the 8-channel return. (2) The rest of
 this plan's 96 sequence (offer 96, candidate configs, presets at 96), on this
 loop instead of DVS. (3) Subscriptions back to 49-64 at 48 and a 48 anchor.
+
+**MEASURED 2026-10-29 04:29-04:35 UTC: 96 kHz on the real loop, 8 channels, arm A: clean, and
+faster than 48 on the same path.** Evidence `outputs/latency/rate96-loop8-20261029/` (`steps.txt`,
+`dante-sync-to96.txt`, `subscriptions-before.json` / `-at96.json`, `owner-candidate.log`).
+- Routing (operator): Pi `TX 1-8` -> Pulse `Input 17-24` -> RemoteFish `MADI OUT 25-32` <-
+  `DANTE IN 17-24` -> Metric Halo strips t1-t8 (MA25-32 in, MADI Op 25-32 out, 0.0 dB) ->
+  `DANTE OUT 17-24` <- `MADI IN 25-32` -> Pulse `Output 17-24` -> Pi `RX 1-8`. Pi 9-16 go via
+  MADI 33-40, which does not exist at 96 (silent there).
+- 48 kHz reference on this path (installed service, 04:25): 100 impulses 378 /
+  `daw_timeline` 530 (11.042 ms), clean on the Pi.
+- Move: `systemctl stop usb16x16-dante`; `dante-sync sync --rate 96000 --allow-band-up
+  --exclude USB-16x16-Inferno` (Pulse, DVS, D2USB, the Mac's USB 16x16). It left MHLink at 48:
+  with `--rate` and no `--source` the Metric Halo is the source and is not set. A second
+  `dante-sync sync --source usb16x16 --exclude USB-16x16-Inferno` set MHLink to 96. Pulse word
+  clock locked throughout.
+- Candidate: owner rate8 a15a9d84 (the installed one), `config/asound-inferno-owner-rate96-candidate.conf`
+  (same identity as the service), arm A (`--rate 96000 --period 64 --buffer 2048 --tx-lead 256
+  --guard 512 --usb-period 96 --usb-buffer 960 --rx-queue 192 --rx-slack 192`), started 04:29:55;
+  `USBOPEN ... rate=96000 host_rate=match`. All 64 subscriptions present and connected at 96,
+  none lost (every channel the Pi uses on the Pulse is inside 1-32 now).
+- Noise probe at 32: clean (`loop8-96-noise-ch2-32f-20261029T043054Z`: zero runs >= 4: 0).
+- 100 impulses: **680 / `daw_timeline` 916 = 9.542 ms** (io_offset 236), against 11.042 ms at 48
+  on the same path.
+- Soak 120 s, `USB16X16_LOOP_CHANNELS=8`: **PASS** (`loop8-96-soak-120s-32f-20261029T043237Z`:
+  channels 1-8, longest zero run 1, discontinuities 0/0).
+- The owner's ` ERROR ` lines (+10, +12, +38) are all Inferno's control server logging
+  `unknown opcode1` 0x00 / 0x2204 packets (Controller's queries; RESULTS.md), not audio: no xrun,
+  lag, fault, overflow or re-prime in the owner's counters.
+Not yet run at 96: the four loaded 800-impulse runs, the ten-minute soak, `bitexact
+--loop-channels 8`, the hour on `loaded`, `dsp_us_max`.

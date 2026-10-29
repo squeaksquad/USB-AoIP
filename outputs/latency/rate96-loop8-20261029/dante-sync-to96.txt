@@ -1,0 +1,44 @@
+Dante interface en12 169.254.253.98 (4c:ea:41:63:33:8f)
+Target rate 96k. Listening for devices for 4 s…
+Set FF-PULSE-16-DX 48k → 96k
+FF-PULSE-16-DX word clock locked.
+Set Bryans-MBP-M2-Max 48k → 96k
+Set D2USB-6152f1 48k → 96k
+Set USB 16x16 48k → 96k (CoreAudio)
+
+  USB-16x16-Inferno      skipped          excluded
+  FF-PULSE-16-DX         changed          verified by heartbeat after 3.0 s
+  Bryans-MBP-M2-Max      changed          verified by heartbeat after 4.0 s
+  D2USB-6152f1           changed          verified by heartbeat after 1.3 s
+  USB 16x16              changed          verified by CoreAudio after 0.5 s
+96k: 4 changed, 1 skipped
+Clock master MHLink [49057]: 48k
+USB 16x16: 96k (offers 44.1k, 48k, 88.2k, 96k)
+Leader FF-PULSE-16-DX: word clock LOCKED (state 3, stratum 41)
+
+Device                IP               Rate    Port   Heartbeat
+Bryans-MBP-M2-Max     169.254.253.98   96k     38700  1.4s ago  (DVS)
+D2USB-6152f1          169.254.242.82   96k     8700   2.0s ago
+FF-PULSE-16-DX        169.254.248.189  96k     8700   1.2s ago
+USB-16x16-Inferno     —                —       8700   none
+Dante interface en12 169.254.253.98 (4c:ea:41:63:33:8f)
+USB 16x16: 96k
+Target rate 96k. Listening for devices for 4 s…
+Set MHLink [49057] 48k → 96k (CoreAudio)
+FF-PULSE-16-DX word clock locked.
+
+  USB-16x16-Inferno      skipped          excluded
+  MHLink [49057]         changed          verified by CoreAudio after 0.4 s
+  FF-PULSE-16-DX         already at rate  96k
+  Bryans-MBP-M2-Max      already at rate  96k
+  D2USB-6152f1           already at rate  96k
+96k: 1 changed, 3 already at rate, 1 skipped
+Clock master MHLink [49057]: 96k
+USB 16x16: 96k (offers 44.1k, 48k, 88.2k, 96k)
+Leader FF-PULSE-16-DX: word clock LOCKED (state 3, stratum 41)
+
+Device                IP               Rate    Port   Heartbeat
+Bryans-MBP-M2-Max     169.254.253.98   96k     38700  1.3s ago  (DVS)
+D2USB-6152f1          169.254.242.82   96k     8700   1.4s ago
+FF-PULSE-16-DX        169.254.248.189  96k     8700   1.2s ago
+USB-16x16-Inferno     —                —       8700   none
