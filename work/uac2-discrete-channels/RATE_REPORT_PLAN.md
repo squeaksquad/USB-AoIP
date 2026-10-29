@@ -495,3 +495,31 @@ with its rollback), then B3, B5, B6 and B7 on the installed set.
 Install command (operator's sudo):
 `cd ~/usb-16x16-work/gadget-ratereport && sudo ./install-rate-report.sh install`.
 Then B3, B5, B6, B7 on the installed set.
+
+## INSTALLED 2026-10-28 (start check ok 23:40:15 UTC); B5 passed
+
+`sudo ./install-rate-report.sh install` (a4de9995) by the operator: `u_audio.ko`
+b2f5c6cd and `usb_f_uac2.ko` fa8bed12 under `updates/usb-16x16/`,
+`usb16x16-apply` 1.6.0 c3c14505; kept `usb_f_uac2.ko.pre-rate-report`
+(87989337) and `usb16x16-apply.pre-rate-report` (4a4aef82). Loaded pair
+DD2DD510.../C647475B..., configured/high-speed, idle controls 48000/48000.
+Evidence `outputs/latency/rate-report-installed-20261028/` (`b5-journal.txt`,
+times EDT; `idle-controls-20min.txt`, 2,353 reads 23:58-00:18 UTC, all
+configured at 48000/48000 with nothing open on the Mac).
+
+B5, Mac idle at 48, Dante-side set to 44.1 (`set-rate-one.py 169.254.92.97
+44100`, 23:51:44):
+- taken over the Mac's 48 (the 5 s wait, then `done`); endpoint at 44.1 by
+  23:51:50; `rate-history.json` `overrode` 48000;
+- the owner: `USBRATE refused host 48000 rate=44100`, requests for 48000 at
+  10, 20 and 40 s (rate8); the arbiter refused them with "the Mac has not
+  followed yet", also past the 30 s reversal window: no tug-of-war, the USB
+  half closed;
+- Mac set to 44.1 by hand (23:53:34): `USBRATE cleared`, `USBOPEN ...
+  host_rate=match` at once, no restart;
+- Mac back to 48 (23:53:49): a new choice (the owner had joined at 44.1),
+  `done`, owner at 48000, `host_rate=match`, by 23:53:53.
+
+Still owed: B3/B6 (a cable pull; two loggers ran 4 and 20 minutes without one),
+B7 (four loaded 800-impulse runs, the ten-minute soak, bitexact, one loaded run
+at 44.1, labels). Rollback: `sudo ./install-rate-report.sh rollback`.

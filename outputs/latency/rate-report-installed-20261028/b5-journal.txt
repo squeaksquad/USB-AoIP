@@ -1,0 +1,26 @@
+2026-10-28T19:51:49.835857-04:00 audio-dev usb16x16-dante[1795916]: START usb16x16-dante-owner mode=usb pcm=inferno rate=44100 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-13.58 seed_from_file=1
+2026-10-28T19:51:50.101193-04:00 audio-dev usb16x16-dante[1795916]: NETSTART capture=RUNNING playback=RUNNING
+2026-10-28T19:51:50.119934-04:00 audio-dev usb16x16-dante[1795916]: USBRATE refused host_capture=48000 host_playback=48000 rate=44100; the USB half stays closed
+2026-10-28T19:51:50.119985-04:00 audio-dev usb16x16-dante[1795916]: USBRATE requested rate=48000 source=usb at=1793231510 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-28T19:52:00.147483-04:00 audio-dev usb16x16-dante[1795916]: USBRATE still refused host_capture=48000 host_playback=48000 rate=44100; asking again
+2026-10-28T19:52:00.147782-04:00 audio-dev usb16x16-dante[1795916]: USBRATE requested rate=48000 source=usb at=1793231520 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-28T19:52:06.467634-04:00 audio-dev usb16x16-dante-rate[1795834]: 38a595069d11305a: done
+2026-10-28T19:52:20.202464-04:00 audio-dev usb16x16-dante[1795916]: USBRATE still refused host_capture=48000 host_playback=48000 rate=44100; asking again
+2026-10-28T19:52:20.202829-04:00 audio-dev usb16x16-dante[1795916]: USBRATE requested rate=48000 source=usb at=1793231540 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-28T19:52:20.353783-04:00 audio-dev usb16x16-dante-rate[1796160]: bab3b2f8b18e3525: refused — the endpoint moved to 44100 Hz on the Dante side over the Mac's 48000 Hz and the Mac has not followed yet; its 48000 Hz is the old rate, not a new choice, so nothing changes
+2026-10-28T19:53:00.312399-04:00 audio-dev usb16x16-dante[1795916]: USBRATE still refused host_capture=48000 host_playback=48000 rate=44100; asking again
+2026-10-28T19:53:00.312734-04:00 audio-dev usb16x16-dante[1795916]: USBRATE requested rate=48000 source=usb at=1793231580 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-28T19:53:00.446382-04:00 audio-dev usb16x16-dante-rate[1796401]: 702e74404dcdfea3: refused — the endpoint moved to 44100 Hz on the Dante side over the Mac's 48000 Hz and the Mac has not followed yet; its 48000 Hz is the old rate, not a new choice, so nothing changes
+2026-10-28T19:53:35.408531-04:00 audio-dev usb16x16-dante[1795916]: USBRATE cleared host_capture=44100 host_playback=44100 rate=44100
+2026-10-28T19:53:35.408822-04:00 audio-dev usb16x16-dante[1795916]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=44100 host_rate=match host_capture=44100 host_playback=44100
+2026-10-28T19:53:50.450293-04:00 audio-dev usb16x16-dante[1795916]: USBRATE changed host_capture=48000 host_playback=48000 rate=44100 while open; handing the USB half back
+2026-10-28T19:53:51.473209-04:00 audio-dev usb16x16-dante[1795916]: USBRATE refused host_capture=48000 host_playback=48000 rate=44100; the USB half stays closed
+2026-10-28T19:53:51.473564-04:00 audio-dev usb16x16-dante[1795916]: USBRATE requested rate=48000 source=usb at=1793231631 from the arbiter in /run/usb16x16-dante/rate-request
+2026-10-28T19:53:51.851358-04:00 audio-dev usb16x16-dante[1796695]: START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-13.58 seed_from_file=1
+2026-10-28T19:53:52.117842-04:00 audio-dev usb16x16-dante[1796695]: NETSTART capture=RUNNING playback=RUNNING
+2026-10-28T19:53:52.133004-04:00 audio-dev usb16x16-dante[1796695]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+2026-10-28T19:54:08.374913-04:00 audio-dev usb16x16-dante-rate[1796660]: fbec6adb0b1c8858: done
+u_audio.ko (updates): b2f5c6cd  usb_f_uac2.ko: fa8bed12  kept: 87989337
+usb16x16-apply: c3c14505  kept: 4a4aef82
+loaded: rate-report (DD2DD5108A06E3270F336AF/C647475B059D8F6DB983CED)
+usb: configured/high-speed  rates: 48000/48000  dante: active
