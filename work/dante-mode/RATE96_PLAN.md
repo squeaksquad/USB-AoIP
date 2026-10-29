@@ -574,3 +574,25 @@ Metric Halo, without a reboot, `bitexact --loop-channels 8` still PASSES at 96 k
 - Not shown: what put the unit in that state (the day's rate moves 48 -> 96 -> 48 -> 96 are the obvious
   suspect) or whether it comes back after the next rate change. Operating note until then: after moving
   the loop to 96k, reboot the Metric Halo before a bit-exact measurement.
+
+**MEASURED 2026-10-29 21:00-22:02 UTC: the hour on `loaded@96000` (89759207), production owner
+a15a9d84 as a candidate, real 8-channel loop. Transport clean; soak verdict INCONCLUSIVE (harness
+limit); `dsp_us_max` over the planned budget in 6 % of the 10 s windows.** Candidate start: `START
+rate=96000`, `DSP loaded ... biquads=308`, NETSTART, `USBOPEN host_rate=match`; all 64 subscriptions as
+`subscriptions-before.json` (`rate96-slip-kind-20261029/subscriptions-dsphour.json`); noise probe at 32
+clean (`loop8-96dsp-noise-ch2-32f-20261029T210031Z`). Host gain from
+`loop8-96mhheavy-bitexact-360s-32f-20261029T180004Z.json`.
+- Soak `loop8-96dsphour-soak-3600s-32f-20261029T210151Z`: no discontinuity either way, longest zero run
+  11 (ch4), peaks 0.0046-0.0372 on channels 1-8. 46 zero runs of 4+; the harness kept 32 windows, so
+  `soak_reference.py` could not judge the other 14: inconclusive, which the wrapper counts as FAIL. At
+  44.1 kHz the same preset gave 8 in an hour; at 96 the low-passed output dwells near zero twice as many
+  samples, so more runs cross the threshold. Harness changed to keep 512 (39f815c, 23 tests pass,
+  `test_soak_reference.py` OK, app rebuilt); the hour is being rerun on the same candidate.
+- Owner over the hour: no resync, loss, capture or playback fault, re-prime or servo rejection;
+  `gap_us_max` at most 1349 (1.07 ms at 44.1); `back_holes` 144 (all-16 runs of 8+, channels 9-16
+  not looped and the preset's output, not faults); the error lines are Inferno's unknown-opcode chatter.
+- DSP cost (365 ten-second windows with audio): `dsp_us_mean` 157 (80 at 48: twice the samples, as
+  expected); `dsp_us_max` 150-300 in 343 windows, over 300 in 22, worst 414 (41 % of a 1 ms wake).
+  The plan's budget was 30 % (about 300 µs); at 48 the hour had 300 once. No fault or gap followed
+  any of them, but the budget is not met: the loaded preset at 96 has about 0.6 ms of the wake left
+  in its worst windows.
