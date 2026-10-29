@@ -560,3 +560,17 @@ lighter monitor output (far from the unit's DSP limit at 96k), `bitexact --loop-
   misplaced), the misplaced 16-frame block is most likely the Metric Halo's processing at 96k under a
   heavy DSP load, or a state it was in before the reboot. To separate them: the heavier preset again
   without a reboot (the slip should return if it is the load).
+
+**MEASURED 2026-10-29 18:00-18:06 UTC: with the operator's heavy monitor preset loaded again on the
+Metric Halo, without a reboot, `bitexact --loop-channels 8` still PASSES at 96 kHz.** Evidence
+`outputs/latency/loop8-96mhheavy-bitexact-360s-32f-20261029T180004Z.json`, owner log
+`rate96-slip-kind-20261029/owner-candidate-seq.log` (candidate rate8seq, unchanged since 14:48).
+- 360 s, 34.56 M frames, no discontinuity either way, no slip; the owner's sequence check logged nothing
+  inside the run but the stream's stop (SEQ n=351-358 `other 0` at the close), and no fault, re-prime or
+  resync (EVENT lines only the stream's open and close).
+- So the DSP load at 96k alone does not bring the misplaced block back: the change that removed it is the
+  reboot, i.e. a state the Metric Halo (or the far loop with it) was in before. Three clean runs in a row
+  against the earlier ~1.2 misplaced blocks per run: by chance about 3 %.
+- Not shown: what put the unit in that state (the day's rate moves 48 -> 96 -> 48 -> 96 are the obvious
+  suspect) or whether it comes back after the next rate change. Operating note until then: after moving
+  the loop to 96k, reboot the Metric Halo before a bit-exact measurement.
