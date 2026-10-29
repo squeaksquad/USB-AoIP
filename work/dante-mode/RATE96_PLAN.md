@@ -660,3 +660,14 @@ rx 102.0) and `tx_prime_found` 79-103 across today's opens. Most likely the far 
 with the Metric Halo's reboot at 96 and move to 48 (a buffer or latency setting it came back with); not
 shown. To check: the Metric Halo's settings against a known state, or a reboot of it at 48 and 100
 impulses.
+
+**MEASURED 2026-10-29 23:40 UTC: Metric Halo rebooted at 48 by the operator, same service start: 385 /
+`daw_timeline` 537 (11.188 ms), spread 0** (`mh48-roundtrip-32f-*`; every device at 48, MHLink clock
+master, the Pulse's word clock locked, 64/64 subscriptions as the reference
+(`rate96-slip-kind-20261029/subscriptions-mh48.json`), noise probe clean (`mh48-noise-ch2-32f-*`)).
+- Down 18 from 403, still above the earlier 329-379. Not separated: each harness open draws its own
+  priming depth too (`tx_prime_found` 93 for the 403 run, 81 for this one), so the 18 may be mostly that
+  draw rather than the reboot. Today's three 48 kHz readings (391, 403, 385) sit 6-24 above the old
+  range; the far loop's delay and the open's draw are both in it and these runs do not split them.
+- Next time it matters: several harness opens on one start (the draw's spread) against the same after a
+  Metric Halo reboot, or an eth0 capture timing the Pi -> Pulse -> Pi leg directly.
