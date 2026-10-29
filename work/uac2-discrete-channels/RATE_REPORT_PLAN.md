@@ -800,7 +800,7 @@ must come before `install-rate-report.sh rollback` (which refuses while these
 modules are installed: neither of its two known hashes).
 
 Script hashes as staged: `install-rate-request.sh` 745f2b9a,
-`test-rate-request.sh` d38b521d, `build-rate-request.sh` 0139ad74, patch 45beecea.
+`test-rate-request.sh` d38b521d (e840e683 after the fix below), `build-rate-request.sh` 0139ad74, patch 45beecea.
 
 **Battery after the install** (a change outside the audio path: behaviour, a
 noise probe at 32, a two-minute soak):
@@ -816,3 +816,31 @@ noise probe at 32, a two-minute soak):
   source `usb`, no `host-follow` step); back to 48.
 - Noise probe at 32 after F1-F3, then `measure-candidate.sh soak 120 32`.
   Mac left at 48000.
+
+## Bounded test of the production pair (2026-10-29 02:35-02:39 UTC): PASSED
+
+`test-rate-request.sh build/rate-request-production 600` (d38b521d), operator's
+sudo; ended with the end file. Evidence
+`outputs/latency/rate-request-production-bounded-20261029/journal.txt` (the
+endpoint and gadget units; times in UTC) and the two noise probes below.
+
+- Load: srcversions 681145C2... / 3373101B... (the production pair),
+  configured, `usb16x16-dante` started 02:36:10, start check `ok` 02:37:15.
+- Controls: `Device Rate Request` present and 0, Capture/Playback Rate
+  48000/48000 with nothing open; the owner `USBOPEN ... host_rate=match`.
+- Noise probe at 32 on the candidate: clean
+  (`raterequest-candidate-noise-ch2-32f-20261029T023717Z`: zero runs >= 4: 0,
+  no xrun, lag or error lines).
+- Restore at 02:38:04: rate-report pair DD2DD510... / C647475B... loaded, files
+  under `updates/` still b2f5c6cd / fa8bed12, the control gone, configured.
+  **Script defect, fixed:** on this path the restore swapped the modules with
+  the endpoint still running (the experiment path had it stopped, so the
+  restore never needed to stop it). The owner rode through the swap
+  (`USBCLOSE reason=-19`, `USBOPEN ... host_rate=match` one second later, no
+  restart, start check still `ok`). `test-rate-request.sh` now stops
+  `usb16x16-dante` before the swap, as `test-rate-report.sh` does (e840e683,
+  restaged). Noise probe at 32 after the restore: clean
+  (`raterequest-afterrestore2-noise-ch2-32f-20261029T023930Z`). Mac at 48000.
+
+Next: `sudo ./install-rate-request.sh install` (operator), then F1-F3, a noise
+probe at 32 and the two-minute soak.

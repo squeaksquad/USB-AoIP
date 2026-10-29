@@ -98,6 +98,7 @@ restore() {
   rm -f "$end_file"
   if [ "$candidate_active" -eq 1 ]; then
     echo "restoring the installed modules"
+    systemctl stop usb16x16-dante
     swap_out
     /usr/sbin/modprobe usb_f_uac2
     systemctl start usb-16x16.service
