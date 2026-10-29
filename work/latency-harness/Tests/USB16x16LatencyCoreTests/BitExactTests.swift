@@ -133,3 +133,36 @@ private func measured(_ gain: Float, double: Bool = false) throws -> HostGain {
     for frame in 0..<100 { silent.observe(0, frame: frame) }
     #expect(silent.source == 0 && silent.firstLockFrame == -1 && silent.mismatchesAfterLock == 0)
 }
+
+// A loop narrower than the device (2026-10-29: 12 channels at 96 kHz, where MADI
+// halves): channels past the loop return nothing, and only the looped ones are judged.
+@Test func hostGainReadsOnlyTheLoopedChannels() throws {
+    let readings = (0..<HostGainCalibration.steps).map { step in
+        (0..<16).map { channel -> Float in
+            channel < 12 ? hostIn(hostOut(HostGainCalibration.sample(step: step, channel: channel), double: false, gain: 1),
+                                  double: false, gain: 1) : 0
+        }
+    }
+    #expect(throws: HostGainError.self) { try HostGainCalibration.solve(readings) }
+    let gain = try HostGainCalibration.solve(readings, loopChannels: 12)
+    #expect(abs(gain.outputGain - 1) < 6e-8 && abs(gain.inputGain - 1) < 6e-8)
+}
+
+@Test func bitExactJudgesOnlyTheLoopedChannels() {
+    let model = HostGain.unity
+    var channels = [BitExactChannel](repeating: BitExactChannel(gain: model), count: 16)
+    var codes: [UInt32] = (0..<16).map { UInt32($0) &* 0x0001_0001 }
+    for frame in 0..<2_000 {
+        for channel in 0..<16 {
+            codes[channel] = BitExactSequence.next(codes[channel], channel: channel)
+            let value = channel < 12 ? BitExactSequence.sample(wire: BitExactSequence.wire(codes[channel], model), model) : 0
+            channels[channel].observe(value, frame: frame)
+        }
+    }
+    #expect(!BitExactReport.passes(channels, loopChannels: 16, fullScaleDue: false,
+                                   inputDiscontinuities: 0, outputDiscontinuities: 0, invalidBuffers: 0))
+    #expect(BitExactReport.passes(channels, loopChannels: 12, fullScaleDue: false,
+                                  inputDiscontinuities: 0, outputDiscontinuities: 0, invalidBuffers: 0))
+    #expect(!BitExactReport.passes(channels, loopChannels: 12, fullScaleDue: false,
+                                   inputDiscontinuities: 1, outputDiscontinuities: 0, invalidBuffers: 0))
+}

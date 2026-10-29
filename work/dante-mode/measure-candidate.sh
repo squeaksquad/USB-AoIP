@@ -24,6 +24,11 @@
 #                                                    USB16X16_HOST_GAIN (a direct run's
 #                                                    hostgain or bitexact report)
 # USB16X16_OTHER_LOAD=0.1 loads the other 15 channels in the impulse run.
+# USB16X16_LOOP_CHANNELS=N (soak): only channels 1..N are looped back, so only they
+#                                  are judged; all 16 are still loaded. For a loop
+#                                  narrower than the device (2026-10-29: 12 channels at
+#                                  96 kHz, where MADI halves). Default 16. A preset's
+#                                  zero-run check (soak_reference.py) needs all 16.
 # Close RTL Utility first: the harness and RTL never share the device.
 set -uo pipefail
 
@@ -133,9 +138,15 @@ if [[ $mode == soak ]]; then
   if (( measure_exit == 0 )) && [[ -s "$result_path" ]]; then
     # The battery's criteria (work/dsp-service/validate.py): full-length capture,
     # signal on every channel, no zero run of 4 or more, nothing non-finite or at full scale.
-    /usr/bin/python3 - "$result_path" <<'PYEOF'
+    /usr/bin/python3 - "$result_path" "${USB16X16_LOOP_CHANNELS:-16}" <<'PYEOF'
 import json, sys
 d = json.load(open(sys.argv[1])); bad = []; zero_runs = []
+loop = int(sys.argv[2])
+if not 1 <= loop <= len(d["channels"]):
+    print(f"soak: FAIL USB16X16_LOOP_CHANNELS={loop} is not 1..{len(d['channels'])}"); raise SystemExit(1)
+if loop < len(d["channels"]):
+    print(f"judging channels 1-{loop} of {len(d['channels'])} (USB16X16_LOOP_CHANNELS); the rest are loaded, not looped")
+    d["channels"] = d["channels"][:loop]
 rate = d["sampleRate"]    # the device's rate as the harness ran it (2026-10-17), not 48000
 for key in ("inputDiscontinuities", "outputDiscontinuities"):
     if d.get(key): bad.append(f"{key}={d[key]}")
@@ -159,7 +170,10 @@ if zero_runs:
 print("soak: PASS")
 PYEOF
     verdict=$?
-    if (( verdict == 3 )); then
+    if (( verdict == 3 )) && (( ${USB16X16_LOOP_CHANNELS:-16} < 16 )); then
+      print -r -- "soak: FAIL the zero runs above; a preset's zero runs cannot be checked on a loop narrower than 16 channels"
+      measure_exit=7
+    elif (( verdict == 3 )); then
       # Which preset the endpoint ran, from its own log; the artifact is fetched now that the audio has closed.
       preset=$(pi 'f=$(ls -t /dev/shm/dante-alsaloop-*.log /dev/shm/dante-owner-*.log 2>/dev/null | head -1)
 [ "$(systemctl is-active usb16x16-dante 2>/dev/null)" = active ] && f=/dev/shm/dante-service-journal.txt

@@ -44,6 +44,8 @@ public struct HostGainReport: Encodable, Sendable {
     public let kind = "host-gain"
     public let device: CoreAudioDeviceSnapshot
     public let sampleRate: Int
+    /// Channels 1...loopChannels were read; the rest were sent but are not looped.
+    public let loopChannels: Int
     public let hostGain: HostGain
 }
 
@@ -77,14 +79,17 @@ public enum HostGainCalibration {
     /// The float sent for a code: exact, with no gain compensation.
     static func sample(step: Int, channel: Int) -> Float { Float(Double(code(step: step, channel: channel)) / scale) }
 
-    /// Gains from the steady returns, `readings[step][channel]`.
-    public static func solve(_ readings: [[Float]]) throws -> HostGain {
+    /// Gains from the steady returns, `readings[step][channel]`. Only channels
+    /// 1...loopChannels are read: a loop narrower than the device (2026-10-29: 12
+    /// channels at 96 kHz, MADI halving) leaves the rest unreturned.
+    public static func solve(_ readings: [[Float]], loopChannels: Int = 16) throws -> HostGain {
         guard readings.count == steps, readings.allSatisfy({ $0.count == 16 }) else {
             throw HostGainError.inconsistent("expected \(steps) steps of 16 readings")
         }
+        guard (1...16).contains(loopChannels) else { throw HostGainError.inconsistent("loop channels \(loopChannels)") }
         var inLow = 0.0, inHigh = Double.infinity
         for step in 0..<smallSteps {
-            for channel in 0..<16 {
+            for channel in 0..<loopChannels {
                 let sent = Double(code(step: step, channel: channel)), back = readings[step][channel]
                 guard back.isFinite, back != 0, (Double(back) > 0) == (sent > 0) else {
                     throw HostGainError.inconsistent("channel \(channel + 1) returned \(back) for code \(Int(sent))")
@@ -100,7 +105,7 @@ public enum HostGainCalibration {
         let inputGain = (inLow + inHigh) / 2
         var outLow = 0.0, outHigh = Double.infinity
         for step in smallSteps..<steps {
-            for channel in 0..<16 {
+            for channel in 0..<loopChannels {
                 let sent = Double(code(step: step, channel: channel)), back = readings[step][channel]
                 let codes = Double(back) * scale / inputGain
                 let wire = codes.rounded()
@@ -119,7 +124,7 @@ public enum HostGainCalibration {
     }
 
     /// Run the steps on an open device: 0.5 s each, read at the end of each step.
-    static func measure(id: AudioDeviceID, rate: Int) throws -> HostGain {
+    static func measure(id: AudioDeviceID, rate: Int, loopChannels: Int = 16) throws -> HostGain {
         let state = HostGainState(stepFrames: rate / 2)
         var proc: AudioDeviceIOProcID?
         func check(_ status: OSStatus) throws {
@@ -138,15 +143,15 @@ public enum HostGainCalibration {
                                                inputStarted: state.inputFrames > 0, impulses: 0)
         }
         for step in 0..<steps {
-            for channel in 0..<16 where state.steady[step][channel] < state.stepFrames / 4 {
+            for channel in 0..<loopChannels where state.steady[step][channel] < state.stepFrames / 4 {
                 throw HostGainError.unsteady(step: step, channel: channel)
             }
         }
-        return try solve(state.readings)
+        return try solve(state.readings, loopChannels: loopChannels)
     }
 
-    public static func run(deviceName: String, bufferFrames: UInt32) throws -> HostGainReport {
-        guard bufferFrames == 32 || bufferFrames == 64 else {
+    public static func run(deviceName: String, bufferFrames: UInt32, loopChannels: Int = 16) throws -> HostGainReport {
+        guard bufferFrames == 32 || bufferFrames == 64, (1...16).contains(loopChannels) else {
             throw CoreAudioInspectionError.invalidProperty("host gain settings")
         }
         let before = try CoreAudioInspector.snapshot(named: deviceName)
@@ -155,7 +160,8 @@ public enum HostGainCalibration {
         defer { try? CoreAudioInspector.setBufferFrameSize(before.bufferFrameSize, on: id) }
         let device = try CoreAudioInspector.snapshot(named: deviceName)
         let rate = try SoakRate.validate(device, bufferFrames: bufferFrames)
-        return HostGainReport(device: device, sampleRate: rate, hostGain: try measure(id: id, rate: rate))
+        return HostGainReport(device: device, sampleRate: rate, loopChannels: loopChannels,
+                              hostGain: try measure(id: id, rate: rate, loopChannels: loopChannels))
     }
 }
 

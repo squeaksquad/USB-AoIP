@@ -12,6 +12,7 @@ private struct Arguments {
     let maximumLagMilliseconds: Double
     let otherChannelLoadAmplitude: Float
     let seconds: Int
+    let loopChannels: Int
 
     init(_ values: [String]) throws {
         guard values.count >= 2 else { throw CLIError.usage }
@@ -25,6 +26,7 @@ private struct Arguments {
         var maximumLagMilliseconds = 200.0
         var otherChannelLoadAmplitude: Float = 0
         var seconds = 60
+        var loopChannels = 16
         var index = 2
         while index < values.count {
             switch values[index] {
@@ -32,6 +34,11 @@ private struct Arguments {
                 guard index + 1 < values.count, let parsed = Int(values[index + 1]),
                       (5...3600).contains(parsed) else { throw CLIError.usage }
                 seconds = parsed
+                index += 2
+            case "--loop-channels":
+                guard index + 1 < values.count, let parsed = Int(values[index + 1]),
+                      (1...16).contains(parsed) else { throw CLIError.usage }
+                loopChannels = parsed
                 index += 2
             case "--device":
                 guard index + 1 < values.count else { throw CLIError.usage }
@@ -88,6 +95,7 @@ private struct Arguments {
         self.maximumLagMilliseconds = maximumLagMilliseconds
         self.otherChannelLoadAmplitude = otherChannelLoadAmplitude
         self.seconds = seconds
+        self.loopChannels = loopChannels
     }
 }
 
@@ -105,11 +113,13 @@ private enum CLIError: Error, CustomStringConvertible {
               usb16x16-latency continuous [--device NAME] [--buffer-frames 32|64]
                   [--seconds 5...3600] --other-channel-load-amplitude 0.1 [--output FILE]
               usb16x16-latency bitexact [--device NAME] [--buffer-frames 32|64]
-                  [--seconds 5...3600] [--output FILE]
-              usb16x16-latency hostgain [--device NAME] [--buffer-frames 32|64] [--output FILE]
+                  [--seconds 5...3600] [--loop-channels 1...16] [--output FILE]
+              usb16x16-latency hostgain [--device NAME] [--buffer-frames 32|64]
+                  [--loop-channels 1...16] [--output FILE]
                   the gain macOS applies each way, measured through the loop in 2 s
                   (bitexact measures it first itself)
                   continuous, bitexact and hostgain run at the device's rate (44.1, 48, 88.2 or 96 kHz)
+                  --loop-channels N: only channels 1...N are looped back and judged (default 16)
               usb16x16-latency measure [--device NAME] [--buffer-frames N]
                   [--input-channel N] [--output-channel N] [--impulses N]
                   [--maximum-lag-ms N] [--other-channel-load-amplitude 0...0.25]
@@ -169,10 +179,10 @@ do {
             amplitude: arguments.otherChannelLoadAmplitude)), to: arguments.outputPath)
     case "hostgain":
         try emit(encoded(HostGainCalibration.run(deviceName: arguments.deviceName,
-            bufferFrames: arguments.bufferFrames)), to: arguments.outputPath)
+            bufferFrames: arguments.bufferFrames, loopChannels: arguments.loopChannels)), to: arguments.outputPath)
     case "bitexact":
-        try emit(encoded(BitExact.run(deviceName: arguments.deviceName,
-            bufferFrames: arguments.bufferFrames, seconds: arguments.seconds)), to: arguments.outputPath)
+        try emit(encoded(BitExact.run(deviceName: arguments.deviceName, bufferFrames: arguments.bufferFrames,
+            seconds: arguments.seconds, loopChannels: arguments.loopChannels)), to: arguments.outputPath)
     default:
         throw CLIError.usage
     }

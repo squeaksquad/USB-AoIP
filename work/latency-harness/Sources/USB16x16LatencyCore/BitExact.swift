@@ -148,12 +148,24 @@ public struct BitExactReport: Encodable, Sendable {
     public let outputDiscontinuities: Int
     public let invalidBuffers: Int
     public let channels: [BitExactChannel]
+    /// Channels 1...loopChannels are judged; the rest carry their sequence but are not looped.
+    public let loopChannels: Int
     /// Measured through the loop just before the sequence ran.
     public let hostGain: HostGain
     public let largestCode: Int32
-    /// Every input locked on its own output's sequence and never left it, nothing off
-    /// the 24-bit grid, and the largest codes of both signs came back on every channel.
+    /// Every looped input locked on its own output's sequence and never left it, nothing
+    /// off the 24-bit grid, and the largest codes of both signs came back on every one.
     public let pass: Bool
+
+    /// The verdict over channels 1...loopChannels.
+    public static func passes(_ channels: [BitExactChannel], loopChannels: Int, fullScaleDue: Bool,
+                              inputDiscontinuities: Int, outputDiscontinuities: Int, invalidBuffers: Int) -> Bool {
+        channels.prefix(loopChannels).enumerated().allSatisfy { index, channel in
+            channel.source == index + 1 && channel.firstLockFrame >= 0 && channel.mismatchesAfterLock == 0 &&
+                channel.lostLocks == 0 && channel.offGridAfterLock == 0 &&
+                (!fullScaleDue || (channel.positiveLimit > 0 && channel.negativeLimit > 0))
+        } && inputDiscontinuities == 0 && outputDiscontinuities == 0 && invalidBuffers == 0
+    }
 }
 
 final class BitExactState: @unchecked Sendable {
@@ -225,8 +237,8 @@ final class BitExactState: @unchecked Sendable {
 }
 
 public enum BitExact {
-    public static func run(deviceName: String, bufferFrames: UInt32, seconds: Int) throws -> BitExactReport {
-        guard (5...3600).contains(seconds), bufferFrames == 32 || bufferFrames == 64 else {
+    public static func run(deviceName: String, bufferFrames: UInt32, seconds: Int, loopChannels: Int = 16) throws -> BitExactReport {
+        guard (5...3600).contains(seconds), bufferFrames == 32 || bufferFrames == 64, (1...16).contains(loopChannels) else {
             throw CoreAudioInspectionError.invalidProperty("bit-exact settings")
         }
         let before = try CoreAudioInspector.snapshot(named: deviceName)
@@ -235,7 +247,7 @@ public enum BitExact {
         defer { try? CoreAudioInspector.setBufferFrameSize(before.bufferFrameSize, on: id) }
         let device = try CoreAudioInspector.snapshot(named: deviceName)
         let rate = try SoakRate.validate(device, bufferFrames: bufferFrames)
-        let gain = try HostGainCalibration.measure(id: id, rate: rate)
+        let gain = try HostGainCalibration.measure(id: id, rate: rate, loopChannels: loopChannels)
         let state = BitExactState(seconds: seconds, sampleRate: rate, gain: gain)
         var proc: AudioDeviceIOProcID?
         func check(_ status: OSStatus) throws {
@@ -255,14 +267,12 @@ public enum BitExact {
         }
         // One period of the sequence is 2^24 samples: 360 s covers it at 48 kHz.
         let fullScaleDue = seconds * rate >= 360 * 48_000
-        let pass = state.channels.enumerated().allSatisfy { index, channel in
-            channel.source == index + 1 && channel.firstLockFrame >= 0 && channel.mismatchesAfterLock == 0 &&
-                channel.lostLocks == 0 && channel.offGridAfterLock == 0 &&
-                (!fullScaleDue || (channel.positiveLimit > 0 && channel.negativeLimit > 0))
-        } && state.inputDiscontinuities == 0 && state.outputDiscontinuities == 0 && state.invalidBuffers == 0
+        let pass = BitExactReport.passes(state.channels, loopChannels: loopChannels, fullScaleDue: fullScaleDue,
+            inputDiscontinuities: state.inputDiscontinuities, outputDiscontinuities: state.outputDiscontinuities,
+            invalidBuffers: state.invalidBuffers)
         return BitExactReport(device: device, sampleRate: rate, seconds: seconds, outputFrames: state.outputFrames,
             inputFrames: state.inputFrames, inputDiscontinuities: state.inputDiscontinuities,
             outputDiscontinuities: state.outputDiscontinuities, invalidBuffers: state.invalidBuffers,
-            channels: state.channels, hostGain: gain, largestCode: gain.limit, pass: pass)
+            channels: state.channels, loopChannels: loopChannels, hostGain: gain, largestCode: gain.limit, pass: pass)
     }
 }
