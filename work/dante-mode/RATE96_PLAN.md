@@ -348,3 +348,25 @@ on steady single-frame slips, not located.**
   run at 96 (which side slips), and `bitexact --loop-channels 8` at 48 on this same path (the rate
   or the new routing through the Metric Halo strips). At 48 and 44.1 on the 49-64 loop, also
   through the Metric Halo, `bitexact` passed (handoff, 2026-10-27/28).
+
+**FOUND 2026-10-29 10:39-11:15 UTC, same session: an eth0 capture at 96 cannot locate the slips,
+because the capture itself breaks the loop.** Evidence: `outputs/latency/rate96-slip-capture-20261029/`
+(`run.log`, `tcpdump*.txt`, `sequence-slips.py`; the pcaps are deleted, 4.1 and 4.5 GB).
+- A third `bitexact --loop-channels 8` without a capture failed the same way: 2 all-channel slips,
+  last at 230.32 s (`loop8-96-bitexact3-capture-360s-32f-20261029T105511Z`, misnamed: its capture
+  had no sudo). The slips reproduce on every run at 96.
+- With `tcpdump` streaming the Pulse's flows to the Mac over wlan0 (about 10.7 MB/s), the host-gain
+  step that opens `bitexact` failed 4 times out of 4 ("channel 1 did not return a steady level");
+  without it, 4 out of 4 passed, and a 60 s 8-channel soak passed (`loop8-96-recheck-*`). `tcpdump
+  -p` (no promiscuous mode) fails the same way, 3 out of 3: it is the load, not the mode.
+- On the wire during that failure: every channel the Pi sends holds its host-gain level (one
+  88-frame zero on all 16 at the first step edge), packets on time to 0.3 ms by the Pi's clock
+  (p99.9 0.27 ms); what the Pulse returns carries 32-frame zero runs on all 8 looped channels
+  together every 20-80 ms. 32 frames is one Pi transmit packet at 96 (4 channels x 32 frames per
+  flow), so the Pulse is most likely treating Pi packets as late: under that load, either the
+  wire timing or the Pi's PTP clock moves against the Pulse's by more than its receive latency.
+  Not shown which. Soak 3 at 48 (RATE_REPORT_PLAN.md) also ran under a streamed capture and also saw
+  32/64-sample zeros in what the Pi receives; that capture may have caused them too.
+- So the slips are still not located, and a streamed capture is not a usable tool at 96. Left:
+  `bitexact` at 48 on this path, and a capture that does not load the Pi (a mirror port on the
+  switch, or a short capture to tmpfs: 473 MB is about 44 s at 96).
