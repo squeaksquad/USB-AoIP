@@ -254,46 +254,47 @@ a second Inferno instance as a reflector, or a patch to the self-filter.
 end: the candidate is clean at 96 (nothing it sent had a hole), the loop's holes
 come from DVS, and the figure (about 1900 / 19.8 ms) includes DVS's latency.
 
-## Revised 2026-10-29 (operator): 96 kHz on the real loop with 12 channels
+## Revised 2026-10-29 (operator): 96 kHz on the real loop with 8 channels
 
 At 2x rates the Pulse keeps 32 Dante channels each way and MADI carries 32
 instead of 64, so the loop's 49-64 cannot exist at 96. The Metric Halo's
-speakers use MADI 1-20, which leaves **MADI 21-32: a 12-channel loop** that
-exists at 44.1, 48 and 96 alike. Operator, 2026-10-29: test 96 on the real loop
-with fewer channels; the operator does the routing.
+speakers use MADI 1-20, and the Ferrofish maps freely only in blocks of 8, which
+leaves **MADI 25-32: an 8-channel loop** that exists at 44.1, 48 and 96 alike.
+Operator, 2026-10-29: test 96 on the real loop with fewer channels (first 12 on
+MADI 21-32, then 8 for the Ferrofish's blocks); the operator does the routing.
 
-**Routing (operator).** Pi `TX 1-12` -> the Pulse, inside its Dante channels
-1-32 -> the Pulse's MADI out 21-32 -> the Metric Halo, MADI in 21-32 looped to
-MADI out 21-32 -> the Pulse's MADI in 21-32 -> its Dante transmit, inside 1-32
--> Pi `RX 1-12`. Pi channels 13-16 unrouted. Check how the Metric Halo numbers
-MADI channels in its 2x mode before taking 21-32 for granted. Set it up and
+**Routing (operator).** Pi `TX 1-8` -> the Pulse, inside its Dante channels
+1-32 -> the Pulse's MADI out 25-32 -> the Metric Halo, MADI in 25-32 looped to
+MADI out 25-32 -> the Pulse's MADI in 25-32 -> its Dante transmit, inside 1-32
+-> Pi `RX 1-8`. Pi channels 9-16 unrouted. Check how the Metric Halo numbers
+MADI channels in its 2x mode before taking 25-32 for granted. Set it up and
 check it **at 48 first**: then the domain's move to 96 re-maps nothing (the
 condition of 2026-10-27). The 48 point of record's 16-channel loop on 49-64
 stays; only the Pi's receive subscriptions move between the two, at 48.
 
-**What the measurement does with 12 channels (built 2026-10-29, Mac side).**
+**What the measurement does with 8 channels (built 2026-10-29, Mac side).**
 - Impulse runs (USB 1 -> 1) and the noise probe (out 1 / in 2): unchanged,
   since Pi channels 1-2 are in the loop.
-- Soak: `USB16X16_LOOP_CHANNELS=12 measure-candidate.sh soak ...` judges
-  channels 1-12 and still loads all 16; it says so in its output. A preset's
+- Soak: `USB16X16_LOOP_CHANNELS=8 measure-candidate.sh soak ...` judges
+  channels 1-8 and still loads all 16; it says so in its output. A preset's
   zero-run check (`soak_reference.py`) assumes 16 channels, so with a narrower
   loop a zero run is a FAIL, not a reference check: run the 96 soaks on
   `direct` or `transparent`, where none is expected.
-- `bitexact` and `hostgain`: `--loop-channels 12` (1...16, default 16) judges
-  channels 1-12 only, the host-gain calibration included (it required all 16
+- `bitexact` and `hostgain`: `--loop-channels 8` (1...16, default 16) judges
+  channels 1-8 only, the host-gain calibration included (it required all 16
   to return a steady level); the report records `loopChannels`. Harness tests
   `hostGainReadsOnlyTheLoopedChannels`, `bitExactJudgesOnlyTheLoopedChannels`;
   21 pass; the signed app rebuilt.
 - The owner's `out_holes` / `back_holes` count only runs where all 16 channels
-  are zero; with 13-16 silent they cannot fire on this loop, so a failure is
+  are zero; with 9-16 silent they cannot fire on this loop, so a failure is
   located with the per-channel capture reader
   (`outputs/latency/rate-report-capture-20261029/channel-zeros.py`) instead.
 
-**Rules.** The battery's sixteen-channel soak becomes a 12-channel soak at 96:
+**Rules.** The battery's sixteen-channel soak becomes an 8-channel soak at 96:
 the operator's exception for this rate, recorded with each result. 48 and 44.1
 keep the 16-channel loop and the full battery.
 
 **Order.** (1) Routing at 48, checked with an impulse run and
-`USB16X16_LOOP_CHANNELS=12` soak 120 on the 12-channel return. (2) The rest of
+`USB16X16_LOOP_CHANNELS=8` soak 120 on the 8-channel return. (2) The rest of
 this plan's 96 sequence (offer 96, candidate configs, presets at 96), on this
 loop instead of DVS. (3) Subscriptions back to 49-64 at 48 and a 48 anchor.

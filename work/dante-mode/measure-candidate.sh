@@ -26,7 +26,7 @@
 # USB16X16_OTHER_LOAD=0.1 loads the other 15 channels in the impulse run.
 # USB16X16_LOOP_CHANNELS=N (soak): only channels 1..N are looped back, so only they
 #                                  are judged; all 16 are still loaded. For a loop
-#                                  narrower than the device (2026-10-29: 12 channels at
+#                                  narrower than the device (2026-10-29: 8 channels at
 #                                  96 kHz, where MADI halves). Default 16. A preset's
 #                                  zero-run check (soak_reference.py) needs all 16.
 # Close RTL Utility first: the harness and RTL never share the device.

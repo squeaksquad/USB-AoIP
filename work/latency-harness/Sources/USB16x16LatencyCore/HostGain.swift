@@ -80,7 +80,7 @@ public enum HostGainCalibration {
     static func sample(step: Int, channel: Int) -> Float { Float(Double(code(step: step, channel: channel)) / scale) }
 
     /// Gains from the steady returns, `readings[step][channel]`. Only channels
-    /// 1...loopChannels are read: a loop narrower than the device (2026-10-29: 12
+    /// 1...loopChannels are read: a loop narrower than the device (2026-10-29: 8
     /// channels at 96 kHz, MADI halving) leaves the rest unreturned.
     public static func solve(_ readings: [[Float]], loopChannels: Int = 16) throws -> HostGain {
         guard readings.count == steps, readings.allSatisfy({ $0.count == 16 }) else {
