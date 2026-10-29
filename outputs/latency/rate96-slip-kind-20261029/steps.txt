@@ -1,0 +1,6 @@
+14:26:47 stop usb16x16-dante
+inactive
+14:26:47 dante-sync sync --rate 96000 --allow-band-up --exclude USB-16x16-Inferno
+14:27:01 dante-sync sync --source usb16x16 --exclude USB-16x16-Inferno
+14:27:13 candidate start rate8trace c065b40f, rate96-candidate config, arm A, --event-trace
+14:29:18 bitexact 360 s -> outputs/latency/loop8-96trace-bitexact-360s-32f-20261029T142918Z.json

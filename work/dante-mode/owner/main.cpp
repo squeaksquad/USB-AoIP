@@ -50,6 +50,13 @@
 // the wall clock (CLOCK_REALTIME) as well as t, to align them with what the
 // Mac's `bitexact` records. Nothing is added to the loop.
 //
+// With --seq-check N (diagnostic, off by default) the loop checks channels 1..N
+// against the Mac's `bitexact` sequence where the owner sees them: as the gadget
+// delivers them (point out) and as Inferno delivers them (point back), and the
+// telemetry thread prints a SEQ line, with the wall clock, for each lost lock:
+// frames dropped, repeated, or other (seq_check.hpp). It says on which side of
+// the owner a slip the Mac sees was made.
+//
 // Build on the Pi (the bridge core is the one source file DspStage lives in):
 //   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
@@ -64,6 +71,7 @@
 #include "dsp_path.hpp"
 #include "meter_tap.hpp"
 #include "rate_check.hpp"
+#include "seq_check.hpp"
 #include "servo.hpp"
 
 #include <dirent.h>
@@ -156,6 +164,8 @@ struct Options {
     unsigned gap_trace_us{0};
     // Diagnostic: EVENT and SERVO lines with the wall clock (telemetry thread only).
     bool event_trace{false};
+    // Diagnostic: check channels 1..seq_check against `bitexact`'s sequence at both points. 0 is off.
+    unsigned seq_check{0};
     // Experiment (2026-10-13): touch this many kilobytes of the loop thread's stack before it
     // turns real-time, so the loop never grows its stack (a page fault that can sleep). 0 is off.
     unsigned stack_prefault_kb{0};
@@ -174,7 +184,8 @@ struct Options {
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
-               "                     [--gap-trace MICROSECONDS] [--event-trace] [--stack-prefault KILOBYTES]\n"
+               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N]\n"
+               "                     [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
                "  --rate      the sample rate of both halves and of the DSP preset (a Dante rate; default\n"
@@ -199,6 +210,7 @@ struct Options {
                "  --stall-at, --stall-ms   test only: stall the loop once, MS long, SECONDS after it starts\n"
                "  --gap-trace   diagnostic: print a LOOPGAP line for every wake this late or later\n"
                "  --event-trace diagnostic: an EVENT line at each step counter change, a SERVO line a second\n"
+               "  --seq-check   diagnostic: check channels 1..N against bitexact's sequence, gadget and Inferno side\n"
                "  --stack-prefault   experiment: touch this much of the loop's stack before it turns real-time\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
@@ -243,6 +255,7 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--rate-request-file") o.rate_request_file = v;
         else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
         else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
+        else if (a == "--seq-check") o.seq_check = static_cast<unsigned>(parse_number(v, "--seq-check"));
         else if (a == "--gap-trace") o.gap_trace_us = static_cast<unsigned>(parse_number(v, "--gap-trace"));
         else if (a == "--stack-prefault") o.stack_prefault_kb = static_cast<unsigned>(parse_number(v, "--stack-prefault"));
         else if (a == "--period") o.period = parse_number(v, "--period");
@@ -469,6 +482,7 @@ struct Telemetry {
     std::atomic<std::uint64_t> meter_calls{0};
     std::atomic<unsigned> stall_injected_ms{0};   // --stall-at fired; reported once
     GapTrace gaps;
+    usb16x16::owner::SeqTrace seq;
 };
 
 void store_max(std::atomic<std::int64_t>& target, std::int64_t value) noexcept {
@@ -517,6 +531,7 @@ void* telemetry_entry(void* argument) {
     std::uint64_t last_rx = 0;
     std::uint64_t reported_errors = 0;
     std::uint64_t gaps_printed = 0;
+    std::uint64_t seq_printed = 0;
     int link_owner = -1;
     int link_tx = -1;
     int link_rx = -1;
@@ -574,6 +589,16 @@ void* telemetry_entry(void* argument) {
                             static_cast<double>(t.tx_integral_milli.load(std::memory_order_relaxed)) / 1000.0,
                             static_cast<double>(t.rx_integral_milli.load(std::memory_order_relaxed)) / 1000.0);
             }
+            std::fflush(stdout);
+        }
+        const std::uint64_t seq_written = t.seq.written.load(std::memory_order_acquire);
+        if (seq_written - seq_printed > t.seq.events.size()) seq_printed = seq_written - t.seq.events.size();
+        for (; seq_printed < seq_written; ++seq_printed) {
+            const usb16x16::owner::SeqEvent& e = t.seq.events[seq_printed % t.seq.events.size()];
+            static constexpr const char* kinds[] = {"dropped", "repeated", "other"};
+            std::printf("SEQ n=%" PRIu64 " wall=%.6f point=%s ch=%d frame=%" PRIu64 " %s %d\n", seq_printed + 1,
+                        static_cast<double>(e.wall_ns) / 1e9, e.point == 0 ? "out" : "back", e.channel, e.frame,
+                        kinds[static_cast<int>(e.kind)], e.count);
             std::fflush(stdout);
         }
         if (const std::uint64_t errors = t.net_errors.load(std::memory_order_relaxed); errors != reported_errors) {
@@ -1363,6 +1388,9 @@ struct UsbHalf {
     Scratch rx_scratch{};
     std::uint32_t out_zero_run{0};
     std::uint32_t back_zero_run{0};
+    // --seq-check: the outgoing direction as the gadget delivers it, the return as Inferno delivers it.
+    usb16x16::owner::SeqCheck<kChannels> seq_out;
+    usb16x16::owner::SeqCheck<kChannels> seq_back;
     // The DSP stage on the outgoing direction; null without --dsp-preset.
     usb16x16::owner::OutDsp* dsp{nullptr};
     // The level meters; null without --meter-file.
@@ -1606,6 +1634,7 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
     usb.tx_idle_wakes = 0;
     observe_peaks(usb.tx_scratch.data(), frames, t.out_peak_1, t.out_peak_2);
     observe_holes(usb.tx_scratch.data(), frames, usb.out_zero_run, t.out_holes, t.out_hole_max);
+    if (usb.seq_out.channels != 0) usb.seq_out.observe(usb.tx_scratch.data(), frames, t.seq);
     const auto lead = static_cast<std::int64_t>(net.lead);
     const std::int64_t ceiling = static_cast<std::int64_t>(net.playback.buffer) - static_cast<std::int64_t>(net.guard) -
                                  static_cast<std::int64_t>(net.playback.period);
@@ -1825,6 +1854,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
     if (usb.attached) {
         observe_peaks(usb.rx_scratch.data(), received, t.back_peak_1, t.back_peak_2);
         observe_holes(usb.rx_scratch.data(), received, usb.back_zero_run, t.back_holes, t.back_hole_max);
+        if (usb.seq_back.channels != 0) usb.seq_back.observe(usb.rx_scratch.data(), received, t.seq);
         if (usb.meters != nullptr && received > 0) {
             const std::int64_t before = now_ns();
             usb.meters->observe(usb.rx_scratch.data(), static_cast<std::size_t>(received), usb.meters->dante_capture);
@@ -1932,6 +1962,9 @@ int main(int argc, char** argv) {
     usb.tx_servo.restart(options.seed_ppm);
     usb.rx_servo.restart(-options.seed_ppm);
     if (dsp.enabled()) usb.dsp = &dsp;
+    usb.seq_out.point = 0;
+    usb.seq_back.point = 1;
+    usb.seq_out.channels = usb.seq_back.channels = std::min(options.seq_check, kChannels);
     TelemetryContext telemetry_context{&telemetry, options.log_every, options.no_usb, options.event_trace};
     StewardContext steward_context{&options, &telemetry, &handles};
     const pthread_t telemetry_thread = start_thread(telemetry_entry, &telemetry_context, "telemetry");

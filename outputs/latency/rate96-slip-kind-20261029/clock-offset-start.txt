@@ -1,0 +1,5 @@
+pi-mac offset +0.1101 s, rtt 0.207
+pi-mac offset +0.0807 s, rtt 0.147
+pi-mac offset +0.1894 s, rtt 0.365
+pi-mac offset +0.0815 s, rtt 0.148
+pi-mac offset +0.0844 s, rtt 0.154
