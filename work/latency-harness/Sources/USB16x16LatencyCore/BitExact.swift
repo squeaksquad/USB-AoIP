@@ -26,6 +26,32 @@ public enum BitExactSequence {
     static func next(_ code: UInt32, channel: Int) -> UInt32 {
         (code &* multiplier &+ increment(channel: channel)) & mask
     }
+    /// The inverse of `multiplier` mod 2^24 (Newton's iteration for an odd number).
+    static let inverse: UInt32 = {
+        var x = multiplier
+        for _ in 0..<5 { x = x &* (2 &- multiplier &* x) }
+        return x & mask
+    }()
+    static func previous(_ code: UInt32, channel: Int) -> UInt32 {
+        ((code &- increment(channel: channel)) &* inverse) & mask
+    }
+    /// Searched each way when a locked channel loses lock; past it a slip is `other`.
+    static let slipSearch = 1024
+
+    /// What a received code is, given the last code that matched: the stream
+    /// moved on `count` frames too many (`drop`) or went back to a code it
+    /// already sent (`repeat`, count 1 when the last code came again).
+    static func classify(received: UInt32, after last: UInt32, channel: Int) -> (BitExactSlip.Kind, Int) {
+        var forward = next(last, channel: channel), back = last
+        for count in 1...slipSearch {
+            if received == back { return (.repeated, count) }
+            forward = next(forward, channel: channel)
+            if received == forward { return (.dropped, count) }
+            back = previous(back, channel: channel)
+        }
+        return (.other, 0)
+    }
+
     static func signed(_ code: UInt32) -> Int32 {
         code >= 0x0080_0000 ? Int32(code) - 0x0100_0000 : Int32(code)
     }
@@ -55,6 +81,16 @@ public enum BitExactSequence {
     }
 }
 
+/// One lost lock on a channel that was locked.
+public struct BitExactSlip: Encodable, Sendable, Equatable {
+    public enum Kind: String, Encodable, Sendable { case dropped, repeated, other, offGrid }
+    /// Input frame of the sample that broke the lock, counted from the run's first input frame.
+    public let frame: Int
+    public let kind: Kind
+    /// Frames dropped or repeated; 0 for `other` and `offGrid`.
+    public let count: Int
+}
+
 public struct BitExactChannel: Encodable, Sendable {
     /// Output channel (1-based) whose sequence this input carries; 0 until it locks.
     public private(set) var source = 0
@@ -70,6 +106,9 @@ public struct BitExactChannel: Encodable, Sendable {
     /// Samples passed over because the one before them was a clamped code.
     public private(set) var unjudged = 0
     public private(set) var longestZeroRunAfterLock = 0
+    /// Every lost lock, the first `slipCapacity` of them; `lostLocks` counts them all.
+    public private(set) var slips: [BitExactSlip] = []
+    static let slipCapacity = 4096
     private let gain: HostGain
     private var previous: UInt32?
     private var locked = false
@@ -77,16 +116,28 @@ public struct BitExactChannel: Encodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case source, firstLockFrame, matches, mismatchesAfterLock, lostLocks, lastLostLockFrame, offGridAfterLock
-        case positiveLimit, negativeLimit, unjudged, longestZeroRunAfterLock
+        case positiveLimit, negativeLimit, unjudged, longestZeroRunAfterLock, slips
     }
 
-    init(gain: HostGain) { self.gain = gain }
+    /// Reserves the slip list, so the IOProc never allocates. Each channel must
+    /// be made by its own call: copies would share the buffer and copy it on the first slip.
+    init(gain: HostGain) {
+        self.gain = gain
+        slips.reserveCapacity(Self.slipCapacity)
+    }
+
+    private mutating func lost(_ frame: Int, _ kind: BitExactSlip.Kind, _ count: Int) {
+        lostLocks += 1
+        lastLostLockFrame = frame
+        locked = false
+        if slips.count < Self.slipCapacity { slips.append(BitExactSlip(frame: frame, kind: kind, count: count)) }
+    }
 
     mutating func observe(_ value: Float, frame: Int) {
         let (wire, error) = value.isFinite ? BitExactSequence.received(value, gain) : (0, 1)
         if error > 0.3 {
             if firstLockFrame >= 0 { offGridAfterLock += 1; mismatchesAfterLock += 1 }
-            if locked { lostLocks += 1; lastLostLockFrame = frame; locked = false }
+            if locked { lost(frame, .offGrid, 0) }
             previous = nil
             return
         }
@@ -107,9 +158,8 @@ public struct BitExactChannel: Encodable, Sendable {
                 matched(expected)
             } else {
                 mismatchesAfterLock += 1
-                lostLocks += 1
-                lastLostLockFrame = frame
-                locked = false
+                let (kind, count) = BitExactSequence.classify(received: code, after: previous, channel: source - 1)
+                lost(frame, kind, count)
                 self.previous = abs(wire) >= gain.limit ? nil : code
             }
             return
@@ -147,6 +197,9 @@ public struct BitExactReport: Encodable, Sendable {
     public let inputDiscontinuities: Int
     public let outputDiscontinuities: Int
     public let invalidBuffers: Int
+    /// Wall clock (Unix seconds) when the first input buffer arrived: a slip's
+    /// time is this plus its frame over the rate, to a few milliseconds.
+    public let inputStartUnixTime: Double
     public let channels: [BitExactChannel]
     /// Channels 1...loopChannels are judged; the rest carry their sequence but are not looped.
     public let loopChannels: Int
@@ -176,6 +229,7 @@ final class BitExactState: @unchecked Sendable {
     var inputDiscontinuities = 0
     var outputDiscontinuities = 0
     var invalidBuffers = 0
+    var inputStartUnixTime = 0.0
     let gain: HostGain
     var channels: [BitExactChannel]
     var codes: [UInt32] = (0..<16).map { UInt32($0) &* 0x0001_0001 }
@@ -186,7 +240,7 @@ final class BitExactState: @unchecked Sendable {
     init(seconds: Int, sampleRate: Int = 48_000, gain: HostGain) {
         totalFrames = seconds * sampleRate
         self.gain = gain
-        channels = [BitExactChannel](repeating: BitExactChannel(gain: gain), count: 16)
+        channels = (0..<16).map { _ in BitExactChannel(gain: gain) }
     }
 
     func process(_ input: UnsafePointer<AudioBufferList>, _ inputTime: Double,
@@ -217,6 +271,7 @@ final class BitExactState: @unchecked Sendable {
         if inputs.count == 1, let buffer = inputs.first, buffer.mNumberChannels == 16,
            buffer.mDataByteSize > 0, buffer.mDataByteSize % 64 == 0, let data = buffer.mData {
             let frames = Int(buffer.mDataByteSize) / 64
+            if inputFrames == 0 { inputStartUnixTime = Date().timeIntervalSince1970 }
             if let expectedInput, abs(inputTime - expectedInput) > 0.5 { inputDiscontinuities += 1 }
             expectedInput = inputTime + Double(frames)
             let values = data.assumingMemoryBound(to: Float.self)
@@ -273,6 +328,6 @@ public enum BitExact {
         return BitExactReport(device: device, sampleRate: rate, seconds: seconds, outputFrames: state.outputFrames,
             inputFrames: state.inputFrames, inputDiscontinuities: state.inputDiscontinuities,
             outputDiscontinuities: state.outputDiscontinuities, invalidBuffers: state.invalidBuffers,
-            channels: state.channels, loopChannels: loopChannels, hostGain: gain, largestCode: gain.limit, pass: pass)
+            inputStartUnixTime: state.inputStartUnixTime, channels: state.channels, loopChannels: loopChannels, hostGain: gain, largestCode: gain.limit, pass: pass)
     }
 }

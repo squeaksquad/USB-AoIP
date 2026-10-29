@@ -166,3 +166,43 @@ private func measured(_ gain: Float, double: Bool = false) throws -> HostGain {
     #expect(!BitExactReport.passes(channels, loopChannels: 8, fullScaleDue: false,
                                    inputDiscontinuities: 1, outputDiscontinuities: 0, invalidBuffers: 0))
 }
+
+// The 96 kHz slips of 2026-10-29: one mismatch and an immediate re-lock on every
+// looped channel. Each lost lock is now recorded and named a drop or a repeat.
+@Test func bitExactSequenceStepsBackExactly() {
+    for channel in [0, 7, 15] {
+        var code: UInt32 = 12_345
+        for _ in 0..<1_000 {
+            let following = BitExactSequence.next(code, channel: channel)
+            #expect(BitExactSequence.previous(following, channel: channel) == code)
+            code = following
+        }
+    }
+}
+
+@Test func bitExactNamesEachSlipADropOrARepeat() {
+    let model = HostGain.unity
+    var channel = BitExactChannel(gain: model)
+    var codes: [UInt32] = []
+    var code: UInt32 = 3
+    for _ in 0..<10_000 { code = BitExactSequence.next(code, channel: 6); codes.append(code) }
+    // What the loop delivers: the sequence with one frame dropped at 2000, one repeated
+    // at 4000, 160 dropped at 6000, three repeated at 8000.
+    var delivered = Array(codes[0..<2_000]) + Array(codes[2_001..<4_000])
+    delivered += [codes[3_999]] + Array(codes[4_000..<6_000]) + Array(codes[6_160..<8_000])
+    delivered += Array(codes[7_997..<10_000])
+    for (frame, wire) in delivered.enumerated() {
+        channel.observe(BitExactSequence.sample(wire: BitExactSequence.wire(wire, model), model), frame: frame)
+    }
+    #expect(channel.source == 7)
+    #expect(channel.lostLocks == 4 && channel.mismatchesAfterLock == 4)
+    #expect(channel.slips == [
+        BitExactSlip(frame: 2_000, kind: .dropped, count: 1),
+        BitExactSlip(frame: 3_999, kind: .repeated, count: 1),
+        BitExactSlip(frame: 6_000, kind: .dropped, count: 160),
+        BitExactSlip(frame: 7_840, kind: .repeated, count: 3),
+    ])
+    #expect(channel.lastLostLockFrame == 7_840)
+    // Something the sequence never sent nearby is `other`.
+    #expect(BitExactSequence.classify(received: 0x00AB_CDEF, after: codes[0], channel: 6).0 == .other)
+}
