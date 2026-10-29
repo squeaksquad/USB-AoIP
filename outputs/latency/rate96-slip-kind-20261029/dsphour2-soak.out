@@ -1,0 +1,28 @@
+=== measure Dante candidate (soak): 32 frames, 0 impulses, 3600 s (20261029T220456Z)
+  before: aes67=inactive statime=1 endpoint=1 udc=configured
+  before: log=/dev/shm/dante-owner-20261029T210003Z.log
+  before: START 20261029T210003Z seconds=candidate owner=a15a9d84 plugin=c6b012ae config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner-rate96-candidate.conf trial=no mode=usb cpus=all user=usb16x16-dante
+  before: xrun_lines=0 lag_lines=0 error_lines=1254 lines=2483
+  before: pcm0c state: RUNNING delay : 0 
+  before: pcm0p state: RUNNING delay : 192 
+  before: pitch values=1000000 values=1000000
+return signal ready after 3 probes
+measure_exit=0 result=/Users/bryandimaio/Development/USB-AoIP/outputs/latency/loop8-96dsphour2-soak-3600s-32f-20261029T220456Z.json
+judging channels 1-8 of 16 (USB16X16_LOOP_CHANNELS); the rest are loaded, not looped
+rate=96000 channels=8 seconds=3600 longest zero run max=64 peak min=0.0046 max=0.0372
+discontinuities in=0 out=0
+zero runs: ch3: zero run 64; ch4: zero run 11; ch5: zero run 64; ch6: zero run 64; ch8: zero run 64
+preset /var/lib/usb16x16-dante-candidate/files/1-dsp-loaded@96000.dsp (89759207): checking each zero run against it
+reference: mismatch - channel 4 at input frame 118909759: 4 zeros where the preset does not produce exactly 4
+  ch4: 20 run(s), longest 11; worst error 1.00 codes; one alignment (None frames) for all 20
+soak: FAIL, a zero run the preset does not produce
+  after: aes67=inactive statime=1 endpoint=1 udc=configured
+  after: log=/dev/shm/dante-owner-20261029T210003Z.log
+  after: START 20261029T210003Z seconds=candidate owner=a15a9d84 plugin=c6b012ae config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner-rate96-candidate.conf trial=no mode=usb cpus=all user=usb16x16-dante
+  after: xrun_lines=0 lag_lines=0 error_lines=2894 lines=5301
+  after: pcm0c state: RUNNING delay : 24 
+  after: pcm0p state: RUNNING delay : 192 
+  after: pitch values=1000000 values=1000000
+during run: xrun lines +0, lag lines +0, error lines +1640
+
+exit=7

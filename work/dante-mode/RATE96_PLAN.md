@@ -596,3 +596,26 @@ clean (`loop8-96dsp-noise-ch2-32f-20261029T210031Z`). Host gain from
   The plan's budget was 30 % (about 300 µs); at 48 the hour had 300 once. No fault or gap followed
   any of them, but the budget is not met: the loaded preset at 96 has about 0.6 ms of the wake left
   in its worst windows.
+
+**DECIDED 2026-10-29 (operator): the DSP budget at 96 kHz is 45 % of a 1 ms wake (about 450 µs), in
+place of the 30 % the plan named.** The first hour's worst window (414) is inside it. Splitting the stage
+across two cores is to be assessed for feasibility (no code yet).
+
+**MEASURED 2026-10-29 22:05-23:05 UTC: the hour on `loaded@96000` again, harness keeping 512 windows
+(39f815c), same candidate. FAIL: zero runs of 32 and 64 frames on channels 3, 5, 6 and 8 together, at
+three moments; not located.** `loop8-96dsphour2-soak-3600s-32f-20261029T220456Z` (dsphour2-soak.out).
+- No discontinuity either way; 70 events, none omitted. Ch4: 20 short runs (4-11) of the preset's own
+  kind; `soak_reference.py` judged one of them (input frame 118909759, 4 zeros) not exactly the
+  preset's, worst error 1 code over all 20: a borderline call, not looked into.
+- The failure proper: at soak 1262.16-1262.78 s four bursts of 32 (two of 64) on ch3, 5, 6, 8 at once;
+  at 2255.55 s 64 frames on the same four; at 2436.18 s two of 32 on ch6 and 8. Every start is frame 1
+  mod 16, i.e. on the same 16-frame grid as the Pulse's packets. Channels 1, 2, 4 and 7 are untouched.
+- Owner over the soak (t 3906-7506): no USB event, fault, re-prime, resync, loss or servo rejection;
+  `out_holes` 0 (it counts all-16 runs only, so it would not see these). The DSP stage acts on the
+  outgoing direction and is an IIR filter: it cannot cut exactly 32 frames from four channels.
+- So by the repo's rule this is not blamed on the preset: the pattern (a fixed channel subset, packet-
+  grid multiples, no Pi-side event) matches the far loop delivering zeros, as it did after the MH
+  reboot today. Locating it needs an eth0 capture of the Pulse -> Pi flows during a soak, read per
+  channel (`diag/dante-pcap-zeros.py`); the SEQ trigger cannot be used with a preset running.
+- DSP cost this hour: `dsp_us_mean` 150, `dsp_us_max` over 300 in 11 of 362 windows, worst 384; none
+  over the operator's 45 % (450 µs).

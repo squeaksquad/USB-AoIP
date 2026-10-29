@@ -1,0 +1,392 @@
+{
+  "policy": {
+    "id": "dante-event-reference-v2",
+    "maximumErrorLSB": 2.0,
+    "maximumSearchLagFrames": 9600,
+    "minimumAnchorRangeLSB": 256,
+    "inputModel": "measured host output gain, nearest 24-bit",
+    "returnModel": "measured host input gain",
+    "gainFitting": false,
+    "alignment": "one integer offset for all channels and events",
+    "zeroRunRule": "exact predicted zero codes with nonzero boundaries",
+    "coverage": "retained event windows only",
+    "wholeRunValidated": false,
+    "maximumSeconds": 3600
+  },
+  "status": "mismatch",
+  "wholeRunValidated": false,
+  "coveredInputFrames": 0,
+  "events": [
+    {
+      "channel": 4,
+      "startInputFrame": 43827400,
+      "referenceStartFrame": 43826435,
+      "zeroFrames": 8,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 0.0,
+      "matchedFrames": 40
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 49798131,
+      "referenceStartFrame": 49797166,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 0.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 61525167,
+      "referenceStartFrame": 61524202,
+      "zeroFrames": 7,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 39
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 66485283,
+      "referenceStartFrame": 66484318,
+      "zeroFrames": 11,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 43
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 68637889,
+      "referenceStartFrame": 68636924,
+      "zeroFrames": 7,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 0.0,
+      "matchedFrames": 39
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 76715070,
+      "referenceStartFrame": 76714105,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 77029597,
+      "referenceStartFrame": 77028632,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 77736297,
+      "referenceStartFrame": 77735332,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 0.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 84978984,
+      "referenceStartFrame": 84978019,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 97150564,
+      "referenceStartFrame": 97149599,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 97150571,
+      "referenceStartFrame": 97149606,
+      "zeroFrames": 5,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 37
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 97298822,
+      "referenceStartFrame": 97297857,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 0.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 98314957,
+      "referenceStartFrame": 98313992,
+      "zeroFrames": 8,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 40
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 101410618,
+      "referenceStartFrame": 101409653,
+      "zeroFrames": 8,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 40
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 107424713,
+      "referenceStartFrame": 107423748,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 107424726,
+      "referenceStartFrame": 107423761,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 111382260,
+      "referenceStartFrame": 111381295,
+      "zeroFrames": 6,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 38
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 114140995,
+      "referenceStartFrame": 114140030,
+      "zeroFrames": 9,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 41
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 116758580,
+      "referenceStartFrame": 116757615,
+      "zeroFrames": 6,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 0.0,
+      "matchedFrames": 38
+    },
+    {
+      "channel": 4,
+      "startInputFrame": 118909752,
+      "referenceStartFrame": 118908787,
+      "zeroFrames": 4,
+      "alignmentAnchorChannel": 1,
+      "maximumErrorLSB": 1.0,
+      "matchedFrames": 36
+    }
+  ],
+  "reason": "channel 4 at input frame 118909759: 4 zeros where the preset does not produce exactly 4",
+  "evidenceComplete": true,
+  "provenance": {
+    "exporterSHA256": "6261ddb55d03a108ef61b82596d964d89213c83386cc23465ccfb88cdc496393",
+    "coreSHA256": "bbaec39ef0cab29bd9a493db9eefaff47507f4fa916389a3c5d01612e41453f2",
+    "artifactSHA256": "89759207ea27b22756c1e1a50663cfd23e2dc47aa7ca79e7b46f149d7458ac66",
+    "referenceSHA256": "56c9b8dd5852cb3a483a1192d614e7c6703772a55bde37f716e1327fd5facb3d",
+    "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)"
+  },
+  "ranges": [
+    [
+      43817548,
+      43827188
+    ],
+    [
+      49788279,
+      49797916
+    ],
+    [
+      61515315,
+      61524954
+    ],
+    [
+      66475431,
+      66485074
+    ],
+    [
+      68628037,
+      68637676
+    ],
+    [
+      76705218,
+      76714854
+    ],
+    [
+      77019745,
+      77029382
+    ],
+    [
+      77726445,
+      77736082
+    ],
+    [
+      84969132,
+      84978768
+    ],
+    [
+      97140712,
+      97150356
+    ],
+    [
+      97288970,
+      97298606
+    ],
+    [
+      98305105,
+      98314745
+    ],
+    [
+      101400766,
+      101410406
+    ],
+    [
+      107414861,
+      107424510
+    ],
+    [
+      111372408,
+      111382046
+    ],
+    [
+      114131143,
+      114140784
+    ],
+    [
+      116748728,
+      116758366
+    ],
+    [
+      118899900,
+      118909543
+    ],
+    [
+      121157349,
+      121171589
+    ],
+    [
+      121210053,
+      121226213
+    ],
+    [
+      160929331,
+      160938967
+    ],
+    [
+      161500005,
+      161509645
+    ],
+    [
+      183796785,
+      183806425
+    ],
+    [
+      185924551,
+      185934188
+    ],
+    [
+      216523045,
+      216532741
+    ],
+    [
+      233863237,
+      233872997
+    ],
+    [
+      239393685,
+      239403322
+    ],
+    [
+      248592577,
+      248602215
+    ],
+    [
+      248980144,
+      248989780
+    ],
+    [
+      248999639,
+      249009280
+    ],
+    [
+      257451643,
+      257461280
+    ],
+    [
+      270487390,
+      270497029
+    ],
+    [
+      273242589,
+      273252247
+    ],
+    [
+      293679215,
+      293688851
+    ],
+    [
+      295954779,
+      295964416
+    ],
+    [
+      322069144,
+      322078782
+    ],
+    [
+      334204858,
+      334214494
+    ],
+    [
+      343832687,
+      343842325
+    ]
+  ],
+  "hostGain": {
+    "output": 1.0,
+    "input": 1.0
+  },
+  "hostGainSHA256": "67ea6c223ce1fe5d8741f0f6b50f45e6a5e3cbd38a36b4bd39e99e574c57a3e5",
+  "loopChannels": 8,
+  "reportSHA256": "97bf1052f60e3ad02e0aec9c9d8efff5870d8f0e717dcc2468d435301beeed1d",
+  "checkerSHA256": "c10ed859f2a4bf8a46ade147ee261f775dad38dda7fa4666529ad0cc44e75013",
+  "artifact": "/Users/bryandimaio/Development/USB-AoIP/outputs/latency/loop8-96dsphour2-soak-3600s-32f-20261029T220456Z-api/preset.dsp",
+  "seconds": 3600,
+  "longestZeroRuns": [
+    1,
+    1,
+    64,
+    11,
+    64,
+    64,
+    1,
+    64,
+    345408000,
+    345408000,
+    345408000,
+    345408000,
+    345408000,
+    345408000,
+    345408000,
+    345408000
+  ]
+}
