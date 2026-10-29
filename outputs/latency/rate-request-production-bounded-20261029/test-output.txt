@@ -1,0 +1,9 @@
+(test-rate-request.sh build/rate-request-production 600 on the Pi, d38b521d, operator's sudo, terminal output)
+before: rates 48000/48000; loaded DD2DD5108A06E3270F336AF/C647475B059D8F6DB983CED
+CANDIDATE READY for 600 s at 02:36:10 UTC: rates 48000/48000/0; dante active
+end early: touch /dev/shm/rate-request-test.end (or Ctrl-C)
+end file seen
+window over at 02:38:04 UTC: rates 48000/48000/0
+restoring the installed modules
+loaded: DD2DD5108A06E3270F336AF/C647475B059D8F6DB983CED (expected DD2DD5108A06E3270F336AF/C647475B059D8F6DB983CED)
+usb state: configured / high-speed; dante: active; rates 48000/48000

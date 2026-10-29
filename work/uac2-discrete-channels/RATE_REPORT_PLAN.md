@@ -821,7 +821,7 @@ noise probe at 32, a two-minute soak):
 
 `test-rate-request.sh build/rate-request-production 600` (d38b521d), operator's
 sudo; ended with the end file. Evidence
-`outputs/latency/rate-request-production-bounded-20261029/journal.txt` (the
+`outputs/latency/rate-request-production-bounded-20261029/` (`test-output.txt` the script's output, `journal.txt` the
 endpoint and gadget units; times in UTC) and the two noise probes below.
 
 - Load: srcversions 681145C2... / 3373101B... (the production pair),
