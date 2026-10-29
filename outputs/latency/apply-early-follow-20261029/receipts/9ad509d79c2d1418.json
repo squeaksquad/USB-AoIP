@@ -1,0 +1,92 @@
+{
+  "error": null,
+  "finishedAt": "2026-10-29T03:38:36Z",
+  "id": "9ad509d79c2d1418",
+  "identity": {
+    "confSha256": "7f25b9d90a4c360567f4313d3977157132288c5f5e8cf832193438c77e69636d",
+    "ownerSha256": "a15a9d846254281e965d0da3e4ab57c98b657b97fb7d1f0ba91d53f7cbd63b7f",
+    "startSha256": "a6c3a1972ca6bbad335194dee436b1a611e84c7918b4e126a1f48650570e13f6"
+  },
+  "kind": "rate",
+  "live": "direct",
+  "previousProfile": "direct",
+  "profile": "direct",
+  "rate": {
+    "from": 48000,
+    "source": "dante",
+    "to": 44100
+  },
+  "request": {
+    "artifactSha256": null,
+    "expectedLiveSha256": null,
+    "expectedProfile": null,
+    "from": "169.254.253.98",
+    "kind": "rate",
+    "name": null,
+    "profile": null,
+    "rate": 44100,
+    "requestedAt": 1793245094.0,
+    "requestedBy": "dante 169.254.253.98",
+    "revert": null,
+    "slug": null,
+    "source": "dante"
+  },
+  "stack": "dante",
+  "startLines": {
+    "direct": [
+      "START usb16x16-dante-owner mode=usb pcm=inferno rate=44100 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-15.48 seed_from_file=1",
+      "METERS publishing file=/run/usb16x16-dante/meters.txt window_frames=2205",
+      "NETSTART capture=RUNNING playback=RUNNING",
+      "USBLINK usb=absent tx=idle rx=idle tx_links=0 rx_primes=0 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=0 tx_prime_found=0 t=0.300",
+      "USBLINK usb=open tx=idle rx=idle tx_links=0 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=0 tx_prime_found=0 t=1.301"
+    ]
+  },
+  "startedAt": "2026-10-29T03:38:14Z",
+  "state": "done",
+  "steps": [
+    {
+      "at": "2026-10-29T03:38:19Z",
+      "detail": "48000 -> 44100 Hz asked by dante; direct; USB host 48000/48000",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-10-29T03:38:19Z",
+      "detail": "systemctl stop usb16x16-dante.service",
+      "name": "stopping",
+      "ok": true
+    },
+    {
+      "at": "2026-10-29T03:38:19Z",
+      "detail": "/etc/usb16x16/dante/owner.conf -> direct at 44100 Hz, asound-inferno-owner.conf with it",
+      "name": "switching",
+      "ok": true
+    },
+    {
+      "at": "2026-10-29T03:38:19Z",
+      "detail": "systemctl start usb16x16-dante.service",
+      "name": "starting",
+      "ok": true
+    },
+    {
+      "at": "2026-10-29T03:38:19Z",
+      "detail": "waiting up to 75 s for the owner to start both streams",
+      "name": "verifying",
+      "ok": true
+    },
+    {
+      "at": "2026-10-29T03:38:20Z",
+      "detail": "asked the Mac to follow to 44100 Hz (gadget clock interrupt)",
+      "name": "host-follow",
+      "ok": true
+    },
+    {
+      "at": "2026-10-29T03:38:20Z",
+      "detail": "15 s on one start with nothing fatal",
+      "name": "settling",
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-10-29T03:38:36Z",
+  "version": "1.8.0"
+}

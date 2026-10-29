@@ -935,3 +935,28 @@ change, outside the audio path): F1 again (Dante 48 -> 44.1 -> 48, Mac idle:
 the Mac's nominal rate and the owner's `host_rate=match` within about 2 s of
 the restart, `host-follow` before `settling` in the receipt, no `USBRATE
 refused` request), a noise probe at 32 and the two-minute soak.
+
+## Early follow: INSTALLED 2026-10-29 03:37 UTC and ACCEPTED 03:46 UTC (operator)
+
+`sudo ./install-apply-early-follow.sh install` (3cd9e0a8) by the operator:
+`usb16x16-apply` 1.8.0 347a7062, 1.7.0 kept as `usb16x16-apply.pre-early-follow`.
+Evidence `outputs/latency/apply-early-follow-20261029/` (`install-output.txt`,
+`steps.txt`, `g1-*-mac-rate.txt`, `g1-*-pi.txt`, `receipts/`, `journal.txt`).
+
+| Change (Mac idle) | Restart | `host-follow` | Mac nominal | Owner `host_rate=match` | Arbiter `done` |
+|---|---|---|---|---|---|
+| Dante 48 -> 44.1 (03:38:14) | 03:38:19 | 03:38:20, before `settling` | 44100 at 03:38:20.7 | 03:38:20 | 03:38:36 |
+| Dante 44.1 -> 48 (03:41:27) | 03:41:32 | 03:41:33, before `settling` | 48000 at 03:41:33.7 | 03:41:33 | 03:41:49 |
+
+The USB half now opens about one second after the restart (it was about 16 s
+on 1.7.0). The owner's request for the old rate at its first check (0 s) is
+still written, before the endpoint runs and so before the follow can be; the
+10 s retry no longer happens. Noise probe at 32 clean
+(`earlyfollow-installed-noise-ch2-32f-20261029T034240Z`: zero runs >= 4: 0, no
+xrun, lag or error lines); two-minute soak **PASS**
+(`earlyfollow-soak120-soak-120s-32f-20261029T034343Z`: 16 channels, longest
+zero run 1, discontinuities 0/0). Accepted by the operator's standing word
+("if it passes, accept it"). Not provoked live: a settle failure after the
+follow (Mac-tested). Rollback: `cd ~/usb-16x16-work/apply-early-follow && sudo
+./install-apply-early-follow.sh rollback` (1.7.0), before
+`install-rate-request.sh rollback`. Mac at 48000.

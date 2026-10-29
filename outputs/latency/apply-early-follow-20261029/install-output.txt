@@ -1,0 +1,3 @@
+(sudo ./install-apply-early-follow.sh install, 3cd9e0a8, operator, terminal output)
+installed usb16x16-apply 1.8.0 347a7062; kept 1.7.0 as /usr/local/bin/usb16x16-apply.pre-early-follow
+usb16x16-apply: 347a7062  kept: 1a85bd3d  (1.8.0 347a7062, 1.7.0 1a85bd3d)

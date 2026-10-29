@@ -14528,3 +14528,14 @@ point of record.** `u_audio.ko` ed539ca8, `usb_f_uac2.ko` 505c6ad0, `usb16x16-ap
 1a85bd3d, as installed at 02:41 (entry above). Rollback unchanged:
 `cd ~/usb-16x16-work/gadget-raterequest && sudo ./install-rate-request.sh rollback`, before any
 older module rollback.
+
+**ACCEPTED 2026-10-29 03:46 UTC (operator, "if it passes, accept it"): usb16x16-apply 1.8.0 347a7062,
+the early follow.** Installed 03:37 by `work/web-control/install-apply-early-follow.sh` (3cd9e0a8)
+over 1.7.0 1a85bd3d (kept as `/usr/local/bin/usb16x16-apply.pre-early-follow`). The Mac is asked
+to follow a Dante-side or page rate move as soon as the endpoint runs at the new rate, before the
+15 s settle, and sent back if the move then rolls back. Dante 48 <-> 44.1 with the Mac idle: Mac
+and owner matched about 1 s after the restart both ways (was about 16 s). Noise probe at 32 clean;
+two-minute soak PASS (`earlyfollow-soak120-soak-120s-32f-20261029T034343Z`). Detail:
+`work/uac2-discrete-channels/RATE_REPORT_PLAN.md`, last section. Rollback: `cd
+~/usb-16x16-work/apply-early-follow && sudo ./install-apply-early-follow.sh rollback` (1.7.0); it
+comes before `install-rate-request.sh rollback`.
