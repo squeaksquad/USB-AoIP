@@ -1,0 +1,283 @@
+=== hostgain under the tmpfs capture 11:43:01
+started
+    "inputGain" : 1,
+    "inputGain" : 1,
+    "inputGain" : 1,
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+251604 packets captured
+251924 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:43:11 /dev/shm/slip96.pcap0
+-rw-r--r-- 1 tcpdump tcpdump  13473198 07:43:12 /dev/shm/slip96.pcap1
+=== try 1 20261029T114313Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+836443 packets captured
+836483 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump  77235127 07:43:48 /dev/shm/slip96.pcap0
+-rw-r--r-- 1 tcpdump tcpdump 100000276 07:43:32 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:43:41 /dev/shm/slip96.pcap2
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 2 20261029T114350Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+840074 packets captured
+840250 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump  78872708 07:44:25 /dev/shm/slip96.pcap0
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:44:08 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:44:18 /dev/shm/slip96.pcap2
+bitexact exit 0 
+ch1 lostLocks, last at s: 2 2.07709375
+total 607968
+-rw-r--r--@ 1 bryandimaio  wheel   78872708 Oct 29 07:44 slip96.pcap0
+-rw-r--r--@ 1 bryandimaio  wheel  100000254 Oct 29 07:44 slip96.pcap1
+-rw-r--r--@ 1 bryandimaio  wheel  100000254 Oct 29 07:44 slip96.pcap2
+CAUGHT outputs/latency/loop8-96-bitexact-tmpfs-30s-32f-20261029T114350Z.json
+=== hostgain under the tmpfs capture 11:45:03
+started
+    "inputGain" : 1,
+    "inputGain" : 1,
+    "inputGain" : 1,
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+249694 packets captured
+249816 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:45:12 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump  12611788 07:45:13 /dev/shm/slip96.pcap1
+=== try 1 20261029T114514Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+716507 packets captured
+716918 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:45:24 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:45:33 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:45:42 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  23143991 07:45:45 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 2 20261029T114546Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+711992 packets captured
+712256 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:45:55 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:46:04 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:46:14 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  21107726 07:46:16 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 3 20261029T114617Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+711830 packets captured
+712248 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:46:26 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:46:36 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:46:45 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  21034664 07:46:47 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 4 20261029T114648Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+722990 packets captured
+723118 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:46:57 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:47:07 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:47:16 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  26067824 07:47:18 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 5 20261029T114719Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+712008 packets captured
+712150 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:47:29 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:47:38 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:47:47 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  21114942 07:47:49 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 6 20261029T114751Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+713049 packets captured
+713289 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000342 07:48:00 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:48:09 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:48:18 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  21584433 07:48:20 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 7 20261029T114822Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+714475 packets captured
+714668 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:48:31 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000406 07:48:40 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:48:50 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  22227559 07:48:52 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 8 20261029T114853Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+723632 packets captured
+723674 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:49:02 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:49:12 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:49:21 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  26357366 07:49:23 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+no slip in 8 tries
+=== hostgain under the tmpfs capture 11:49:37
+started
+    "inputGain" : 1,
+    "inputGain" : 1,
+    "inputGain" : 1,
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+249911 packets captured
+250231 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:49:46 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump  12709655 07:49:47 /dev/shm/slip96.pcap1
+=== try 1 20261029T114948Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+712006 packets captured
+712262 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:49:58 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:50:07 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:50:16 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  21114040 07:50:18 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 2 20261029T115019Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+712501 packets captured
+712551 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:50:29 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:50:38 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:50:47 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  21337285 07:50:49 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 3 20261029T115051Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+711184 packets captured
+711514 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000342 07:51:00 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:51:09 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:51:19 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  20743318 07:51:20 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 4 20261029T115122Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+711254 packets captured
+711500 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:51:31 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:51:40 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:51:50 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  20774888 07:51:51 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 5 20261029T115153Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+711978 packets captured
+712024 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:52:02 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:52:11 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:52:21 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  21101412 07:52:23 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 6 20261029T115224Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+711977 packets captured
+712097 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000089 07:52:33 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:52:42 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:52:52 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  21101412 07:52:54 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 7 20261029T115255Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+715002 packets captured
+715234 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:53:04 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:53:13 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:53:23 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  22465236 07:53:25 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 8 20261029T115326Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+711616 packets captured
+711936 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:53:35 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:53:45 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:53:54 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  20938150 07:53:56 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 9 20261029T115357Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+711614 packets captured
+712032 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:54:07 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:54:16 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:54:25 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  20937248 07:54:27 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 0 -1.0416666666666666e-05
+=== try 10 20261029T115428Z
+started
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+710816 packets captured
+711120 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:54:38 /dev/shm/slip96.pcap
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:54:47 /dev/shm/slip96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 100000254 07:54:56 /dev/shm/slip96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump  20577350 07:54:58 /dev/shm/slip96.pcap3
+bitexact exit 0 
+ch1 lostLocks, last at s: 1 6.1349479166666665
+total 653216
+-rw-r--r--@ 1 bryandimaio  wheel  100000254 Oct 29 07:55 slip96.pcap
+-rw-r--r--@ 1 bryandimaio  wheel  100000254 Oct 29 07:55 slip96.pcap1
+-rw-r--r--@ 1 bryandimaio  wheel  100000254 Oct 29 07:55 slip96.pcap2
+-rw-r--r--@ 1 bryandimaio  wheel   20577350 Oct 29 07:55 slip96.pcap3
+CAUGHT outputs/latency/loop8-96-bitexact-tmpfs-25s-32f-20261029T115428Z.json

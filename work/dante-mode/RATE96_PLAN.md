@@ -370,3 +370,25 @@ because the capture itself breaks the loop.** Evidence: `outputs/latency/rate96-
 - So the slips are still not located, and a streamed capture is not a usable tool at 96. Left:
   `bitexact` at 48 on this path, and a capture that does not load the Pi (a mirror port on the
   switch, or a short capture to tmpfs: 473 MB is about 44 s at 96).
+
+**MEASURED 2026-10-29 11:43-11:57 UTC, same session: a capture kept in tmpfs on the Pi does not
+break the loop, but it caught a different event, not the slip.** `tmpfs-catch.sh` (beside the
+evidence in `outputs/latency/rate96-slip-capture-20261029/`; log `tmpfs-catch.txt`): `tcpdump -p`
+to `/dev/shm` (nothing streamed), host gain 3 of 3 under it each time, then 25-30 s `bitexact
+--loop-channels 8` runs inside it, the capture kept only after a run with a lost lock.
+- 22 runs, about 560 s of sequence. Two lost locks of the slip's shape (one mismatch each, no zero
+  run), both 2.08 s into the run at 11:43 (`loop8-96-bitexact-tmpfs-30s-32f-20261029T114350Z`); that
+  run used a 3 x 100 MB ring, which had already overwritten that second. At about one slip per 90 s
+  without a capture, about six were due; two came.
+- The run kept (`loop8-96-bitexact-tmpfs-25s-32f-20261029T115428Z`, capture
+  `try-20261029T115428Z/all.pcap`, gitignored; `sequence-slips-115428Z.txt`) holds a different event:
+  on all 8 channels one lost lock with 161 mismatches and a 160-frame zero run (128 on two). On the
+  wire, all four of the Pi's transmit flows skip four packets at once: the Dante timestamp steps 160
+  instead of 32, the audio steps 129 codes (128 frames never sent, none repeated), the send gap is
+  1.665 ms where 0.333 is normal. What the Pulse returns has the matching 160 zeros. So once in
+  about 560 s under a tmpfs capture, the Pi's transmit (Inferno or the owner feeding it) stalled
+  for 1.3 ms and dropped those frames. The 600 s soak without a capture had no zero run longer
+  than 1, so this may be the capture's load. The owner counts only runs on all 16 channels.
+- The slip, one frame dropped or repeated on every looped channel, is still not located. Two
+  facts narrow it: `bitexact` cannot tell a drop from a repeat (both re-lock after one mismatch),
+  and every capture so far either breaks the loop (streamed) or adds its own events (tmpfs).

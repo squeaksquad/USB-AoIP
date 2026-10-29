@@ -1,0 +1,17 @@
+capture all.pcap: 6 flows
+  Pi receives 169.254.248.189:61445 -> 169.254.92.97:42714  8 ch x 16 frames, 177707 packets; sources -,-,-,-,-,-,-,-; matches [2399722, 2399721, 2399720, 2399719, 0, 0, 0, 2399754]; breaks [2, 2, 2, 2, 0, 0, 0, 2]
+  Pi receives 169.254.248.189:61446 -> 169.254.92.97:51417  8 ch x 16 frames, 177707 packets; sources -,-,-,-,-,-,-,-; matches [2399724, 2399721, 2399749, 0, 0, 0, 0, 0]; breaks [2, 2, 3, 0, 0, 0, 0, 0]
+  Pi sends    169.254.92.97:35739 -> 169.254.248.189:14347  4 ch x 32 frames, 88849 packets; sources -,-,-,-; matches [2399749, 2399753, 2399754, 2399753]; breaks [2, 1, 1, 1]
+  Pi sends    169.254.92.97:47252 -> 169.254.248.189:14353  4 ch x 32 frames, 88849 packets; sources -,-,-,-; matches [2399756, 2399753, 2399754, 2399754]; breaks [1, 1, 1, 1]
+  Pi sends    169.254.92.97:58402 -> 169.254.248.189:14349  4 ch x 32 frames, 88849 packets; sources -,-,-,-; matches [2399754, 2399754, 2399749, 2399753]; breaks [1, 1, 2, 1]
+  Pi sends    169.254.92.97:59811 -> 169.254.248.189:14351  4 ch x 32 frames, 88849 packets; sources -,-,-,-; matches [2399754, 2399752, 2399752, 2399751]; breaks [1, 1, 1, 1]
+timestamp gaps: 4
+  t+   10.574s 169.254.92.97:35739->169.254.248.189:14347 after 55675127952 came 55675128112 (160)
+  t+   10.574s 169.254.92.97:58402->169.254.248.189:14349 after 55675127952 came 55675128112 (160)
+  t+   10.574s 169.254.92.97:59811->169.254.248.189:14351 after 55675127952 came 55675128112 (160)
+  t+   10.574s 169.254.92.97:47252->169.254.248.189:14353 after 55675127952 came 55675128112 (160)
+sequence breaks: 35
+  t+    9.760s  1 channel breaks; Dante stamp 55675049953..55675049953; sends port 58402 other x1
+  t+   10.574s  8 channel breaks; Dante stamp 55675128094..55675128126; receives port 61445 other x5; receives port 61446 other x3
+  t+   21.816s  2 channel breaks; Dante stamp 55676207340..55676207482; receives port 61446 other x1; sends port 35739 other x1
+  t+   29.446s  24 channel breaks; Dante stamp 55676939829..55676939971; receives port 61445 other x5; receives port 61446 other x3; sends port 35739 other x4; sends port 47252 other x4; sends port 58402 other x4; sends port 59811 other x4
