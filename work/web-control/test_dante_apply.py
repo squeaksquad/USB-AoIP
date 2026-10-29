@@ -768,8 +768,43 @@ class DanteApplyTest(unittest.TestCase):
         follow = [s for s in result["steps"] if s["name"] == "host-follow"]
         self.assertEqual([(s["ok"], s["detail"]) for s in follow], [(True, "asked the Mac to follow to 96000 Hz (gadget clock interrupt)")])
         self.assertEqual(runner.host, (96000, 96000))
+        # as soon as the owner runs at the rate: after verifying, before the settle
+        names = [s["name"] for s in result["steps"]]
+        self.assertEqual(names[names.index("verifying"):], ["verifying", "host-follow", "settling"])
         # The overrode guard stays as the fallback; it lifts when the owner joins the Mac.
         self.assertEqual(json.loads((self.env.spool / "rate-history.json").read_text())["overrode"], 48000)
+
+    def test_a_move_that_fails_its_settle_sends_the_mac_back(self):
+        self.env.set_inferno(48000, "48000,96000")
+        before = (self.env.conf.read_text(), self.env.inferno.read_text())
+
+        class FailsFirstSettle(FakeRunner):
+            starts = 0
+            def run(self, argv, timeout=60.0, env=None):
+                if argv[:2] == ["systemctl", "start"]:
+                    self.starts += 1
+                return super().run(argv, timeout, env)
+            def sleep(self, seconds):
+                super().sleep(seconds)
+                if self.starts == 1 and self.unit == "active" and self.ticks == 3:
+                    self.log.append("NETERROR count=1 last=-32 (Broken pipe) t=3.000")
+
+        runner = FailsFirstSettle(self.env, host=(48000, 48000), rate_request=True)
+        result = self.make(runner=runner).apply(self.rate(96000, source="dante"))
+        self.assertEqual(result["state"], "rolled-back", result["error"])
+        self.assertEqual((self.env.conf.read_text(), self.env.inferno.read_text()), before)
+        writes = [c[-1] for c in runner.calls if c[:1] == ["amixer"] and c[3] == "cset"]
+        self.assertEqual(writes, ["96000", "48000"])
+        self.assertEqual(runner.host, (48000, 48000))
+        names = [s["name"] for s in result["steps"]]
+        back = names.index("rolling-back")
+        self.assertEqual(names[back:], ["rolling-back", "stopping", "switching", "starting", "verifying", "host-follow",
+                                        "settling"])
+        # A Mac that was never told is not told on a rollback either.
+        runner = FailsFirstSettle(self.env, host=(48000, 48000))
+        result = self.make(runner=runner).apply(self.rate(96000, source="dante"))
+        self.assertEqual(result["state"], "rolled-back", result["error"])
+        self.assertEqual(len([s for s in result["steps"] if s["name"] == "host-follow"]), 1)
 
     def test_without_the_control_a_dante_set_still_stands(self):
         self.env.set_inferno(48000, "48000,96000")

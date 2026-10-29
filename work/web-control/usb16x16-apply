@@ -93,7 +93,7 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 
 SPOOL_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
 CONF_PATH = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
@@ -1773,20 +1773,33 @@ class DanteApplier(Applier):
         new_text = render_owner_conf(conf.get("METERS", "0"),
                                      Path(target["dspPreset"]) if target["dspPreset"] else None, target["dspSha256"],
                                      None if rate == NOMINAL_RATE else str(rate))
-        reason = self.switch_to(new_text, target, inferno_text=spec["inferno"])
+        # A move made on the Dante side or the page asks the Mac to follow as soon
+        # as the endpoint runs at the new rate, before the settle, so the USB half
+        # opens about a second after the restart instead of after the settle.
+        host = spec["host"]
+        asked: list[int] = []
+
+        def follow(to: int) -> None:
+            ok, detail = self.ask_host_to_follow(to)
+            self.step("host-follow", detail, ok=ok)
+            if ok:
+                asked.append(to)
+
+        on_running = None
+        if spec["source"] != "usb" and (host is None or any(value != rate for value in host)):
+            on_running = lambda: follow(rate)
+        reason = self.switch_to(new_text, target, inferno_text=spec["inferno"], on_running=on_running)
         if reason is None:
             history = {"from": spec["running"], "to": rate, "at": self.runner.now(), "source": spec["source"]}
             if spec["overrode"] is not None:
                 history["overrode"] = spec["overrode"]
             write_atomic(self.spool / "rate-history.json", history)
-            host = spec["host"]
-            if spec["source"] != "usb" and (host is None or any(value != rate for value in host)):
-                asked, detail = self.ask_host_to_follow(rate)
-                self.step("host-follow", detail, ok=asked)
             return self.finish("done")
         self.step("rolling-back", f"{reason}; returning to {spec['running']} Hz", ok=False)
         rollback_target = {"name": target["name"], "dspPreset": conf.get("DSP_PRESET") or None, "rate": spec["running"]}
-        rollback_reason = self.switch_to(previous_text, rollback_target, inferno_text=spec["previousInferno"])
+        # A Mac already sent to the new rate goes back once the endpoint runs at the old one.
+        rollback_reason = self.switch_to(previous_text, rollback_target, inferno_text=spec["previousInferno"],
+                                         on_running=(lambda: follow(spec["running"])) if asked else None)
         if rollback_reason is None:
             return self.finish("rolled-back", reason)
         return self.finish("failed", f"{reason}; rollback to {spec['running']} Hz also failed: {rollback_reason}")
@@ -1827,9 +1840,10 @@ class DanteApplier(Applier):
 
     # ---- the operation
 
-    def switch_to(self, text: str, target: dict, inferno_text: str | None = None) -> str | None:
+    def switch_to(self, text: str, target: dict, inferno_text: str | None = None, on_running=None) -> str | None:
         """Stop, write owner.conf (and the Inferno config, for a rate change),
-        start, verify. Returns None or the reason."""
+        start, verify. Returns None or the reason. `on_running` is called once,
+        when the owner runs as the target says and before the settle."""
         self.step("stopping", f"systemctl stop {DANTE_UNIT}")
         code, out = self.runner.run(["systemctl", "stop", DANTE_UNIT], timeout=60)
         if code != 0:
@@ -1851,7 +1865,7 @@ class DanteApplier(Applier):
         if code != 0:
             return f"start failed: {out}"
         self.step("verifying", f"waiting up to {self.start_timeout:.0f} s for the owner to start both streams")
-        return self.verify(target)
+        return self.verify(target, on_running)
 
     def check_owner(self, target: dict, invocation: str) -> str | None:
         """None when this start is what the profile calls for; else the reason.
@@ -1884,7 +1898,7 @@ class DanteApplier(Applier):
             return "the owner is not following a live file"
         return None
 
-    def verify(self, target: dict) -> str | None:
+    def verify(self, target: dict, on_running=None) -> str | None:
         deadline = self.runner.now() + self.start_timeout
         invocation = ""
         while True:
@@ -1898,6 +1912,8 @@ class DanteApplier(Applier):
             if self.runner.now() >= deadline:
                 return f"not up within {self.start_timeout:.0f} s ({reason})"
             self.runner.sleep(self.poll)
+        if on_running is not None:
+            on_running()
         self.step("settling", f"{self.settle:.0f} s on one start with nothing fatal")
         settle_end = self.runner.now() + self.settle
         while self.runner.now() < settle_end:

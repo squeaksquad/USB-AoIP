@@ -902,3 +902,36 @@ The rate-request set (`u_audio` ed539ca8, `usb_f_uac2` 505c6ad0, `usb16x16-apply
 1a85bd3d) is part of the Dante point of record; the handoff tail has the entry. Open: the
 follow written after the settle (about 16 s with the USB half closed per Dante-side move),
 88.2 / 96 on this route, Pro Tools open during a move.
+
+## Early follow: usb16x16-apply 1.8.0 (built 2026-10-29, not installed)
+
+The refinement noted at the install: the Mac was asked to follow only after the
+applier's 15 s settle, so the USB half stayed closed about 16 s per Dante-side
+move. `usb16x16-apply` 1.8.0
+(**347a7062**1f3c6bb9c10092f42ac52a0d280a756b14ba9c9f71175e7a3b28f3eb):
+
+- `switch_to` / the Dante `verify` take an `on_running` hook, called once when
+  `check_owner` passes (the owner runs at the new rate, both streams up) and
+  before the settle. `change_rate` passes the follow write there, under the
+  same rule as 1.7.0 (a `dante` or `page` move, the Mac not already at N).
+  Ordering is kept: never before the endpoint runs at N.
+- If the settle then fails and the move rolls back, a Mac that was told to
+  follow is sent back to the old rate by the rollback's own `on_running` (once
+  the endpoint runs at the old rate again). A Mac that was not told is left
+  alone.
+- Tests: `test_a_dante_set_asks_the_mac_to_follow_after_the_move` now also
+  pins the step order (`verifying`, `host-follow`, `settling`);
+  `test_a_move_that_fails_its_settle_sends_the_mac_back` (writes 96000 then
+  48000, files restored, `host-follow` again before the rollback's settle; no
+  write on rollback when none was made). 126 pass with `test_apply`,
+  `test_web`, `test_dante_web`; the UI's 119 pass.
+- Not provoked live: a settle failure after the follow (Mac-tested only).
+
+Install: `work/web-control/install-apply-early-follow.sh` (3cd9e0a8), the
+applier alone, pinned 1.7.0 -> 1.8.0, keeping
+`/usr/local/bin/usb16x16-apply.pre-early-follow`; `rollback` returns to 1.7.0.
+Staged in `~/usb-16x16-work/apply-early-follow/`. Checks after it (an applier
+change, outside the audio path): F1 again (Dante 48 -> 44.1 -> 48, Mac idle:
+the Mac's nominal rate and the owner's `host_rate=match` within about 2 s of
+the restart, `host-follow` before `settling` in the receipt, no `USBRATE
+refused` request), a noise probe at 32 and the two-minute soak.
