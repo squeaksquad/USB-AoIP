@@ -1,0 +1,371 @@
+{
+  "channels" : [
+    {
+      "firstLockFrame" : 979,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 1,
+      "lostLocks" : 0,
+      "matches" : 34559015,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 4,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 2,
+      "slips" : [
+
+      ],
+      "source" : 1,
+      "unjudged" : 6
+    },
+    {
+      "firstLockFrame" : 980,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 1,
+      "lostLocks" : 0,
+      "matches" : 34559014,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 4,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 2,
+      "slips" : [
+
+      ],
+      "source" : 2,
+      "unjudged" : 6
+    },
+    {
+      "firstLockFrame" : 980,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 1,
+      "lostLocks" : 0,
+      "matches" : 34559014,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 4,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 2,
+      "slips" : [
+
+      ],
+      "source" : 3,
+      "unjudged" : 6
+    },
+    {
+      "firstLockFrame" : 980,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 1,
+      "lostLocks" : 0,
+      "matches" : 34559014,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 4,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 2,
+      "slips" : [
+
+      ],
+      "source" : 4,
+      "unjudged" : 6
+    },
+    {
+      "firstLockFrame" : 980,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 1,
+      "lostLocks" : 0,
+      "matches" : 34559014,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 4,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 2,
+      "slips" : [
+
+      ],
+      "source" : 5,
+      "unjudged" : 6
+    },
+    {
+      "firstLockFrame" : 980,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 1,
+      "lostLocks" : 0,
+      "matches" : 34559014,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 4,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 2,
+      "slips" : [
+
+      ],
+      "source" : 6,
+      "unjudged" : 6
+    },
+    {
+      "firstLockFrame" : 980,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 1,
+      "lostLocks" : 0,
+      "matches" : 34559014,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 4,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 2,
+      "slips" : [
+
+      ],
+      "source" : 7,
+      "unjudged" : 6
+    },
+    {
+      "firstLockFrame" : 980,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 1,
+      "lostLocks" : 0,
+      "matches" : 34559014,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 4,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 2,
+      "slips" : [
+
+      ],
+      "source" : 8,
+      "unjudged" : 6
+    },
+    {
+      "firstLockFrame" : -1,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 0,
+      "lostLocks" : 0,
+      "matches" : 0,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 0,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 0,
+      "slips" : [
+
+      ],
+      "source" : 0,
+      "unjudged" : 0
+    },
+    {
+      "firstLockFrame" : -1,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 0,
+      "lostLocks" : 0,
+      "matches" : 0,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 0,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 0,
+      "slips" : [
+
+      ],
+      "source" : 0,
+      "unjudged" : 0
+    },
+    {
+      "firstLockFrame" : -1,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 0,
+      "lostLocks" : 0,
+      "matches" : 0,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 0,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 0,
+      "slips" : [
+
+      ],
+      "source" : 0,
+      "unjudged" : 0
+    },
+    {
+      "firstLockFrame" : -1,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 0,
+      "lostLocks" : 0,
+      "matches" : 0,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 0,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 0,
+      "slips" : [
+
+      ],
+      "source" : 0,
+      "unjudged" : 0
+    },
+    {
+      "firstLockFrame" : -1,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 0,
+      "lostLocks" : 0,
+      "matches" : 0,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 0,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 0,
+      "slips" : [
+
+      ],
+      "source" : 0,
+      "unjudged" : 0
+    },
+    {
+      "firstLockFrame" : -1,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 0,
+      "lostLocks" : 0,
+      "matches" : 0,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 0,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 0,
+      "slips" : [
+
+      ],
+      "source" : 0,
+      "unjudged" : 0
+    },
+    {
+      "firstLockFrame" : -1,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 0,
+      "lostLocks" : 0,
+      "matches" : 0,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 0,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 0,
+      "slips" : [
+
+      ],
+      "source" : 0,
+      "unjudged" : 0
+    },
+    {
+      "firstLockFrame" : -1,
+      "lastLostLockFrame" : -1,
+      "longestZeroRunAfterLock" : 0,
+      "lostLocks" : 0,
+      "matches" : 0,
+      "mismatchesAfterLock" : 0,
+      "negativeLimit" : 0,
+      "offGridAfterLock" : 0,
+      "positiveLimit" : 0,
+      "slips" : [
+
+      ],
+      "source" : 0,
+      "unjudged" : 0
+    }
+  ],
+  "device" : {
+    "actualSampleRate" : 96000,
+    "bufferFrameSize" : 32,
+    "bufferFrameSizeRanges" : [
+      {
+        "maximum" : 4096,
+        "minimum" : 29
+      }
+    ],
+    "capturedAt" : "2026-10-29T15:08:47.322Z",
+    "deviceID" : 307,
+    "input" : {
+      "channelNames" : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ],
+      "channels" : 16,
+      "deviceLatencyFrames" : 146,
+      "safetyOffsetFrames" : 146,
+      "streams" : [
+        {
+          "bitsPerChannel" : 32,
+          "bytesPerFrame" : 64,
+          "channels" : 16,
+          "formatFlagsHex" : "0x00000009",
+          "formatID" : "lpcm",
+          "framesPerPacket" : 1,
+          "interleaved" : true,
+          "latencyFrames" : 0,
+          "sampleRate" : 96000,
+          "streamID" : 309
+        }
+      ]
+    },
+    "isAlive" : true,
+    "manufacturer" : "Bryan DiMaio",
+    "name" : "USB 16x16",
+    "nominalSampleRate" : 96000,
+    "output" : {
+      "channelNames" : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16"
+      ],
+      "channels" : 16,
+      "deviceLatencyFrames" : 26,
+      "safetyOffsetFrames" : 26,
+      "streams" : [
+        {
+          "bitsPerChannel" : 32,
+          "bytesPerFrame" : 64,
+          "channels" : 16,
+          "formatFlagsHex" : "0x00000009",
+          "formatID" : "lpcm",
+          "framesPerPacket" : 1,
+          "interleaved" : true,
+          "latencyFrames" : 0,
+          "sampleRate" : 96000,
+          "streamID" : 308
+        }
+      ]
+    },
+    "transportType" : "usb ",
+    "uid" : "AppleUSBAudioEngine:Bryan DiMaio:USB 16x16:AUDDEV001:1,2"
+  },
+  "hostGain" : {
+    "inputGain" : 1,
+    "inputGainWidth" : 6.10351561514122e-08,
+    "limit" : 8388607,
+    "outputGain" : 1,
+    "outputGainWidth" : 1.2231962542852415e-07
+  },
+  "inputDiscontinuities" : 0,
+  "inputFrames" : 34560000,
+  "inputStartUnixTime" : 1793286529.538038,
+  "invalidBuffers" : 0,
+  "kind" : "bit-exact-24",
+  "largestCode" : 8388607,
+  "loopChannels" : 8,
+  "outputDiscontinuities" : 0,
+  "outputFrames" : 34560000,
+  "pass" : true,
+  "sampleRate" : 96000,
+  "seconds" : 360
+}

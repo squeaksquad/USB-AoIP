@@ -468,3 +468,30 @@ before it (the Pulse, the MADI loop through the Metric Halo).** Evidence
   capture tells those apart: the audio in the Pulse's packets against their Dante timestamps at the
   moment of a SEQ line. With the SEQ line as the trigger, a tmpfs ring of only the Pulse -> Pi
   flows can run until an event and be cut 2 s after it, rather than catching one by chance.
+
+**MEASURED 2026-10-29 15:01-15:24 UTC: the misplaced block is already in the Pulse's packets on the
+wire. Inferno's receive is cleared with the owner; left are what the Pi sends (Inferno's transmit)
+and the far loop (the Pulse, MADI, the Metric Halo strips).** Evidence
+`outputs/latency/rate96-slip-kind-20261029/` (`seq-catch.sh`, `slip-wire.py`, `catch1/`, `catch2/`;
+the pcaps are gitignored).
+- `seq-catch.sh`: a tcpdump ring in the Pi's `/dev/shm` (4 x 80 MB, about 60 s) of the Pulse -> Pi flows
+  only, stopped 2 s after the owner's first `SEQ ... point=back ... dropped|repeated` line, while the
+  Mac runs `bitexact --loop-channels 8` 360 s at a time.
+- catch1 (15:01-15:08, tcpdump at normal priority, trigger on any `point=back` line): the trigger fired
+  on an `other`, and the capture's own load showed: two USB playback faults in the owner 32 s apart
+  (`playback_faults` 1 and 2, `gap_us_max` 2193, transmit depth down to 12), the second seen by the Mac
+  as `repeated 960`, the gadget's whole playback buffer played again. Neither happened without a
+  capture. Not the misplaced block.
+- catch2 (15:08-15:24, tcpdump at nice 19, trigger on `dropped|repeated` only): no owner fault in
+  three runs; the trigger fired in the third, `SEQ ... point=back ... dropped 8` at 15:23:38.31; 0
+  packets dropped by the kernel.
+- On the wire (`catch2/slip-wire.txt`): all 8 looped channels in one Pulse flow (port 61445, 8 ch x
+  16 frames). The packet stamped 56878865694 breaks at sample 13 on every channel, `dropped 8`; the next
+  (…710) at sample 13, `repeated 8`: a 16-frame window carrying the audio of 8 frames later, the shape
+  the owner and the Mac see. Stamps run on evenly (0 irregularities in 316,924 packets per flow) and
+  arrive every 0.167 ms as always. So the Pulse sent the block already misplaced, and Inferno placed it
+  where its stamp says. The window starts at sample 13, not on a Pulse packet boundary.
+- Next: the same catch with the Pi's own transmit flows in the ring (both directions, about 10 MB/s,
+  a ring of about 30 s). If what the Pi sends is clean at the matching moment, the shift is made in the
+  far loop; MADI and the Metric Halo can then be split by routing the Pulse's MADI out straight back to
+  its MADI in, without the strips.

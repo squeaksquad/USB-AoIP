@@ -49,3 +49,4 @@ __pycache__/
 
 # Dante mode upstream checkouts; pinned revisions in work/dante-mode/SOURCES.lock
 work/dante-mode/upstream/
+*.pcap[0-9]

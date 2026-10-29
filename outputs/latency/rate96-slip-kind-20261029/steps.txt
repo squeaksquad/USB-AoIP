@@ -7,3 +7,5 @@ inactive
 14:48:54 candidate stop (rate8trace)
 14:48:55 candidate start rate8seq 5f8a45b6, rate96-candidate config, arm A, --event-trace --seq-check 8
 14:50:36 bitexact 360 s -> outputs/latency/loop8-96seq-bitexact-360s-32f-20261029T145036Z.json
+15:01:36 seq-catch.sh 4 (tmpfs ring of the Pulse -> Pi flows, stopped 2 s after the first SEQ back line)
+15:08:44 seq-catch.sh 4, catch2: trigger on dropped|repeated at point=back only, tcpdump at nice 19
