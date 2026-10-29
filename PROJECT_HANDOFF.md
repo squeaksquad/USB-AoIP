@@ -14522,3 +14522,9 @@ Plan, results and evidence: `work/uac2-discrete-channels/RATE_REPORT_PLAN.md` (l
 `outputs/latency/rate-request-*-20261029/`.
 Rollback: `cd ~/usb-16x16-work/gadget-raterequest && sudo ./install-rate-request.sh rollback`
 (the rate-report set, applier 1.6.0); it must come before `install-rate-report.sh rollback`.
+
+**ACCEPTED 2026-10-29 03:34 UTC (operator, "Accept it"): the rate-request set is part of the Dante
+point of record.** `u_audio.ko` ed539ca8, `usb_f_uac2.ko` 505c6ad0, `usb16x16-apply` 1.7.0
+1a85bd3d, as installed at 02:41 (entry above). Rollback unchanged:
+`cd ~/usb-16x16-work/gadget-raterequest && sudo ./install-rate-request.sh rollback`, before any
+older module rollback.

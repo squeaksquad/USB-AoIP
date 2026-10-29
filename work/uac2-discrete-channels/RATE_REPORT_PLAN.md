@@ -895,3 +895,10 @@ Dante Switcher's parallel Mac set racing the follow (both set the same rate).
 Awaiting the operator's acceptance. Rollback:
 `cd ~/usb-16x16-work/gadget-raterequest && sudo ./install-rate-request.sh rollback`
 (the rate-report set), before `install-rate-report.sh rollback`.
+
+## ACCEPTED 2026-10-29 03:34 UTC (operator)
+
+The rate-request set (`u_audio` ed539ca8, `usb_f_uac2` 505c6ad0, `usb16x16-apply` 1.7.0
+1a85bd3d) is part of the Dante point of record; the handoff tail has the entry. Open: the
+follow written after the settle (about 16 s with the USB half closed per Dante-side move),
+88.2 / 96 on this route, Pro Tools open during a move.
