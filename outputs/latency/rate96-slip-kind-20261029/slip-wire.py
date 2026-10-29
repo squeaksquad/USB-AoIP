@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""slip-wire.py RING_FILE... [--at WALL]: the bitexact sequence in the Pulse's flows to the Pi, for the
+"""slip-wire.py RING_FILE... [--at WALL]: the bitexact sequence in the Dante flows between the Pi and the
+Pulse, both ways when the capture has both (what the Pi sends and what it receives), for the
 96 kHz misplaced blocks (2026-10-29). The files of a tcpdump ring are read in time order. For every
 looped channel each break is named as `bitexact` and the owner's --seq-check name it (dropped N,
 repeated N, other), with the packet's capture time (the Pi's clock, the same as the owner's SEQ lines),
@@ -62,11 +63,12 @@ def main():
             if parsed is None or cut:
                 continue
             src, dst, sport, dport, payload = parsed
-            if dst != o.pi or len(payload) < 12 or payload[0] != 2:
+            if o.pi not in (src, dst) or len(payload) < 12 or payload[0] != 2:
                 continue
+            way = "sends" if src == o.pi else "receives"
             seconds, samples = struct.unpack(">II", payload[1:9])
             stamp, audio = seconds * o.rate + samples, payload[9:]
-            f = flows.setdefault((sport, dport), {"last": None, "frames": None, "chans": None, "prev": None,
+            f = flows.setdefault((way, sport, dport), {"last": None, "frames": None, "chans": None, "prev": None,
                                                   "source": None, "packets": 0})
             if f["frames"] is None:
                 if f["last"] is not None:
@@ -76,12 +78,12 @@ def main():
                 f["last"] = stamp
                 continue
             if stamp != f["last"] + f["frames"]:
-                stamp_events.append((when, sport, f["last"], stamp))
+                stamp_events.append((when, way, sport, f["last"], stamp))
             f["last"] = stamp
             f["packets"] += 1
             n, frames = f["chans"], f["frames"]
             if o.at is not None and abs(when - o.at) < 0.005:
-                near.append((when, sport, stamp, int.from_bytes(audio[0:3], "big")))
+                near.append((when, way, sport, stamp, int.from_bytes(audio[0:3], "big")))
             for i in range(frames):
                 for c in range(n):
                     code = int.from_bytes(audio[(i * n + c) * 3:(i * n + c) * 3 + 3], "big")
@@ -92,27 +94,27 @@ def main():
                     if src_ch is not None:
                         if nxt(prev, src_ch) == code:
                             continue
-                        breaks.append((when, sport, c + 1, src_ch + 1, stamp, i, classify(code, prev, src_ch)))
+                        breaks.append((when, way, sport, c + 1, src_ch + 1, stamp, i, classify(code, prev, src_ch)))
                         f["source"][c] = None
                         continue
                     for ch in range(16):
                         if nxt(prev, ch) == code:
                             f["source"][c] = ch
                             break
-    print(f"{len(files)} files; flows to the Pi:")
-    for (sport, dport), f in sorted(flows.items()):
-        print(f"  port {sport}->{dport}: {f['chans']} ch x {f['frames']} frames, {f['packets']} packets, "
+    print(f"{len(files)} files; flows:")
+    for (way, sport, dport), f in sorted(flows.items()):
+        print(f"  Pi {way:8} port {sport}->{dport}: {f['chans']} ch x {f['frames']} frames, {f['packets']} packets, "
               f"sources {','.join(str(s + 1) if s is not None else '-' for s in f['source'] or [])}")
     print(f"stamp irregularities: {len(stamp_events)}")
-    for when, sport, last, stamp in stamp_events[:40]:
-        print(f"  wall {when:.6f} port {sport}: after {last} came {stamp} ({stamp - last:+d})")
+    for when, way, sport, last, stamp in stamp_events[:40]:
+        print(f"  wall {when:.6f} Pi {way} port {sport}: after {last} came {stamp} ({stamp - last:+d})")
     print(f"sequence breaks: {len(breaks)}")
-    for when, sport, ch, src, stamp, i, kind in breaks[:80]:
-        print(f"  wall {when:.6f} port {sport} ch {ch} (seq {src}) stamp {stamp} sample {i}: {kind}")
+    for when, way, sport, ch, src, stamp, i, kind in breaks[:120]:
+        print(f"  wall {when:.6f} Pi {way} port {sport} ch {ch} (seq {src}) stamp {stamp} sample {i}: {kind}")
     if near:
         print(f"packets within 5 ms of {o.at}:")
-        for when, sport, stamp, code in near:
-            print(f"  wall {when:.6f} port {sport} stamp {stamp} ch1 code {code:06x}")
+        for when, way, sport, stamp, code in near:
+            print(f"  wall {when:.6f} Pi {way} port {sport} stamp {stamp} ch1 code {code:06x}")
 
 
 if __name__ == "__main__":

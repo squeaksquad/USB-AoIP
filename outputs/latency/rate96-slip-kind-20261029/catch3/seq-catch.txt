@@ -1,0 +1,21 @@
+owner log /dev/shm/dante-owner-20261029T144855Z.log
+1944938 tcpdump -p -i eth0 -n -s 0 -B 32768 -C 80 -W 4 -w /dev/shm/seq96.pcap udp and host 169.254.248.189 and host 169.254.92.97 and greater 400
+=== run 1 20261029T161900Z
+bitexact exit 0 
+TRIGGER SEQ n=251 wall=1793290871.494664 point=back ch=1 frame=531433875 dropped 8
+16:21:13.602851322
+tcpdump: listening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+3233842 packets captured
+3234338 packets received by filter
+0 packets dropped by kernel
+-rw-r--r-- 1 tcpdump tcpdump 80000208 12:21:04.489941735 /dev/shm/seq96.pcap0
+-rw-r--r-- 1 tcpdump tcpdump 80000208 12:21:11.869841206 /dev/shm/seq96.pcap1
+-rw-r--r-- 1 tcpdump tcpdump 18459454 12:21:13.625817286 /dev/shm/seq96.pcap2
+-rw-r--r-- 1 tcpdump tcpdump 80000208 12:20:57.098042427 /dev/shm/seq96.pcap3
+total 551088
+-rw-r--r--@ 1 bryandimaio  wheel       174 Oct 29 12:25 seq96-tcpdump.txt
+-rw-r--r--@ 1 bryandimaio  wheel        94 Oct 29 12:25 seq96-trigger.txt
+-rw-r--r--@ 1 bryandimaio  wheel  80000208 Oct 29 12:25 seq96.pcap0
+-rw-r--r--@ 1 bryandimaio  wheel  80000208 Oct 29 12:25 seq96.pcap1
+-rw-r--r--@ 1 bryandimaio  wheel  18459454 Oct 29 12:25 seq96.pcap2
+-rw-r--r--@ 1 bryandimaio  wheel  80000208 Oct 29 12:25 seq96.pcap3

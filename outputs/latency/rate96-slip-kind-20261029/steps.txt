@@ -9,3 +9,4 @@ inactive
 14:50:36 bitexact 360 s -> outputs/latency/loop8-96seq-bitexact-360s-32f-20261029T145036Z.json
 15:01:36 seq-catch.sh 4 (tmpfs ring of the Pulse -> Pi flows, stopped 2 s after the first SEQ back line)
 15:08:44 seq-catch.sh 4, catch2: trigger on dropped|repeated at point=back only, tcpdump at nice 19
+16:18:58 seq-catch.sh 4 both, catch3: both directions in the ring, tcpdump at nice 19

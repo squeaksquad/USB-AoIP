@@ -1,0 +1,79 @@
+4 files; flows:
+  Pi receives port 61445->59931: 8 ch x 16 frames, 143269 packets, sources 1,2,3,4,5,6,7,8
+  Pi receives port 61446->60769: 8 ch x 16 frames, 143269 packets, sources -,-,-,-,-,-,-,-
+  Pi sends    port 36781->14353: 4 ch x 32 frames, 71633 packets, sources 6,8,14,15
+  Pi sends    port 38126->14349: 4 ch x 32 frames, 71633 packets, sources 7,10,2,9
+  Pi sends    port 45365->14351: 4 ch x 32 frames, 71633 packets, sources 11,16,3,5
+  Pi sends    port 47708->14347: 4 ch x 32 frames, 71633 packets, sources 4,12,1,13
+stamp irregularities: 0
+sequence breaks: 70
+  wall 1793290851.767245 Pi sends port 45365 ch 3 (seq 3) stamp 57208477680 sample 16: other
+  wall 1793290851.768611 Pi receives port 61445 ch 3 (seq 3) stamp 57208477838 sample 2: other
+  wall 1793290858.105944 Pi sends port 38126 ch 1 (seq 7) stamp 57209086192 sample 31: other
+  wall 1793290858.105944 Pi sends port 38126 ch 2 (seq 10) stamp 57209086192 sample 31: other
+  wall 1793290858.105944 Pi sends port 38126 ch 3 (seq 2) stamp 57209086192 sample 31: other
+  wall 1793290858.105944 Pi sends port 38126 ch 4 (seq 9) stamp 57209086192 sample 31: other
+  wall 1793290858.105963 Pi sends port 45365 ch 1 (seq 11) stamp 57209086192 sample 31: other
+  wall 1793290858.105963 Pi sends port 45365 ch 2 (seq 16) stamp 57209086192 sample 31: other
+  wall 1793290858.105963 Pi sends port 45365 ch 3 (seq 3) stamp 57209086192 sample 31: other
+  wall 1793290858.105963 Pi sends port 45365 ch 4 (seq 5) stamp 57209086192 sample 31: other
+  wall 1793290858.105979 Pi sends port 47708 ch 1 (seq 4) stamp 57209086192 sample 31: other
+  wall 1793290858.105979 Pi sends port 47708 ch 2 (seq 12) stamp 57209086192 sample 31: other
+  wall 1793290858.105979 Pi sends port 47708 ch 3 (seq 1) stamp 57209086192 sample 31: other
+  wall 1793290858.105979 Pi sends port 47708 ch 4 (seq 13) stamp 57209086192 sample 31: other
+  wall 1793290858.105997 Pi sends port 36781 ch 1 (seq 6) stamp 57209086192 sample 31: other
+  wall 1793290858.105997 Pi sends port 36781 ch 2 (seq 8) stamp 57209086192 sample 31: other
+  wall 1793290858.105997 Pi sends port 36781 ch 3 (seq 14) stamp 57209086192 sample 31: other
+  wall 1793290858.105997 Pi sends port 36781 ch 4 (seq 15) stamp 57209086192 sample 31: other
+  wall 1793290858.106925 Pi sends port 38126 ch 1 (seq 7) stamp 57209086288 sample 31: other
+  wall 1793290858.106925 Pi sends port 38126 ch 2 (seq 10) stamp 57209086288 sample 31: other
+  wall 1793290858.106925 Pi sends port 38126 ch 3 (seq 2) stamp 57209086288 sample 31: other
+  wall 1793290858.106925 Pi sends port 38126 ch 4 (seq 9) stamp 57209086288 sample 31: other
+  wall 1793290858.106954 Pi sends port 45365 ch 1 (seq 11) stamp 57209086288 sample 31: other
+  wall 1793290858.106954 Pi sends port 45365 ch 2 (seq 16) stamp 57209086288 sample 31: other
+  wall 1793290858.106954 Pi sends port 45365 ch 3 (seq 3) stamp 57209086288 sample 31: other
+  wall 1793290858.106954 Pi sends port 45365 ch 4 (seq 5) stamp 57209086288 sample 31: other
+  wall 1793290858.106974 Pi sends port 47708 ch 1 (seq 4) stamp 57209086288 sample 31: other
+  wall 1793290858.106974 Pi sends port 47708 ch 2 (seq 12) stamp 57209086288 sample 31: other
+  wall 1793290858.106974 Pi sends port 47708 ch 3 (seq 1) stamp 57209086288 sample 31: other
+  wall 1793290858.106974 Pi sends port 47708 ch 4 (seq 13) stamp 57209086288 sample 31: other
+  wall 1793290858.106993 Pi sends port 36781 ch 1 (seq 6) stamp 57209086288 sample 31: other
+  wall 1793290858.106993 Pi sends port 36781 ch 2 (seq 8) stamp 57209086288 sample 31: other
+  wall 1793290858.106993 Pi sends port 36781 ch 3 (seq 14) stamp 57209086288 sample 31: other
+  wall 1793290858.106993 Pi sends port 36781 ch 4 (seq 15) stamp 57209086288 sample 31: other
+  wall 1793290858.107405 Pi receives port 61445 ch 1 (seq 1) stamp 57209086366 sample 1: other
+  wall 1793290858.107405 Pi receives port 61445 ch 2 (seq 2) stamp 57209086366 sample 1: other
+  wall 1793290858.107405 Pi receives port 61445 ch 3 (seq 3) stamp 57209086366 sample 1: other
+  wall 1793290858.107405 Pi receives port 61445 ch 4 (seq 4) stamp 57209086366 sample 1: other
+  wall 1793290858.107405 Pi receives port 61445 ch 5 (seq 5) stamp 57209086366 sample 1: other
+  wall 1793290858.107405 Pi receives port 61445 ch 6 (seq 6) stamp 57209086366 sample 1: other
+  wall 1793290858.107405 Pi receives port 61445 ch 7 (seq 7) stamp 57209086366 sample 1: other
+  wall 1793290858.107405 Pi receives port 61445 ch 8 (seq 8) stamp 57209086366 sample 1: other
+  wall 1793290858.108533 Pi receives port 61445 ch 1 (seq 1) stamp 57209086462 sample 1: other
+  wall 1793290858.108533 Pi receives port 61445 ch 2 (seq 2) stamp 57209086462 sample 1: other
+  wall 1793290858.108533 Pi receives port 61445 ch 3 (seq 3) stamp 57209086462 sample 1: other
+  wall 1793290858.108533 Pi receives port 61445 ch 4 (seq 4) stamp 57209086462 sample 1: other
+  wall 1793290858.108533 Pi receives port 61445 ch 5 (seq 5) stamp 57209086462 sample 1: other
+  wall 1793290858.108533 Pi receives port 61445 ch 6 (seq 6) stamp 57209086462 sample 1: other
+  wall 1793290858.108533 Pi receives port 61445 ch 7 (seq 7) stamp 57209086462 sample 1: other
+  wall 1793290858.108533 Pi receives port 61445 ch 8 (seq 8) stamp 57209086462 sample 1: other
+  wall 1793290863.927927 Pi sends port 36781 ch 1 (seq 6) stamp 57209645104 sample 12: other
+  wall 1793290863.929107 Pi receives port 61445 ch 6 (seq 6) stamp 57209645246 sample 14: other
+  wall 1793290868.661909 Pi sends port 38126 ch 4 (seq 9) stamp 57210099568 sample 9: other
+  wall 1793290871.492774 Pi receives port 61445 ch 1 (seq 1) stamp 57210371358 sample 13: dropped 8
+  wall 1793290871.492774 Pi receives port 61445 ch 2 (seq 2) stamp 57210371358 sample 13: dropped 8
+  wall 1793290871.492774 Pi receives port 61445 ch 3 (seq 3) stamp 57210371358 sample 13: dropped 8
+  wall 1793290871.492774 Pi receives port 61445 ch 4 (seq 4) stamp 57210371358 sample 13: dropped 8
+  wall 1793290871.492774 Pi receives port 61445 ch 5 (seq 5) stamp 57210371358 sample 13: dropped 8
+  wall 1793290871.492774 Pi receives port 61445 ch 6 (seq 6) stamp 57210371358 sample 13: dropped 8
+  wall 1793290871.492774 Pi receives port 61445 ch 7 (seq 7) stamp 57210371358 sample 13: dropped 8
+  wall 1793290871.492774 Pi receives port 61445 ch 8 (seq 8) stamp 57210371358 sample 13: dropped 8
+  wall 1793290871.492936 Pi receives port 61445 ch 1 (seq 1) stamp 57210371374 sample 13: repeated 8
+  wall 1793290871.492936 Pi receives port 61445 ch 2 (seq 2) stamp 57210371374 sample 13: repeated 8
+  wall 1793290871.492936 Pi receives port 61445 ch 3 (seq 3) stamp 57210371374 sample 13: repeated 8
+  wall 1793290871.492936 Pi receives port 61445 ch 4 (seq 4) stamp 57210371374 sample 13: repeated 8
+  wall 1793290871.492936 Pi receives port 61445 ch 5 (seq 5) stamp 57210371374 sample 13: repeated 8
+  wall 1793290871.492936 Pi receives port 61445 ch 6 (seq 6) stamp 57210371374 sample 13: repeated 8
+  wall 1793290871.492936 Pi receives port 61445 ch 7 (seq 7) stamp 57210371374 sample 13: repeated 8
+  wall 1793290871.492936 Pi receives port 61445 ch 8 (seq 8) stamp 57210371374 sample 13: repeated 8
+  wall 1793290873.076253 Pi sends port 47708 ch 2 (seq 12) stamp 57210523344 sample 22: other

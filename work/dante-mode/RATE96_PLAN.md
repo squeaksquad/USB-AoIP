@@ -495,3 +495,28 @@ the pcaps are gitignored).
   a ring of about 30 s). If what the Pi sends is clean at the matching moment, the shift is made in the
   far loop; MADI and the Metric Halo can then be split by routing the Pulse's MADI out straight back to
   its MADI in, without the strips.
+
+**MEASURED 2026-10-29 16:19-16:21 UTC: what the Pi sends is clean at the moment the Pulse returns the
+block misplaced. The whole Pi side is cleared; the 96 kHz slip is made in the far loop (the Pulse,
+MADI, the Metric Halo strips).** Evidence `outputs/latency/rate96-slip-kind-20261029/catch3/`
+(`seq-catch.txt`, `slip-wire.txt`; pcaps gitignored).
+- `seq-catch.sh 4 both`: the same triggered tmpfs ring with the Pi's four transmit flows in it too
+  (about 10.8 MB/s, a ring of about 24 s), tcpdump at nice 19. Fired in the first run, `SEQ ...
+  point=back ... dropped 8` at 16:21:11.49; 0 packets dropped by the kernel; no owner fault.
+- Return (Pulse -> Pi, port 61445, all 8 looped channels): the packet stamped 57210371358 breaks at
+  sample 13 on every channel, `dropped 8`; the next (…374) at sample 13, `repeated 8`. Same shape and
+  same place in the Pulse's packet as catch2. Stamps even in every flow (0 irregularities).
+- Outgoing (Pi -> Pulse, four flows of 4 ch x 32 frames, the 16 sequences): no break on any channel
+  from 16:21:08.66 to 16:21:13.07, which holds the matching moment: the loop is 144 frames (1.5 ms)
+  from a Pi stamp to the Pulse's (measured from one code seen leaving on sequence 6 and returning
+  on channel 6). The only breaks in the outgoing flows outside the stream's start are single-channel
+  `other`s that reappear 144 frames later in the return on the same sequence: one code carried
+  through the loop, consistent with the Mac's clamp of -2^23 to -2^23+1 at unity gain (the reader
+  does not skip it), not a slip.
+- The window starts 11 frames into a Pi transmit packet and 13 into a Pulse packet: no boundary of
+  either.
+- So the Pi (the owner, the gadget, Inferno both ways) sends the sequence intact and receives it
+  misplaced. Left to split: the Pulse's Dante/MADI conversion at 96, the MADI link, the Metric Halo
+  strips at 96. One routing change splits them: the Pulse's MADI out 25-32 straight back to its MADI
+  in 25-32 (no Metric Halo), the rest as now; if the slip goes, it is the Metric Halo (or its MADI
+  port) at 96; if it stays, the Pulse.
