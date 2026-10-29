@@ -960,3 +960,9 @@ zero run 1, discontinuities 0/0). Accepted by the operator's standing word
 follow (Mac-tested). Rollback: `cd ~/usb-16x16-work/apply-early-follow && sudo
 ./install-apply-early-follow.sh rollback` (1.7.0), before
 `install-rate-request.sh rollback`. Mac at 48000.
+
+**Operator, 2026-10-29 (scope).** A rate change under an open Pro Tools session that Pro
+Tools did not cause is not a use case and is dropped from the open list. The case that
+matters is a session opening and setting the device to the session rate: a Mac-side set,
+which takes the `usb` path (F3, B4: the endpoint follows the Mac, no follow write). Still
+open on this route: 88.2 / 96.
