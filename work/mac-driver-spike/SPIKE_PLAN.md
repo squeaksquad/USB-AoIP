@@ -451,3 +451,35 @@ the capture ring now reset at each stop.
 Next, for the operator: find the one-block return-side term (it showed after an abnormal stop here,
 and without one in the kernel windows), then step 5 (Apple's driver, eight harness opens) with
 `--prime-drop 24 --capture-drain`; the kernel control is not needed for either.
+
+**The one-block term: the prime raced the second block (2026-10-30 03:37-04:45 UTC).** All runs
+with the installed modules, `--prime-drop 24 --capture-drain`, 24 or 36 `stream 12` opens each,
+run from a session (the operator made the spike tool passwordless: root-owned
+`/usr/local/sbin/usb-aoip-spike` with its own sudoers rule). Evidence
+`outputs/latency/spike-{capdiag,anchor,anchor2,latewait,ptrace,idlepoll,ptrace2,wait127}-20261030/`.
+
+- `capdiag` (8ec73adf, prime start and first block logged): 422 in 5 of 24, every one a prime that
+  found depth 127 on the second block (the 374s found 80-125, or found 128, waited and primed on
+  the third block).
+- Two anchor forms, both dropped: a position taken at the first read (c2c292f5: still two 422s)
+  and the least line over three reads (723d2cbc: 327-346, drifting).
+- `latewait` (ca479ab1, wait at depth 126 and up): no 422, but 9 of 36 at 327.
+- `ptrace` (3dd71df5, PRIMETRACE: every wake from the first block to the prime): while idle the
+  loop runs on its 1 ms grid, so the first block is read on a grid tick (depth always 80); the
+  second comes 13 us to 0.9 ms later. A gap of 12-19 us (depth 127 or 128) is the race: the
+  tick fell just before the second block landed.
+- `idlepoll` (d6454621, the loop polls the gadget capture while idle): the race goes, but the
+  first read then follows the packet that completes the period, and the lag spread 338-350.
+- `ptrace2` (352a7d93, the Inferno clock at the first read logged): the outgoing placement against
+  that clock is the same (+56) in the 362 and 410 opens; depth-128 opens wait and place at +8, 362.
+- `wait127` (abee374a): with `--capture-drain` the prime also waits at depth 127. **24 of 24 opens
+  374 or 375** (the opens that waited are 375: the wake's silence adds one frame); owner share 362
+  or 363, gadget remainder 12.
+
+**Step 4 PASS: 374 +-1 on all 24 opens (wait127). Step 5 PASS: Apple's driver, eight harness opens,
+`daw_timeline` 532 on all eight** (`measure-candidate.sh 32 400`, levels 380x400 each, io_offset
+152; `outputs/latency/step5-wait127-roundtrip-32f-20261030T04*.json`). The kernel anchor of steps 1-3
+was not needed: the owner's three terms (prime drop, capture restart, the wait at 127) make the
+round trip the same at every open. 532 is 42 samples above the point of record's 490, which was one
+draw of the old per-open spread (37-44 under the class driver); a larger PRIME_DROP lowers it by
+the same amount, up to 32 (the depth after the prime must stay above the floor), untested.

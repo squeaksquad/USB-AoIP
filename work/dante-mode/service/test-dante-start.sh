@@ -78,5 +78,12 @@ if [ "${1:-}" = transport ]; then
   expect "rate requests" 0 "--rx-queue 96 --rate-request-file /run/x/rate-request --meter-file /run/x/meters.txt "
   tr_run $'RATE_REQUESTS=0\n' "";               [ "$out" = "$base" ] || { echo "FAIL: RATE_REQUESTS=0: $out"; failures=$((failures + 1)); }
   tr_run $'RATE_REQUESTS=yes\n' "";             expect "bad RATE_REQUESTS" 2 "RATE_REQUESTS must be"
+  tr_run $'RX_QUEUE=96\nRATE_REQUESTS=1\nPRIME_DROP=24\nCAPTURE_DRAIN=1\n' $'METERS=1\n'
+  expect "deterministic round trip" 0 "--rx-queue 96 --rate-request-file /run/x/rate-request --prime-drop 24 --capture-drain --meter-file /run/x/meters.txt "
+  tr_run $'PRIME_DROP=0\n' "";                  expect "a drop of zero" 0 "--log-every 60 --prime-drop 0 "
+  tr_run $'CAPTURE_DRAIN=0\n' "";               [ "$out" = "$base" ] || { echo "FAIL: CAPTURE_DRAIN=0: $out"; failures=$((failures + 1)); }
+  tr_run $'PRIME_DROP=49\n' "";                 expect "drop too large" 2 "PRIME_DROP must be"
+  tr_run $'PRIME_DROP=-1\n' "";                 expect "negative drop" 2 "PRIME_DROP must be"
+  tr_run $'CAPTURE_DRAIN=yes\n' "";             expect "bad CAPTURE_DRAIN" 2 "CAPTURE_DRAIN must be"
 fi
 if [ "$failures" -eq 0 ]; then echo "test-dante-start: all passed"; else echo "test-dante-start: $failures FAILED"; exit 1; fi

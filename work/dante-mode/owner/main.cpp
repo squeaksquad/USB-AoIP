@@ -510,6 +510,14 @@ struct Telemetry {
     std::atomic<std::int64_t> tx_prime_dropped{0};        //   and the frames of the block it dropped
     std::atomic<std::uint64_t> tx_unanchored{0};          // --prime-drop primes that had to skip silence
     std::atomic<std::int64_t> tx_drained{0};              // --capture-drain: frames discarded at the last idle
+    std::atomic<std::int64_t> tx_first_block{0};          // the last session: frames in its first block (discarded)
+    // Diagnostic: the wakes from the first block to the prime of the last session (PRIMETRACE).
+    static constexpr int kPrimeTrace = 8;
+    std::atomic<int> prime_trace_n{0};
+    std::atomic<std::uint64_t> prime_trace_seq{0};
+    std::atomic<std::int64_t> prime_trace_c0{0};               // the Inferno clock at the first block
+    std::atomic<std::int64_t> prime_trace[kPrimeTrace][5]{};   // us, frames, depth, clock, host IN taken
+    std::atomic<std::int64_t> tx_prime_start{0};          //   and the host index of its prime block's first frame
     std::atomic<std::uint64_t> rx_primes{0};
     std::atomic<std::uint64_t> rx_overflow{0};            // Dante frames dropped with the host pulling
     std::atomic<std::uint64_t> rx_idle_discards{0};       // Dante frames dropped with no host pulling
@@ -612,6 +620,7 @@ void* telemetry_entry(void* argument) {
     std::uint64_t gaps_printed = 0;
     std::uint64_t seq_printed = 0;
     std::uint64_t phases_printed = 0;
+    std::uint64_t prime_trace_printed = 0;
     std::uint64_t impulses_printed = 0;
     std::int64_t next_impulse_line = started;
     int link_owner = -1;
@@ -673,6 +682,18 @@ void* telemetry_entry(void* argument) {
             }
             std::fflush(stdout);
         }
+        if (const std::uint64_t seq = t.prime_trace_seq.load(std::memory_order_acquire); seq != prime_trace_printed) {
+            prime_trace_printed = seq;
+            std::printf("PRIMETRACE n=%" PRIu64 " wall=%.6f c0=%" PRId64 " (us frames depth clock taken):", seq, wall_seconds(),
+                        t.prime_trace_c0.load(std::memory_order_relaxed));
+            for (int i = 0; i < std::min(t.prime_trace_n.load(std::memory_order_relaxed), Telemetry::kPrimeTrace); ++i) {
+                std::printf(" [%" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 "]", t.prime_trace[i][0].load(),
+                            t.prime_trace[i][1].load(), t.prime_trace[i][2].load(), t.prime_trace[i][3].load(),
+                            t.prime_trace[i][4].load());
+            }
+            std::printf("\n");
+            std::fflush(stdout);
+        }
         if (const std::uint64_t phases = t.open_phase_count.load(std::memory_order_acquire); phases != phases_printed) {
             phases_printed = phases;
             std::printf("OPENPHASE n=%" PRIu64 " wall=%.6f t=%.3f since=%.3f x_mean=%.3f x_min=%" PRId64 " x_max=%" PRId64
@@ -722,7 +743,8 @@ void* telemetry_entry(void* argument) {
             link_rx = rx;
             std::printf("USBLINK usb=%s tx=%s rx=%s tx_links=%" PRIu64 " rx_primes=%" PRIu64 " capture_faults=%" PRIu64
                         " playback_faults=%" PRIu64 " last_fault=%" PRId64 " tx_prime_block=%" PRId64 " tx_prime_found=%" PRId64
-                        " tx_prime_dropped=%" PRId64 " tx_unanchored=%" PRIu64 " tx_drained=%" PRId64 " t=%.3f\n",
+                        " tx_prime_dropped=%" PRId64 " tx_unanchored=%" PRIu64 " tx_drained=%" PRId64
+                        " tx_first_block=%" PRId64 " tx_prime_start=%" PRId64 " t=%.3f\n",
                         usb_owner_name(owner), tx_state_name(tx), rx != 0 ? "flow" : "idle",
                         t.tx_links.load(std::memory_order_relaxed), t.rx_primes.load(std::memory_order_relaxed),
                         t.usb_capture_faults.load(std::memory_order_relaxed),
@@ -732,7 +754,9 @@ void* telemetry_entry(void* argument) {
                         t.tx_prime_found.load(std::memory_order_relaxed),
                         t.tx_prime_dropped.load(std::memory_order_relaxed),
                         t.tx_unanchored.load(std::memory_order_relaxed),
-                        t.tx_drained.load(std::memory_order_relaxed), seconds);
+                        t.tx_drained.load(std::memory_order_relaxed),
+                        t.tx_first_block.load(std::memory_order_relaxed),
+                        t.tx_prime_start.load(std::memory_order_relaxed), seconds);
             signature = thread_inventory("usblink", true);
         }
         if (signature == 0) signature = thread_inventory("", false);
@@ -1522,6 +1546,10 @@ struct UsbHalf {
     long prime_drop{-1};
     // --capture-drain: the capture PCM is restarted when the outgoing direction goes idle.
     bool capture_drain{false};
+    // PRIMETRACE: the wakes from the first block to the prime (us, frames, depth, clock, IN taken).
+    int trace_n{0};
+    std::int64_t trace_t0{0}, trace_c0{0}, trace_k0{0};
+    std::int64_t trace[Telemetry::kPrimeTrace][5]{};
     // --impulse-trace: the latest onset sent (host index, playback position) and the edge states.
     bool impulse_trace{false};
     std::int64_t sent_k{-1};
@@ -1773,6 +1801,37 @@ void observe_holes(const std::int32_t* block, long frames, std::uint32_t& run, s
     }
 }
 
+// PRIMETRACE (with --impulse-trace): one wake of the outgoing direction from the first block to the prime.
+void trace_wake(UsbHalf& usb, const NetHalf& net, long frames, std::int64_t depth, bool first) noexcept {
+    if (!usb.impulse_trace) return;
+    const std::int64_t now = now_ns();
+    const std::int64_t clock = static_cast<std::int64_t>(net.appl) - depth;
+    const std::int64_t taken = usb.in_written - usb.rx_last_after;
+    if (first) {
+        usb.trace_n = 0;
+        usb.trace_t0 = now;
+        usb.trace_c0 = clock;
+        usb.trace_k0 = taken;
+    }
+    if (usb.trace_n >= Telemetry::kPrimeTrace) return;
+    std::int64_t* e = usb.trace[usb.trace_n++];
+    e[0] = (now - usb.trace_t0) / 1000;
+    e[1] = frames;
+    e[2] = depth;
+    e[3] = clock - usb.trace_c0;
+    e[4] = taken - usb.trace_k0;
+}
+
+void publish_trace(const UsbHalf& usb, Telemetry& t) noexcept {
+    if (!usb.impulse_trace) return;
+    for (int i = 0; i < usb.trace_n; ++i) {
+        for (int f = 0; f < 5; ++f) t.prime_trace[i][f].store(usb.trace[i][f], std::memory_order_relaxed);
+    }
+    t.prime_trace_n.store(usb.trace_n, std::memory_order_relaxed);
+    t.prime_trace_c0.store(usb.trace_c0, std::memory_order_relaxed);
+    t.prime_trace_seq.fetch_add(1, std::memory_order_release);
+}
+
 // Out, one wake. `depth` is the Inferno playback depth as observed this wake
 // and is updated by what is written. False only on an Inferno error.
 bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& depth, bool resynced,
@@ -1792,6 +1851,7 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         return true;
     }
     if (frames == 0) {
+        if (usb.tx == TxState::armed) trace_wake(usb, net, 0, depth, false);
         // A flowing host that sends nothing while the pointer is within a wake
         // of the clock has stopped (a block that is merely late leaves the
         // depth a wake higher): it counts as stopped now, so the lead is kept
@@ -1822,6 +1882,8 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
                                  static_cast<std::int64_t>(net.playback.period);
     if (usb.tx == TxState::idle) {
         // The first block after silence is whatever the gadget had queued: discard it and prime on the next.
+        t.tx_first_block.store(frames, std::memory_order_relaxed);
+        trace_wake(usb, net, frames, depth, true);
         set_tx_state(usb, TxState::armed, t);
         return true;
     }
@@ -1834,7 +1896,14 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         return true;
     }
     if (usb.tx == TxState::armed) {
-        if (depth >= lead) return true;   // still above the lead: let the clock take it down
+        trace_wake(usb, net, frames, depth, false);
+        // Still above the lead: let the clock take it down. With --capture-drain (whose
+        // session starts on a period boundary) a depth one short of the lead waits too: the
+        // first block was then read on the grid's tick a frame before the second landed,
+        // the same race as a depth at the lead, which waits and lands right (362), while a
+        // prime at 127 put the session one block later (410; PRIMETRACE, 2026-10-30).
+        const std::int64_t wait_from = usb.capture_drain ? lead - 1 : lead;
+        if (depth >= wait_from) return true;
         // Prime only on an ordinary block. A larger one means frames the host
         // sent earlier are still arriving (after a stall the gadget delivers
         // its backlog over more than one wake), and a prime made then is deeper
@@ -1874,6 +1943,8 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         t.tx_prime_block.store(frames, std::memory_order_relaxed);
         t.tx_prime_found.store(lead - room, std::memory_order_relaxed);
         t.tx_prime_dropped.store(frames - take, std::memory_order_relaxed);
+        t.tx_prime_start.store(usb.out_count - frames, std::memory_order_relaxed);
+        publish_trace(usb, t);
         // Both directions see the same two clocks with opposite sign.
         usb.tx_servo.restart(usb.rx_flowing && usb.rx_servo.settled() ? -usb.rx_servo.integral() : usb.tx_servo.integral());
         set_tx_state(usb, TxState::flow, t);

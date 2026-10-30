@@ -33,6 +33,13 @@
 #                      host at another rate becomes a request for the arbiter
 #                      (usb16x16-dante-rate.path; SAMPLE_RATE_DESIGN.md step 4).
 #                      Needs an owner that has the option.
+#   PRIME_DROP=N       --prime-drop N (0 to 48): the outgoing prime drops a constant N of
+#                      the host's first block, so the round trip does not depend on the
+#                      depth the prime finds (work/mac-driver-spike/SPIKE_PLAN.md, Phase B)
+#   CAPTURE_DRAIN=0|1  1: --capture-drain, the gadget capture PCM restarted at each host
+#                      stop, so every host session starts from an empty ring on a period
+#                      boundary (SPIKE_PLAN.md, Phase C). With PRIME_DROP=24 the round
+#                      trip is the same at every host open. Both need owner abee374a or later.
 #
 # A configuration that cannot be honoured is a refusal (exit 2), never a
 # quieter start: a system set up with crossovers must not come up without
@@ -73,6 +80,8 @@ fi
 
 rx_queue=
 rate_requests=0
+prime_drop=
+capture_drain=0
 if [ -e "$transport" ]; then
   [ -r "$transport" ] || refuse "$transport cannot be read"
   while IFS= read -r line || [ -n "$line" ]; do
@@ -84,6 +93,9 @@ if [ -e "$transport" ]; then
       RX_QUEUE) [[ $value =~ ^[0-9]{2,4}$ ]] && [ "$value" -ge 96 ] && [ "$value" -le 384 ] || refuse "RX_QUEUE must be a number of frames from 96 to 384"
                 rx_queue=$value ;;
       RATE_REQUESTS) [[ $value =~ ^[01]$ ]] || refuse "RATE_REQUESTS must be 0 or 1"; rate_requests=$value ;;
+      PRIME_DROP) [[ $value =~ ^[0-9]{1,2}$ ]] && [ "$value" -le 48 ] || refuse "PRIME_DROP must be a number of frames from 0 to 48"
+                  prime_drop=$value ;;
+      CAPTURE_DRAIN) [[ $value =~ ^[01]$ ]] || refuse "CAPTURE_DRAIN must be 0 or 1"; capture_drain=$value ;;
       *)        refuse "$transport: unknown key $key" ;;
     esac
   done < "$transport"
@@ -95,6 +107,8 @@ arguments=(--seconds 0 --ppm-file "$state_dir/usb16x16-dante-owner.ppm" --log-ev
 [ -n "$rate" ] && arguments+=(--rate "$rate")
 [ -n "$rx_queue" ] && arguments+=(--rx-queue "$rx_queue")
 [ "$rate_requests" = 1 ] && arguments+=(--rate-request-file "$run_dir/rate-request")
+[ -n "$prime_drop" ] && arguments+=(--prime-drop "$prime_drop")
+[ "$capture_drain" = 1 ] && arguments+=(--capture-drain)
 [ "$meters" = 1 ] && arguments+=(--meter-file "$run_dir/meters.txt")
 if [ -n "$preset" ]; then
   [[ $preset == "$dsp_dir"/*.dsp && $preset != *..* && ${preset#"$dsp_dir"/} != */* ]] ||
