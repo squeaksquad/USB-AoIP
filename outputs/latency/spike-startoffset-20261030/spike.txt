@@ -1,0 +1,96 @@
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2508067, both directions anchored there
+ran 12.04 s: OUT 577160 frames in 96192 transactions (0 failed), IN 577159 frames in 96192 transactions (0 failed)
+feedback: 12024 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0001
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 374 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2523253, both directions anchored there
+ran 12.04 s: OUT 577156 frames in 96192 transactions (0 failed), IN 577155 frames in 96192 transactions (0 failed)
+feedback: 12028 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 374 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2538439, both directions anchored there
+ran 12.04 s: OUT 577156 frames in 96192 transactions (0 failed), IN 577145 frames in 96192 transactions (0 failed)
+feedback: 12024 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 364 x86, 374 x24, spread 10
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2553633, both directions anchored there
+ran 12.04 s: OUT 577347 frames in 96224 transactions (0 failed), IN 577339 frames in 96224 transactions (0 failed)
+feedback: 12028 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 362 x49, 368 x61, spread 6
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2568818, both directions anchored there
+ran 12.04 s: OUT 577155 frames in 96192 transactions (0 failed), IN 577147 frames in 96192 transactions (0 failed)
+feedback: 12024 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 362 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2583999, both directions anchored there
+ran 12.04 s: OUT 577347 frames in 96224 transactions (0 failed), IN 577356 frames in 96224 transactions (0 failed)
+feedback: 12028 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 410 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2599185, both directions anchored there
+ran 12.04 s: OUT 577347 frames in 96224 transactions (0 failed), IN 577356 frames in 96224 transactions (0 failed)
+feedback: 12028 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 410 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2614372, both directions anchored there
+ran 12.04 s: OUT 577347 frames in 96224 transactions (0 failed), IN 577355 frames in 96224 transactions (0 failed)
+feedback: 12028 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 404 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2629565, both directions anchored there
+ran 12.04 s: OUT 577346 frames in 96224 transactions (0 failed), IN 577356 frames in 96224 transactions (0 failed)
+feedback: 12028 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 404 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2644744, both directions anchored there
+ran 12.04 s: OUT 577154 frames in 96192 transactions (0 failed), IN 577163 frames in 96192 transactions (0 failed)
+feedback: 12028 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 398 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2659923, both directions anchored there
+ran 12.04 s: OUT 577154 frames in 96192 transactions (0 failed), IN 577162 frames in 96192 transactions (0 failed)
+feedback: 12024 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 392 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again
+captured the device (class driver's clients terminated)
+clock 7 set to 48000 Hz
+streaming 12.0 s from bus frame 2675111, both directions anchored there
+ran 12.04 s: OUT 577345 frames in 96224 transactions (0 failed), IN 577354 frames in 96224 transactions (0 failed)
+feedback: 12028 transactions (1 failed, 0 late re-queues), 6.0000..6.0001 frames a microframe, last 6.0000
+impulses: 110 sent, 110 found, 0 unmatched onsets; lag (samples): 392 x110, spread 0
+numbering intact: no failed transaction
+released the device: it is reset and the class driver matches it again

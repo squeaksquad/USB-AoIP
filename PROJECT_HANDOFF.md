@@ -14640,3 +14640,19 @@ owner share 362 in every one (the depth found still varied, 110-122), far loop 1
 in steps of 6 only, all from the gadget remainder (12 to 54 frames). Detail and the two ways to
 finish: `work/mac-driver-spike/SPIKE_PLAN.md`, "Phase B, step 4". Service restored 02:16
 (a15a9d84, start check ok).
+
+**FOUND 2026-10-30 02:26-02:35 UTC: the kernel's IN start offset is the same at every open (18);
+the per-open draw is on the OUT side of the owner's count, not in `u_audio`'s IN mapping.** Phase C
+steps 1-2 (`work/mac-driver-spike/SPIKE_PLAN.md`, "Phase C results"): `uac2-start-offset-6.18.34.patch`
+adds a read-only `Playback Start Offset` control to `u_audio` (counting only; candidate u_audio
+6ff56392, the control build reproduces the installed ed539ca8 / 505c6ad0; `build-start-offset.sh`,
+`test-start-offset.sh`). In a bounded window with owner 903aa1bc (`--prime-drop 24`) and twelve spike
+opens, the IN offset read 18 and missed OUT 1 at every open while the gadget remainder ran 12 to 54:
+the step-2 check FAILED and the plan stopped there. The owner's `--open-phase` `x` moves with the lag
+(lag + x constant at 380-383, share-corrected), so OUT frames the host sends before the owner's count
+starts are the likely term; unverified. The control also showed IN packets the gadget failed mid-open
+(opens 3-5), which the spike reported as intact. Nothing installed. Evidence
+`outputs/latency/spike-startoffset-20261030/`. Installed modules restored 02:34 (rate-request pair,
+`install-rate-request.sh status`), `usb16x16-dante` (a15a9d84) active, start check ok 02:35. No noise
+probe run.
+

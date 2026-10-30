@@ -1,0 +1,356 @@
+--- a/drivers/usb/gadget/function/u_audio.c
++++ b/drivers/usb/gadget/function/u_audio.c
+@@ -35,8 +35,12 @@
+ 	UAC_VOLUME_CTRL,
+ 	UAC_RATE_CTRL,
+ 	UAC_RATE_REQ_CTRL,
++	UAC_START_OFFSET_CTRL,
+ };
+ 
++/* Playback Start Offset: an offset not taken yet */
++#define START_OFFSET_NONE	INT_MIN
++
+ /* Runtime data params for one stream */
+ struct uac_rtd_params {
+ 	struct snd_uac_chip *uac; /* parent chip */
+@@ -85,6 +89,22 @@
+ 
+ 	int rate_request; /* last rate written to Device Rate Request, 0: none */
+ 
++	/*
++	 * Playback Start Offset (read-only, counting only): where the host's IN
++	 * frame count stands against the playback ring's frame count, and the
++	 * OUT packets the gadget missed before its first good one.
++	 */
++	spinlock_t so_lock;
++	unsigned int so_generation;	/* changes at every reset below */
++	long long so_in_sent;	/* IN frames the host received since alt 1 */
++	long long so_ring;	/* ring frames packed since the trigger */
++	long long *so_req_ring;	/* per IN request: ring frame it carries, -1: none */
++	int so_in_start;	/* so_in_sent - ring frame, first ring packet */
++	int so_in_now;		/* the same, latest ring packet */
++	int so_in_failed;	/* IN packets failed while carrying ring data */
++	int so_out_missed;	/* OUT packets failed before the first good one */
++	bool so_out_good;
++
+ 	/* pre-calculated values for playback iso completion */
+ 	unsigned long long p_residue_mil;
+ 	unsigned int p_interval;
+@@ -149,6 +169,100 @@
+ 	ff = DIV_ROUND_CLOSEST_ULL((freq * pitch), 1953125);
+ 
+ 	*(__le32 *)buf = cpu_to_le32(ff);
++}
++
++/*
++ * Playback Start Offset bookkeeping. A request's index is its buffer's slot in
++ * rbuf (u_audio_start_playback places them ep->maxpacket apart).
++ */
++static int so_req_index(struct snd_uac_chip *uac, struct usb_ep *ep,
++			struct usb_request *req)
++{
++	unsigned int i;
++
++	if (!uac->so_req_ring || !ep->maxpacket)
++		return -1;
++	i = ((u8 *)req->buf - (u8 *)uac->p_prm.rbuf) / ep->maxpacket;
++	return i < uac->audio_dev->params.req_number ? i : -1;
++}
++
++/* under so_lock: a new playback ring (trigger) or a new host stream (alt 1) */
++static void so_in_reset(struct snd_uac_chip *uac, bool host_start)
++{
++	int i;
++
++	if (uac->so_req_ring)
++		for (i = 0; i < uac->audio_dev->params.req_number; i++)
++			uac->so_req_ring[i] = -1;
++	if (host_start)
++		uac->so_in_sent = 0;
++	uac->so_ring = 0;
++	uac->so_in_start = START_OFFSET_NONE;
++	uac->so_in_now = START_OFFSET_NONE;
++	uac->so_in_failed = 0;
++	uac->so_generation++;
++}
++
++/* an IN request completed: what it carried reached the host, or not */
++static void so_in_done(struct snd_uac_chip *uac, struct usb_ep *ep,
++		       struct usb_request *req, int status)
++{
++	int i = so_req_index(uac, ep, req);
++	unsigned long flags;
++	long long ring, offset;
++
++	if (i < 0 || !uac->p_framesize)
++		return;
++	spin_lock_irqsave(&uac->so_lock, flags);
++	ring = uac->so_req_ring[i];
++	if (status) {
++		if (ring >= 0)
++			uac->so_in_failed++;
++	} else {
++		if (ring >= 0) {
++			offset = clamp_t(long long, uac->so_in_sent - ring,
++					 INT_MIN + 1, INT_MAX);
++			uac->so_in_now = offset;
++			if (uac->so_in_start == START_OFFSET_NONE)
++				uac->so_in_start = offset;
++		}
++		uac->so_in_sent += req->actual / uac->p_framesize;
++	}
++	uac->so_req_ring[i] = -1;
++	spin_unlock_irqrestore(&uac->so_lock, flags);
++}
++
++/* an IN request is queued again: with `frames` ring frames, or none (0) */
++static void so_in_fill(struct snd_uac_chip *uac, struct usb_ep *ep,
++		       struct usb_request *req, unsigned int frames)
++{
++	int i = so_req_index(uac, ep, req);
++	unsigned long flags;
++
++	if (i < 0)
++		return;
++	spin_lock_irqsave(&uac->so_lock, flags);
++	if (frames) {
++		uac->so_req_ring[i] = uac->so_ring;
++		uac->so_ring += frames;
++	} else {
++		uac->so_req_ring[i] = -1;
++	}
++	spin_unlock_irqrestore(&uac->so_lock, flags);
++}
++
++static void so_out_done(struct snd_uac_chip *uac, int status)
++{
++	unsigned long flags;
++
++	spin_lock_irqsave(&uac->so_lock, flags);
++	if (!uac->so_out_good) {
++		if (status)
++			uac->so_out_missed++;
++		else
++			uac->so_out_good = true;
++	}
++	spin_unlock_irqrestore(&uac->so_lock, flags);
+ }
+ 
+ static void u_audio_iso_complete(struct usb_ep *ep, struct usb_request *req)
+@@ -163,6 +277,7 @@
+ 	unsigned int frames, p_pktsize;
+ 	unsigned long long pitched_rate_mil, p_pktsize_residue_mil,
+ 			residue_frames_mil, div_result;
++	bool so_filled = false;
+ 
+ 	/* i/f shutting down */
+ 	if (!prm->ep_enabled) {
+@@ -181,6 +296,11 @@
+ 		pr_debug("%s: iso_complete status(%d) %d/%d\n",
+ 			__func__, status, req->actual, req->length);
+ 
++	if (prm == &uac->p_prm)
++		so_in_done(uac, ep, req, status);
++	else
++		so_out_done(uac, status);
++
+ 	substream = prm->ss;
+ 
+ 	/* Do nothing if ALSA isn't active */
+@@ -258,6 +378,8 @@
+ 			memcpy(req->buf, runtime->dma_area + hw_ptr,
+ 			       req->actual);
+ 		}
++		so_in_fill(uac, ep, req, req->actual / uac->p_framesize);
++		so_filled = true;
+ 	} else {
+ 		if (unlikely(pending < req->actual)) {
+ 			memcpy(runtime->dma_area + hw_ptr, req->buf, pending);
+@@ -278,6 +400,8 @@
+ 		snd_pcm_period_elapsed(substream);
+ 
+ exit:
++	if (prm == &uac->p_prm && !so_filled)
++		so_in_fill(uac, ep, req, 0);
+ 	if (usb_ep_queue(ep, req, GFP_ATOMIC))
+ 		dev_err(uac->card->dev, "%d Error!\n", __LINE__);
+ }
+@@ -334,7 +458,14 @@
+ 
+ 	/* Reset */
+ 	prm->hw_ptr = 0;
++	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
++		unsigned long flags;
+ 
++		spin_lock_irqsave(&uac->so_lock, flags);
++		so_in_reset(uac, false);
++		spin_unlock_irqrestore(&uac->so_lock, flags);
++	}
++
+ 	switch (cmd) {
+ 	case SNDRV_PCM_TRIGGER_START:
+ 	case SNDRV_PCM_TRIGGER_RESUME:
+@@ -611,6 +742,7 @@
+ 	struct usb_ep *ep, *ep_fback;
+ 	struct uac_rtd_params *prm;
+ 	struct uac_params *params = &audio_dev->params;
++	unsigned long flags;
+ 	int req_len, i, ret;
+ 
+ 	prm = &uac->c_prm;
+@@ -624,6 +756,12 @@
+ 
+ 	req_len = ep->maxpacket;
+ 
++	spin_lock_irqsave(&uac->so_lock, flags);
++	uac->so_out_missed = 0;
++	uac->so_out_good = false;
++	uac->so_generation++;
++	spin_unlock_irqrestore(&uac->so_lock, flags);
++
+ 	prm->ep_enabled = true;
+ 	ret = usb_ep_enable(ep);
+ 	if (ret < 0) {
+@@ -726,6 +864,7 @@
+ 	const struct usb_endpoint_descriptor *ep_desc;
+ 	int req_len, i, ret;
+ 	unsigned int p_pktsize;
++	unsigned long flags;
+ 
+ 	prm = &uac->p_prm;
+ 	dev_dbg(dev, "start playback with rate %d\n", prm->srate);
+@@ -760,6 +899,10 @@
+ 	req_len = p_pktsize;
+ 	uac->p_residue_mil = 0;
+ 
++	spin_lock_irqsave(&uac->so_lock, flags);
++	so_in_reset(uac, true);
++	spin_unlock_irqrestore(&uac->so_lock, flags);
++
+ 	prm->ep_enabled = true;
+ 	ret = usb_ep_enable(ep);
+ 	if (ret < 0) {
+@@ -1265,8 +1408,43 @@
+ 	dev_dbg(&audio_dev->gadget->dev, "%s: srate %d, clock %d interrupt: %d\n",
+ 		__func__, srate, params->clk_id, ret);
+ 	return 1;
++}
++
++/*
++ * Playback Start Offset, five integers: generation (changes at each playback
++ * trigger and each alt 1 on either streaming interface), IN offset at start and
++ * now (IN frames the host received before a ring packet, minus that packet's
++ * first ring frame; INT_MIN until a ring packet has reached the host), OUT
++ * packets missed before the first good one, IN packets failed while carrying
++ * ring data.
++ */
++static int u_audio_start_offset_info(struct snd_kcontrol *kcontrol,
++				     struct snd_ctl_elem_info *uinfo)
++{
++	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
++	uinfo->count = 5;
++	uinfo->value.integer.min = INT_MIN;
++	uinfo->value.integer.max = INT_MAX;
++	return 0;
+ }
+ 
++static int u_audio_start_offset_get(struct snd_kcontrol *kcontrol,
++				    struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_uac_chip *uac = snd_kcontrol_chip(kcontrol);
++	long *v = ucontrol->value.integer.value;
++	unsigned long flags;
++
++	spin_lock_irqsave(&uac->so_lock, flags);
++	v[0] = uac->so_generation & INT_MAX;
++	v[1] = uac->so_in_start;
++	v[2] = uac->so_in_now;
++	v[3] = uac->so_out_missed;
++	v[4] = uac->so_in_failed;
++	spin_unlock_irqrestore(&uac->so_lock, flags);
++	return 0;
++}
++
+ static struct snd_kcontrol_new u_audio_controls[]  = {
+ 	[UAC_FBACK_CTRL] = {
+     .iface =        SNDRV_CTL_ELEM_IFACE_PCM,
+@@ -1310,6 +1488,14 @@
+ 		.get =		u_audio_rate_req_get,
+ 		.put =		u_audio_rate_req_put,
+ 	},
++	[UAC_START_OFFSET_CTRL] = {
++		.iface =	SNDRV_CTL_ELEM_IFACE_PCM,
++		.name =		"Playback Start Offset",
++		.access =	SNDRV_CTL_ELEM_ACCESS_READ |
++				SNDRV_CTL_ELEM_ACCESS_VOLATILE,
++		.info =		u_audio_start_offset_info,
++		.get =		u_audio_start_offset_get,
++	},
+ };
+ 
+ int g_audio_setup(struct g_audio *g_audio, const char *pcm_name,
+@@ -1331,6 +1517,9 @@
+ 		return -ENOMEM;
+ 	g_audio->uac = uac;
+ 	uac->audio_dev = g_audio;
++	spin_lock_init(&uac->so_lock);
++	uac->so_in_start = START_OFFSET_NONE;
++	uac->so_in_now = START_OFFSET_NONE;
+ 
+ 	params = &g_audio->params;
+ 	p_chmask = params->p_chmask;
+@@ -1384,6 +1573,16 @@
+ 			err = -ENOMEM;
+ 			goto fail;
+ 		}
++
++		uac->so_req_ring = kmalloc_array(params->req_number,
++						 sizeof(*uac->so_req_ring),
++						 GFP_KERNEL);
++		if (!uac->so_req_ring) {
++			err = -ENOMEM;
++			goto fail;
++		}
++		for (i = 0; i < params->req_number; i++)
++			uac->so_req_ring[i] = -1;
+ 	}
+ 
+ 	/* Choose any slot, with no id */
+@@ -1561,6 +1760,21 @@
+ 			goto snd_fail;
+ 	}
+ 
++	if (p_chmask) {
++		kctl = snd_ctl_new1(&u_audio_controls[UAC_START_OFFSET_CTRL], uac);
++		if (!kctl) {
++			err = -ENOMEM;
++			goto snd_fail;
++		}
++
++		kctl->id.device = pcm->device;
++		kctl->id.subdevice = 0;
++
++		err = snd_ctl_add(card, kctl);
++		if (err < 0)
++			goto snd_fail;
++	}
++
+ 	strscpy(card->driver, card_name);
+ 	strscpy(card->shortname, card_name);
+ 	snprintf(card->longname, sizeof(card->longname), "%s %i",
+@@ -1581,6 +1795,7 @@
+ 	kfree(uac->c_prm.reqs);
+ 	kfree(uac->p_prm.rbuf);
+ 	kfree(uac->c_prm.rbuf);
++	kfree(uac->so_req_ring);
+ 	kfree(uac);
+ 
+ 	return err;
+@@ -1606,6 +1821,7 @@
+ 	kfree(uac->c_prm.reqs);
+ 	kfree(uac->p_prm.rbuf);
+ 	kfree(uac->c_prm.rbuf);
++	kfree(uac->so_req_ring);
+ 	kfree(uac);
+ }
+ EXPORT_SYMBOL_GPL(g_audio_cleanup);

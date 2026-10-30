@@ -312,3 +312,61 @@ Verification: control build matches installed hashes, candidate builds with -Wer
 per-open table equal on all 12 rows; step 4 spread 0 (at most 1) over 12 opens; step 5 harness
 spread over 8 opens; after every window the installed modules back (`install-rate-request.sh
 status`), `usb16x16-dante` active with the start check ok, a noise probe at 32 clean.
+
+### Phase C results
+
+**Step 1, the control: built (2026-10-30).** `uac2-start-offset-6.18.34.patch` on top of the
+rate-request patch, `u_audio.c` only: `Playback Start Offset` (read-only, five integers: generation,
+IN offset at start, IN offset now, OUT packets missed before the first good one, IN packets failed
+while carrying ring data). Each IN request records the ring frame it is refilled with (request index
+`(req->buf - rbuf) / ep->maxpacket`); a ring packet that reaches the host gives offset = IN frames the
+host had received before it minus its ring frame. The ring count restarts at every playback trigger
+(as the owner's `w` restarts at its prime), the host count at alt 1. `build-start-offset.sh`: the
+control build reproduces the installed pair (u_audio ed539ca8, usb_f_uac2 505c6ad0); candidate
+u_audio 6ff56392 (srcversion 76D1FB4092A8109D46CFB87), -Werror clean, usb_f_uac2 unchanged.
+
+**Step 2, the check: FAILED (2026-10-30 02:26-02:35 UTC). The kernel's IN offset is 18 at every
+open; the per-open draw is not in `u_audio`'s IN mapping or in missed OUT packets.**
+`test-start-offset.sh 900` window, owner 903aa1bc (`--prime-drop 24 --impulse-trace --open-phase`)
+by the candidate launcher, twelve `stream 12` opens. Evidence `outputs/latency/spike-startoffset-20261030/`
+(`spike.txt`, `owner.log`, `start-offset-control.log`: every change of the control, read at 10 Hz).
+
+| Open | Lag | Owner share w - k | Remainder | Kernel IN start | IN now | Missed OUT | IN failed (ring) | Owner `x_mean` | Lag + x - (share - 362) |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 374 | 362 | 12 | 18 | 18 | 1 | 0 | 7.15 | 381.2 |
+| 2 | 374 | 362 | 12 | 18 | 18 | 1 | 0 | 6.33 | 380.3 |
+| 3 | 374 then 364 | 362 | 12 then 2 | 18 | 18 then 6 | 1 | 2 | 6.62 | 380.6 (before the loss) |
+| 4 | 368 then 362 | 314 | 54 then 48 | 18 | 18 then 12 | 1 | 1 | -35.31 | 380.7 (before the loss) |
+| 5 | 362 | 314 | 48 | 18 | 12 (from 1 s in) | 1 | 1 | -35.00 | 375.0 (381 before the loss) |
+| 6 | 410 | 362 | 48 | 18 | 18 | 1 | 0 | -26.70 | 383.3 |
+| 7 | 410 | 362 | 48 | 18 | 18 | 1 | 0 | -28.03 | 382.0 |
+| 8 | 404 | 362 | 42 | 18 | 18 | 1 | 0 | -21.38 | 382.6 |
+| 9 | 404 | 362 | 42 | 18 | 18 | 1 | 0 | -21.05 | 383.0 |
+| 10 | 398 | 362 | 36 | 18 | 18 | 1 | 0 | -15.08 | 382.9 |
+| 11 | 392 | 362 | 30 | 18 | 18 | 1 | 0 | -9.18 | 382.8 |
+| 12 | 392 | 362 | 30 | 18 | 18 | 1 | 0 | -9.05 | 383.0 |
+
+- IN offset + 6 x missed OUT is 24 at every open (IN offset - 6 x missed OUT is 12); the remainder
+  ran 12 to 54. Neither form, nor the IN offset alone, matches. Stopped here, as the plan says.
+- 18 = the three zero packets the IN side sends before the first ring packet; the ring maps to the
+  host's IN count the same way at every open. One OUT packet missed at every open (the one missed
+  microframe of the traces).
+- What the control did catch: IN packets lost mid-open while carrying ring data (opens 3, 4, 5;
+  `IN now` fell by the frames lost) and the lag stepped down with them (open 4: -6 and -6; open 3:
+  -12 in the kernel, -10 in the lag). The spike reported "0 failed" IN transactions in those opens,
+  so its "numbering intact" does not see a packet the gadget failed to send.
+- The draw is in the owner's own `--open-phase` figure: `x` (frames the host has taken from the
+  return queue minus frames it has sent, the owner's counts) moves with the lag, and lag + x,
+  corrected for the share, is 380-383 in every open. With the IN side fixed at 18, `x` can only move
+  if the owner's OUT count (`out_count`, the `k` numbering) starts at a varying host OUT frame: OUT
+  frames the host sent that the owner never counted. Not lost USB packets (one every open, counted).
+  Candidates, unverified: OUT packets `u_audio` receives while the capture PCM is not running
+  (`u_audio_iso_complete` drops them without a count), or capture frames the owner reads or discards
+  before `out_count` starts.
+- Opens 4 and 5 had owner share 314, not 362 (48 lower, one transmit block), with `x` 48 lower than
+  the trend; the prime-drop log shows `tx_prime_dropped=24` there too. Not explained.
+
+Proposed next (needs the operator): a sixth counter in the control, OUT frames received since alt 1
+before the capture PCM was running (and the first good OUT packet's frame count), and the owner's
+log of frames read before `out_count` starts; one more 12-open window. If those account for `x`,
+the anchor in step 3 uses them instead of the IN offset.
