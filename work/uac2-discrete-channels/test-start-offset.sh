@@ -8,6 +8,11 @@
 #
 #   sudo ./test-start-offset.sh [WINDOW_SECONDS]
 #
+# It can be installed root-owned (/usr/local/sbin/test-start-offset.sh) and allowed without a
+# password: it loads only modules with the pinned hashes, copied first from the staging
+# directory (~bdimaio/usb-16x16-work/gadget-startoffset/build/start-offset) to a root-owned
+# one, so nothing the normal user can write is loaded.
+#
 # usb16x16-dante is stopped for the whole window, so a candidate owner can be run in it
 # through /usr/local/sbin/usb16x16-dante-candidate; the candidate unit is stopped and
 # usb16x16-dante started again after the restore if it was running. Through the window
@@ -22,8 +27,8 @@ set -euo pipefail
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo" >&2; exit 2; fi
 if [ "$#" -gt 1 ]; then echo "usage: $0 [WINDOW_SECONDS]" >&2; exit 2; fi
 
-here=$(cd "$(dirname "$0")" && pwd)
-candidate_dir=$here/build/start-offset
+staging_dir=/home/bdimaio/usb-16x16-work/gadget-startoffset/build/start-offset
+candidate_dir=/var/lib/usb16x16-start-offset-test
 window_seconds=${1:-900}
 kernel_release=$(uname -r)
 updates=/lib/modules/$kernel_release/updates/usb-16x16
@@ -59,6 +64,8 @@ if ! [[ "$window_seconds" =~ ^[0-9]+$ ]] || [ "$window_seconds" -lt 60 ] || [ "$
   echo "window must be 60..1800 seconds" >&2; exit 3
 fi
 [ "$kernel_release" = "$expected_kernel_release" ] || { echo "kernel mismatch: $kernel_release" >&2; exit 3; }
+rm -rf "$candidate_dir"; install -d -o root -g root -m 755 "$candidate_dir"
+install -o root -g root -m 644 "$staging_dir/u_audio.ko" "$staging_dir/usb_f_uac2.ko" "$candidate_dir/"
 [ "$(sha256 "$candidate_dir/u_audio.ko")" = "$expected_candidate_u_audio" ] || { echo "candidate u_audio.ko hash mismatch" >&2; exit 4; }
 [ "$(sha256 "$candidate_dir/usb_f_uac2.ko")" = "$expected_candidate_f_uac2" ] || { echo "candidate usb_f_uac2.ko hash mismatch" >&2; exit 4; }
 [ "$(sha256 "$updates/u_audio.ko")" = "$expected_installed_u_audio" ] || { echo "installed u_audio.ko is not the rate-request one" >&2; exit 5; }

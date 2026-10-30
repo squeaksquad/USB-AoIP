@@ -14671,3 +14671,16 @@ direction goes idle; expected lag 374 at every open with `--prime-drop 24`. A se
 `outputs/latency/spike-startoffset2-20261030/`. Installed modules restored 02:44, `usb16x16-dante`
 (a15a9d84) active, start check ok 02:45. No noise probe run.
 
+**MEASURED 2026-10-30 03:15-03:30 UTC: with the owner restarting its gadget capture PCM at each host
+stop, the host-anchored round trip is 374 on 11 of 12 opens.** Owner candidates with `--prime-drop 24
+--capture-drain` (experiment, off by default; not installed), installed modules, twelve spike opens
+each. First form e676ed97 (discard the leftovers with `snd_pcm_forward`): gadget remainder 12 on every
+open, but the share moved with the leftovers modulo 48 (lags 368-386), because the empty ring started
+part way into a period. Second form 48ecca5b (`snd_pcm_drop`, `prepare`, `start`, which also resets
+`u_audio`'s ring position): lag 374 on eleven opens; the twelfth, after a Mac-side BROKEN open, read
+422 with the owner share one block (48) high, the same one-block return-side term as the shares of 314
+in the kernel windows; still open. Detail: `work/mac-driver-spike/SPIKE_PLAN.md`, "Phase C results".
+Evidence `outputs/latency/spike-capdrain-20261030/`, `outputs/latency/spike-caprestart-20261030/`.
+`test-start-offset.sh` can now be installed root-owned (copies the pinned modules to a root-owned
+directory before loading). Service restored 03:31 (a15a9d84, start check ok). No noise probe run.
+

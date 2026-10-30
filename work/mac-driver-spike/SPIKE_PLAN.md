@@ -411,3 +411,43 @@ What this changes in the plan: the term needs no kernel anchor. An owner-only fi
 source: when the outgoing direction goes idle, ask the driver (`snd_pcm_avail`, which syncs the
 pointer) and discard what is left, so the next open starts with an empty capture ring. Then the lag
 is 362 + 12 = 374 at every open (opens 1-3 here). The kernel control stays a test instrument.
+
+**Owner capture drain, first form (discard): the gadget term goes, a period-phase term is left
+(2026-10-30 03:15-03:19 UTC).** Owner candidate e676ed97 (`--prime-drop 24 --capture-drain`, the
+drain as `snd_pcm_avail` then `snd_pcm_forward` of everything left, when the outgoing direction goes
+idle), installed modules, twelve `stream 12` opens (open 9 BROKEN on a Mac enqueue failure).
+Evidence `outputs/latency/spike-capdrain-20261030/`.
+
+| Open | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9* | 10 | 11 | 12 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Lag | 374 | 368 | 374 | 380 | 380 | 381 | 380 | 386 | 380 | 386 | 386 | 380 |
+| Owner share | 362 | 356 | 362 | 368 | 368 | 369 | 368 | 374 | 368 | 374 | 374 | 368 |
+| Gadget remainder | 12 | 12 | 12 | 12 | 12 | 12 | 12 | 12 | 12 | 12 | 12 | 12 |
+| Drained at the stop before | - | 42 | 0 | 6 | 6 | 6 | 6 | 12 | 6 | 12 | 12 | 6 |
+
+The remainder is 12 on every open and `x` is flat (6.7-8.4), but the share followed the frames
+drained at the previous stop, modulo 48: the ring was empty yet part way into a period, so the
+owner's first blocks, and the prime made from them, fell that much later in the host's stream.
+
+**Owner capture drain, second form (restart the capture PCM): 374 on 11 of 12 opens (2026-10-30
+03:26-03:30 UTC).** Owner candidate 48ecca5b: at idle `snd_pcm_drop`, `snd_pcm_prepare`,
+`snd_pcm_start` on the gadget capture PCM, which also puts `u_audio`'s ring position to 0
+(`uac_pcm_trigger`), so every session starts empty and on a period boundary. Same twelve opens.
+Evidence `outputs/latency/spike-caprestart-20261030/`.
+
+| Open | 1-7 | 8* | 9 | 10-12 |
+|---|---|---|---|---|
+| Lag | 374 x7 | 374 | 422 | 374 x3 |
+| Owner share | 362 | 362 | 410 | 362 |
+| Gadget remainder | 12 | 12 | 12 | 12 |
+
+Frames left at the stops: 0, 0, 42, 0, 0, 0, 6, 0, 42, 0, 0, 0; the restart made them irrelevant.
+Open 8 was BROKEN (Mac enqueue failure, the run ended early); at its stop the return side primed
+once instead of twice, and the next open's share was one block (48) high: the same one-block owner
+term as the shares of 314 in the two kernel windows. That term is still open; everything else in
+the per-open draw is accounted for: far loop 114, owner prime (constant drop), the gadget's 12, and
+the capture ring now reset at each stop.
+
+Next, for the operator: find the one-block return-side term (it showed after an abnormal stop here,
+and without one in the kernel windows), then step 5 (Apple's driver, eight harness opens) with
+`--prime-drop 24 --capture-drain`; the kernel control is not needed for either.

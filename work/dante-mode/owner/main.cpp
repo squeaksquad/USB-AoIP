@@ -80,6 +80,19 @@
 // that would leave less than one block plus the transmit read-ahead and the
 // resync margin skips silence as before and counts as unanchored.
 //
+// With --capture-drain (experiment, off by default) the outgoing direction,
+// when it goes idle because the host stopped sending, stops the gadget capture
+// PCM and starts it again, so the next host session starts from an empty ring
+// at a period boundary. u_audio reports capture frames to ALSA only at period
+// boundaries and the loop reads with snd_pcm_avail_update, so the host's last
+// frames short of a period stayed hidden and were read as the first frames of
+// the next host session, which then counted them as its own: 0 to 42 frames,
+// different at every open (the kernel's Playback Start Offset control,
+// SPIKE_PLAN.md, "Phase C results"). Discarding them alone (snd_pcm_forward,
+// candidate e676ed97) left the ring part way into a period, and the owner's
+// share moved by that much; the restart puts u_audio's ring position back to 0
+// (uac_pcm_trigger). tx_drained is what was left, as snd_pcm_avail saw it.
+//
 // With --impulse-trace (diagnostic, off by default) the loop finds impulse
 // onsets on channel 1 (above a quarter of half scale, as the host-driver
 // spike sends them) in both directions: each one the host sends, with its
@@ -206,6 +219,8 @@ struct Options {
     bool impulse_trace{false};
     // Experiment: frames of the first block the outgoing prime drops, constant. -1 is off.
     long prime_drop{-1};
+    // Experiment: restart the gadget capture PCM when the outgoing direction goes idle.
+    bool capture_drain{false};
     // Experiment (2026-10-13): touch this many kilobytes of the loop thread's stack before it
     // turns real-time, so the loop never grows its stack (a page fault that can sleep). 0 is off.
     unsigned stack_prefault_kb{0};
@@ -225,6 +240,7 @@ struct Options {
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
                "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--open-phase] [--impulse-trace] [--prime-drop D]\n"
+               "                     [--capture-drain]\n"
                "                     [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
@@ -254,6 +270,7 @@ struct Options {
                "  --open-phase  diagnostic: an OPENPHASE line per host session, frames taken minus frames sent\n"
                "  --impulse-trace  diagnostic: IMPULSE lines, channel 1 onsets both ways with positions and indices\n"
                "  --prime-drop  experiment: the outgoing prime drops this many of the first block's frames, always\n"
+               "  --capture-drain  experiment: restart the gadget capture PCM when the host stops sending\n"
                "  --stack-prefault   experiment: touch this much of the loop's stack before it turns real-time\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
@@ -280,6 +297,7 @@ Options parse_options(int argc, char** argv) {
         if (a == "--event-trace") { o.event_trace = true; continue; }
         if (a == "--open-phase") { o.open_phase = true; continue; }
         if (a == "--impulse-trace") { o.impulse_trace = true; continue; }
+        if (a == "--capture-drain") { o.capture_drain = true; continue; }
         if (a == "--help" || i + 1 >= argc) { usage(); }
         const char* v = argv[++i];
         if (a == "--pcm") o.pcm = v;
@@ -491,6 +509,7 @@ struct Telemetry {
     std::atomic<std::int64_t> tx_prime_found{0};          //   and the Inferno depth it found
     std::atomic<std::int64_t> tx_prime_dropped{0};        //   and the frames of the block it dropped
     std::atomic<std::uint64_t> tx_unanchored{0};          // --prime-drop primes that had to skip silence
+    std::atomic<std::int64_t> tx_drained{0};              // --capture-drain: frames discarded at the last idle
     std::atomic<std::uint64_t> rx_primes{0};
     std::atomic<std::uint64_t> rx_overflow{0};            // Dante frames dropped with the host pulling
     std::atomic<std::uint64_t> rx_idle_discards{0};       // Dante frames dropped with no host pulling
@@ -703,7 +722,7 @@ void* telemetry_entry(void* argument) {
             link_rx = rx;
             std::printf("USBLINK usb=%s tx=%s rx=%s tx_links=%" PRIu64 " rx_primes=%" PRIu64 " capture_faults=%" PRIu64
                         " playback_faults=%" PRIu64 " last_fault=%" PRId64 " tx_prime_block=%" PRId64 " tx_prime_found=%" PRId64
-                        " tx_prime_dropped=%" PRId64 " tx_unanchored=%" PRIu64 " t=%.3f\n",
+                        " tx_prime_dropped=%" PRId64 " tx_unanchored=%" PRIu64 " tx_drained=%" PRId64 " t=%.3f\n",
                         usb_owner_name(owner), tx_state_name(tx), rx != 0 ? "flow" : "idle",
                         t.tx_links.load(std::memory_order_relaxed), t.rx_primes.load(std::memory_order_relaxed),
                         t.usb_capture_faults.load(std::memory_order_relaxed),
@@ -712,7 +731,8 @@ void* telemetry_entry(void* argument) {
                         t.tx_prime_block.load(std::memory_order_relaxed),
                         t.tx_prime_found.load(std::memory_order_relaxed),
                         t.tx_prime_dropped.load(std::memory_order_relaxed),
-                        t.tx_unanchored.load(std::memory_order_relaxed), seconds);
+                        t.tx_unanchored.load(std::memory_order_relaxed),
+                        t.tx_drained.load(std::memory_order_relaxed), seconds);
             signature = thread_inventory("usblink", true);
         }
         if (signature == 0) signature = thread_inventory("", false);
@@ -1500,6 +1520,8 @@ struct UsbHalf {
     std::int64_t phase_max{0};
     // --prime-drop: frames of the first block the outgoing prime drops; -1 lands it at the lead.
     long prime_drop{-1};
+    // --capture-drain: the capture PCM is restarted when the outgoing direction goes idle.
+    bool capture_drain{false};
     // --impulse-trace: the latest onset sent (host index, playback position) and the edge states.
     bool impulse_trace{false};
     std::int64_t sent_k{-1};
@@ -1777,7 +1799,17 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         // the clock pass the pointer on every wake, 98 resyncs in 100 ms.
         const bool starved = usb.tx == TxState::flow &&
                              depth < static_cast<std::int64_t>(handles.capture.period + kResyncMargin);
-        if (starved || (usb.tx != TxState::idle && ++usb.tx_idle_wakes >= kIdleWakes)) set_tx_state(usb, TxState::idle, t);
+        if (starved || (usb.tx != TxState::idle && ++usb.tx_idle_wakes >= kIdleWakes)) {
+            set_tx_state(usb, TxState::idle, t);
+            if (usb.capture_drain) {
+                // snd_pcm_avail asks the driver, so the frames short of a period show too.
+                t.tx_drained.store(snd_pcm_avail(handles.capture.handle), std::memory_order_relaxed);
+                snd_pcm_drop(handles.capture.handle);
+                int rc = snd_pcm_prepare(handles.capture.handle);
+                if (rc == 0) rc = snd_pcm_start(handles.capture.handle);
+                if (rc < 0) detach_usb(usb, rc, t);
+            }
+        }
         return true;
     }
     usb.tx_idle_wakes = 0;
@@ -2121,14 +2153,14 @@ int main(int argc, char** argv) {
 
     std::printf("START usb16x16-dante-owner mode=%s pcm=%s rate=%u period=%lu buffer=%lu tx_lead=%lu guard=%lu priority=%d "
                 "mlock=%d rt=%d seconds=%u usb=%s usb_period=%lu usb_buffer=%lu rx_queue=%lu rx_slack=%lu kp=%g ki=%g "
-                "seed_ppm=%g seed_from_file=%d prime_drop=%ld\n",
+                "seed_ppm=%g seed_from_file=%d prime_drop=%ld capture_drain=%d\n",
                 options.no_usb ? "no-usb" : "usb", options.pcm.c_str(), options.rate, static_cast<unsigned long>(options.period),
                 static_cast<unsigned long>(options.buffer), static_cast<unsigned long>(options.tx_lead),
                 static_cast<unsigned long>(options.guard), options.priority, options.mlock ? 1 : 0,
                 options.realtime ? 1 : 0, options.seconds, options.usb.c_str(),
                 static_cast<unsigned long>(options.usb_period), static_cast<unsigned long>(options.usb_buffer),
                 static_cast<unsigned long>(options.rx_queue), static_cast<unsigned long>(options.rx_slack), options.kp,
-                options.ki, options.seed_ppm, seed_from_file ? 1 : 0, options.prime_drop);
+                options.ki, options.seed_ppm, seed_from_file ? 1 : 0, options.prime_drop, options.capture_drain ? 1 : 0);
 
     // 0. The preset, before anything is opened: an owner asked for DSP that ran
     // without it would be measured as if it had filtered.
@@ -2178,6 +2210,7 @@ int main(int argc, char** argv) {
     usb.open_phase = options.open_phase;
     usb.impulse_trace = options.impulse_trace;
     usb.prime_drop = options.prime_drop;
+    usb.capture_drain = options.capture_drain;
     TelemetryContext telemetry_context{&telemetry, options.log_every, options.no_usb, options.event_trace};
     StewardContext steward_context{&options, &telemetry, &handles};
     const pthread_t telemetry_thread = start_thread(telemetry_entry, &telemetry_context, "telemetry");
