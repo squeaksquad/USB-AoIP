@@ -14614,3 +14614,11 @@ the class driver's (44). Not yet shown: that removing it in the owner makes the 
 `daw_timeline` repeat across opens. The fix (Phase B in the plan) is an owner change on the audio
 path and needs the full battery before any install. Service restored 01:21 (a15a9d84, start check
 ok).
+
+**FOUND 2026-10-30 01:31-01:34 UTC: the per-open level, with the host anchored, is the gadget's IN
+start in whole packets; the far loop (114) and the owner's share (344-345) are constant.** Owner
+candidate d84fe83a (`--impulse-trace`, diagnostic, not installed) beside the spike tool, eleven
+intact opens: the lag minus the owner's share was 12-42 frames, always a multiple of 6 (one 125 us
+packet), rising by a packet every open or two. Detail and next step (a kernel trace of
+`u_audio_iso_complete` at each open): `work/mac-driver-spike/SPIKE_PLAN.md`, "Phase B, step 1".
+Service restored 01:41 (a15a9d84, start check ok).

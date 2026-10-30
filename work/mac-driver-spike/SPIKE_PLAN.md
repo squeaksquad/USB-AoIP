@@ -149,3 +149,28 @@ difference of those two offsets. One insertion of silence or drop of frames in t
 that difference to a chosen constant, once per open. Then test it twice: with this tool (spread at
 most 1 across opens), and with the class driver and the harness (`daw_timeline` spread across
 opens). If the second also holds, the class driver needs no replacement for determinism.
+
+**Phase B, step 1 (diagnostic): the drift is the gadget's IN start, in whole packets; the far loop
+and the owner are constant (2026-10-30 01:31-01:34 UTC).** Owner candidate d84fe83a
+(`--impulse-trace`: channel 1 onsets both ways with Inferno positions and indices; evidence
+`outputs/latency/spike-imptrace-20261030/owner.log`), twelve 15 s opens of `stream`, eleven intact
+(open 10 had 8 failed OUT transactions and is excluded):
+
+| Open | Far loop q - p | Owner share w - k | Lag (tool) | Remainder (gadget) |
+|---|---|---|---|---|
+| 1 | 114 | 362 | 374 | 12 |
+| 2-9 | 114 | 344-345 | 356, 363, 368, 369, 375, 381, 381, 387 | 12, 18, 24, 24, 30, 36, 36, 42 |
+| 11-12 | 114 | 345 | 381, 387 | 36, 42 |
+
+The remainder is the number of frames the Mac receives on IN before the first frame from the
+owner's queue: 2 to 7 packets of 6, never a fraction, rising by a packet every open or two (the
+sawtooth of Phase A, now resolved into packets). So the owner-side correction planned for Phase B
+would not touch it. In `u_audio_iso_complete` (6.18, the installed rate-request build) an IN request
+carries ring data only when the ALSA playback stream is running at its completion, else what it
+held before, and data copied at one completion goes out on that request's next turn; the owner
+drops and re-primes its playback stream at every host stop and primes it again before the next
+start (`rx_primes` +2 an open). Which of these sets the packet count, and why it drifts with time,
+is not read yet. Next: a bounded kernel trace of the IN completions at each open (status, running,
+hw_ptr; kprobes on `u_audio_iso_complete`, as `outputs/latency/rate882-dirtest-20261018/trace.sh`
+did for SET_CUR; needs sudo on the Pi), then a fix in the owner's priming or in `u_audio`, whichever
+the trace names. Service restored 01:41 (a15a9d84, start check ok, no restart).
