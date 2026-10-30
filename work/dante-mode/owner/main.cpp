@@ -67,6 +67,19 @@
 // says whether the level drawn at each host open can be seen from the Pi.
 // Nothing is changed in the audio path.
 //
+// With --prime-drop D (experiment, off by default) the outgoing prime drops a
+// constant D of the host's first block's oldest frames and commits the rest at
+// the Inferno pointer where it stands, instead of landing the block's newest
+// frame exactly --tx-lead ahead of the clock. Without it the prime drops
+// (depth found - lead + block) frames, which varies with the Dante clock's phase
+// against the loop's idle grid, and every frame dropped comes off the round
+// trip the host counts: share = 466 - depth found over 18 opens (the host-driver
+// spike, SPIKE_PLAN.md, "Phase B, step 3"). With it the host frame to Dante
+// position offset is the same at every prime, so the round trip is too. The
+// servo then takes the depth to --tx-lead without changing that offset. A prime
+// that would leave less than one block plus the transmit read-ahead and the
+// resync margin skips silence as before and counts as unanchored.
+//
 // With --impulse-trace (diagnostic, off by default) the loop finds impulse
 // onsets on channel 1 (above a quarter of half scale, as the host-driver
 // spike sends them) in both directions: each one the host sends, with its
@@ -191,6 +204,8 @@ struct Options {
     bool open_phase{false};
     // Diagnostic: IMPULSE lines (channel 1 onsets both ways, with positions and indices).
     bool impulse_trace{false};
+    // Experiment: frames of the first block the outgoing prime drops, constant. -1 is off.
+    long prime_drop{-1};
     // Experiment (2026-10-13): touch this many kilobytes of the loop thread's stack before it
     // turns real-time, so the loop never grows its stack (a page fault that can sleep). 0 is off.
     unsigned stack_prefault_kb{0};
@@ -209,7 +224,7 @@ struct Options {
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
-               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--open-phase] [--impulse-trace]\n"
+               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--open-phase] [--impulse-trace] [--prime-drop D]\n"
                "                     [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
@@ -238,6 +253,7 @@ struct Options {
                "  --seq-check   diagnostic: check channels 1..N against bitexact's sequence, gadget and Inferno side\n"
                "  --open-phase  diagnostic: an OPENPHASE line per host session, frames taken minus frames sent\n"
                "  --impulse-trace  diagnostic: IMPULSE lines, channel 1 onsets both ways with positions and indices\n"
+               "  --prime-drop  experiment: the outgoing prime drops this many of the first block's frames, always\n"
                "  --stack-prefault   experiment: touch this much of the loop's stack before it turns real-time\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
@@ -285,6 +301,7 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
         else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
         else if (a == "--seq-check") o.seq_check = static_cast<unsigned>(parse_number(v, "--seq-check"));
+        else if (a == "--prime-drop") o.prime_drop = static_cast<long>(parse_number(v, "--prime-drop"));
         else if (a == "--gap-trace") o.gap_trace_us = static_cast<unsigned>(parse_number(v, "--gap-trace"));
         else if (a == "--stack-prefault") o.stack_prefault_kb = static_cast<unsigned>(parse_number(v, "--stack-prefault"));
         else if (a == "--period") o.period = parse_number(v, "--period");
@@ -472,6 +489,8 @@ struct Telemetry {
     std::atomic<std::uint64_t> tx_reprimes{0};            // of those, forced while it was flowing
     std::atomic<std::int64_t> tx_prime_block{0};          // the last prime: frames in the block it used
     std::atomic<std::int64_t> tx_prime_found{0};          //   and the Inferno depth it found
+    std::atomic<std::int64_t> tx_prime_dropped{0};        //   and the frames of the block it dropped
+    std::atomic<std::uint64_t> tx_unanchored{0};          // --prime-drop primes that had to skip silence
     std::atomic<std::uint64_t> rx_primes{0};
     std::atomic<std::uint64_t> rx_overflow{0};            // Dante frames dropped with the host pulling
     std::atomic<std::uint64_t> rx_idle_discards{0};       // Dante frames dropped with no host pulling
@@ -684,14 +703,16 @@ void* telemetry_entry(void* argument) {
             link_rx = rx;
             std::printf("USBLINK usb=%s tx=%s rx=%s tx_links=%" PRIu64 " rx_primes=%" PRIu64 " capture_faults=%" PRIu64
                         " playback_faults=%" PRIu64 " last_fault=%" PRId64 " tx_prime_block=%" PRId64 " tx_prime_found=%" PRId64
-                        " t=%.3f\n",
+                        " tx_prime_dropped=%" PRId64 " tx_unanchored=%" PRIu64 " t=%.3f\n",
                         usb_owner_name(owner), tx_state_name(tx), rx != 0 ? "flow" : "idle",
                         t.tx_links.load(std::memory_order_relaxed), t.rx_primes.load(std::memory_order_relaxed),
                         t.usb_capture_faults.load(std::memory_order_relaxed),
                         t.usb_playback_faults.load(std::memory_order_relaxed),
                         t.usb_last_fault.load(std::memory_order_relaxed),
                         t.tx_prime_block.load(std::memory_order_relaxed),
-                        t.tx_prime_found.load(std::memory_order_relaxed), seconds);
+                        t.tx_prime_found.load(std::memory_order_relaxed),
+                        t.tx_prime_dropped.load(std::memory_order_relaxed),
+                        t.tx_unanchored.load(std::memory_order_relaxed), seconds);
             signature = thread_inventory("usblink", true);
         }
         if (signature == 0) signature = thread_inventory("", false);
@@ -1477,6 +1498,8 @@ struct UsbHalf {
     std::int64_t phase_n{0};
     std::int64_t phase_min{0};
     std::int64_t phase_max{0};
+    // --prime-drop: frames of the first block the outgoing prime drops; -1 lands it at the lead.
+    long prime_drop{-1};
     // --impulse-trace: the latest onset sent (host index, playback position) and the edge states.
     bool impulse_trace{false};
     std::int64_t sent_k{-1};
@@ -1788,8 +1811,18 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         // Land this block so that the pointer ends exactly `lead` ahead of the
         // clock: skip forward over silence, or drop the block's oldest frames.
         const std::int64_t room = lead - depth;
-        const std::int64_t take = std::min<std::int64_t>(frames, room);
-        skip_playback(net, static_cast<snd_pcm_uframes_t>(room - take));
+        std::int64_t take = std::min<std::int64_t>(frames, room);
+        std::int64_t skip = room - take;
+        if (usb.prime_drop >= 0) {
+            // A constant drop, committed at the pointer as it stands; silence only if that
+            // would leave too little before the next block arrives.
+            take = frames - std::min<std::int64_t>(usb.prime_drop, frames);
+            const std::int64_t floor = static_cast<std::int64_t>(handles.capture.period) + kPacketFrames +
+                                       static_cast<std::int64_t>(kResyncMargin);
+            skip = std::max<std::int64_t>(0, floor - (depth + take));
+            if (skip > 0) t.tx_unanchored.fetch_add(1, std::memory_order_relaxed);
+        }
+        skip_playback(net, static_cast<snd_pcm_uframes_t>(skip));
         std::int32_t* const primed = usb.tx_scratch.data() + static_cast<std::size_t>(frames - take) * kChannels;
         if (usb.dsp != nullptr) {
             // A prime follows a gap: the filters start from silence, not from the tail of what played before it.
@@ -1803,11 +1836,12 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         if (!commit_playback(net, primed, static_cast<snd_pcm_uframes_t>(take), t)) {
             return false;
         }
-        depth = lead;
+        depth += skip + take;
         t.usb_tx_frames.fetch_add(static_cast<std::uint64_t>(take), std::memory_order_relaxed);
         t.tx_links.fetch_add(1, std::memory_order_relaxed);
         t.tx_prime_block.store(frames, std::memory_order_relaxed);
         t.tx_prime_found.store(lead - room, std::memory_order_relaxed);
+        t.tx_prime_dropped.store(frames - take, std::memory_order_relaxed);
         // Both directions see the same two clocks with opposite sign.
         usb.tx_servo.restart(usb.rx_flowing && usb.rx_servo.settled() ? -usb.rx_servo.integral() : usb.tx_servo.integral());
         set_tx_state(usb, TxState::flow, t);
@@ -2087,14 +2121,14 @@ int main(int argc, char** argv) {
 
     std::printf("START usb16x16-dante-owner mode=%s pcm=%s rate=%u period=%lu buffer=%lu tx_lead=%lu guard=%lu priority=%d "
                 "mlock=%d rt=%d seconds=%u usb=%s usb_period=%lu usb_buffer=%lu rx_queue=%lu rx_slack=%lu kp=%g ki=%g "
-                "seed_ppm=%g seed_from_file=%d\n",
+                "seed_ppm=%g seed_from_file=%d prime_drop=%ld\n",
                 options.no_usb ? "no-usb" : "usb", options.pcm.c_str(), options.rate, static_cast<unsigned long>(options.period),
                 static_cast<unsigned long>(options.buffer), static_cast<unsigned long>(options.tx_lead),
                 static_cast<unsigned long>(options.guard), options.priority, options.mlock ? 1 : 0,
                 options.realtime ? 1 : 0, options.seconds, options.usb.c_str(),
                 static_cast<unsigned long>(options.usb_period), static_cast<unsigned long>(options.usb_buffer),
                 static_cast<unsigned long>(options.rx_queue), static_cast<unsigned long>(options.rx_slack), options.kp,
-                options.ki, options.seed_ppm, seed_from_file ? 1 : 0);
+                options.ki, options.seed_ppm, seed_from_file ? 1 : 0, options.prime_drop);
 
     // 0. The preset, before anything is opened: an owner asked for DSP that ran
     // without it would be measured as if it had filtered.
@@ -2143,6 +2177,7 @@ int main(int argc, char** argv) {
     usb.seq_out.channels = usb.seq_back.channels = std::min(options.seq_check, kChannels);
     usb.open_phase = options.open_phase;
     usb.impulse_trace = options.impulse_trace;
+    usb.prime_drop = options.prime_drop;
     TelemetryContext telemetry_context{&telemetry, options.log_every, options.no_usb, options.event_trace};
     StewardContext steward_context{&options, &telemetry, &handles};
     const pthread_t telemetry_thread = start_thread(telemetry_entry, &telemetry_context, "telemetry");
