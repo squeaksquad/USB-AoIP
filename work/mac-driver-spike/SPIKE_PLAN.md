@@ -483,3 +483,16 @@ was not needed: the owner's three terms (prime drop, capture restart, the wait a
 round trip the same at every open. 532 is 42 samples above the point of record's 490, which was one
 draw of the old per-open spread (37-44 under the class driver); a larger PRIME_DROP lowers it by
 the same amount, up to 32 (the depth after the prime must stay above the floor), untested.
+
+**Step 6: the full battery PASS on one candidate start (2026-10-30 05:06-06:43 UTC).** Owner
+abee374a in its install form (`--rx-queue 96 --prime-drop 24 --capture-drain`, meters, the
+service's RUST_LOG filter, no diagnostics) by the candidate launcher on the installed modules:
+noise probe at 32 clean (no zero run of 4 or more); four loaded 800-impulse runs (0.1 on the other
+channels), `daw_timeline` 532 in each, levels 380x800, spread 0, no discontinuities; ten-minute
+soak and loaded hour PASS on the loop's eight channels (`USB16X16_LOOP_CHANNELS=8`, as since the
+96 kHz routing of 2026-10-29: the first ten-minute soak, judged on sixteen, failed only on 9-16
+silent from start to end); longest zero run 1, no discontinuities, no xruns; the owner's counters
+for the whole start: no resyncs, reprimes, faults or holes, rx_overflow 794. Evidence
+`outputs/latency/anchorbat-*` and `anchorbat-owner-20261030T050622Z.log`. With the twelve-plus-eight
+opens of steps 4 and 5 that makes the round trip the same at every open, for the spike and for
+Apple's driver. Installed by `work/dante-mode/service/install-owner-anchor.sh` (operator's sudo).

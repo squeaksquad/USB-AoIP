@@ -14684,3 +14684,31 @@ Evidence `outputs/latency/spike-capdrain-20261030/`, `outputs/latency/spike-capr
 `test-start-offset.sh` can now be installed root-owned (copies the pinned modules to a root-owned
 directory before loading). Service restored 03:31 (a15a9d84, start check ok). No noise probe run.
 
+**FOUND 2026-10-30 03:37-04:45 UTC: the one-block term was the prime racing the second host block.**
+While the outgoing side is idle the owner's loop runs on its 1 ms grid, so the first block after a
+host start is read on a grid tick; when that tick falls 12-19 us before the second block lands (the
+prime finds depth 127 or 128) the prime's pointer is a block off. Depth 128 already waited a block
+and landed right; owner abee374a (`--capture-drain`) waits at 127 too. Spike: 374 or 375 on 24 of
+24 opens. Apple's driver (`measure-candidate.sh 32 400`, eight opens): `daw_timeline` 532 on all
+eight. Steps tried and dropped on the way (two anchor forms, a wait from 126, polling the capture
+while idle) and the diagnostics (PRIMETRACE under `--impulse-trace`): `work/mac-driver-spike/SPIKE_PLAN.md`,
+"The one-block term". The kernel anchor of Phase C steps 1-3 is not needed.
+
+**ACCEPTED 2026-10-30 06:45 UTC (operator's standing instruction of 03:35 UTC: "if you can get it to
+be deterministic go ahead and run the full battery. If it passes, accept and push"): owner abee374a
+with `PRIME_DROP=24` and `CAPTURE_DRAIN=1` is the Dante point of record; the DAW-timeline round trip
+is the same at every host open (532 at 32 frames, 11.083 ms).** Battery on one candidate start
+(05:06-06:43 UTC): noise probe at 32 clean; four loaded 800-impulse runs, `daw_timeline` 532 each,
+spread 0, no discontinuities; ten-minute soak and loaded hour PASS on the loop's eight channels
+(`USB16X16_LOOP_CHANNELS=8`; a first ten-minute soak judged on sixteen failed only on 9-16, silent
+throughout, the 96 kHz routing); owner counters clean (no resyncs, reprimes, faults or holes). The
+level is 42 samples above the previous point of record's 490, which was one draw of the old 37-44
+spread; `PRIME_DROP` up to 32 would lower it, untested. NOT YET INSTALLED: installing needs the
+operator's sudo on the Pi:
+`cd ~/usb-16x16-work/dante-mode/service && sudo ./install-owner-anchor.sh` (staged and hash-checked:
+owner abee374a, start wrapper f4afa51d with the `PRIME_DROP` / `CAPTURE_DRAIN` keys, transport.conf
+31a2a257); `sudo ./install-owner-anchor.sh rollback` restores a15a9d84, a6c3a197 and 1434f79f.
+After the install: start check ok, and one harness run should read 532. Untested: 44.1 kHz and DSP
+presets with the new flags (the prime drop is in frames; at 44.1 the blocks are 44-50). Service
+restored 06:44 (a15a9d84, start check ok); the service ran the old owner throughout.
+
