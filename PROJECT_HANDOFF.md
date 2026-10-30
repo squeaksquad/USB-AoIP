@@ -14743,3 +14743,17 @@ run (`measure-candidate.sh 32 400`); soaks on the loop's eight channels.
 So the round trip is 532 at 48 and 508 +-1 at 44.1, with or without a preset. Evidence
 `outputs/latency/anchor441*`, `anchor48-dsp*` and their owner logs.
 
+
+**STAGED 2026-10-30 12:30 UTC: the Dante device renamed USB-AoIP (operator's request), not installed.**
+`work/dante-mode/service/install-dante-name.sh` installs `config/asound-inferno-owner-usb-aoip.conf`
+(54f3f0ba: the installed 19da7c70 with `NAME "USB-AoIP"`, the one change; DEVICE_ID and STATE_ID
+kept, so the Pi's saved subscriptions `RX 1-16` <- Pulse `Output 17-32` carry over) and four
+description drop-ins `usb16x16-{dante,statime,dante-startcheck,dante-rate}.service.d/10-usb-aoip.conf`
+(unit names and pinned unit files unchanged), then restarts the endpoint. It refuses unless at 48 kHz
+and unless the installed config is 19da7c70; `rollback` restores it from `.name-previous` and removes
+the drop-ins. Receivers subscribe by name: the only receiver of the Pi is the Pulse, `Input 17-32`
+<- `TX 1-16` (netaudio list before the change: `outputs/latency/dante-rename-20261030/`), so after
+the install they are made again from the Mac with `netaudio subscription add --tx USB-AoIP --rx
+FF-PULSE-16-DX --count 16 --offset-rx 16`. Nothing in the scripts, the applier, the start check or
+Dante Switcher uses the Dante name. The audio path is unchanged, so the check is the control-change
+rule: a harness run (532 expected), a noise probe at 32 and a two-minute soak on 8 channels.
