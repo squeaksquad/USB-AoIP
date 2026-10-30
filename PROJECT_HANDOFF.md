@@ -14570,3 +14570,27 @@ the device open. Levels this night: 513-555 (first pass 543 / 555 / 549 / 513 / 
 eb4f733..c5cf9de); not located. Restored 00:18: `usb16x16-dante` (a15a9d84), start check ok
 (rate 6016, one restart of its own), service active. Evidence `outputs/latency/openphase*`, owner
 logs `outputs/latency/openphase-20261029/owner{,2}.log`.
+
+**INSTALLED 2026-10-30 00:44 UTC: the device is renamed USB-AoIP; the audio path is unchanged.**
+Operator's request (with the repo made public under Apache-2.0, `LICENSING.md`). Installed by the
+operator with `work/pi-tuning/install-gadget-usb-aoip.sh` (e9c9ec57), run as install, rollback,
+install: `usb-16x16.service` runs `/usr/local/sbin/setup-usb-aoip` (65d26567, d4f0ee7b with only
+the configfs gadget `usb-aoip` for `studio_audio` and the product, function and control names
+`USB-AoIP` for `USB 16x16`; it also tears down a leftover `studio_audio`) through the drop-in
+`10-usb-aoip.conf` (91449df9) in place of `10-rates.conf`. The protected unit and script and the
+rates script d4f0ee7b are checked and untouched; `rollback` restores `10-rates.conf` (and with it
+`USB 16x16`), and its leg of the run brought the rates gadget up (journal 20:44:49 EDT) before
+the reinstall. VID/PID, serial, rates, req_number and fb_max as before; the ALSA card is still
+`UAC2Gadget`, so the owner and the arbiter are unchanged. Checks: the Mac lists `USB-AoIP`, 48 kHz,
+channel names 1-16 both ways (harness `inspect`); noise probe at 32 clean (no zero run of 4 or
+more); two-minute soak PASS on the loop's eight channels (`USB16X16_LOOP_CHANNELS=8`: the far loop
+carries Pi channels 1-8 only since the 2026-10-29 96 kHz routing; the first soak without it
+failed on 9-16 silent, as any 16-channel judge would). By the operator's rule for changes off the
+audio path these are the acceptance checks; ACCEPTED is the operator's call. With it: the Mac tools
+default to `USB-AoIP` (`USB16X16_DEVICE` overrides; harness rebuilt, 23 tests), Dante Switcher
+matches both names (its c9e3717), README and the map updated. Not renamed, by design: service,
+binary and file names (`usb16x16` / `usb-16x16`), and the hash-pinned installed files whose text
+names the device (applier messages, web title, unit descriptions, the compiler's header), which
+change with their next version. Pro Tools and Audio MIDI Setup select `USB-AoIP` once. Evidence
+`outputs/latency/usbaoip-*`. Rollback: `cd ~/usb-16x16-work/gadget-usb-aoip && sudo
+./install-gadget-usb-aoip.sh rollback`.
