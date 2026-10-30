@@ -174,3 +174,25 @@ is not read yet. Next: a bounded kernel trace of the IN completions at each open
 hw_ptr; kprobes on `u_audio_iso_complete`, as `outputs/latency/rate882-dirtest-20261018/trace.sh`
 did for SET_CUR; needs sudo on the Pi), then a fix in the owner's priming or in `u_audio`, whichever
 the trace names. Service restored 01:41 (a15a9d84, start check ok, no restart).
+
+**Phase B, step 2 (kernel trace of the IN start, 2026-10-30 01:47-01:49 UTC).**
+`trace-in-start.sh on 45` on the Pi (kprobes on `u_audio_iso_complete` and the start, stop, trigger
+and alt-setting events; it switched itself off; 480,868 lines) beside two `stream 15` opens on the
+installed owner a15a9d84: lags 377 and 357. Evidence (first 200 ms of each open, every event and
+every failed completion): `outputs/latency/spike-instart-20261030/trace-condensed.txt`.
+- The USB start was the same in both opens: the Mac's first IN token about 23.5 ms after alt 1 on
+  interface 2, the first IN and the first OUT completion failed (-61, the microframe missed), every
+  later one completed; IN and OUT started on the same microframe.
+- `uac_pcm_trigger` resets `u_audio`'s ring position to 0 on every start and stop and zeroes the
+  request buffers on stop; the owner's playback stream was running before each open (its stop and
+  restart come when the host stops, 1 ms apart, and again at the device reset), so no open began
+  with the stream stopped.
+- Not explained by this run: the two lags differ by 20, not a multiple of 6, with identical USB
+  starts, so the owner's share moved between these two opens (the installed owner does not log it).
+- A lead that fits the 6-step remainder of step 1: each missed first-microframe OUT packet is 6
+  frames the host counts as sent and the owner never receives, and each missed IN request removes
+  a leading packet; a count of misses that varies by open would move the lag in steps of 6. Both
+  opens here had one of each, so this run cannot show it.
+Next, one combined run decides: the `--impulse-trace` owner (d84fe83a) with this trace on, for
+120 s (six opens): per open the misses at the start, the owner's share, the far loop and the
+remainder together.
