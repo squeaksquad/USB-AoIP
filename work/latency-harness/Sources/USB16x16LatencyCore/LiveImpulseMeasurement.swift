@@ -38,7 +38,7 @@ public struct LiveMeasurementConfiguration: Codable, Equatable, Sendable {
     public var otherChannelLoadAmplitude: Float
 
     public init(
-        deviceName: String = "USB 16x16",
+        deviceName: String = "USB-AoIP",
         bufferFrames: UInt32 = 64,
         inputChannel: Int = 1,
         outputChannel: Int = 1,

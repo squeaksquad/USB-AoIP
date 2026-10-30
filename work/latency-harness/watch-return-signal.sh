@@ -12,7 +12,7 @@ set -uo pipefail
 
 script_dir=${0:A:h}
 app_binary="$script_dir/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
-device=${USB16X16_DEVICE:-USB 16x16}
+device=${USB16X16_DEVICE:-USB-AoIP}
 frames=${USB16X16_COREAUDIO_FRAMES:-64}
 output_channel=${USB16X16_OUTPUT_CHANNEL:-1}
 input_channel=${USB16X16_INPUT_CHANNEL:-1}

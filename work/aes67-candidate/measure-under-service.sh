@@ -20,6 +20,8 @@ other_load=${USB16X16_OTHER_LOAD:-}
 load_args=()
 if [[ -n "$other_load" ]]; then load_args=(--other-channel-load-amplitude "$other_load"); fi
 app_binary="$repo_root/work/latency-harness/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
+# The Mac's name for the gadget (USB 16x16 until 2026-10-30); USB16X16_DEVICE overrides it.
+device=${USB16X16_DEVICE:-USB-AoIP}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 out_dir="$repo_root/outputs/latency"
 result_path="$out_dir/${label}-roundtrip-${frames}f-${timestamp}.json"
@@ -43,8 +45,8 @@ fi
 start_uptime=$(print -r -- "$state" | awk '{print $(NF-3)}')
 recovers_before=$(print -r -- "$state" | awk '{print $(NF-2)}')
 
-if ! "$app_binary" inspect --device "USB 16x16" >/dev/null 2>&1; then
-  print -r -- "CoreAudio does not expose USB 16x16; refusing"
+if ! "$app_binary" inspect --device "$device" >/dev/null 2>&1; then
+  print -r -- "CoreAudio does not expose $device; refusing"
   print -r -- "exit=3"
   exit 3
 fi
@@ -53,7 +55,7 @@ consecutive=0
 signal_ready=
 for attempt in $(seq 1 "$probe_attempts"); do
   probe_path="$api_dir/readiness-probe-${attempt}.json"
-  if "$app_binary" measure --device "USB 16x16" --buffer-frames "$frames" \
+  if "$app_binary" measure --device "$device" --buffer-frames "$frames" \
        --input-channel 1 --output-channel 1 --impulses 8 \
        --maximum-lag-ms "$maximum_lag_ms" --output "$probe_path" \
        >/dev/null 2>"$api_dir/readiness-probe-${attempt}.log" &&
@@ -85,7 +87,7 @@ if [[ -z "$signal_ready" ]]; then
   exit 6
 fi
 
-"$app_binary" measure --device "USB 16x16" --buffer-frames "$frames" \
+"$app_binary" measure --device "$device" --buffer-frames "$frames" \
   --input-channel 1 --output-channel 1 --impulses "$impulses" "${load_args[@]}" \
   --maximum-lag-ms "$maximum_lag_ms" --output "$result_path" \
   >/dev/null 2>"$api_dir/measure.log"

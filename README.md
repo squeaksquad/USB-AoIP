@@ -1,7 +1,8 @@
 # USB-AoIP
 
 A Raspberry Pi 5 that shows up on a Mac as a plain USB audio interface,
-**USB 16x16** (16 in / 16 out, class compliant, no driver), and bridges those
+**USB-AoIP** (16 in / 16 out, class compliant, no driver; named "USB 16x16"
+until 2026-10-30), and bridges those
 channels in both directions onto an audio-over-IP network. The Mac sees an
 ordinary sound card; the network sees a Dante (or, on the older path, AES67)
 device.
@@ -15,17 +16,25 @@ The project is research-grade: every operating point is measured, hashed and
 recorded before it is accepted, and the protected USB baseline can always be
 restored.
 
-## Current state (2026-10-18)
+## Current state (2026-10-30)
 
 - **Active path: Dante**, through [Inferno](https://gitlab.com/lumifaza/inferno)
   (an open Dante implementation) and Statime for PTP. A single long-lived
   process, `usb16x16-dante-owner`, moves audio between the USB gadget and the
   network, with an optional DSP stage (EQ, crossovers, bass management) and
   live coefficient changes.
-- **USB side** offers 44.1, 48, 88.2 and 96 kHz. The Dante side currently runs
-  48 kHz only; 96 kHz end to end is the next step.
-- **Measured digital round trip** Mac → Pi → Dante → Ferrofish → Pi → Mac at
-  48 kHz and 32-frame CoreAudio buffer: about **10.2 ms**.
+- **Sample rates:** the USB side offers 44.1, 48, 88.2 and 96 kHz; the Dante
+  side offers 44.1 and 48 kHz. The Mac decides: a rate set on the Mac, or from
+  Dante Controller / Dante Switcher, moves the endpoint through an arbiter on
+  the Pi, and the Mac follows a Dante-side move. 96 kHz runs on an 8-channel
+  test loop but is not yet a point of record.
+- **Measured digital round trip** Mac → Pi → Dante → far loop → Pi → Mac at
+  48 kHz and a 32-frame CoreAudio buffer: about **10.0 to 11.6 ms** on the DAW
+  timeline. The figure is fixed for as long as an app keeps the device open,
+  but each new open lands somewhere in a band of about 0.9 ms. That spread is
+  set by how macOS's class driver starts its input and output streams, and the
+  Pi cannot see it (2026-10-28/29). A dedicated host driver with deterministic
+  latency is being explored: `work/mac-driver-spike/`.
 - **AES67 path** (RAVENNA driver + `aes67-linux-daemon`) still works and is
   kept as the rollback; its service is stopped.
 
@@ -59,7 +68,7 @@ SSH working says nothing about the audio network; check `eth0` separately.
 | `work/dsp-compiler/` | Turns a UI preset into DSP coefficients for the bridge (and CamillaDSP for verification). |
 | `work/latency-harness/` | Swift CoreAudio tool that measures round-trip latency and bit transparency from the Mac. |
 | `work/protected-baseline-2026-08-31/` | The known-good USB gadget module and scripts. **Never edited.** |
-| `work/uac2-discrete-channels/` | Kernel patch that makes macOS label the channels 1–16. |
+| `work/uac2-discrete-channels/` | Kernel patches: macOS labels the channels 1–16, the gadget reports and requests the Mac's sample rate. |
 | `outputs/latency/` | Raw measurement evidence, cited in the handoff by UTC timestamp. |
 
 ## Day-to-day operation
@@ -79,7 +88,8 @@ cat /run/usb16x16-dante-startcheck/status
 ```
 
 `usb-16x16.service` is the USB gadget, `usb16x16-statime` the PTP clock,
-`usb16x16-dante` the endpoint. Wait for `state=ok` from the start check before
+`usb16x16-dante` the endpoint. The service and process names keep their
+`usb16x16` prefix; only the device's name changed. Wait for `state=ok` from the start check before
 trusting audio after a restart. Restarting `usb-16x16.service` re-enumerates the
 device on the Mac.
 
@@ -109,3 +119,9 @@ noise probe first: a dropped sample anywhere invalidates a latency reading. See
 - A new operating point needs four loaded 800-impulse runs and a soak before
   it is accepted.
 - Don't build on the Pi or copy files to/from it while audio is being measured.
+
+## Licence
+
+Apache License 2.0 ([`LICENSE`](LICENSE)), except the patches to and binaries
+built from GPL projects (the Linux kernel, the RAVENNA module, Inferno), which
+keep their upstream licences; [`LICENSING.md`](LICENSING.md) lists them.

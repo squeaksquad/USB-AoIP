@@ -1,0 +1,146 @@
+#!/bin/bash
+set -euo pipefail
+
+# The service's gadget under the project's name (2026-10-30): the installed
+# multi-rate gadget setup-usb-16x16-rates (d4f0ee7b) with only its names
+# changed. The configfs gadget is usb-aoip (was studio_audio) and the product,
+# function and control names are USB-AoIP (was USB 16x16), which is the name
+# the Mac shows. Descriptors, rates, endpoints, req_number, fb_max, VID/PID
+# and serial number are d4f0ee7b's, so the audio path is unchanged. Installed
+# as /usr/local/sbin/setup-usb-aoip by install-gadget-usb-aoip.sh, which points
+# usb-16x16.service at it with a drop-in in place of the rates one and leaves
+# the protected unit and script untouched; its rollback returns to d4f0ee7b.
+#
+# A gadget left under the old name (studio_audio, by the protected or the rates
+# script) is torn down before this one is made, so a start works whichever
+# script ran last; the stop leaves no gadget under either name.
+#
+# From d4f0ee7b: with 88200 or 96000 listed the kernel sizes the endpoints for
+# 96 kHz: 624 bytes every 125 us (bInterval 1) at every rate, 48 kHz included
+# (MULTIRATE_GADGET_PLAN.md). 88.2 kHz needs a 10 s wait after each switch
+# before audio starts, a macOS fault. 48000 is listed first: until the host
+# sets a rate the clock reports the first entry.
+RATES=48000,44100,88200,96000
+
+G=/sys/kernel/config/usb_gadget/usb-aoip
+# The name every earlier script used; torn down at start and stop.
+LEGACY_G=/sys/kernel/config/usb_gadget/studio_audio
+F="$G/functions/uac2.usb0"
+C="$G/configs/c.1"
+LINK="$C/uac2.usb0"
+UDC=1000480000.usb
+
+# Experiment 2026-09-04: the number of queued USB requests per direction.
+# The installed script writes 2 (the kernel default). At 64 CoreAudio frames
+# and below the Mac's USB audio driver drops isochronous data in both
+# directions (75% zeros at 64, 87% at 32, 0% at 128 and 512, measured with
+# the harness's channel-2 noise probe with the bridge clean). Two queued
+# requests at 125 us microframes is 250 us of slack against the host's
+# scheduling. Usage: setup-usb-aoip start [REQ_NUMBER]; default 4.
+REQ_NUMBER=${2:-4}
+case "$REQ_NUMBER" in
+	''|*[!0-9]*) echo "REQ_NUMBER must be an unsigned integer" >&2; exit 2 ;;
+esac
+
+# Tear down the gadget at $1 (the layout every version of this script makes).
+remove_gadget() {
+	local g=$1
+	local f="$g/functions/uac2.usb0" c="$g/configs/c.1"
+	if [[ ! -d "$g" ]]; then
+		return
+	fi
+
+	if [[ -f "$g/UDC" ]]; then
+		printf '\n' > "$g/UDC" || true
+	fi
+
+	if [[ -L "$c/uac2.usb0" ]]; then
+		unlink "$c/uac2.usb0"
+	fi
+
+	if [[ -d "$f" ]]; then
+		rmdir "$f"
+	fi
+
+	rmdir "$c/strings/0x409" 2>/dev/null || true
+	rmdir "$c" 2>/dev/null || true
+	rmdir "$g/strings/0x409" 2>/dev/null || true
+	rmdir "$g" 2>/dev/null || true
+}
+
+stop_gadget() {
+	remove_gadget "$G"
+	remove_gadget "$LEGACY_G"
+}
+
+start_gadget() {
+	if ! mountpoint -q /sys/kernel/config; then
+		mount -t configfs configfs /sys/kernel/config
+	fi
+
+	modprobe -r g_ether 2>/dev/null || true
+	modprobe libcomposite
+	modprobe usb_f_uac2
+
+	stop_gadget
+
+	if [[ ! -e "/sys/class/udc/$UDC" ]]; then
+		echo "UDC $UDC is not available" >&2
+		exit 1
+	fi
+
+	mkdir -p "$G/strings/0x409"
+	mkdir -p "$C/strings/0x409"
+
+	# Prototype VID/PID only; obtain a production USB VID/PID before shipping.
+	printf '%s\n' 0x1d6b > "$G/idVendor"
+	printf '%s\n' 0x0104 > "$G/idProduct"
+	printf '%s\n' 0x0200 > "$G/bcdUSB"
+	printf '%s\n' 0x0100 > "$G/bcdDevice"
+
+	printf '%s\n' AUDDEV001 > "$G/strings/0x409/serialnumber"
+	printf '%s\n' 'Bryan DiMaio' > "$G/strings/0x409/manufacturer"
+	printf '%s\n' 'USB-AoIP' > "$G/strings/0x409/product"
+	printf '%s\n' 'UAC2 Audio' > "$C/strings/0x409/configuration"
+
+	mkdir "$F"
+
+	printf '%s\n' 65535 > "$F/p_chmask"
+	printf '%s\n' "$RATES" > "$F/p_srate"
+	printf '%s\n' 3 > "$F/p_ssize"
+	printf '%s\n' 0 > "$F/p_hs_bint"
+
+	printf '%s\n' 65535 > "$F/c_chmask"
+	printf '%s\n' "$RATES" > "$F/c_srate"
+	printf '%s\n' 3 > "$F/c_ssize"
+	printf '%s\n' 0 > "$F/c_hs_bint"
+	printf '%s\n' async > "$F/c_sync"
+
+	printf '%s\n' "$REQ_NUMBER" > "$F/req_number"
+	printf '%s\n' 5 > "$F/fb_max"
+	printf '%s\n' 'USB-AoIP' > "$F/function_name"
+	printf '%s\n' 'USB-AoIP' > "$F/if_ctrl_name"
+
+	# The shared-clock patch needs both lists identical; the kernel keeps what it parsed.
+	if [[ "$(cat "$F/p_srate")" != "$RATES" || "$(cat "$F/c_srate")" != "$RATES" ]]; then
+		echo "rate lists read back as p=$(cat "$F/p_srate") c=$(cat "$F/c_srate"), not $RATES" >&2
+		exit 1
+	fi
+
+	ln -s "$F" "$LINK"
+	printf '%s\n' "$UDC" > "$G/UDC"
+}
+
+case "${1:-start}" in
+	start)
+		start_gadget
+		echo "gadget bound with rates=$(cat "$F/p_srate") req_number=$(cat "$F/req_number") fb_max=$(cat "$F/fb_max")"
+		;;
+	stop)
+		stop_gadget
+		;;
+	*)
+		echo "Usage: $0 {start|stop}" >&2
+		exit 2
+		;;
+esac

@@ -21,6 +21,6 @@
     <key>LSBackgroundOnly</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Measure sample-accurate round-trip latency through the USB 16x16 audio interface.</string>
+    <string>Measure sample-accurate round-trip latency through the USB-AoIP audio interface.</string>
 </dict>
 </plist>

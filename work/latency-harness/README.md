@@ -1,4 +1,8 @@
-# USB 16x16 CoreAudio latency harness
+# USB-AoIP CoreAudio latency harness
+
+The device was named "USB 16x16" until 2026-10-30. `--device` defaults to
+`USB-AoIP`; the wrapper scripts take the name from `USB16X16_DEVICE`, so set
+`USB16X16_DEVICE="USB 16x16"` while the old-named gadget runs.
 
 This native macOS command-line tool reads CoreAudio directly. It does not rely on
 `system_profiler`, which returned an empty audio-device list during the 2026-08-31
@@ -68,11 +72,11 @@ The DSP service validator provides a single 90-second loaded diagnostic run via
 `--phase capture`, requiring a fresh preflight from the same harness and service
 process. See `work/dsp-service/README.md` for the controlled live procedure.
 
-## Inspect USB 16x16
+## Inspect the device
 
 ```bash
 .build/release/usb16x16-latency inspect \
-  --device "USB 16x16" \
+  --device "USB-AoIP" \
   --output ../../outputs/latency/coreaudio-usb16x16-baseline.json
 ```
 
@@ -98,7 +102,7 @@ executable inside the app bundle:
 
 ```bash
 ".build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency" measure \
-  --device "USB 16x16" \
+  --device "USB-AoIP" \
   --buffer-frames 64 \
   --output-channel 1 \
   --input-channel 1 \

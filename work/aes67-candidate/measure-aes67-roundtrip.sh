@@ -14,6 +14,8 @@ script_dir=${0:A:h}
 repo_root=${script_dir:h:h}
 harness_dir="$repo_root/work/latency-harness"
 app_binary="$harness_dir/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
+# The Mac's name for the gadget (USB 16x16 until 2026-10-30); USB16X16_DEVICE overrides it.
+device=${USB16X16_DEVICE:-USB-AoIP}
 pi_target=${USB16X16_PI_TARGET:-bdimaio@192.168.1.201}
 pi_alias=${USB16X16_PI_HOST_KEY_ALIAS:-audio-dev.local}
 remote_script=${USB16X16_REMOTE_CANDIDATE:-/usr/local/sbin/run-aes67-candidate-safe.sh}
@@ -108,12 +110,12 @@ print -r -- "pi: clean, usb configured/high-speed, usb-16x16.service active"
 
 # CoreAudio must currently own the device. The 2026-08-31 combined attempt was
 # wasted because macOS had silently dropped USB enumeration.
-if ! "$app_binary" inspect --device "USB 16x16" >/dev/null 2>&1; then
-    print -ru2 -- "error: CoreAudio does not expose 'USB 16x16'."
+if ! "$app_binary" inspect --device "$device" >/dev/null 2>&1; then
+    print -ru2 -- "error: CoreAudio does not expose '$device'."
     print -ru2 -- "Reconnect the USB data cable and confirm the device in Audio MIDI Setup."
     exit 3
 fi
-print -r -- "mac: CoreAudio exposes USB 16x16"
+print -r -- "mac: CoreAudio exposes $device"
 print -r -- ""
 print -r -- "Return path under test: $path_label"
 print -r -- ""
@@ -150,7 +152,7 @@ remote_result_file=$(mktemp -t usb16x16-remote-result)
     for settle_attempt in $(seq 1 "$signal_probe_attempts"); do
         probe_path="$api_dir/readiness-probe-${settle_attempt}.json"
         if "$app_binary" measure \
-            --device "USB 16x16" \
+            --device "$device" \
             --buffer-frames "$coreaudio_frames" \
             --input-channel 1 \
             --output-channel 1 \
@@ -188,7 +190,7 @@ PYEOF
     fi
     api_snapshot before-measurement
     "$app_binary" measure \
-        --device "USB 16x16" \
+        --device "$device" \
         --buffer-frames "$coreaudio_frames" \
         --input-channel 1 \
         --output-channel 1 \

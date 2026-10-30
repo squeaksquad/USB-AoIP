@@ -19,6 +19,8 @@ script_dir=${0:A:h}
 repo_root=${script_dir:h:h}
 harness_dir="$repo_root/work/latency-harness"
 app_binary="$harness_dir/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
+# The Mac's name for the gadget (USB 16x16 until 2026-10-30); USB16X16_DEVICE overrides it.
+device=${USB16X16_DEVICE:-USB-AoIP}
 pi_target=${USB16X16_PI_TARGET:-bdimaio@192.168.1.201}
 ssh_options=(-o BatchMode=yes -o HostKeyAlias=audio-dev.local -o ConnectTimeout=8)
 candidate_seconds=${USB16X16_CANDIDATE_SECONDS:-1200}
@@ -38,13 +40,13 @@ print -r -- "points (bridge seconds)=${points[*]}"
 if [[ ! -x "$app_binary" ]]; then
     "$harness_dir/build-app.sh"
 fi
-if ! "$app_binary" inspect --device "USB 16x16" >/dev/null 2>&1; then
-    print -r -- "CoreAudio does not expose USB 16x16; refusing"; exit 3
+if ! "$app_binary" inspect --device "$device" >/dev/null 2>&1; then
+    print -r -- "CoreAudio does not expose $device; refusing"; exit 3
 fi
 
 probe() {
     local path=$1
-    "$app_binary" measure --device "USB 16x16" --buffer-frames 64 --input-channel 1 --output-channel 1 \
+    "$app_binary" measure --device "$device" --buffer-frames 64 --input-channel 1 --output-channel 1 \
         --impulses 8 --maximum-lag-ms 200 --output "$path" >/dev/null 2>"${path%.json}.log" || return 1
     USB16X16_PROBE="$path" USB16X16_MAX_SPREAD="$max_spread" /usr/bin/python3 - <<'PYEOF'
 import json, os
@@ -120,7 +122,7 @@ for point in "${points[@]}"; do
     state_before=$(bridge_state)
     print -r -- "before: t=$(bridge_seconds)s $state_before"
     result="$output_dir/point-$point.json"
-    "$app_binary" measure --device "USB 16x16" --buffer-frames 64 --input-channel 1 --output-channel 1 \
+    "$app_binary" measure --device "$device" --buffer-frames 64 --input-channel 1 --output-channel 1 \
         --impulses "$impulses" --maximum-lag-ms 200 --output "$result" >/dev/null 2>"$output_dir/point-$point.log"
     state_after=$(bridge_state)
     print -r -- "after:  t=$(bridge_seconds)s $state_after"

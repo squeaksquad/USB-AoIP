@@ -17,7 +17,7 @@ private struct Arguments {
     init(_ values: [String]) throws {
         guard values.count >= 2 else { throw CLIError.usage }
         command = values[1]
-        var deviceName = "USB 16x16"
+        var deviceName = "USB-AoIP"
         var outputPath: String?
         var bufferFrames: UInt32 = 64
         var inputChannel = 1

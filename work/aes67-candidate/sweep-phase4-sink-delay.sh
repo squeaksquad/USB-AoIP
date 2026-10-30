@@ -11,6 +11,8 @@ script_dir=${0:A:h}
 repo_root=${script_dir:h:h}
 harness_dir="$repo_root/work/latency-harness"
 app_binary="$harness_dir/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
+# The Mac's name for the gadget (USB 16x16 until 2026-10-30); USB16X16_DEVICE overrides it.
+device=${USB16X16_DEVICE:-USB-AoIP}
 pi_target=${USB16X16_PI_TARGET:-bdimaio@192.168.1.201}
 ssh_options=(-o BatchMode=yes -o HostKeyAlias=audio-dev.local -o ConnectTimeout=8)
 candidate_seconds=${USB16X16_CANDIDATE_SECONDS:-720}
@@ -34,7 +36,7 @@ print -r -- "wrapper_arguments=$remote_arguments"
 probe() {
     # one 8-impulse probe; 0 if it carries signal within the spread limit
     local path=$1
-    "$app_binary" measure --device "USB 16x16" --buffer-frames 64 --input-channel 1 --output-channel 1 \
+    "$app_binary" measure --device "$device" --buffer-frames 64 --input-channel 1 --output-channel 1 \
         --impulses 8 --maximum-lag-ms 200 --output "$path" >/dev/null 2>"${path%.json}.log" || return 1
     USB16X16_PROBE="$path" USB16X16_MAX_SPREAD="$max_spread" /usr/bin/python3 - <<'PYEOF'
 import json, os
@@ -116,7 +118,7 @@ PYEOF" || { print -r -- "point delay=$delay SINK WRITE FAILED"; continue; }
     sleep "$settle_seconds"
     wait_ready "d$delay" 60
     result="$output_dir/delay-$delay.json"
-    "$app_binary" measure --device "USB 16x16" --buffer-frames 64 --input-channel 1 --output-channel 1 \
+    "$app_binary" measure --device "$device" --buffer-frames 64 --input-channel 1 --output-channel 1 \
         --impulses "$impulses" --maximum-lag-ms 200 --output "$result" >/dev/null 2>"$output_dir/delay-$delay.log"
     if [[ -s "$result" ]]; then
         USB16X16_RESULT="$result" USB16X16_DELAY="$delay" /usr/bin/python3 - <<'PYEOF'

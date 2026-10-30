@@ -4,6 +4,8 @@ set -euo pipefail
 script_dir=${0:A:h}
 repo_root=${script_dir:h:h}
 app_binary="$script_dir/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
+# The Mac's name for the gadget (USB 16x16 until 2026-10-30); USB16X16_DEVICE overrides it.
+device=${USB16X16_DEVICE:-USB-AoIP}
 pi_target=${USB16X16_PI_TARGET:-bdimaio@192.168.1.201}
 pi_alias=${USB16X16_PI_HOST_KEY_ALIAS:-audio-dev.local}
 loopback_usec=${1:-80000}
@@ -67,7 +69,7 @@ started_loop=1
 sleep 1
 
 "$app_binary" measure \
-    --device "USB 16x16" \
+    --device "$device" \
     --buffer-frames "$coreaudio_frames" \
     --input-channel 1 \
     --output-channel 1 \

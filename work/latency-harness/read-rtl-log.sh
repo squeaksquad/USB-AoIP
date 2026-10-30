@@ -40,7 +40,7 @@ print -r -- "$lines" | while IFS= read -r line; do
   samples=${fields[20]//\"/}; ms=${fields[21]//\"/}; level=${fields[22]}; correlation=${fields[24]}; valid=${fields[25]}
   utc=$(date -j -f '%d %b %Y %H:%M:%S' "$when" +%s 2>/dev/null); utc=$(date -u -r "${utc:-0}" +%H:%M:%SZ)
   verdict=ok
-  [[ $device == "USB 16x16" && $channel == 1 && $rate == 48000 && $frames == $buffer ]] || verdict="NOT STANDARD (device/channel/rate/buffer)"
+  [[ ( $device == "USB-AoIP" || $device == "USB 16x16" ) && $channel == 1 && $rate == 48000 && $frames == $buffer ]] || verdict="NOT STANDARD (device/channel/rate/buffer)"
   [[ $samples == <-> && $valid == True ]] || verdict="NO READING"
   if [[ $verdict == ok && -n $harness ]]; then
     cost=$(( buffer == 64 ? 252 : 188 ))

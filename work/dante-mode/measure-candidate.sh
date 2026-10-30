@@ -50,6 +50,8 @@ other_load=${USB16X16_OTHER_LOAD:-}
 load_args=()
 if [[ -n "$other_load" ]]; then load_args=(--other-channel-load-amplitude "$other_load"); fi
 app_binary="$repo_root/work/latency-harness/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
+# The Mac's name for the gadget (USB 16x16 until 2026-10-30); USB16X16_DEVICE overrides it.
+device=${USB16X16_DEVICE:-USB-AoIP}
 zeros_py="$repo_root/outputs/latency/usb-holes-20260904/zeros.py"
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 out_dir="$repo_root/outputs/latency"
@@ -87,8 +89,8 @@ if [[ "$gates" != *"aes67=inactive"* || "$gates" == *"statime=0"* || "$gates" ==
   print -r -- "exit=2"
   exit 2
 fi
-if ! "$app_binary" inspect --device "USB 16x16" >/dev/null 2>&1; then
-  print -r -- "CoreAudio does not expose USB 16x16; refusing"
+if ! "$app_binary" inspect --device "$device" >/dev/null 2>&1; then
+  print -r -- "CoreAudio does not expose $device; refusing"
   print -r -- "exit=3"
   exit 3
 fi
@@ -97,7 +99,7 @@ consecutive=0
 signal_ready=
 for attempt in $(seq 1 "$probe_attempts"); do
   probe_path="$api_dir/readiness-probe-${attempt}.json"
-  if "$app_binary" measure --device "USB 16x16" --buffer-frames "$frames" \
+  if "$app_binary" measure --device "$device" --buffer-frames "$frames" \
        --input-channel 1 --output-channel 1 --impulses 8 \
        --maximum-lag-ms "$maximum_lag_ms" --output "$probe_path" \
        >/dev/null 2>"$api_dir/readiness-probe-${attempt}.log" &&
@@ -130,7 +132,7 @@ if [[ -z "$signal_ready" ]]; then
 fi
 
 if [[ $mode == soak ]]; then
-  "$app_binary" continuous --device "USB 16x16" --buffer-frames "$frames" \
+  "$app_binary" continuous --device "$device" --buffer-frames "$frames" \
     --seconds "$soak_seconds" --other-channel-load-amplitude 0.1 --output "$result_path" \
     >/dev/null 2>"$api_dir/measure.log"
   measure_exit=$?
@@ -208,7 +210,7 @@ grep -m1 "^DSP loaded file=" "$f" 2>/dev/null | cut -d" " -f3 | cut -d= -f2-')
   fi
 elif [[ $mode == noise ]]; then
   raw="$api_dir/capture.raw"
-  USB16X16_DUMP="$raw" "$app_binary" measure --device "USB 16x16" --buffer-frames "$frames" \
+  USB16X16_DUMP="$raw" "$app_binary" measure --device "$device" --buffer-frames "$frames" \
     --output-channel 1 --input-channel 2 --other-channel-load-amplitude 0.1 \
     --impulses "$impulses" --maximum-lag-ms "$maximum_lag_ms" --output "$result_path" \
     >/dev/null 2>"$api_dir/measure.log"
@@ -221,7 +223,7 @@ elif [[ $mode == noise ]]; then
     print -r -- "no capture dump; harness stderr: $(head -c 300 "$api_dir/measure.log")"
   fi
 else
-  "$app_binary" measure --device "USB 16x16" --buffer-frames "$frames" \
+  "$app_binary" measure --device "$device" --buffer-frames "$frames" \
     --input-channel 1 --output-channel 1 --impulses "$impulses" "${load_args[@]}" \
     --maximum-lag-ms "$maximum_lag_ms" --output "$result_path" \
     >/dev/null 2>"$api_dir/measure.log"

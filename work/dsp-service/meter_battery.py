@@ -46,7 +46,7 @@ def run_phase(name, plan, output, host, timeout):
             result_path = output.resolve() / f'{index}-audio.json'
             start = time.monotonic()
             with (output / f'{index}-harness.log').open('w') as log:
-                outcome = subprocess.run([str(HARNESS), *command, '--device', 'USB 16x16',
+                outcome = subprocess.run([str(HARNESS), *command, '--device', 'USB-AoIP',
                                           '--buffer-frames', '64', '--output', str(result_path)],
                                          stdout=log, stderr=log, timeout=timeout)
             after = snapshot(host)

@@ -183,7 +183,7 @@ def execute(args):
             result_path = args.output.resolve() / f'{index}-audio.json'
             start = time.monotonic()
             with (args.output / f'{index}-harness.log').open('w') as log:
-                outcome = subprocess.run([str(HARNESS), *command, '--device', 'USB 16x16',
+                outcome = subprocess.run([str(HARNESS), *command, '--device', 'USB-AoIP',
                     '--buffer-frames', '64', '--output', str(result_path)], stdout=log, stderr=log,
                     timeout=650 if args.phase == 'soak' else 260)
             # No SSH or transfers took place while CoreAudio was running.
