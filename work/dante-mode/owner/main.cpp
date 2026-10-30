@@ -67,6 +67,17 @@
 // says whether the level drawn at each host open can be seen from the Pi.
 // Nothing is changed in the audio path.
 //
+// With --impulse-trace (diagnostic, off by default) the loop finds impulse
+// onsets on channel 1 (above a quarter of half scale, as the host-driver
+// spike sends them) in both directions: each one the host sends, with its
+// host frame index k and the Inferno playback position p it was committed
+// at, and each one Dante returns, with its Inferno capture position q and
+// the index w it was written at in the gadget queue. The telemetry thread
+// prints the latest pair once a second as an IMPULSE line: q - p is the far
+// loop in Inferno positions, w - k the owner's own share of the round trip
+// the host measures (the rest is the gadget's, constant if the host numbers
+// its IN frames from the first). Nothing is changed in the audio path.
+//
 // Build on the Pi (the bridge core is the one source file DspStage lives in):
 //   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
@@ -178,6 +189,8 @@ struct Options {
     unsigned seq_check{0};
     // Diagnostic: an OPENPHASE line per host session (frames taken minus frames sent).
     bool open_phase{false};
+    // Diagnostic: IMPULSE lines (channel 1 onsets both ways, with positions and indices).
+    bool impulse_trace{false};
     // Experiment (2026-10-13): touch this many kilobytes of the loop thread's stack before it
     // turns real-time, so the loop never grows its stack (a page fault that can sleep). 0 is off.
     unsigned stack_prefault_kb{0};
@@ -196,7 +209,7 @@ struct Options {
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
-               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--open-phase]\n"
+               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--open-phase] [--impulse-trace]\n"
                "                     [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
@@ -224,6 +237,7 @@ struct Options {
                "  --event-trace diagnostic: an EVENT line at each step counter change, a SERVO line a second\n"
                "  --seq-check   diagnostic: check channels 1..N against bitexact's sequence, gadget and Inferno side\n"
                "  --open-phase  diagnostic: an OPENPHASE line per host session, frames taken minus frames sent\n"
+               "  --impulse-trace  diagnostic: IMPULSE lines, channel 1 onsets both ways with positions and indices\n"
                "  --stack-prefault   experiment: touch this much of the loop's stack before it turns real-time\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
@@ -249,6 +263,7 @@ Options parse_options(int argc, char** argv) {
         if (a == "--no-rt") { o.realtime = false; continue; }
         if (a == "--event-trace") { o.event_trace = true; continue; }
         if (a == "--open-phase") { o.open_phase = true; continue; }
+        if (a == "--impulse-trace") { o.impulse_trace = true; continue; }
         if (a == "--help" || i + 1 >= argc) { usage(); }
         const char* v = argv[++i];
         if (a == "--pcm") o.pcm = v;
@@ -501,6 +516,12 @@ struct Telemetry {
     std::atomic<std::int64_t> open_phase_min{0};
     std::atomic<std::int64_t> open_phase_max{0};
     std::atomic<std::int64_t> open_phase_since_ns{0};     // both directions flowing since
+    // --impulse-trace: the latest matched pair (sent k at playback p, returned at capture q, written w).
+    std::atomic<std::uint64_t> impulse_count{0};
+    std::atomic<std::int64_t> impulse_k{0};
+    std::atomic<std::int64_t> impulse_p{0};
+    std::atomic<std::int64_t> impulse_q{0};
+    std::atomic<std::int64_t> impulse_w{0};
     GapTrace gaps;
     usb16x16::owner::SeqTrace seq;
 };
@@ -553,6 +574,8 @@ void* telemetry_entry(void* argument) {
     std::uint64_t gaps_printed = 0;
     std::uint64_t seq_printed = 0;
     std::uint64_t phases_printed = 0;
+    std::uint64_t impulses_printed = 0;
+    std::int64_t next_impulse_line = started;
     int link_owner = -1;
     int link_tx = -1;
     int link_rx = -1;
@@ -623,6 +646,17 @@ void* telemetry_entry(void* argument) {
                         static_cast<double>(t.tx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
                         static_cast<double>(t.rx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
                         t.tx_links.load(std::memory_order_relaxed), t.rx_primes.load(std::memory_order_relaxed));
+            std::fflush(stdout);
+        }
+        if (const std::uint64_t impulses = t.impulse_count.load(std::memory_order_acquire);
+            impulses != impulses_printed && now >= next_impulse_line) {
+            impulses_printed = impulses;
+            next_impulse_line = now + 1000000000LL;
+            const std::int64_t k = t.impulse_k.load(std::memory_order_relaxed), p = t.impulse_p.load(std::memory_order_relaxed);
+            const std::int64_t q = t.impulse_q.load(std::memory_order_relaxed), w = t.impulse_w.load(std::memory_order_relaxed);
+            std::printf("IMPULSE n=%" PRIu64 " wall=%.6f t=%.3f k=%" PRId64 " p=%" PRId64 " q=%" PRId64 " w=%" PRId64
+                        " loop=%" PRId64 " w_minus_k=%" PRId64 "\n",
+                        impulses, wall_seconds(), seconds, k, p, q, w, q - p, w - k);
             std::fflush(stdout);
         }
         const std::uint64_t seq_written = t.seq.written.load(std::memory_order_acquire);
@@ -916,6 +950,8 @@ struct NetHalf {
     // and forwards), and the position below which the ring has been cleared.
     std::uint64_t appl{0};
     std::uint64_t cleared_to{0};
+    // Frames the capture pointer has moved since start (taken, discarded or lost).
+    std::uint64_t taken{0};
 };
 
 void net_error(Telemetry& t, std::int64_t code) noexcept {
@@ -979,6 +1015,7 @@ long take_capture(NetHalf& net, std::int32_t* keep, Telemetry& t) noexcept {
         return -1;
     }
     if (captured == 0) return 0;
+    net.taken += static_cast<std::uint64_t>(captured);
     store_max(t.rx_avail_max, captured);
     t.rx_frames.fetch_add(static_cast<std::uint64_t>(captured), std::memory_order_relaxed);
     if (static_cast<snd_pcm_uframes_t>(captured) > net.capture.buffer) {
@@ -1440,7 +1477,50 @@ struct UsbHalf {
     std::int64_t phase_n{0};
     std::int64_t phase_min{0};
     std::int64_t phase_max{0};
+    // --impulse-trace: the latest onset sent (host index, playback position) and the edge states.
+    bool impulse_trace{false};
+    std::int64_t sent_k{-1};
+    std::int64_t sent_p{0};
+    bool out_above{false};
+    bool back_above{false};
 };
+
+// --impulse-trace: channel 1 above a quarter of the spike's half-scale impulse (S32 units).
+constexpr std::int32_t kImpulseThreshold = 0x10000000;
+
+// Onsets in `n` frames the host sent, frame i being host index k0 + i at playback position p0 + i.
+void trace_sent(UsbHalf& usb, const std::int32_t* frames, long n, std::int64_t k0, std::int64_t p0) noexcept {
+    for (long i = 0; i < n; ++i) {
+        const std::int32_t s = frames[static_cast<std::size_t>(i) * kChannels];
+        const bool above = s >= kImpulseThreshold || s <= -kImpulseThreshold;
+        if (above && !usb.out_above) {
+            usb.sent_k = k0 + i;
+            usb.sent_p = p0 + i;
+        }
+        usb.out_above = above;
+    }
+}
+
+// Onsets in `n` frames Dante returned, frame i at capture position q0 + i; frames from `first`
+// on are written to the gadget queue at index w0 + (i - first), the others dropped.
+void trace_returned(UsbHalf& usb, const std::int32_t* frames, long n, std::int64_t q0, long first, std::int64_t w0,
+                    Telemetry& t) noexcept {
+    for (long i = 0; i < n; ++i) {
+        const std::int32_t s = frames[static_cast<std::size_t>(i) * kChannels];
+        const bool above = s >= kImpulseThreshold || s <= -kImpulseThreshold;
+        if (above && !usb.back_above && i >= first && usb.sent_k >= 0) {
+            const std::int64_t q = q0 + i;
+            if (q > usb.sent_p && q - usb.sent_p < 4800) {
+                t.impulse_k.store(usb.sent_k, std::memory_order_relaxed);
+                t.impulse_p.store(usb.sent_p, std::memory_order_relaxed);
+                t.impulse_q.store(q, std::memory_order_relaxed);
+                t.impulse_w.store(w0 + (i - first), std::memory_order_relaxed);
+                t.impulse_count.fetch_add(1, std::memory_order_release);
+            }
+        }
+        usb.back_above = above;
+    }
+}
 
 void set_tx_state(UsbHalf& usb, TxState state, Telemetry& t) noexcept {
     usb.tx = state;
@@ -1716,6 +1796,9 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
             usb.dsp->reset();
             t.dsp_resets.fetch_add(1, std::memory_order_relaxed);
         }
+        if (usb.impulse_trace) {
+            trace_sent(usb, primed, take, usb.out_count - take, static_cast<std::int64_t>(net.appl));
+        }
         run_dsp(usb, primed, take, t);
         if (!commit_playback(net, primed, static_cast<snd_pcm_uframes_t>(take), t)) {
             return false;
@@ -1731,6 +1814,9 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         t.wanted_capture_pitch.store(usb16x16::owner::pitch_value(usb.tx_servo.output(), -1), std::memory_order_relaxed);
         return true;
     }
+    if (usb.impulse_trace) {
+        trace_sent(usb, usb.tx_scratch.data(), frames, usb.out_count - frames, static_cast<std::int64_t>(net.appl));
+    }
     run_dsp(usb, usb.tx_scratch.data(), frames, t);
     if (!commit_playback(net, usb.tx_scratch.data(), static_cast<snd_pcm_uframes_t>(frames), t)) return false;
     depth += frames;
@@ -1740,7 +1826,9 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
 }
 
 // Back, one wake: `frames` of Dante audio in the scratch, newest last.
-void service_rx(UsbHalf& usb, UsbHandles& handles, const Options& o, long frames, Telemetry& t) noexcept {
+// `net_taken`: the Inferno capture position after this wake's frames (NetHalf::taken).
+void service_rx(UsbHalf& usb, UsbHandles& handles, const Options& o, long frames, std::uint64_t net_taken,
+                Telemetry& t) noexcept {
     if (usb.rx_holdoff > 0) {
         --usb.rx_holdoff;
         return;
@@ -1821,6 +1909,10 @@ void service_rx(UsbHalf& usb, UsbHandles& handles, const Options& o, long frames
     if (frames > take) {
         (usb.rx_flowing ? t.rx_overflow : t.rx_idle_discards)
             .fetch_add(static_cast<std::uint64_t>(frames - take), std::memory_order_relaxed);
+    }
+    if (usb.impulse_trace && usb.rx_flowing) {
+        trace_returned(usb, usb.rx_scratch.data(), frames, static_cast<std::int64_t>(net_taken) - frames, frames - take,
+                       usb.in_written, t);
     }
     if (take > 0) {
         const long rc = write_gadget(pcm, usb.rx_scratch.data() + static_cast<std::size_t>(frames - take) * kChannels,
@@ -1943,7 +2035,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
             usb.meters->observe(usb.rx_scratch.data(), static_cast<std::size_t>(received), usb.meters->dante_capture);
             add_meter_cost(t, now_ns() - before);
         }
-        service_rx(usb, handles, o, received, t);
+        service_rx(usb, handles, o, received, net.taken, t);
     }
     if (marks != nullptr) marks[3] = now_ns();
     if (usb.attached) run_servos(usb, o, now, t);
@@ -2050,6 +2142,7 @@ int main(int argc, char** argv) {
     usb.seq_back.point = 1;
     usb.seq_out.channels = usb.seq_back.channels = std::min(options.seq_check, kChannels);
     usb.open_phase = options.open_phase;
+    usb.impulse_trace = options.impulse_trace;
     TelemetryContext telemetry_context{&telemetry, options.log_every, options.no_usb, options.event_trace};
     StewardContext steward_context{&options, &telemetry, &handles};
     const pthread_t telemetry_thread = start_thread(telemetry_entry, &telemetry_context, "telemetry");
