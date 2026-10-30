@@ -14600,3 +14600,17 @@ the Dante point of record.** `setup-usb-aoip` 65d26567 with `10-usb-aoip.conf` 9
 installed at 00:44 (entry above), on the checks there (noise probe clean, two-minute soak PASS on
 the 8-channel loop). Rollback unchanged: `cd ~/usb-16x16-work/gadget-usb-aoip && sudo
 ./install-gadget-usb-aoip.sh rollback`, which comes before `install-gadget-rates.sh rollback`.
+
+**FOUND 2026-10-30 01:04-01:08 UTC: the level drawn at each open is most likely the owner's, not
+the Mac's; the 2026-10-29 23:42 conclusion ("a deterministic `daw_timeline` is not reachable from
+the Pi") is in doubt.** The host-driver spike (`work/mac-driver-spike/`, SPIKE_PLAN.md "Phase A")
+captured USB-AoIP from the class driver and started both directions on one bus frame, numbering
+samples from there: twelve intact opens read 351-397, a sawtooth rising about 6 samples an open
+and wrapping by about 48, while the owner's `--open-phase` figure stayed flat between wraps. While
+no host sends, the owner's loop sleeps on a 1 ms grid of the Pi's clock and primes on the first
+wakes after a host starts (`owner/main.cpp`, top of the loop), so where the host's first frame
+falls in that millisecond sets the round trip, drifting with the two crystals. Its range (46) is
+the class driver's (44). Not yet shown: that removing it in the owner makes the class driver's
+`daw_timeline` repeat across opens. The fix (Phase B in the plan) is an owner change on the audio
+path and needs the full battery before any install. Service restored 01:21 (a15a9d84, start check
+ok).
