@@ -14712,3 +14712,14 @@ After the install: start check ok, and one harness run should read 532. Untested
 presets with the new flags (the prime drop is in frames; at 44.1 the blocks are 44-50). Service
 restored 06:44 (a15a9d84, start check ok); the service ran the old owner throughout.
 
+**INSTALLED 2026-10-30 10:36 UTC: owner abee374a with `PRIME_DROP=24` and `CAPTURE_DRAIN=1` is in
+service.** Installed by the operator with `work/dante-mode/service/install-owner-anchor.sh`:
+`usb16x16-dante-owner` abee374a, `usb16x16-dante-start` f4afa51d, `transport.conf` 31a2a257, the
+previous three kept as `*.anchor-previous`. The unit runs `--rx-queue 96 --rate-request-file ...
+--prime-drop 24 --capture-drain --meter-file ...`; start check ok 10:37:29. Checks on the installed
+service: two harness opens, `daw_timeline` 532 each (levels 380x400, no discontinuities); noise
+probe at 32 clean (no zero run of 4 or more). The point of record (ACCEPTED 06:45) is now the
+installed one. Rollback: `cd ~/usb-16x16-work/dante-mode/service && sudo ./install-owner-anchor.sh
+rollback`, which comes before `install-owner-rate8.sh rollback`. Evidence
+`outputs/latency/anchor-installed-*`.
+
