@@ -78,3 +78,24 @@ USB transport entitlement for the shared `0x1209` vendor ID.
 - After: the class driver has the device again (or the vendor-class rollback
   ran), `usb16x16-dante` active with the start check ok, a noise probe at 32
   clean.
+
+## Results
+
+**Step 0, probe: PASS (2026-10-30 00:53 UTC).** `sudo usb-aoip-spike probe` captured the device
+from the class driver (`IOUSBHostObjectInitOptionsDeviceCapture` as root, no entitlement, as
+`IOUSBHostDefinitions.h` says), opened both streaming interfaces at alt 1 and released it; the
+release reset the device (Pi kernel: new address 11 at 00:53:05) and `USB-AoIP` came back to the
+class driver. The vendor-class fallback is not needed. What the host gets at alt 1:
+
+| Interface | Endpoint | Type | Size | Interval |
+|---|---|---|---|---|
+| 1 (Mac output) | 0x01 OUT data | isochronous, async | 624 bytes | bInterval 1: every 125 us microframe |
+| 1 | 0x82 IN feedback | isochronous | 4 bytes (16.16) | bInterval 4: every 8 microframes (1 ms) |
+| 2 (Mac input) | 0x83 IN data | isochronous, async | 624 bytes | bInterval 1 |
+
+624 bytes is 13 frames of 16 channels x 3 bytes, the size the rate list (96 kHz) sets at every
+rate; at 48 kHz a microframe carries 6 frames on average, the feedback saying when it is 5 or 7.
+The bus frame number (626613725 at the probe) counts 1 ms frames; microframe placement comes
+from the transaction-list form of the isochronous request (`IOUSBHostIsochronousTransaction`).
+While the probe held alt 1 the owner counted one return prime and 24 frames of `rx_overflow`:
+selecting alt 1 alone starts the gadget's IN side.
