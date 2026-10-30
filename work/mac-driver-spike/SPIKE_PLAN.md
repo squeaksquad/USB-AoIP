@@ -99,3 +99,20 @@ The bus frame number (626613725 at the probe) counts 1 ms frames; microframe pla
 from the transaction-list form of the isochronous request (`IOUSBHostIsochronousTransaction`).
 While the probe held alt 1 the owner counted one return prime and 24 frames of `rx_overflow`:
 selecting alt 1 alone starts the gadget's IN side.
+
+**Step 1, stream: PASS (2026-10-30 01:01-01:02 UTC).** `sudo usb-aoip-spike stream 10`, three
+opens on the installed endpoint (owner a15a9d84), each 10 s, both directions anchored on one bus
+frame: 80,192-80,224 transactions each way, none failed; feedback one transaction per 1 ms frame
+(bInterval 4), 6.0000-6.0001 frames a microframe; 90 impulses sent and found in each open.
+
+| Open | Lag (samples) | Spread within the open | Owner `tx_prime_found` |
+|---|---|---|---|
+| 1 | 382 | 0 | 90 |
+| 2 | 371 | 0 | 107 |
+| 3 | 372 | 0 | 106 |
+
+Across opens: 11 samples, against 37-44 under the class driver. The first run (4.3 s, lag 396 x33)
+ended on a late feedback request (IsoTooOld) when the queue was 12 ms deep; feedback lateness is
+now skipped and the queues are 32 ms deep. The owner's transmit prime moved with the lag in all
+three opens (higher found, lower lag), so what is left looks like the Pi's per-open start; Phase A
+reads it with `--open-phase`.
