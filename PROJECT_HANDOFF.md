@@ -14656,3 +14656,18 @@ starts are the likely term; unverified. The control also showed IN packets the g
 `install-rate-request.sh status`), `usb16x16-dante` (a15a9d84) active, start check ok 02:35. No noise
 probe run.
 
+**ROOT CAUSE 2026-10-30 02:40-02:44 UTC: the gadget's per-open whole-packet term is capture frames
+left from the previous open, which the owner counts as the new open's first frames.** The start
+offset control with three OUT counters (`uac2-start-offset-6.18.34.patch` v2, candidate u_audio
+280c8c96, not installed) in a second bounded window, owner 903aa1bc, twelve spike opens: on every
+open the gadget remainder equals 18 (IN offset) - 6 (one missed OUT packet) + the capture frames
+`u_audio` had written but the owner had not read at OUT alt 1 (0 to 42). `u_audio` reports capture
+frames to ALSA only at period boundaries (48 frames) and the owner reads with
+`snd_pcm_avail_update`, so a partial period at the host's stop stays hidden and is read at the next
+open. Proposed fix, owner only: drain the capture ring with `snd_pcm_avail` when the outgoing
+direction goes idle; expected lag 374 at every open with `--prime-drop 24`. A separate owner term
+(share 314 instead of 362 in one or two opens per run) is still open. Detail:
+`work/mac-driver-spike/SPIKE_PLAN.md`, "Phase C results". Evidence
+`outputs/latency/spike-startoffset2-20261030/`. Installed modules restored 02:44, `usb16x16-dante`
+(a15a9d84) active, start check ok 02:45. No noise probe run.
+

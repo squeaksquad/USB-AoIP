@@ -13,7 +13,7 @@
  /* Runtime data params for one stream */
  struct uac_rtd_params {
  	struct snd_uac_chip *uac; /* parent chip */
-@@ -85,6 +89,22 @@
+@@ -85,6 +89,25 @@
  
  	int rate_request; /* last rate written to Device Rate Request, 0: none */
  
@@ -32,11 +32,14 @@
 +	int so_in_failed;	/* IN packets failed while carrying ring data */
 +	int so_out_missed;	/* OUT packets failed before the first good one */
 +	bool so_out_good;
++	int so_out_unread;	/* at OUT alt 1: capture frames written, not yet read */
++	int so_out_unreported;	/* the same, not yet in ALSA's hw_ptr */
++	int so_out_dropped;	/* OUT frames received while capture was not running */
 +
  	/* pre-calculated values for playback iso completion */
  	unsigned long long p_residue_mil;
  	unsigned int p_interval;
-@@ -149,6 +169,100 @@
+@@ -149,6 +172,145 @@
  	ff = DIV_ROUND_CLOSEST_ULL((freq * pitch), 1953125);
  
  	*(__le32 *)buf = cpu_to_le32(ff);
@@ -134,10 +137,55 @@
 +			uac->so_out_good = true;
 +	}
 +	spin_unlock_irqrestore(&uac->so_lock, flags);
++}
++
++static void so_out_drop(struct snd_uac_chip *uac, unsigned int bytes)
++{
++	struct uac_params *params = &uac->audio_dev->params;
++	unsigned int framesize = params->c_ssize * num_channels(params->c_chmask);
++	unsigned long flags;
++
++	if (!framesize)
++		return;
++	spin_lock_irqsave(&uac->so_lock, flags);
++	uac->so_out_dropped += bytes / framesize;
++	spin_unlock_irqrestore(&uac->so_lock, flags);
++}
++
++/*
++ * At OUT alt 1: capture frames u_audio has written into the ring that the
++ * application has not read, and of those the ones ALSA's hw_ptr does not show
++ * yet (u_audio reports only at period boundaries). The application reads them
++ * as the first frames of this stream.
++ */
++static void so_out_start(struct snd_uac_chip *uac)
++{
++	struct snd_pcm_substream *ss = uac->pcm->streams[SNDRV_PCM_STREAM_CAPTURE].substream;
++	struct snd_pcm_runtime *runtime;
++	snd_pcm_uframes_t written, buffer;
++	int unread = START_OFFSET_NONE, unreported = START_OFFSET_NONE;
++	unsigned long flags, so_flags;
++
++	if (ss) {
++		snd_pcm_stream_lock_irqsave(ss, flags);
++		runtime = ss->runtime;
++		if (uac->c_prm.ss && runtime && snd_pcm_running(ss) && runtime->buffer_size) {
++			buffer = runtime->buffer_size;
++			written = bytes_to_frames(runtime, uac->c_prm.hw_ptr);
++			unread = (written + buffer - runtime->control->appl_ptr % buffer) % buffer;
++			unreported = (written + buffer - runtime->status->hw_ptr % buffer) % buffer;
++		}
++		snd_pcm_stream_unlock_irqrestore(ss, flags);
++	}
++	spin_lock_irqsave(&uac->so_lock, so_flags);
++	uac->so_out_unread = unread;
++	uac->so_out_unreported = unreported;
++	uac->so_out_dropped = 0;
++	spin_unlock_irqrestore(&uac->so_lock, so_flags);
  }
  
  static void u_audio_iso_complete(struct usb_ep *ep, struct usb_request *req)
-@@ -163,6 +277,7 @@
+@@ -163,6 +325,7 @@
  	unsigned int frames, p_pktsize;
  	unsigned long long pitched_rate_mil, p_pktsize_residue_mil,
  			residue_frames_mil, div_result;
@@ -145,7 +193,7 @@
  
  	/* i/f shutting down */
  	if (!prm->ep_enabled) {
-@@ -181,6 +296,11 @@
+@@ -181,6 +344,11 @@
  		pr_debug("%s: iso_complete status(%d) %d/%d\n",
  			__func__, status, req->actual, req->length);
  
@@ -157,25 +205,36 @@
  	substream = prm->ss;
  
  	/* Do nothing if ALSA isn't active */
-@@ -258,6 +378,8 @@
+@@ -258,6 +426,7 @@
  			memcpy(req->buf, runtime->dma_area + hw_ptr,
  			       req->actual);
  		}
 +		so_in_fill(uac, ep, req, req->actual / uac->p_framesize);
-+		so_filled = true;
  	} else {
  		if (unlikely(pending < req->actual)) {
  			memcpy(runtime->dma_area + hw_ptr, req->buf, pending);
-@@ -278,6 +400,8 @@
+@@ -268,6 +437,7 @@
+ 			       req->actual);
+ 		}
+ 	}
++	so_filled = true;
+ 
+ 	/* update hw_ptr after data is copied to memory */
+ 	prm->hw_ptr = (hw_ptr + req->actual) % runtime->dma_bytes;
+@@ -278,6 +448,12 @@
  		snd_pcm_period_elapsed(substream);
  
  exit:
-+	if (prm == &uac->p_prm && !so_filled)
-+		so_in_fill(uac, ep, req, 0);
++	if (!so_filled) {
++		if (prm == &uac->p_prm)
++			so_in_fill(uac, ep, req, 0);
++		else if (!status)
++			so_out_drop(uac, req->actual);
++	}
  	if (usb_ep_queue(ep, req, GFP_ATOMIC))
  		dev_err(uac->card->dev, "%d Error!\n", __LINE__);
  }
-@@ -334,7 +458,14 @@
+@@ -334,7 +510,14 @@
  
  	/* Reset */
  	prm->hw_ptr = 0;
@@ -190,7 +249,7 @@
  	switch (cmd) {
  	case SNDRV_PCM_TRIGGER_START:
  	case SNDRV_PCM_TRIGGER_RESUME:
-@@ -611,6 +742,7 @@
+@@ -611,6 +794,7 @@
  	struct usb_ep *ep, *ep_fback;
  	struct uac_rtd_params *prm;
  	struct uac_params *params = &audio_dev->params;
@@ -198,7 +257,7 @@
  	int req_len, i, ret;
  
  	prm = &uac->c_prm;
-@@ -624,6 +756,12 @@
+@@ -624,6 +808,13 @@
  
  	req_len = ep->maxpacket;
  
@@ -207,11 +266,12 @@
 +	uac->so_out_good = false;
 +	uac->so_generation++;
 +	spin_unlock_irqrestore(&uac->so_lock, flags);
++	so_out_start(uac);
 +
  	prm->ep_enabled = true;
  	ret = usb_ep_enable(ep);
  	if (ret < 0) {
-@@ -726,6 +864,7 @@
+@@ -726,6 +917,7 @@
  	const struct usb_endpoint_descriptor *ep_desc;
  	int req_len, i, ret;
  	unsigned int p_pktsize;
@@ -219,41 +279,41 @@
  
  	prm = &uac->p_prm;
  	dev_dbg(dev, "start playback with rate %d\n", prm->srate);
-@@ -760,6 +899,10 @@
+@@ -759,6 +951,10 @@
+ 
  	req_len = p_pktsize;
  	uac->p_residue_mil = 0;
- 
++
 +	spin_lock_irqsave(&uac->so_lock, flags);
 +	so_in_reset(uac, true);
 +	spin_unlock_irqrestore(&uac->so_lock, flags);
-+
+ 
  	prm->ep_enabled = true;
  	ret = usb_ep_enable(ep);
- 	if (ret < 0) {
-@@ -1265,8 +1408,43 @@
- 	dev_dbg(&audio_dev->gadget->dev, "%s: srate %d, clock %d interrupt: %d\n",
- 		__func__, srate, params->clk_id, ret);
+@@ -1267,6 +1463,46 @@
  	return 1;
-+}
-+
+ }
+ 
 +/*
-+ * Playback Start Offset, five integers: generation (changes at each playback
++ * Playback Start Offset, eight integers: generation (changes at each playback
 + * trigger and each alt 1 on either streaming interface), IN offset at start and
 + * now (IN frames the host received before a ring packet, minus that packet's
 + * first ring frame; INT_MIN until a ring packet has reached the host), OUT
 + * packets missed before the first good one, IN packets failed while carrying
-+ * ring data.
++ * ring data; at OUT alt 1, capture frames written but not read by the
++ * application and of those not yet reported to ALSA (INT_MIN if capture was not
++ * running); OUT frames received since alt 1 while capture was not running.
 + */
 +static int u_audio_start_offset_info(struct snd_kcontrol *kcontrol,
 +				     struct snd_ctl_elem_info *uinfo)
 +{
 +	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
-+	uinfo->count = 5;
++	uinfo->count = 8;
 +	uinfo->value.integer.min = INT_MIN;
 +	uinfo->value.integer.max = INT_MAX;
 +	return 0;
- }
- 
++}
++
 +static int u_audio_start_offset_get(struct snd_kcontrol *kcontrol,
 +				    struct snd_ctl_elem_value *ucontrol)
 +{
@@ -267,6 +327,9 @@
 +	v[2] = uac->so_in_now;
 +	v[3] = uac->so_out_missed;
 +	v[4] = uac->so_in_failed;
++	v[5] = uac->so_out_unread;
++	v[6] = uac->so_out_unreported;
++	v[7] = uac->so_out_dropped;
 +	spin_unlock_irqrestore(&uac->so_lock, flags);
 +	return 0;
 +}
@@ -274,10 +337,11 @@
  static struct snd_kcontrol_new u_audio_controls[]  = {
  	[UAC_FBACK_CTRL] = {
      .iface =        SNDRV_CTL_ELEM_IFACE_PCM,
-@@ -1310,6 +1488,14 @@
+@@ -1309,6 +1545,14 @@
+ 		.info =		u_audio_rate_req_info,
  		.get =		u_audio_rate_req_get,
  		.put =		u_audio_rate_req_put,
- 	},
++	},
 +	[UAC_START_OFFSET_CTRL] = {
 +		.iface =	SNDRV_CTL_ELEM_IFACE_PCM,
 +		.name =		"Playback Start Offset",
@@ -285,38 +349,42 @@
 +				SNDRV_CTL_ELEM_ACCESS_VOLATILE,
 +		.info =		u_audio_start_offset_info,
 +		.get =		u_audio_start_offset_get,
-+	},
+ 	},
  };
  
- int g_audio_setup(struct g_audio *g_audio, const char *pcm_name,
-@@ -1331,6 +1517,9 @@
+@@ -1331,6 +1575,11 @@
  		return -ENOMEM;
  	g_audio->uac = uac;
  	uac->audio_dev = g_audio;
 +	spin_lock_init(&uac->so_lock);
 +	uac->so_in_start = START_OFFSET_NONE;
 +	uac->so_in_now = START_OFFSET_NONE;
++	uac->so_out_unread = START_OFFSET_NONE;
++	uac->so_out_unreported = START_OFFSET_NONE;
  
  	params = &g_audio->params;
  	p_chmask = params->p_chmask;
-@@ -1384,6 +1573,16 @@
- 			err = -ENOMEM;
- 			goto fail;
- 		}
+@@ -1381,9 +1630,19 @@
+ 				GFP_KERNEL);
+ 		if (!prm->rbuf) {
+ 			prm->max_psize = 0;
++			err = -ENOMEM;
++			goto fail;
++		}
 +
 +		uac->so_req_ring = kmalloc_array(params->req_number,
 +						 sizeof(*uac->so_req_ring),
 +						 GFP_KERNEL);
 +		if (!uac->so_req_ring) {
-+			err = -ENOMEM;
-+			goto fail;
-+		}
+ 			err = -ENOMEM;
+ 			goto fail;
+ 		}
 +		for (i = 0; i < params->req_number; i++)
 +			uac->so_req_ring[i] = -1;
  	}
  
  	/* Choose any slot, with no id */
-@@ -1561,6 +1760,21 @@
+@@ -1561,6 +1820,21 @@
  			goto snd_fail;
  	}
  
@@ -338,7 +406,7 @@
  	strscpy(card->driver, card_name);
  	strscpy(card->shortname, card_name);
  	snprintf(card->longname, sizeof(card->longname), "%s %i",
-@@ -1581,6 +1795,7 @@
+@@ -1581,6 +1855,7 @@
  	kfree(uac->c_prm.reqs);
  	kfree(uac->p_prm.rbuf);
  	kfree(uac->c_prm.rbuf);
@@ -346,7 +414,7 @@
  	kfree(uac);
  
  	return err;
-@@ -1606,6 +1821,7 @@
+@@ -1606,6 +1881,7 @@
  	kfree(uac->c_prm.reqs);
  	kfree(uac->p_prm.rbuf);
  	kfree(uac->c_prm.rbuf);

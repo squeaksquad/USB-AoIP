@@ -370,3 +370,44 @@ Proposed next (needs the operator): a sixth counter in the control, OUT frames r
 before the capture PCM was running (and the first good OUT packet's frame count), and the owner's
 log of frames read before `out_count` starts; one more 12-open window. If those account for `x`,
 the anchor in step 3 uses them instead of the IN offset.
+
+**Step 2 again, with OUT counters: PASS on all 12 opens; the gadget remainder is 12 plus the capture
+frames left unread from the previous open (2026-10-30 02:40-02:44 UTC).** The control gained three
+integers, taken at OUT alt 1 (`uac2-start-offset-6.18.34.patch` v2, candidate u_audio 280c8c96,
+srcversion B8D71924ED2F102086D0BCE; control build still ed539ca8 / 505c6ad0): capture frames
+`u_audio` had written that the application had not read, of those the ones not yet in ALSA's
+`hw_ptr`, and OUT frames received while capture was not running. Same owner (903aa1bc, `--prime-drop
+24 --impulse-trace --open-phase`), same twelve `stream 12` opens. Evidence
+`outputs/latency/spike-startoffset2-20261030/`.
+
+| Open | Lag | Share | Remainder | IN start | Missed OUT | Unread at alt 1 | Not in `hw_ptr` | Dropped | 18 - 6 x missed + unread |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 374 (365 after an IN loss) | 362 | 12 | 18 | 1 | 0 | 0 | 0 | 12 |
+| 2 | 374 | 362 | 12 | 18 | 1 | 0 | 0 | 0 | 12 |
+| 3 | 374 | 362 | 12 | 18 | 1 | 0 | 0 | 0 | 12 |
+| 4 | 416 | 362 | 54 | 18 | 1 | 42 | 42 | 0 | 54 |
+| 5 | 368 | 314 | 54 | 18 | 1 | 42 | 42 | 0 | 54 |
+| 6 | 410 | 362 | 48 | 18 | 1 | 36 | 36 | 0 | 48 |
+| 7 | 410 | 362 | 48 | 18 | 1 | 36 | 36 | 0 | 48 |
+| 8 | 404 | 362 | 42 | 18 | 1 | 30 | 30 | 0 | 42 |
+| 9 | 404 | 362 | 42 | 18 | 1 | 30 | 30 | 0 | 42 |
+| 10 | 398 | 362 | 36 | 18 | 1 | 24 | 24 | 0 | 36 |
+| 11 | 392 | 362 | 30 | 18 | 1 | 18 | 18 | 0 | 30 |
+| 12 | 392 (374 after an IN loss) | 362 | 30 | 18 | 1 | 18 | 18 | 0 | 30 |
+
+- Remainder = IN offset - 6 x missed OUT + unread, exactly, on all twelve opens; the constant part
+  is 12 (the IN side's three zero packets, less the one OUT packet the gadget misses at the start).
+- The variable part is the owner's: the frames the host sent last in the previous open that never
+  completed a 48-frame period. `u_audio` reports capture frames to ALSA only at period boundaries
+  and the owner reads with `snd_pcm_avail_update`, which does not ask the driver, so those frames
+  stay invisible after the host stops and the owner reads them as the first frames of the next
+  open, counting them into `out_count` (`k`). Unread always equalled not-in-`hw_ptr`: the owner had
+  read everything ALSA had been told about. No OUT frames were dropped for capture not running.
+- The share of 314 in open 5 (as in opens 4-5 of the first window) is a separate owner term; the
+  remainder identity held through it.
+- IN packets the gadget failed while carrying ring data, again invisible to the spike (opens 1, 12).
+
+What this changes in the plan: the term needs no kernel anchor. An owner-only fix removes it at the
+source: when the outgoing direction goes idle, ask the driver (`snd_pcm_avail`, which syncs the
+pointer) and discard what is left, so the next open starts with an empty capture ring. Then the lag
+is 362 + 12 = 374 at every open (opens 1-3 here). The kernel control stays a test instrument.

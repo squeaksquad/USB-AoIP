@@ -13,8 +13,10 @@
 # usb16x16-dante started again after the restore if it was running. Through the window
 # the control is read ten times a second and every change is printed with its UTC time
 # (also to /dev/shm/start-offset-test.log, readable by any user):
-#   generation in_start in_now out_missed in_failed
-# in_start / in_now read -2147483648 until a ring packet has reached the host.
+#   generation in_start in_now out_missed in_failed out_unread out_unreported out_dropped
+# in_start / in_now read -2147483648 until a ring packet has reached the host; out_unread /
+# out_unreported (capture frames written before OUT alt 1 that the application had not read,
+# and of those not yet in ALSA's hw_ptr) read -2147483648 if capture was not running.
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo" >&2; exit 2; fi
@@ -28,9 +30,9 @@ updates=/lib/modules/$kernel_release/updates/usb-16x16
 end_file=/dev/shm/start-offset-test.end
 log=/dev/shm/start-offset-test.log
 expected_kernel_release=6.18.34+rpt-rpi-2712
-expected_candidate_u_audio=6ff56392d5930ca0fa994958e5c2a52b1c92e49fb8c315590b1c992e850c3446
+expected_candidate_u_audio=280c8c96abcd470ed8d6f7f5014e0beea783d35def01efcaad207e7f7473bf6f
 expected_candidate_f_uac2=505c6ad0bad44f92f5487988d2f192efd9bd7018b7fc60e45e86c90080e20fe2
-expected_candidate_srcversions=76D1FB4092A8109D46CFB87/3373101B95DBCD81E04F33F
+expected_candidate_srcversions=B8D71924ED2F102086D0BCE/3373101B95DBCD81E04F33F
 expected_installed_u_audio=ed539ca898298b3d90863db51808153f83a702f4f330d08bb12753ed7b9baf57
 expected_installed_f_uac2=505c6ad0bad44f92f5487988d2f192efd9bd7018b7fc60e45e86c90080e20fe2
 expected_installed_srcversions=681145C2E4636CAF77983DE/3373101B95DBCD81E04F33F
