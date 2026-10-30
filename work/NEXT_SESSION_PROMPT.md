@@ -1,6 +1,70 @@
 # Next-session pickup prompt
 
-## Current pickup — 2026-10-28: rates 44.1 and 48 on the Dante point of record; nothing owed. Start here.
+## Current pickup — 2026-10-30: a deterministic round trip, everything named USB-AoIP. Start here.
+
+You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16,
+bridged to Dante through Inferno; called USB 16x16 until 2026-10-30). Read
+`CLAUDE.md` (repo map), then `PROJECT_HANDOFF.md`'s tail from "ACCEPTED
+2026-10-30 06:45 UTC" to the end, and `work/mac-driver-spike/SPIKE_PLAN.md`'s
+"Phase C results" for how the per-open draw was found and removed. The handoff is
+authoritative where anything disagrees; the sections below this one are history.
+
+**Where it stands (ACCEPTED 2026-10-30).** The Dante point of record:
+- Gadget `setup-usb-aoip` 65d26567 (configfs `usb-aoip`, the Mac shows `USB-AoIP`),
+  rates `48000,44100,88200,96000`; the rate-report and rate-request modules
+  (`u_audio.ko` ed539ca8, `usb_f_uac2.ko` 505c6ad0), so the Mac follows a
+  Dante-side rate set and a Mac-side change reaches the arbiter.
+- Owner abee374a (`install-owner-anchor.sh`; `rollback` returns to rate8 a15a9d84),
+  start wrapper f4afa51d, `transport.conf` 31a2a257 (`RX_QUEUE=96`
+  `RATE_REQUESTS=1` `PRIME_DROP=24` `CAPTURE_DRAIN=1`).
+- Inferno config 54f3f0ba: Dante name `USB-AoIP` (was `USB-16x16-Inferno`),
+  offering `44100,48000`; the four Dante units describe themselves as USB-AoIP
+  (`install-dante-name.sh`). Applier 1.8.0 347a7062. Profile `direct` with meters.
+- The round trip is the same at every open: `daw_timeline` 532 (11.08 ms) at 48 and
+  508 +-1 (11.52 ms) at 44.1, with or without a DSP preset. The per-open draw that
+  every earlier pickup calls unremovable is gone (owner prime drops a constant 24;
+  the gadget capture PCM is restarted when the host goes idle).
+- Left at the close: everything at 48, Mac included; service active, start check
+  ok; nothing running. Every commit pushed.
+
+**Rules that bite now.**
+- The far loop carries Pi channels 1-8 only (the 2026-10-29 96 kHz routing on MADI
+  25-32): judge every soak with `USB16X16_LOOP_CHANNELS=8`, or it fails on 9-16.
+- The Dante device is `USB-AoIP` now. Older commands say `USB-16x16-Inferno`
+  (`dante-sync ... --exclude USB-16x16-Inferno`, `netaudio ... --tx
+  USB-16x16-Inferno`); use the new name. The Pulse's `Input 17-32` <- `TX 1-16`
+  is the only subscription to the Pi.
+- netaudio is `~/.venvs/netaudio/bin/netaudio` on the Mac; the Pi has none.
+- A first open within a few minutes of a rate move can read high while the network
+  settles (538 at 44.1 on 2026-10-30); restart the endpoint or wait, then measure.
+- Root test steps run from a session: `sudo -n -l` on the Pi lists what is allowed
+  (`usb16x16-dante-candidate`, `test-start-offset.sh`, the unit controls). New
+  installs are still the operator's.
+
+**Open, in the order recommended on 2026-10-30.**
+1. One owner build with two changes and one full battery:
+   - `PRIME_DROP` toward 32 (24 now): up to 8 samples off the round trip;
+     untested, the risk is a prime too thin. It is a `transport.conf` key, so the
+     sweep needs no build; the build is for the second change.
+   - Faster detection of a Mac-side rate change (item 2 of the 2026-10-28 list
+     below): check every 100 ms in the steward, off the loop thread, instead of
+     once a second (about 57 wrong-rate re-primes per change today).
+2. DSP at 44.1 from the page and the arbiter. The owner runs presets at 44.1
+   (508 +-1 by hand through the candidate launcher), but the page and the arbiter
+   offer DSP at 48 only. A control-side change: behavioural checks, a noise probe
+   at 32 and a two-minute soak.
+3. 96 kHz on the real loop (8 channels): DEFERRED 2026-10-29 with the loaded-hour
+   holes on ch3, 5, 6, 8 unlocated; the catch plan is the last section of
+   `work/dante-mode/RATE96_PLAN.md` (owner per-channel `back` zero-run line as the
+   trigger, a Pulse -> Pi tcpdump ring, `diag/dante-pcap-zeros.py`). Run it on the
+   deterministic owner. The 96 kHz DSP budget is 45 % of a 1 ms wake.
+4. Watch item: the single 8-sample zero run of 2026-10-28 (ch5-12) has not
+   recurred.
+5. Untracked evidence never committed and cited nowhere (2026-10-29 `loop8-96*`
+   `.err` files, two `-api/` folders, `channel-zeros.txt`, two `step5-wait127`
+   JSONs of 2026-10-30 05:0x): commit or delete, the operator's call.
+
+## Pickup — 2026-10-28: rates 44.1 and 48 on the Dante point of record (history).
 
 You are picking up the USB 16x16 project (Raspberry Pi 5 UAC2 gadget, 16x16,
 bridged to Dante through Inferno). Read `CLAUDE.md` (repo map), then
