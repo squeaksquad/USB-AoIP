@@ -234,3 +234,27 @@ all six (the trace shows one missed microframe each way, then clean), drifted 12
 whole packets, set somewhere between `u_audio`'s initial requests and the owner's ring. With the
 owner fixed, the lag will move only by these packets; the next look is at what the queue holds at
 the host's first poll (the owner's `rx_primes` rose by 1 instead of 2 around open 4).
+
+**Phase B, step 4: the constant-drop prime removes the owner's term (2026-10-30 02:09-02:13 UTC).**
+Owner candidate 903aa1bc (`--prime-drop 24`, with `--impulse-trace`) in place of the service,
+twelve `stream 12` opens, all intact. Evidence `outputs/latency/spike-primedrop-20261030/owner.log`.
+
+| Open | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Lag | 374 | 374 | 416 | 416 | 416 | 410 | 410 | 404 | 398 | 398 | 392 | 386 |
+| Owner share | 362 | 362 | 362 | 362 | 362 | 362 | 362 | 362 | 362 | 362 | 362 | 362 |
+| `tx_prime_found` | 110 | 121 | 121 | 121 | 122 | 121 | 121 | 122 | 121 | 121 | 121 | 120 |
+| Gadget remainder | 12 | 12 | 54 | 54 | 54 | 48 | 48 | 42 | 36 | 36 | 30 | 24 |
+
+Far loop 114 in every open; dropped 24 at every prime, no prime unanchored. The owner's share is
+now 362 whatever depth the prime finds (386 - D as predicted), so the owner's term is gone. Every
+remaining step in the lag is the gadget remainder, always a whole number of 6-frame packets: here a
+jump of seven packets at open 3, then down a packet every open or two (step 1 drifted up the same
+way). Two traced runs have not given its mechanism (the USB start is identical in every open: one
+missed microframe each way); not explored further tonight.
+
+Two ways to finish, for the operator: find the cause (what decides how many packets the gadget
+sends before the first frame of the owner's queue), or make it irrelevant: a small `u_audio` patch
+that reports, per stream start, the IN frames sent before the first ring frame (the kernel counts
+both), read once by the owner after the start, which inserts or drops that many frames less a
+constant. The second is deterministic by construction and does not need the cause.

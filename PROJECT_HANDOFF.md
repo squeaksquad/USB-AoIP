@@ -14632,3 +14632,11 @@ the owner's idle 1 ms grid. Far loop constant (114) in every open; the gadget ad
 constant drop at the prime (share 386 - D, D = 24 gives 362), an audio-path change that needs the
 full battery. Detail: `work/mac-driver-spike/SPIKE_PLAN.md`, "Phase B, step 3". Service restored
 02:02 (a15a9d84, start check ok).
+
+**MEASURED 2026-10-30 02:09-02:13 UTC: the constant-drop prime removes the owner's share of the
+per-open level; the gadget's whole-packet term is what is left.** Owner candidate 903aa1bc
+(`--prime-drop 24`, `--impulse-trace`; not installed) beside the spike tool, twelve intact opens:
+owner share 362 in every one (the depth found still varied, 110-122), far loop 114, lags 374-416
+in steps of 6 only, all from the gadget remainder (12 to 54 frames). Detail and the two ways to
+finish: `work/mac-driver-spike/SPIKE_PLAN.md`, "Phase B, step 4". Service restored 02:16
+(a15a9d84, start check ok).
