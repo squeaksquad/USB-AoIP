@@ -14622,3 +14622,13 @@ intact opens: the lag minus the owner's share was 12-42 frames, always a multipl
 packet), rising by a packet every open or two. Detail and next step (a kernel trace of
 `u_audio_iso_complete` at each open): `work/mac-driver-spike/SPIKE_PLAN.md`, "Phase B, step 1".
 Service restored 01:41 (a15a9d84, start check ok).
+
+**FOUND 2026-10-30 01:57-01:59 UTC: the owner's share of the per-open level is its transmit prime,
+exactly: share = 466 - `tx_prime_found` over 18 host-anchored opens and two owner starts.** The
+prime lands the host's first block with its newest frame `lead` ahead of the Dante clock and drops
+the block's oldest `found - 80` frames to fit; `found` depends on the Dante clock's phase against
+the owner's idle 1 ms grid. Far loop constant (114) in every open; the gadget adds 12 or 18 frames
+(a whole packet) with an identical USB start, not yet explained. Fix proposed, not written: a
+constant drop at the prime (share 386 - D, D = 24 gives 362), an audio-path change that needs the
+full battery. Detail: `work/mac-driver-spike/SPIKE_PLAN.md`, "Phase B, step 3". Service restored
+02:02 (a15a9d84, start check ok).

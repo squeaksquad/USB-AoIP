@@ -196,3 +196,41 @@ every failed completion): `outputs/latency/spike-instart-20261030/trace-condense
 Next, one combined run decides: the `--impulse-trace` owner (d84fe83a) with this trace on, for
 120 s (six opens): per open the misses at the start, the owner's share, the far loop and the
 remainder together.
+
+**Phase B, step 3 (combined run): the owner's share is set by its transmit prime, exactly; the far
+loop is constant; the gadget adds a whole packet some opens (2026-10-30 01:57-01:59 UTC).** Owner
+d84fe83a (`--impulse-trace`) in place of the service, `trace-in-start.sh on 120`, six `stream 12`
+opens, all intact. Evidence `outputs/latency/spike-combined-20261030/` (owner log; the trace's
+first 200 ms of each open, every event and every failed completion).
+
+| Open | Lag | Far loop | Owner share w - k | `tx_prime_found` | share + found | Gadget remainder | USB start |
+|---|---|---|---|---|---|---|---|
+| 1 | 374 | 114 | 362 | 104 | 466 | 12 | first IN and OUT missed, rest clean |
+| 2 | 376 | 114 | 364 | 102 | 466 | 12 | same |
+| 3 | 364 | 114 | 352 | 114 | 466 | 12 | same |
+| 4 | 375 | 114 | 357 | 109 | 466 | 18 | same |
+| 5 | 371 | 114 | 353 | 113 | 466 | 18 | same |
+| 6 | 361 | 114 | 343 | 123 | 466 | 18 | same |
+
+The same identity holds for all twelve opens of step 1 (found 104 then 121-122, share 362 then
+344-345; the broken open 10 aside): **owner share = 466 - `tx_prime_found`** over 18 opens and two
+owner starts. Mechanism (`owner/main.cpp`, `service_tx`, the `armed` branch): the prime lands the
+host's first ordinary block (48 frames) so its newest frame ends exactly `lead` (128) ahead of the
+Dante clock, dropping the block's oldest frames to fit; it drops `found - 80` of them (0 to 48),
+and `found`, the Inferno depth at that wake, depends on where the Dante clock stands against the
+owner's idle 1 ms grid. Every dropped frame comes off the round trip the host counts.
+
+Fix, owner only (not written): drop a constant number D of the prime block's oldest frames and
+commit the rest at the pointer where it stands, without skipping to `lead`; the host-frame to
+Dante-position offset then no longer depends on `found`, and the share becomes 386 - D. D = 24
+gives 362 (today's range 343-385), with the depth after the prime 104 to 152 (today 128), never
+below today's floor before the next block; if `found` is ever too low to leave the margin, skip
+silence as today and count the open as not anchored. The servo then takes the depth to `lead` over
+the first seconds without changing the frame mapping (within an open the lag was steady through
+every servo transient, spread 0 in every run).
+
+Still open: the gadget remainder, 12 in opens 1-3 and 18 in opens 4-6 with identical USB starts in
+all six (the trace shows one missed microframe each way, then clean), drifted 12 to 42 in step 1:
+whole packets, set somewhere between `u_audio`'s initial requests and the owner's ring. With the
+owner fixed, the lag will move only by these packets; the next look is at what the queue holds at
+the host's first poll (the owner's `rx_primes` rose by 1 instead of 2 around open 4).
