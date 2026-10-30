@@ -116,3 +116,36 @@ ended on a late feedback request (IsoTooOld) when the queue was 12 ms deep; feed
 now skipped and the queues are 32 ms deep. The owner's transmit prime moved with the lag in all
 three opens (higher found, lower lag), so what is left looks like the Pi's per-open start; Phase A
 reads it with `--open-phase`.
+
+**Phase A: the draw left with the host anchored is the owner's, not the Mac's (2026-10-30
+01:04-01:08 UTC).** Twelve 15 s opens of `stream`, every one intact (no failed transaction, 140 of
+140 impulses, spread 0 within the open), beside the `--open-phase` owner (aa340c10, the service's
+transport; evidence `outputs/latency/spike-phaseA-20261030/owner.log`):
+
+| Open | Lag | Pi figure `x`+queue | Lag minus Pi figure |
+|---|---|---|---|
+| 1 | 397 | 143.6 | 253.4 |
+| 2-11 | 357, 364, 369, 368, 375, 381, 381, 387, 393, 393 | 102.8-104.4 | 253.0 rising to 289.3 |
+| 12 | 351 | 55.8 | 295.5 |
+
+The lag is a sawtooth over the session: about +6 samples an open (opens 18 s apart, about
+0.34 samples/s), falling back about 48 (one millisecond) twice. The Pi figure jumps by about one
+period exactly at the wraps; lag minus Pi figure rises steadily through them. Mechanism, from
+`owner/main.cpp` (the wait at the top of the loop): while no host sends, the loop sleeps on a 1 ms
+grid of the Pi's CLOCK_MONOTONIC, and both directions are primed on the first wakes after the host
+starts; where the host's first frame falls within that millisecond sets the round trip, and that
+phase drifts with the Mac's crystal against the Pi's (about 7 ppm here) and wraps every 48
+samples. The host-anchored range over the twelve (351-397, 46) is the class driver's range
+(481-525, 44, 2026-10-28; 513-555 on 2026-10-29): so the draw read under the class driver is most
+likely this same owner phase, and the handoff's 2026-10-29 conclusion that it lies on the Mac is
+in doubt. The 2026-10-28 hold-open result fits either: a held stream never restarts, so the phase
+is drawn once.
+
+Next (Phase B, revised): the owner removes the phase itself. At the first wake with both
+directions flowing it knows, in Inferno positions, where host OUT frame k went (playback position
+minus k, fixed after the prime) and where host IN frame j came from (capture position minus j,
+fixed after the rx prime while nothing overflows); the round trip is the far loop (fixed) plus the
+difference of those two offsets. One insertion of silence or drop of frames in the IN queue sets
+that difference to a chosen constant, once per open. Then test it twice: with this tool (spread at
+most 1 across opens), and with the class driver and the harness (`daw_timeline` spread across
+opens). If the second also holds, the class driver needs no replacement for determinism.
