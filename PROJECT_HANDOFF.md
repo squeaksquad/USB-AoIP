@@ -14723,3 +14723,23 @@ installed one. Rollback: `cd ~/usb-16x16-work/dante-mode/service && sudo ./insta
 rollback`, which comes before `install-owner-rate8.sh rollback`. Evidence
 `outputs/latency/anchor-installed-*`.
 
+**MEASURED 2026-10-30 10:45-11:59 UTC: the deterministic owner holds at 44.1 kHz and with DSP.**
+Owner abee374a (`--prime-drop 24 --capture-drain`), installed modules. Every open is one harness
+run (`measure-candidate.sh 32 400`); soaks on the loop's eight channels.
+- 44.1 kHz, the installed service. Moved with the Mac's USB-AoIP set to 44100 and `dante-sync sync
+  --source usb-aoip` (Metric Halo, Pulse, DVS, D2USB verified; the Pi had already followed the Mac
+  through the arbiter, `RATE=44100`, start check whole 5528, 0 restarts). Eight opens: 508 or 509
+  on opens 2-8 (363/364 + io_offset 145); open 1, three minutes after the rate move, read 538 with
+  its level stepping 393 -> 385 inside the open. After a plain endpoint restart at 44.1 three
+  opens read 509, 509, 508, so that first open belongs to the network settling after the rate
+  move, not to the owner. Noise probe clean; ten-minute soak PASS.
+- 44.1 kHz with the loaded preset (`config/dsp-loaded@44100.dsp`, by the candidate launcher: the
+  page and the arbiter still offer DSP at 48 only): four opens, 508, 509, 509, 509.
+- 48 kHz with DSP (launcher): loaded preset (`config/dsp-loaded@48000.dsp`) four opens 532; the
+  transparent preset (`dsp-verify/transparent.dsp`) four opens 532, noise probe clean, ten-minute
+  soak PASS.
+- Back to 48 the same way (owner.conf without `RATE=`, start check whole 6015); service restored
+  11:58 (abee374a, start check ok).
+So the round trip is 532 at 48 and 508 +-1 at 44.1, with or without a preset. Evidence
+`outputs/latency/anchor441*`, `anchor48-dsp*` and their owner logs.
+
