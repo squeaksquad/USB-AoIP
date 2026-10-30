@@ -1,6 +1,8 @@
 // usb-aoip-spike: the host-driver spike's user-space tool (SPIKE_PLAN.md).
 //
 //   usb-aoip-spike list            the gadget's IOKit services, no open (no root needed)
+//   sudo usb-aoip-spike stream [S]  capture, stream both directions for S seconds (10) from one
+//                                  bus frame, impulses on channel 1, and report the round trip
 //   sudo usb-aoip-spike probe      capture the device from the class driver, open both
 //                                  streaming interfaces at alt 1, print their endpoints
 //                                  and the bus frame number, then let the device go
@@ -89,6 +91,101 @@ func describeEndpoints(of interface: IOUSBHostInterface) {
     }
 }
 
+// Capture the device from the class driver and open both streaming interfaces at alt 1.
+func captureAndOpen() -> (IOUSBHostDevice, [(Int, IOUSBHostInterface)]) {
+    guard geteuid() == 0 else { fail("capturing the device needs root: run with sudo") }
+    let service = deviceService()
+    let device: IOUSBHostDevice
+    do {
+        device = try IOUSBHostDevice(__ioService: service, options: [.deviceCapture], queue: nil, interestHandler: nil)
+    } catch {
+        fail("capture refused: \(error)")
+    }
+    print("captured the device (class driver's clients terminated)")
+    // The interfaces come back as services once the device is captured; wait for them.
+    var streaming: [(number: Int, alternate: Int, cls: Int, subclass: Int, service: io_service_t)] = []
+    for _ in 0..<50 {
+        streaming = interfaceServices().filter { $0.cls == 1 && $0.subclass == 2 }
+        if streaming.count >= 2 { break }
+        Thread.sleep(forTimeInterval: 0.1)
+    }
+    guard streaming.count >= 2 else {
+        device.destroy()
+        fail("found \(streaming.count) audio streaming interfaces, expected 2")
+    }
+    var interfaces: [(Int, IOUSBHostInterface)] = []
+    for entry in streaming {
+        do {
+            let interface = try IOUSBHostInterface(__ioService: entry.service, options: [], queue: nil, interestHandler: nil)
+            try interface.selectAlternateSetting(1)
+            interfaces.append((entry.number, interface))
+        } catch {
+            print("  interface \(entry.number): \(error)")
+        }
+    }
+    return (device, interfaces)
+}
+
+// Close the interfaces and let the device go: it is reset and the class driver matches it again.
+func release(_ device: IOUSBHostDevice, _ interfaces: [(Int, IOUSBHostInterface)]) {
+    for (_, interface) in interfaces {
+        try? interface.selectAlternateSetting(0)
+        interface.destroy()
+    }
+    device.destroy()
+    print("released the device: it is reset and the class driver matches it again")
+}
+
+// The UAC2 clock source's ID, from the configuration descriptor (CS_INTERFACE, CLOCK_SOURCE).
+func clockSourceID(_ device: IOUSBHostDevice) -> UInt8? {
+    guard let configuration = device.configurationDescriptor else { return nil }
+    let total = Int(UInt16(littleEndian: configuration.pointee.wTotalLength))
+    let bytes = UnsafeRawPointer(configuration).assumingMemoryBound(to: UInt8.self)
+    var at = 0
+    while at + 2 < total {
+        let length = Int(bytes[at])
+        if length == 0 { break }
+        if bytes[at + 1] == 0x24 && bytes[at + 2] == 0x0a && length >= 4 { return bytes[at + 3] }
+        at += length
+    }
+    return nil
+}
+
+// SET_CUR on the clock's sampling-frequency control, as the class driver does before streaming.
+func setClock(_ device: IOUSBHostDevice, rate: UInt32) {
+    guard let clock = clockSourceID(device) else { print("no clock source in the descriptors; rate not set"); return }
+    var request = IOUSBDeviceRequest()
+    request.bmRequestType = 0x21            // class, interface, host to device
+    request.bRequest = 0x01                 // CUR
+    request.wValue = 0x0100                 // CS_SAM_FREQ_CONTROL
+    request.wIndex = UInt16(clock) << 8     // clock entity, interface 0
+    request.wLength = 4
+    var value = rate.littleEndian
+    let data = NSMutableData(bytes: &value, length: 4)
+    do {
+        try device.__send(request, data: data, bytesTransferred: nil, completionTimeout: 1.0)
+        print("clock \(clock) set to \(rate) Hz")
+    } catch {
+        print("clock \(clock): SET_CUR \(rate) failed: \(error)")
+    }
+}
+
+func printReport(_ r: StreamReport) {
+    print(String(format: "ran %.2f s: OUT %d frames in %d transactions (%d failed), IN %d frames in %d transactions (%d failed)",
+                 r.seconds, r.outFrames, r.outTransactions, r.outFailed, r.inFrames, r.inTransactions, r.inFailed))
+    print(String(format: "feedback: %d transactions (%d failed), %.4f..%.4f frames a microframe, last %.4f",
+                 r.feedbackTransactions, r.feedbackFailed, r.feedbackMin.isFinite ? r.feedbackMin : 0, r.feedbackMax, r.feedbackLast))
+    for failure in r.enqueueFailures { print("enqueue failed: \(failure)") }
+    var counts: [Int: Int] = [:]
+    for lag in r.lags { counts[lag, default: 0] += 1 }
+    let spread = (r.lags.max() ?? 0) - (r.lags.min() ?? 0)
+    print("impulses: \(r.impulsesSent) sent, \(r.lags.count) found, \(r.unmatched) unmatched onsets; lag (samples): "
+          + counts.keys.sorted().map { "\($0) x\(counts[$0]!)" }.joined(separator: ", ")
+          + (r.lags.isEmpty ? "none" : ", spread \(spread)"))
+    print(r.broken ? "BROKEN: a failed transaction or enqueue breaks the sample numbering; this run's lag is not valid"
+                   : "numbering intact: no failed transaction")
+}
+
 let command = CommandLine.arguments.dropFirst().first ?? "list"
 switch command {
 case "list":
@@ -100,47 +197,33 @@ case "list":
     }
 
 case "probe":
-    guard geteuid() == 0 else { fail("probe captures the device: run with sudo") }
-    let service = deviceService()
-    let device: IOUSBHostDevice
-    do {
-        device = try IOUSBHostDevice(__ioService: service, options: [.deviceCapture], queue: nil, interestHandler: nil)
-    } catch {
-        fail("capture refused: \(error)")
-    }
-    print("captured the device (class driver's clients terminated)")
-    defer {
-        device.destroy()
-        print("released the device: it is reset and the class driver matches it again")
-    }
-    // The interfaces come back as services once the device is captured; wait for them.
-    var streaming: [(number: Int, alternate: Int, cls: Int, subclass: Int, service: io_service_t)] = []
-    for _ in 0..<50 {
-        streaming = interfaceServices().filter { $0.cls == 1 && $0.subclass == 2 }
-        if streaming.count >= 2 { break }
-        Thread.sleep(forTimeInterval: 0.1)
-    }
-    guard streaming.count >= 2 else { fail("found \(streaming.count) audio streaming interfaces, expected 2") }
-    var interfaces: [IOUSBHostInterface] = []
-    for entry in streaming {
-        do {
-            let interface = try IOUSBHostInterface(__ioService: entry.service, options: [], queue: nil, interestHandler: nil)
-            try interface.selectAlternateSetting(1)
-            print("  interface \(entry.number): opened, alt 1 selected")
-            describeEndpoints(of: interface)
-            interfaces.append(interface)
-        } catch {
-            print("  interface \(entry.number): \(error)")
-        }
+    let (device, interfaces) = captureAndOpen()
+    defer { release(device, interfaces) }
+    for (number, interface) in interfaces {
+        print("  interface \(number): opened, alt 1 selected")
+        describeEndpoints(of: interface)
     }
     var now = UInt64(0)
     let frame = device.__frameNumber(withTime: &now)
     print("bus frame \(frame) at host time \(now)")
-    for interface in interfaces {
-        try? interface.selectAlternateSetting(0)
-        interface.destroy()
+
+case "stream":
+    let seconds = CommandLine.arguments.dropFirst(2).first.flatMap(Double.init) ?? 10
+    let (device, interfaces) = captureAndOpen()
+    defer { release(device, interfaces) }
+    setClock(device, rate: 48000)
+    func pipe(_ address: Int) -> IOUSBHostPipe {
+        for (_, interface) in interfaces {
+            if let pipe = try? interface.copyPipe(withAddress: address) { return pipe }
+        }
+        fail(String(format: "no endpoint 0x%02x on the streaming interfaces", address))
     }
+    let engine = StreamEngine(outPipe: pipe(0x01), feedbackPipe: pipe(0x82), inPipe: pipe(0x83))
+    var now = UInt64(0)
+    let anchor = device.__frameNumber(withTime: &now) + kStartMargin
+    print("streaming \(seconds) s from bus frame \(anchor), both directions anchored there")
+    printReport(engine.run(anchor: anchor, seconds: seconds))
 
 default:
-    fail("unknown command \(command); use list or probe")
+    fail("unknown command \(command); use list, probe or stream [SECONDS]")
 }
