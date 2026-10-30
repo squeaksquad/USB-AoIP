@@ -14594,3 +14594,9 @@ names the device (applier messages, web title, unit descriptions, the compiler's
 change with their next version. Pro Tools and Audio MIDI Setup select `USB-AoIP` once. Evidence
 `outputs/latency/usbaoip-*`. Rollback: `cd ~/usb-16x16-work/gadget-usb-aoip && sudo
 ./install-gadget-usb-aoip.sh rollback`.
+
+**ACCEPTED 2026-10-30 (operator, "accept the stuff from earlier"): the USB-AoIP rename is part of
+the Dante point of record.** `setup-usb-aoip` 65d26567 with `10-usb-aoip.conf` 91449df9, as
+installed at 00:44 (entry above), on the checks there (noise probe clean, two-minute soak PASS on
+the 8-channel loop). Rollback unchanged: `cd ~/usb-16x16-work/gadget-usb-aoip && sudo
+./install-gadget-usb-aoip.sh rollback`, which comes before `install-gadget-rates.sh rollback`.
