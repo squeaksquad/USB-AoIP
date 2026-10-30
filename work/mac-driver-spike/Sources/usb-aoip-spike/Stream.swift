@@ -17,8 +17,11 @@ let kChannels = 16
 let kBytesPerFrame = kChannels * 3
 let kMaxPacket = 624                    // 13 frames, the size the gadget's rate list sets
 let kMicroframesPerFrame = 8
-let kFramesPerRequest = 2               // bus frames (1 ms) each request covers
-let kRequestsInFlight = 6               // per pipe: 12 ms queued ahead
+let kFramesPerRequest = 4               // bus frames (1 ms) each request covers
+let kRequestsInFlight = 8               // per pipe: 32 ms queued ahead. How early a request is
+                                        // queued does not change the frame its samples travel in,
+                                        // so depth costs the measurement nothing; 12 ms was once
+                                        // too little for the feedback pipe (IsoTooOld, 2026-10-30).
 let kStartMargin: UInt64 = 20           // bus frames between now and the anchor frame
 let kImpulsePeriod = 4800               // OUT frames between impulses (100 ms at 48 kHz)
 let kImpulseOffset = 2400
@@ -36,6 +39,7 @@ struct StreamReport {
     var outFailed = 0                   // status not success, or fewer bytes than asked
     var inFailed = 0
     var feedbackFailed = 0
+    var feedbackSkips = 0               // feedback requests re-queued later after IsoTooOld; harmless
     var enqueueFailures: [String] = []
     var feedbackMin = Double.infinity
     var feedbackMax = 0.0
@@ -66,6 +70,7 @@ final class StreamEngine {
     let outPipe: IOUSBHostPipe
     let feedbackPipe: IOUSBHostPipe
     let inPipe: IOUSBHostPipe
+    let currentFrame: () -> UInt64
     private(set) var report = StreamReport()
     private var stopping = false
     private var pending = 0
@@ -80,10 +85,11 @@ final class StreamEngine {
     private var sentImpulses: [Int] = []
     private var inAbove = false
 
-    init(outPipe: IOUSBHostPipe, feedbackPipe: IOUSBHostPipe, inPipe: IOUSBHostPipe) {
+    init(outPipe: IOUSBHostPipe, feedbackPipe: IOUSBHostPipe, inPipe: IOUSBHostPipe, currentFrame: @escaping () -> UInt64) {
         self.outPipe = outPipe
         self.feedbackPipe = feedbackPipe
         self.inPipe = inPipe
+        self.currentFrame = currentFrame
     }
 
     // Start all three pipes on `anchor`, run for `seconds`, stop, and return the report.
@@ -156,8 +162,13 @@ final class StreamEngine {
             slot.list[t] = IOUSBHostIsochronousTransaction(
                 status: kIOReturnInvalid, requestCount: 4, offset: UInt32(t * 4), completeCount: 0, timeStamp: 0, options: [])
         }
-        let frame = nextFeedbackFrame
-        nextFeedbackFrame += UInt64(kFramesPerRequest)
+        var frame = nextFeedbackFrame
+        if frame <= currentFrame() + 1 {
+            // Late: the feedback is not part of the sample numbering, so skip ahead instead of failing.
+            frame = currentFrame() + 2 * UInt64(kFramesPerRequest)
+            report.feedbackSkips += 1
+        }
+        nextFeedbackFrame = frame + UInt64(kFramesPerRequest)
         enqueue(feedbackPipe, slot, frame, "feedback") { [unowned self] status, list in
             let bytes = slot.data.bytes.assumingMemoryBound(to: UInt8.self)
             for t in 0..<slot.count {
@@ -226,6 +237,9 @@ final class StreamEngine {
                 }
             }
             pending += 1
+        } catch where pipe === feedbackPipe {
+            // That slot is dropped (one fewer feedback request in flight); the numbering is untouched.
+            report.feedbackFailed += 1
         } catch {
             report.enqueueFailures.append("\(name) at frame \(frame): \(error)")
             stopping = true

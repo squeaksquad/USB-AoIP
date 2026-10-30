@@ -173,8 +173,8 @@ func setClock(_ device: IOUSBHostDevice, rate: UInt32) {
 func printReport(_ r: StreamReport) {
     print(String(format: "ran %.2f s: OUT %d frames in %d transactions (%d failed), IN %d frames in %d transactions (%d failed)",
                  r.seconds, r.outFrames, r.outTransactions, r.outFailed, r.inFrames, r.inTransactions, r.inFailed))
-    print(String(format: "feedback: %d transactions (%d failed), %.4f..%.4f frames a microframe, last %.4f",
-                 r.feedbackTransactions, r.feedbackFailed, r.feedbackMin.isFinite ? r.feedbackMin : 0, r.feedbackMax, r.feedbackLast))
+    print(String(format: "feedback: %d transactions (%d failed, %d late re-queues), %.4f..%.4f frames a microframe, last %.4f",
+                 r.feedbackTransactions, r.feedbackFailed, r.feedbackSkips, r.feedbackMin.isFinite ? r.feedbackMin : 0, r.feedbackMax, r.feedbackLast))
     for failure in r.enqueueFailures { print("enqueue failed: \(failure)") }
     var counts: [Int: Int] = [:]
     for lag in r.lags { counts[lag, default: 0] += 1 }
@@ -218,7 +218,8 @@ case "stream":
         }
         fail(String(format: "no endpoint 0x%02x on the streaming interfaces", address))
     }
-    let engine = StreamEngine(outPipe: pipe(0x01), feedbackPipe: pipe(0x82), inPipe: pipe(0x83))
+    let engine = StreamEngine(outPipe: pipe(0x01), feedbackPipe: pipe(0x82), inPipe: pipe(0x83),
+                              currentFrame: { var time = UInt64(0); return device.__frameNumber(withTime: &time) })
     var now = UInt64(0)
     let anchor = device.__frameNumber(withTime: &now) + kStartMargin
     print("streaming \(seconds) s from bus frame \(anchor), both directions anchored there")
