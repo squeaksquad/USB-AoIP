@@ -14757,3 +14757,12 @@ the install they are made again from the Mac with `netaudio subscription add --t
 FF-PULSE-16-DX --count 16 --offset-rx 16`. Nothing in the scripts, the applier, the start check or
 Dante Switcher uses the Dante name. The audio path is unchanged, so the check is the control-change
 rule: a harness run (532 expected), a noise probe at 32 and a two-minute soak on 8 channels.
+
+**INSTALLED and ACCEPTED 2026-10-30 13:05 UTC: the Dante device is USB-AoIP.** The operator ran
+`install-dante-name.sh`: config 54f3f0ba, the four units describe themselves as USB-AoIP, the old
+config kept as `.name-previous`; endpoint up, start check ok 13:06:06 (6015). The Pi's own
+subscriptions resolved under the new name by themselves; the Pulse's `Input 17-32` were made again
+with `netaudio subscription add --tx USB-AoIP --rx FF-PULSE-16-DX --count 16 --offset-rx 16`
+(lists before and after in `outputs/latency/dante-rename-20261030/`). Control-change checks: 400
+loaded impulses `daw_timeline` 532 (380 + io_offset 152), noise probe at 32 clean (no zero run of 4+),
+two-minute soak on 8 channels PASS, no xrun, lag or error lines. Evidence `outputs/latency/rename-aoip-*`.
