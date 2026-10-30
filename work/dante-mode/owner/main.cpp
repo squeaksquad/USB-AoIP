@@ -57,6 +57,16 @@
 // frames dropped, repeated, or other (seq_check.hpp). It says on which side of
 // the owner a slip the Mac sees was made.
 //
+// With --open-phase (diagnostic, off by default) the loop counts, from the
+// start of each stream, the frames the host has sent (gadget capture) and the
+// frames it has taken (gadget playback), and once both directions have flowed
+// for two seconds it averages their difference over a second, every ten
+// seconds; the telemetry thread prints each as an OPENPHASE line with the wall clock. If the
+// host numbers its samples from the first frame of each stream, the round
+// trip it measures is this difference plus the owner's own path, so the line
+// says whether the level drawn at each host open can be seen from the Pi.
+// Nothing is changed in the audio path.
+//
 // Build on the Pi (the bridge core is the one source file DspStage lives in):
 //   g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
@@ -166,6 +176,8 @@ struct Options {
     bool event_trace{false};
     // Diagnostic: check channels 1..seq_check against `bitexact`'s sequence at both points. 0 is off.
     unsigned seq_check{0};
+    // Diagnostic: an OPENPHASE line per host session (frames taken minus frames sent).
+    bool open_phase{false};
     // Experiment (2026-10-13): touch this many kilobytes of the loop thread's stack before it
     // turns real-time, so the loop never grows its stack (a page fault that can sleep). 0 is off.
     unsigned stack_prefault_kb{0};
@@ -184,7 +196,7 @@ struct Options {
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
-               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N]\n"
+               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--open-phase]\n"
                "                     [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
                "  --no-usb    network half only: silence out, capture discarded, the gadget never opened\n"
@@ -211,6 +223,7 @@ struct Options {
                "  --gap-trace   diagnostic: print a LOOPGAP line for every wake this late or later\n"
                "  --event-trace diagnostic: an EVENT line at each step counter change, a SERVO line a second\n"
                "  --seq-check   diagnostic: check channels 1..N against bitexact's sequence, gadget and Inferno side\n"
+               "  --open-phase  diagnostic: an OPENPHASE line per host session, frames taken minus frames sent\n"
                "  --stack-prefault   experiment: touch this much of the loop's stack before it turns real-time\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
@@ -235,6 +248,7 @@ Options parse_options(int argc, char** argv) {
         if (a == "--no-mlock") { o.mlock = false; continue; }
         if (a == "--no-rt") { o.realtime = false; continue; }
         if (a == "--event-trace") { o.event_trace = true; continue; }
+        if (a == "--open-phase") { o.open_phase = true; continue; }
         if (a == "--help" || i + 1 >= argc) { usage(); }
         const char* v = argv[++i];
         if (a == "--pcm") o.pcm = v;
@@ -481,6 +495,12 @@ struct Telemetry {
     std::atomic<std::uint64_t> meter_ns_total{0};
     std::atomic<std::uint64_t> meter_calls{0};
     std::atomic<unsigned> stall_injected_ms{0};   // --stall-at fired; reported once
+    // --open-phase: the last session's frames taken minus frames sent, over one second.
+    std::atomic<std::uint64_t> open_phase_count{0};
+    std::atomic<std::int64_t> open_phase_mean_milli{0};
+    std::atomic<std::int64_t> open_phase_min{0};
+    std::atomic<std::int64_t> open_phase_max{0};
+    std::atomic<std::int64_t> open_phase_since_ns{0};     // both directions flowing since
     GapTrace gaps;
     usb16x16::owner::SeqTrace seq;
 };
@@ -532,6 +552,7 @@ void* telemetry_entry(void* argument) {
     std::uint64_t reported_errors = 0;
     std::uint64_t gaps_printed = 0;
     std::uint64_t seq_printed = 0;
+    std::uint64_t phases_printed = 0;
     int link_owner = -1;
     int link_tx = -1;
     int link_rx = -1;
@@ -589,6 +610,19 @@ void* telemetry_entry(void* argument) {
                             static_cast<double>(t.tx_integral_milli.load(std::memory_order_relaxed)) / 1000.0,
                             static_cast<double>(t.rx_integral_milli.load(std::memory_order_relaxed)) / 1000.0);
             }
+            std::fflush(stdout);
+        }
+        if (const std::uint64_t phases = t.open_phase_count.load(std::memory_order_acquire); phases != phases_printed) {
+            phases_printed = phases;
+            std::printf("OPENPHASE n=%" PRIu64 " wall=%.6f t=%.3f since=%.3f x_mean=%.3f x_min=%" PRId64 " x_max=%" PRId64
+                        " tx_mean=%.3f rx_mean=%.3f tx_links=%" PRIu64 " rx_primes=%" PRIu64 "\n",
+                        phases, wall_seconds(), seconds,
+                        static_cast<double>(t.open_phase_since_ns.load(std::memory_order_relaxed) - started) / 1e9,
+                        static_cast<double>(t.open_phase_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
+                        t.open_phase_min.load(std::memory_order_relaxed), t.open_phase_max.load(std::memory_order_relaxed),
+                        static_cast<double>(t.tx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
+                        static_cast<double>(t.rx_mean_milli.load(std::memory_order_relaxed)) / 1000.0,
+                        t.tx_links.load(std::memory_order_relaxed), t.rx_primes.load(std::memory_order_relaxed));
             std::fflush(stdout);
         }
         const std::uint64_t seq_written = t.seq.written.load(std::memory_order_acquire);
@@ -1395,10 +1429,22 @@ struct UsbHalf {
     usb16x16::owner::OutDsp* dsp{nullptr};
     // The level meters; null without --meter-file.
     usb16x16::owner::OwnerMeters* meters{nullptr};
+    // --open-phase: frames the host sent since the outgoing direction left idle,
+    // frames queued to the gadget since the last prime, and the sampling window.
+    bool open_phase{false};
+    std::int64_t out_count{0};
+    std::int64_t in_written{0};
+    std::int64_t phase_since_ns{0};
+    std::int64_t phase_window_ns{0};
+    std::int64_t phase_sum{0};
+    std::int64_t phase_n{0};
+    std::int64_t phase_min{0};
+    std::int64_t phase_max{0};
 };
 
 void set_tx_state(UsbHalf& usb, TxState state, Telemetry& t) noexcept {
     usb.tx = state;
+    if (state == TxState::idle) usb.out_count = 0;
     t.tx_state.store(static_cast<int>(state), std::memory_order_relaxed);
     usb.tx_filter.restart();
     if (state != TxState::flow) t.wanted_capture_pitch.store(kNominalPitch, std::memory_order_relaxed);
@@ -1632,6 +1678,7 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         return true;
     }
     usb.tx_idle_wakes = 0;
+    usb.out_count += frames;
     observe_peaks(usb.tx_scratch.data(), frames, t.out_peak_1, t.out_peak_2);
     observe_holes(usb.tx_scratch.data(), frames, usb.out_zero_run, t.out_holes, t.out_hole_max);
     if (usb.seq_out.channels != 0) usb.seq_out.observe(usb.tx_scratch.data(), frames, t.seq);
@@ -1726,6 +1773,7 @@ void service_rx(UsbHalf& usb, UsbHandles& handles, const Options& o, long frames
         }
         usb.rx_primed = true;
         usb.rx_last_after = target;
+        usb.in_written = target;
         usb.rx_idle_wakes = 0;
         t.rx_primes.fetch_add(1, std::memory_order_relaxed);
         t.usb_rx_frames.fetch_add(static_cast<std::uint64_t>(real), std::memory_order_relaxed);
@@ -1782,11 +1830,46 @@ void service_rx(UsbHalf& usb, UsbHandles& handles, const Options& o, long frames
             return;
         }
         t.usb_rx_frames.fetch_add(static_cast<std::uint64_t>(take), std::memory_order_relaxed);
+        usb.in_written += take;
     }
     usb.rx_last_after = queue + take;
     if (usb.rx_flowing) {
         usb.rx_filter.add(static_cast<int>(usb.rx_last_after));
     }
+}
+
+// --open-phase, one wake: frames the host has taken minus frames it has sent,
+// both counted from the start of their streams, averaged over one second and
+// published every ten while both directions flow (from the third second on),
+// so the figure can be read before and after the servos settle.
+void sample_open_phase(UsbHalf& usb, std::int64_t now, Telemetry& t) noexcept {
+    if (usb.tx != TxState::flow || !usb.rx_flowing) {
+        usb.phase_since_ns = 0;
+        return;
+    }
+    if (usb.phase_since_ns == 0) {
+        usb.phase_since_ns = now;
+        usb.phase_window_ns = now + 2000000000LL;
+        usb.phase_sum = usb.phase_n = 0;
+    }
+    if (now < usb.phase_window_ns) return;
+    const std::int64_t taken = usb.in_written - usb.rx_last_after;
+    const std::int64_t x = taken - usb.out_count;
+    if (usb.phase_n == 0 || x < usb.phase_min) usb.phase_min = x;
+    if (usb.phase_n == 0 || x > usb.phase_max) usb.phase_max = x;
+    usb.phase_sum += x;
+    ++usb.phase_n;
+    if (now < usb.phase_window_ns + 1000000000LL) return;
+    usb.phase_window_ns += 10000000000LL;
+    const std::int64_t sum = usb.phase_sum;
+    usb.phase_sum = 0;
+    const std::int64_t n = usb.phase_n;
+    usb.phase_n = 0;
+    t.open_phase_mean_milli.store(sum * 1000 / n, std::memory_order_relaxed);
+    t.open_phase_min.store(usb.phase_min, std::memory_order_relaxed);
+    t.open_phase_max.store(usb.phase_max, std::memory_order_relaxed);
+    t.open_phase_since_ns.store(usb.phase_since_ns, std::memory_order_relaxed);
+    t.open_phase_count.fetch_add(1, std::memory_order_release);
 }
 
 // Once a second: each flowing direction's mean depth through its PI law.
@@ -1864,6 +1947,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
     }
     if (marks != nullptr) marks[3] = now_ns();
     if (usb.attached) run_servos(usb, o, now, t);
+    if (usb.attached && usb.open_phase) sample_open_phase(usb, now, t);
 
     // No block went through the stage on this wake: take any coefficient set
     // published meanwhile, so the next live update is not left waiting for a host.
@@ -1965,6 +2049,7 @@ int main(int argc, char** argv) {
     usb.seq_out.point = 0;
     usb.seq_back.point = 1;
     usb.seq_out.channels = usb.seq_back.channels = std::min(options.seq_check, kChannels);
+    usb.open_phase = options.open_phase;
     TelemetryContext telemetry_context{&telemetry, options.log_every, options.no_usb, options.event_trace};
     StewardContext steward_context{&options, &telemetry, &handles};
     const pthread_t telemetry_thread = start_thread(telemetry_entry, &telemetry_context, "telemetry");

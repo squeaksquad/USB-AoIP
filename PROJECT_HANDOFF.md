@@ -14539,3 +14539,34 @@ two-minute soak PASS (`earlyfollow-soak120-soak-120s-32f-20261029T034343Z`). Det
 `work/uac2-discrete-channels/RATE_REPORT_PLAN.md`, last section. Rollback: `cd
 ~/usb-16x16-work/apply-early-follow && sudo ./install-apply-early-follow.sh rollback` (1.7.0); it
 comes before `install-rate-request.sh rollback`.
+
+**MEASURED 2026-10-29 23:42 - 2026-10-30 00:20 UTC: the level drawn at each harness open cannot
+be seen from the Pi by counting frames either; a deterministic `daw_timeline` is not reachable
+from the Pi. Not adopted; nothing installed.** Operator's goal: "ensure latency on the daw timeline
+can be deterministic". Hypothesis tested: if CoreAudio numbers each direction's samples from the
+first frame of its stream, the round trip it measures is (frames the host has taken) minus (frames
+it has sent), each counted from its stream's start, plus the owner's own path; the owner could then
+set the return queue once per open to land every open on one figure. Diagnostic `--open-phase` in
+`work/dante-mode/owner/main.cpp` (off by default, audio path unchanged): the loop keeps both counts
+and the telemetry thread prints an OPENPHASE line (`x` = taken minus sent, a one-second mean) every
+10 s while both directions flow. Candidates built on the Pi from `owner/openphase/` (rate8seq's
+bundled bridge core): dd52ab71 (one line per open), aa340c10 (source 2c6f86e9, every 10 s). Run in
+place of the service at 48 kHz, direct, `--rx-queue 96`; noise probe clean both times; eight
+400-impulse harness opens each, spread 0.
+- Within an open, `x` drifts by up to 50 frames as the return servo moves the queue (prime about
+  107-135, end 84-92 against the target 96, still drifting at 100 s), and `x` plus the queue mean
+  stays within 2 frames: the Pi-side figure for an open is that sum, fixed from the open's start.
+- Across opens it does not predict the harness. Second pass, sum at the open's end against
+  `daw_timeline`: 1275.2 / 543, 1228.6 / 526, 1294.6 / 555, 1258.9 / 537, 1258.7 / 525,
+  1251.5 / 524, 1258.9 / 537, 1258.6 / 555. Opens 5 and 8 have the same Pi-side figure and read
+  525 and 555; the difference ranges over 37 samples, as wide as the level itself (31).
+With the 2026-10-28 results (the Pi's pickup phase fixed to a packet left the range unchanged; a
+client holding the device fixed the figure until that client restarted), the draw lies in how the
+Mac anchors its input and output timelines at each IO start, which neither the Pi's timing nor its
+frame counts see. The only deterministic figures shown so far are Mac-side: within one IO session
+(which a DAW session is, until it closes the device or changes the rate), or a silent client holding
+the device open. Levels this night: 513-555 (first pass 543 / 555 / 549 / 513 / 537 / 519 / 537 /
+549), above the 2026-10-28 48 kHz band (481-525) as on the three starts before it (commits
+eb4f733..c5cf9de); not located. Restored 00:18: `usb16x16-dante` (a15a9d84), start check ok
+(rate 6016, one restart of its own), service active. Evidence `outputs/latency/openphase*`, owner
+logs `outputs/latency/openphase-20261029/owner{,2}.log`.
