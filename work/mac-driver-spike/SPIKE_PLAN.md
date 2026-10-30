@@ -258,3 +258,57 @@ sends before the first frame of the owner's queue), or make it irrelevant: a sma
 that reports, per stream start, the IN frames sent before the first ring frame (the kernel counts
 both), read once by the owner after the start, which inserts or drops that many frames less a
 constant. The second is deterministic by construction and does not need the cause.
+
+## Phase C: measure the gadget term in the kernel, cancel it in the owner (APPROVED 2026-10-30)
+
+Goal: the same DAW-timeline round trip at every open, without knowing why the gadget's
+leading-packet count varies: the kernel reports it, the owner cancels it once per open.
+
+Assumptions: the host numbers IN samples from its first IN packet and OUT from its first OUT
+packet (true for the spike; step 5 decides it for Apple's driver). The gadget remainder is all of
+what is left: IN frames the host received before the first ring frame, plus OUT frames it sent that
+the gadget missed at the start. `--prime-drop 24` stays in (owner share 362). Target in spike index
+terms: 114 + 362 + R with R = 36, so 512.
+
+Files: `work/uac2-discrete-channels/uac2-start-offset-6.18.34.patch` (on top of the installed
+rate-request patch), `build-start-offset.sh` (control build reproducing the installed modules, plus
+the candidate; modelled on `build-rate-request.sh`), `test-start-offset.sh` (bounded insmod window
+that restores the installed pair; modelled on `test-rate-request.sh`); `work/dante-mode/owner/main.cpp`
+`--gadget-anchor R` (the steward reads the control, as it reads the rate controls, `main.cpp`
+around line 1187; the loop applies the correction); this file and the handoff. Installers only if
+adopted.
+
+Steps:
+1. `u_audio`: a read-only ALSA control `Playback Start Offset`, five integers: generation (changes
+   at each stream start), IN offset at start (frames the host received before the first ring
+   frame went out, minus that frame's ring index), the same offset now, OUT packets missed before
+   the first good one, IN packets failed while carrying ring data. The IN completion records the
+   ring index each request is refilled with (request found by `(req->buf - rbuf) / maxpacket`) and
+   compares it with the frames sent so far on each successful completion; the OUT completion
+   counts misses before its first success. Reset at alt setting and trigger. Counting only.
+2. Build (control build must match the installed hashes) and a bounded test window with the
+   impulse-trace owner and 12 spike opens. Check: per open, IN offset + 6 x missed OUT equals the
+   measured gadget remainder. If not, stop.
+3. Owner `--gadget-anchor R`: once both directions flow and the control shows a new generation with
+   a valid offset, G = offset + 6 x missed OUT, s = R - G, applied once (s > 0: s frames of silence
+   into the return queue; s < 0: skip -s Dante frames); log G, s, generation; no valid offset
+   leaves the open alone and counts it as unanchored.
+4. Spike: `--prime-drop 24 --gadget-anchor 36 --impulse-trace` with the candidate modules in a test
+   window. Pass: the same lag on all 12 opens (512, at most 1 off).
+5. Apple's driver: same candidate, no spike, eight harness opens (`measure-candidate.sh 32 400`).
+   Pass: `daw_timeline` identical across opens. If not, Apple's driver adds its own draw and the
+   custom driver is needed after all.
+6. If both pass: the full battery (four loaded 800-impulse runs, 10-minute soak, loaded hour),
+   installers, the operator's accept.
+
+Risks: a kernel module beside the protected baseline (own name, test windows restore the installed
+pair, the protected `usb_f_uac2.ko` untouched); counters in the 8 kHz completion path (a pointer
+subtraction and a few adds, under the lock already held); step 5 failing if Apple's driver numbers
+input otherwise; the one-time correction inserts or drops up to about 1 ms at stream start;
+44.1 kHz (5- and 6-frame packets) handled but tested only at 48; mid-stream USB drops counted, not
+corrected; each owner restart a new draw of the far loop (114 in every run so far).
+
+Verification: control build matches installed hashes, candidate builds with -Werror; step 2's
+per-open table equal on all 12 rows; step 4 spread 0 (at most 1) over 12 opens; step 5 harness
+spread over 8 opens; after every window the installed modules back (`install-rate-request.sh
+status`), `usb16x16-dante` active with the start check ok, a noise probe at 32 clean.
