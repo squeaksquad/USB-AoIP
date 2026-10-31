@@ -59,7 +59,7 @@ authoritative where anything disagrees; the sections below this one are history.
    - Faster detection of a Mac-side rate change (item 2 of the 2026-10-28 list
      below): check every 100 ms in the steward, off the loop thread, instead of
      once a second (about 57 wrong-rate re-primes per change today).
-2. DONE 2026-10-31 04:25 UTC (handoff, MEASURED 03:57-04:25), no code change: the page
+2. DONE 2026-10-31 04:25 UTC (handoff, MEASURED 04:10-04:25), no code change: the page
    and the arbiter already handled 44.1 (per-rate preset files since 2026-10-17). A preset
    installed the page's way followed the Mac 48 -> 44.1 -> 48 on its `@44100` file: 505 at
    44.1, noise probe and two-minute soak clean; restored to `direct`, 528. Original item:

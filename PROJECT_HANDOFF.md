@@ -14826,7 +14826,7 @@ no discontinuities, no xrun, lag or error lines. The battery behind it is the ca
 ~/usb-16x16-work/dante-mode/service && sudo ./install-owner-ratepoll.sh rollback`, before
 `install-owner-anchor.sh rollback`. Evidence `outputs/latency/ratepoll-installed-*`.
 
-**MEASURED 2026-10-31 03:57-04:25 UTC: the installed ratepoll service is clean on the noise probe,
+**MEASURED 2026-10-31 04:10-04:25 UTC: the installed ratepoll service is clean on the noise probe,
 and a Dante preset installed the page's way follows the Mac to 44.1 and back on its own per-rate
 file.** No code changed; this closes item 2 of the 2026-10-30 pickup, which said the page and the
 arbiter offered DSP at 48 only. That was stale: since 1582cf2 (2026-10-28) the compiler offers
