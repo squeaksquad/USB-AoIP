@@ -1,0 +1,23 @@
+14:40:28 Mac AoIP adapter en7 169.254.97.136 (was en12); DVS stopped (its conmon_server held 8708 on en7). 48 baseline on the installed service: noise probe clean (en7-48-noise-ch2-32f-20261031T143731Z), 400 loaded impulses daw_timeline 528 (376 + 152; 398 x 376, 2 x 368), no discontinuities
+14:40:29 service stopped
+14:40:29 dante-sync sync --rate 96000 --allow-band-up --exclude USB-AoIP --interface en7
+14:40:46 dante-sync sync --source usb-aoip --exclude USB-AoIP --interface en7
+started usb16x16-dante-candidate: log /dev/shm/dante-owner-20261031T144054Z.log
+14:40:56 candidate start chanholes 3ef92ca0, asound-inferno-owner-rate96-usb-aoip.conf (b1b677fd), dsp-loaded@96000 (89759207), the morning's arguments, --chan-holes 8 --event-trace
+14:41:35 operator: Metric Halo rebooted at 96
+catch: not running
+14:42:25 soak 3600 s at 32 on 8 channels, no capture (en7nocap96); owner counters before:
+/dev/shm/dante-owner-20261031T144054Z.log
+USB t=90.1 usb=open tx=idle rx=idle tx_mean=257.0 rx_mean=192.0 rx_depth=95..384 pitch_c=1000000 pitch_p=1000000 tx_i=-14.61 rx_i=15.66 usb_tx=3344412 usb_rx=3358648 tx_links=4 tx_reprimes=0 rx_primes=5 rx_overflow=324 rx_idle_discards=5259269 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838855 back_peak=128902,97776 out_holes=0/0 back_holes=72/301
+15:42:40 soak done: soak: FAIL, the zero runs could not be checked against the preset (inconclusive is not a pass); owner counters after:
+/dev/shm/dante-owner-20261031T144054Z.log
+USB t=3700.0 usb=open tx=flow rx=flow tx_mean=256.7 rx_mean=191.0 rx_depth=72..126 pitch_c=1000013 pitch_p=1000013 tx_i=-13.63 rx_i=13.58 usb_tx=349299777 usb_rx=349327653 tx_links=8 tx_reprimes=0 rx_primes=8 rx_overflow=655 rx_idle_discards=5846596 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838860,838861 back_peak=138776,97924 out_holes=0/0 back_holes=144/301
+15:42:40 owner log copied to outputs/latency/rate96-en7-20261031/en7nocap96-owner.log
+15:43:34 hour read: playback_faults 0 -> 0, CHANHOLE events 0 in the continuous load (count-chanholes.py), tx_links/rx_primes/back_holes/rx_overflow/tx_reprimes unchanged from t=110 s to the end; soak longest zero run 11 on ch4 (the preset's), verdict FAIL as inconclusive as in the morning
+15:43:34 candidate stopped (log kept as ~/usb-16x16-work/dante-owner-en7nocap96-20261031T144054Z.log)
+15:43:34 dante-sync sync --rate 48000 --source usb-aoip --exclude USB-AoIP --interface en7
+15:43:42 dante-sync sync --rate 48000 --exclude USB-AoIP --interface en7
+15:43:48 systemctl start usb16x16-dante
+15:43:53 start check: state=checking rate= restarts=0 invocation=79c6a36af28a4bfdbad77b9797134539 time=2026-10-31T15:43:48Z
+15:46:35 start check: state=ok rate=6014 restarts=0 invocation=79c6a36af28a4bfdbad77b9797134539 time=2026-10-31T15:44:53Z
+15:46:35 restored 48: noise probe clean (en7-restored48-noise-ch2-32f-20261031T154353Z), 400 loaded impulses daw_timeline 528 (376 + 152), spread 0, no discontinuities

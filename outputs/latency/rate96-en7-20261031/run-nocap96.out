@@ -1,0 +1,8 @@
+catch: not running
+14:42:25 soak 3600 s at 32 on 8 channels, no capture (en7nocap96); owner counters before:
+/dev/shm/dante-owner-20261031T144054Z.log
+USB t=90.1 usb=open tx=idle rx=idle tx_mean=257.0 rx_mean=192.0 rx_depth=95..384 pitch_c=1000000 pitch_p=1000000 tx_i=-14.61 rx_i=15.66 usb_tx=3344412 usb_rx=3358648 tx_links=4 tx_reprimes=0 rx_primes=5 rx_overflow=324 rx_idle_discards=5259269 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838855 back_peak=128902,97776 out_holes=0/0 back_holes=72/301
+15:42:40 soak done: soak: FAIL, the zero runs could not be checked against the preset (inconclusive is not a pass); owner counters after:
+/dev/shm/dante-owner-20261031T144054Z.log
+USB t=3700.0 usb=open tx=flow rx=flow tx_mean=256.7 rx_mean=191.0 rx_depth=72..126 pitch_c=1000013 pitch_p=1000013 tx_i=-13.63 rx_i=13.58 usb_tx=349299777 usb_rx=349327653 tx_links=8 tx_reprimes=0 rx_primes=8 rx_overflow=655 rx_idle_discards=5846596 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838860,838861 back_peak=138776,97924 out_holes=0/0 back_holes=144/301
+15:42:40 owner log copied to outputs/latency/rate96-en7-20261031/en7nocap96-owner.log

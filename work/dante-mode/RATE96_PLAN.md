@@ -688,3 +688,13 @@ Next time:
    and take `both` from the start: a return-only ring cannot say who made the zeros.
 3. The CHANHOLE cap of 4800 frames hid the faults' longer holes in the return (at 96 kHz, 50 ms); a
    cap of 9600 at 96 would show them.
+
+## Run 2026-10-31 afternoon: the same hour, no capture, Mac on `en7` (results in the handoff)
+
+The Mac's AoIP adapter moved from `en12` to `en7`; the hour was run again exactly as the morning's but
+with no tcpdump ring. No playback fault, no CHANHOLE event, no subset hole in 60 minutes (the morning:
+six faults and four events in 45 minutes under capture, none in 25 without). The capture is the likely
+cause of the morning's faults; the adapter is not implicated in them. The 2026-10-29 subset shape
+recurred in neither hour, so the adapter's part in it is still not shown. Item 1 of "Next time" above
+stands before any further catch: a capture pinned away from the owner, with a short snap length,
+checked over equal stretches with and without it.

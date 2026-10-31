@@ -1,0 +1,9 @@
+Dante interface en7 169.254.97.136 (68:5b:35:a3:9e:c1)
+Target rate 48k. Listening for devices for 4 s…
+FF-PULSE-16-DX word clock locked.
+Set USB-AoIP 96k → 48k (CoreAudio)
+
+  FF-PULSE-16-DX         already at rate  48k
+  D2USB-6152f1           already at rate  48k
+  USB-AoIP               changed          verified by CoreAudio after 0.2 s
+48k: 1 changed, 2 already at rate

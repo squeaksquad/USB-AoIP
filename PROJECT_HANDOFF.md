@@ -14905,3 +14905,43 @@ kept rings, pcaps gitignored), soak `catch96hour-soak-3600s-32f-20261031T045818Z
 - Also FOUND the same day at 48 (candidate chanholes, 04:34:00): the first soak after the candidate's
   start had one 119-frame zero run on all 8 loop channels 2 s in, with `tx_links` +1 and no fault or
   re-prime: the Mac's USB OUT paused and re-linked mid-stream. The second soak was clean. Not located.
+
+**MEASURED 2026-10-31 14:37-15:45 UTC: the 96 kHz loaded hour again, Mac on its new AoIP adapter
+(`en7`) and with NO capture: no USB playback fault, no CHANHOLE event, no subset hole. This morning's
+six faults followed the tcpdump ring, not the adapter.** Plan: `work/dante-mode/RATE96_PLAN.md`, last
+section. Evidence `outputs/latency/rate96-en7-20261031/` (`steps.txt`, `run-nocap96.sh`, the owner
+log `en7nocap96-owner.log`, `count-chanholes*.py` and their outputs for both hours), soak
+`en7nocap96-soak-3600s-32f-20261031T144225Z`.
+- The change under test: the operator moved the Mac's AoIP adapter from `en12` (suspected faulty) to
+  `en7` (Thunderbolt Ethernet, now DHCP with a self-assigned 169.254.97.136; it first had a manual
+  10.1.0.24/16, on which neither eth0 SSH nor `dante-sync` worked). `dante-sync` still defaults to
+  `en12`: pass `--interface en7`. With DVS running on `en7`, its `conmon_server` holds 224.0.0.233:8708
+  and `dante-sync` cannot bind (`Address already in use`); quitting the DVS window is not enough,
+  DVS must be stopped. It was stopped for this run.
+- 48 on the installed service before (owner c84e6a36, drop 28, direct): noise probe at 32 clean; 400
+  loaded impulses `daw_timeline` 528 (376 + 152), no discontinuities, but 2 of 400 at 368 (spread 8;
+  spread 0 again after the hour).
+- Same setup as the morning: two `dante-sync` syncs to 96 (MH, Pulse locked, D2USB, Mac), candidate
+  `chanholes` 3ef92ca0 on `asound-inferno-owner-rate96-usb-aoip.conf` (b1b677fd), the 2026-10-29
+  21:00 hour's arguments plus `--chan-holes 8 --event-trace`, `dsp-loaded@96000` (89759207), installed
+  plugin c6b012ae; Metric Halo rebooted at 96 by the operator; noise probe at 32 clean. No
+  `usb16x16-dante-catch` (status `not running` throughout), no watcher.
+- Soak 3600 s at 32 on 8 channels (14:42:25-15:42:40): no discontinuity; longest zero run 11 on ch4
+  (the preset's own, as in the morning); verdict FAIL as inconclusive, as the plan expects with a
+  preset and no host gain. Owner from the continuous load's link (t=110 s) to the end: `playback_faults`
+  0, `capture_faults` 0, `tx_links` 8 and `rx_primes` 8 (the soak's own probes, no re-link mid-load),
+  `tx_reprimes` 0, `out_holes` / `back_holes` and `rx_overflow` unchanged; CHANHOLE events 0.
+- Against the morning (same counter over its kept log, 04:59:30-05:58:32): 6 playback faults and 4
+  CHANHOLE events (05:10:59, 05:35:15 twice, one of them ch2,3,5,7 at 39 frames as part of the fault,
+  05:43:23), all under capture. Without capture today: 25 min on `en12` (morning) plus 60 min on
+  `en7` (now), 0 faults. At the morning's rate under capture (6 in 45 min) an hour without a fault is
+  unlikely by chance (Poisson, about 3 in 10,000), and the 25 clean minutes on `en12` say it is not the
+  adapter. So the capture is the likely cause of this morning's faults; the adapter is not shown to
+  matter to them.
+- Not shown: the 2026-10-29 subset holes (32/64 frames on ch3, 5, 6, 8). They appeared in neither
+  hour, on either adapter, so whether the old adapter made them is still open; to reach them a catch
+  must cost less than the faults it causes (RATE96_PLAN, "Next time", 1).
+- Back to 48 (two syncs on `en7`), service started 15:43:48, start check ok 15:44:53; noise probe at
+  32 clean; 400 loaded impulses `daw_timeline` 528 (376 + 152), spread 0, no discontinuities. Left:
+  everything at 48, `direct`, owner c84e6a36, no catch ring; DVS stopped. Candidate log kept on the
+  Pi as `~/usb-16x16-work/dante-owner-en7nocap96-20261031T144054Z.log`.

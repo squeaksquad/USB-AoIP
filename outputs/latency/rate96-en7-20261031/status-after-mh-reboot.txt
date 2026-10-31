@@ -1,0 +1,9 @@
+Dante interface en7 169.254.97.136 (68:5b:35:a3:9e:c1)
+Clock master MHLink [49057]: 96k
+USB-AoIP: 96k (offers 44.1k, 48k, 88.2k, 96k)
+Leader FF-PULSE-16-DX: word clock LOCKED (state 3, stratum 41)
+
+Device                IP               Rate    Port   Heartbeat
+D2USB-6152f1          169.254.242.82   96k     8700   1.1s ago
+FF-PULSE-16-DX        169.254.248.189  96k     8700   1.6s ago
+USB-AoIP              169.254.92.97    96k     8700   1.9s ago
