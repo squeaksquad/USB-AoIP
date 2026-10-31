@@ -1,0 +1,145 @@
+{
+  "error": null,
+  "finishedAt": "2026-10-31T04:14:31Z",
+  "id": "7bbb5a479e71ce54",
+  "identity": {
+    "confSha256": "c870203689038eb30421ba7ea2ce7fc10ff44d2151115575680efc87ac58aeb7",
+    "ownerSha256": "c84e6a36f41fe439ba729fb2a15fa05e25f72b34c4415cc618e5b5d8048e95c3",
+    "startSha256": "f4afa51d4fef13baa7fdfe7cc6fa56c12e37c8b5ffe6d6a638a4ab7466dc78eb"
+  },
+  "kind": "preset",
+  "live": "dante-rate-check",
+  "loaderLine": "{\"rate\":192000,\"block\":48,\"runs\":1,\"audio_us\":250,\"min_us\":67.261,\"median_us\":67.261,\"p99_us\":67.261,\"max_us\":67.261,\"mean_us\":67.261,\"duty_median\":0.269044,\"duty_max\":0.269044}",
+  "previousProfile": "direct",
+  "profile": "dante-rate-check",
+  "request": {
+    "artifactSha256": "29f192cad0b87f57c7eef18d1570ddddc2670da9336181b90b68e924293a1274",
+    "expectedLiveSha256": null,
+    "expectedProfile": "direct",
+    "from": null,
+    "kind": "preset",
+    "name": "Rate check",
+    "profile": "dante-rate-check",
+    "rate": null,
+    "rates": [
+      "176400",
+      "192000",
+      "44100",
+      "88200",
+      "96000"
+    ],
+    "requestedAt": 1793420053.6796916,
+    "requestedBy": "session-check",
+    "revert": null,
+    "slug": "rate-check",
+    "source": null
+  },
+  "stack": "dante",
+  "startLines": {
+    "dante-rate-check": [
+      "START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-14 seed_from_file=1 prime_drop=28 capture_drain=1",
+      "DSP loaded file=/etc/usb16x16/dsp/dante-rate-check.dsp rate=48000 preset=\"Rate check\" internal=16 biquads=288 delay_frames=0 shape=4fef3f1dc5fdb6b00ce0b698f5c09c1c5d12c2deac811bdb58d4d11cfbd27d9b",
+      "DSPLIVE following file=/run/usb16x16-dante/dsp-live.dsp status=/run/usb16x16-dante/dsp-live.status",
+      "METERS publishing file=/run/usb16x16-dante/meters.txt window_frames=2400",
+      "NETSTART capture=RUNNING playback=RUNNING",
+      "USBLINK usb=open tx=idle rx=idle tx_links=0 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=0 tx_prime_found=0 tx_prime_dropped=0 tx_unanchored=0 tx_drained=0 tx_first_block=0 tx_prime_start=0 t=0.300"
+    ]
+  },
+  "startedAt": "2026-10-31T04:14:13Z",
+  "state": "done",
+  "stats": {
+    "biquads": 288,
+    "internal": 16,
+    "maxDelay": 0,
+    "preset": "Rate check",
+    "rate": 48000
+  },
+  "steps": [
+    {
+      "at": "2026-10-31T04:14:13Z",
+      "detail": "288 biquads, internal 16, new dante-rate-check",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:13Z",
+      "detail": "/usr/local/libexec/usb16x16-dsp-offline --bench 1 on the artifact (288 biquads)",
+      "name": "checking",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:13Z",
+      "detail": "/usr/local/libexec/usb16x16-dsp-offline --bench 1 --rate 44100 on the artifact (288 biquads)",
+      "name": "checking",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "/usr/local/libexec/usb16x16-dsp-offline --bench 1 --rate 88200 on the artifact (288 biquads)",
+      "name": "checking",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "/usr/local/libexec/usb16x16-dsp-offline --bench 1 --rate 96000 on the artifact (288 biquads)",
+      "name": "checking",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "/usr/local/libexec/usb16x16-dsp-offline --bench 1 --rate 176400 on the artifact (288 biquads)",
+      "name": "checking",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "/usr/local/libexec/usb16x16-dsp-offline --bench 1 --rate 192000 on the artifact (288 biquads)",
+      "name": "checking",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "/etc/usb16x16/dsp/dante-rate-check.dsp and 44100, 88200, 96000, 176400, 192000 Hz beside it",
+      "name": "installing",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "dante-rate-check is installed; live profile direct",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "systemctl stop usb16x16-dante.service",
+      "name": "stopping",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "/etc/usb16x16/dante/owner.conf -> dante-rate-check",
+      "name": "switching",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "systemctl start usb16x16-dante.service",
+      "name": "starting",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:14Z",
+      "detail": "waiting up to 75 s for the owner to start both streams",
+      "name": "verifying",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:14:15Z",
+      "detail": "15 s on one start with nothing fatal",
+      "name": "settling",
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-10-31T04:14:31Z",
+  "version": "1.8.0"
+}

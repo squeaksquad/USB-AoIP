@@ -1,0 +1,17 @@
+START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-14 seed_from_file=1 prime_drop=28 capture_drain=1
+DSP loaded file=/etc/usb16x16/dsp/dante-rate-check.dsp rate=48000 preset="Rate check" internal=16 biquads=288 delay_frames=0 shape=4fef3f1dc5fdb6b00ce0b698f5c09c1c5d12c2deac811bdb58d4d11cfbd27d9b
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+USBRATE changed host_capture=44100 host_playback=44100 rate=48000 while open; handing the USB half back
+USBRATE refused host_capture=44100 host_playback=44100 rate=48000; the USB half stays closed
+USBRATE requested rate=44100 source=usb at=1793420093 from the arbiter in /run/usb16x16-dante/rate-request
+START usb16x16-dante-owner mode=usb pcm=inferno rate=44100 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-14 seed_from_file=1 prime_drop=28 capture_drain=1
+DSP loaded file=/etc/usb16x16/dsp/dante-rate-check@44100.dsp rate=44100 preset="Rate check" internal=16 biquads=288 delay_frames=0 shape=e02e1f3960e759d713f3be269d3e5dea4feb69df6a5ac955f4d5e56201a9f7c5
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=44100 host_rate=match host_capture=44100 host_playback=44100
+USBRATE changed host_capture=48000 host_playback=48000 rate=44100 while open; handing the USB half back
+USBRATE refused host_capture=48000 host_playback=48000 rate=44100; the USB half stays closed
+USBRATE requested rate=48000 source=usb at=1793420495 from the arbiter in /run/usb16x16-dante/rate-request
+START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-14 seed_from_file=1 prime_drop=28 capture_drain=1
+DSP loaded file=/etc/usb16x16/dsp/dante-rate-check.dsp rate=48000 preset="Rate check" internal=16 biquads=288 delay_frames=0 shape=4fef3f1dc5fdb6b00ce0b698f5c09c1c5d12c2deac811bdb58d4d11cfbd27d9b
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000
+START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-14 seed_from_file=1 prime_drop=28 capture_drain=1
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000

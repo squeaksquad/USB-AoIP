@@ -1,0 +1,42 @@
+{
+  "error": null,
+  "finishedAt": "2026-10-31T04:23:14Z",
+  "id": "7b864ac2f9286a4b",
+  "identity": {
+    "confSha256": "2318ab6f1ef33a84100f9683b6ca80b5760013bc7b32035fc230b33d21080376",
+    "ownerSha256": "c84e6a36f41fe439ba729fb2a15fa05e25f72b34c4415cc618e5b5d8048e95c3",
+    "startSha256": "f4afa51d4fef13baa7fdfe7cc6fa56c12e37c8b5ffe6d6a638a4ab7466dc78eb"
+  },
+  "kind": "remove",
+  "live": "direct",
+  "previousProfile": null,
+  "profile": "dante-rate-check",
+  "request": {
+    "artifactSha256": null,
+    "expectedLiveSha256": null,
+    "expectedProfile": null,
+    "from": null,
+    "kind": "remove",
+    "name": null,
+    "profile": "dante-rate-check",
+    "rate": null,
+    "requestedAt": 1793420594.2921703,
+    "requestedBy": "session-check",
+    "revert": null,
+    "slug": "rate-check",
+    "source": null
+  },
+  "stack": "dante",
+  "startedAt": "2026-10-31T04:23:14Z",
+  "state": "done",
+  "steps": [
+    {
+      "at": "2026-10-31T04:23:14Z",
+      "detail": "/etc/usb16x16/dsp/dante-rate-check.dsp and its other rates",
+      "name": "removing",
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-10-31T04:23:14Z",
+  "version": "1.8.0"
+}

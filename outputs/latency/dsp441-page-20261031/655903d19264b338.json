@@ -1,0 +1,80 @@
+{
+  "error": null,
+  "finishedAt": "2026-10-31T04:23:11Z",
+  "id": "655903d19264b338",
+  "identity": {
+    "confSha256": "2318ab6f1ef33a84100f9683b6ca80b5760013bc7b32035fc230b33d21080376",
+    "ownerSha256": "c84e6a36f41fe439ba729fb2a15fa05e25f72b34c4415cc618e5b5d8048e95c3",
+    "startSha256": "f4afa51d4fef13baa7fdfe7cc6fa56c12e37c8b5ffe6d6a638a4ab7466dc78eb"
+  },
+  "kind": "profile",
+  "live": "direct",
+  "previousProfile": "dante-rate-check",
+  "profile": "direct",
+  "request": {
+    "artifactSha256": null,
+    "expectedLiveSha256": null,
+    "expectedProfile": "dante-rate-check",
+    "from": null,
+    "kind": null,
+    "name": null,
+    "profile": "direct",
+    "rate": null,
+    "requestedAt": 1793420574.2792394,
+    "requestedBy": "session-check",
+    "revert": null,
+    "slug": null,
+    "source": null
+  },
+  "stack": "dante",
+  "startLines": {
+    "direct": [
+      "START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_queue=96 rx_slack=96 kp=0.5 ki=0.003 seed_ppm=-14 seed_from_file=1 prime_drop=28 capture_drain=1",
+      "METERS publishing file=/run/usb16x16-dante/meters.txt window_frames=2400",
+      "NETSTART capture=RUNNING playback=RUNNING",
+      "USBLINK usb=open tx=idle rx=idle tx_links=0 rx_primes=1 capture_faults=0 playback_faults=0 last_fault=0 tx_prime_block=0 tx_prime_found=0 tx_prime_dropped=0 tx_unanchored=0 tx_drained=0 tx_first_block=0 tx_prime_start=0 t=0.300"
+    ]
+  },
+  "startedAt": "2026-10-31T04:22:54Z",
+  "state": "done",
+  "steps": [
+    {
+      "at": "2026-10-31T04:22:54Z",
+      "detail": "direct is installed; live profile dante-rate-check",
+      "name": "validating",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:22:54Z",
+      "detail": "systemctl stop usb16x16-dante.service",
+      "name": "stopping",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:22:54Z",
+      "detail": "/etc/usb16x16/dante/owner.conf -> direct",
+      "name": "switching",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:22:54Z",
+      "detail": "systemctl start usb16x16-dante.service",
+      "name": "starting",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:22:54Z",
+      "detail": "waiting up to 75 s for the owner to start both streams",
+      "name": "verifying",
+      "ok": true
+    },
+    {
+      "at": "2026-10-31T04:22:55Z",
+      "detail": "15 s on one start with nothing fatal",
+      "name": "settling",
+      "ok": true
+    }
+  ],
+  "updatedAt": "2026-10-31T04:23:11Z",
+  "version": "1.8.0"
+}

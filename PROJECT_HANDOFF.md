@@ -14825,3 +14825,38 @@ no discontinuities, no xrun, lag or error lines. The battery behind it is the ca
 2026-10-30 15:04-16:51; this is now the Dante point of record. Rollback: `cd
 ~/usb-16x16-work/dante-mode/service && sudo ./install-owner-ratepoll.sh rollback`, before
 `install-owner-anchor.sh rollback`. Evidence `outputs/latency/ratepoll-installed-*`.
+
+**MEASURED 2026-10-31 03:57-04:25 UTC: the installed ratepoll service is clean on the noise probe,
+and a Dante preset installed the page's way follows the Mac to 44.1 and back on its own per-rate
+file.** No code changed; this closes item 2 of the 2026-10-30 pickup, which said the page and the
+arbiter offered DSP at 48 only. That was stale: since 1582cf2 (2026-10-28) the compiler offers
+44.1, and since step 4d (2026-10-17) the page compiles every Dante rate (`compileOtherRates`) and the
+applier 1.8.0 (347a7062, the installed one) stores `dante-<slug>@<rate>.dsp` and runs the file for
+owner.conf's `RATE`. What had never been done is the whole path on the installed set.
+- Noise probe at 32 on the installed service (owner c84e6a36, drop 28, direct, 48): no zero run of 4+.
+- A preset made the page's way: the transparent verify preset named `Rate check`, compiled on the Mac
+  by `work/web-ui/backend.mjs`'s own `compileDraft` and `compileOtherRates` (288 sections; 48 kHz
+  29f192ca), queued as a `preset` request by `usb16x16-web`'s own `write_apply_request` (the login
+  is the only step skipped). Applier: done 04:14:31, `dante-rate-check.dsp` plus `@44100`,
+  `@88200`, `@96000`, `@176400`, `@192000`; owner.conf `DSP_PRESET` the 48 kHz file.
+- Mac to 44.1 (`setrate.swift`, then `dante-sync sync --source usb-aoip`: MH, Pulse, DVS, D2USB
+  verified): the owner caught it while open (`USBRATE changed ... while open`, the ratepoll check in
+  service), requested 44100, the arbiter moved (receipt 310eec3b done 04:15:10): owner.conf `RATE=44100`,
+  `DSP_PRESET=.../dante-rate-check@44100.dsp` (0a474747), `DSP loaded ... rate=44100 preset="Rate
+  check" biquads=288`, start check ok 04:15:59 (5529, 0 restarts). One XRUN warning and two flow
+  request errors at 04:14:56-04:15:04, while the other devices were still being moved, before the
+  start check passed; none during the runs.
+- At 44.1 with the preset: 400 loaded impulses `daw_timeline` 505 (360 + io_offset 145), spread 0, no
+  discontinuities; noise probe at 32 clean; two-minute soak PASS on 8 channels
+  (`USB16X16_LOOP_CHANNELS=8`; longest zero run 1 on 1-8, 9-16 silent as routed). 505 against 508-509
+  on 2026-10-30 is the drop of 28 against 24.
+- Back to 48 the same way (receipt 08619da4 done 04:21:52; the preset's 48 kHz file again, start check
+  ok 04:22:40), then `direct` (655903d1) and `remove` (7b864ac2): `/etc/usb16x16/dsp/` holds no
+  `dante-*` file, owner.conf `METERS=1` only, start check ok 04:23:59. Harness on the restored
+  service: `daw_timeline` 528 (376 + 152), no discontinuities.
+- The page's staged copy on the Pi had a 2026-10-17 `backend.mjs` and `compiler/compile.mjs`
+  (comments, `OFFERED_RATES [48000]` used only as a default, and no `host-follow` step label); both
+  copied from the repo (41a12454, 99a62857). The static dir is not hash-pinned; nothing else differed.
+Left at the close: everything at 48, Mac included; `direct` with meters; service active.
+Evidence `outputs/latency/dsp441-page-20261031/` (the five receipts and the owner's START / DSP /
+USBRATE / USBOPEN lines), `dsp441-page-*`, `dsp441-restored-*`, `ratepoll-installed-noise-*`.
