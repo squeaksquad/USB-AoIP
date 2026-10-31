@@ -1,0 +1,5 @@
+04:40:30 candidate chanholes (48) stopped; service stopped since 04:32
+04:40:30 dante-sync sync --rate 96000 --allow-band-up --exclude USB-AoIP
+04:40:42 dante-sync sync --source usb-aoip --exclude USB-AoIP
+04:40:58 candidate start chanholes 3ef92ca0, rate96-candidate config, the 2026-10-29 21:00 hour's arguments + --chan-holes 8 --event-trace, dsp-loaded@96000
+04:42:26 candidate restarted on asound-inferno-owner-rate96-usb-aoip.conf (b1b677fd: the rate96 candidate config with NAME USB-AoIP, so the Pulse's subscriptions by name resolve)

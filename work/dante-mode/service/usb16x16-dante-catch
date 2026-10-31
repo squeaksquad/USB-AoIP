@@ -1,0 +1,96 @@
+#!/bin/bash
+# usb16x16-dante-catch: a bounded tcpdump ring of the Dante flows in tmpfs, for
+# catching one event on the wire (RATE96_PLAN.md, the 96 kHz loaded-hour holes,
+# 2026-10-31). Installed root-owned in /usr/local/sbin by install-dante-catch.sh
+# with a NOPASSWD rule, so a session can arm and stop it without the operator
+# (the seq-catch.sh of 2026-10-29 needed his `sudo -v`).
+#
+#   sudo -n usb16x16-dante-catch start FAR_IP [return|both] [MINUTES]
+#   sudo -n usb16x16-dante-catch stop
+#   sudo -n usb16x16-dante-catch status
+#   sudo -n usb16x16-dante-catch clear
+#
+# start: tcpdump on eth0 at nice 19 (at normal priority its writes stalled the
+#   owner's loop, 2026-10-29), UDP packets over 400 bytes, written as a ring of
+#   4 x 80 MB in /dev/shm/usb16x16-catch/ (about 60 s of one 96 kHz device's
+#   return flows). `return` (the default) keeps FAR_IP -> this Pi only, `both`
+#   both directions. FAR_IP must be a link-local IPv4 address (169.254.0.0/16).
+#   MINUTES (default 90, at most 240) bounds the capture; it refuses to start a
+#   second one.
+# stop: SIGINT to the capture, then the ring is made readable by everyone.
+# status: whether it runs, and the ring's files.
+# clear: removes the ring (refused while the capture runs).
+#
+# Nothing else: no other interface, path, filter or option is reachable.
+set -euo pipefail
+
+dir=/dev/shm/usb16x16-catch
+pidfile=$dir/tcpdump.pid
+iface=eth0
+
+fail() { echo "usb16x16-dante-catch: $*" >&2; exit 2; }
+[ "$(id -u)" -eq 0 ] || fail "run with sudo"
+local_ip=$(ip -4 -o addr show dev "$iface" | awk '{print $4}' | cut -d/ -f1 | head -1)
+
+running() {
+  [ -f "$pidfile" ] || return 1
+  local pid
+  pid=$(cat "$pidfile")
+  [[ $pid =~ ^[0-9]+$ ]] || return 1
+  [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = tcpdump ]
+}
+
+case "${1:-}" in
+  start)
+    far=${2:-}
+    mode=${3:-return}
+    minutes=${4:-90}
+    [[ $far =~ ^169\.254\.([0-9]{1,3})\.([0-9]{1,3})$ ]] && [ "${BASH_REMATCH[1]}" -le 255 ] && [ "${BASH_REMATCH[2]}" -le 255 ] \
+      || fail "FAR_IP must be a 169.254.x.y address"
+    [[ $local_ip =~ ^169\.254\. ]] || fail "$iface has no link-local address"
+    case "$mode" in
+      return) filter="udp and src host $far and dst host $local_ip and greater 400" ;;
+      both) filter="udp and host $far and host $local_ip and greater 400" ;;
+      *) fail "mode must be return or both" ;;
+    esac
+    [[ $minutes =~ ^[0-9]{1,3}$ ]] && [ "$minutes" -ge 1 ] && [ "$minutes" -le 240 ] || fail "MINUTES must be 1 to 240"
+    running && fail "a capture is already running (pid $(cat "$pidfile"))"
+    mkdir -p "$dir"
+    chmod 755 "$dir"
+    rm -f "$dir"/ring.pcap* "$dir"/tcpdump.txt "$dir"/started.txt "$dir"/stopped.txt
+    printf 'started=%s far=%s local=%s mode=%s minutes=%s\nfilter=%s\n' "$(date -u +%FT%T.%NZ)" "$far" "$local_ip" "$mode" "$minutes" "$filter" > "$dir/started.txt"
+    setsid timeout "$((minutes * 60))" nice -n 19 tcpdump -p -i "$iface" -n -s 0 -B 32768 -C 80 -W 4 -Z root \
+      -w "$dir/ring.pcap" "$filter" > "$dir/tcpdump.txt" 2>&1 < /dev/null &
+    sleep 1
+    pid=$(pgrep -n -x tcpdump || true)
+    [ -n "$pid" ] || { cat "$dir/tcpdump.txt" >&2; fail "tcpdump did not start"; }
+    echo "$pid" > "$pidfile"
+    echo "capturing: pid $pid, $filter, at most $minutes min, ring in $dir"
+    ;;
+  stop)
+    if running; then
+      kill -INT "$(cat "$pidfile")"
+      for _ in $(seq 1 20); do running || break; sleep 0.25; done
+      date -u +%FT%T.%NZ > "$dir/stopped.txt"
+      echo "stopped"
+    else
+      echo "not running"
+    fi
+    rm -f "$pidfile"
+    [ -d "$dir" ] && chmod a+r "$dir"/* 2>/dev/null || true
+    ls -l --time-style=+%T.%N "$dir" 2>/dev/null || true
+    ;;
+  status)
+    if running; then echo "running: pid $(cat "$pidfile")"; else echo "not running"; fi
+    cat "$dir/started.txt" 2>/dev/null || true
+    ls -l --time-style=+%T.%N "$dir" 2>/dev/null || true
+    ;;
+  clear)
+    running && fail "a capture is running; stop it first"
+    rm -rf "$dir"
+    echo "cleared $dir"
+    ;;
+  *)
+    fail "usage: start FAR_IP [return|both] [MINUTES] | stop | status | clear"
+    ;;
+esac

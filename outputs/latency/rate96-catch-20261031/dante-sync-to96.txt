@@ -1,0 +1,14 @@
+Dante interface en12 169.254.154.96 (4c:ea:41:63:33:8f)
+Target rate 96k. Listening for devices for 4 s…
+Set FF-PULSE-16-DX 48k → 96k
+FF-PULSE-16-DX word clock locked.
+Set Bryans-MBP-M2-Max 48k → 96k
+Set D2USB-6152f1 48k → 96k
+Set USB-AoIP 48k → 96k (CoreAudio)
+
+  USB-AoIP               skipped          excluded
+  FF-PULSE-16-DX         changed          verified by heartbeat after 2.8 s
+  Bryans-MBP-M2-Max      changed          verified by heartbeat after 3.3 s
+  D2USB-6152f1           changed          verified by heartbeat after 1.1 s
+  USB-AoIP               changed          verified by CoreAudio after 0.2 s
+96k: 4 changed, 1 skipped

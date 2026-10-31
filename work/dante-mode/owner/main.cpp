@@ -57,6 +57,13 @@
 // frames dropped, repeated, or other (seq_check.hpp). It says on which side of
 // the owner a slip the Mac sees was made.
 //
+// With --chan-holes N (diagnostic, off by default) the loop watches channels
+// 1..N of what Inferno delivers for runs of 16 to 4800 zero frames that end in
+// signal, on any subset of channels (back_holes counts only all-sixteen runs),
+// and the telemetry thread prints a CHANHOLE line, with the wall clock, for each
+// (chan_holes.hpp). It is the trigger for the 96 kHz catch (RATE96_PLAN.md):
+// it works with a preset running, where the SEQ check cannot.
+//
 // With --open-phase (diagnostic, off by default) the loop counts, from the
 // start of each stream, the frames the host has sent (gadget capture) and the
 // frames it has taken (gadget playback), and once both directions have flowed
@@ -109,7 +116,7 @@
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
 // (one line)
 // (the headers beside it; servo_test.cpp, dsp_path_test.cpp, dsp_live_test.cpp,
-// meter_tap_test.cpp and rate_check_test.cpp are their tests and build anywhere)
+// meter_tap_test.cpp, rate_check_test.cpp and chan_holes_test.cpp are their tests and build anywhere)
 
 #include <alsa/asoundlib.h>
 
@@ -117,6 +124,7 @@
 #include "dsp_live.hpp"
 #include "dsp_path.hpp"
 #include "meter_tap.hpp"
+#include "chan_holes.hpp"
 #include "rate_check.hpp"
 #include "seq_check.hpp"
 #include "servo.hpp"
@@ -218,6 +226,8 @@ struct Options {
     bool event_trace{false};
     // Diagnostic: check channels 1..seq_check against `bitexact`'s sequence at both points. 0 is off.
     unsigned seq_check{0};
+    // Diagnostic: CHANHOLE lines for zero runs on channels 1..chan_holes of the return. 0 is off.
+    unsigned chan_holes{0};
     // Diagnostic: an OPENPHASE line per host session (frames taken minus frames sent).
     bool open_phase{false};
     // Diagnostic: IMPULSE lines (channel 1 onsets both ways, with positions and indices).
@@ -244,7 +254,7 @@ struct Options {
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
-               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--open-phase] [--impulse-trace] [--prime-drop D]\n"
+               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--chan-holes N] [--open-phase] [--impulse-trace] [--prime-drop D]\n"
                "                     [--capture-drain]\n"
                "                     [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
@@ -272,6 +282,7 @@ struct Options {
                "  --gap-trace   diagnostic: print a LOOPGAP line for every wake this late or later\n"
                "  --event-trace diagnostic: an EVENT line at each step counter change, a SERVO line a second\n"
                "  --seq-check   diagnostic: check channels 1..N against bitexact's sequence, gadget and Inferno side\n"
+               "  --chan-holes  diagnostic: a CHANHOLE line for each 16+ frame zero run on channels 1..N of the return\n"
                "  --open-phase  diagnostic: an OPENPHASE line per host session, frames taken minus frames sent\n"
                "  --impulse-trace  diagnostic: IMPULSE lines, channel 1 onsets both ways with positions and indices\n"
                "  --prime-drop  experiment: the outgoing prime drops this many of the first block's frames, always\n"
@@ -324,6 +335,7 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
         else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
         else if (a == "--seq-check") o.seq_check = static_cast<unsigned>(parse_number(v, "--seq-check"));
+        else if (a == "--chan-holes") o.chan_holes = static_cast<unsigned>(parse_number(v, "--chan-holes"));
         else if (a == "--prime-drop") o.prime_drop = static_cast<long>(parse_number(v, "--prime-drop"));
         else if (a == "--gap-trace") o.gap_trace_us = static_cast<unsigned>(parse_number(v, "--gap-trace"));
         else if (a == "--stack-prefault") o.stack_prefault_kb = static_cast<unsigned>(parse_number(v, "--stack-prefault"));
@@ -575,6 +587,7 @@ struct Telemetry {
     std::atomic<std::int64_t> impulse_w{0};
     GapTrace gaps;
     usb16x16::owner::SeqTrace seq;
+    usb16x16::owner::ChanHoleTrace chan_holes;
 };
 
 void store_max(std::atomic<std::int64_t>& target, std::int64_t value) noexcept {
@@ -624,6 +637,7 @@ void* telemetry_entry(void* argument) {
     std::uint64_t reported_errors = 0;
     std::uint64_t gaps_printed = 0;
     std::uint64_t seq_printed = 0;
+    std::uint64_t holes_printed = 0;
     std::uint64_t phases_printed = 0;
     std::uint64_t prime_trace_printed = 0;
     std::uint64_t impulses_printed = 0;
@@ -731,6 +745,14 @@ void* telemetry_entry(void* argument) {
             std::printf("SEQ n=%" PRIu64 " wall=%.6f point=%s ch=%d frame=%" PRIu64 " %s %d\n", seq_printed + 1,
                         static_cast<double>(e.wall_ns) / 1e9, e.point == 0 ? "out" : "back", e.channel, e.frame,
                         kinds[static_cast<int>(e.kind)], e.count);
+            std::fflush(stdout);
+        }
+        const std::uint64_t holes_written = t.chan_holes.written.load(std::memory_order_acquire);
+        if (holes_written - holes_printed > t.chan_holes.events.size()) holes_printed = holes_written - t.chan_holes.events.size();
+        for (; holes_printed < holes_written; ++holes_printed) {
+            const usb16x16::owner::ChanHoleEvent& e = t.chan_holes.events[holes_printed % t.chan_holes.events.size()];
+            std::printf("CHANHOLE n=%" PRIu64 " wall=%.6f point=back ch=%d frame=%" PRIu64 " frames=%u\n", holes_printed + 1,
+                        static_cast<double>(e.wall_ns) / 1e9, e.channel, e.frame, e.frames);
             std::fflush(stdout);
         }
         if (const std::uint64_t errors = t.net_errors.load(std::memory_order_relaxed); errors != reported_errors) {
@@ -1532,6 +1554,8 @@ struct UsbHalf {
     // --seq-check: the outgoing direction as the gadget delivers it, the return as Inferno delivers it.
     usb16x16::owner::SeqCheck<kChannels> seq_out;
     usb16x16::owner::SeqCheck<kChannels> seq_back;
+    // --chan-holes: zero runs per channel in the return as Inferno delivers it.
+    usb16x16::owner::ChanHoles<kChannels> holes_back;
     // The DSP stage on the outgoing direction; null without --dsp-preset.
     usb16x16::owner::OutDsp* dsp{nullptr};
     // The level meters; null without --meter-file.
@@ -2148,6 +2172,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
     const bool loop_owns = t.usb_owner.load(std::memory_order_acquire) == static_cast<int>(UsbOwner::loop);
     if (loop_owns && !usb.attached) {
         usb.attached = true;
+        usb.holes_back.reset();
         usb.rx_primed = false;
         usb.tx_holdoff = 0;
         usb.tx_restart_due = false;
@@ -2172,6 +2197,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
         observe_peaks(usb.rx_scratch.data(), received, t.back_peak_1, t.back_peak_2);
         observe_holes(usb.rx_scratch.data(), received, usb.back_zero_run, t.back_holes, t.back_hole_max);
         if (usb.seq_back.channels != 0) usb.seq_back.observe(usb.rx_scratch.data(), received, t.seq);
+        if (usb.holes_back.channels != 0) usb.holes_back.observe(usb.rx_scratch.data(), received, t.chan_holes);
         if (usb.meters != nullptr && received > 0) {
             const std::int64_t before = now_ns();
             usb.meters->observe(usb.rx_scratch.data(), static_cast<std::size_t>(received), usb.meters->dante_capture);
@@ -2283,6 +2309,7 @@ int main(int argc, char** argv) {
     usb.seq_out.point = 0;
     usb.seq_back.point = 1;
     usb.seq_out.channels = usb.seq_back.channels = std::min(options.seq_check, kChannels);
+    usb.holes_back.channels = std::min(options.chan_holes, kChannels);
     usb.open_phase = options.open_phase;
     usb.impulse_trace = options.impulse_trace;
     usb.prime_drop = options.prime_drop;
