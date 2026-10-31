@@ -28,6 +28,9 @@ authoritative where anything disagrees; the sections below this one are history.
   ok; nothing running. Every commit pushed.
 
 **Rules that bite now.**
+- SSH to the Pi over Ethernet: `ssh -o HostKeyAlias=audio-dev.local bdimaio@169.254.92.97`
+  (the Mac is on the audio switch). Backup over Wi-Fi when eth0 is down or being
+  changed: the same command with `192.168.1.201`, which is also the web UI's address. Older sections and scripts still say `192.168.1.201`.
 - The far loop carries Pi channels 1-8 only (the 2026-10-29 96 kHz routing on MADI
   25-32): judge every soak with `USB16X16_LOOP_CHANNELS=8`, or it fails on 9-16.
 - The Dante device is `USB-AoIP` now. Older commands say `USB-16x16-Inferno`

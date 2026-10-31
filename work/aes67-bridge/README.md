@@ -24,12 +24,12 @@ touched by any of this.
 Stage from the Mac, verify the hashes, then run the installer once:
 
 ```bash
-rsync -a work/aes67-bridge/{usb16x16-aes67-supervisor,usb16x16-aes67.service,aes67.conf,install-aes67-service.sh} \
-  audio-dev.local:usb-16x16-work/aes67-service/
+rsync -a -e "ssh -o HostKeyAlias=audio-dev.local" work/aes67-bridge/{usb16x16-aes67-supervisor,usb16x16-aes67.service,aes67.conf,install-aes67-service.sh} \
+  bdimaio@169.254.92.97:usb-16x16-work/aes67-service/
 ```
 
 ```bash
-ssh -t -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
+ssh -t -o HostKeyAlias=audio-dev.local bdimaio@169.254.92.97 \
   'sudo ~/usb-16x16-work/aes67-service/install-aes67-service.sh'
 ```
 
@@ -159,7 +159,7 @@ The candidate wrapper and the service refuse to run over each other. The
 rule is: stop the service, measure, start it again.
 
 ```bash
-ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 'sudo systemctl stop usb16x16-aes67'
+ssh -o HostKeyAlias=audio-dev.local bdimaio@169.254.92.97 'sudo systemctl stop usb16x16-aes67'
 ```
 
 Then the accepted-point measurement as documented in the pickup prompt
@@ -167,7 +167,7 @@ Then the accepted-point measurement as documented in the pickup prompt
 environment), then:
 
 ```bash
-ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 'sudo systemctl start usb16x16-aes67'
+ssh -o HostKeyAlias=audio-dev.local bdimaio@169.254.92.97 'sudo systemctl start usb16x16-aes67'
 ```
 
 If the service is left running, the wrapper refuses with "aes67-daemon is

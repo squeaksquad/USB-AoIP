@@ -46,13 +46,13 @@ the handoff wins.
 
 | Thing | Detail |
 |---|---|
-| Pi | Raspberry Pi 5, `bdimaio@192.168.1.201` (`audio-dev.local`), management over Wi-Fi (`wlan0`) |
-| AoIP port | `eth0`, `169.254.92.97`, gigabit, on the audio switch |
+| Pi | Raspberry Pi 5; SSH as `bdimaio@169.254.92.97` over `eth0` (the Mac is on the audio switch); Wi-Fi `wlan0` at `192.168.1.201` (`audio-dev.local`) stays up as the backup SSH path |
+| AoIP port | `eth0`, `169.254.92.97`, gigabit, on the audio switch; also the SSH path |
 | Host | A Mac, connected to the Pi's USB-C port (device mode) |
 | Loop return | Ferrofish converter on the Dante network, used to measure the round trip |
 | Web UI | `http://192.168.1.201:8088` (Basic auth): health, meters, presets, DSP |
 
-SSH working says nothing about the audio network; check `eth0` separately.
+SSH over `eth0` shows the link is up, not that the Dante flows are healthy; check those separately, and keep bulk copies out of measurement runs. The web UI binds `wlan0`, so it stays at `192.168.1.201`.
 
 ## Repository layout
 

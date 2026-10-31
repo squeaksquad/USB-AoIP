@@ -26,7 +26,7 @@ The default reconnaissance sweep is 384, 192, 144, and 96 frames, 16 channels,
 48 kHz, packed 24-bit, and ten seconds per point. Run on the Mac:
 
 ```bash
-ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
+ssh -o HostKeyAlias=audio-dev.local bdimaio@169.254.92.97 \
   'sudo -n /usr/local/sbin/run-ravenna-latency-safe.sh'
 ```
 
@@ -38,7 +38,7 @@ To hold the RAVENNA period at 96 frames and sweep only the configured sink
 delay:
 
 ```bash
-ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201 \
+ssh -o HostKeyAlias=audio-dev.local bdimaio@169.254.92.97 \
   'USB16X16_RAVENNA_SINK_DELAYS="576 288 144 96 48" \
     sudo -n /usr/local/sbin/run-ravenna-latency-safe.sh 96'
 ```

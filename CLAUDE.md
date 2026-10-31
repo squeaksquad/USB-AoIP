@@ -18,8 +18,8 @@ persistent services, then an optional DSP mode.
 
 Hosts and paths that every script assumes:
 
-- Pi: `bdimaio@192.168.1.201`, ssh alias `audio-dev.local` (`wlan0`, management).
-- Pi AoIP interface: `eth0` at `169.254.92.97`. SSH working says nothing about AoIP health.
+- Pi: SSH as `bdimaio@169.254.92.97` over `eth0` (since 2026-10-30 the Mac is plugged into the audio switch); keep `-o HostKeyAlias=audio-dev.local`, the key is recorded under that name. `wlan0` at `192.168.1.201` (alias `audio-dev.local`) stays up as the backup SSH path (`ssh -o HostKeyAlias=audio-dev.local bdimaio@192.168.1.201`, for when eth0 is down or being changed); the web UI binds it (`http://192.168.1.201:8088`). Older docs and scripts still say `192.168.1.201`.
+- Pi AoIP interface: `eth0` at `169.254.92.97`, the same port SSH now uses: SSH working shows the link is up, not that the Dante flows are healthy, and bulk copies over it share the link with the audio (keep them out of measurement runs).
 - Pi work directory: `/home/bdimaio/usb-16x16-work` (staging for everything installed).
 - Installed service names: `usb-16x16.service` (gadget, protected), `usb16x16-aes67.service` (bridge), `usb16x16-governor.service`.
 - Remote: `github.com/squeaksquad/USB-AoIP` (renamed from `usb-16x16-aes67` on 2026-10-27; older entries cite the old name, which GitHub redirects), branch `main`. Public since 2026-10-30, Apache-2.0 with GPL exceptions (`LICENSE`, `LICENSING.md`, `NOTICE`, `LICENSES/`).
