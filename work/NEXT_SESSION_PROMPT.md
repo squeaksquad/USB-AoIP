@@ -42,7 +42,11 @@ authoritative where anything disagrees; the sections below this one are history.
   installs are still the operator's.
 
 **Open, in the order recommended on 2026-10-30.**
-1. One owner build with two changes and one full battery:
+1. DONE as a candidate 2026-10-30 16:51 UTC (handoff, MEASURED 15:04-16:51): owner `ratepoll`
+   c84e6a36 with `PRIME_DROP=28` passed the battery at 528; 100 ms rate check works. Next: copy its
+   owner logs from the Pi's /dev/shm, stage the installer (owner + `PRIME_DROP=28`, with rollback),
+   then the operator installs. Drop 32 sits on the prime floor (see the entry). Original item:
+   One owner build with two changes and one full battery:
    - `PRIME_DROP` toward 32 (24 now): up to 8 samples off the round trip;
      untested, the risk is a prime too thin. It is a `transport.conf` key, so the
      sweep needs no build; the build is for the second change.

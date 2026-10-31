@@ -157,6 +157,11 @@ constexpr unsigned kIdleWakes = 100;               // wakes without movement bef
 constexpr unsigned kFaultHoldoffWakes = 50;        // after a gadget PCM error, leave that direction alone this long
 constexpr std::int64_t kHostRateChanged = -ERANGE; // the detach code when the host's rate moved under an open gadget
 constexpr int kNominalPitch = 1000000;
+// How often the steward reads the host's rate while the loop owns the gadget. A
+// Mac-side change does not close the gadget PCM, and until it is seen the USB
+// half re-primes at the wrong rate: about 57 times at 1 s (2026-10-28). One
+// control open and two reads on the steward thread, never the loop's.
+constexpr std::int64_t kOpenRateCheckNs = 100000000;
 
 std::atomic<bool> stop_requested{false};
 // Set by main once the loop has returned: only then may the steward close what the loop was using.
@@ -1380,7 +1385,7 @@ void* steward_entry(void* argument) {
             // (2026-10-28). A mismatch hands the gadget back, and the check
             // before the next open refuses it and asks the arbiter.
             if (now_ns() >= next_rate_check && !t.usb_rate_changed.load(std::memory_order_acquire)) {
-                next_rate_check = now_ns() + 1000000000LL;
+                next_rate_check = now_ns() + kOpenRateCheckNs;
                 long host_capture = 0;
                 long host_playback = 0;
                 read_gadget_rates(o.usb, host_capture, host_playback);
@@ -1492,7 +1497,7 @@ void* steward_entry(void* argument) {
         last_reported = 1;
         // A change seen under the last open was dealt with by the check above.
         t.usb_rate_changed.store(false, std::memory_order_release);
-        next_rate_check = now_ns() + 1000000000LL;
+        next_rate_check = now_ns() + kOpenRateCheckNs;
         t.usb_owner.store(static_cast<int>(UsbOwner::loop), std::memory_order_release);
     }
     // The loop has returned; whatever is open is ours to close.

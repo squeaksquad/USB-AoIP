@@ -14766,3 +14766,33 @@ with `netaudio subscription add --tx USB-AoIP --rx FF-PULSE-16-DX --count 16 --o
 (lists before and after in `outputs/latency/dante-rename-20261030/`). Control-change checks: 400
 loaded impulses `daw_timeline` 532 (380 + io_offset 152), noise probe at 32 clean (no zero run of 4+),
 two-minute soak on 8 channels PASS, no xrun, lag or error lines. Evidence `outputs/latency/rename-aoip-*`.
+
+**MEASURED 2026-10-30 15:04-16:51 UTC: owner candidate `ratepoll` (c84e6a36, source ec8d60bc) with
+`--prime-drop 28` passes the full battery at `daw_timeline` 528; a Mac-only rate change is caught
+with no wrong-rate re-prime. Not installed; no installer staged yet.** Item 1 of the 2026-10-30 pickup.
+The source change is one constant: the steward's host-rate check while the loop owns the gadget runs
+every 100 ms (`kOpenRateCheckNs`) instead of every second, still on the steward thread. Built on the
+Pi in `~/usb-16x16-work/dante-mode/owner/ratepoll/` with the header's g++ line (bridge core and
+headers identical to `capdrain/`), binary `owner/usb16x16-dante-owner-ratepoll`. Run by the candidate
+launcher with the service's arguments, `--capture-drain`, and `--rate-request-file
+/dev/shm/ratepoll-rate-request` so the installed arbiter was never driven.
+- Prime-drop sweep, 400 loaded impulses at 32 per open: 24 (control) 532, 532; 28: 528, 528, 527;
+  32: 524, 524, 524. At 32 the prime finds depth 79-81 and 79 + (48 - 32) = 95 is one under the
+  floor (block 48 + packet 32 + resync margin 16 = 96), so 2 of 12 primes skipped a frame of silence
+  (`tx_unanchored` 2). 28 keeps 4-5 frames of margin and never hit the guard. Counters clean at all
+  three (no reprimes, faults or holes). Going below 528 needs the floor itself revisited.
+- Rate change (drop 28, silent hold client at 48 / 32 frames, `setrate.swift` from
+  `outputs/latency/rate-report-trace-20261028/`): Mac to 44.1 at 15:24:03, `USBRATE changed ...
+  while open` 100 ms after the host stopped, `tx_links` stayed 1 (2026-10-28: about 57 wrong-rate
+  re-primes at the 1 s check), then `USBRATE refused`, `requested rate=44100 source=usb`; Mac back to
+  48 at 15:24:11, `USBRATE cleared`, reopened and flowed.
+- Battery on one fresh candidate start (15:24:58), drop 28: noise probe at 32 clean (no zero run of
+  4+); four loaded 800-impulse runs `daw_timeline` 528 each (376 + io_offset 152), spread 0, no
+  discontinuities; ten-minute soak and loaded hour PASS on 8 channels (`USB16X16_LOOP_CHANNELS=8`);
+  owner counters over 5170 s: `tx_reprimes` 0, faults 0, `out_holes` / `back_holes` 0/0, no USBRATE
+  or RECOVER, `rx_overflow` 763 over 33 primes (about 23 per prime, as on the 06:45 battery).
+Owed for install: an installer (owner c84e6a36 for abee374a, `transport.conf` `PRIME_DROP=28`, with
+`rollback` to abee374a / 31a2a257) and the operator's sudo; after it, one harness run should read 528.
+Service restored 16:52 (abee374a, drop 24, start check ok 16:53:16). Evidence
+`outputs/latency/ratepoll-drop{24,28,32}-*`, `ratepoll28-battery*`, `ratepoll28-hour-*`; the owner logs
+are still in the Pi's `/dev/shm/dante-owner-20261030T15*.log` (not yet copied).
