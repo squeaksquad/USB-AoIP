@@ -671,3 +671,20 @@ master, the Pulse's word clock locked, 64/64 subscriptions as the reference
   range; the far loop's delay and the open's draw are both in it and these runs do not split them.
 - Next time it matters: several harness opens on one start (the draw's spread) against the same after a
   Metric Halo reboot, or an eth0 capture timing the Pi -> Pulse -> Pi leg directly.
+
+## Run 2026-10-31: the catch, armed through a loaded hour (results in the handoff)
+
+What was built for steps 2-4 above: the owner's `--chan-holes N` line (the cheaper trigger), the
+root-owned `service/usb16x16-dante-catch` ring (sessions arm it without the operator), and
+`outputs/latency/rate96-catch-20261031/` (`watch-chanhole.py`, `run-catch96.sh`). The hour did not
+show the 2026-10-29 subset holes. It showed six USB playback faults, about 51 ms of zeros at the Mac
+each, all while the capture ran; where the ring held both directions the zeros left the Pi first.
+Next time:
+1. Make the capture cheap enough not to cause faults, or show that it does: pin tcpdump away from
+   the owner's cores (the candidate launcher's `CPUS=` for the owner, `taskset` in the catch script),
+   take a short snap length if the reader can live with part of each packet, and run equal stretches
+   with and without it, counting faults.
+2. Arm the watcher only after the soak's load starts (the readiness probes are subset runs on ch1),
+   and take `both` from the start: a return-only ring cannot say who made the zeros.
+3. The CHANHOLE cap of 4800 frames hid the faults' longer holes in the return (at 96 kHz, 50 ms); a
+   cap of 9600 at 96 would show them.

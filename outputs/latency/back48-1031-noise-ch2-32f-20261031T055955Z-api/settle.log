@@ -1,0 +1,4 @@
+probe 1 FAIL consecutive=0 diag: callbacks=1 inputWithData=4425 inputSkipped=0 copiedFrames=141600 placementMisses=0 rawInputPeak=0.0 capturePeak=0
+probe 2 PASS consecutive=1
+probe 3 PASS consecutive=2
+probe 4 PASS consecutive=3

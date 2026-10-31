@@ -14860,3 +14860,48 @@ owner.conf's `RATE`. What had never been done is the whole path on the installed
 Left at the close: everything at 48, Mac included; `direct` with meters; service active.
 Evidence `outputs/latency/dsp441-page-20261031/` (the five receipts and the owner's START / DSP /
 USBRATE / USBOPEN lines), `dsp441-page-*`, `dsp441-restored-*`, `ratepoll-installed-noise-*`.
+
+**MEASURED 2026-10-31 04:28-06:02 UTC: the 96 kHz loaded hour with the wire catch armed. The 2026-10-29
+shape (32/64 frames on a subset of channels) did not recur; six USB playback faults did, each a hole
+of about 51 ms on every looped channel at the Mac, all six while the capture ran and none in the 25
+minutes without it. Where the wire saw zeros, the Pi sent them first.** Plan: `work/dante-mode/
+RATE96_PLAN.md`, last section. Evidence `outputs/latency/rate96-catch-20261031/` (`steps.txt`, three
+kept rings, pcaps gitignored), soak `catch96hour-soak-3600s-32f-20261031T045818Z`.
+- New tools. Owner `--chan-holes N` (`owner/chan_holes.hpp`, `chan_holes_test.cpp` passes): a CHANHOLE
+  line per zero run of 16-4800 frames ending in signal on any of channels 1..N of the return, which
+  `back_holes` (all 16) cannot see and which works with a preset running; candidate `chanholes`
+  3ef92ca0 (ratepoll source plus that). `service/usb16x16-dante-catch` (58be3664) with
+  `install-dante-catch.sh` (a8e4315b): a root-owned bounded tcpdump ring in `/dev/shm/usb16x16-catch`
+  (eth0, nice 19, 4 x 80 MB, `return` or `both`, at most 240 min, link-local far address only);
+  INSTALLED by the operator that morning with its NOPASSWD rule, so sessions arm and stop catches themselves.
+  `config/asound-inferno-owner-rate96-usb-aoip.conf` (b1b677fd): the rate96 candidate config with NAME
+  `USB-AoIP`, since the Pulse subscribes by name (the 2026-10-29 one says `USB-16x16-Inferno`).
+  `watch-chanhole.py` (the trigger: CHANHOLE lines within 2 ms are one event) and `run-catch96.sh`.
+- Domain to 96 by `dante-sync` (two syncs), candidate on the 2026-10-29 21:00 hour's arguments
+  (`loaded@96000` 89759207, no prime drop or capture drain, no rate-request file) plus `--chan-holes 8
+  --event-trace`; Metric Halo rebooted at 96 by the operator; noise probe at 32 clean.
+- Soak 3600 s at 32 on 8 channels: no discontinuity; 89 events: the preset's own ch4 runs of 4-11, and
+  six all-8 holes of 4872-5088 frames at soak 598, 631, 748, 2204, 2656, 2692 s = owner
+  `playback_faults` 1-6 at 05:08:29.98, 05:09:02.80, 05:10:59.97, 05:35:15.60, 05:42:48.25,
+  05:43:23.58 (the 4th with `tx_reprimes` and `tx_links` +1). Verdict FAIL as inconclusive (the
+  preset's reference check cannot judge an 8-channel loop with no host gain), as the plan expected.
+- On the wire (`channel-zeros.py --min 16`): at 05:10:59 (return-only ring) 40, 136, 104 zero frames on
+  all 8 looped channels in the Pulse's packets; at 05:35:15 and 05:43:23 (both directions) the Pi's own
+  transmit flows carry the zeros first (39 then 226; 90) on all 16 TX channels and the return carries
+  them 144 frames later, the loop's delay. So those holes leave the Pi; the far loop only brings them
+  back. At the Mac each fault's hole is about 51 ms against 0.4-2.4 ms on the wire: the rest is made
+  between the owner and the Mac (the playback fault and the return queue's re-prime).
+- The capture's cost, as the plan warned (catch2/catch3 on 2026-10-29, faults about every 32.7 s):
+  capture ran 04:58-05:11, 05:12-05:35 and 05:36-05:43 (both directions from 05:13); faults 1-2 are
+  32.8 s apart; none in the first 10 min of capture, none in 05:43:26-05:58:32 without it. Not
+  separated from chance, but no hole of today is known to occur without a capture running.
+- Not shown: what made the 2026-10-29 subset holes; they did not appear in this hour. The trigger
+  armed only after the soak's load started: the readiness probes' channel-1 impulses are subset runs
+  (a false fire at 04:56:31 in the trial).
+- Back to 48 (two syncs), service started 05:59:55, start check ok 06:01:00; noise probe at
+  32 clean; 400 loaded impulses `daw_timeline` 528 (376 + 152). Left: everything at 48, `direct`,
+  owner c84e6a36, the catch ring cleared. Candidate log kept on the Pi as
+  `~/usb-16x16-work/dante-owner-catch96-20261031T044227Z.log`.
+- Also FOUND the same day at 48 (candidate chanholes, 04:34:00): the first soak after the candidate's
+  start had one 119-frame zero run on all 8 loop channels 2 s in, with `tx_links` +1 and no fault or
+  re-prime: the Mac's USB OUT paused and re-linked mid-stream. The second soak was clean. Not located.

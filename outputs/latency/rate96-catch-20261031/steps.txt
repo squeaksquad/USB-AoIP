@@ -3,3 +3,34 @@
 04:40:42 dante-sync sync --source usb-aoip --exclude USB-AoIP
 04:40:58 candidate start chanholes 3ef92ca0, rate96-candidate config, the 2026-10-29 21:00 hour's arguments + --chan-holes 8 --event-trace, dsp-loaded@96000
 04:42:26 candidate restarted on asound-inferno-owner-rate96-usb-aoip.conf (b1b677fd: the rate96 candidate config with NAME USB-AoIP, so the Pulse's subscriptions by name resolve)
+04:46:03 operator: Metric Halo rebooted at 96, install-dante-catch.sh run
+04:46:56 catch armed: usb16x16-dante-catch start 169.254.248.189 return 75; watcher on the owner log; soak 3600 s (catch96hour)
+04:47:46 first arming hung (sudo's pty held the ssh channel; no soak ran); stopped, cleared, driver fixed
+04:48:26 catch armed: usb16x16-dante-catch start 169.254.248.189 return 16; watcher on the owner log; soak 60 s (catch96test)
+04:56:27 catch armed: usb16x16-dante-catch start 169.254.248.189 return 16; watcher on the owner log; soak 60 s (catch96test)
+04:57:43 soak done: soak: PASS
+04:57:44 ring and trigger copied to outputs/latency/rate96-catch-20261031/catch96test
+04:58:16 catch armed: usb16x16-dante-catch start 169.254.248.189 return 75; watcher on the owner log; soak 3600 s (catch96hour)
+capturing: pid 2188143, udp and src host 169.254.248.189 and dst host 169.254.92.97 and greater 400, at most 75 min, ring in /dev/shm/usb16x16-catch
+running: pid 2188143
+04:58:36.001 watching /dev/shm/dante-owner-20261031T044227Z.log
+05:12:22 false trigger at 05:10:59.98 (one all-8 event split by 1 us stamps): it was an owner playback fault; ring kept in catch96hour-fault1/; watcher grouping fixed (2 ms), capture and watcher re-armed for the rest of the soak
+capturing: pid 2189467, udp and src host 169.254.248.189 and dst host 169.254.92.97 and greater 400, at most 55 min, ring in /dev/shm/usb16x16-catch
+05:12:24.405 watching /dev/shm/dante-owner-20261031T044227Z.log
+stopped
+capturing: pid 2189693, udp and host 169.254.248.189 and host 169.254.92.97 and greater 400, at most 50 min, ring in /dev/shm/usb16x16-catch
+05:13:24.287 watching /dev/shm/dante-owner-20261031T044227Z.log
+05:13:25 re-armed: capture both directions, watcher rule any (the 05:10:59 all-8 run was zeros already in the Pulse's packets: catch96hour-fault1/)
+capturing: pid 2191539, udp and host 169.254.248.189 and host 169.254.92.97 and greater 400, at most 35 min, ring in /dev/shm/usb16x16-catch
+05:36:15.199 watching /dev/shm/dante-owner-20261031T044227Z.log
+05:36:16 05:35:15 subset catch kept in catch96hour-subset1/ (the zeros leave the Pi first, 144 frames before they return; tx_reprime, tx_link and a playback fault with them); re-armed both/any
+05:44:09 05:43:23 all-8 catch kept in catch96hour-event3/ (90 zeros sent by the Pi on all 16 TX, back 144 frames later; playback fault + rx prime, no tx link). Capture left OFF for the rest of the soak: faults and holes counted without it
+05:58:32 soak done: soak: FAIL, the zero runs could not be checked against the preset (inconclusive is not a pass)
+05:58:36 ring and trigger copied to outputs/latency/rate96-catch-20261031/catch96hour
+05:59:25 candidate stopped (log kept as ~/usb-16x16-work/dante-owner-catch96-20261031T044227Z.log), catch ring cleared
+05:59:25 dante-sync sync --rate 48000 --source usb-aoip --exclude USB-AoIP
+05:59:38 dante-sync sync --rate 48000 --exclude USB-AoIP
+05:59:55 systemctl start usb16x16-dante
+state=ok rate=6017 restarts=0 invocation=9be5d30c1ff3401fabbcabed2078f548 time=2026-10-31T04:23:59Z
+START usb16x16-dante-owner mode=usb pcm=inferno rate=48000 period=64 buffer=1024 tx_lead=128 guard=256 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=48 usb_buffer=480 rx_q
+USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 buffer=480 rate=48000 host_rate=match host_capture=48000 host_playback=48000

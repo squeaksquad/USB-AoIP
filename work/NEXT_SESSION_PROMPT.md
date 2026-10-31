@@ -67,7 +67,12 @@ authoritative where anything disagrees; the sections below this one are history.
    (508 +-1 by hand through the candidate launcher), but the page and the arbiter
    offer DSP at 48 only. A control-side change: behavioural checks, a noise probe
    at 32 and a two-minute soak.
-3. 96 kHz on the real loop (8 channels): DEFERRED 2026-10-29 with the loaded-hour
+3. RUN 2026-10-31 04:28-06:02 UTC (handoff, MEASURED; RATE96_PLAN.md, last section): the catch
+   armed through a loaded hour at 96. The 2026-10-29 subset holes did not recur; six USB playback
+   faults (~51 ms holes at the Mac) came, all while the capture ran, and on the wire the zeros left
+   the Pi first. Next: a capture that does not cause faults (or proof that it does), then the hour
+   again. `usb16x16-dante-catch` is installed, so sessions arm catches themselves. Original item:
+   96 kHz on the real loop (8 channels): DEFERRED 2026-10-29 with the loaded-hour
    holes on ch3, 5, 6, 8 unlocated; the catch plan is the last section of
    `work/dante-mode/RATE96_PLAN.md` (owner per-channel `back` zero-run line as the
    trigger, a Pulse -> Pi tcpdump ring, `diag/dante-pcap-zeros.py`). Run it on the

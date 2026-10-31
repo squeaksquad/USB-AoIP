@@ -1,0 +1,25 @@
+04:56:27 catch armed: usb16x16-dante-catch start 169.254.248.189 return 16; watcher on the owner log; soak 60 s (catch96test)
+capturing: pid 2187768, udp and src host 169.254.248.189 and dst host 169.254.92.97 and greater 400, at most 16 min, ring in /dev/shm/usb16x16-catch
+04:56:28.799 watching /dev/shm/dante-owner-20261031T044227Z.log
+04:57:43 soak done: soak: PASS
+not running
+total 29712
+-rw-r--r-- 1 root root 30366756 00:56:33.348326855 ring.pcap0
+-rw-r--r-- 1 root root      185 00:56:27.670138042 started.txt
+-rw-r--r-- 1 root root       31 00:56:33.581595358 stopped.txt
+-rw-r--r-- 1 root root      170 00:56:33.320327112 tcpdump.txt
+04:56:28.799 watching /dev/shm/dante-owner-20261031T044227Z.log
+04:56:31.304 TRIGGER CHANHOLE wall=1793422591.219494 ch=1 frames=38 frame=80998893; stopping the capture in 2 s
+04:56:33.586 stopped
+total 29712
+-rw-r--r-- 1 root root 30366756 00:56:33.348326855 ring.pcap0
+-rw-r--r-- 1 root root      185 00:56:27.670138042 started.txt
+-rw-r--r-- 1 root root       31 00:56:33.581595358 stopped.txt
+-rw-r--r-- 1 root root      170 00:56:33.320327112 tcpdump.txt 
+total 59344
+-rw-r--r--@ 1 bryandimaio  wheel  30366756 Oct 31 00:57 ring.pcap0
+-rw-r--r--@ 1 bryandimaio  wheel       185 Oct 31 00:57 started.txt
+-rw-r--r--@ 1 bryandimaio  wheel        31 Oct 31 00:57 stopped.txt
+-rw-r--r--@ 1 bryandimaio  wheel       170 Oct 31 00:57 tcpdump.txt
+-rw-r--r--@ 1 bryandimaio  wheel       461 Oct 31 00:57 trigger.txt
+04:57:44 ring and trigger copied to outputs/latency/rate96-catch-20261031/catch96test

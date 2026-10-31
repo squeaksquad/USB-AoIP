@@ -14,6 +14,9 @@ import time
 from pathlib import Path
 
 log, out = Path(sys.argv[1]), Path(sys.argv[2])
+# `subset` (the first arming) passes over events on all 8 channels; `any` (default since 05:13 that day,
+# after the 05:10:59 all-8 run proved to be zeros already in the Pulse's packets) fires on every event.
+rule = sys.argv[3] if len(sys.argv) > 3 else "any"
 out.mkdir(parents=True, exist_ok=True)
 record = open(out / "trigger.txt", "a", buffering=1)
 
@@ -31,11 +34,11 @@ def stop(reason):
 
 def judge(group):
     """True when this event fired the trigger."""
-    channels = sorted(int(g["ch"]) for g in group)
+    channels = sorted({int(g["ch"]) for g in group})
     frames = sorted({int(g["frames"]) for g in group})
     summary = (f"CHANHOLE wall={group[0]['wall']} ch={','.join(map(str, channels))} "
                f"frames={','.join(map(str, frames))} frame={group[0]['frame']}")
-    if len(channels) < 8:
+    if rule == "any" or len(channels) < 8:
         stop(f"TRIGGER {summary}")
         return True
     record.write(f"{stamp()} passed over (all 8 channels) {summary}\n")
@@ -50,7 +53,9 @@ with open(log) as handle:
         line = handle.readline()
         if line.startswith("CHANHOLE "):
             fields = dict(part.split("=", 1) for part in line.split()[1:] if "=" in part)
-            if group and fields["wall"] != group[0]["wall"]:
+            # One event's lines can carry stamps a few microseconds apart (05:10:59.966582 and .966583 on
+            # 2026-10-31 split one all-8 run into a false ch1,2 trigger): within 2 ms is the same event.
+            if group and abs(float(fields["wall"]) - float(group[0]["wall"])) > 0.002:
                 if judge(group):
                     break
                 group = []

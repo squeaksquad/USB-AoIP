@@ -1,0 +1,35 @@
+04:58:16 catch armed: usb16x16-dante-catch start 169.254.248.189 return 75; watcher on the owner log; soak 3600 s (catch96hour)
+capturing: pid 2188143, udp and src host 169.254.248.189 and dst host 169.254.92.97 and greater 400, at most 75 min, ring in /dev/shm/usb16x16-catch
+running: pid 2188143
+04:58:36.001 watching /dev/shm/dante-owner-20261031T044227Z.log
+05:58:32 soak done: soak: FAIL, the zero runs could not be checked against the preset (inconclusive is not a pass)
+not running
+total 267360
+-rw-r--r-- 1 root root 80000208 01:43:15.404396201 ring.pcap0
+-rw-r--r-- 1 root root 80000208 01:43:22.796306839 ring.pcap1
+-rw-r--r-- 1 root root 33706862 01:43:25.948268719 ring.pcap2
+-rw-r--r-- 1 root root 80000208 01:43:08.024485369 ring.pcap3
+-rw-r--r-- 1 root root      175 01:36:14.078907946 started.txt
+-rw-r--r-- 1 root root       31 01:43:26.179397294 stopped.txt
+-rw-r--r-- 1 root root      176 01:43:25.912269155 tcpdump.txt
+05:36:15.199 watching /dev/shm/dante-owner-20261031T044227Z.log
+05:43:23.890 TRIGGER CHANHOLE wall=1793425403.523158 ch=1,2,3,4,5,6,7,8 frames=90 frame=350980984; stopping the capture in 2 s
+05:43:26.186 stopped
+total 267360
+-rw-r--r-- 1 root root 80000208 01:43:15.404396201 ring.pcap0
+-rw-r--r-- 1 root root 80000208 01:43:22.796306839 ring.pcap1
+-rw-r--r-- 1 root root 33706862 01:43:25.948268719 ring.pcap2
+-rw-r--r-- 1 root root 80000208 01:43:08.024485369 ring.pcap3
+-rw-r--r-- 1 root root      175 01:36:14.078907946 started.txt
+-rw-r--r-- 1 root root       31 01:43:26.179397294 stopped.txt
+-rw-r--r-- 1 root root      176 01:43:25.912269155 tcpdump.txt 
+total 534640
+-rw-r--r--@ 1 bryandimaio  wheel  80000208 Oct 31 01:58 ring.pcap0
+-rw-r--r--@ 1 bryandimaio  wheel  80000208 Oct 31 01:58 ring.pcap1
+-rw-r--r--@ 1 bryandimaio  wheel  33706862 Oct 31 01:58 ring.pcap2
+-rw-r--r--@ 1 bryandimaio  wheel  80000208 Oct 31 01:58 ring.pcap3
+-rw-r--r--@ 1 bryandimaio  wheel       175 Oct 31 01:58 started.txt
+-rw-r--r--@ 1 bryandimaio  wheel        31 Oct 31 01:58 stopped.txt
+-rw-r--r--@ 1 bryandimaio  wheel       176 Oct 31 01:58 tcpdump.txt
+-rw-r--r--@ 1 bryandimaio  wheel       663 Oct 31 01:58 trigger.txt
+05:58:36 ring and trigger copied to outputs/latency/rate96-catch-20261031/catch96hour

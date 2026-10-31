@@ -1,0 +1,8 @@
+USB-AoIP: 96k (offers 44.1k, 48k, 88.2k, 96k)
+Leader FF-PULSE-16-DX: word clock LOCKED (state 3, stratum 41)
+
+Device                IP               Rate    Port   Heartbeat
+Bryans-MBP-M2-Max     169.254.154.96   96k     38700  1.5s ago  (DVS)
+D2USB-6152f1          169.254.242.82   96k     8700   1.3s ago
+FF-PULSE-16-DX        169.254.248.189  96k     8700   1.4s ago
+USB-AoIP              169.254.92.97    96k     8700   1.3s ago

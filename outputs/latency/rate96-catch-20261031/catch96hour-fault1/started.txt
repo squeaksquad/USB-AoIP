@@ -1,0 +1,2 @@
+started=2026-10-31T04:58:17.116990900Z far=169.254.248.189 local=169.254.92.97 mode=return minutes=75
+filter=udp and src host 169.254.248.189 and dst host 169.254.92.97 and greater 400

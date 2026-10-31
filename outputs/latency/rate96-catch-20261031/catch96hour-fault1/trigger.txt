@@ -1,0 +1,12 @@
+04:58:36.001 watching /dev/shm/dante-owner-20261031T044227Z.log
+05:10:59.980 passed over (all 8 channels) CHANHOLE wall=1793423459.966370 ch=1,2,3,4,5,6,7,8 frames=40 frame=164399402
+05:10:59.981 TRIGGER CHANHOLE wall=1793423459.966582 ch=1,2 frames=136 frame=164399498; stopping the capture in 2 s
+05:11:02.303 stopped
+total 292720
+-rw-r--r-- 1 root root 80000208 01:10:21.455518255 ring.pcap0
+-rw-r--r-- 1 root root 80000208 01:10:36.247244034 ring.pcap1
+-rw-r--r-- 1 root root 80000208 01:10:51.030972387 ring.pcap2
+-rw-r--r-- 1 root root 59676344 01:11:02.074771003 ring.pcap3
+-rw-r--r-- 1 root root      185 00:58:17.117187985 started.txt
+-rw-r--r-- 1 root root       31 01:11:02.298628713 stopped.txt
+-rw-r--r-- 1 root root      174 01:11:02.034771730 tcpdump.txt 
