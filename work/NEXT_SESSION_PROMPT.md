@@ -49,8 +49,8 @@ authoritative where anything disagrees; the sections below this one are history.
    c84e6a36 with `PRIME_DROP=28` passed the battery at 528; 100 ms rate check works. STAGED 23:20
    (handoff): `service/install-owner-ratepoll.sh` (owner c84e6a36 + `transport-ratepoll.conf`,
    `PRIME_DROP=28`; `rollback` to abee374a / 31a2a257), hash-checked on the Pi; owner logs saved in
-   `outputs/latency/ratepoll-20261030/`. Next: the operator runs `cd ~/usb-16x16-work/dante-mode/service
-   && sudo ./install-owner-ratepoll.sh`, then one `measure-candidate.sh 32 400` should read 528.
+   `outputs/latency/ratepoll-20261030/`. INSTALLED 2026-10-31 03:33 UTC by the operator; one
+   `measure-candidate.sh 32 400` read 528 on the installed service (handoff tail).
    Drop 32 sits on the prime floor (see the entry). Original item:
    One owner build with two changes and one full battery:
    - `PRIME_DROP` toward 32 (24 now): up to 8 samples off the round trip;
