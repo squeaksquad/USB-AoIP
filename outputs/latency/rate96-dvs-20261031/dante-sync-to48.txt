@@ -1,0 +1,14 @@
+Dante interface en7 169.254.97.136 (68:5b:35:a3:9e:c1)
+Target rate 48k. Listening for devices for 4 s…
+Set MHLink [49057] 96k → 48k (CoreAudio)
+Set FF-PULSE-16-DX 96k → 48k
+FF-PULSE-16-DX word clock locked.
+Set Bryans-MBP-M2-Max 96k → 48k
+Set D2USB-6152f1 96k → 48k
+
+  USB-AoIP               skipped          excluded
+  MHLink [49057]         changed          verified by CoreAudio after 0.1 s
+  FF-PULSE-16-DX         changed          verified by heartbeat after 2.4 s
+  Bryans-MBP-M2-Max      changed          verified by heartbeat after 5.7 s
+  D2USB-6152f1           changed          verified by heartbeat after 0.8 s
+48k: 4 changed, 1 skipped

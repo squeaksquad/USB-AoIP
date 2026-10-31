@@ -1,0 +1,1 @@
+window lines 1020..7261; CHANHOLE lines 0; events 0; first -; by shape {}

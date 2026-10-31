@@ -1,0 +1,21 @@
+16:35:34 noise probe dvs96preset: zero runs>=4: 0
+catch: not running
+16:35:34 soak 3600 s at 32 on 8 channels, no capture (dvs96preset); owner counters before:
+/dev/shm/dante-owner-20261031T160523Z.log
+USB t=1810.1 usb=open tx=idle rx=idle tx_mean=260.0 rx_mean=200.4 rx_depth=80..384 pitch_c=1000000 pitch_p=1000000 tx_i=-13.23 rx_i=16.66 usb_tx=3344383 usb_rx=3358693 tx_links=4 tx_reprimes=0 rx_primes=5 rx_overflow=345 rx_idle_discards=170384618 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838859 back_peak=128902,102261 out_holes=0/0 back_holes=72/301
+17:35:50 soak done: soak: FAIL, the zero runs could not be checked against the preset (inconclusive is not a pass); owner counters after:
+/dev/shm/dante-owner-20261031T160523Z.log
+USB t=5420.0 usb=open tx=flow rx=flow tx_mean=256.6 rx_mean=192.0 rx_depth=84..124 pitch_c=1000015 pitch_p=1000015 tx_i=-15.07 rx_i=15.20 usb_tx=349345726 usb_rx=349373741 tx_links=8 tx_reprimes=0 rx_primes=9 rx_overflow=528 rx_idle_discards=170924881 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838860,838861 back_peak=138776,97924 out_holes=0/0 back_holes=144/301
+17:35:50 owner log copied to outputs/latency/rate96-dvs-20261031/dvs96preset-owner.log
+started usb16x16-dante-candidate: log /dev/shm/dante-owner-20261031T173553Z.log
+17:35:55 candidate restarted with no preset (direct), same arguments otherwise
+17:37:36 noise probe dvs96direct: zero runs>=4: 0
+catch: not running
+17:37:36 soak 3600 s at 32 on 8 channels, no capture (dvs96direct); owner counters before:
+/dev/shm/dante-owner-20261031T173553Z.log
+USB t=100.1 usb=open tx=flow rx=flow tx_mean=256.0 rx_mean=198.7 rx_depth=101..122 pitch_c=1000015 pitch_p=1000022 tx_i=-15.15 rx_i=18.56 usb_tx=3201189 usb_rx=3214454 tx_links=4 tx_reprimes=0 rx_primes=4 rx_overflow=184 rx_idle_discards=6364060 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838859 back_peak=2097152,838859 out_holes=0/0 back_holes=0/0
+18:37:50 soak done: soak: PASS; owner counters after:
+/dev/shm/dante-owner-20261031T173553Z.log
+USB t=3710.0 usb=open tx=flow rx=flow tx_mean=255.5 rx_mean=192.0 rx_depth=95..109 pitch_c=1000016 pitch_p=1000016 tx_i=-15.37 rx_i=15.53 usb_tx=349206199 usb_rx=349233985 tx_links=8 tx_reprimes=0 rx_primes=8 rx_overflow=554 rx_idle_discards=6898069 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838860,838861 back_peak=838860,838861 out_holes=0/0 back_holes=0/0
+18:37:51 owner log copied to outputs/latency/rate96-dvs-20261031/dvs96direct-owner.log
+18:37:51 both hours done

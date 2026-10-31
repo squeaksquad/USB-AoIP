@@ -4,7 +4,7 @@
 # counters before and after, and the candidate's log copied back for the CHANHOLE and fault count.
 set -u
 cd /Users/bryandimaio/Development/USB-AoIP
-D=outputs/latency/rate96-en7-20261031
+D=${D:-outputs/latency/rate96-en7-20261031}
 SECONDS_SOAK=${1:-3600}
 LABEL=${2:-en7nocap96}
 P=(-o HostKeyAlias=audio-dev.local)
@@ -18,6 +18,6 @@ counters | tee -a $D/steps.txt
 USB16X16_LOOP_CHANNELS=8 work/dante-mode/measure-candidate.sh soak $SECONDS_SOAK 32 $LABEL > $D/$LABEL-soak.out 2>&1
 log "soak done: $(grep -E '^soak:' $D/$LABEL-soak.out | tail -1); owner counters after:"
 counters | tee -a $D/steps.txt
-ssh $P $PI 'cp $(ls -t /dev/shm/dante-owner-*.log | head -1) /dev/shm/en7nocap96-owner.log'
-scp -q $P $PI:/dev/shm/en7nocap96-owner.log $D/$LABEL-owner.log
+ssh $P $PI "cp \$(ls -t /dev/shm/dante-owner-*.log | head -1) /dev/shm/$LABEL-owner.log"
+scp -q $P $PI:/dev/shm/$LABEL-owner.log $D/$LABEL-owner.log
 log "owner log copied to $D/$LABEL-owner.log"

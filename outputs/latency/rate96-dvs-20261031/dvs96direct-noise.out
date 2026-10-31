@@ -1,0 +1,22 @@
+=== measure Dante candidate (noise): 32 frames, 100 impulses (20261031T173656Z)
+  before: aes67=inactive statime=1 endpoint=1 udc=configured
+  before: log=/dev/shm/dante-owner-20261031T173553Z.log
+  before: START 20261031T173553Z seconds=candidate owner=3ef92ca0 plugin=c6b012ae config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner-rate96-usb-aoip.conf trial=no mode=usb cpus=all user=usb16x16-dante
+  before: xrun_lines=0 lag_lines=0 error_lines=52 lines=761
+  before: pcm0c state: RUNNING delay : 0 
+  before: pcm0p state: RUNNING delay : 192 
+  before: pitch values=1000000 values=1000000
+return signal ready after 3 probes
+measure_exit=0 result=/Users/bryandimaio/Development/USB-AoIP/outputs/latency/dvs96direct-noise-ch2-32f-20261031T173656Z.json
+   nonzero span 956..2491199 (2490244 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+   zero-run start offsets mod 32 (top 6): []
+  after: aes67=inactive statime=1 endpoint=1 udc=configured
+  after: log=/dev/shm/dante-owner-20261031T173553Z.log
+  after: START 20261031T173553Z seconds=candidate owner=3ef92ca0 plugin=c6b012ae config=/home/bdimaio/usb-16x16-work/dante-mode/config/asound-inferno-owner-rate96-usb-aoip.conf trial=no mode=usb cpus=all user=usb16x16-dante
+  after: xrun_lines=0 lag_lines=0 error_lines=74 lines=919
+  after: pcm0c state: RUNNING delay : 60 
+  after: pcm0p state: RUNNING delay : 192 
+  after: pitch values=1000000 values=1000000
+during run: xrun lines +0, lag lines +0, error lines +22
+
+exit=0

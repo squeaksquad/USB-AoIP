@@ -698,3 +698,9 @@ cause of the morning's faults; the adapter is not implicated in them. The 2026-1
 recurred in neither hour, so the adapter's part in it is still not shown. Item 1 of "Next time" above
 stands before any further catch: a capture pinned away from the owner, with a short snap length,
 checked over equal stretches with and without it.
+
+Evening of 2026-10-31: two more hours the same way with DVS running, one with the preset and one
+direct; both had no fault and no CHANHOLE event, and the direct hour's soak PASSED (the first real
+verdict at 96 on this loop). Without a capture: 0 faults in about 205 minutes at 96. 96 kHz on the
+8-channel loop is ready for the install steps as far as faults go; the 2026-10-29 subset holes stay
+unreproduced (the old `en12` adapter is the remaining suspect, not shown).

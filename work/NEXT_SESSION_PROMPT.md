@@ -74,8 +74,10 @@ authoritative where anything disagrees; the sections below this one are history.
    again. `usb16x16-dante-catch` is installed, so sessions arm catches themselves. RUN AGAIN
    2026-10-31 14:42-15:42 UTC with no capture and the Mac on its new AoIP adapter `en7` (handoff, MEASURED
    14:37-15:45): 0 faults, 0 CHANHOLE events, no subset hole; the capture, not the adapter, is the
-   likely cause of the morning's faults. The 10-29 subset holes are still unreproduced. `dante-sync`
-   needs `--interface en7`, and DVS stopped (not just quit), or it cannot bind 8708. Original item:
+   likely cause of the morning's faults. The 10-29 subset holes are still unreproduced. Two more clean
+   hours the same evening with DVS up (preset; direct, soak PASS): 0 faults in about 205 min at 96
+   without capture. Next: the 96 kHz install steps. `dante-sync` (Dante Switcher 98c3a2b) defaults to
+   `en7` and runs beside DVS. Original item:
    96 kHz on the real loop (8 channels): DEFERRED 2026-10-29 with the loaded-hour
    holes on ch3, 5, 6, 8 unlocated; the catch plan is the last section of
    `work/dante-mode/RATE96_PLAN.md` (owner per-channel `back` zero-run line as the

@@ -1,0 +1,38 @@
+16:04:48 96 kHz validation continued: DVS running (conmon_server up), dante-sync 98c3a2b (group-address binds, default en7), no capture
+16:04:54 service stopped
+16:04:54 dante-sync sync --rate 96000 --allow-band-up --exclude USB-AoIP
+16:05:09 dante-sync sync --source usb-aoip --exclude USB-AoIP
+started usb16x16-dante-candidate: log /dev/shm/dante-owner-20261031T160523Z.log
+16:05:25 candidate start chanholes 3ef92ca0, rate96-usb-aoip config, dsp-loaded@96000, --chan-holes 8 --event-trace (the afternoon's arguments)
+16:34:53 operator: Metric Halo rebooted at 96
+16:35:34 noise probe dvs96preset: zero runs>=4: 0
+catch: not running
+16:35:34 soak 3600 s at 32 on 8 channels, no capture (dvs96preset); owner counters before:
+/dev/shm/dante-owner-20261031T160523Z.log
+USB t=1810.1 usb=open tx=idle rx=idle tx_mean=260.0 rx_mean=200.4 rx_depth=80..384 pitch_c=1000000 pitch_p=1000000 tx_i=-13.23 rx_i=16.66 usb_tx=3344383 usb_rx=3358693 tx_links=4 tx_reprimes=0 rx_primes=5 rx_overflow=345 rx_idle_discards=170384618 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838859 back_peak=128902,102261 out_holes=0/0 back_holes=72/301
+17:35:50 soak done: soak: FAIL, the zero runs could not be checked against the preset (inconclusive is not a pass); owner counters after:
+/dev/shm/dante-owner-20261031T160523Z.log
+USB t=5420.0 usb=open tx=flow rx=flow tx_mean=256.6 rx_mean=192.0 rx_depth=84..124 pitch_c=1000015 pitch_p=1000015 tx_i=-15.07 rx_i=15.20 usb_tx=349345726 usb_rx=349373741 tx_links=8 tx_reprimes=0 rx_primes=9 rx_overflow=528 rx_idle_discards=170924881 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838860,838861 back_peak=138776,97924 out_holes=0/0 back_holes=144/301
+17:35:50 owner log copied to outputs/latency/rate96-dvs-20261031/dvs96preset-owner.log
+started usb16x16-dante-candidate: log /dev/shm/dante-owner-20261031T173553Z.log
+17:35:55 candidate restarted with no preset (direct), same arguments otherwise
+17:37:36 noise probe dvs96direct: zero runs>=4: 0
+catch: not running
+17:37:36 soak 3600 s at 32 on 8 channels, no capture (dvs96direct); owner counters before:
+/dev/shm/dante-owner-20261031T173553Z.log
+USB t=100.1 usb=open tx=flow rx=flow tx_mean=256.0 rx_mean=198.7 rx_depth=101..122 pitch_c=1000015 pitch_p=1000022 tx_i=-15.15 rx_i=18.56 usb_tx=3201189 usb_rx=3214454 tx_links=4 tx_reprimes=0 rx_primes=4 rx_overflow=184 rx_idle_discards=6364060 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,838859 back_peak=2097152,838859 out_holes=0/0 back_holes=0/0
+18:37:50 soak done: soak: PASS; owner counters after:
+/dev/shm/dante-owner-20261031T173553Z.log
+USB t=3710.0 usb=open tx=flow rx=flow tx_mean=255.5 rx_mean=192.0 rx_depth=95..109 pitch_c=1000016 pitch_p=1000016 tx_i=-15.37 rx_i=15.53 usb_tx=349206199 usb_rx=349233985 tx_links=8 tx_reprimes=0 rx_primes=8 rx_overflow=554 rx_idle_discards=6898069 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=838860,838861 back_peak=838860,838861 out_holes=0/0 back_holes=0/0
+18:37:51 owner log copied to outputs/latency/rate96-dvs-20261031/dvs96direct-owner.log
+18:37:51 both hours done
+18:38:58 read: dvs96preset 0 faults, 0 CHANHOLE, longest run 11 on ch4 (preset), inconclusive; dvs96direct 0 faults, 0 CHANHOLE, longest run 1, PASS; arc_server unknown-opcode lines (DVS polling) 1451 and 996
+18:38:58 candidate stopped (logs kept in ~/usb-16x16-work/ as dante-owner-dvs96{preset,direct}-*.log)
+18:39:17 two syncs to 48 (DVS included)
+18:39:18 service started
+state=ok rate=6015 restarts=0 invocation=40e9e9c8aa2b4f559d4f4bb9a4632b9c time=2026-10-31T18:40:23Z
+18:43:13 restored 48: noise probe zero runs>=4: 0; daw_timeline=11.021 ms (529) = 377 + io_offset 152 (steady) at 48000 Hz; spread=0
+18:47:15 second read: daw_timeline=11.021 ms (529) = 377 + io_offset 152 (steady) at 48000 Hz; spread=0
+18:47:22 service restarted to check the 529
+state=ok rate=6015 restarts=0 invocation=f23d2dfbe02a46e1895ca33a34bfffec time=2026-10-31T18:48:27Z
+18:50:33 after restart: daw_timeline=11.000 ms (528) = 376 + io_offset 152 (steady) at 48000 Hz; spread=0

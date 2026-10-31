@@ -14945,3 +14945,35 @@ log `en7nocap96-owner.log`, `count-chanholes*.py` and their outputs for both hou
   32 clean; 400 loaded impulses `daw_timeline` 528 (376 + 152), spread 0, no discontinuities. Left:
   everything at 48, `direct`, owner c84e6a36, no catch ring; DVS stopped. Candidate log kept on the
   Pi as `~/usb-16x16-work/dante-owner-en7nocap96-20261031T144054Z.log`.
+
+**MEASURED 2026-10-31 16:04-18:52 UTC: two more 96 kHz hours without capture, DVS running, both clean:
+with the loaded preset 0 playback faults and 0 CHANHOLE events; direct, 0 and 0 and the soak's first
+real verdict at 96, PASS (longest zero run 1).** Evidence `outputs/latency/rate96-dvs-20261031/`
+(`steps.txt`, `run-hours.sh`, both owner logs and their `*-chanholes.txt`), soaks
+`dvs96preset-soak-3600s-32f-20261031T163534Z` and `dvs96direct-soak-3600s-32f-20261031T173736Z`.
+- `dante-sync` now runs beside DVS (Dante Switcher 98c3a2b: its multicast listeners bind the group
+  address; DVS's `conmon_server` holds 8708/8702 with SO_REUSEADDR only; default interface `en7`).
+  The move to 96 was the first live sync with DVS up: Pulse, DVS (5.8 s), D2USB, Mac, then MH, all
+  verified; back to 48 the same way.
+- DVS polls the Pi's ARC port with an opcode Inferno does not know: the owner logs `arc_server ...
+  received unknown opcode1 0x00` about once every 2-4 s while DVS runs (1473 lines in the morning's
+  log, 0 in the 14:42 hour with DVS stopped, 1451 and 996 in these two). Logging only; it ran through
+  both clean hours, so DVS is not the cause of the morning's faults either.
+- Hour 2 (16:35:34-17:35:50): the 14:42 hour's setup exactly (candidate `chanholes` 3ef92ca0,
+  `rate96-usb-aoip`, `dsp-loaded@96000`, `--chan-holes 8 --event-trace`, MH rebooted at 96), DVS up.
+  Noise probe at 32 clean. Soak: longest zero run 11 on ch4 (the preset's), no discontinuity, verdict
+  inconclusive as always with the preset. Owner over the continuous load: `playback_faults` 0,
+  CHANHOLE 0, `tx_reprimes` 0, holes unchanged.
+- Hour 3 (17:37:36-18:37:50): the candidate restarted with no preset, nothing else changed, no rate
+  move. Noise probe clean. Soak PASS on 8 channels, longest zero run 1, no discontinuity; owner
+  `playback_faults` 0, CHANHOLE 0, `out_holes` / `back_holes` 0/0 throughout.
+- Tally at 96 today: under capture 6 faults in about 45 min; without capture 0 in about 205 min (25 on
+  `en12` in the morning, three hours on `en7`, two of them with DVS up), with and without a preset.
+  The 2026-10-29 subset holes appeared in none of the four hours.
+- Back to 48: service started 18:39:18, start check ok; noise probe clean; 400 loaded impulses read
+  `daw_timeline` 529 (377 + 152) twice, 4 minutes apart, spread 0. After one service restart
+  (start check ok 18:48:27): 528 (376 + 152), spread 0. So this service start landed one sample late
+  and held it: the level is constant across Mac opens within a start but not exactly across owner
+  starts (the 44.1 kHz figure has been 508 +-1 since 2026-10-30). Left: everything at 48, `direct`,
+  owner c84e6a36, no catch; DVS running. Candidate logs kept on the Pi as
+  `~/usb-16x16-work/dante-owner-dvs96{preset,direct}-*.log`.
