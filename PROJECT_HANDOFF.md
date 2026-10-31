@@ -14813,3 +14813,15 @@ swap. Staged in `~/usb-16x16-work/dante-mode/service/` and checked there: script
 `work/dante-mode/measure-candidate.sh 32 400` should read `daw_timeline` 528. The candidate's owner
 logs (the five `/dev/shm/dante-owner-20261030T15*.log` of the 15:04-16:51 entry, hashes checked
 against the Pi) are now in `outputs/latency/ratepoll-20261030/`.
+
+**INSTALLED 2026-10-31 03:33 UTC: owner `ratepoll` c84e6a36 with `PRIME_DROP=28` is in service.**
+Installed by the operator with `work/dante-mode/service/install-owner-ratepoll.sh`:
+`usb16x16-dante-owner` c84e6a36, `transport.conf` 2e2c7a20, start wrapper f4afa51d unchanged; the
+previous two kept as `*.ratepoll-previous` (abee374a, 31a2a257). The unit runs `--rx-queue 96
+--rate-request-file ... --prime-drop 28 --capture-drain --meter-file ...`; unit active 03:33:54,
+start check ok 03:34:59 (6016, 0 restarts). Check on the installed service: one harness run
+`measure-candidate.sh 32 400` (03:39 UTC) `daw_timeline` 528 (376 + io_offset 152), levels 376x400,
+no discontinuities, no xrun, lag or error lines. The battery behind it is the candidate's of
+2026-10-30 15:04-16:51; this is now the Dante point of record. Rollback: `cd
+~/usb-16x16-work/dante-mode/service && sudo ./install-owner-ratepoll.sh rollback`, before
+`install-owner-anchor.sh rollback`. Evidence `outputs/latency/ratepoll-installed-*`.
