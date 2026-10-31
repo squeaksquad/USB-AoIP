@@ -14977,3 +14977,50 @@ real verdict at 96, PASS (longest zero run 1).** Evidence `outputs/latency/rate9
   starts (the 44.1 kHz figure has been 508 +-1 since 2026-10-30). Left: everything at 48, `direct`,
   owner c84e6a36, no catch; DVS running. Candidate logs kept on the Pi as
   `~/usb-16x16-work/dante-owner-dvs96{preset,direct}-*.log`.
+
+**INSTALLED 2026-10-31 21:52 UTC (operator): 96 kHz offered beside 44.1 and 48 by
+`work/dante-mode/service/install-dante-rate96.sh` (d9977fb2, commit 323d4fe), RATE96_PLAN.md phase 5.**
+Three files, the old ones kept as `/usr/local/libexec/usb16x16-dante/*.rate96-previous`: the Inferno config
+8549af7e (`config/asound-inferno-owner-usb-aoip-rate96.conf`: 54f3f0ba with `SUPPORTED_SAMPLE_RATES
+"44100,48000,96000"`, the one change); the start wrapper 93d1b082 (`usb16x16-dante-start-transport`: the depth
+keys `RX_SLACK BUFFER TX_LEAD GUARD USB_PERIOD USB_BUFFER`, and `KEY_<rate>` overrides that apply only at
+that rate, an empty one leaving the option off; `test-dante-start.sh transport` passes on the Mac and the
+Pi); transport.conf 082ce171 (`service/transport-rate96.conf`: today's keys plus the `_96000` keys, every depth
+doubled, arm A, and no prime drop or capture drain at 96, since neither was run there). The 48 and 44.1
+command lines are unchanged byte for byte (checked against the installed wrapper with the real owner.conf).
+`OFFERED_RATES` in `work/dsp-compiler/compile.mjs` gains 96000 (page and compiler tests 185 pass), copied
+to the Pi's `~/usb-16x16-work/web-ui/compiler/`. `rollback` runs only at 48 and comes before
+install-owner-ratepoll.sh's. Evidence `outputs/latency/rate96-install-20261031/` (`steps.txt`,
+`run-battery96.sh`, the `dante-sync` outputs, `pi-at96.txt`).
+- At 48 after the install (owner START line identical to before): start check ok, noise probe 0 runs of 4+
+  (`inst48-noise-*`), soak 120 s on channels 1-8 PASS, longest zero run 1 (`inst48l8-soak-*`; a 16-channel
+  judge failed only on 9-16, silent as routed since 2026-10-29), 100 impulses 376 / `daw_timeline` 528.
+- The move, with the Pi left in: `dante-sync sync --rate 96000 --allow-band-up` set the Pulse (word clock
+  locked), DVS, D2USB, USB-AoIP's Dante side and the Mac's USB-AoIP, each verified; the arbiter wrote
+  `RATE=96000` and `SAMPLE_RATE "96000"` and restarted the endpoint: `START rate=96000 ... buffer=2048 tx_lead=256
+  guard=512 usb_period=96 usb_buffer=960 rx_queue=192 rx_slack=192 prime_drop=-1 capture_drain=0`, `USBOPEN
+  host_rate=match`; start check `state=ok rate=12020`. `dante-sync sync --source usb-aoip` then set MHLink.
+  The operator rebooted the Metric Halo at 96 (the 2026-10-29 operating note).
+
+**MEASURED 2026-10-31 22:16-22:47 UTC: the 96 kHz battery under the installed service, 8-channel loop: noise,
+soak and `bitexact` pass; the four loaded runs spread 85 samples, because 96 runs with no prime drop.**
+- Noise probe at 32: 0 runs of 4+ (`svc96-noise-*`).
+- Four loaded 800-impulse runs (`USB16X16_OTHER_LOAD=0.1`, `svc96loaded{1..4}-*`): `daw_timeline` 967 / 919 / 1004
+  / 932 (731 / 683 / 768 / 696 + io_offset 236), 9.57-10.46 ms, each steady within itself. FOUND: the round
+  trip at 96 is drawn per Mac open (`tx_prime_found` 179-248 across the opens), the per-open draw that
+  PRIME_DROP and CAPTURE_DRAIN removed at 48 on 2026-10-30. On 2026-10-29 owner a15a9d84 drew 680 four times
+  (spread 0) on the same arm, so luck or the owners' difference; not separated. The fix is per-rate keys
+  already supported (`PRIME_DROP_96000`, `CAPTURE_DRAIN_96000`), sized by a candidate sweep at 96 as the 48
+  one was; the wrapper caps PRIME_DROP at 48 frames, which may be too small for 96's 96-frame block.
+- Soak 600 s, `USB16X16_LOOP_CHANNELS=8`: PASS, longest zero run 1 (`svc96-soak-600s-32f-20261031T223110Z`).
+- `bitexact --loop-channels 8`, 360 s: PASS (`svc96-bitexact-360s-32f-20261031T224125Z`).
+- Owner over the battery: one playback fault (`last_fault=-32`) at 22:20:34, in a USBLINK at a harness open
+  between loaded1 and loaded2, not during audio; `out_holes` 2/1128 at `bitexact`'s start (all-16 zeros in
+  what the Mac sent, the run passed); no capture fault, re-prime, resync, loss or servo rejection.
+- Back to 48 the same way (`dante-sync sync --rate 48000`, then `--source usb-aoip` for MHLink), the arbiter
+  restarting the endpoint at 48 with the 48 line: start check ok, noise probe 0, 100 impulses 376 /
+  `daw_timeline` 528 (`back48-*-20261031T2249*`).
+- DECIDED (operator, the same evening): the sample rate is changed from the Mac and from Dante Controller
+  (or Dante Switcher); the page gets no rate control, although the arbiter accepts a `page` source.
+Acceptance of 96 is the operator's; the per-open spread is the open item. Left at the close: everything at
+48, `direct`, the installed set with 96 offered, DVS running.

@@ -76,8 +76,12 @@ authoritative where anything disagrees; the sections below this one are history.
    14:37-15:45): 0 faults, 0 CHANHOLE events, no subset hole; the capture, not the adapter, is the
    likely cause of the morning's faults. The 10-29 subset holes are still unreproduced. Two more clean
    hours the same evening with DVS up (preset; direct, soak PASS): 0 faults in about 205 min at 96
-   without capture. Next: the 96 kHz install steps. `dante-sync` (Dante Switcher 98c3a2b) defaults to
-   `en7` and runs beside DVS. Original item:
+   without capture. INSTALLED 2026-10-31 21:52 UTC (`install-dante-rate96.sh`, handoff): 96 offered beside
+   44.1 and 48, the arbiter moves the stack there itself, and the battery under the service passed
+   noise, soak and `bitexact`; the loaded runs spread 919-1004 because 96 runs without a prime drop.
+   Next: size `PRIME_DROP_96000` / `CAPTURE_DRAIN_96000` by a candidate sweep at 96, then ACCEPT. The rate
+   is changed from the Mac and Dante Controller only, never the page (operator). `dante-sync` (Dante
+   Switcher 98c3a2b) defaults to `en7` and runs beside DVS. Original item:
    96 kHz on the real loop (8 channels): DEFERRED 2026-10-29 with the loaded-hour
    holes on ch3, 5, 6, 8 unlocated; the catch plan is the last section of
    `work/dante-mode/RATE96_PLAN.md` (owner per-channel `back` zero-run line as the

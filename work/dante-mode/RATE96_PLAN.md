@@ -704,3 +704,13 @@ direct; both had no fault and no CHANHOLE event, and the direct hour's soak PASS
 verdict at 96 on this loop). Without a capture: 0 faults in about 205 minutes at 96. 96 kHz on the
 8-channel loop is ready for the install steps as far as faults go; the 2026-10-29 subset holes stay
 unreproduced (the old `en12` adapter is the remaining suspect, not shown).
+
+## Phase 5 done 2026-10-31: 96 offered under the service (results in the handoff)
+
+`service/install-dante-rate96.sh` (installed 21:52 UTC) offers 96 beside 44.1 and 48: the Inferno config's
+list, per-rate transport keys in the start wrapper, and transport.conf's `_96000` keys (arm A, no prime drop
+or capture drain). A `dante-sync sync --rate 96000` with the Pi included now moves the endpoint through the
+arbiter. Under the service at 96: noise probe clean, 600 s 8-channel soak PASS, `bitexact` PASS; four loaded
+runs at `daw_timeline` 919-1004, a per-open draw. Left: a prime drop and capture drain sized for 96, through
+the per-rate keys, then the operator's acceptance. The rate changes from the Mac and Dante Controller only;
+the page gets no rate control (operator).

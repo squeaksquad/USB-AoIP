@@ -1,0 +1,24 @@
+=== measure Dante candidate (impulse): 32 frames, 800 impulses (20261031T222734Z)
+  before: aes67=inactive statime=1 endpoint=1 udc=configured
+  before: log=/dev/shm/dante-service-journal.txt
+  before: START usb16x16-dante-owner mode=usb pcm=inferno rate=96000 period=64 buffer=2048 tx_lead=256 guard=512 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=96 usb_buffer=960 rx_queue=192 rx_slack=192 kp=0.5 ki=0.003 seed_ppm=-15.46 seed_from_file=1 prime_drop=-1 capture_drain=0
+  before: xrun_lines=0 lag_lines=0 error_lines=0 lines=177
+  before: pcm0c state: RUNNING delay : 0 
+  before: pcm0p state: RUNNING delay : 192 
+  before: pitch values=1000000 values=1000000
+return signal ready after 3 probes
+measure_exit=0 result=/Users/bryandimaio/Development/USB-AoIP/outputs/latency/svc96loaded4-roundtrip-32f-20261031T222734Z.json
+median=7.250 ms (696) min=696 max=696 spread=0 score=1.000 count=800
+levels=696x800
+discontinuities in=0 out=0
+daw_timeline=9.708 ms (932) = 696 + io_offset 236 (steady) at 96000 Hz
+  after: aes67=inactive statime=1 endpoint=1 udc=configured
+  after: log=/dev/shm/dante-service-journal.txt
+  after: START usb16x16-dante-owner mode=usb pcm=inferno rate=96000 period=64 buffer=2048 tx_lead=256 guard=512 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=96 usb_buffer=960 rx_queue=192 rx_slack=192 kp=0.5 ki=0.003 seed_ppm=-15.46 seed_from_file=1 prime_drop=-1 capture_drain=0
+  after: xrun_lines=0 lag_lines=0 error_lines=0 lines=207
+  after: pcm0c state: RUNNING delay : 72 
+  after: pcm0p state: RUNNING delay : 192 
+  after: pitch values=1000000 values=1000000
+during run: xrun lines +0, lag lines +0, error lines +0
+
+exit=0

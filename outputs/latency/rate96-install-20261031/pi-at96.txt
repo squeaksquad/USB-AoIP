@@ -1,0 +1,15 @@
+METERS=1
+RATE=96000
+# rewrites SAMPLE_RATE below; SUPPORTED_SAMPLE_RATES it never writes. Installed
+# rewrites SAMPLE_RATE below. Installed by service/install-dante-name.sh.
+# SAMPLE_RATE_DESIGN.md step 7 for 44.1 kHz, 2026-10-28: the installed config
+# applier rewrites SAMPLE_RATE below; SUPPORTED_SAMPLE_RATES it never writes.
+# SAMPLE_RATE_DESIGN.md step 4, 2026-10-17, staged: the step-2 config plus
+	SAMPLE_RATE "96000"
+	SUPPORTED_SAMPLE_RATES "44100,48000,96000"
+Oct 31 18:01:44 audio-dev usb16x16-dante[2270840]: USBRATE changed host_capture=96000 host_playback=96000 rate=48000 while open; handing the USB half back
+Oct 31 18:01:45 audio-dev usb16x16-dante[2272177]: START usb16x16-dante-owner mode=usb pcm=inferno rate=96000 period=64 buffer=2048 tx_lead=256 guard=512 priority=79 mlock=1 rt=1 seconds=0 usb=hw:CARD=UAC2Gadget,DEV=0 usb_period=96 usb_buffer=960 rx_queue=192 rx_slack=192 kp=0.5 ki=0.003 seed_ppm=-15.46 seed_from_file=1 prime_drop=-1 capture_drain=0
+Oct 31 18:01:46 audio-dev usb16x16-dante[2272177]: NETSTART capture=RUNNING playback=RUNNING
+Oct 31 18:01:46 audio-dev usb16x16-dante[2272177]: USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=96 buffer=960 playback period=96 buffer=960 rate=96000 host_rate=match host_capture=96000 host_playback=96000
+state=checking rate= restarts=0 invocation=c26feb2c1e7f4c85be4f3ae531c6f8b5 time=2026-10-31T22:01:45Z
+state=ok rate=12020 restarts=0 invocation=c26feb2c1e7f4c85be4f3ae531c6f8b5 time=2026-10-31T22:02:50Z
