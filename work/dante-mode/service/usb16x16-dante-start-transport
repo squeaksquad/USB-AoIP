@@ -41,6 +41,19 @@
 #                      boundary (SPIKE_PLAN.md, Phase C). With PRIME_DROP=24 the round
 #                      trip is the same at every host open. Both need owner abee374a or later.
 #
+# Depths in frames for a rate other than 48 kHz (2026-10-31, RATE96_PLAN.md phase 5):
+# every depth is frames, so at 96 kHz each lasts half as long, and 96 runs with all
+# of them doubled (arm A). With none of these the owner keeps its defaults.
+#
+#   RX_SLACK=N  BUFFER=N  TX_LEAD=N  GUARD=N  USB_PERIOD=N  USB_BUFFER=N
+#                      --rx-slack, --buffer, --tx-lead, --guard, --usb-period, --usb-buffer
+#
+# Every key but RATE_REQUESTS may also be written KEY_<rate> (RX_QUEUE_96000=192):
+# it applies only when owner.conf's RATE= is that rate (absent: 48000) and wins over
+# the plain KEY there. An empty KEY_<rate>= leaves the option off at that rate
+# (PRIME_DROP_96000= : no --prime-drop at 96 kHz). The applier moves RATE=; this
+# file is what each rate then runs with.
+#
 # A configuration that cannot be honoured is a refusal (exit 2), never a
 # quieter start: a system set up with crossovers must not come up without
 # them. The unit does not restart on exit 2.
@@ -78,10 +91,27 @@ if [ -e "$conf" ]; then
   done < "$conf"
 fi
 
-rx_queue=
+# Each transport key: its range check, then its plain value and the one for this
+# rate (t_KEY, r_KEY, with has_r_KEY set when KEY_<rate> was given, even empty).
+transport_keys="RX_QUEUE RX_SLACK BUFFER TX_LEAD GUARD USB_PERIOD USB_BUFFER PRIME_DROP CAPTURE_DRAIN"
+running_rate=${rate:-48000}
+check_transport() {   # key, value; refuses unless the value is in range
+  local v=$2
+  case "$1" in
+    RX_QUEUE)      [[ $v =~ ^[0-9]{2,4}$ ]] && [ "$v" -ge 96 ] && [ "$v" -le 384 ] || refuse "RX_QUEUE must be a number of frames from 96 to 384" ;;
+    RX_SLACK)      [[ $v =~ ^[0-9]{2,4}$ ]] && [ "$v" -ge 16 ] && [ "$v" -le 768 ] || refuse "RX_SLACK must be a number of frames from 16 to 768" ;;
+    BUFFER)        [[ $v =~ ^[0-9]{3,4}$ ]] && [ "$v" -ge 256 ] && [ "$v" -le 8192 ] || refuse "BUFFER must be a number of frames from 256 to 8192" ;;
+    TX_LEAD)       [[ $v =~ ^[0-9]{2,4}$ ]] && [ "$v" -ge 16 ] && [ "$v" -le 2048 ] || refuse "TX_LEAD must be a number of frames from 16 to 2048" ;;
+    GUARD)         [[ $v =~ ^[0-9]{2,4}$ ]] && [ "$v" -ge 16 ] && [ "$v" -le 4096 ] || refuse "GUARD must be a number of frames from 16 to 4096" ;;
+    USB_PERIOD)    [[ $v =~ ^[0-9]{2,3}$ ]] && [ "$v" -ge 12 ] && [ "$v" -le 384 ] || refuse "USB_PERIOD must be a number of frames from 12 to 384" ;;
+    USB_BUFFER)    [[ $v =~ ^[0-9]{2,4}$ ]] && [ "$v" -ge 96 ] && [ "$v" -le 3840 ] || refuse "USB_BUFFER must be a number of frames from 96 to 3840" ;;
+    PRIME_DROP)    [[ $v =~ ^[0-9]{1,2}$ ]] && [ "$v" -le 48 ] || refuse "PRIME_DROP must be a number of frames from 0 to 48" ;;
+    CAPTURE_DRAIN) [[ $v =~ ^[01]$ ]] || refuse "CAPTURE_DRAIN must be 0 or 1" ;;
+  esac
+}
+# declare, not printf -v: bash 3.2 (the Mac's, where the test runs) leaves a printf -v of '' unset.
+for k in $transport_keys; do declare "t_$k=" "r_$k=" "has_r_$k=0"; done
 rate_requests=0
-prime_drop=
-capture_drain=0
 if [ -e "$transport" ]; then
   [ -r "$transport" ] || refuse "$transport cannot be read"
   while IFS= read -r line || [ -n "$line" ]; do
@@ -89,26 +119,39 @@ if [ -e "$transport" ]; then
     [[ $line =~ ^([A-Z0-9_]+)=(.*)$ ]] || refuse "$transport: not KEY=value: $line"
     key=${BASH_REMATCH[1]}
     value=${BASH_REMATCH[2]}
-    case "$key" in
-      RX_QUEUE) [[ $value =~ ^[0-9]{2,4}$ ]] && [ "$value" -ge 96 ] && [ "$value" -le 384 ] || refuse "RX_QUEUE must be a number of frames from 96 to 384"
-                rx_queue=$value ;;
-      RATE_REQUESTS) [[ $value =~ ^[01]$ ]] || refuse "RATE_REQUESTS must be 0 or 1"; rate_requests=$value ;;
-      PRIME_DROP) [[ $value =~ ^[0-9]{1,2}$ ]] && [ "$value" -le 48 ] || refuse "PRIME_DROP must be a number of frames from 0 to 48"
-                  prime_drop=$value ;;
-      CAPTURE_DRAIN) [[ $value =~ ^[01]$ ]] || refuse "CAPTURE_DRAIN must be 0 or 1"; capture_drain=$value ;;
-      *)        refuse "$transport: unknown key $key" ;;
-    esac
+    if [ "$key" = RATE_REQUESTS ]; then
+      [[ $value =~ ^[01]$ ]] || refuse "RATE_REQUESTS must be 0 or 1"; rate_requests=$value; continue
+    fi
+    for_rate=
+    if [[ $key =~ ^(.*)_(44100|48000|88200|96000|176400|192000)$ ]]; then key=${BASH_REMATCH[1]}; for_rate=${BASH_REMATCH[2]}; fi
+    [[ " $transport_keys " == *" $key "* ]] || refuse "$transport: unknown key ${line%%=*}"
+    if [ -z "$for_rate" ]; then
+      check_transport "$key" "$value"; declare "t_$key=$value"
+    else
+      [ -z "$value" ] || check_transport "$key" "$value"
+      if [ "$for_rate" = "$running_rate" ]; then declare "r_$key=$value" "has_r_$key=1"; fi
+    fi
   done < "$transport"
 fi
+for k in $transport_keys; do
+  has=has_r_$k
+  if [ "${!has}" = 1 ]; then r=r_$k; declare "$k=${!r}"; else t=t_$k; declare "$k=${!t}"; fi
+done
 
 sha256_of() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -c1-64; else shasum -a 256 "$1" | cut -c1-64; fi; }
 
 arguments=(--seconds 0 --ppm-file "$state_dir/usb16x16-dante-owner.ppm" --log-every 60)
 [ -n "$rate" ] && arguments+=(--rate "$rate")
-[ -n "$rx_queue" ] && arguments+=(--rx-queue "$rx_queue")
+[ -n "$RX_QUEUE" ] && arguments+=(--rx-queue "$RX_QUEUE")
+[ -n "$RX_SLACK" ] && arguments+=(--rx-slack "$RX_SLACK")
+[ -n "$BUFFER" ] && arguments+=(--buffer "$BUFFER")
+[ -n "$TX_LEAD" ] && arguments+=(--tx-lead "$TX_LEAD")
+[ -n "$GUARD" ] && arguments+=(--guard "$GUARD")
+[ -n "$USB_PERIOD" ] && arguments+=(--usb-period "$USB_PERIOD")
+[ -n "$USB_BUFFER" ] && arguments+=(--usb-buffer "$USB_BUFFER")
 [ "$rate_requests" = 1 ] && arguments+=(--rate-request-file "$run_dir/rate-request")
-[ -n "$prime_drop" ] && arguments+=(--prime-drop "$prime_drop")
-[ "$capture_drain" = 1 ] && arguments+=(--capture-drain)
+[ -n "$PRIME_DROP" ] && arguments+=(--prime-drop "$PRIME_DROP")
+[ "$CAPTURE_DRAIN" = 1 ] && arguments+=(--capture-drain)
 [ "$meters" = 1 ] && arguments+=(--meter-file "$run_dir/meters.txt")
 if [ -n "$preset" ]; then
   [[ $preset == "$dsp_dir"/*.dsp && $preset != *..* && ${preset#"$dsp_dir"/} != */* ]] ||

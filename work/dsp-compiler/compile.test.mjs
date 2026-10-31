@@ -384,7 +384,7 @@ import { DANTE_RATES, OFFERED_RATES } from './compile.mjs';
 
 test('48 kHz is the default rate; 44.1 and 48 kHz are offered today', () => {
   assert.equal(SAMPLE_RATE, 48000);
-  assert.deepEqual(OFFERED_RATES, [44100, 48000]);
+  assert.deepEqual(OFFERED_RATES, [44100, 48000, 96000]);
   assert.ok(OFFERED_RATES.every(rate => DANTE_RATES.includes(rate)), 'every offered rate is a Dante rate');
   assert.equal(fileDevices('in.raw', 'out.raw').samplerate, 48000);
   const preset = createConfig();

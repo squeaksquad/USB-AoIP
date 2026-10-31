@@ -69,7 +69,10 @@ if [ "${1:-}" = transport ]; then
   tr_run $'RX_QUEUE=95\n' "";                   expect "queue too small" 2 "RX_QUEUE must be"
   tr_run $'RX_QUEUE=4096\n' "";                 expect "queue too large" 2 "RX_QUEUE must be"
   tr_run $'RX_QUEUE=96; reboot\n' "";           expect "nothing is executed" 2 "RX_QUEUE must be"
-  tr_run $'TX_LEAD=96\n' "";                    expect "unknown transport key" 2 "unknown key"
+  tr_run $'PERIOD=96\n' "";                     expect "unknown transport key" 2 "unknown key"
+  tr_run $'PERIOD_96000=96\n' "";               expect "unknown per-rate key" 2 "unknown key PERIOD_96000"
+  tr_run $'RATE_REQUESTS_96000=1\n' "";         expect "rate requests are not per rate" 2 "unknown key RATE_REQUESTS_96000"
+  tr_run $'RX_QUEUE_32000=96\n' "";             expect "not a Dante rate suffix" 2 "unknown key RX_QUEUE_32000"
   tr_run $'METERS=1\n' "";                      expect "owner.conf keys do not belong there" 2 "unknown key"
   tr_run $'RX_QUEUE=96\n' $'RX_QUEUE=96\n';     expect "transport keys do not belong in owner.conf" 2 "unknown key"
   tr_run $'RX_QUEUE=96\n' $'RATE=96000\n';       expect "rate before the queue" 0 "--log-every 60 --rate 96000 --rx-queue 96 "
@@ -85,5 +88,28 @@ if [ "${1:-}" = transport ]; then
   tr_run $'PRIME_DROP=49\n' "";                 expect "drop too large" 2 "PRIME_DROP must be"
   tr_run $'PRIME_DROP=-1\n' "";                 expect "negative drop" 2 "PRIME_DROP must be"
   tr_run $'CAPTURE_DRAIN=yes\n' "";             expect "bad CAPTURE_DRAIN" 2 "CAPTURE_DRAIN must be"
+  # Per-rate keys (2026-10-31): the depths, and KEY_<rate> winning at its rate only.
+  tr_run $'TX_LEAD=96\nBUFFER=1024\nGUARD=256\nRX_SLACK=96\nUSB_PERIOD=48\nUSB_BUFFER=480\n' ""
+  expect "the depths" 0 "--log-every 60 --rx-slack 96 --buffer 1024 --tx-lead 96 --guard 256 --usb-period 48 --usb-buffer 480 "
+  tr_run $'RX_QUEUE_96000=192\nRX_QUEUE=96\n' "";           expect "a 96 key at 48" 0 "--log-every 60 --rx-queue 96 "
+  tr_run $'RX_QUEUE_96000=192\nRX_QUEUE=96\n' $'RATE=96000\n'; expect "a 96 key at 96, whatever the order" 0 "--rate 96000 --rx-queue 192 "
+  tr_run $'RX_QUEUE_48000=112\n' "";                        expect "a 48000 key with no RATE=" 0 "--log-every 60 --rx-queue 112 "
+  tr_run $'PRIME_DROP=28\nPRIME_DROP_96000=\n' $'RATE=96000\n'
+  [ "$out" = "${base}--rate 96000 " ] || { echo "FAIL: an empty per-rate key turns the option off: $out"; failures=$((failures + 1)); }
+  tr_run $'CAPTURE_DRAIN=1\nCAPTURE_DRAIN_96000=0\n' $'RATE=96000\n'
+  [ "$out" = "${base}--rate 96000 " ] || { echo "FAIL: CAPTURE_DRAIN_96000=0: $out"; failures=$((failures + 1)); }
+  tr_run $'RX_QUEUE_96000=4096\n' "";                       expect "a per-rate key is checked at any rate" 2 "RX_QUEUE must be"
+  tr_run $'RX_QUEUE=\n' "";                                 expect "a plain key may not be empty" 2 "RX_QUEUE must be"
+  tr_run $'BUFFER=100\n' "";                                expect "buffer too small" 2 "BUFFER must be"
+  # The staged files: at 48 the installed command line exactly, at 96 arm A, at 44.1 the 48 figures.
+  cp "$here/transport-rate96.conf" "$work/transport.conf"; run $'METERS=1\n'; at48_new=$out
+  cp "$here/transport-ratepoll.conf" "$work/transport.conf"; run $'METERS=1\n'
+  [ "$at48_new" = "$out" ] || { echo "FAIL: transport-rate96.conf changes the 48 kHz line: $at48_new"; failures=$((failures + 1)); }
+  cp "$here/transport-rate96.conf" "$work/transport.conf"; run $'RATE=96000\nMETERS=1\n'
+  [ "$out" = "${base}--rate 96000 --rx-queue 192 --rx-slack 192 --buffer 2048 --tx-lead 256 --guard 512 --usb-period 96 --usb-buffer 960 --rate-request-file /run/x/rate-request --meter-file /run/x/meters.txt " ] ||
+    { echo "FAIL: transport-rate96.conf at 96: $out"; failures=$((failures + 1)); }
+  run $'RATE=44100\nMETERS=1\n'
+  [ "$out" = "${base}--rate 44100 --rx-queue 96 --rate-request-file /run/x/rate-request --prime-drop 28 --capture-drain --meter-file /run/x/meters.txt " ] ||
+    { echo "FAIL: transport-rate96.conf at 44.1: $out"; failures=$((failures + 1)); }
 fi
 if [ "$failures" -eq 0 ]; then echo "test-dante-start: all passed"; else echo "test-dante-start: $failures FAILED"; exit 1; fi

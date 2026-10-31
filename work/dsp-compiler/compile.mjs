@@ -52,9 +52,9 @@ export const SAMPLE_RATE = 48000;
 export const DANTE_RATES = Object.freeze([44100, 48000, 88200, 96000, 176400, 192000]);
 // The rates the endpoint offers today, as the installed Inferno config's
 // SUPPORTED_SAMPLE_RATES does: a rate joins only after its own battery (design,
-// step 6; 44.1 kHz ACCEPTED 2026-10-28). The Dante page stores a preset at
+// step 6; 44.1 kHz ACCEPTED 2026-10-28, 96 kHz installed 2026-10-31). The Dante page stores a preset at
 // every Dante rate (compileOtherRates), so a rate added here needs no resave.
-export const OFFERED_RATES = Object.freeze([44100, 48000]);
+export const OFFERED_RATES = Object.freeze([44100, 48000, 96000]);
 
 // Linkwitz-Riley order is twice the Butterworth order: 12 dB/oct is order 2.
 const SLOPE_ORDER = {12: 2, 24: 4, 48: 8};
