@@ -14796,3 +14796,20 @@ Owed for install: an installer (owner c84e6a36 for abee374a, `transport.conf` `P
 Service restored 16:52 (abee374a, drop 24, start check ok 16:53:16). Evidence
 `outputs/latency/ratepoll-drop{24,28,32}-*`, `ratepoll28-battery*`, `ratepoll28-hour-*`; the owner logs
 are still in the Pi's `/dev/shm/dante-owner-20261030T15*.log` (not yet copied).
+
+**STAGED 2026-10-30 23:20 UTC: installer for owner `ratepoll` c84e6a36 with `PRIME_DROP=28`, not
+installed.** `work/dante-mode/service/install-owner-ratepoll.sh` (a93ab52d) swaps two files
+together: `usb16x16-dante-owner` abee374a -> c84e6a36 (`owner/usb16x16-dante-owner-ratepoll`) and
+`/etc/usb16x16/dante/transport.conf` 31a2a257 -> 2e2c7a20 (`service/transport-ratepoll.conf`: the
+installed file with `PRIME_DROP=28` for 24 and its comment, nothing else). Every hash pinned; it
+refuses unless the start wrapper is f4afa51d (unchanged, it already passes `PRIME_DROP` 0-48), keeps
+the old files as `*.ratepoll-previous`, and stops and restarts `usb16x16-dante.service` around the
+swap. Staged in `~/usb-16x16-work/dante-mode/service/` and checked there: script a93ab52d, conf
+2e2c7a20, candidate binary c84e6a36, installed owner abee374a, start f4afa51d, transport.conf
+31a2a257; run unprivileged it exits "run with sudo" and touches nothing. Install (operator's sudo):
+`cd ~/usb-16x16-work/dante-mode/service && sudo ./install-owner-ratepoll.sh`. Rollback:
+`sudo ./install-owner-ratepoll.sh rollback` restores abee374a and 31a2a257, and comes before
+`install-owner-anchor.sh rollback`. After the install: start check ok, and one harness run
+`work/dante-mode/measure-candidate.sh 32 400` should read `daw_timeline` 528. The candidate's owner
+logs (the five `/dev/shm/dante-owner-20261030T15*.log` of the 15:04-16:51 entry, hashes checked
+against the Pi) are now in `outputs/latency/ratepoll-20261030/`.
