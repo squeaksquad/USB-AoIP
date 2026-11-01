@@ -15024,3 +15024,30 @@ soak and `bitexact` pass; the four loaded runs spread 85 samples, because 96 run
   (or Dante Switcher); the page gets no rate control, although the arbiter accepts a `page` source.
 Acceptance of 96 is the operator's; the per-open spread is the open item. Left at the close: everything at
 48, `direct`, the installed set with 96 offered, DVS running.
+
+**MEASURED 2026-10-31 23:32-00:22 UTC: the 96 kHz prime drop sized: with capture drain, every Mac open at 96
+draws the same round trip; D=48 passes the battery.** Evidence `outputs/latency/rate96-primedrop-20261031/`
+(`steps.txt`, `run-sweep.sh`, `run-battery-d48.sh`, the candidate logs `sw96d{48,72,96}-owner.log`,
+`d48b96-owner.log`). Domain to 96 by `dante-sync` (the Pi through the arbiter), service stopped, the installed
+owner c84e6a36 (`owner/usb16x16-dante-owner-ratepoll`) as a candidate on arm A with `--prime-drop D --capture-drain`.
+- Sweep, six opens of 100 impulses per D, noise probe clean on each: D=48 958 on 6 of 6; D=72 934-935; D=96 910
+  on 6 of 6 (the level is about 1006 - D); `tx_unanchored` 0 throughout; `tx_prime_found` 161-162 or 244-246 (the
+  prime's two phases), the level the same on both. Without a drop the service drew 919-1004 (entry above).
+- Chosen D=48: it fits the start wrapper's PRIME_DROP cap (48), so only transport.conf changes; the servo's
+  correction after a prime is 47 frames against about 95 at D=96; the return queue's floor was 96 at D=48 and
+  73-75 at D=72 and 96 (minimum `rx_depth` in the 5 min after the opens). D=96 would be 48 samples (0.5 ms) lower.
+- Battery on the D=48 candidate (Metric Halo not rebooted since the move): noise 0; four loaded 800-impulse runs
+  958 / 958 / 958 / 958 (9.979 ms), spread 0; 600 s soak on 1-8 PASS, longest zero run 1
+  (`d48b96-soak-600s-*`); `bitexact --loop-channels 8` 360 s PASS (`d48b96-bitexact-360s-32f-20261101T001624Z`);
+  owner: 0 playback or capture faults, no re-prime, `out_holes` 2/940 at `bitexact`'s start as before.
+
+**INSTALLED 2026-11-01 00:34 UTC (operator): the 96 kHz prime drop, `service/install-dante-rate96-drop.sh`
+(dbe54faf, commit 66793dc): transport.conf 6498b9f4 (`service/transport-rate96-drop.conf`) for 082ce171,
+`PRIME_DROP_96000=48` and `CAPTURE_DRAIN_96000=1` the only change.** The old file kept as
+`transport.conf.rate96drop-previous`; its `rollback` comes before install-dante-rate96.sh's.
+- Service at 96: `START rate=96000 ... prime_drop=48 capture_drain=1`, start check ok (12020); noise 0;
+  100 impulses on three opens 958 / 958 / 958; soak 120 s on 1-8 PASS (`svcd48-*`).
+- Back to 48 by `dante-sync` (the arbiter restarting the endpoint): START with the 48 line unchanged
+  (`prime_drop=28 capture_drain=1`), start check ok, noise 0, 100 impulses 376 / `daw_timeline` 528 (`back48d-*`).
+96 kHz now stands as installed with its battery passed and the same round trip at every open (958, 9.98 ms);
+ACCEPTED is the operator's. Left at the close: everything at 48, `direct`, DVS running.

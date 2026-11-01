@@ -714,3 +714,8 @@ arbiter. Under the service at 96: noise probe clean, 600 s 8-channel soak PASS, 
 runs at `daw_timeline` 919-1004, a per-open draw. Left: a prime drop and capture drain sized for 96, through
 the per-rate keys, then the operator's acceptance. The rate changes from the Mac and Dante Controller only;
 the page gets no rate control (operator).
+
+Later the same night: the prime drop at 96, swept on the installed owner with capture drain (D=48 958 x6, D=72
+934-935, D=96 910 x6, none unanchored), D=48 passed the battery on a candidate (958 x4, soak and `bitexact`
+PASS) and was INSTALLED 2026-11-01 00:34 UTC by `service/install-dante-rate96-drop.sh`; the service then read 958
+on three of three opens at 96 and 528 back at 48. Left: the operator's acceptance.
