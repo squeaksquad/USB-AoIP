@@ -1,0 +1,12 @@
+14:16:52 persist: start; service: inactive
+state=ok rate=6017 restarts=0 invocation=abd55fd81ad9481b8a5c16146149a516 time=2026-11-01T14:16:32Z
+14:16:52 service stopped
+14:17:35 p-r48 exit=0    nonzero span 1130..1245631 (1244502 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+14:18:03 p-r882tight exit=0    nonzero span 67144..2288713 (2221570 samples), zeros inside span 94.5%, zero runs>=4: 3151, mean run 666.1, run-length histogram (top 8): [(670, 128), (662, 128), (665, 120), (673, 118), (678, 116), (675, 108), (667, 108), (659, 100)]
+14:18:03 USB-AoIP nominal=88200
+14:18:30 p-r882plain1 exit=0    nonzero span 2019..2288863 (2286845 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+14:19:01 p-r882plain2 exit=0    nonzero span 2020..2288863 (2286844 samples), zeros inside span 0.0%, zero runs>=4: 0, mean run 0.0, run-length histogram (top 8): []
+14:19:03 USB-AoIP nominal=48000
+14:20:21 service started: state=ok rate=6018 restarts=0 invocation=7b075aa409474029a240fae684f1eefe time=2026-11-01T14:20:19Z
+14:20:24 Dante Switcher relaunched: 81249
+14:20:24 persist done

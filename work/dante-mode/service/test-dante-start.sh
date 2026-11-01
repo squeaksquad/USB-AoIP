@@ -130,5 +130,17 @@ if [ "${1:-}" = transport ]; then
     { echo "FAIL: transport-rate96-drop96.conf at 96: $out"; failures=$((failures + 1)); }
   run $'RATE=44100\nMETERS=1\n'
   case "$out" in *"--prime-drop 28 --capture-drain"*) ;; *) echo "FAIL: transport-rate96-drop96.conf at 44.1: $out"; failures=$((failures + 1)) ;; esac
+  # transport-rate882.conf (2026-11-01): 48, 96 and 44.1 as drop96's; 88.2 at arm A with a drop of 72.
+  cp "$here/transport-rate96-drop96.conf" "$work/transport.conf"; run $'RATE=96000\nMETERS=1\n'; at96_drop96=$out
+  run $'RATE=44100\nMETERS=1\n'; at441_drop96=$out
+  cp "$here/transport-rate882.conf" "$work/transport.conf"; run $'METERS=1\n'
+  [ "$at48_new" = "$out" ] || { echo "FAIL: transport-rate882.conf changes the 48 kHz line: $out"; failures=$((failures + 1)); }
+  run $'RATE=96000\nMETERS=1\n'
+  [ "$at96_drop96" = "$out" ] || { echo "FAIL: transport-rate882.conf changes the 96 kHz line: $out"; failures=$((failures + 1)); }
+  run $'RATE=44100\nMETERS=1\n'
+  [ "$at441_drop96" = "$out" ] || { echo "FAIL: transport-rate882.conf changes the 44.1 kHz line: $out"; failures=$((failures + 1)); }
+  run $'RATE=88200\nMETERS=1\n'
+  [ "$out" = "${base}--rate 88200 --rx-queue 192 --rx-slack 192 --buffer 2048 --tx-lead 256 --guard 512 --usb-period 96 --usb-buffer 960 --rate-request-file /run/x/rate-request --prime-drop 72 --capture-drain --meter-file /run/x/meters.txt " ] ||
+    { echo "FAIL: transport-rate882.conf at 88.2: $out"; failures=$((failures + 1)); }
 fi
 if [ "$failures" -eq 0 ]; then echo "test-dante-start: all passed"; else echo "test-dante-start: $failures FAILED"; exit 1; fi

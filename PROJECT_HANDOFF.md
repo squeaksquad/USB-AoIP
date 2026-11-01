@@ -15132,3 +15132,73 @@ transport.conf 5887284a for 6498b9f4.** The old files kept as `*.rate96drop96-pr
 The Dante point of record at 96 is now 911 (9.49 ms) at every open, 528 at 48 and 505 at 44.1 unchanged.
 Rollback order: install-dante-rate96-drop96.sh, install-dante-rate96-drop.sh, install-dante-rate96.sh (only at 48).
 Left at the close: everything at 48, `direct`, service active, start check ok.
+
+**MEASURED 2026-11-01 13:57-15:40 UTC (operator away, "set the Pi to 88.2 some other way in CoreAudio"): 88.2
+kHz on the 8-channel loop. The macOS 88.2 silent state no longer persists; the domain runs at 88.2; candidate
+c84e6a36 at 96's arm A with `--prime-drop 72 --capture-drain` reads 888-889 (10.07 ms) at every open; battery
+passed except one `bitexact` event that did not recur in two repeats.** Plan and detail
+`work/dante-mode/RATE882_PLAN.md` ("Results"); evidence `outputs/latency/rate882-macrule-20261101/` and
+`outputs/latency/rate882-20261101/` (`steps.txt` and the scripts beside it), top-level `d72b882-*` / `d72r882-*`.
+Dante Switcher's app was quit for every run (its follow would have acted on the moves) and relaunched after.
+- macOS rule re-tested (service stopped, USB-only `alsaloop`): October's quick change (harness open about 3.5 s
+  after the set) clean 6 of 6 from 48 and 44.1 (October: bad 7 of 7). Harness open about 0.3 s after the set:
+  94.5-95.6 % zeros 6 of 6 with October's signature, but the next two opens at 88.2 with no rate change were
+  clean: the bad state now lasts one IO session, not until the next rate change. Pro Tools not tested.
+- Domain: with the service stopped, `dante-sync sync --rate 88200 --allow-band-up` then `sync --source
+  usb-aoip` (the Pulse's word clock stays unlocked until the Metric Halo follows): Pulse, D2USB, DVS, MHLink at
+  88.2, the Pulse locked.
+- Prime-drop sweep, six opens of 100 impulses per D, noise clean, no unanchored prime: D=48 912-913, D=72
+  888-889, D=84 876-877 x3 and 932-933 x3 (the prime anchored a block later), D=96 909-920. 72 chosen.
+- Battery on D=72: noise 0; loaded 889 / 889 / 888 / 889; 600 s soak on 1-8 PASS; `bitexact` 360 s FAIL on one
+  all-channel swap of two 8-frame blocks 267 s in (2 lost locks a channel), with the owner clean (no resync,
+  loss, fault, re-prime or servo rejection; `back_holes` 0/0; return queue floor 86). Not located (no capture
+  during measurements). Repeated on the same candidate: two 360 s `bitexact` PASS, 0 lost locks.
+Staged, not installed: `work/dante-mode/service/install-dante-rate882.sh` (03e2d2c0; on the Pi in
+`~/usb-16x16-work/dante-mode/service/`) swaps the Inferno config 8549af7e for 85a5256f
+(`config/asound-inferno-owner-usb-aoip-rate882.conf`, 88200 offered) and transport.conf 5887284a for add1bc21
+(`service/transport-rate882.conf`, the `_88200` keys); at 48 only; keeps `*.rate882-previous`; its `rollback`
+comes before install-dante-rate96-drop96.sh's. `test-dante-start.sh transport` passes (48, 44.1, 96 unchanged).
+Owed: the operator's call on the single swap and the install, then the service checks at 88.2 (RATE882_PLAN.md
+phase 5) and a Pro Tools open. Left at the close: everything at 48, `direct`, service active, start check ok.
+
+**INSTALLED 2026-11-01 ~17:28 UTC (operator): 88.2 kHz offered (`install-dante-rate882.sh` 03e2d2c0).** Inferno
+config 85a5256f (`SUPPORTED_SAMPLE_RATES "44100,48000,88200,96000"`) and transport.conf add1bc21 (the `_88200`
+keys, `PRIME_DROP_88200=72`, `CAPTURE_DRAIN_88200=1`) in place, both hashes checked; the service restarted on them
+at 48 (start check ok). Rollback order: install-dante-rate882.sh, then install-dante-rate96-drop96.sh's chain
+(only at 48).
+
+**MEASURED 2026-11-01 17:30-18:16 UTC: RATE882_PLAN.md phase 5 under the service. 889 (10.08 ms) at every open
+at 88.2, moved from the Dante side and from the Mac, with and without a page preset; soaks PASS; 528 at 48 after
+each.** Dante Switcher's app quit for each run and relaunched after.
+- Dante-side move (`outputs/latency/rate882-service-20261101/`, `service-steps.txt`, `run-service-check.sh`):
+  `dante-sync sync --rate 88200 --allow-band-up` then `--source usb-aoip`; the arbiter moved (receipt
+  17ebdc23, source dante), start check ok 11043 after 50 s, `START rate=88200 usb_period=96 rx_queue=192
+  prime_drop=72 capture_drain=1`. After the 180 s settle: noise 0; three opens of 100 impulses 889 / 889 / 889
+  (667 + io_offset 222), every prime anchored (dropped 72, unanchored 0); 120 s soak on 1-8 PASS; owner
+  `tx_reprimes` 0, faults 0, `out_holes` / `back_holes` 0/0. Back to 48 the same way: noise 0, 528.
+- Mac-side move with a page preset (`outputs/latency/rate882-page-20261101/`, `steps.txt`, `run-page-check.sh`,
+  `build-request.mjs`, `queue.py`, the five receipts, `owner-lines.txt`): the transparent verify preset
+  `Rate check` compiled the page's way (48 kHz 29f192ca, 88.2 kHz aa9be795) and queued by `usb16x16-web`'s own
+  `write_apply_request` (receipt ca89d36a done). Mac to 88.2 by `setrate` (the Pro Tools case): the owner
+  refused the reopen and requested 88200 (`USBRATE ... source=usb`), the arbiter moved in 20 s (receipt
+  e4b4c8a8): owner.conf `RATE=88200`, `DSP_PRESET=.../dante-rate-check@88200.dsp`, `DSP loaded ... rate=88200
+  biquads=288`, `USBOPEN host_rate=match`; then `dante-sync sync --source usb-aoip --allow-band-up` moved the
+  rest; start check ok 11042. Noise 0; three opens 889 x3 (no settle penalty this time, unlike 959-960 at 96);
+  120 s soak on 1-8 PASS, longest zero run 1; `dsp_us_max` at most 179; faults 0, re-primes 0. `back_holes`
+  rose to 2100/297 during the noise probe and impulse opens only, flat through the soak: the known effect of
+  bare impulses through filters (2026-10-11 entry), not a fault. Back to 48 by `setrate` (receipt 61ccf2a6, the
+  preset's 48 kHz file), then `direct` (4cffa724) and `remove` (55453d80): no `dante-*` preset file left; 528.
+- A first attempt at the preset run (`steps-run1.txt`) waited for healthy flows before moving the rest of the
+  domain, so the start check found none (`state=idle`, it judges once per start) and the run skipped its
+  measurements; the move and the `@88200` load were already seen there. Fixed in the script (wait for the
+  arbiter, move the domain, then wait for flows) and run again as above.
+Not yet done: a Pro Tools open at 88.2; the single unlocated `bitexact` swap of the candidate battery stands.
+Left at the close: everything at 48, `direct`, service active, start check ok, 528, Dante Switcher running.
+
+**ACCEPTED 2026-11-01 18:37 UTC (operator, "Accepted"): 88.2 kHz on the Dante point of record.** Inferno config
+85a5256f (offering `44100,48000,88200,96000`) and transport.conf add1bc21 (`_88200` keys at 96's arm A depths,
+`PRIME_DROP_88200=72`, `CAPTURE_DRAIN_88200=1`) by `install-dante-rate882.sh` 03e2d2c0; owner c84e6a36 and start
+wrapper df6a1b0b unchanged. `daw_timeline` 889 (10.08 ms) at every open at 88.2, 911 at 96, 528 at 48, 505 at 44.1.
+Accepted with the one unlocated candidate `bitexact` swap and without a Pro Tools open at 88.2 (both still open).
+Rollback order: install-dante-rate882.sh, install-dante-rate96-drop96.sh, install-dante-rate96-drop.sh,
+install-dante-rate96.sh (only at 48).

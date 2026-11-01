@@ -252,3 +252,10 @@ first is the safe form.
 `killall coreaudiod` clears a bad state; whether anything the gadget does
 (feedback value, packet pattern) provokes it. Recheck after a macOS update with
 `quickwin.sh` and `slowwin.sh` in the evidence directory, run without the trace.
+
+**Rechecked 2026-11-01** (kernel with the rate-report and rate-request patches; evidence
+`outputs/latency/rate882-macrule-20261101/`): the quick change (audio about 3.5 s after the
+set) was clean 6 of 6. Audio about 0.3 s after the set still gave the bad state (6 of 6, same
+signature), but it lasted only that IO session: the next open at 88.2, with no rate change,
+was clean. The 10 s hold in Dante Switcher stays; a silent 88.2 session is now cleared by
+stopping and restarting audio.

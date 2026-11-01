@@ -1,6 +1,6 @@
 # Next-session pickup prompt
 
-## Current pickup — 2026-11-01: 44.1, 48 and 96 kHz on the point of record. Start here.
+## Current pickup — 2026-11-01: 44.1, 48, 88.2 and 96 kHz on the point of record. Start here.
 
 You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16, bridged to Dante
 through Inferno). Read `CLAUDE.md` (repo map), then `PROJECT_HANDOFF.md`'s tail from "INSTALLED
@@ -12,19 +12,20 @@ handoff is authoritative where anything disagrees; the sections below this one a
   with the rate-report and rate-request modules (`u_audio.ko` ed539ca8, `usb_f_uac2.ko` 505c6ad0):
   the Mac follows a Dante-side rate set, and a Mac-side change reaches the arbiter.
 - Owner `ratepoll` c84e6a36 (the host's rate checked every 100 ms while open); plugin c6b012ae.
-- Inferno config 8549af7e: Dante name `USB-AoIP`, offering `44100,48000,96000`
-  (`install-dante-rate96.sh`); the applier rewrites its `SAMPLE_RATE` at each move, so the hash holds
+- Inferno config 85a5256f: Dante name `USB-AoIP`, offering `44100,48000,88200,96000`
+  (`install-dante-rate882.sh`, 2026-11-01; was 8549af7e by `install-dante-rate96.sh`); the applier rewrites its `SAMPLE_RATE` at each move, so the hash holds
   only at 48.
 - Start wrapper df6a1b0b (was 93d1b082): transport keys per rate (`KEY_<rate>` wins at that rate). `transport.conf`
   5887284a (was 6498b9f4): at 48 and 44.1 `RX_QUEUE=96 PRIME_DROP=28 CAPTURE_DRAIN=1 RATE_REQUESTS=1`; at 96 every
   depth doubled (arm A: buffer 2048, tx_lead 256, guard 512, usb 96/960, rx_queue/slack 192) with
   `PRIME_DROP_96000=96 CAPTURE_DRAIN_96000=1` (transport.conf 5887284a and start wrapper df6a1b0b by
-  `install-dante-rate96-drop96.sh`, 2026-11-01; was 48 by `install-dante-rate96-drop.sh`).
+  `install-dante-rate96-drop96.sh`, 2026-11-01; was 48 by `install-dante-rate96-drop.sh`). transport.conf add1bc21
+  (`install-dante-rate882.sh`) adds the `_88200` keys: 96's depths, `PRIME_DROP_88200=72 CAPTURE_DRAIN_88200=1`.
 - Start check fccfdd62 (judges at owner.conf's `RATE=`), applier 1.8.0 347a7062, web 6b98e7cf,
   profile `direct` with meters; `usb16x16-dante-catch` installed (sessions arm it; it causes faults
   while it runs, see the rules).
 - The round trip is the same at every Mac open: `daw_timeline` 528 (11.00 ms) at 48, 505 at 44.1,
-  911 (9.49 ms) at 96 (958 before 2026-11-01). A DSP preset adds about nothing (transparent `Rate check`: 959-960 at 96).
+  911 (9.49 ms) at 96 (958 before 2026-11-01), 889 (10.08 ms) at 88.2. A DSP preset adds about nothing (transparent `Rate check`: 959-960 at 96).
 - Left at the close: everything at 48, Mac included; `direct`; service active, start check ok; no
   preset files besides the shipped ones; DVS running on the Mac. Every commit pushed.
 
@@ -58,9 +59,15 @@ Halo, which the first does not set. `dante-sync` is `~/Development/Dante Switche
   settings, ask the operator.
 
 **Open, recommended order (2026-11-01).**
-1. 88.2 kHz, only if the operator wants it: the gadget offers it, Inferno does not. Same path as 96
-   (depths, a drop sweep, the battery), plus the 10 s wait macOS needs after a move to 88.2 before
-   audio starts (`MULTIRATE_GADGET_PLAN.md`), which the arbiter's restart does not have.
+1. 88.2 kHz (operator wants it, 2026-11-01): measured the same afternoon (`work/dante-mode/RATE882_PLAN.md`,
+   "Results"; handoff MEASURED 2026-11-01 13:57). The macOS silent state now lasts one IO session (audio
+   started about 0.3 s after the switch), not until the next change; 3.5 s after was clean 6 of 6. The domain
+   runs at 88.2. Candidate at 96's arm A with `--prime-drop 72`: 888-889 (10.07 ms) at every open, battery
+   passed but for one all-channel 8-frame swap in `bitexact` that two repeats did not show (owner clean, not
+   located). INSTALLED by the operator 2026-11-01 (`service/install-dante-rate882.sh` 03e2d2c0); phase 5
+   under the service passed (handoff MEASURED 2026-11-01 17:30): 889 at every open after a Dante-side or a
+   Mac-side move, a page preset follows to its `@88200` file, soaks PASS, 528 at 48. ACCEPTED 2026-11-01.
+   Still open: a Pro Tools open at 88.2 (if it opens silent, restart its engine) and the one unlocated swap.
 2. The Mac driver question (`work/mac-driver-spike/SPIKE_PLAN.md`): DriverKit / ASIO named USB-AoIP.
    The owner now gives the same round trip at every open with Apple's driver at 48 and 96, the main
    reason for a driver; a go/no-go for the operator.
