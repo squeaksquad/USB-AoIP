@@ -1,0 +1,69 @@
+03:57:57 dante-sync sync --rate 96000 --allow-band-up
+Dante interface en7 169.254.97.136 (68:5b:35:a3:9e:c1)
+Target rate 96k. Listening for devices for 4 s…
+FF-PULSE-16-DX word clock locked.
+
+  FF-PULSE-16-DX         already at rate  96k
+  Bryans-MBP-M2-Max      already at rate  96k
+  D2USB-6152f1           already at rate  96k
+  USB-AoIP               already at rate  96k
+  USB-AoIP (CoreAudio)   already at rate  96k
+96k: 5 already at rate
+03:58:08 dante-sync sync --source usb-aoip
+Dante interface en7 169.254.97.136 (68:5b:35:a3:9e:c1)
+USB-AoIP: 96k
+Target rate 96k. Listening for devices for 4 s…
+FF-PULSE-16-DX word clock locked.
+
+  MHLink [49057] (CoreAu already at rate  96k
+  FF-PULSE-16-DX         already at rate  96k
+  Bryans-MBP-M2-Max      already at rate  96k
+  D2USB-6152f1           already at rate  96k
+  USB-AoIP               already at rate  96k
+96k: 5 already at rate
+03:58:13 settled after 5 s: state=ok rate=12018 restarts=0 invocation=e7d4737592654b029988816b4753265d time=2026-11-01T03:53:20Z
+03:58:13 service stopped
+03:58:21 candidate started; host_rate=match
+04:03:02 noise: zero runs>=4: 0
+04:06:37 loaded1: daw_timeline=9.490 ms (911) = 675 + io_offset 236 (steady) at 96000 Hz | tx_prime_found=161 tx_prime_dropped=96 tx_unanchored=0
+04:10:12 loaded2: daw_timeline=9.490 ms (911) = 675 + io_offset 236 (steady) at 96000 Hz | tx_prime_found=245 tx_prime_dropped=96 tx_unanchored=0
+04:13:47 loaded3: daw_timeline=9.490 ms (911) = 675 + io_offset 236 (steady) at 96000 Hz | tx_prime_found=245 tx_prime_dropped=96 tx_unanchored=0
+04:17:23 loaded4: daw_timeline=9.490 ms (911) = 675 + io_offset 236 (steady) at 96000 Hz | tx_prime_found=161 tx_prime_dropped=96 tx_unanchored=0
+04:27:37 soak 600: soak: PASS / rate=96000 channels=8 seconds=600 longest zero run max=1 peak min=0.1000 max=0.1000
+04:33:39 bitexact exit 0: outputs/latency/d96r2-bitexact-360s-32f-20261101T042737Z.json
+04:33:39 owner counters after:
+USB t=2120.1 usb=open tx=flow rx=flow tx_mean=256.0 rx_mean=193.0 rx_depth=96..110 pitch_c=1000014 pitch_p=1000014 tx_i=-13.74 rx_i=13.50 usb_tx=176636495 usb_rx=176745219 tx_links=27 tx_reprimes=0 rx_primes=45 rx_overflow=1994 rx_idle_discards=26747910 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388606,8388591 back_peak=8388606,8388591 out_holes=2/1127 back_holes=0/0
+04:33:39 rx_depth minimum over the flowing lines: 80
+04:33:40 candidate stopped, service started at 96 (D=48 installed)
+04:34:45 settled after 70 s: state=ok rate=12017 restarts=0 invocation=62486a2a573240b1a3e2bb4d1ec89409 time=2026-11-01T04:34:45Z
+04:34:45 dante-sync sync --rate 48000
+Dante interface en7 169.254.97.136 (68:5b:35:a3:9e:c1)
+Target rate 48k. Listening for devices for 4 s…
+Set FF-PULSE-16-DX 96k → 48k
+FF-PULSE-16-DX word clock locked.
+Set Bryans-MBP-M2-Max 96k → 48k
+Set D2USB-6152f1 96k → 48k
+Set USB-AoIP 96k → 48k
+Set USB-AoIP 96k → 48k (CoreAudio)
+
+  FF-PULSE-16-DX         changed          verified by heartbeat after 2.5 s
+  Bryans-MBP-M2-Max      changed          verified by heartbeat after 5.7 s
+  D2USB-6152f1           changed          verified by heartbeat after 1.2 s
+  USB-AoIP               changed          verified by heartbeat after 1.4 s
+  USB-AoIP (CoreAudio)   changed          verified by CoreAudio after 0.2 s
+48k: 5 changed
+04:35:05 dante-sync sync --source usb-aoip
+Dante interface en7 169.254.97.136 (68:5b:35:a3:9e:c1)
+USB-AoIP: 48k
+Target rate 48k. Listening for devices for 4 s…
+FF-PULSE-16-DX word clock locked.
+
+  MHLink [49057] (CoreAu already at rate  48k
+  FF-PULSE-16-DX         already at rate  48k
+  Bryans-MBP-M2-Max      already at rate  48k
+  D2USB-6152f1           already at rate  48k
+  USB-AoIP               already at rate  48k
+48k: 5 already at rate
+04:36:01 settled after 55 s: state=ok rate=6017 restarts=0 invocation=440d1d0f86ee4700b415cfee621dda9b time=2026-11-01T04:36:00Z
+04:36:01 start check: state=ok rate=6017 restarts=0 invocation=440d1d0f86ee4700b415cfee621dda9b time=2026-11-01T04:36:00Z
+04:36:01 battery done

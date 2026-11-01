@@ -721,3 +721,8 @@ PASS) and was INSTALLED 2026-11-01 00:34 UTC by `service/install-dante-rate96-dr
 on three of three opens at 96 and 528 back at 48. Left: the operator's acceptance.
 
 ACCEPTED 2026-11-01 (operator): 96 kHz is on the Dante point of record (handoff).
+
+2026-11-01, after the acceptance: a drop of 96 at 96 passed the battery on a candidate of the same owner (911 x4,
+600 s soak and `bitexact` PASS, 0 faults, return queue floor 80); staged as `service/install-dante-rate96-drop96.sh`
+(start wrapper with a per-rate drop limit plus `PRIME_DROP_96000=96`), accepted by the operator on that battery;
+INSTALLED the same day, 912-913 under the service right after a move (handoff).

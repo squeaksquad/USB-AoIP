@@ -88,6 +88,11 @@ if [ "${1:-}" = transport ]; then
   tr_run $'PRIME_DROP=49\n' "";                 expect "drop too large" 2 "PRIME_DROP must be"
   tr_run $'PRIME_DROP=-1\n' "";                 expect "negative drop" 2 "PRIME_DROP must be"
   tr_run $'CAPTURE_DRAIN=yes\n' "";             expect "bad CAPTURE_DRAIN" 2 "CAPTURE_DRAIN must be"
+  # The drop's limit is one block (2026-11-01): 48 for a plain or 48 kHz key, 96 for a 96 kHz one.
+  tr_run $'PRIME_DROP_96000=96\n' $'RATE=96000\n';         expect "a drop of 96 at 96" 0 "--rate 96000 --prime-drop 96 "
+  tr_run $'PRIME_DROP_96000=97\n' "";                      expect "96 kHz drop too large" 2 "PRIME_DROP_96000 must be a number of frames from 0 to 96"
+  tr_run $'PRIME_DROP_48000=72\n' "";                      expect "48 kHz drop of 72" 2 "PRIME_DROP_48000 must be a number of frames from 0 to 48"
+  tr_run $'PRIME_DROP=72\n' $'RATE=96000\n';               expect "a plain drop keeps 48, at 96 too" 2 "PRIME_DROP must be a number of frames from 0 to 48"
   # Per-rate keys (2026-10-31): the depths, and KEY_<rate> winning at its rate only.
   tr_run $'TX_LEAD=96\nBUFFER=1024\nGUARD=256\nRX_SLACK=96\nUSB_PERIOD=48\nUSB_BUFFER=480\n' ""
   expect "the depths" 0 "--log-every 60 --rx-slack 96 --buffer 1024 --tx-lead 96 --guard 256 --usb-period 48 --usb-buffer 480 "
@@ -117,5 +122,13 @@ if [ "${1:-}" = transport ]; then
   run $'RATE=96000\nMETERS=1\n'
   [ "$out" = "${base}--rate 96000 --rx-queue 192 --rx-slack 192 --buffer 2048 --tx-lead 256 --guard 512 --usb-period 96 --usb-buffer 960 --rate-request-file /run/x/rate-request --prime-drop 48 --capture-drain --meter-file /run/x/meters.txt " ] ||
     { echo "FAIL: transport-rate96-drop.conf at 96: $out"; failures=$((failures + 1)); }
+  # transport-rate96-drop96.conf (2026-11-01): the same, with a drop of 96 at 96.
+  cp "$here/transport-rate96-drop96.conf" "$work/transport.conf"; run $'METERS=1\n'
+  [ "$at48_new" = "$out" ] || { echo "FAIL: transport-rate96-drop96.conf changes the 48 kHz line: $out"; failures=$((failures + 1)); }
+  run $'RATE=96000\nMETERS=1\n'
+  [ "$out" = "${base}--rate 96000 --rx-queue 192 --rx-slack 192 --buffer 2048 --tx-lead 256 --guard 512 --usb-period 96 --usb-buffer 960 --rate-request-file /run/x/rate-request --prime-drop 96 --capture-drain --meter-file /run/x/meters.txt " ] ||
+    { echo "FAIL: transport-rate96-drop96.conf at 96: $out"; failures=$((failures + 1)); }
+  run $'RATE=44100\nMETERS=1\n'
+  case "$out" in *"--prime-drop 28 --capture-drain"*) ;; *) echo "FAIL: transport-rate96-drop96.conf at 44.1: $out"; failures=$((failures + 1)) ;; esac
 fi
 if [ "$failures" -eq 0 ]; then echo "test-dante-start: all passed"; else echo "test-dante-start: $failures FAILED"; exit 1; fi

@@ -15082,3 +15082,53 @@ Evidence `outputs/latency/dsp96-page-20261101/` (`steps.txt`, `build-request.mjs
   then `direct` (4e172da7) and `remove` (dd76d22c): no `dante-*` preset file left, owner.conf `METERS=1`;
   start check ok; 100 impulses 376 / `daw_timeline` 528.
 `work/NEXT_SESSION_PROMPT.md`'s top section rewritten for the 2026-11-01 point of record.
+
+**MEASURED 2026-11-01 03:58-04:36 UTC: a prime drop of 96 at 96 kHz passes the battery at `daw_timeline` 911
+(9.490 ms), 47 samples (0.49 ms) under the installed 958; the operator accepts it on the battery (2026-11-01:
+"if it passes the battery, accept it"). STAGED for install, not installed.** Open item 3 of the 2026-11-01
+pickup. Evidence `outputs/latency/rate96-primedrop96-20261101/` (`steps.txt`, `run-battery-d96.sh`,
+`d96r2-owner.log`) and the top-level `d96r2*` harness files. Domain to 96 by `dante-sync` (the Pi through the
+arbiter), service stopped once the arbiter and start check had settled, the installed owner c84e6a36 as a
+candidate on arm A with `--prime-drop 96 --capture-drain`.
+- Noise probe at 32: 0 zero runs of 4+. Four loaded 800-impulse runs: 911 / 911 / 911 / 911 (675 + io_offset
+  236), spread 0; every prime anchored (dropped 96, unanchored 0, found 161 or 245, both phases at the same
+  level). 600 s soak on 1-8 PASS, longest zero run 1. `bitexact --loop-channels 8` 360 s PASS
+  (`d96r2-bitexact-360s-32f-20261101T042737Z`).
+- Owner over 2120 s: playback and capture faults 0, `tx_reprimes` 0, servo rejections 0, `back_holes` 0/0,
+  `out_holes` 2/1127 at `bitexact`'s start (2/940 on the D=48 battery); the return queue's floor 80 frames
+  on the flowing lines (96 at D=48, 73-75 in the D=96 sweep).
+- Back at 48 at 04:36 (the service restarted at 96 first, settled at 12017, then `dante-sync sync --rate 48000`):
+  start check ok at 6017.
+- FOUND on the way (run 1, 03:14-03:50, invalid, kept in `run1-invalid/`): stopping `usb16x16-dante` while the
+  arbiter is still verifying a rate move makes it log `rolled-back — usb16x16-dante.service is inactive` and
+  start the service again (here at 48, then a second request moved it to 96). The service then fought the
+  candidate for Inferno's ports (`AddrInUse`, `Restart=on-failure`) and from 03:19 ran beside it for the whole
+  battery: 913 / 904 x3, a soak with an 82 s zero run, `bitexact` failed, `back_holes` 340. The sweep of
+  2026-10-31 had waited 36 s and missed it (this run 24 s). Rule: after a rate move, wait until
+  `usb16x16-dante-rate` is inactive and the start check reads ok at the new rate before stopping the service
+  for a candidate; `run-battery-d96.sh`'s `settled` does this.
+The install, `work/dante-mode/service/install-dante-rate96-drop96.sh` (99ab3414; staged on the Pi in
+`~/usb-16x16-work/dante-mode/service/`), swaps two files: the start wrapper 93d1b082 for df6a1b0b, whose
+PRIME_DROP limit is one block per rate (0 to 48 for a plain or 48 kHz key, 0 to 96 for a 96 kHz one;
+`test-dante-start.sh transport` passes, the 48 and 44.1 lines unchanged), and transport.conf 6498b9f4 for
+5887284a (`transport-rate96-drop96.conf`, `PRIME_DROP_96000=96` the only setting changed). It refuses while a
+candidate or a rate change runs, keeps `*.rate96drop96-previous`, and its `rollback` comes before
+install-dante-rate96-drop.sh's. Owed: the operator's `sudo ./install-dante-rate96-drop96.sh`, then at 96 under
+the service a noise probe, three opens of 100 impulses (911 expected) and a 120 s soak; with those the point of
+record at 96 is 911. Left at the close: everything at 48, `direct`, service active, start check ok.
+
+**INSTALLED 2026-11-01 ~10:10 UTC (operator) and ACCEPTED (operator, on the battery above): the prime drop of 96
+at 96 kHz, `service/install-dante-rate96-drop96.sh` (99ab3414): start wrapper df6a1b0b for 93d1b082,
+transport.conf 5887284a for 6498b9f4.** The old files kept as `*.rate96drop96-previous` in
+`/usr/local/libexec/usb16x16-dante/`; its `rollback` comes before install-dante-rate96-drop.sh's. Evidence
+`outputs/latency/rate96-primedrop96-20261101/` (`service-steps.txt`, `run-service-check.sh`) and the top-level
+`svcd96*` / `back48d96*` files.
+- At 48 after the install: start check ok (6016). Domain to 96 by `dante-sync`, the arbiter moving the endpoint,
+  start check ok at 12018.
+- Service at 96: noise probe 0; three opens of 100 impulses 913 / 912 / 912 (`tx_prime_dropped` 96, unanchored 0),
+  1-2 samples over the battery's 911 in the first minutes after the move, as the D=48 point read 959-960 there;
+  120 s soak on 1-8 PASS; owner `tx_reprimes` 0, faults 0, `out_holes` / `back_holes` 0/0.
+- Back at 48 by `dante-sync`: start check ok (6016), noise 0, 100 impulses 376 / `daw_timeline` 528.
+The Dante point of record at 96 is now 911 (9.49 ms) at every open, 528 at 48 and 505 at 44.1 unchanged.
+Rollback order: install-dante-rate96-drop96.sh, install-dante-rate96-drop.sh, install-dante-rate96.sh (only at 48).
+Left at the close: everything at 48, `direct`, service active, start check ok.

@@ -15,15 +15,16 @@ handoff is authoritative where anything disagrees; the sections below this one a
 - Inferno config 8549af7e: Dante name `USB-AoIP`, offering `44100,48000,96000`
   (`install-dante-rate96.sh`); the applier rewrites its `SAMPLE_RATE` at each move, so the hash holds
   only at 48.
-- Start wrapper 93d1b082: transport keys per rate (`KEY_<rate>` wins at that rate). `transport.conf`
-  6498b9f4: at 48 and 44.1 `RX_QUEUE=96 PRIME_DROP=28 CAPTURE_DRAIN=1 RATE_REQUESTS=1`; at 96 every
+- Start wrapper df6a1b0b (was 93d1b082): transport keys per rate (`KEY_<rate>` wins at that rate). `transport.conf`
+  5887284a (was 6498b9f4): at 48 and 44.1 `RX_QUEUE=96 PRIME_DROP=28 CAPTURE_DRAIN=1 RATE_REQUESTS=1`; at 96 every
   depth doubled (arm A: buffer 2048, tx_lead 256, guard 512, usb 96/960, rx_queue/slack 192) with
-  `PRIME_DROP_96000=48 CAPTURE_DRAIN_96000=1` (`install-dante-rate96-drop.sh`).
+  `PRIME_DROP_96000=96 CAPTURE_DRAIN_96000=1` (transport.conf 5887284a and start wrapper df6a1b0b by
+  `install-dante-rate96-drop96.sh`, 2026-11-01; was 48 by `install-dante-rate96-drop.sh`).
 - Start check fccfdd62 (judges at owner.conf's `RATE=`), applier 1.8.0 347a7062, web 6b98e7cf,
   profile `direct` with meters; `usb16x16-dante-catch` installed (sessions arm it; it causes faults
   while it runs, see the rules).
 - The round trip is the same at every Mac open: `daw_timeline` 528 (11.00 ms) at 48, 505 at 44.1,
-  958 (9.98 ms) at 96. A DSP preset adds about nothing (transparent `Rate check`: 959-960 at 96).
+  911 (9.49 ms) at 96 (958 before 2026-11-01). A DSP preset adds about nothing (transparent `Rate check`: 959-960 at 96).
 - Left at the close: everything at 48, Mac included; `direct`; service active, start check ok; no
   preset files besides the shipped ones; DVS running on the Mac. Every commit pushed.
 
@@ -63,8 +64,10 @@ Halo, which the first does not set. `dante-sync` is `~/Development/Dante Switche
 2. The Mac driver question (`work/mac-driver-spike/SPIKE_PLAN.md`): DriverKit / ASIO named USB-AoIP.
    The owner now gives the same round trip at every open with Apple's driver at 48 and 96, the main
    reason for a driver; a go/no-go for the operator.
-3. Lower latency at 96: a drop of 96 read 910 (0.5 ms under 958) with no unanchored prime; it needs
-   the start wrapper's PRIME_DROP cap (48) raised and a battery.
+3. Lower latency at 96: DONE 2026-11-01, drop 96 INSTALLED and ACCEPTED (911 at every open; handoff
+   tail). Before stopping the service for a candidate after a rate move, wait for the arbiter and the
+   start check to settle (handoff, 2026-11-01). The DriverKit/ASIO driver (item 2) is closed: the
+   operator judged it not worth pursuing (2026-11-01; at most part of the 88 safety-offset samples to gain).
 4. Watch items, no work unless they recur: the 2026-10-29 32/64-frame holes on a channel subset at 96
    (unreproduced in about five hours of 96 kHz audio since, 2026-10-31), the 2026-10-28 single 8-sample run on ch5-12.
 

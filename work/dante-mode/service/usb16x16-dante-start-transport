@@ -35,7 +35,9 @@
 #                      Needs an owner that has the option.
 #   PRIME_DROP=N       --prime-drop N (0 to 48): the outgoing prime drops a constant N of
 #                      the host's first block, so the round trip does not depend on the
-#                      depth the prime finds (work/mac-driver-spike/SPIKE_PLAN.md, Phase B)
+#                      depth the prime finds (work/mac-driver-spike/SPIKE_PLAN.md, Phase B).
+#                      The limit is one 1 ms block, so PRIME_DROP_88200= and
+#                      PRIME_DROP_96000= take 0 to 96 (2026-11-01)
 #   CAPTURE_DRAIN=0|1  1: --capture-drain, the gadget capture PCM restarted at each host
 #                      stop, so every host session starts from an empty ring on a period
 #                      boundary (SPIKE_PLAN.md, Phase C). With PRIME_DROP=24 the round
@@ -95,8 +97,9 @@ fi
 # rate (t_KEY, r_KEY, with has_r_KEY set when KEY_<rate> was given, even empty).
 transport_keys="RX_QUEUE RX_SLACK BUFFER TX_LEAD GUARD USB_PERIOD USB_BUFFER PRIME_DROP CAPTURE_DRAIN"
 running_rate=${rate:-48000}
-check_transport() {   # key, value; refuses unless the value is in range
-  local v=$2
+check_transport() {   # key, value, rate the key is for (empty: every rate); refuses unless the value is in range
+  local v=$2 drop_max=48
+  case "${3:-}" in 88200|96000|176400|192000) drop_max=96 ;; esac
   case "$1" in
     RX_QUEUE)      [[ $v =~ ^[0-9]{2,4}$ ]] && [ "$v" -ge 96 ] && [ "$v" -le 384 ] || refuse "RX_QUEUE must be a number of frames from 96 to 384" ;;
     RX_SLACK)      [[ $v =~ ^[0-9]{2,4}$ ]] && [ "$v" -ge 16 ] && [ "$v" -le 768 ] || refuse "RX_SLACK must be a number of frames from 16 to 768" ;;
@@ -105,7 +108,7 @@ check_transport() {   # key, value; refuses unless the value is in range
     GUARD)         [[ $v =~ ^[0-9]{2,4}$ ]] && [ "$v" -ge 16 ] && [ "$v" -le 4096 ] || refuse "GUARD must be a number of frames from 16 to 4096" ;;
     USB_PERIOD)    [[ $v =~ ^[0-9]{2,3}$ ]] && [ "$v" -ge 12 ] && [ "$v" -le 384 ] || refuse "USB_PERIOD must be a number of frames from 12 to 384" ;;
     USB_BUFFER)    [[ $v =~ ^[0-9]{2,4}$ ]] && [ "$v" -ge 96 ] && [ "$v" -le 3840 ] || refuse "USB_BUFFER must be a number of frames from 96 to 3840" ;;
-    PRIME_DROP)    [[ $v =~ ^[0-9]{1,2}$ ]] && [ "$v" -le 48 ] || refuse "PRIME_DROP must be a number of frames from 0 to 48" ;;
+    PRIME_DROP)    [[ $v =~ ^[0-9]{1,2}$ ]] && [ "$v" -le "$drop_max" ] || refuse "PRIME_DROP${3:+_$3} must be a number of frames from 0 to $drop_max" ;;
     CAPTURE_DRAIN) [[ $v =~ ^[01]$ ]] || refuse "CAPTURE_DRAIN must be 0 or 1" ;;
   esac
 }
@@ -128,7 +131,7 @@ if [ -e "$transport" ]; then
     if [ -z "$for_rate" ]; then
       check_transport "$key" "$value"; declare "t_$key=$value"
     else
-      [ -z "$value" ] || check_transport "$key" "$value"
+      [ -z "$value" ] || check_transport "$key" "$value" "$for_rate"
       if [ "$for_rate" = "$running_rate" ]; then declare "r_$key=$value" "has_r_$key=1"; fi
     fi
   done < "$transport"
