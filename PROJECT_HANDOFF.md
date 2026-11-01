@@ -15059,3 +15059,26 @@ c84e6a36 unchanged. At 96 on the 8-channel loop (MADI 25-32): `daw_timeline` 958
 passed (four loaded 800-impulse runs 958 x4, 600 s soak, `bitexact`); 48 unchanged at 528. The rate is changed from
 the Mac and from Dante Controller (or Dante Switcher), never the page. Rollback order: install-dante-rate96-drop.sh,
 then install-dante-rate96.sh (only at 48).
+
+**MEASURED 2026-11-01 01:26-01:39 UTC: a Dante preset installed the page's way follows a Mac-side move to 96
+kHz and back on its own `@96000` file; no code change.** The 96 counterpart of the 2026-10-31 44.1 check.
+Evidence `outputs/latency/dsp96-page-20261101/` (`steps.txt`, `build-request.mjs`, the five receipts,
+`owner-lines.txt`).
+- The transparent verify preset named `Rate check`, compiled on the Mac by `backend.mjs`'s `compileDraft` and
+  `compileOtherRates` (288 sections; 48 kHz 29f192ca as on 10-31, 96 kHz 7a60eab4), queued by `usb16x16-web`'s
+  own `write_apply_request` (the login the only step skipped): receipt 18b94090 done, `dante-rate-check.dsp`
+  plus the five other rates, the applier's bench at every rate passed; owner `DSP loaded ... rate=48000`.
+- Mac to 96 (`setrate.swift USB-AoIP 96000`, the Pro Tools case): the owner refused the reopen and requested
+  96000 (`USBRATE ... source=usb`); the arbiter moved (receipt 06021866 done): owner.conf `RATE=96000`,
+  `DSP_PRESET=.../dante-rate-check@96000.dsp`, `START rate=96000` with the 96 transport line and the drop,
+  `DSP loaded ... rate=96000 biquads=288`, `USBOPEN host_rate=match`, start check ok (12019). Then
+  `dante-sync sync --source usb-aoip --allow-band-up` (without `--allow-band-up` it refuses 48 -> 96) set
+  MHLink, the Pulse, DVS and D2USB.
+- At 96 with the preset: noise probe 0; 400 loaded impulses `daw_timeline` 1039, begun two minutes after the
+  move, every prime anchored (dropped 48, unanchored 0); two later opens 959 and 960: the known settle after
+  a rate move (pickup rules), not the preset. Soak 120 s on 1-8 PASS, longest zero run 1. `dsp_us_max` at
+  most 288 (the 45 % budget is 450); no playback or capture fault, no re-prime.
+- Back to 48 the same way (`setrate.swift`, receipt 7cac2f78 done, the preset's 48 kHz file, start check ok),
+  then `direct` (4e172da7) and `remove` (dd76d22c): no `dante-*` preset file left, owner.conf `METERS=1`;
+  start check ok; 100 impulses 376 / `daw_timeline` 528.
+`work/NEXT_SESSION_PROMPT.md`'s top section rewritten for the 2026-11-01 point of record.

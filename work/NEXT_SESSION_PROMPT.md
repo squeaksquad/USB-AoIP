@@ -1,6 +1,73 @@
 # Next-session pickup prompt
 
-## Current pickup — 2026-10-30: a deterministic round trip, everything named USB-AoIP. Start here.
+## Current pickup — 2026-11-01: 44.1, 48 and 96 kHz on the point of record. Start here.
+
+You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16, bridged to Dante
+through Inferno). Read `CLAUDE.md` (repo map), then `PROJECT_HANDOFF.md`'s tail from "INSTALLED
+2026-10-31 21:52 UTC" to the end, and `work/dante-mode/RATE96_PLAN.md`'s last two sections. The
+handoff is authoritative where anything disagrees; the sections below this one are history.
+
+**Where it stands (ACCEPTED 2026-11-01).** The Dante point of record:
+- Gadget `setup-usb-aoip` 65d26567 (the Mac shows `USB-AoIP`), rates `48000,44100,88200,96000`,
+  with the rate-report and rate-request modules (`u_audio.ko` ed539ca8, `usb_f_uac2.ko` 505c6ad0):
+  the Mac follows a Dante-side rate set, and a Mac-side change reaches the arbiter.
+- Owner `ratepoll` c84e6a36 (the host's rate checked every 100 ms while open); plugin c6b012ae.
+- Inferno config 8549af7e: Dante name `USB-AoIP`, offering `44100,48000,96000`
+  (`install-dante-rate96.sh`); the applier rewrites its `SAMPLE_RATE` at each move, so the hash holds
+  only at 48.
+- Start wrapper 93d1b082: transport keys per rate (`KEY_<rate>` wins at that rate). `transport.conf`
+  6498b9f4: at 48 and 44.1 `RX_QUEUE=96 PRIME_DROP=28 CAPTURE_DRAIN=1 RATE_REQUESTS=1`; at 96 every
+  depth doubled (arm A: buffer 2048, tx_lead 256, guard 512, usb 96/960, rx_queue/slack 192) with
+  `PRIME_DROP_96000=48 CAPTURE_DRAIN_96000=1` (`install-dante-rate96-drop.sh`).
+- Start check fccfdd62 (judges at owner.conf's `RATE=`), applier 1.8.0 347a7062, web 6b98e7cf,
+  profile `direct` with meters; `usb16x16-dante-catch` installed (sessions arm it; it causes faults
+  while it runs, see the rules).
+- The round trip is the same at every Mac open: `daw_timeline` 528 (11.00 ms) at 48, 505 at 44.1,
+  958 (9.98 ms) at 96. A DSP preset adds about nothing (transparent `Rate check`: 959-960 at 96).
+- Left at the close: everything at 48, Mac included; `direct`; service active, start check ok; no
+  preset files besides the shipped ones; DVS running on the Mac. Every commit pushed.
+
+**How the rate changes.** From the Mac (Pro Tools opening a session, Audio MIDI Setup) or from Dante
+Controller / Dante Switcher; never from the page (operator, 2026-10-31: no page rate control). The
+owner sees a Mac-side change and writes a request; Inferno hands a Dante-side set to the same arbiter
+(`usb16x16-apply --rate-request`), which rewrites owner.conf's `RATE=` (and the preset's `@<rate>`
+file) and Inferno's `SAMPLE_RATE` together and restarts the endpoint, then asks the Mac to follow.
+The rest of the domain is Dante Switcher's job: from the Mac side `dante-sync sync --source usb-aoip
+--allow-band-up` (needed for 48 <-> 96); from the Dante side `dante-sync sync --rate R
+--allow-band-up` (the Pi included) and then `dante-sync sync --source usb-aoip` for the Metric Halo,
+which the first does not set. `dante-sync` is `~/Development/Dante Switcher/.build/debug/dante-sync`
+(98c3a2b, defaults to `en7`, runs beside DVS).
+
+**Rules that bite now.**
+- SSH over Ethernet: `ssh -o HostKeyAlias=audio-dev.local bdimaio@169.254.92.97`; Wi-Fi backup and
+  the web UI (login required) at `192.168.1.201`.
+- The far loop is 8 channels at every rate (Pi 1-8 on MADI 25-32): judge every soak with
+  `USB16X16_LOOP_CHANNELS=8` and `bitexact` / `hostgain` with `--loop-channels 8`; 9-16 are silent.
+- A first open within a few minutes of a rate move can read high (1039 at 96, 538 at 44.1) while the
+  network settles; wait or restart the endpoint, then measure.
+- After moving the loop to 96, reboot the Metric Halo before a bit-exact measurement (2026-10-29
+  operating note; `bitexact` passed without it on 2026-10-31, once).
+- No packet capture during a measurement: the tcpdump ring caused USB playback faults at 96
+  (2026-10-31); a capture needs pinning away from the owner and a short snap length first.
+- No rate move under an open Pro Tools session.
+- Root test steps run from a session (`sudo -n -l` on the Pi: candidate launcher, catch, unit
+  controls); installs are the operator's, by hash-pinned installers with a `rollback`.
+- The Mac's AoIP adapter is `en7` (169.254.97.136, DHCP self-assigned); never change Mac network
+  settings, ask the operator.
+
+**Open, recommended order (2026-11-01).**
+1. 88.2 kHz, only if the operator wants it: the gadget offers it, Inferno does not. Same path as 96
+   (depths, a drop sweep, the battery), plus the 10 s wait macOS needs after a move to 88.2 before
+   audio starts (`MULTIRATE_GADGET_PLAN.md`), which the arbiter's restart does not have.
+2. The Mac driver question (`work/mac-driver-spike/SPIKE_PLAN.md`): DriverKit / ASIO named USB-AoIP.
+   The owner now gives the same round trip at every open with Apple's driver at 48 and 96, the main
+   reason for a driver; a go/no-go for the operator.
+3. Lower latency at 96: a drop of 96 read 910 (0.5 ms under 958) with no unanchored prime; it needs
+   the start wrapper's PRIME_DROP cap (48) raised and a battery.
+4. Watch items, no work unless they recur: the 2026-10-29 32/64-frame holes on a channel subset at 96
+   (unreproduced in about five hours of 96 kHz audio since, 2026-10-31), the 2026-10-28 single 8-sample run on ch5-12.
+
+## Pickup — 2026-10-30: a deterministic round trip, everything named USB-AoIP (history).
 
 You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16,
 bridged to Dante through Inferno; called USB 16x16 until 2026-10-30). Read
