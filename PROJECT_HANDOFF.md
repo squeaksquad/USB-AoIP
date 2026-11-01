@@ -15051,3 +15051,11 @@ owner c84e6a36 (`owner/usb16x16-dante-owner-ratepoll`) as a candidate on arm A w
   (`prime_drop=28 capture_drain=1`), start check ok, noise 0, 100 impulses 376 / `daw_timeline` 528 (`back48d-*`).
 96 kHz now stands as installed with its battery passed and the same round trip at every open (958, 9.98 ms);
 ACCEPTED is the operator's. Left at the close: everything at 48, `direct`, DVS running.
+
+**ACCEPTED 2026-11-01 (operator): 96 kHz on the Dante point of record.** The installed set: Inferno config 8549af7e
+offering 44.1 / 48 / 96 (`install-dante-rate96.sh`), start wrapper 93d1b082 with per-rate transport keys, transport.conf
+6498b9f4 (`install-dante-rate96-drop.sh`: arm A at 96 with `PRIME_DROP_96000=48`, `CAPTURE_DRAIN_96000=1`), owner
+c84e6a36 unchanged. At 96 on the 8-channel loop (MADI 25-32): `daw_timeline` 958 (9.979 ms) at every open, battery
+passed (four loaded 800-impulse runs 958 x4, 600 s soak, `bitexact`); 48 unchanged at 528. The rate is changed from
+the Mac and from Dante Controller (or Dante Switcher), never the page. Rollback order: install-dante-rate96-drop.sh,
+then install-dante-rate96.sh (only at 48).

@@ -719,3 +719,5 @@ Later the same night: the prime drop at 96, swept on the installed owner with ca
 934-935, D=96 910 x6, none unanchored), D=48 passed the battery on a candidate (958 x4, soak and `bitexact`
 PASS) and was INSTALLED 2026-11-01 00:34 UTC by `service/install-dante-rate96-drop.sh`; the service then read 958
 on three of three opens at 96 and 528 back at 48. Left: the operator's acceptance.
+
+ACCEPTED 2026-11-01 (operator): 96 kHz is on the Dante point of record (handoff).

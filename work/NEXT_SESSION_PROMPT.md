@@ -80,8 +80,8 @@ authoritative where anything disagrees; the sections below this one are history.
    44.1 and 48, the arbiter moves the stack there itself, and the battery under the service passed
    noise, soak and `bitexact`; the loaded runs spread 919-1004 because 96 runs without a prime drop.
    The prime drop at 96 was sized the same night (D=48 with capture drain: 958 on every open, battery
-   passed) and INSTALLED 2026-11-01 00:34 UTC (`install-dante-rate96-drop.sh`). Next: the operator's
-   ACCEPTED for 96 (D=96, 910, is a 0.5 ms option needing the wrapper's cap raised). The rate
+   passed) and INSTALLED 2026-11-01 00:34 UTC (`install-dante-rate96-drop.sh`). ACCEPTED 2026-11-01
+   (operator): 96 is on the point of record (D=96, 910, stays a 0.5 ms option needing the wrapper's cap raised). The rate
    is changed from the Mac and Dante Controller only, never the page (operator). `dante-sync` (Dante
    Switcher 98c3a2b) defaults to `en7` and runs beside DVS. Original item:
    96 kHz on the real loop (8 channels): DEFERRED 2026-10-29 with the loaded-hour
