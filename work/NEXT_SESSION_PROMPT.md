@@ -32,11 +32,12 @@ Controller / Dante Switcher; never from the page (operator, 2026-10-31: no page 
 owner sees a Mac-side change and writes a request; Inferno hands a Dante-side set to the same arbiter
 (`usb16x16-apply --rate-request`), which rewrites owner.conf's `RATE=` (and the preset's `@<rate>`
 file) and Inferno's `SAMPLE_RATE` together and restarts the endpoint, then asks the Mac to follow.
-The rest of the domain is Dante Switcher's job: from the Mac side `dante-sync sync --source usb-aoip
---allow-band-up` (needed for 48 <-> 96); from the Dante side `dante-sync sync --rate R
---allow-band-up` (the Pi included) and then `dante-sync sync --source usb-aoip` for the Metric Halo,
-which the first does not set. `dante-sync` is `~/Development/Dante Switcher/.build/debug/dante-sync`
-(98c3a2b, defaults to `en7`, runs beside DVS).
+The rest of the domain is Dante Switcher's job: from the Mac side `dante-sync sync --source usb-aoip`
+(since Dante Switcher 14f48a5 a follow crosses rate bands, 48 <-> 96, with a channel-count note instead
+of an abort); from the Dante side `dante-sync sync --rate R --allow-band-up` (an explicit `--rate`
+still needs the flag; the Pi included) and then `dante-sync sync --source usb-aoip` for the Metric
+Halo, which the first does not set. `dante-sync` is `~/Development/Dante Switcher/.build/debug/dante-sync`
+(14f48a5, built; defaults to `en7`, runs beside DVS; that repo is private and 14f48a5 not pushed yet).
 
 **Rules that bite now.**
 - SSH over Ethernet: `ssh -o HostKeyAlias=audio-dev.local bdimaio@169.254.92.97`; Wi-Fi backup and
