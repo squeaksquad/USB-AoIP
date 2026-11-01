@@ -1,0 +1,12 @@
+23:51:09 battery at 96 under the service; owner counters:
+USB t=60.0 usb=open tx=idle rx=idle tx_mean=0.0 rx_mean=0.0 rx_depth=192..192 pitch_c=1000000 pitch_p=1000000 tx_i=0.00 rx_i=0.00 usb_tx=0 usb_rx=96 tx_links=0 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=5736104 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=0,0 back_peak=0,0 out_holes=0/0 back_holes=0/0
+23:51:50 noise: zero runs>=4: 0
+23:55:25 loaded1: daw_timeline=9.979 ms (958) = 722 + io_offset 236 (steady) at 96000 Hz
+23:59:00 loaded2: daw_timeline=9.979 ms (958) = 722 + io_offset 236 (steady) at 96000 Hz
+00:02:35 loaded3: daw_timeline=9.979 ms (958) = 722 + io_offset 236 (steady) at 96000 Hz
+00:06:10 loaded4: daw_timeline=9.979 ms (958) = 722 + io_offset 236 (steady) at 96000 Hz
+00:16:24 soak 600: soak: PASS / rate=96000 channels=8 seconds=600 longest zero run max=1 peak min=0.1000 max=0.1000
+00:22:27 bitexact exit 0: outputs/latency/d48b96-bitexact-360s-32f-20261101T001624Z.json
+00:22:27 owner counters after:
+USB t=1930.1 usb=open tx=flow rx=flow tx_mean=257.0 rx_mean=190.0 rx_depth=94..108 pitch_c=1000014 pitch_p=1000014 tx_i=-14.35 rx_i=14.66 usb_tx=176343010 usb_rx=176441710 tx_links=27 tx_reprimes=0 rx_primes=30 rx_overflow=1705 rx_idle_discards=8814727 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388604,8388598 back_peak=8388604,8388598 out_holes=2/940 back_holes=0/0
+00:22:27 battery done

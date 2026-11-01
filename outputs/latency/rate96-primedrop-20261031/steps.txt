@@ -1,0 +1,57 @@
+23:31:25 96 kHz prime-drop sweep: dante-sync sync --rate 96000 --allow-band-up (Pi included)
+  FF-PULSE-16-DX         changed          verified by heartbeat after 2.6 s
+  Bryans-MBP-M2-Max      changed          verified by heartbeat after 3.6 s
+  D2USB-6152f1           changed          verified by heartbeat after 1.1 s
+  USB-AoIP               changed          verified by heartbeat after 1.4 s
+  USB-AoIP               changed          verified by CoreAudio after 0.1 s
+96k: 5 changed
+23:31:38 dante-sync sync --source usb-aoip
+  MHLink [49057]         changed          verified by CoreAudio after 0.2 s
+  FF-PULSE-16-DX         already at rate  96k
+  Bryans-MBP-M2-Max      already at rate  96k
+  D2USB-6152f1           already at rate  96k
+  USB-AoIP               already at rate  96k
+96k: 1 changed, 4 already at rate
+23:32:01 service stopped
+23:32:09 D=48: candidate started; host_rate=match
+23:33:49 D=48 noise: zero runs>=4: 0
+23:34:30 D=48 open 1: (958) = 722 | tx_prime_found=161 tx_prime_dropped=48 tx_unanchored=0 tx_drained=72
+23:35:10 D=48 open 2: (958) = 722 | tx_prime_found=161 tx_prime_dropped=48 tx_unanchored=0 tx_drained=84
+23:35:50 D=48 open 3: (958) = 722 | tx_prime_found=161 tx_prime_dropped=48 tx_unanchored=0 tx_drained=12
+23:36:30 D=48 open 4: (958) = 722 | tx_prime_found=161 tx_prime_dropped=48 tx_unanchored=0 tx_drained=0
+23:37:10 D=48 open 5: (958) = 722 | tx_prime_found=162 tx_prime_dropped=48 tx_unanchored=0 tx_drained=60
+23:37:50 D=48 open 6: (958) = 722 | tx_prime_found=162 tx_prime_dropped=48 tx_unanchored=0 tx_drained=0
+D=48 owner: USB t=340.1 usb=open tx=flow rx=flow tx_mean=252.5 rx_mean=195.6 rx_depth=96..134 pitch_c=1000033 pitch_p=1000046 tx_i=-30.82 rx_i=44.53 usb_tx=22642991 usb_rx=22744621 tx_links=29 tx_reprimes=0 rx_primes=29 rx_overflow=1165 rx_idle_discards=9873301 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,0 back_peak=2097152,0 out_holes=0/0 back_holes=0/0
+23:37:58 D=72: candidate started; host_rate=match
+23:39:39 D=72 noise: zero runs>=4: 0
+23:40:19 D=72 open 1: (934) = 698 | tx_prime_found=245 tx_prime_dropped=72 tx_unanchored=0 tx_drained=12
+23:40:59 D=72 open 2: (935) = 699 | tx_prime_found=245 tx_prime_dropped=72 tx_unanchored=0 tx_drained=72
+23:41:39 D=72 open 3: (934) = 698 | tx_prime_found=161 tx_prime_dropped=72 tx_unanchored=0 tx_drained=84
+23:42:19 D=72 open 4: (934) = 698 | tx_prime_found=244 tx_prime_dropped=72 tx_unanchored=0 tx_drained=36
+23:42:59 D=72 open 5: (934) = 698 | tx_prime_found=161 tx_prime_dropped=72 tx_unanchored=0 tx_drained=0
+23:43:39 D=72 open 6: (934) = 698 | tx_prime_found=244 tx_prime_dropped=72 tx_unanchored=0 tx_drained=24
+D=72 owner: USB t=340.1 usb=open tx=flow rx=flow tx_mean=274.6 rx_mean=172.0 rx_depth=75..93 pitch_c=1000017 pitch_p=1000022 tx_i=-26.15 rx_i=31.88 usb_tx=22664614 usb_rx=22785405 tx_links=32 tx_reprimes=0 rx_primes=35 rx_overflow=1854 rx_idle_discards=9831159 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,0 back_peak=2097152,0 out_holes=0/0 back_holes=0/0
+23:43:47 D=96: candidate started; host_rate=match
+23:45:28 D=96 noise: zero runs>=4: 0
+23:46:08 D=96 open 1: (910) = 674 | tx_prime_found=162 tx_prime_dropped=96 tx_unanchored=0 tx_drained=48
+23:46:48 D=96 open 2: (910) = 674 | tx_prime_found=161 tx_prime_dropped=96 tx_unanchored=0 tx_drained=72
+23:47:28 D=96 open 3: (910) = 674 | tx_prime_found=162 tx_prime_dropped=96 tx_unanchored=0 tx_drained=36
+23:48:08 D=96 open 4: (910) = 674 | tx_prime_found=162 tx_prime_dropped=96 tx_unanchored=0 tx_drained=0
+23:48:48 D=96 open 5: (910) = 674 | tx_prime_found=246 tx_prime_dropped=96 tx_unanchored=0 tx_drained=0
+23:49:28 D=96 open 6: (910) = 674 | tx_prime_found=244 tx_prime_dropped=96 tx_unanchored=0 tx_drained=0
+D=96 owner: USB t=340.1 usb=open tx=flow rx=flow tx_mean=278.0 rx_mean=170.0 rx_depth=73..94 pitch_c=1000027 pitch_p=1000022 tx_i=-37.72 rx_i=33.20 usb_tx=22676714 usb_rx=22781579 tx_links=29 tx_reprimes=0 rx_primes=38 rx_overflow=2424 rx_idle_discards=9833582 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=2097152,0 back_peak=2097152,0 out_holes=0/0 back_holes=0/0
+23:49:29 candidate stopped; service left stopped
+23:50:14 battery candidate started (D=48, capture drain)
+23:51:09 battery at 96 under the service; owner counters:
+USB t=60.0 usb=open tx=idle rx=idle tx_mean=0.0 rx_mean=0.0 rx_depth=192..192 pitch_c=1000000 pitch_p=1000000 tx_i=0.00 rx_i=0.00 usb_tx=0 usb_rx=96 tx_links=0 tx_reprimes=0 rx_primes=1 rx_overflow=0 rx_idle_discards=5736104 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=0,0 back_peak=0,0 out_holes=0/0 back_holes=0/0
+23:51:50 noise: zero runs>=4: 0
+23:55:25 loaded1: daw_timeline=9.979 ms (958) = 722 + io_offset 236 (steady) at 96000 Hz
+23:59:00 loaded2: daw_timeline=9.979 ms (958) = 722 + io_offset 236 (steady) at 96000 Hz
+00:02:35 loaded3: daw_timeline=9.979 ms (958) = 722 + io_offset 236 (steady) at 96000 Hz
+00:06:10 loaded4: daw_timeline=9.979 ms (958) = 722 + io_offset 236 (steady) at 96000 Hz
+00:16:24 soak 600: soak: PASS / rate=96000 channels=8 seconds=600 longest zero run max=1 peak min=0.1000 max=0.1000
+00:22:27 bitexact exit 0: outputs/latency/d48b96-bitexact-360s-32f-20261101T001624Z.json
+00:22:27 owner counters after:
+USB t=1930.1 usb=open tx=flow rx=flow tx_mean=257.0 rx_mean=190.0 rx_depth=94..108 pitch_c=1000014 pitch_p=1000014 tx_i=-14.35 rx_i=14.66 usb_tx=176343010 usb_rx=176441710 tx_links=27 tx_reprimes=0 rx_primes=30 rx_overflow=1705 rx_idle_discards=8814727 capture_faults=0 playback_faults=0 detaches=0 pitch_write_errors=0 servo_rejected=0 out_peak=8388604,8388598 back_peak=8388604,8388598 out_holes=2/940 back_holes=0/0
+00:22:27 battery done
+00:23:01 candidate stopped, service started at 96 (no drop yet)

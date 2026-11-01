@@ -111,5 +111,11 @@ if [ "${1:-}" = transport ]; then
   run $'RATE=44100\nMETERS=1\n'
   [ "$out" = "${base}--rate 44100 --rx-queue 96 --rate-request-file /run/x/rate-request --prime-drop 28 --capture-drain --meter-file /run/x/meters.txt " ] ||
     { echo "FAIL: transport-rate96.conf at 44.1: $out"; failures=$((failures + 1)); }
+  # transport-rate96-drop.conf: the 48 line unchanged, 96 with the drop and the drain.
+  cp "$here/transport-rate96-drop.conf" "$work/transport.conf"; run $'METERS=1\n'
+  [ "$at48_new" = "$out" ] || { echo "FAIL: transport-rate96-drop.conf changes the 48 kHz line: $out"; failures=$((failures + 1)); }
+  run $'RATE=96000\nMETERS=1\n'
+  [ "$out" = "${base}--rate 96000 --rx-queue 192 --rx-slack 192 --buffer 2048 --tx-lead 256 --guard 512 --usb-period 96 --usb-buffer 960 --rate-request-file /run/x/rate-request --prime-drop 48 --capture-drain --meter-file /run/x/meters.txt " ] ||
+    { echo "FAIL: transport-rate96-drop.conf at 96: $out"; failures=$((failures + 1)); }
 fi
 if [ "$failures" -eq 0 ]; then echo "test-dante-start: all passed"; else echo "test-dante-start: $failures FAILED"; exit 1; fi
