@@ -16,25 +16,32 @@ The project is research-grade: every operating point is measured, hashed and
 recorded before it is accepted, and the protected USB baseline can always be
 restored.
 
-## Current state (2026-10-30)
+## Current state (2026-11-02)
 
 - **Active path: Dante**, through [Inferno](https://gitlab.com/lumifaza/inferno)
   (an open Dante implementation) and Statime for PTP. A single long-lived
   process, `usb16x16-dante-owner`, moves audio between the USB gadget and the
   network, with an optional DSP stage (EQ, crossovers, bass management) and
   live coefficient changes.
-- **Sample rates:** the USB side offers 44.1, 48, 88.2 and 96 kHz; the Dante
-  side offers 44.1 and 48 kHz. The Mac decides: a rate set on the Mac, or from
-  Dante Controller / Dante Switcher, moves the endpoint through an arbiter on
-  the Pi, and the Mac follows a Dante-side move. 96 kHz runs on an 8-channel
-  test loop but is not yet a point of record.
-- **Measured digital round trip** Mac → Pi → Dante → far loop → Pi → Mac at
-  48 kHz and a 32-frame CoreAudio buffer: about **10.0 to 11.6 ms** on the DAW
-  timeline. The figure is fixed for as long as an app keeps the device open,
-  but each new open lands somewhere in a band of about 0.9 ms. That spread is
-  set by how macOS's class driver starts its input and output streams, and the
-  Pi cannot see it (2026-10-28/29). A dedicated host driver with deterministic
-  latency is being explored: `work/mac-driver-spike/`.
+- **Sample rates:** both the USB side and the Dante side offer 44.1, 48, 88.2
+  and 96 kHz, all part of the point of record. The rate is set from the Mac
+  (Pro Tools opening a session, Audio MIDI Setup) or from Dante Controller /
+  Dante Switcher: either moves the endpoint through an arbiter on the Pi, and
+  the Mac follows a Dante-side move. 88.2 and 96 kHz are measured on an
+  8-channel loop (the far loop's MADI carries half the channels at 2x).
+- **Measured digital round trip** Mac → Pi → Dante → far loop → Pi → Mac at a
+  32-frame CoreAudio buffer, on the DAW timeline, the same at every open:
+
+  | Rate | Samples | Time |
+  |---|---|---|
+  | 44.1 kHz | 505 | 11.45 ms |
+  | 48 kHz | 528 | 11.00 ms |
+  | 88.2 kHz | 889 | 10.08 ms |
+  | 96 kHz | 911 | 9.49 ms |
+
+  The owner now removes the per-open spread that macOS's class driver used to
+  draw (`--prime-drop`, `--capture-drain`, 2026-10-30), so no host driver is
+  needed; the spike that found it is in `work/mac-driver-spike/`.
 - **AES67 path** (RAVENNA driver + `aes67-linux-daemon`) still works and is
   kept as the rollback; its service is stopped.
 
