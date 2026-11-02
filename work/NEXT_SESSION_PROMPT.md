@@ -67,7 +67,7 @@ Halo, which the first does not set. `dante-sync` is `~/Development/Dante Switche
    located). INSTALLED by the operator 2026-11-01 (`service/install-dante-rate882.sh` 03e2d2c0); phase 5
    under the service passed (handoff MEASURED 2026-11-01 17:30): 889 at every open after a Dante-side or a
    Mac-side move, a page preset follows to its `@88200` file, soaks PASS, 528 at 48. ACCEPTED 2026-11-01.
-   Still open: a Pro Tools open at 88.2 (if it opens silent, restart its engine) and the one unlocated swap.
+   Pro Tools at 88.2 works (operator, 2026-11-01). Still open: the one unlocated swap.
 2. The Mac driver question (`work/mac-driver-spike/SPIKE_PLAN.md`): DriverKit / ASIO named USB-AoIP.
    The owner now gives the same round trip at every open with Apple's driver at 48 and 96, the main
    reason for a driver; a go/no-go for the operator.

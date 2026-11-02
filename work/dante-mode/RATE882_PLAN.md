@@ -171,4 +171,5 @@ owner) both land at 889 at every open (three each), noise 0, 120 s soaks PASS, e
 follows to its `@88200` file (`dsp_us_max` at most 179); 528 at 48 after each. Evidence
 `outputs/latency/rate882-service-20261101/` and `outputs/latency/rate882-page-20261101/`.
 
-ACCEPTED by the operator 2026-11-01. Still open: a Pro Tools open at 88.2; the single unlocated `bitexact` swap.
+ACCEPTED by the operator 2026-11-01. Pro Tools at 88.2 then used by the operator on the service: works, no silent open.
+Still open: the single unlocated `bitexact` swap.

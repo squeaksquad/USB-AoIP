@@ -15202,3 +15202,8 @@ wrapper df6a1b0b unchanged. `daw_timeline` 889 (10.08 ms) at every open at 88.2,
 Accepted with the one unlocated candidate `bitexact` swap and without a Pro Tools open at 88.2 (both still open).
 Rollback order: install-dante-rate882.sh, install-dante-rate96-drop96.sh, install-dante-rate96-drop.sh,
 install-dante-rate96.sh (only at 48).
+
+**MEASURED 2026-11-01 (operator, "pro tools works great at 88.2kHz"): Pro Tools at 88.2 on the point of record.**
+The operator used Pro Tools at 88.2 on the installed service and reported it works. No silent open was seen (the
+macOS one-IO-session silence of RATE882_PLAN.md's Results did not show), so the Pro Tools item is closed. Still
+open: the single unlocated candidate `bitexact` swap.
