@@ -15207,3 +15207,84 @@ install-dante-rate96.sh (only at 48).
 The operator used Pro Tools at 88.2 on the installed service and reported it works. No silent open was seen (the
 macOS one-IO-session silence of RATE882_PLAN.md's Results did not show), so the Pro Tools item is closed. Still
 open: the single unlocated candidate `bitexact` swap.
+
+**DONE 2026-11-10: the repository is laid out for a stranger (packaging
+workstream 1 of 3). No audio-path file changed a byte; nothing was installed
+on or run on the Pi.** The operator's goal: someone else can install USB-AoIP
+on their own Pi 5 and operate it, the 2026-11-01 point of record being the
+thing packaged. Three workstreams, one pull request each: this layout, then
+a from-scratch installer, then the web UI and access.
+
+Why: the repository was 10,625 files, 9,944 of them evidence, and the
+product could not be told from the record of how it was reached.
+
+What changed (branch `cleanup/repo-layout`, pull request squeaksquad/USB-AoIP#1):
+
+1. Layout (operator's decision, option A). At the top level, what is
+   installed and run: `dante/` (owner, Inferno patches, `SOURCES.lock`, the
+   installed config, the service files), `gadget/`, `kernel/`, `dsp-core/`
+   (was `work/phase4-bridge`), `dsp-compiler/`, `web-control/`, `web-ui/`,
+   `tools/`. Under `history/`: the AES67 path (`aes67/`), the incremental
+   installers and the files they replaced (`installers/`), experiments and
+   candidate configs (`experiments/`), the 2026-08-30 snapshots. Under
+   `docs/`: the design and plan documents and the pickup prompt.
+   `work/protected-baseline-2026-08-31/` did not move. The moves are two
+   commits of pure renames (331 files, each at 100% similarity).
+2. This handoff is append-only and keeps citing the old paths. They resolve
+   three ways: `work/MOVED.md` maps every old path to its new one, each old
+   `work/<dir>/` holds a pointer, and the tag `layout-2026-11-01` (commit
+   5c489d9) is the tree every entry above this one was written against.
+3. The scripts under `history/` are byte for byte as accepted, so the
+   installer hashes recorded above still hold. They name their sibling files
+   by the old layout (`$script_dir/../config/...`) and therefore run from a
+   checkout of the tag, or from the Pi's staging directory
+   `~/usb-16x16-work`, which still mirrors the old layout; not from
+   `history/`. The author's Pi and its rollback chain are untouched.
+4. Evidence (operator's decision): `outputs/` was split with its history
+   into `github.com/squeaksquad/USB-AoIP-evidence` (public) and removed from
+   this tree at HEAD. No history was rewritten, so every commit hash cited
+   above still resolves. `EVIDENCE.md` is the pointer; the evidence
+   repository is cloned as `outputs/` (ignored here), where the measurement
+   tools still write. Moved out of the evidence into this repository
+   (operator's decision: outright, not copied): `zeros.py`, `gaps2.py`,
+   `channel-zeros.py`, `set-rate-one.py` to `tools/analysis/`.
+5. Content edits, all outside the installed set: path references in the
+   live Markdown documents, in tests, and in the Mac-side tools
+   (`dante/measure-candidate.sh`, `dante/soak_reference.py`, the
+   `dsp-compiler/run-*.sh` wrappers); the web-control tests read their DSP
+   artifact from `web-control/fixtures/transparent.dsp`, a copy of the
+   evidence bundle's file. Comments inside installed files and audio-path
+   sources (the owner's headers, the service files, the compiler's modules)
+   still name old paths and were left alone on purpose: editing them would
+   change pinned hashes. Workstream 2 re-records hashes and can correct them.
+6. `README.md` rewritten for a stranger. It describes the network side as an
+   unofficial Dante-compatible implementation built on Inferno, not an
+   Audinate product, and states that the device is a PTP follower that needs
+   another Dante device as clock leader. It carries no personal names or
+   addresses, and says plainly that there is no one-step install yet.
+7. CI (`.github/workflows/ci.yml`, GitHub Actions on Ubuntu): `node --test`
+   for `web-ui` and `dsp-compiler`; the Python tests in `web-control`,
+   `dante` and `tools/diag`; the DSP core by cmake and ctest; the seven
+   owner header tests; `test-dante-start.sh` (both forms) and
+   `test-dante-startcheck.sh`.
+
+Two departures from the plan the operator approved, both forced:
+
+- `web-control/`, `web-ui/`, `dsp-compiler/` and `dsp-core/` are hyphenated
+  top-level siblings, not `web/control`, `web/ui`, `dsp/compiler`,
+  `dsp/core`. The compiler modules the Pi serves to the browser import the
+  UI's shared modules as `../web-ui/<file>`, and `usb16x16-web` defaults
+  `--static` to `../web-ui`; nesting them would have changed installed files.
+- `history/experiments/dsp-service` is not in CI, though the operator asked
+  for it. Its tests read the evidence bundles and pin old-layout paths, and
+  two of them (`test_reference_criterion_*`) already fail on `main`: the
+  pinned hash of `bridge_core.cpp` is the 2026-09-11 one and the file has
+  changed since. The pin is that acceptance's criterion, so it was not
+  updated. They still run from the tag with the evidence cloned.
+
+Verified on the Mac in the new layout: 119 + 66 node tests, 126 + 17 + 6
+Python tests, the DSP core's ctest, the seven owner header tests, and the
+three shell tests, all passing, as before the move. Not verified: anything
+on the Pi (nothing there depends on this repository's layout, but a
+re-staging to `~/usb-16x16-work` from the new layout has not been done and
+the old installers would not find their files if it were).
