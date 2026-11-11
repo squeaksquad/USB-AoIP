@@ -288,7 +288,7 @@ stays; only the Pi's receive subscriptions move between the two, at 48.
 - The owner's `out_holes` / `back_holes` count only runs where all 16 channels
   are zero; with 9-16 silent they cannot fire on this loop, so a failure is
   located with the per-channel capture reader
-  (`outputs/latency/rate-report-capture-20261029/channel-zeros.py`) instead.
+  (`tools/analysis/channel-zeros.py`) instead.
 
 **Rules.** The battery's sixteen-channel soak becomes an 8-channel soak at 96:
 the operator's exception for this rate, recorded with each result. 48 and 44.1

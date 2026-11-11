@@ -1,5 +1,12 @@
 # Next-session pickup prompt
 
+> **Layout note, 2026-11-10.** The repository was laid out for packaging
+> (handoff entry of that date; `work/MOVED.md`, `EVIDENCE.md`). Paths in the
+> current section below are the new ones; the Pi's staging directory
+> `~/usb-16x16-work` still mirrors the old layout. The work in hand is the
+> packaging: workstream 1 (layout) done, 2 (a from-scratch installer) and
+> 3 (web UI and access) to come. The audio-path state below is unchanged.
+
 ## Current pickup — 2026-11-01: 44.1, 48, 88.2 and 96 kHz on the point of record. Start here.
 
 You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16, bridged to Dante
