@@ -155,8 +155,9 @@ it.)
   the page. The endpoint restarts at the new rate: a short outage.
 - Restarting `usb-16x16.service` makes the device disappear and reappear on
   the host.
-- The page is served on port 8088 of the management interface, behind a
-  login.
+- The page is at `https://<management address>:8088`, behind a login made
+  with `sudo install/install.sh set-password NAME`. How access to it is
+  built, and why: [`docs/web/ACCESS.md`](docs/web/ACCESS.md).
 
 To measure the round trip yourself, from a Mac: build
 `tools/latency-harness` (`swift build -c release && ./build-app.sh`) and run
@@ -189,8 +190,15 @@ noise probe first; a dropped sample anywhere invalidates a latency reading.
 - **Hosts other than macOS are untested.** The gadget is class compliant,
   but the per-rate latency figures and the rate-follow behaviour were only
   ever measured against Apple's driver.
-- **The page uses a password over plain HTTP.** Fine on a network you
-  control, not protection against anyone who can watch it.
+- **The page is for a local network.** It is behind a login and, by
+  default, encrypted with a certificate the unit makes itself, so each
+  browser warns once. Anyone with a login can do everything, including
+  shutting the unit down. Do not expose it to the internet.
+- **By default the page cannot tell you whether the clock has a leader.**
+  The clock service as measured does not report it; an optional, not yet
+  measured build does (`PTP_STATE` in `docs/INSTALL.md`). A silent,
+  otherwise healthy unit usually means no other Dante device is leading the
+  clock.
 - **Not a product.** One unit exists, and the installer for a second has
   not yet been run on hardware.
 

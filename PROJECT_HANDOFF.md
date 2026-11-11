@@ -15384,3 +15384,137 @@ configuration is not in the record); `AUDIO_IF_SETUP=link-local`; DKMS
 installing over the in-tree modules; the web service as a dedicated user;
 `adopt` on the author's Pi. A unit built this way has its own owner, plugin
 and module binaries and is a new operating point until measured.
+
+**DONE 2026-11-10: the web page's access rebuilt and its status made
+truthful (packaging workstream 3 of 3). Unit-tested and seen in a browser
+against a mock stack; not run on a Pi; nothing installed.** Branch
+`web/access`, stacked on the installer's. The operator chose the scope from
+`docs/web/AUDIT-2026-11-10.md`: audit group 1 for the page, the access
+proposal's parts A to D, a self-signed certificate by default, and the
+Statime change as an opt-in.
+
+**FOUND 2026-11-10, by reading the code (neither exercised): two faults in
+the access path as installed on the author's Pi (web 1.6.0 6b98e7cf,
+applier 1.8.0 347a7062).**
+
+1. The web account could make root overwrite files. The applier, as root,
+   wrote `current.json.tmp`, `rate-history.json.tmp`, `apply.lock` and
+   `presets/check-<id>.dsp` with plain `open()` in the spool, a directory
+   the web account owns, and `receipts/` sat under a parent it could
+   rename. A symbolic link at any of those names sends the write anywhere.
+   Whether it reaches code execution as root was not shown.
+2. Any web page could drive the unit through a signed-in browser. The
+   service had no Origin or custom-header check; a cross-site POST carries
+   the Basic credentials, so another site's page could apply a preset of its
+   own (output gain up to +40 dB passes the applier's guards), switch
+   profile or shut the unit down.
+
+Both need someone on the management network or a page opened while signed
+in. The author's Pi has them until it runs the new files.
+
+What changed:
+
+- `usb16x16-apply` 1.9.0. Requests come from `/var/spool/usb-aoip/inbox`
+  (root, group the web account's, mode 1730: create and rename only, no
+  listing) as `<id>.request` with artifacts beside it. Every read from it,
+  and from the audio service's rate-request and live files, is no-follow,
+  non-blocking, a regular file with one link, bounded, then removed. Root's
+  own files (`current.json`, `receipts/`, the lock, the rate history, the
+  loader check's temp file) are in `/var/lib/usb16x16-apply`, which only
+  root writes and which the applier refuses if it is a link or writable by
+  others. The envelope (id, time window, replay) is validated before any
+  kind acts, on both backends. Kind `rate` is taken only from the
+  rate-request trigger. Unchanged, and kept so on review: the artifact
+  grammar and its checks, every systemctl, amixer and journalctl call, the
+  arbiter's decisions, what is written under `/etc/usb16x16`, and at most
+  one operation that restarts the audio service per run.
+- `usb16x16-web` 1.7.0. Every POST, PUT and DELETE needs `X-USB-AoIP: 1`, a
+  JSON content type and, when sent, an `Origin` equal to `Host`. Security
+  headers, a 30 s handler timeout, an HTML sign-in failure page for
+  browsers. `--tls-cert` / `--tls-key` (TLS 1.2 or later, the handshake in
+  the connection's thread). With no address on the management interface it
+  exits 75 and is restarted, where it used to listen on 127.0.0.1 until
+  restarted by hand. Health on the Dante stack gains `device.name`, the
+  real `audio.sampleRate` (it was the constant 48000), `startCheck` and
+  `clock`.
+- The installer: the inbox and state directories; the login file
+  `/etc/usb-aoip/web-auth`, root's and group-readable, with `set-password`
+  run as root (as written on 2026-11-10 earlier it would have failed: the
+  web account could not create its temp file); `WEB_TLS=self-signed|
+  provided|off` with a certificate made by `openssl` for the unit's name
+  and address and its fingerprint printed; `WEB_BIND`; journal access by
+  `systemd-journal` in place of `adm`; more sandbox directives on the web
+  unit and a few on the applier's.
+- `PTP_SANDBOX=0|1`, default 0. At 1, Statime runs as the audio account
+  with `CAP_NET_BIND_SERVICE` and `CAP_NET_RAW`, sandboxed, its socket at
+  `/run/usb16x16-statime/ptp-usrvclock` (Statime's `usrvclock-path`,
+  Inferno's `CLOCK_PATH`: both configuration, no patch). It runs as the
+  audio account, not one of its own, because the Inferno client binds a
+  reply socket of its own in `/tmp` that Statime must be able to write to.
+  At 0 the Statime unit, its config, the Inferno config and the Dante unit
+  render byte for byte as accepted; the render test checks both. Never run.
+- The page (`web-ui/`): invented meter levels are gone when connected (the
+  meters sit empty with the reason); the header pill and a notice area on
+  both tabs say what state the device is in; one line says whether edits
+  are live or a draft; the mode buttons are marked as the draft's, with
+  what the device is running beside them; the real rate; a "Network audio
+  check" row and notices from the start check; a lost sign-in is shown as
+  one and no longer moves presets to browser storage; the device's name
+  from the Inferno config replaces "USB 16x16" and the author's name.
+
+Not done, by the operator's choice of scope: audit groups 2 to 4 (wording
+and jargon, onboarding, the AES67 leftovers, both READMEs beyond a
+correction note, phone and accessibility).
+
+**Open, for the operator: the page cannot say whether the clock has a
+leader.** Statime at its configured `loglevel = "warn"` logs nothing when
+it gains one, and the line it logs on losing one can be dropped by the
+unit's rate limit; no owner telemetry field reflects it. `clock.state` is
+therefore `unknown` whenever Statime runs, and the page says so. Making it
+knowable needs a small patch to the Statime fork (write the port state to a
+file under `/run`), which is a change to the audio path's build.
+
+Verified off the Pi: 185 Python tests in `web-control/` (93 before), among
+them a symbolic link, a FIFO, a hard link and an oversize file in the
+inbox, the cross-site cases, and an HTTPS request with a stalled second
+client; 132 page tests (119 before); the render test with the sandbox on
+and off; the page in a browser against the real service with a mock stack,
+at desktop and 375 px width (no sideways scroll, where there was). Not
+verified: anything under a real systemd or as two real accounts;
+`docs/install/TO-VERIFY.md`, items 14 to 21. The applier and the web
+service are new builds of installed files outside the audio path: by the
+2026-10-29 rule they are accepted on those checks plus a noise probe and
+one two-minute soak, on the Pi.
+
+**STAGED 2026-11-10: a draft patch to the Statime fork that publishes its PTP
+port state, and the page reading it. Opt-in (`PTP_STATE=1`), default off;
+never run.** The operator asked for the draft after the page was found
+unable to say whether the clock has a leader (the entry above).
+
+- `dante/patches/statime/0001-publish-port-state.patch` (against 244f20a5,
+  hash in `install/pins.sha256`). In `set_forced_port_state()`
+  (`statime/src/port/mod.rs`), when the environment variable
+  `STATIME_PORT_STATE_FILE` is set, one line is written to that file by a
+  temporary file and a rename at each port-state change:
+  `state=Slave port=1 leader=<hex>`, `state=Master ...`, `state=Listening
+  ...`. Without the variable the added code does nothing. The write is in
+  the thread that runs the port, on a state change only.
+- `install.sh`: with `PTP_STATE=1` (or `build --with-port-state`) the patch
+  is applied, with no fuzz, before Statime is built; the Statime unit gains
+  three lines (the variable, a writable path, removal of a stale file) and
+  a tmpfiles.d entry makes `/run/usb16x16-clock`. With `PTP_STATE=0` the
+  patch is not applied and the unit renders as accepted; the render test
+  checks both.
+- `usb16x16-web`: `clock.state` is `locked` for `Slave`, `no-leader` for
+  `Master` or for `Listening` older than 20 s, `unknown` otherwise and
+  whenever the file is absent (a stock Statime). A stopped Statime is
+  `no-leader` whatever an old file says.
+
+Verified: the patch applies exactly to the pinned source; the installer's
+arm64 build in CI compiles Statime with it (see the pull request's run); 12
+new assertions on the reading side. Not verified: that Statime behaves the
+same with it, that the states it writes are the ones a real leader coming
+and going produces, anything on a Pi. It changes the Statime binary, part
+of the audio path's build: a unit built with `PTP_STATE=1` is a new
+operating point until it passes the battery
+(`docs/install/TO-VERIFY.md`, item 20a).

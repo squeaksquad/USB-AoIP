@@ -1,0 +1,65 @@
+Statime (github.com/teodly/statime, branch inferno-dev, 244f20a5): publish
+the PTP port state to a file.
+
+Why: the USB-AoIP control page has to tell its user whether the unit's
+clock has a leader, the first thing a new unit on a network gets wrong.
+Statime logs port-state changes at info; the unit runs it at warn, where it
+says nothing on gaining a leader, and the journal rate limit can drop the
+one line it prints on losing one.
+
+What: when the environment variable STATIME_PORT_STATE_FILE is set,
+set_forced_port_state() writes one line to that file, by a temporary file
+and a rename, each time a port's state changes:
+
+    state=Slave port=1 leader=<clock identity and port, hex>
+    state=Master port=1 leader=
+    state=Listening port=1 leader=
+
+Slave means the port is following a leader. Without the variable the code
+does nothing, so a build with this patch and no variable behaves as the
+pinned one. The write happens in the thread that runs the port, on a state
+change only; on a tmpfs it does not wait for a disk.
+
+Status: DRAFT, 2026-11-10. Written from a read of the source and
+compile-checked in CI on arm64; never run. It changes the Statime binary,
+which is part of the audio path's build: the installer applies it only with
+PTP_STATE=1, and a unit built with it is a new operating point until
+measured (docs/INSTALL.md, "Showing whether the clock has a leader").
+
+License: as Statime (Apache-2.0 OR MIT).
+
+diff --git a/statime/src/port/mod.rs b/statime/src/port/mod.rs
+index d9a5461..24083a1 100644
+--- a/statime/src/port/mod.rs
++++ b/statime/src/port/mod.rs
+@@ -662,6 +662,30 @@ impl<L, A, R, C: Clock, F: Filter, S> Port<'_, L, A, R, C, F, S> {
+             state
+         );
+         core::mem::swap(&mut self.port_state, &mut state);
++        // Publish the port state, for whatever needs to know whether this
++        // follower has a leader: at loglevel warn nothing else says so. One
++        // line, replaced atomically at each change (changes are rare: a
++        // leader appearing, going away or being replaced). Off unless
++        // STATIME_PORT_STATE_FILE names a file; a failed write is ignored,
++        // the clock does not depend on it.
++        if let Ok(path) = std::env::var("STATIME_PORT_STATE_FILE") {
++            let leader = match &self.port_state {
++                PortState::Slave(slave) => {
++                    let master = slave.remote_master();
++                    hex::encode(master.clock_identity.0)
++                        + &hex::encode(master.port_number.to_be_bytes())
++                }
++                _ => std::string::String::new(),
++            };
++            let line = std::format!(
++                "state={} port={} leader={}\n",
++                self.port_state, self.port_identity.port_number, leader
++            );
++            let temporary = std::format!("{path}.tmp");
++            if std::fs::write(&temporary, line).is_ok() {
++                let _ = std::fs::rename(&temporary, &path);
++            }
++        }
+         if matches!(state, PortState::Slave(_) | PortState::Faulty)
+             || matches!(self.port_state, PortState::Faulty)
+         {

@@ -25,12 +25,22 @@ JOURNAL = """1791757664.000100 audio-dev usb16x16-dante[76423]: DSP t=1260.1 dsp
 """
 
 
+ENV_KEYS = ("USB16X16_APPLY_INBOX", "USB16X16_APPLY_STATE", "USB16X16_DANTE_CONF", "USB16X16_DANTE_RUN_DIR",
+            "USB16X16_DSP_DIR", "USB16X16_STACK", "USB16X16_INFERNO_CONF", "USB16X16_STARTCHECK_STATUS",
+            "USB16X16_STATIME_CONF", "USB16X16_CLOCK_STATE_FILE")
+
+
 def load(root):
-    os.environ["USB16X16_APPLY_DIR"] = str(root / "web-apply")
+    os.environ["USB16X16_APPLY_INBOX"] = str(root / "inbox")
+    os.environ["USB16X16_APPLY_STATE"] = str(root / "state")
     os.environ["USB16X16_DANTE_CONF"] = str(root / "owner.conf")
     os.environ["USB16X16_DANTE_RUN_DIR"] = str(root / "run")
     os.environ["USB16X16_DSP_DIR"] = str(root / "dsp")
     os.environ["USB16X16_STACK"] = "dante"
+    os.environ["USB16X16_INFERNO_CONF"] = str(root / "asound-inferno-owner.conf")
+    os.environ["USB16X16_STARTCHECK_STATUS"] = str(root / "startcheck-status")
+    os.environ["USB16X16_STATIME_CONF"] = str(root / "statime.toml")
+    os.environ["USB16X16_CLOCK_STATE_FILE"] = str(root / "port-state")
     loader = importlib.machinery.SourceFileLoader("usb16x16_web_dante", str(HERE / "usb16x16-web"))
     spec = importlib.util.spec_from_loader("usb16x16_web_dante", loader)
     module = importlib.util.module_from_spec(spec)
@@ -42,13 +52,13 @@ class DanteWebTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        for name in ("web-apply", "run", "dsp"):
+        for name in ("inbox", "state", "run", "dsp"):
             (self.root / name).mkdir()
         (self.root / "owner.conf").write_text("# as installed\nMETERS=1\n")
         self.web = load(self.root)
 
     def tearDown(self):
-        for key in ("USB16X16_DANTE_CONF", "USB16X16_DANTE_RUN_DIR", "USB16X16_DSP_DIR", "USB16X16_STACK"):
+        for key in ENV_KEYS:
             os.environ.pop(key, None)
         self.tmp.cleanup()
 
@@ -174,6 +184,115 @@ class DanteWebTests(unittest.TestCase):
         snapshot = collector.build()
         self.assertFalse(snapshot["mode"]["running"])
         self.assertIn("Dante service failed", snapshot["mode"]["detail"])
+
+    def snapshot(self, slow=None):
+        collector = self.web.Collector(self.root, self.root)
+        collector._slow = slow if slow is not None else {
+            "services": {"gadget": {"state": "active"}, "dante": {"state": "active"}, "statime": {"state": "active"}},
+            "profile": {"selected": "direct", "profiles": []}}
+        collector._fast = collector.collect_fast()
+        collector._daemon = {"owner": {"present": False}}
+        return collector.build()
+
+    def test_sample_rate_is_the_endpoints(self):
+        slow = {"services": {}, "profile": {"selected": "direct", "profiles": [], "rate": 96000}}
+        self.assertEqual(self.snapshot(slow)["audio"]["sampleRate"], 96000)
+        slow["profile"]["rate"] = 44100
+        self.assertEqual(self.snapshot(slow)["audio"], {"sampleRate": 44100, "inputs": 16, "outputs": 16})
+        slow["profile"]["rate"] = None   # owner.conf's RATE= garbled
+        self.assertEqual(self.snapshot(slow)["audio"]["sampleRate"], 48000)
+        self.assertEqual(self.snapshot({"services": {}})["audio"]["sampleRate"], 48000, "before the slow tier ran")
+
+    def test_device_name(self):
+        text = ('# NAME "commented"\n</usr/share/alsa/alsa.conf>\npcm.inferno {\n\ttype inferno\n'
+                '\tNAME "USB-AoIP Studio"\n\tDEVICE_ID "88a29e8b01e40000"\n}\n')
+        self.assertEqual(self.web.parse_device_name(text), "USB-AoIP Studio")
+        self.assertEqual(self.web.parse_device_name(None), "USB-AoIP")
+        self.assertEqual(self.web.parse_device_name("pcm.inferno {\n}\n"), "USB-AoIP")
+        self.assertEqual(self.web.parse_device_name('\tNAME ""\n'), "USB-AoIP")
+        self.assertEqual(self.web.INFERNO_CONF, self.root / "asound-inferno-owner.conf")
+        snapshot = self.snapshot()
+        self.assertEqual(snapshot["device"], {"name": "USB-AoIP"}, "the default until the slow tier reads the file")
+        slow = {"services": {}, "profile": {}, "device": {"name": "USB-AoIP Studio"}}
+        self.assertEqual(self.snapshot(slow)["device"], {"name": "USB-AoIP Studio"})
+
+    def test_start_check(self):
+        parse = self.web.parse_startcheck
+        self.assertEqual(parse("state=ok rate=6005 restarts=0 invocation=ab12 time=2026-11-01T12:00:00Z\n"),
+                         {"state": "ok", "rate": 6005, "restarts": 0, "time": "2026-11-01T12:00:00Z"})
+        self.assertEqual(parse("state=unknown rate= restarts=0 invocation= time=2026-11-01T12:00:00Z"),
+                         {"state": "unknown", "rate": None, "restarts": 0, "time": "2026-11-01T12:00:00Z"})
+        self.assertEqual(parse("state=gave-up rate=12 restarts=3 invocation=x time=yesterday")["time"], None)
+        self.assertEqual(parse("state=restarting rate=12 restarts=x time=2026-11-01T12:00:00Z")["restarts"], None)
+        nothing = {"state": "unknown", "rate": None, "restarts": None, "time": None}
+        for garbled in (None, "", "garbage", "state=exploded rate=1", "state=ok\nstate=idle\n"):
+            self.assertEqual(parse(garbled), nothing, repr(garbled))
+        self.assertEqual(self.snapshot()["startCheck"], nothing, "no status file")
+        (self.root / "startcheck-status").write_text("state=checking rate=6000 restarts=1 invocation=ab time=2026-11-01T12:00:00Z\n")
+        self.assertEqual(self.snapshot()["startCheck"],
+                         {"state": "checking", "rate": 6000, "restarts": 1, "time": "2026-11-01T12:00:00Z"})
+
+    def test_clock(self):
+        clock = self.web.clock_state
+        for state in ("inactive", "failed", "activating"):
+            self.assertEqual(clock(state, "warn")["state"], "no-leader", state)
+        for state in (None, "unknown", ""):
+            self.assertEqual(clock(state, "warn")["state"], "unknown", state)
+        running = clock("active", "warn")
+        self.assertEqual(running["state"], "unknown", "nothing Statime logs at warn shows lock")
+        self.assertIn("warn", running["detail"])
+        self.assertEqual(clock("active", "info")["state"], "unknown", "never a guessed lock")
+        self.assertEqual(clock("active", None)["state"], "unknown")
+        self.assertEqual(self.web.parse_statime_loglevel('# x\nloglevel = "warn"\nsdo-id = 0\n'), "warn")
+        self.assertIsNone(self.web.parse_statime_loglevel(None))
+        self.assertIsNone(self.web.parse_statime_loglevel("sdo-id = 0\n"))
+        snapshot = self.snapshot()
+        self.assertEqual(set(snapshot["clock"]), {"state", "detail"})
+        self.assertEqual(snapshot["clock"]["state"], "unknown")
+
+    def test_clock_from_a_published_port_state(self):
+        clock, read = self.web.clock_state, self.web.read_port_state
+        self.assertEqual(clock("active", "warn", ("Slave", "001dc1fffe0a0b0c0001", 300.0)),
+                         {"state": "locked", "detail": "following leader 001dc1fffe0a0b0c0001"})
+        self.assertEqual(clock("active", "warn", ("Slave", "", 1.0))["state"], "locked")
+        self.assertEqual(clock("active", "warn", ("Master", "", 5.0))["state"], "no-leader")
+        self.assertEqual(clock("active", "warn", ("Listening", "", 2.0))["state"], "unknown", "only just started")
+        self.assertEqual(clock("active", "warn", ("Listening", "", 60.0))["state"], "no-leader")
+        self.assertEqual(clock("active", "warn", ("Passive", "", 60.0))["state"], "unknown")
+        self.assertEqual(clock("active", "warn", ("Faulty", "", 60.0))["state"], "unknown")
+        # A stopped follower follows nothing, whatever an old file says.
+        self.assertEqual(clock("inactive", "warn", ("Slave", "ab", 5.0))["state"], "no-leader")
+        self.assertEqual(clock(None, "warn", ("Slave", "ab", 5.0))["state"], "unknown")
+        path = self.root / "port-state"
+        self.assertIsNone(read(path), "no file: a stock Statime")
+        path.write_text("state=Slave port=1 leader=001dc1fffe0a0b0c0001\n")
+        state, leader, age = read(path)
+        self.assertEqual((state, leader), ("Slave", "001dc1fffe0a0b0c0001"))
+        self.assertLess(age, 30)
+        for garbled in ("", "state=Locked port=1 leader=\n", "nonsense", "state=\n"):
+            path.write_text(garbled)
+            self.assertIsNone(read(path), repr(garbled))
+        path.write_text("state=Slave port=1 leader=$(reboot)\n")
+        self.assertEqual(read(path)[:2], ("Slave", ""), "a leader that is not hex is dropped, not shown")
+        path.write_text("state=Master port=1 leader=\n")
+        self.assertEqual(read(path)[:2], ("Master", ""))
+        slow = {"services": {"statime": {"state": "failed"}}, "profile": {}}
+        self.assertEqual(self.snapshot(slow)["clock"]["state"], "no-leader")
+
+    def test_existing_fields_are_still_there(self):
+        snapshot = self.snapshot()
+        for key in ("ok", "generated", "service", "host", "audio", "stack", "mode", "meters", "dsp", "owner",
+                    "apply", "dspLive"):
+            self.assertIn(key, snapshot)
+        self.assertEqual(snapshot["service"]["version"], "1.7.0")
+
+    def test_the_dante_dsp_answer_runs_no_engine_probe(self):
+        collector = self.web.Collector(self.root, self.root)
+        calls = []
+        self.web.run = lambda argv, timeout=4.0: calls.append(argv)
+        dsp = collector.collect_dsp()
+        self.assertIsNone(dsp["engine"])
+        self.assertEqual(calls, [])
 
     def test_log_units(self):
         self.assertIn("usb16x16-dante.service", self.web.DANTE_LOG_UNITS["all"])

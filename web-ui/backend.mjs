@@ -73,12 +73,62 @@ export function stackTerms(health) {
 
 /** Read a health snapshot, or null when no backend is reachable. */
 export async function probeHealth(fetchImpl = globalThis.fetch, signal) {
+  return (await readHealth(fetchImpl, signal)).health;
+}
+
+// HTTP statuses that mean "the service is there, but this browser may not
+// talk to it right now": a lost or wrong sign-in, a refusal, or the sign-in
+// limiter. None of them means the device is gone, so the page keeps its
+// connected state and its preset store when it sees one.
+const ACCESS_STATUSES = new Set([401, 403, 429]);
+
+/** An access problem from a response status and its JSON body, or null. */
+export function accessProblem(status, body = null) {
+  if (!ACCESS_STATUSES.has(status)) return null;
+  const message = isObject(body) && typeof body.error === 'string' ? body.error : '';
+  return {status, message};
+}
+
+/**
+ * Read a health snapshot and say why there is none. `health` is the snapshot
+ * or null; `access` is an access problem (401, 403, 429) or null. A network
+ * failure or any other status is "no backend" (both null).
+ */
+export async function readHealth(fetchImpl = globalThis.fetch, signal) {
   try {
     const response = await fetchImpl(HEALTH_PATH, { signal, headers: { accept: 'application/json' } });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const body = ACCESS_STATUSES.has(response.status) ? await response.json().catch(() => null) : null;
+      return {health: null, access: accessProblem(response.status, body)};
+    }
     const body = await response.json();
-    return isObject(body) && body.ok === true ? body : null;
-  } catch { return null; }
+    return {health: isObject(body) && body.ok === true ? body : null, access: null};
+  } catch { return {health: null, access: null}; }
+}
+
+// Every request that changes something on the device carries this header
+// (and a JSON content type when it has a body): the service refuses a
+// state-changing request without it, which a page on another site cannot add.
+export const REQUEST_HEADER = 'X-USB-AoIP';
+let accessListener = null;
+/** Called with an access problem whenever a state-changing request meets one. */
+export function onAccessProblem(listener) { accessListener = typeof listener === 'function' ? listener : null; }
+
+/** The one place the page sends a POST, PUT or DELETE. */
+export async function sendRequest(url, {method = 'POST', body} = {}, fetchImpl = globalThis.fetch) {
+  const headers = {accept: 'application/json', [REQUEST_HEADER]: '1'};
+  const init = {method, headers};
+  if (body !== undefined) {
+    headers['content-type'] = 'application/json';
+    init.body = JSON.stringify(body);
+  }
+  const response = await fetchImpl(url, init);
+  if (!response.ok && ACCESS_STATUSES.has(response.status) && accessListener) {
+    const peek = typeof response.clone === 'function' ? await response.clone().json().catch(() => null) : null;
+    const problem = accessProblem(response.status, peek);
+    if (problem) accessListener(problem);
+  }
+  return response;
 }
 
 /** The bridge's latest meter window, or null when no tap is available. */
@@ -134,9 +184,180 @@ export function formatDuration(seconds) {
 const serviceWords = {active: 'running', inactive: 'stopped', failed: 'failed', activating: 'starting', deactivating: 'stopping'};
 export const serviceLabel = state => serviceWords[state] || state || 'unknown';
 
+/** A sample rate in kHz as people write it: 44.1, 48, 88.2, 96. Null when unknown. */
+export function formatRate(rate) {
+  if (!Number.isFinite(rate) || rate <= 0) return null;
+  return `${Number((rate / 1000).toFixed(1))} kHz`;
+}
+
+/** The format line at the top of the page. No rate is shown that the device did not report. */
+export function formatLine(health) {
+  const channels = `${health?.audio?.inputs ?? 16} × ${health?.audio?.outputs ?? 16}`;
+  if (!health) return channels;
+  return `${formatRate(health.audio?.sampleRate) ?? 'Rate unknown'} · ${channels}`;
+}
+
+/** The device's own name from health, or null when the service does not say. */
+export function deviceName(health) {
+  const name = health?.device?.name;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
+// ------------------------------------------------------------- device state
+//
+// What is wrong with the device right now, most severe first. The header pill
+// and the notice area at the top of both tabs are built from the same list,
+// so they cannot disagree. A field the service does not send is unknown and
+// raises nothing; it is never read as good.
+
+export const START_CHECK_MAX = 4;
+const unitState = (health, key) => health?.services?.[key]?.state;
+
+/** The words for an access problem (see accessProblem). */
+export function accessNotice(access) {
+  if (!access) return null;
+  if (access.status === 401) return {id: 'signed-out', severity: 'bad', pill: 'SIGNED OUT',
+    text: 'Signed out: reload the page to sign in again. Until then the page cannot read or change the device.'};
+  if (access.status === 429) return {id: 'sign-in-limit', severity: 'bad', pill: 'SIGN-IN PAUSED',
+    text: 'Too many sign-in attempts: wait a minute, then reload the page.'};
+  return {id: 'refused', severity: 'bad', pill: 'REQUEST REFUSED',
+    text: `The device refused a request from this page${access.message ? `: ${access.message.replace(/[.\s]*$/, '')}` : ''}. Reload the page and try again.`};
+}
+
+/**
+ * The current problems, most severe first: [{id, severity: 'bad'|'warn', pill, text}].
+ * Empty when connected and nothing is known to be wrong, and when not connected
+ * (the pill says that on its own).
+ */
+export function pageNotices(health, access = null) {
+  const notices = [];
+  const fromAccess = accessNotice(access);
+  if (fromAccess) notices.push(fromAccess);
+  if (!health) return notices;
+  const dante = health.stack === 'dante';
+  const service = stackTerms(health).service;
+  const engine = unitState(health, dante ? 'dante' : 'aes67');
+  if (engine === 'activating') {
+    notices.push({id: 'service-starting', severity: 'warn', pill: 'STARTING',
+      text: `The ${service} is starting. Audio returns when it is up, usually within a few seconds.`});
+  } else if (engine && engine !== 'active' && engine !== 'unknown') {
+    notices.push({id: 'service-down', severity: 'bad', pill: dante ? 'DANTE SERVICE DOWN' : 'AES67 SERVICE DOWN',
+      text: `The ${service} is not running. It usually restarts by itself within a few seconds; if it stays down, restart the device or read its log under System & presets.`});
+  }
+  const statime = dante ? unitState(health, 'statime') : undefined;
+  // The clock service's own state explains a missing leader better than the
+  // network does: while it is starting or stopped, "no leader" is about it.
+  const clockLocal = Boolean(statime) && statime !== 'active' && statime !== 'unknown';
+  if (statime === 'activating') {
+    notices.push({id: 'clock-service-starting', severity: 'warn', pill: 'CLOCK STARTING',
+      text: 'The clock service is starting. Audio flows once it has found the network clock.'});
+  } else if (clockLocal) {
+    notices.push({id: 'clock-service-down', severity: 'bad', pill: 'CLOCK SERVICE DOWN',
+      text: 'The clock service is not running, so audio will not flow. It usually restarts by itself; if it stays down, restart the device.'});
+  }
+  if (dante && !clockLocal && health.clock?.state === 'no-leader') {
+    notices.push({id: 'no-leader', severity: 'bad', pill: 'NO CLOCK LEADER',
+      text: 'No clock leader on the network: audio will not flow until another Dante device leads the clock. Check that another Dante device is on and connected to the same network.'});
+  }
+  const check = dante ? health.startCheck : null;
+  if (check?.state === 'gave-up') {
+    notices.push({id: 'start-check-gave-up', severity: 'bad', pill: 'LOSING PACKETS',
+      text: `Network audio is still losing packets after ${restartCount(check.restarts)}; audio may have gaps. Check the switch and cabling.`});
+  } else if (check?.state === 'restarting') {
+    notices.push({id: 'start-check-restarting', severity: 'warn', pill: 'RESTARTING',
+      text: `Some network audio was missing after the last start, so the device is restarting the Dante service${attempt(check.restarts)}. Audio stops for a few seconds.`});
+  }
+  const gadget = unitState(health, 'gadget');
+  if (gadget && gadget !== 'active' && gadget !== 'unknown') {
+    notices.push({id: 'usb-down', severity: 'bad', pill: 'USB SERVICE DOWN',
+      text: 'The USB audio service is not running, so the computer cannot use the device. Restart the device; if that does not help, read the log under System & presets.'});
+  }
+  const rank = {bad: 0, warn: 1};
+  return notices.map((notice, order) => ({notice, order}))
+    .sort((a, b) => rank[a.notice.severity] - rank[b.notice.severity] || a.order - b.order)
+    .map(({notice}) => notice);
+}
+const attempt = restarts => Number.isInteger(restarts) && restarts > 0 ? ` (attempt ${restarts} of ${START_CHECK_MAX})` : '';
+const restartCount = restarts => Number.isInteger(restarts) ? `${restarts} restart${restarts === 1 ? '' : 's'}` : 'several restarts';
+
+/**
+ * The header pill: {state: 'offline'|'ok'|'unknown'|'warn', text, title}.
+ * The words change with the state; colour only repeats them.
+ */
+export function pillState(health, access = null) {
+  const notices = pageNotices(health, access);
+  if (notices.length) {
+    const first = notices[0];
+    return {state: 'warn', text: first.pill, title: notices.map(n => n.text).join('\n')};
+  }
+  if (!health) return {state: 'offline', text: 'NOT CONNECTED',
+    title: 'No device is answering. This page is a demonstration: edits and presets stay in this browser and nothing reaches a device.'};
+  const keys = health.stack === 'dante' ? ['gadget', 'dante', 'statime'] : ['gadget', 'aes67'];
+  const where = health.host ? ` to ${health.host}` : '';
+  if (!keys.every(key => unitState(health, key) === 'active')) {
+    return {state: 'unknown', text: 'CONNECTED · STATE UNKNOWN',
+      title: `Connected${where}, but the device did not report whether its audio services are running.`};
+  }
+  return {state: 'ok', text: 'CONNECTED',
+    title: `Connected${where}. This page acts on the device: switching presets, live edits and shutting down all change it.`};
+}
+
+/** Why the meters are empty while connected, in plain words; null when live levels are available. */
+export function meterAbsence(health) {
+  if (!health) return null;
+  const service = stackTerms(health).service;
+  const engine = unitState(health, health.stack === 'dante' ? 'dante' : 'aes67');
+  if (engine && engine !== 'active' && engine !== 'unknown') return `No level data: the ${service} is not running.`;
+  const meters = health.meters;
+  if (!meters) return 'No level data: this device does not report levels.';
+  if (meters.available) return 'No level data: waiting for a reading from the device.';
+  const reason = String(meters.reason || '');
+  if (/not yet read/.test(reason)) return 'No level data yet: waiting for the first reading.';
+  if (/not running or runs with METERS=0/.test(reason)) return `No level data: the ${service} is not publishing levels.`;
+  if (/no audio is moving|stopped publishing|s old/.test(reason)) return 'No level data: no audio is passing through the device.';
+  if (/could not be parsed/.test(reason)) return 'No level data: the device\'s level reading could not be read.';
+  return reason ? `No level data: ${reason.replace(/[.\s]*$/, '')}.` : 'No level data from the device.';
+}
+
+/** What the device runs now, for the line beside the draft's mode buttons; null when not connected. */
+export function deviceModeLabel(health) {
+  if (!health) return null;
+  const selected = health.profile?.selected;
+  let label;
+  if (!selected) label = 'Unknown';
+  else if (health.stack === 'dante') label = selected === 'direct' ? 'Direct (no DSP)' : `DSP preset ${selected}`;
+  else label = `Profile ${selected}`;
+  return health.mode?.running === false ? `${label} · not running` : label;
+}
+
+/**
+ * The always-visible line at the top of the Channels page: whether an edit
+ * here reaches the device. `live` is liveState's answer for the draft.
+ */
+export function editStatus(health, live, draftMode) {
+  if (!health) return {state: 'offline', text: 'Not connected: edits stay in this page and its saved presets. Nothing reaches a device.'};
+  if (draftMode !== 'direct' && live?.state === 'live') {
+    return {state: 'live', text: 'Edits are live: gain, delay, mute, polarity and EQ changes reach the device as you make them. They are kept after a restart only once you choose Commit preview under System & presets.'};
+  }
+  if (draftMode !== 'direct' && live?.state === 'needs-apply') {
+    return {state: 'draft', text: 'Editing a draft: this change alters the processing layout, so nothing reaches the device until you choose Compile & apply under System & presets.'};
+  }
+  return {state: 'draft', text: 'Editing a draft: nothing reaches the device until you apply it under System & presets.'};
+}
+
+/** The note under the signal path: what the draft's mode buttons mean. */
+export function draftModeNote(health, isDirect) {
+  const draft = isDirect
+    ? 'Mode sets this draft only. The draft is set to Direct: its DSP settings are kept but greyed out.'
+    : 'Mode sets this draft only. The draft is set to DSP processor.';
+  if (!health) return `${draft} No device is connected.`;
+  const dsp = isDirect ? '' : ` ${dspNote(health)}`;
+  return `${draft} To change what the device runs, use Switch or Compile & apply under System & presets.${dsp}`;
+}
+
 /** The one-line connection status shown above the signal path. */
 export function connectionLine(health) {
-  if (!health) return 'Not connected · Local draft · Simulated meters';
+  if (!health) return 'Not connected · Demonstration only';
   const parts = [`Connected · ${health.host || 'Pi'}`];
   if (health.stack === 'dante') {
     const preset = health.mode?.actual === 'dsp' && health.profile?.selected ? ` · ${health.profile.selected}` : ' · direct';
@@ -146,7 +367,7 @@ export function connectionLine(health) {
   }
   const ptp = health.ptp?.status;
   if (ptp && ptp !== 'unavailable') parts.push(`PTP ${ptp}${Number.isFinite(health.ptp?.jitter) ? ` · jitter ${health.ptp.jitter}` : ''}`);
-  parts.push(health.meters?.available ? 'Live meters' : 'Simulated meters');
+  parts.push(health.meters?.available ? 'Live meters' : 'No level data');
   return parts.join(' · ');
 }
 
@@ -211,6 +432,13 @@ export function systemFacts(health) {
       net.speedMbit !== 1000 && net.carrier ? 'Expected 1000 Mbit/s on this link' : '');
   }
 
+  if (dante) {
+    const clock = clockFact(health.clock, health.services?.statime?.state);
+    push('Clock', clock.value, clock.state, clock.title);
+    const check = startCheckFact(health.startCheck);
+    push('Network audio check', check.value, check.state, check.title);
+  }
+
   const bridge = health.bridge;
   if (dante) {
     ownerFacts(health.owner, push);
@@ -245,8 +473,8 @@ export function systemFacts(health) {
     if (Array.isArray(system.load)) push('Load average', system.load.map(v => v.toFixed(2)).join(' · '), '');
   }
 
-  push('Audio format', `${(health.audio?.sampleRate ?? 48000) / 1000} kHz · ${health.audio?.inputs ?? 16} in / ${health.audio?.outputs ?? 16} out`, '');
-  push('Metering', health.meters?.available ? 'Live' : 'Simulated display activity', health.meters?.available ? 'ok' : 'warn', health.meters?.reason || '');
+  push('Audio format', `${formatRate(health.audio?.sampleRate) ?? 'Rate unknown'} · ${health.audio?.inputs ?? 16} in / ${health.audio?.outputs ?? 16} out`, '');
+  push('Metering', health.meters?.available ? 'Live' : meterAbsence(health), health.meters?.available ? 'ok' : 'warn', health.meters?.reason || '');
   if (dante) {
     // The endpoint's stage is in service: say whether a preset is using it, not that it is unfinished.
     const preset = health.mode?.actual === 'dsp' ? health.profile?.selected : null;
@@ -256,6 +484,35 @@ export function systemFacts(health) {
     push('Added DSP latency / CPU load', 'Not measured', '');
   }
   return rows;
+}
+
+/** The network clock in words: {value, state, title}. Absent means unknown.
+ *  `statime` is the clock service's unit state: while it is not running, the
+ *  missing leader is the service, not the network. */
+export function clockFact(clock, statime) {
+  const detail = typeof clock?.detail === 'string' ? clock.detail : '';
+  if (statime === 'activating') return {value: 'The clock service is starting', state: 'warn', title: detail};
+  if (statime && statime !== 'active' && statime !== 'unknown') return {value: 'No clock: the clock service is not running, so audio will not flow', state: 'bad', title: detail};
+  switch (clock?.state) {
+    case 'locked': return {value: 'Locked to a leader', state: 'ok', title: detail};
+    case 'no-leader': return {value: 'No clock leader on the network: audio will not flow until another Dante device leads the clock', state: 'bad', title: detail};
+    // Unknown is the usual answer on a running unit (the clock service does
+    // not report lock at its installed log level): neutral, not a warning.
+    default: return {value: `Clock state unknown${detail ? ` · ${detail}` : ''}`, state: '', title: clock ? '' : 'This version of the device service does not report the clock'};
+  }
+}
+
+/** The check made after each start of the Dante service, in words: {value, state, title}. */
+export function startCheckFact(check) {
+  const title = check?.time ? `Last checked ${check.time}` : '';
+  switch (check?.state) {
+    case 'ok': return {value: 'Network audio checked after the last start: all packets arriving', state: 'ok', title};
+    case 'checking': return {value: 'Checking that network audio is arriving after the last start', state: '', title};
+    case 'restarting': return {value: `Some packets were missing after the last start: restarting the Dante service${attempt(check.restarts)}`, state: 'warn', title};
+    case 'gave-up': return {value: `Still losing packets after ${restartCount(check.restarts)}; audio may have gaps. Check the switch and cabling`, state: 'bad', title};
+    case 'idle': return {value: 'No audio is being sent to the device yet', state: '', title};
+    default: return {value: 'Unknown', state: '', title: check ? title : 'This version of the device service does not report the check'};
+  }
 }
 
 /** The Dante endpoint's own account of itself: its once-a-minute telemetry. */
@@ -348,15 +605,11 @@ export function piStore(fetchImpl = globalThis.fetch) {
       return this.cache;
     },
     async save(name, document) {
-      await check(await fetchImpl(`/api/presets/${encodeURIComponent(name)}`, {
-        method: 'PUT',
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify(document),
-      }));
+      await check(await sendRequest(`/api/presets/${encodeURIComponent(name)}`, {method: 'PUT', body: document}, fetchImpl));
       await this.refresh();
     },
     async remove(name) {
-      await check(await fetchImpl(`/api/presets/${encodeURIComponent(name)}`, {method: 'DELETE'}));
+      await check(await sendRequest(`/api/presets/${encodeURIComponent(name)}`, {method: 'DELETE'}, fetchImpl));
       await this.refresh();
     },
   };
@@ -375,11 +628,7 @@ export const APPLY_POLL_MS = 2000;
 const APPLY_TERMINAL = new Set(['done', 'rolled-back', 'failed', 'refused']);
 
 export async function requestProfile(profile, expectedProfile, fetchImpl = globalThis.fetch) {
-  const response = await fetchImpl('/api/apply/profile', {
-    method: 'POST',
-    headers: {'content-type': 'application/json', accept: 'application/json'},
-    body: JSON.stringify({profile, expectedProfile}),
-  });
+  const response = await sendRequest('/api/apply/profile', {body: {profile, expectedProfile}}, fetchImpl);
   const body = await response.json().catch(() => null);
   if (!response.ok || !isObject(body) || body.ok !== true) {
     throw new Error(isObject(body) && body.error ? body.error : `Apply request failed (${response.status})`);
@@ -542,11 +791,7 @@ export function presetSummary(compiled, name, health = null) {
 export async function requestPreset(name, artifact, expectedProfile, fetchImpl = globalThis.fetch, rateArtifacts = null) {
   const payload = {name, artifact, expectedProfile};
   if (rateArtifacts && Object.keys(rateArtifacts).length) payload.rateArtifacts = rateArtifacts;
-  const response = await fetchImpl('/api/apply/preset', {
-    method: 'POST',
-    headers: {'content-type': 'application/json', accept: 'application/json'},
-    body: JSON.stringify(payload),
-  });
+  const response = await sendRequest('/api/apply/preset', {body: payload}, fetchImpl);
   const body = await response.json().catch(() => null);
   if (!response.ok || !isObject(body) || body.ok !== true) {
     throw new Error(isObject(body) && body.error ? body.error : `Preset request failed (${response.status})`);
@@ -555,7 +800,7 @@ export async function requestPreset(name, artifact, expectedProfile, fetchImpl =
 }
 
 export async function removePreset(slug, fetchImpl = globalThis.fetch) {
-  const response = await fetchImpl(`/api/apply/preset/${encodeURIComponent(slug)}`, {method: 'DELETE', headers: {accept: 'application/json'}});
+  const response = await sendRequest(`/api/apply/preset/${encodeURIComponent(slug)}`, {method: 'DELETE'}, fetchImpl);
   const body = await response.json().catch(() => null);
   if (!response.ok || !isObject(body) || body.ok !== true) {
     throw new Error(isObject(body) && body.error ? body.error : `Remove failed (${response.status})`);
@@ -606,11 +851,7 @@ export async function requestLive(artifact, expectedProfile, expectedLiveSha256,
   const body = artifact === null
     ? {revert: true, expectedProfile, expectedLiveSha256}
     : {artifact, expectedProfile, expectedLiveSha256};
-  const response = await fetchImpl('/api/apply/live', {
-    method: 'POST',
-    headers: {'content-type': 'application/json', accept: 'application/json'},
-    body: JSON.stringify(body),
-  });
+  const response = await sendRequest('/api/apply/live', {body}, fetchImpl);
   const result = await response.json().catch(() => null);
   if (!response.ok || !isObject(result) || result.ok !== true) {
     throw new Error(isObject(result) && result.error ? result.error : `Live update failed (${response.status})`);
@@ -621,11 +862,7 @@ export async function requestLive(artifact, expectedProfile, expectedLiveSha256,
 export async function requestCommit(expectedProfile, expectedLiveSha256, fetchImpl = globalThis.fetch, rateArtifacts = null) {
   const payload = {expectedProfile, expectedLiveSha256};
   if (rateArtifacts && Object.keys(rateArtifacts).length) payload.rateArtifacts = rateArtifacts;
-  const response = await fetchImpl('/api/apply/commit', {
-    method: 'POST',
-    headers: {'content-type': 'application/json', accept: 'application/json'},
-    body: JSON.stringify(payload),
-  });
+  const response = await sendRequest('/api/apply/commit', {body: payload}, fetchImpl);
   const result = await response.json().catch(() => null);
   if (!response.ok || !isObject(result) || result.ok !== true) {
     throw new Error(isObject(result) && result.error ? result.error : `Commit failed (${response.status})`);
@@ -635,11 +872,7 @@ export async function requestCommit(expectedProfile, expectedLiveSha256, fetchIm
 
 /** Power the Pi off through the applier. The confirm word is the service's guard against a stray POST. */
 export async function requestShutdown(expectedProfile, fetchImpl = globalThis.fetch) {
-  const response = await fetchImpl('/api/apply/shutdown', {
-    method: 'POST',
-    headers: {'content-type': 'application/json', accept: 'application/json'},
-    body: JSON.stringify({confirm: 'shutdown', expectedProfile}),
-  });
+  const response = await sendRequest('/api/apply/shutdown', {body: {confirm: 'shutdown', expectedProfile}}, fetchImpl);
   const result = await response.json().catch(() => null);
   if (!response.ok || !isObject(result) || result.ok !== true) {
     throw new Error(isObject(result) && result.error ? result.error : `Shutdown request failed (${response.status})`);

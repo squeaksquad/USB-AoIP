@@ -39,6 +39,9 @@ libexec=/usr/local/libexec/usb16x16-dante
 plugin_dir=/usr/local/lib/usb16x16-dante/alsa-plugins
 dante_etc=/etc/usb16x16/dante
 units=/etc/systemd/system
+inbox=/var/spool/usb-aoip/inbox
+apply_state=/var/lib/usb16x16-apply
+auth_file=/etc/usb-aoip/web-auth
 dkms_name=usb-aoip-uac2
 dkms_version=1.0
 with_dev_tools=0
@@ -56,6 +59,13 @@ need_root() { [ "$(id -u)" -eq 0 ] || refuse "run this with sudo"; }
 conf_keys="OPERATOR_USER WEB_USER OWNER_USER WORK_DIR AUDIO_IF AUDIO_IF_SETUP MGMT_IF WEB_PORT
 KEEPALIVE_TARGETS DEVICE_NAME USB_MANUFACTURER USB_SERIAL USB_VID USB_PID USB_UDC USB_RATES
 DANTE_RATES DANTE_DEVICE_ID DANTE_STATE_ID KERNEL_PIN"
+# Keys added after the first release of this file: absent from an older
+# install.conf they take these values, which are the behaviour it had.
+optional_keys="WEB_BIND= WEB_TLS=off WEB_TLS_CERT= WEB_TLS_KEY= PTP_SANDBOX=0 PTP_STATE=0"
+optional_names=$(for k in $optional_keys; do printf '%s ' "${k%%=*}"; done)
+clock_dir=/run/usb16x16-statime
+clock_state_file=/run/usb16x16-clock/port-state
+with_port_state=0
 
 # Each value is checked against the characters its use allows, so that what
 # is rendered into units, scripts and sudoers can never be more than a value.
@@ -77,6 +87,10 @@ check_key() {
     USB_RATES|DANTE_RATES) [[ $v =~ ^(44100|48000|88200|96000)(,(44100|48000|88200|96000)){0,3}$ ]] ;;
     DANTE_DEVICE_ID|DANTE_STATE_ID) [[ $v =~ ^[0-9a-f]{16}$ ]] ;;
     KERNEL_PIN)        [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9+._-]*$ ]] ;;
+    WEB_BIND)          [[ -z $v || $v =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] ;;
+    WEB_TLS)           [[ $v =~ ^(self-signed|provided|off)$ ]] ;;
+    WEB_TLS_CERT|WEB_TLS_KEY) [[ -z $v || ( $v =~ ^/[A-Za-z0-9/_.-]+$ && $v != *..* ) ]] ;;
+    PTP_SANDBOX|PTP_STATE) [[ $v =~ ^[01]$ ]] ;;
     *) return 1 ;;
   esac
 }
@@ -85,11 +99,12 @@ load_conf() {
   local f=${1:-$conf_file} line k v
   [ -r "$f" ] || refuse "no config at $f; run: sudo install/install.sh config"
   for k in $conf_keys; do unset "$k"; done
+  for k in $optional_keys; do printf -v "${k%%=*}" '%s' "${k#*=}"; done
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in ''|'#'*) continue ;; esac
     [[ $line =~ ^([A-Z_]+)=(.*)$ ]] || refuse "$f: not KEY=value: $line"
     k=${BASH_REMATCH[1]}; v=${BASH_REMATCH[2]}
-    [[ " $(echo $conf_keys) " == *" $k "* ]] || refuse "$f: unknown key $k"
+    [[ " $(echo $conf_keys) $optional_names " == *" $k "* ]] || refuse "$f: unknown key $k"
     check_key "$k" "$v" || refuse "$f: $k has a value it cannot take: '$v'"
     printf -v "$k" '%s' "$v"
   done < "$f"
@@ -98,6 +113,9 @@ load_conf() {
   done
   [ -n "$USB_SERIAL" ] || refuse "$f: USB_SERIAL is empty"
   [ -n "$DANTE_DEVICE_ID" ] || refuse "$f: DANTE_DEVICE_ID is empty"
+  if [ "$WEB_TLS" = provided ]; then
+    [ -n "$WEB_TLS_CERT" ] && [ -n "$WEB_TLS_KEY" ] || refuse "$f: WEB_TLS=provided needs WEB_TLS_CERT and WEB_TLS_KEY"
+  fi
   # The shared USB clock and the arbiter both need the two lists to hold the same rates.
   [ "$(tr ',' '\n' <<<"$USB_RATES" | sort | tr '\n' ,)" = "$(tr ',' '\n' <<<"$DANTE_RATES" | sort | tr '\n' ,)" ] ||
     refuse "$f: USB_RATES and DANTE_RATES must list the same rates"
@@ -215,8 +233,49 @@ render() {
   local d=dante/service g=gadget w=web-control f rate_now
 
   # --- the network side
-  put_file 644 $d/usb16x16-statime.service              $units/usb16x16-statime.service
-  put_file 644 $d/usb16x16-dante-dsp-linkwait.service   $units/usb16x16-dante.service
+  # PTP_SANDBOX=1 (docs/INSTALL.md, "The clock service as an ordinary user"): Statime
+  # as the audio account with two capabilities, its socket out of /tmp. Off, these
+  # three files are exactly the accepted ones.
+  local sock=/tmp/ptp-usrvclock ptp_unit=() ptp_toml=() ptp_asound=()
+  if [ "$PTP_SANDBOX" = 1 ]; then
+    sock=$clock_dir/ptp-usrvclock
+    ptp_unit=(-e "s|^Type=simple\$|Type=simple\\
+User=$OWNER_USER\\
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW\\
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW\\
+NoNewPrivileges=yes\\
+RuntimeDirectory=$(basename "$clock_dir")\\
+RuntimeDirectoryMode=0750\\
+ProtectSystem=strict\\
+ProtectHome=yes\\
+PrivateDevices=yes\\
+ProtectKernelTunables=yes\\
+ProtectKernelModules=yes\\
+ProtectControlGroups=yes|")
+    ptp_toml=(-e "s|^usrvclock-export = true\$|usrvclock-export = true\\
+usrvclock-path = \"$sock\"|")
+    ptp_asound=(-e "s|^\\([[:space:]]*\\)BIND_IP \\(.*\\)\$|\\1BIND_IP \\2\\
+\\1CLOCK_PATH \"$sock\"|")
+  fi
+  # PTP_STATE=1 (docs/INSTALL.md, "Showing whether the clock has a leader"): a
+  # Statime built with dante/patches/statime/0001 is told where to publish its
+  # port state; the directory comes from tmpfiles.d, so it is there before any start.
+  local ptp_state=() state_user=root
+  if [ "$PTP_STATE" = 1 ]; then
+    [ "$PTP_SANDBOX" = 1 ] && state_user=$OWNER_USER
+    ptp_state=(-e "s|^ExecStart=\\(.*\\)\$|Environment=STATIME_PORT_STATE_FILE=$clock_state_file\\
+ReadWritePaths=-$(dirname "$clock_state_file")\\
+ExecStartPre=-/usr/bin/rm -f $clock_state_file\\
+ExecStart=\\1|")
+    put 644 /etc/tmpfiles.d/usb-aoip-clock.conf <<EOF
+# Where the clock service publishes its PTP port state for the control page.
+d $(dirname "$clock_state_file") 0755 $state_user $state_user -
+EOF
+  fi
+  put_file 644 $d/usb16x16-statime.service              $units/usb16x16-statime.service \
+    -e "s|/tmp/ptp-usrvclock|$sock|g" ${ptp_unit[@]+"${ptp_unit[@]}"} ${ptp_state[@]+"${ptp_state[@]}"}
+  put_file 644 $d/usb16x16-dante-dsp-linkwait.service   $units/usb16x16-dante.service \
+    -e "s|/tmp/ptp-usrvclock|$sock|g" -e "s|^User=usb16x16-dante\$|User=$OWNER_USER|" -e "s|^Group=usb16x16-dante\$|Group=$OWNER_USER|"
   put_file 644 $d/usb16x16-dante-startcheck.service     $units/usb16x16-dante-startcheck.service
   put_file 644 $d/usb16x16-dante-rate.path              $units/usb16x16-dante-rate.path
   put_file 644 $d/usb16x16-dante-rate.service           $units/usb16x16-dante-rate.service
@@ -241,8 +300,8 @@ EOF
     -e "s|^\\([[:space:]]*DEVICE_ID\\) \"[^\"]*\"|\\1 \"$DANTE_DEVICE_ID\"|" \
     -e "s|^\\([[:space:]]*STATE_ID\\) \"[^\"]*\"|\\1 \"$DANTE_STATE_ID\"|" \
     -e "s|^\\([[:space:]]*SUPPORTED_SAMPLE_RATES\\) \"[^\"]*\"|\\1 \"$DANTE_RATES\"|" \
-    -e "s|^\\([[:space:]]*SAMPLE_RATE\\) \"[^\"]*\"|\\1 \"${rate_now:-48000}\"|"
-  put_file 644 dante/config/statime-first-run.toml      $dante_etc/statime.toml
+    -e "s|^\\([[:space:]]*SAMPLE_RATE\\) \"[^\"]*\"|\\1 \"${rate_now:-48000}\"|" ${ptp_asound[@]+"${ptp_asound[@]}"}
+  put_file 644 dante/config/statime-first-run.toml      $dante_etc/statime.toml ${ptp_toml[@]+"${ptp_toml[@]}"}
   put_file 644 $d/90-usb16x16-eth0-carrier.conf         /etc/NetworkManager/conf.d/90-usb16x16-eth0-carrier.conf
   put_file 644 $d/90-usb16x16-compaction.conf           /etc/sysctl.d/90-usb16x16-compaction.conf
 
@@ -285,7 +344,7 @@ EOF
   if [ -n "$OPERATOR_USER" ]; then
     put 440 /etc/sudoers.d/usb16x16-dante < <(sudoers_rule)
     if [ "$with_dev_tools" = 1 ]; then
-      put_file 755 $d/usb16x16-dante-candidate /usr/local/sbin/usb16x16-dante-candidate -e "s|^operator=.*|operator=$OPERATOR_USER|" -e "s|~bdimaio|~$OPERATOR_USER|g"
+      put_file 755 $d/usb16x16-dante-candidate /usr/local/sbin/usb16x16-dante-candidate -e "s|^operator=.*|operator=$OPERATOR_USER|" -e "s|~bdimaio|~$OPERATOR_USER|g" -e "s|/tmp/ptp-usrvclock|$sock|g"
       put_file 755 $d/usb16x16-dante-catch     /usr/local/sbin/usb16x16-dante-catch
       put 440 /etc/sudoers.d/usb16x16-dante-candidate <<<"$OPERATOR_USER ALL=(root) NOPASSWD: /usr/local/sbin/usb16x16-dante-candidate"
       put 440 /etc/sudoers.d/usb16x16-dante-catch <<<"$OPERATOR_USER ALL=(root) NOPASSWD: /usr/local/sbin/usb16x16-dante-catch"
@@ -383,12 +442,19 @@ cmd_build() {
     as_builder patch -s -p1 -F 0 -d "$build_dir/inferno" < "$p" || refuse "$(basename "$p") does not apply to the pinned Inferno"
   done
 
+  if [ "${PTP_STATE:-0}" = 1 ] || [ "$with_port_state" = 1 ]; then
+    say "applying the Statime port-state patch (PTP_STATE=1: a draft, not the measured build)"
+    for p in "$repo"/dante/patches/statime/0001-*.patch; do
+      as_builder patch -s -p1 -F 0 -d "$build_dir/statime" < "$p" || refuse "$(basename "$p") does not apply to the pinned Statime"
+    done
+  fi
   say "building Statime (several minutes on a Pi 5)"
   ( cd "$build_dir/statime" && as_builder cargo build --release --locked -j"$jobs" -p statime-linux )
   say "building the Inferno ALSA plugin"
   ( cd "$build_dir/inferno" && as_builder cargo build --release --locked -j"$jobs" -p alsa_pcm_inferno )
-  # The checkout goes back to the pinned tree, so a second run starts from it.
+  # The checkouts go back to the pinned trees, so a second run starts from them.
   as_builder git -C "$build_dir/inferno" reset --quiet --hard "$(pin inferno_rev)"
+  as_builder git -C "$build_dir/statime" reset --quiet --hard "$(pin statime_rev)"
 
   say "building the owner (the point-of-record source)"
   as_builder g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
@@ -410,7 +476,7 @@ cmd_build() {
 
 # --------------------------------------------------------------- install ---
 
-packages="build-essential g++ cmake pkg-config libasound2-dev alsa-utils ethtool dkms curl git patch python3 ca-certificates"
+packages="build-essential g++ cmake pkg-config libasound2-dev alsa-utils ethtool dkms curl git patch python3 ca-certificates openssl"
 
 preflight() {
   [ "$(uname -m)" = aarch64 ] || refuse "this is $(uname -m); the device is a 64-bit Raspberry Pi 5"
@@ -481,8 +547,61 @@ ensure_dirs() {
   install -d -o root -g root -m 755 "$libexec" /usr/local/lib/usb16x16-dante "$plugin_dir" /etc/usb16x16 "$dante_etc" /etc/usb16x16/dsp
   install -d -o "$OWNER_USER" -g "$(id -gn "$OWNER_USER")" -m 750 /var/lib/usb16x16-dante
   install -d -o root -g root -m 755 "$WORK_DIR" "$WORK_DIR/web-ui" "$WORK_DIR/web-ui/compiler"
-  install -d -o "$WEB_USER" -g "$web_group" -m 755 "$WORK_DIR/web-presets" "$WORK_DIR/web-apply" "$WORK_DIR/web-apply/presets"
-  install -d -o root -g root -m 755 "$WORK_DIR/web-apply/receipts"
+  install -d -o "$WEB_USER" -g "$web_group" -m 755 "$WORK_DIR/web-presets"
+  # Requests from the page to root: a directory the web account can drop files
+  # into and can neither list nor tidy; root's own status files live apart, in
+  # a directory only root writes (docs/web/ACCESS.md).
+  install -d -o root -g root -m 755 /var/spool/usb-aoip
+  install -d -o root -g "$web_group" -m 1730 "$inbox"
+  install -d -o root -g root -m 755 "$apply_state"
+  # The page's logins: root's file, readable by the web account's group.
+  [ -e "$auth_file" ] || install -o root -g "$web_group" -m 640 /dev/null "$auth_file"
+  chown root:"$web_group" "$auth_file"; chmod 640 "$auth_file"
+}
+
+mgmt_address() { ip -o -4 addr show dev "$MGMT_IF" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1; }
+
+# TLS for the page. self-signed: a key and certificate made here, for this
+# unit's names and addresses; the browser warns once and the fingerprint
+# printed here is what to compare its warning with. provided: your own files.
+setup_tls() {
+  local web_group dir=/etc/usb-aoip/tls args= ip host san
+  web_group=$(id -gn "$WEB_USER")
+  case "$WEB_TLS" in
+    off) ;;
+    provided)
+      [ -r "$WEB_TLS_CERT" ] && [ -r "$WEB_TLS_KEY" ] || refuse "WEB_TLS=provided: $WEB_TLS_CERT or $WEB_TLS_KEY cannot be read"
+      runuser -u "$WEB_USER" -- test -r "$WEB_TLS_KEY" || refuse "WEB_TLS=provided: $WEB_USER cannot read $WEB_TLS_KEY (group $web_group, mode 640)"
+      args="--tls-cert $WEB_TLS_CERT --tls-key $WEB_TLS_KEY" ;;
+    self-signed)
+      ip=${WEB_BIND:-$(mgmt_address)}
+      host=$(hostname)
+      install -d -o root -g "$web_group" -m 750 "$dir"
+      # Made once; made again only when the address it must answer on is not in it.
+      if [ ! -s "$dir/web.crt" ] || [ ! -s "$dir/web.key" ] ||
+         { [ -n "$ip" ] && ! openssl x509 -in "$dir/web.crt" -noout -checkip "$ip" 2>/dev/null | grep -q 'does match'; }; then
+        san="DNS:$host,DNS:$host.local,DNS:localhost,IP:127.0.0.1${ip:+,IP:$ip}"
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 \
+          -subj "/CN=$host" -addext "subjectAltName=$san" -addext "basicConstraints=critical,CA:FALSE" \
+          -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=serverAuth" \
+          -keyout "$dir/web.key.new" -out "$dir/web.crt.new" 2>/dev/null || refuse "openssl could not make the certificate"
+        chown root:"$web_group" "$dir/web.key.new" "$dir/web.crt.new"; chmod 640 "$dir/web.key.new"; chmod 644 "$dir/web.crt.new"
+        mv -f "$dir/web.key.new" "$dir/web.key"; mv -f "$dir/web.crt.new" "$dir/web.crt"
+        say "made a self-signed certificate for $san"
+      fi
+      say "the page's certificate: $(openssl x509 -in "$dir/web.crt" -noout -fingerprint -sha256 | sed 's/.*=//')"
+      say "your browser will warn about it once; that fingerprint is what its warning should show"
+      args="--tls-cert $dir/web.crt --tls-key $dir/web.key" ;;
+  esac
+  [ -z "$WEB_BIND" ] || args="$args --bind $WEB_BIND"
+  printf '# Written by install.sh from install.conf (WEB_TLS, WEB_BIND).\nUSB_AOIP_WEB_ARGS=%s\n' "${args# }" > /etc/usb-aoip/web.env
+  chmod 644 /etc/usb-aoip/web.env
+}
+
+page_url() {
+  local scheme=http ip; [ "$WEB_TLS" = off ] || scheme=https
+  ip=${WEB_BIND:-$(mgmt_address)}
+  echo "$scheme://${ip:-<address of $MGMT_IF>}:$WEB_PORT"
 }
 
 build_modules() {   # build_modules KERNELVER: the DKMS package added and built for that kernel
@@ -570,6 +689,8 @@ cmd_install() {
   write_manifest
 
   setup_audio_if
+  setup_tls
+  [ ! -e /etc/tmpfiles.d/usb-aoip-clock.conf ] || systemd-tmpfiles --create /etc/tmpfiles.d/usb-aoip-clock.conf
   sysctl -q -p /etc/sysctl.d/90-usb16x16-compaction.conf
   systemctl reload NetworkManager 2>/dev/null || true
   systemctl daemon-reload
@@ -580,8 +701,13 @@ cmd_install() {
   systemctl restart usb16x16-statime.service usb16x16-dante-rate.path usb16x16-apply.path
   systemctl restart usb16x16-dante.service || warn "usb16x16-dante did not start; see: journalctl -u usb16x16-dante -n 50"
 
-  if [ -s "$WORK_DIR/web-auth" ]; then
-    systemctl enable --quiet --now usb16x16-web.service
+  if grep -q '^[^#]' "$auth_file" 2>/dev/null; then
+    systemctl enable --quiet usb16x16-web.service
+    systemctl restart usb16x16-web.service
+    say "the page: $(page_url)"
+  elif [ -t 0 ] && [ -n "$OPERATOR_USER" ]; then
+    say "the web page needs a login. Making one for '$OPERATOR_USER' (set-password NAME adds others):"
+    cmd_set_password "$OPERATOR_USER" || say "no login made; later: sudo install/install.sh set-password NAME"
   else
     say "the web page has no login yet, so its service is not started. Add one:"
     say "    sudo install/install.sh set-password NAME"
@@ -592,15 +718,17 @@ cmd_install() {
 
 cmd_set_password() {
   need_root
-  load_conf
+  [ -n "${WEB_USER:-}" ] || load_conf
   local name=${1:-}
   [[ $name =~ ^[A-Za-z0-9._-]{1,32}$ ]] || refuse "usage: install.sh set-password NAME"
   [ -x /usr/local/bin/usb16x16-web ] || refuse "usb16x16-web is not installed yet"
-  [ -e "$WORK_DIR/web-auth" ] || install -o "$WEB_USER" -g "$(id -gn "$WEB_USER")" -m 600 /dev/null "$WORK_DIR/web-auth"
-  runuser -u "$WEB_USER" -- /usr/local/bin/usb16x16-web --auth-file "$WORK_DIR/web-auth" --add-user "$name"
+  # Run as root: the login file is root's, and the web account only reads it.
+  # The password is asked for twice at the terminal and never appears on a command line.
+  /usr/local/bin/usb16x16-web --auth-file "$auth_file" --add-user "$name"
+  chown root:"$(id -gn "$WEB_USER")" "$auth_file"; chmod 640 "$auth_file"
   systemctl enable --quiet usb16x16-web.service
   systemctl restart usb16x16-web.service
-  say "the page is at http://<address of $MGMT_IF>:$WEB_PORT"
+  say "the page: $(page_url)"
 }
 
 # ---------------------------------------------------------------- status ---
@@ -661,13 +789,13 @@ cmd_uninstall() {
   systemctl daemon-reload
   systemctl reload NetworkManager 2>/dev/null || true
   if [ "$purge" = 1 ]; then
-    rm -rf /etc/usb16x16 /var/lib/usb16x16-dante "$WORK_DIR" "$state" /etc/usb-aoip /var/cache/usb-aoip-uac2
+    rm -rf /etc/usb16x16 /var/lib/usb16x16-dante "$WORK_DIR" "$state" /etc/usb-aoip /var/cache/usb-aoip-uac2 /var/spool/usb-aoip "$apply_state"
     userdel "$WEB_USER" 2>/dev/null || true; userdel "$OWNER_USER" 2>/dev/null || true
     say "removed, with its settings, presets, Dante identity and config"
   else
     rm -f "$manifest"
     say "removed. Kept: /etc/usb-aoip, /etc/usb16x16 (settings), /var/lib/usb16x16-dante (Dante identity"
-    say "and subscriptions), $WORK_DIR (presets, logins). --purge removes those too."
+    say "and subscriptions), $WORK_DIR (presets), the logins and certificate in /etc/usb-aoip. --purge removes those too."
   fi
   say "left alone: the packages, the held kernel (now unheld), /boot/firmware/config.txt, and any aoip-$AUDIO_IF connection"
 }
@@ -739,6 +867,7 @@ while [ $# -gt 0 ]; do
     --config)    conf_file=${2:?--config FILE}; shift 2 ;;
     --build-dir) build_dir=${2:?--build-dir DIR}; shift 2 ;;
     --with-dev-tools) with_dev_tools=1; shift ;;
+    --with-port-state) with_port_state=1; shift ;;
     --purge)     purge=1; shift ;;
     *)           args+=("$1"); shift ;;
   esac

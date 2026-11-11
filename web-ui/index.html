@@ -3,22 +3,24 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>USB 16x16 · Studio processor</title>
+  <title>USB-AoIP</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237edac4'/%3E%3Cpath d='M9 10v12m7-16v20m7-16v12' stroke='%2310191a' stroke-width='3'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#outputs"><span class="brand-icon">≋</span><span>USB <strong>16x16</strong><small>BRYAN DIMAIO</small></span></a>
+    <a class="brand" href="#outputs"><span class="brand-icon">≋</span><span><strong>USB-AoIP</strong><small id="brand-device" hidden></small></span></a>
     <nav aria-label="Processor pages">
       <button data-tab="outputs" class="active">Channels</button><button data-tab="settings">System &amp; presets</button>
     </nav>
-    <span class="preview-pill" id="preview-pill"><i></i> DESIGN PREVIEW</span>
+    <span class="preview-pill" id="preview-pill" title="No device is answering. This page is a demonstration."><i></i> NOT CONNECTED</span>
   </header>
   <main>
-    <div class="connection-status"><span id="format-line">48 kHz · 16 × 16</span><div id="profile-slots" class="profile-slots"></div><span id="connection-line">Not connected · Local draft · Simulated meters</span></div>
+    <div id="page-notices" class="page-notices" role="status" aria-live="polite" hidden></div>
+    <div class="connection-status"><span id="format-line">16 × 16</span><div id="profile-slots" class="profile-slots"></div><span id="connection-line">Not connected · Demonstration only</span></div>
     <section class="signalbar" aria-label="Signal path">
-      <div><span class="overline">MODE</span><div class="segmented"><button data-mode="direct">Direct bridge</button><button data-mode="dsp">DSP processor</button></div></div>
+      <div><span class="overline">DRAFT MODE</span><div class="segmented" role="group" aria-label="Mode of this draft (does not change the device)"><button data-mode="direct" title="Sets this draft to Direct. It does not change the device.">Direct bridge</button><button data-mode="dsp" title="Sets this draft to DSP processor. It does not change the device.">DSP processor</button></div></div>
+      <div class="device-mode" id="device-mode" hidden><span class="overline">DEVICE IS RUNNING</span><strong id="device-running">Unknown</strong><button class="quiet" data-action="goto-switch" title="Open System &amp; presets, where the device is switched">Change on System &amp; presets</button></div>
       <span class="flow-arrow">→</span>
       <div><span class="overline">DSP SOURCE</span><div class="segmented" id="source-switch"><button data-source="usb">USB</button><button data-source="aoip">AoIP</button></div></div>
       <span class="flow-arrow">→</span><div class="flow-node"><strong id="flow-middle">Bass management + output DSP</strong><small id="flow-detail">16-band PEQ · alignment · level</small></div>
@@ -26,10 +28,12 @@
     </section>
     <p class="mode-note" id="mode-note"></p>
     <section id="outputs-page" class="page">
+      <p id="edit-status" class="edit-status banner-note" role="status">Not connected: edits stay in this page and its saved presets. Nothing reaches a device.</p>
       <details class="input-meters" id="input-meters" open><summary>Input meters · selected source · simulated</summary><div id="input-bank" class="channel-bank"></div></details>
       <div id="bus-controls"></div>
       <div id="layout-controls"></div>
       <div class="section-heading"><div><h2>Output bank <span>01—16</span></h2><p>Select a channel; edit it in the overview below or open its EQ.</p></div><button id="meter-toggle" class="quiet">Pause demo meters</button></div>
+      <p id="meter-note" class="meter-note banner-warn" role="status">Demonstration levels: not connected to a device, so these meters show made-up movement, not audio.</p>
       <div id="channel-bank" class="channel-bank"></div>
       <div class="overview-layout">
         <section class="panel" id="channel-overview"></section>
@@ -37,7 +41,7 @@
       </div>
     </section>
     <section id="settings-page" class="page" hidden></section>
-    <footer><span>USB 16x16 <span class="muted">/ Local design prototype</span></span><span id="draft-status">Draft · unsaved</span></footer>
+    <footer><span>USB-AoIP <span class="muted" id="footer-note">/ not connected to a device</span></span><span id="draft-status">Draft · unsaved</span></footer>
   </main>
   <div id="toast" role="status" aria-live="polite"></div>
   <dialog id="eq-dialog" class="eq-dialog" aria-labelledby="eq-dialog-title"><section class="inspector" id="inspector"></section></dialog>

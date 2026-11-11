@@ -32,9 +32,22 @@ AUDIO_IF=eth0
 #               what a Dante network without a DHCP server uses
 AUDIO_IF_SETUP=none
 # The interface the web page listens on. Keep it off the audio port if you
-# can. It falls back to 127.0.0.1 when the interface has no address.
+# can.
 MGMT_IF=wlan0
 WEB_PORT=8088
+# An explicit IPv4 address for the page to listen on, instead of MGMT_IF's.
+# Empty: MGMT_IF's address; while it has none the service waits and retries.
+WEB_BIND=
+# Encryption for the page (docs/web/ACCESS.md):
+#   self-signed  the installer makes a key and certificate for this unit. Your
+#                browser warns once per unit; the installer prints the
+#                fingerprint to compare with the warning.
+#   provided     your own certificate and key, at the two paths below
+#   off          plain HTTP: the page's password crosses the network readable.
+#                Only for a network nobody else is on.
+WEB_TLS=self-signed
+WEB_TLS_CERT=
+WEB_TLS_KEY=
 # Optional: addresses to ping from MGMT_IF every 20 s, space separated, for
 # access points that drop an idle Wi-Fi client. Empty: nothing is installed.
 KEEPALIVE_TARGETS=
@@ -60,6 +73,20 @@ DANTE_RATES=44100,48000,88200,96000
 # MAC address followed by 0000.
 DANTE_DEVICE_ID=
 DANTE_STATE_ID=5553423136783136
+
+# --- The clock service ----------------------------------------------------
+# 0: Statime runs as root with its socket in /tmp, as the project was
+#    measured. 1: it runs as OWNER_USER with two capabilities, sandboxed,
+#    its socket in /run. Not yet measured: docs/INSTALL.md, "The clock
+#    service as an ordinary user".
+PTP_SANDBOX=0
+
+# 0: Statime is built from the pinned source, as measured; the page cannot
+#    then say whether the clock has a leader. 1: it is built with one extra
+#    patch that publishes its PTP port state, and the page shows it. A draft,
+#    not yet measured: docs/INSTALL.md, "Showing whether the clock has a
+#    leader".
+PTP_STATE=0
 
 # --- Kernel --------------------------------------------------------------
 # The kernel release the gadget modules are built for and the unit is held

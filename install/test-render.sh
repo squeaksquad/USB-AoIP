@@ -78,8 +78,8 @@ pinned /etc/usb16x16/dante/asound-inferno-owner.conf          85a5256f
 pinned /etc/usb16x16/dante/statime.toml                       11b055df
 pinned $u/usb16x16-dante.service                              27b68877
 pinned /usr/local/sbin/setup-usb-aoip                         65d26567
-pinned /usr/local/bin/usb16x16-apply                          347a7062
-pinned /usr/local/bin/usb16x16-web                            6b98e7cf
+# (The page's service and the applier changed with the access work of
+# 2026-11-10 and are no longer the development unit's 6b98e7cf / 347a7062.)
 [ $fail = $before ] && ok "development unit: $(wc -l < "$dev/manifest.rendered" | tr -d ' ') files rendered, each identical to the repository's; audio-path hashes are the point of record's"
 
 # --- 3. another unit carries its own values and nothing of the development unit
@@ -103,8 +103,9 @@ has $u/usb16x16-web.service                       'User=usb-aoip-web'
 has $u/usb16x16-web.service                       '--static /var/lib/usb-aoip/web-ui'
 has $u/usb16x16-web.service                       '--management-interface wlan1'
 has $u/usb16x16-web.service                       '--port 9090'
-has $u/usb16x16-apply.path                        'PathChanged=/var/lib/usb-aoip/web-apply/request.json'
-has /usr/local/bin/usb16x16-apply                 '"/var/lib/usb-aoip/web-apply"'
+has $u/usb16x16-apply.path                        'PathChanged=/var/spool/usb-aoip/inbox'
+has $u/usb16x16-web.service                       '--auth-file /etc/usb-aoip/web-auth'
+has $u/usb16x16-web.service                       'ReadWritePaths=/var/lib/usb-aoip/web-presets /var/spool/usb-aoip/inbox'
 has /etc/sudoers.d/usb16x16-dante                 'pi ALL=(root) NOPASSWD:'
 [ ! -e "$new$u/usb16x16-wlan-keepalive.service" ] || bad "fresh unit: a keepalive unit was rendered with no targets"
 # The audio path is the same on every unit: only names and addresses differ.
@@ -118,6 +119,46 @@ diff <(grep -vE 'serialnumber|manufacturer|Studio-B|USB-AoIP' "$dev/usr/local/sb
      <(grep -vE 'serialnumber|manufacturer|Studio-B|USB-AoIP' "$new/usr/local/sbin/setup-usb-aoip") >/dev/null ||
   bad "fresh unit: the gadget script differs in more than its identity strings"
 [ $fail = $before ] && ok "fresh unit: its own values throughout, no development-unit identifiers, the audio-path files unchanged"
+
+# --- 3b. the clock sandbox is opt-in and changes only what it says
+before=$fail
+{ grep -v '^PTP_SANDBOX=' "$repo/install/test/fresh-unit.conf"; echo PTP_SANDBOX=1; } > "$tmp/ptp.conf"
+ptp=$tmp/ptp
+"$repo/install/install.sh" render --root "$ptp" --config "$tmp/ptp.conf" --with-dev-tools >/dev/null || bad "render (clock sandbox) failed"
+sock=/run/usb16x16-statime/ptp-usrvclock
+for f in $u/usb16x16-statime.service $u/usb16x16-dante.service /etc/usb16x16/dante/statime.toml /etc/usb16x16/dante/asound-inferno-owner.conf; do
+  grep -q "$sock" "$ptp$f" || bad "clock sandbox: $f does not name $sock"
+  grep -q '/tmp/ptp-usrvclock' "$ptp$f" && bad "clock sandbox: $f still names the /tmp socket"
+  grep -q "$sock" "$new$f" && bad "clock sandbox off: $f names $sock"
+done
+grep -q '^User=usb16x16-dante$' "$ptp$u/usb16x16-statime.service" || bad "clock sandbox: Statime has no User="
+grep -q '^AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW$' "$ptp$u/usb16x16-statime.service" || bad "clock sandbox: capabilities missing"
+grep -q '^User=' "$new$u/usb16x16-statime.service" && bad "clock sandbox off: Statime has a User="
+# Everything else is the same file by file.
+( cd "$new" && find . -type f ! -name manifest.rendered | sort ) | while read -r f; do
+  case "$f" in ./etc/systemd/system/usb16x16-statime.service|./etc/systemd/system/usb16x16-dante.service|./etc/usb16x16/dante/statime.toml|./etc/usb16x16/dante/asound-inferno-owner.conf|./usr/local/sbin/usb16x16-dante-candidate) continue ;; esac
+  cmp -s "$new/$f" "$ptp/$f" || echo "$f"
+done > "$tmp/ptp.diff"
+[ -s "$tmp/ptp.diff" ] && bad "clock sandbox: other files changed: $(tr '\n' ' ' < "$tmp/ptp.diff")"
+[ "$(diff "$new/etc/usb16x16/dante/asound-inferno-owner.conf" "$ptp/etc/usb16x16/dante/asound-inferno-owner.conf" | grep -c '^[<>]')" = 1 ] || bad "clock sandbox: the Inferno config differs by more than the one CLOCK_PATH line"
+[ $fail = $before ] && ok "clock sandbox: off renders the accepted files; on changes four files (and the candidate launcher) and only by the socket path, the user and the sandbox lines"
+
+# --- 3c. the clock's port state is opt-in and touches only the Statime unit
+before=$fail
+{ grep -v '^PTP_STATE=' "$repo/install/test/fresh-unit.conf"; echo PTP_STATE=1; } > "$tmp/state.conf"
+st=$tmp/state
+"$repo/install/install.sh" render --root "$st" --config "$tmp/state.conf" --with-dev-tools >/dev/null || bad "render (port state) failed"
+grep -q '^Environment=STATIME_PORT_STATE_FILE=/run/usb16x16-clock/port-state$' "$st$u/usb16x16-statime.service" || bad "port state: the Statime unit does not set the file"
+grep -q '^d /run/usb16x16-clock 0755 root root -$' "$st/etc/tmpfiles.d/usb-aoip-clock.conf" || bad "port state: no tmpfiles entry for the directory"
+grep -q 'STATIME_PORT_STATE_FILE' "$new$u/usb16x16-statime.service" && bad "port state off: the Statime unit sets the file"
+[ ! -e "$new/etc/tmpfiles.d/usb-aoip-clock.conf" ] || bad "port state off: a tmpfiles entry was rendered"
+( cd "$st" && find . -type f ! -name manifest.rendered | sort ) | while read -r f; do
+  case "$f" in ./etc/systemd/system/usb16x16-statime.service|./etc/tmpfiles.d/usb-aoip-clock.conf) continue ;; esac
+  cmp -s "$new/$f" "$st/$f" || echo "$f"
+done > "$tmp/state.diff"
+[ -s "$tmp/state.diff" ] && bad "port state: other files changed: $(tr '\n' ' ' < "$tmp/state.diff")"
+[ "$(diff "$new$u/usb16x16-statime.service" "$st$u/usb16x16-statime.service" | grep -c '^>')" = 3 ] || bad "port state: the Statime unit differs by more than its three added lines"
+[ $fail = $before ] && ok "clock port state: off renders the accepted Statime unit; on adds three lines to it and one tmpfiles entry, nothing else"
 
 # --- 4. bad values are refused
 before=$fail
@@ -136,6 +177,10 @@ refused DANTE_DEVICE_ID 'XYZ'
 refused DANTE_RATES '48000'
 refused WEB_PORT '80'
 refused KERNEL_PIN '$(id)'
+refused WEB_TLS 'yes'
+refused WEB_BIND 'localhost; id'
+refused PTP_SANDBOX '2'
+refused PTP_STATE 'yes'
 { cat "$repo/install/test/fresh-unit.conf"; echo "NOT_A_KEY=1"; } > "$tmp/bad.conf"
 "$repo/install/install.sh" render --root "$tmp/bad" --config "$tmp/bad.conf" >/dev/null 2>&1 && bad "config: an unknown key was accepted"
 [ $fail = $before ] && ok "config: bad values and unknown keys are refused"

@@ -697,3 +697,21 @@ input[type=checkbox],input[type=radio]{background:none;border:0;box-shadow:none;
 button.danger { border-color: #7a4a3e; color: #f0b7a6; background: #33221f; }
 button.danger:hover { background: #4a2c27; border-color: #a35f4f; }
 .power-box { margin-top: 16px; }
+
+/* Device state (2026-11-10): the header pill's warning state, the shared
+   notice area above both tabs, the Channels page's edit status line, what the
+   device runs beside the draft's mode, and the line that says why meters are
+   empty. Each state is carried by its words; colour only repeats them. */
+.preview-pill.warn{color:#93281c;border-color:#c33b2c;background:linear-gradient(180deg,#fff5f3,#fbe0dc)}
+.preview-pill.warn i{background:#c33b2c;box-shadow:0 0 0 1px #ffffff80}
+.page-notices{display:grid;gap:6px;margin:0 0 10px}
+.page-notice{font-size:12px;border-radius:6px;padding:8px 12px;margin:0;overflow-wrap:anywhere}
+.page-notice.notice-bad{color:#93281c;background:#fff3f1;border:1px solid #c33b2c}
+.page-notice.notice-warn{color:#5f4a12;background:#fffceb;border:1px solid #d8c07a}
+.page-notice strong{color:inherit}
+.signalbar{flex-wrap:wrap}
+.device-mode{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.device-mode strong{font-size:12px;overflow-wrap:anywhere}
+.device-mode button{font-size:11px;padding:4px 8px}
+.edit-status{margin:0 0 10px;overflow-wrap:anywhere}
+.meter-note{margin:0 0 8px;overflow-wrap:anywhere}

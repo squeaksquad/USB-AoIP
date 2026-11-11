@@ -1,35 +1,44 @@
 #!/usr/bin/env python3
-"""Read-only control service for the USB 16x16 web UI.
+"""Control service for the USB-AoIP web page.
 
-Serves the static UI and a small JSON API describing the running stack. It is
-the "read-only backend" step of work/web-ui/README.md: live health, logs and
-durable presets, with no endpoint that can change device state itself.
+Serves the page's static files and a JSON API for the stack this Pi runs
+(the Dante endpoint, or the older AES67 bridge): health, meters, logs, a
+preset store, and requests to change state.
 
-The one exception, added 2026-09-11 as step 5 (staged Apply), keeps that
-boundary: POST /api/apply/profile writes a request file into a spool
-directory and nothing else. A root systemd path unit runs usb16x16-apply on
-it, which validates the request against the live configuration, switches the
-AES67 service between ACCEPTED profiles only, verifies the start, rolls back
-on failure and leaves a receipt this process reads back. This process still
-runs with NoNewPrivileges, still opens no device and still restarts nothing.
+It changes no device state itself. Every change (a profile or preset switch,
+a preset install or removal, a live coefficient update, a commit, a
+power-off) is a request file it creates in the applier's inbox
+(USB16X16_APPLY_INBOX): uploaded artifacts first, then <id>.request. A root
+path unit runs usb16x16-apply on the inbox, which checks each request again
+against the live configuration, acts, verifies, rolls back on failure and
+writes current.json in its state directory (USB16X16_APPLY_STATE), which this
+process only reads. The inbox cannot be listed by this process: a request is
+known to be pending by stat-ing the name it wrote.
 
 Design constraints this file honours:
 
   * One collector thread owns every Pi read. HTTP handlers copy a cached
-    snapshot and never shell out, so a slow or duplicated browser cannot
+    snapshot and never shell out (the log route and the meter and apply-status
+    reads excepted, each one bounded), so a slow or duplicated browser cannot
     multiply work against the audio stack.
-  * Three refresh tiers, slowest first, so the daemon API is polled at 1/10 Hz
-    and the cheap file reads at 1 Hz.
+  * Three refresh tiers: cheap file reads at 1 Hz, systemctl and sysfs every
+    5 s, the AES67 daemon API or the Dante owner's journal every 10 s.
   * /api/sink/status/N is never read. Its arrival-lead minimum resets on read
     and the latency harness owns that counter.
-  * No ALSA device is opened. Meters therefore report unavailable rather than
-    inventing a value or competing for a PCM.
+  * No ALSA device is opened. Meters come from the snapshot file the bridge or
+    the Dante owner writes.
   * Runs unprivileged. Nothing here needs root and nothing here is given it;
-    the Apply request is a file, and the privilege lives in usb16x16-apply.
+    the request is a file, and the privilege lives in usb16x16-apply.
   * HTTP Basic auth guards every route. Verifying a password costs a real KDF,
     so a successful credential is cached briefly and repeated failures are rate
     limited per client: the 2 s health poll must not turn into a PBKDF2 load on
     the machine running the audio.
+  * State-changing methods (POST, PUT, DELETE) also need the X-USB-AoIP: 1
+    header, a JSON content type when they carry a body, and an Origin that
+    matches Host when a browser sends one, so another site cannot make a
+    signed-in browser send them. Every response carries security headers.
+  * It binds the management interface's address (or --bind), never a
+    fallback, and serves HTTPS when given --tls-cert and --tls-key.
 """
 
 from __future__ import annotations
@@ -44,8 +53,8 @@ import json
 import os
 import re
 import secrets
-
 import socket
+import ssl
 import subprocess
 import sys
 import threading
@@ -57,7 +66,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -69,7 +78,11 @@ CAMILLA_BIN = Path(
     )
 )
 
-APPLY_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
+# The applier's inbox: this process creates and renames its own files there
+# and can stat a name it knows, but cannot list it (root:<web group> 1730).
+APPLY_INBOX = Path(os.environ.get("USB16X16_APPLY_INBOX", "/var/spool/usb-aoip/inbox"))
+# The applier's state directory: root-owned; this process only reads current.json.
+APPLY_STATE = Path(os.environ.get("USB16X16_APPLY_STATE", "/var/lib/usb16x16-apply"))
 APPLY_UNIT = "usb16x16-apply.path"
 AES67_CONF = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
 APPLY_TERMINAL = {"done", "rolled-back", "failed", "refused"}
@@ -118,6 +131,19 @@ DANTE_LOG_UNITS = {
 }
 # The owner writes its telemetry lines once a minute.
 OWNER_LINE_FRESH_S = 150.0
+# The Inferno ALSA config whose NAME "..." line is the Dante device name.
+INFERNO_CONF = Path(os.environ.get("USB16X16_INFERNO_CONF", "/etc/usb16x16/dante/asound-inferno-owner.conf"))
+DEFAULT_DEVICE_NAME = "USB-AoIP"
+# usb16x16-dante-startcheck's one-line status (its `status` function).
+STARTCHECK_STATUS = Path(os.environ.get("USB16X16_STARTCHECK_STATUS", "/run/usb16x16-dante-startcheck/status"))
+STARTCHECK_STATES = ("ok", "checking", "restarting", "gave-up", "idle", "unknown")
+# Statime's config, read only for its loglevel (see clock_state).
+STATIME_CONF = Path(os.environ.get("USB16X16_STATIME_CONF", "/etc/usb16x16/dante/statime.toml"))
+# The PTP port state a Statime built with dante/patches/statime/0001 publishes
+# (PTP_STATE=1 in install.conf). Absent on a stock build: the clock is then unknown.
+CLOCK_STATE_FILE = Path(os.environ.get("USB16X16_CLOCK_STATE_FILE", "/run/usb16x16-clock/port-state"))
+# A port that has only just started listening has not failed to find a leader yet.
+CLOCK_LISTENING_GRACE_SECONDS = 20.0
 
 _stack: dict = {"name": None}
 
@@ -166,7 +192,25 @@ DAEMON_INTERVAL = 10.0  # aes67-daemon HTTP API
 PRESET_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._·-]{0,63}$")
 USER_NAME = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
-REALM = "USB 16x16 control"
+REALM = "USB-AoIP control"
+# A connection that sends nothing for this long is closed, so idle or stalled
+# clients (and stalled TLS handshakes) cannot hold the service's threads.
+HANDLER_TIMEOUT_SECONDS = 30
+# Every response carries these. The page is ES modules from this origin only;
+# style-src keeps 'unsafe-inline' for the style="" attributes app.mjs renders,
+# img-src data: for the inline SVG favicon.
+CONTENT_SECURITY_POLICY = ("default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                           "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+SECURITY_HEADERS = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "no-referrer"),
+    ("Content-Security-Policy", CONTENT_SECURITY_POLICY),
+    ("X-Frame-Options", "DENY"),
+)
+HSTS = "max-age=31536000"
+# What a state-changing request must carry (see Handler.cross_site_refusal).
+CSRF_HEADER = "X-USB-AoIP"
+EXIT_NO_ADDRESS = 75   # EX_TEMPFAIL: the unit restarts the service and it tries again
 # OWASP's 2023 floor for PBKDF2-HMAC-SHA256. About 90 ms on this Pi, paid once
 # per credential per AUTH_CACHE_SECONDS rather than once per request.
 KDF_ITERATIONS = 210_000
@@ -500,6 +544,110 @@ def parse_owner_lines(text: str, now: float | None = None) -> dict:
     }
 
 
+def parse_device_name(text: str | None) -> str:
+    """The Dante device name: the first uncommented NAME "..." line of the
+    Inferno ALSA config, else the default."""
+    for raw in (text or "").splitlines():
+        match = re.match(r'^\s*NAME\s+"([^"\n]{1,63})"', raw)
+        if match and match.group(1).isprintable():
+            return match.group(1)
+    return DEFAULT_DEVICE_NAME
+
+
+def parse_startcheck(text: str | None) -> dict:
+    """usb16x16-dante-startcheck's status line:
+    state=ok rate=6005 restarts=0 invocation=<hex> time=2026-11-01T12:00:00Z.
+    Anything missing or unrecognised reads as unknown."""
+    unknown = {"state": "unknown", "rate": None, "restarts": None, "time": None}
+    lines = (text or "").strip().splitlines()
+    if len(lines) != 1:
+        return unknown
+    fields = dict(token.partition("=")[::2] for token in lines[0].split() if "=" in token)
+    if fields.get("state") not in STARTCHECK_STATES:
+        return unknown
+    as_int = lambda value: int(value) if value and value.isdigit() else None
+    stamp = fields.get("time")
+    return {"state": fields["state"], "rate": as_int(fields.get("rate")),
+            "restarts": as_int(fields.get("restarts")),
+            "time": stamp if parse_iso(stamp) is not None else None}
+
+
+def parse_statime_loglevel(text: str | None) -> str | None:
+    for raw in (text or "").splitlines():
+        match = re.match(r'^\s*loglevel\s*=\s*"([A-Za-z]+)"', raw)
+        if match:
+            return match.group(1).lower()
+    return None
+
+
+def read_port_state(path: Path) -> tuple[str, str, float] | None:
+    """(state, leader, age in seconds) from the one-line file a patched
+    Statime replaces at each port-state change, e.g.
+    "state=Slave port=1 leader=001dc1fffe0a0b0c0001"; None when there is no
+    such file or it does not parse."""
+    try:
+        age = time.time() - path.stat().st_mtime
+    except OSError:
+        return None
+    text = read_text(path, 512)
+    if text is None:
+        return None
+    fields = dict(part.split("=", 1) for part in text.split() if "=" in part)
+    state = fields.get("state", "")
+    leader = fields.get("leader", "")
+    if state not in ("Slave", "Master", "Listening", "Passive", "Faulty"):
+        return None
+    if not re.fullmatch(r"[0-9a-f]{0,40}", leader):
+        leader = ""
+    return state, leader, max(0.0, age)
+
+
+def clock_state(statime: str | None, loglevel: str | None,
+                port: tuple[str, str, float] | None = None) -> dict:
+    """Whether the PTP follower has a clock leader, as far as can be known.
+
+    With a Statime that publishes its port state (`port`, from
+    read_port_state) the answer is that state: Slave is following a leader;
+    Master means no other device leads and this one has elected itself,
+    which a follower-only unit cannot act on; Listening past a short grace
+    is no leader found. Without it, the rest of this note applies.
+
+    Statime, not running, follows nothing: that is the one firm answer.
+    Running, it says nothing that tells lock from no lock at the level it is
+    installed at. Its port-state changes ("new state for port 1: Listening ->
+    Slave", statime/src/port/mod.rs) are logged at info; at warn, which the
+    installed config uses, the only related lines are "trying to act as
+    master in PTPv1" when it loses a leader (port/master.rs) and nothing when
+    it gains one, and the unit's journal rate limit (5 lines per 30 s, taken
+    by the DelayReq warning other followers trigger every few seconds) can
+    drop even that. At info the per-sync Measurement lines would take the
+    same limit, so the newest state line could be stale. Either way a
+    "locked" from the journal could be wrong, so this answers unknown.
+    """
+    if statime in ("inactive", "failed", "activating", "deactivating"):
+        return {"state": "no-leader", "detail": f"Statime (the PTP follower) is {statime}"}
+    if statime != "active":
+        return {"state": "unknown", "detail": f"Statime's service state is {statime or 'unknown'}"}
+    if port is not None:
+        state, leader, age = port
+        if state == "Slave":
+            return {"state": "locked", "detail": f"following leader {leader}" if leader else "following a leader"}
+        if state == "Master":
+            return {"state": "no-leader", "detail": "no other device on the network is leading the clock"}
+        if state == "Listening":
+            if age < CLOCK_LISTENING_GRACE_SECONDS:
+                return {"state": "unknown", "detail": "looking for a clock leader"}
+            return {"state": "no-leader", "detail": "no clock leader has been heard on the network"}
+        return {"state": "unknown", "detail": f"the PTP port is {state.lower()}"}
+    if loglevel in (None, "warn", "error"):
+        return {"state": "unknown",
+                "detail": f"Statime runs at loglevel {loglevel or 'unknown'}, which does not log "
+                          "gaining or losing a clock leader"}
+    return {"state": "unknown",
+            "detail": f"Statime runs at loglevel {loglevel}, but the unit's journal rate limit can drop "
+                      "its port-state lines, so the newest one is not proof of lock"}
+
+
 # ---------------------------------------------------------------- collector
 
 class Collector:
@@ -528,7 +676,8 @@ class Collector:
         if stack() == "dante":
             # No /run telemetry files on this stack: the owner speaks through
             # its journal (the 10 s tier) and its meter and live files.
-            state = {"apply": apply_state(), "dspLive": read_live_status()}
+            state = {"apply": apply_state(), "dspLive": read_live_status(),
+                     "startCheck": parse_startcheck(read_text(STARTCHECK_STATUS, 1024))}
             meters = read_meters()
             state["meters"] = {"available": meters["available"], "endpoint": "/api/meters",
                                "pollMsMin": 100, "reason": meters.get("reason", ""),
@@ -637,6 +786,8 @@ class Collector:
                                     "rate": int(rate) if rate.isdigit() else None}
             else:
                 state["profile"] = {"selected": None, "profiles": [], "reason": f"{DANTE_CONF} unreadable"}
+            state["device"] = {"name": parse_device_name(read_text(INFERNO_CONF, 1 << 16))}
+            self._statime_loglevel = parse_statime_loglevel(read_text(STATIME_CONF, 1 << 14))
         else:
             conf_text = read_text(AES67_CONF, 1 << 20)
             if conf_text is not None:
@@ -645,13 +796,18 @@ class Collector:
             else:
                 state["profile"] = {"selected": None, "profiles": [], "reason": f"{AES67_CONF} unreadable"}
         applier = (run(["systemctl", "is-active", APPLY_UNIT]) or "unknown").strip()
+        inbox_problem = inbox_unwritable()
+        reason = None
+        if applier != "active":
+            reason = f"{APPLY_UNIT} is {applier}: install and enable it to switch profiles from here"
+        elif inbox_problem:
+            reason = inbox_problem
         state["control"] = {
             "apply": {
-                "available": applier == "active",
+                "available": reason is None,
                 "unit": APPLY_UNIT,
                 "state": applier,
-                "reason": None if applier == "active" else
-                          f"{APPLY_UNIT} is {applier}: install and enable it to switch profiles from here",
+                "reason": reason,
                 "scope": "direct and your installed presets; a switch restarts the Dante service and draws a new latency level"
                          if dante else
                          "accepted profiles only; a switch restarts the AES67 service and draws a new latency level",
@@ -736,9 +892,6 @@ class Collector:
         exists and no DSP service is installed, so the UI must present DSP mode
         as a draft rather than a running path.
         """
-        engine = None
-        if CAMILLA_BIN.is_file() and os.access(CAMILLA_BIN, os.X_OK):
-            engine = (run([str(CAMILLA_BIN), "--version"]) or "").strip() or "present"
         if stack() == "dante":
             return {
                 "available": False,
@@ -748,6 +901,11 @@ class Collector:
                           "installs this editor's draft as a preset (compiled here, validated by the "
                           "Pi's own loader, never soaked) and switches between your presets and direct.",
             }
+        # The staged CamillaDSP binary is reported on the AES67 stack only;
+        # the Dante answer above never carried it.
+        engine = None
+        if CAMILLA_BIN.is_file() and os.access(CAMILLA_BIN, os.X_OK):
+            engine = (run([str(CAMILLA_BIN), "--version"]) or "").strip() or "present"
         missing = ["metering (a benchmarked tap in the bridge)", "AoIP-only mode"]
         return {
             # The stage runs in the bridge; the draft reaches it through Apply.
@@ -782,6 +940,7 @@ class Collector:
             "audio": {"sampleRate": self._daemon.get("daemon", {}).get("sampleRate", 48000),
                       "inputs": 16, "outputs": 16},
             "stack": "aes67",
+            "device": {"name": DEFAULT_DEVICE_NAME},
             "mode": {
                 "actual": "direct",
                 "running": bool(running),
@@ -807,14 +966,19 @@ class Collector:
                       else f"USB ↔ Dante endpoint with DSP preset {selected}")
         else:
             detail = f"Dante service {dante or 'unknown'}, clock {statime or 'unknown'}, USB gadget {gadget or 'unknown'}"
+        # owner.conf's RATE= (absent is 48 kHz; profile.rate is None only when it is garbled).
+        rate = (self._slow.get("profile") or {}).get("rate")
         snapshot = {
             "ok": True,
             "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "service": {"name": "usb16x16-web", "version": VERSION,
                         "uptimeSeconds": int(time.time() - self._started)},
             "host": socket.gethostname(),
-            "audio": {"sampleRate": 48000, "inputs": 16, "outputs": 16},
+            "audio": {"sampleRate": rate if isinstance(rate, int) else 48000, "inputs": 16, "outputs": 16},
             "stack": "dante",
+            "device": {"name": DEFAULT_DEVICE_NAME},
+            "startCheck": {"state": "unknown", "rate": None, "restarts": None, "time": None},
+            "clock": clock_state(statime, getattr(self, "_statime_loglevel", None), read_port_state(CLOCK_STATE_FILE)),
             "mode": {
                 "actual": "direct" if selected in (None, DANTE_DIRECT) else "dsp",
                 "running": bool(running),
@@ -861,10 +1025,27 @@ class Collector:
 
 # ------------------------------------------------------------------ apply
 
+# The id of the last request this process put in the inbox. The inbox cannot
+# be listed from here, so "a request is pending" means that name is still
+# there: the applier removes a request when it picks it up.
+_last_request: dict = {"id": None}
+_last_request_lock = threading.Lock()
+
+
+def inbox_unwritable() -> str | None:
+    """Why requests cannot be put in the inbox, or None when they can."""
+    if not APPLY_INBOX.is_dir():
+        return f"{APPLY_INBOX} does not exist; the Apply units are not installed"
+    if not os.access(APPLY_INBOX, os.W_OK | os.X_OK):
+        return (f"{APPLY_INBOX} is not writable by this service; it must be in the inbox's group "
+                "(reinstall the Apply units)")
+    return None
+
+
 def apply_state() -> dict:
     """What the privileged applier last wrote, plus whether a request waits."""
     state: dict = {"current": None, "pending": False, "inFlight": False}
-    text = read_text(APPLY_DIR / "current.json", 1 << 18)
+    text = read_text(APPLY_STATE / "current.json", 1 << 18)
     if text:
         try:
             current = json.loads(text)
@@ -875,11 +1056,14 @@ def apply_state() -> dict:
             updated = parse_iso(current.get("updatedAt"))
             fresh = updated is not None and (time.time() - updated) < APPLY_STALE_SECONDS
             state["inFlight"] = current.get("state") not in APPLY_TERMINAL and fresh
-    try:
-        pending = (APPLY_DIR / "request.json").stat()
-        state["pending"] = (time.time() - pending.st_mtime) < REQUEST_MAX_AGE_SECONDS
-    except OSError:
-        pass
+    with _last_request_lock:
+        ident = _last_request["id"]
+    if ident:
+        try:
+            pending = (APPLY_INBOX / f"{ident}.request").stat()
+            state["pending"] = (time.time() - pending.st_mtime) < REQUEST_MAX_AGE_SECONDS
+        except OSError:
+            pass
     return state
 
 
@@ -1020,50 +1204,56 @@ def rate_artifacts_from(body: dict, allowed: tuple[str, ...]) -> dict[str, bytes
     return found
 
 
+def write_inbox_file(name: str, data: bytes) -> None:
+    """One file into the inbox, whole or not at all: written under <name>.tmp
+    (created exclusively, never through a link, mode 0640), fsynced, then
+    renamed to <name>."""
+    temporary = APPLY_INBOX / f"{name}.tmp"
+    fd = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o640)
+    try:
+        os.fchmod(fd, 0o640)   # whatever the umask
+        with os.fdopen(fd, "wb") as handle:
+            fd = -1
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.rename(temporary, APPLY_INBOX / name)
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
+
 def write_apply_request(profile: str, expected: str | None, user: str | None, extra: dict | None = None,
                         artifact: bytes | None = None, rate_artifacts: dict[str, bytes] | None = None) -> str:
-    """The only write this process makes outside its preset store: one JSON
-    request the path unit picks up (plus, for a preset, the artifact text it
-    refers to, in the spool's presets/ directory). Atomic, so the applier
-    never reads half a file; the directories are created by the installer."""
-    if not APPLY_DIR.is_dir():
-        raise PermissionError(f"{APPLY_DIR} does not exist; the Apply units are not installed")
+    """The only write this process makes outside its preset store: the
+    artifacts a request refers to (<id>.dsp, <id>-<rate>.dsp), then the
+    request itself (<id>.request), each atomically, into the applier's
+    inbox, which the installer creates. The request comes last, so the
+    applier never finds one whose artifacts are not all there."""
+    problem = inbox_unwritable()
+    if problem:
+        raise PermissionError(problem)
     ident = secrets.token_hex(8)
     payload = {"id": ident, "profile": profile, "expectedProfile": expected,
                "requestedAt": time.time(), "requestedBy": user}
     if extra:
         payload.update(extra)
     if artifact is not None:
-        presets = APPLY_DIR / "presets"
-        if not presets.is_dir():
-            raise PermissionError(f"{presets} does not exist; reinstall the Apply units")
-        temporary = presets / f"{ident}.tmp"
-        with open(temporary, "wb") as handle:
-            handle.write(artifact)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, presets / f"{ident}.dsp")
+        write_inbox_file(f"{ident}.dsp", artifact)
         payload["artifactFile"] = f"{ident}.dsp"
     if rate_artifacts:
-        presets = APPLY_DIR / "presets"
-        if not presets.is_dir():
-            raise PermissionError(f"{presets} does not exist; reinstall the Apply units")
         payload["rateArtifacts"] = {}
         for rate, data in sorted(rate_artifacts.items()):
-            temporary = presets / f"{ident}-{rate}.tmp"
-            with open(temporary, "wb") as handle:
-                handle.write(data)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, presets / f"{ident}-{rate}.dsp")
+            write_inbox_file(f"{ident}-{rate}.dsp", data)
             payload["rateArtifacts"][rate] = {"file": f"{ident}-{rate}.dsp", "sha256": hashlib.sha256(data).hexdigest()}
-    target = APPLY_DIR / "request.json"
-    temporary = APPLY_DIR / f"request.{ident}.tmp"
-    with open(temporary, "w", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, indent=2))
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, target)
+    write_inbox_file(f"{ident}.request", json.dumps(payload, indent=2).encode("utf-8"))
+    with _last_request_lock:
+        _last_request["id"] = ident
     return ident
 
 
@@ -1327,15 +1517,64 @@ class Authenticator:
 
 # ------------------------------------------------------------------ handler
 
+AUTH_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>USB-AoIP: {title}</title>
+<style>body{{font:16px/1.5 system-ui,sans-serif;max-width:34em;margin:3em auto;padding:0 16px;color:#1d2424;background:#f6f7f6}}
+h1{{font-size:1.3em}}code{{background:#e4e8e6;padding:1px 4px;border-radius:3px}}
+@media (prefers-color-scheme: dark){{body{{color:#e4ece9;background:#141a1a}}code{{background:#26302f}}}}</style>
+</head><body><h1>{title}</h1><p>{what}</p>
+<p>Logins are created on the device itself: <code>sudo install/install.sh set-password NAME</code>
+in the USB-AoIP checkout, which adds a login or changes its password.</p></body></html>
+"""
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = f"usb16x16-web/{VERSION}"
     protocol_version = "HTTP/1.1"
+    # StreamRequestHandler applies this to the connection socket: a client
+    # that sends nothing for this long is closed rather than holding a thread.
+    timeout = HANDLER_TIMEOUT_SECONDS
 
     collector: Collector
     presets: PresetStore
     auth: Authenticator | None = None
+    tls: bool = False
 
     # ---- plumbing
+
+    def setup(self) -> None:
+        """With TLS the listening socket does not handshake on accept (a
+        stalled client would block every other one there); the handshake
+        happens here, in this connection's own thread, under the timeout.
+        A failed handshake is a closed connection, not a traceback."""
+        self.handshake_failed = False
+        if isinstance(self.request, ssl.SSLSocket):
+            try:
+                self.request.settimeout(self.timeout)
+                self.request.do_handshake()
+            except (ssl.SSLError, OSError):
+                self.handshake_failed = True
+        super().setup()
+
+    def handle(self) -> None:
+        if self.handshake_failed:
+            self.close_connection = True
+            return
+        super().handle()
+
+    def finish(self) -> None:
+        try:
+            super().finish()
+        except OSError:
+            pass
+
+    def end_headers(self) -> None:
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        if self.tls:
+            self.send_header("Strict-Transport-Security", HSTS)
+        super().end_headers()
 
     def log_message(self, fmt: str, *args) -> None:  # quieter journal
         if self.command != "GET" or not self.path.startswith("/api/health"):
@@ -1378,12 +1617,28 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             self.close_connection = True
 
+    def wants_html(self) -> bool:
+        """A person in a browser (a navigation asks for text/html), not the
+        page's own fetches, which ask for JSON."""
+        return "text/html" in (self.headers.get("Accept") or "").lower()
+
+    def auth_body(self, message: str, title: str, what: str) -> tuple[bytes, str]:
+        if self.wants_html():
+            return (AUTH_PAGE.format(title=title, what=what).encode("utf-8"), "text/html; charset=utf-8")
+        return json.dumps({"ok": False, "error": message}).encode(), "application/json; charset=utf-8"
+
     def send_auth_challenge(self, message: str = "Authentication required") -> None:
         self.discard_body()
-        body = json.dumps({"ok": False, "error": message}).encode()
+        if message == "Authentication required":
+            title, what = ("Sign-in needed",
+                           "This page needs a user name and password. Reload the page to be asked for them.")
+        else:
+            title, what = ("Wrong user name or password",
+                           "The user name or password was not accepted. Reload the page to try again.")
+        body, kind = self.auth_body(message, title, what)
         self.send_response(HTTPStatus.UNAUTHORIZED)
         self.send_header("WWW-Authenticate", f'Basic realm="{REALM}", charset="UTF-8"')
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -1410,13 +1665,15 @@ class Handler(BaseHTTPRequestHandler):
         client = self.client_address[0] if self.client_address else "?"
         if self.auth.throttled(client):
             self.discard_body()
-            body = json.dumps({"ok": False,
-                               "error": "Too many failed sign-ins from this address; "
-                                        "wait a minute"}).encode()
+            body, kind = self.auth_body("Too many failed sign-ins from this address; wait a minute",
+                                        "Too many attempts",
+                                        "Too many wrong passwords came from this computer. "
+                                        "Wait a minute, then reload the page to try again.")
             self.send_response(HTTPStatus.TOO_MANY_REQUESTS)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Type", kind)
             self.send_header("Retry-After", str(int(FAIL_WINDOW_SECONDS)))
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
@@ -1428,6 +1685,42 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"{client} - authentication failed for {self.command} {self.path}\n")
         self.send_auth_challenge("Wrong user name or password")
         return False
+
+    def cross_site_refusal(self) -> str | None:
+        """Why a state-changing request may have come from another site, or
+        None. A cross-site page can make a signed-in browser send a POST, but
+        it cannot add a custom header or a JSON content type without a CORS
+        preflight, which this service never grants, and a browser that sends
+        Origin cannot forge it. Non-browser clients send no Origin."""
+        if (self.headers.get(CSRF_HEADER) or "").strip() != "1":
+            return f"missing the {CSRF_HEADER}: 1 header that state-changing requests must carry"
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 1
+        if length > 0 or self.headers.get("Transfer-Encoding"):
+            kind = (self.headers.get("Content-Type") or "").strip().lower()
+            if not kind.startswith("application/json"):
+                return "a request body must be sent as Content-Type: application/json"
+        origin = self.headers.get("Origin")
+        if origin is not None:
+            origin_host = urlparse(origin.strip()).netloc.lower() if "://" in origin else ""
+            host = (self.headers.get("Host") or "").strip().lower()
+            if not origin_host or origin_host != host:
+                return "the request's Origin does not match the address it was sent to"
+        return None
+
+    def gate_change(self) -> bool:
+        """Auth, then the cross-site checks, for every state-changing method.
+        Returns False having already answered the client."""
+        if not self.authorize():
+            return False
+        refusal = self.cross_site_refusal()
+        if refusal:
+            self.discard_body()
+            self.send_error_json(HTTPStatus.FORBIDDEN, f"Refused: {refusal}")
+            return False
+        return True
 
     def read_body(self, limit: int = 1 << 20):
         try:
@@ -1477,8 +1770,19 @@ class Handler(BaseHTTPRequestHandler):
 
     do_HEAD = do_GET
 
+    def do_OPTIONS(self) -> None:
+        """No CORS: a preflight gets a refusal and no Access-Control-* headers,
+        so no other origin is ever allowed the header or content type the
+        state-changing methods require."""
+        self.discard_body()
+        self.send_response(HTTPStatus.METHOD_NOT_ALLOWED)
+        self.send_header("Allow", "GET, HEAD, POST, PUT, DELETE")
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+
     def do_PUT(self) -> None:
-        if not self.authorize():
+        if not self.gate_change():
             return
         route = unquote(urlparse(self.path).path)
         if not route.startswith("/api/presets/"):
@@ -1500,7 +1804,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({"ok": True, "name": name, "store": "pi"})
 
     def do_DELETE(self) -> None:
-        if not self.authorize():
+        if not self.gate_change():
             return
         route = unquote(urlparse(self.path).path)
         if route.startswith("/api/apply/preset/"):
@@ -1517,7 +1821,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({"ok": True, "name": name})
 
     def do_POST(self) -> None:
-        if not self.authorize():
+        if not self.gate_change():
             return
         route = unquote(urlparse(self.path).path)
         if route == "/api/apply/profile":
@@ -1946,9 +2250,37 @@ class Handler(BaseHTTPRequestHandler):
 
 # --------------------------------------------------------------------- main
 
+def choose_bind(explicit: str, interface: str, lookup=interface_address) -> str | None:
+    """The address to listen on: --bind when given, else the management
+    interface's IPv4 address. None when that interface has none yet; the
+    caller exits and systemd retries, rather than serving on loopback."""
+    if explicit:
+        return explicit
+    return lookup(interface) or None
+
+
+def tls_context(cert: str, key: str) -> ssl.SSLContext:
+    """A server context at TLS 1.2 or later. Raises OSError or ssl.SSLError
+    when the certificate or key cannot be read or do not match."""
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.load_cert_chain(certfile=cert, keyfile=key)
+    return context
+
+
+def make_server(bind: str, port: int, context: ssl.SSLContext | None = None) -> ThreadingHTTPServer:
+    """The HTTP(S) server. With a context, accepted connections are wrapped
+    without a handshake; Handler.setup performs it in the connection's thread."""
+    server = ThreadingHTTPServer((bind, port), Handler)
+    server.daemon_threads = True
+    if context is not None:
+        server.socket = context.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
+    return server
+
+
 def main() -> int:
     here = Path(__file__).resolve().parent
-    parser = argparse.ArgumentParser(description="Read-only web control service for USB 16x16")
+    parser = argparse.ArgumentParser(description="Web control service for USB-AoIP")
     parser.add_argument("--static", default=str(here.parent / "web-ui"),
                         help="directory holding the web UI files")
     parser.add_argument("--presets", default=os.path.expanduser("~/usb-16x16-work/web-presets"),
@@ -1958,6 +2290,10 @@ def main() -> int:
     parser.add_argument("--management-interface", default=os.environ.get("USB16X16_MGMT_IF", "wlan0"),
                         help="interface whose address is used when --bind is empty")
     parser.add_argument("--port", type=int, default=8088)
+    parser.add_argument("--tls-cert", metavar="FILE", default="",
+                        help="serve HTTPS with this certificate (PEM; needs --tls-key)")
+    parser.add_argument("--tls-key", metavar="FILE", default="",
+                        help="the certificate's private key (PEM; needs --tls-cert)")
     parser.add_argument("--auth-file", default=os.path.expanduser("~/usb-16x16-work/web-auth"),
                         help="file holding user names and password hashes")
     parser.add_argument("--no-auth", action="store_true",
@@ -2019,20 +2355,40 @@ def main() -> int:
             return 2
         authenticator = Authenticator(password_file)
 
-    bind = arguments.bind or interface_address(arguments.management_interface) or "127.0.0.1"
+    if bool(arguments.tls_cert) != bool(arguments.tls_key):
+        print("--tls-cert and --tls-key go together: give both, or neither for plain HTTP", file=sys.stderr)
+        return 2
+    context = None
+    if arguments.tls_cert:
+        try:
+            context = tls_context(arguments.tls_cert, arguments.tls_key)
+        except (OSError, ssl.SSLError) as error:
+            print(f"cannot use the TLS certificate {arguments.tls_cert} with key {arguments.tls_key}: {error}",
+                  file=sys.stderr)
+            return 2
+
+    bind = choose_bind(arguments.bind, arguments.management_interface)
+    if bind is None:
+        print(f"{arguments.management_interface} has no IPv4 address yet; not serving "
+              f"(exit {EXIT_NO_ADDRESS}, the unit retries). Use --bind ADDR to choose one.",
+              file=sys.stderr, flush=True)
+        return EXIT_NO_ADDRESS
 
     collector = Collector(static_dir, Path(arguments.presets))
     Handler.collector = collector
     Handler.presets = PresetStore(Path(arguments.presets))
     Handler.auth = authenticator
+    Handler.tls = context is not None
 
     thread = threading.Thread(target=collector.loop, name="collector", daemon=True)
     thread.start()
 
-    server = ThreadingHTTPServer((bind, arguments.port), Handler)
-    server.daemon_threads = True
+    server = make_server(bind, arguments.port, context)
     guard = f"{len(password_file.load())} user(s)" if authenticator else "NO AUTHENTICATION"
-    print(f"usb16x16-web {VERSION} serving {static_dir} on http://{bind}:{arguments.port} ({guard})",
+    print(f"TLS on, certificate {arguments.tls_cert}" if context else "TLS off: plain HTTP",
+          file=sys.stderr, flush=True)
+    scheme = "https" if context else "http"
+    print(f"usb16x16-web {VERSION} serving {static_dir} on {scheme}://{bind}:{arguments.port} ({guard})",
           file=sys.stderr, flush=True)
     try:
         server.serve_forever(poll_interval=0.5)

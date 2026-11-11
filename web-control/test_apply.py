@@ -8,6 +8,7 @@ import os
 import tempfile
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -93,8 +94,11 @@ class FakeRunner:
 class Env:
     def __init__(self, root):
         self.root = Path(root)
-        self.spool = self.root / "spool"
-        self.spool.mkdir()
+        # The inbox the web service writes and the state directory only the
+        # applier writes (here both owned by the test's user).
+        self.inbox = self.root / "inbox"
+        self.inbox.mkdir()
+        self.state = self.root / "state"
         self.run_dir = self.root / "run"
         self.run_dir.mkdir()
         self.conf = self.root / "aes67.conf"
@@ -138,12 +142,26 @@ class Env:
         body = {"id": "abcdef0123", "profile": "dsp-loaded", "expectedProfile": "dsp-direct",
                 "requestedAt": time.time(), "requestedBy": "bryan"}
         body.update(fields)
-        (self.spool / "request.json").write_text(json.dumps(body))
+        self.drop(body)
         return body
+
+    def drop(self, body, name=None):
+        """As the web service does: <id>.request.tmp renamed to <id>.request."""
+        name = name or f"{body['id']}.request"
+        temporary = self.inbox / (name + ".tmp")
+        temporary.write_text(body if isinstance(body, str) else json.dumps(body))
+        os.replace(temporary, self.inbox / name)
+        return self.inbox / name
+
+    def root_files(self):
+        """Anything in the inbox the applier could have written."""
+        return [p.name for p in self.inbox.iterdir()
+                if p.name in ("current.json", "receipts", "apply.lock", "rate-history.json", "check", "presets")
+                or p.name.startswith("check-") or p.name.startswith(".") and "json" in p.name]
 
 
 def make(env, runner):
-    return apply_module.Applier(spool=env.spool, conf_path=env.conf, run_dir=env.run_dir, runner=runner,
+    return apply_module.Applier(inbox=env.inbox, state_dir=env.state, conf_path=env.conf, run_dir=env.run_dir, runner=runner,
                                 supervisor="/fake/supervisor", bridge_binary=env.root / "missing",
                                 start_timeout=20.0, settle=5.0, poll=1.0)
 
@@ -157,7 +175,7 @@ class ApplyTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def receipt(self, ident="abcdef0123"):
-        return json.loads((self.env.spool / "receipts" / f"{ident}.json").read_text())
+        return json.loads((self.env.state / "receipts" / f"{ident}.json").read_text())
 
     def test_conf_parser_and_profiles(self):
         table = apply_module.profiles(apply_module.parse_conf(CONF))
@@ -177,10 +195,11 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(self.env.live_profile(), "dsp-loaded")
         self.assertEqual(result["live"], "dsp-loaded")
         self.assertEqual(result["previousProfile"], "dsp-direct")
-        self.assertFalse((self.env.spool / "request.json").exists(), "the request is consumed")
+        self.assertEqual(list(self.env.inbox.iterdir()), [], "the request is consumed")
         self.assertEqual(self.receipt()["state"], "done")
         self.assertTrue(any(v.startswith("DSP loaded") for v in result["startLines"]["dsp-loaded"]))
-        self.assertEqual(json.loads((self.env.spool / "current.json").read_text())["state"], "done")
+        self.assertEqual(json.loads((self.env.state / "current.json").read_text())["state"], "done")
+        self.assertEqual(self.env.root_files(), [])
 
     def test_refusals_leave_the_service_alone(self):
         cases = [
@@ -212,10 +231,11 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("already processed", result["error"])
 
     def test_garbage_request_is_refused_and_consumed(self):
-        (self.env.spool / "request.json").write_text("{not json")
+        self.env.drop("{not json", "abcdef0123.request")
         result = make(self.env, FakeRunner(self.env)).consume()
         self.assertEqual(result["state"], "refused")
-        self.assertFalse((self.env.spool / "request.json").exists())
+        self.assertEqual(result["id"], "abcdef0123", "the receipt is under the file's id")
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
         self.assertIsNone(make(self.env, FakeRunner(self.env)).consume(), "nothing pending afterwards")
 
     def test_start_failure_rolls_back(self):
@@ -288,9 +308,9 @@ class ApplyTests(unittest.TestCase):
     def test_check_mode_reports_without_acting(self):
         self.env.request()
         applier = make(self.env, FakeRunner(self.env))
-        target = applier.validate(applier.load_request(), applier.conf())
+        target = applier.validate(applier.load_request(remove=False), applier.conf())
         self.assertEqual(target["name"], "dsp-loaded")
-        self.assertTrue((self.env.spool / "request.json").exists())
+        self.assertTrue((self.env.inbox / "abcdef0123.request").exists())
 
 
 if __name__ == "__main__":
@@ -354,7 +374,6 @@ class PresetFixture(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.env = Env(self.tmp.name)
         self.env.conf.write_text(PRESET_CONF)
-        (self.env.spool / "presets").mkdir()
         self.dsp_dir = Path(self.tmp.name) / "dsp"
         self.dsp_dir.mkdir()
         runner_path = Path(self.tmp.name) / "usb16x16-dsp-offline"
@@ -371,12 +390,12 @@ class PresetFixture(unittest.TestCase):
     def preset_request(self, data=None, **fields):
         data = self.artifact if data is None else data
         ident = fields.pop("id", "abcdef0123")
-        (self.env.spool / "presets" / f"{ident}.dsp").write_bytes(data)
+        (self.env.inbox / f"{ident}.dsp").write_bytes(data)
         body = {"id": ident, "kind": "preset", "name": "Room A · night", "slug": "room-a-night",
                 "artifactSha256": __import__("hashlib").sha256(data).hexdigest(), "artifactFile": f"{ident}.dsp",
                 "expectedProfile": "dsp-direct", "requestedAt": time.time(), "requestedBy": "bryan"}
         body.update(fields)
-        (self.env.spool / "request.json").write_text(json.dumps(body))
+        self.env.drop(body)
         return body
 
     def make(self, runner):
@@ -436,7 +455,7 @@ class PresetTests(PresetFixture):
         self.assertNotIn("PROFILE_USER_ROOM_A_NIGHT_DSP_SHA256=2b6baa04", conf)
         self.assertIn("256 biquads", conf)
         self.assertEqual(len(runner.profiles_calls), 1, "the supervisor validated the new conf once")
-        self.assertFalse((self.env.spool / "presets" / "abcdef0123.dsp").exists(), "the uploaded artifact is consumed")
+        self.assertFalse((self.env.inbox / "abcdef0123.dsp").exists(), "the uploaded artifact is consumed")
         self.assertEqual(result["stats"]["biquads"], 256)
         self.assertIn("BENCH", result["loaderLine"])
 
@@ -446,9 +465,9 @@ class PresetTests(PresetFixture):
         self.assertEqual(result["state"], "refused")
         self.assertIn("hash does not match", result["error"])
         self.preset_request(id="1234567890ab")
-        (self.env.spool / "presets" / "1234567890ab.dsp").unlink()
+        (self.env.inbox / "1234567890ab.dsp").unlink()
         result = self.make(PresetRunner(self.env)).consume()
-        self.assertIn("missing from the spool", result["error"])
+        self.assertIn("missing from the inbox", result["error"])
         self.assertEqual(self.env.live_profile(), "dsp-direct")
         self.assertEqual(list(self.dsp_dir.iterdir()), [])
 
@@ -497,14 +516,12 @@ class PresetTests(PresetFixture):
     def test_remove(self):
         self.preset_request()
         self.make(PresetRunner(self.env)).consume()
-        (self.env.spool / "request.json").write_text(json.dumps({"id": "bbbbbbbbbb", "kind": "remove", "slug": "room-a-night",
-                                                                  "requestedAt": time.time()}))
+        self.env.drop({"id": "bbbbbbbbbb", "kind": "remove", "slug": "room-a-night", "requestedAt": time.time()})
         result = self.make(PresetRunner(self.env)).consume()
         self.assertEqual(result["state"], "refused")
         self.assertIn("live profile", result["error"])
         self.env.set_profile("dsp-direct")
-        (self.env.spool / "request.json").write_text(json.dumps({"id": "cccccccccc", "kind": "remove", "slug": "room-a-night",
-                                                                  "requestedAt": time.time()}))
+        self.env.drop({"id": "cccccccccc", "kind": "remove", "slug": "room-a-night", "requestedAt": time.time()})
         result = self.make(PresetRunner(self.env)).consume()
         self.assertEqual(result["state"], "done", result)
         self.assertNotIn("PROFILE_USER_", self.env.conf.read_text())
@@ -567,10 +584,10 @@ class ShutdownTests(unittest.TestCase):
         self.assertEqual(acted, [["systemctl", "stop", "usb16x16-aes67.service"], ["systemctl", "poweroff", "--no-block"]])
         self.assertEqual([s["name"] for s in result["steps"]], ["validating", "stopping", "powering-off"])
         self.assertTrue(all(s["ok"] for s in result["steps"]))
-        receipt = json.loads((self.env.spool / "receipts" / "abcdef0123.json").read_text())
+        receipt = json.loads((self.env.state / "receipts" / "abcdef0123.json").read_text())
         self.assertEqual(receipt["state"], "done")
         self.assertEqual(self.env.live_profile(), "dsp-direct", "the conf is never edited")
-        self.assertFalse((self.env.spool / "request.json").exists())
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
 
     def test_refusals_never_reach_poweroff(self):
         cases = [
@@ -614,7 +631,7 @@ class ShutdownTests(unittest.TestCase):
         result = make(self.env, runner).consume()
         self.assertEqual(result["state"], "failed")
         self.assertIn("poweroff exited 1", result["error"])
-        receipt = json.loads((self.env.spool / "receipts" / "abcdef0123.json").read_text())
+        receipt = json.loads((self.env.state / "receipts" / "abcdef0123.json").read_text())
         self.assertEqual(receipt["state"], "failed", "the done receipt written before poweroff is overwritten")
 
 
@@ -710,19 +727,19 @@ class LiveTests(PresetFixture):
     def live_request(self, data=None, **fields):
         data = self.variant if data is None else data
         ident = fields.pop("id", "1234567890ab")
-        (self.env.spool / "presets" / f"{ident}.dsp").write_bytes(data)
+        (self.env.inbox / f"{ident}.dsp").write_bytes(data)
         body = {"id": ident, "kind": "live", "artifactSha256": __import__("hashlib").sha256(data).hexdigest(),
                 "artifactFile": f"{ident}.dsp", "expectedProfile": "user-room-a-night",
                 "requestedAt": time.time(), "requestedBy": "bryan"}
         body.update(fields)
-        (self.env.spool / "request.json").write_text(json.dumps(body))
+        self.env.drop(body)
         return body
 
     def commit_request(self, **fields):
         body = {"id": "fedcba987654", "kind": "commit", "expectedProfile": "user-room-a-night",
                 "requestedAt": time.time(), "requestedBy": "bryan"}
         body.update(fields)
-        (self.env.spool / "request.json").write_text(json.dumps(body))
+        self.env.drop(body)
         return body
 
     def test_user_block_carries_dsp_live(self):
@@ -741,7 +758,7 @@ class LiveTests(PresetFixture):
         self.assertEqual(self.installed.read_bytes(), self.artifact, "nothing installed by a live push")
         self.assertFalse(any(c[:2] == ["systemctl", "stop"] for c in runner.calls), "no restart")
         self.assertTrue(any(c[0] == apply_module.OFFLINE_RUNNER for c in runner.calls), "load-checked first")
-        self.assertFalse((self.env.spool / "presets" / "1234567890ab.dsp").exists(), "the upload is consumed")
+        self.assertFalse((self.env.inbox / "1234567890ab.dsp").exists(), "the upload is consumed")
 
     def test_live_refuses_a_different_shape(self):
         reshaped = self.artifact.decode().replace("assign 16\n", "assign 15\n", 1)
@@ -764,7 +781,7 @@ class LiveTests(PresetFixture):
         self.env.set_profile("user-room-a-night")
         conf = self.env.conf.read_text().replace("PROFILE_USER_ROOM_A_NIGHT_DSP_LIVE=1\n", "")
         self.env.conf.write_text(conf)
-        self.live_request()
+        self.live_request(id="1234567890ac")
         result = self.make(LiveRunner(self.env)).consume()
         self.assertEqual(result["state"], "refused")
         self.assertIn("DSP_LIVE", result["error"])
@@ -774,7 +791,7 @@ class LiveTests(PresetFixture):
         result = self.make(LiveRunner(self.env)).consume()
         self.assertEqual(result["state"], "refused")
         self.assertIn("expected dsp-direct", result["error"])
-        self.live_request(expectedLiveSha256="0" * 64)
+        self.live_request(id="1234567890ac", expectedLiveSha256="0" * 64)
         result = self.make(LiveRunner(self.env)).consume()
         self.assertEqual(result["state"], "refused")
         self.assertIn("bridge reports none", result["error"])
@@ -784,7 +801,7 @@ class LiveTests(PresetFixture):
         result = self.make(LiveRunner(self.env, bridge_refuses="shape differs")).consume()
         self.assertEqual(result["state"], "failed")
         self.assertIn("refused the artifact: shape differs", result["error"])
-        self.live_request()
+        self.live_request(id="1234567890ac")
         result = self.make(LiveRunner(self.env, bridge_silent=True)).consume()
         self.assertEqual(result["state"], "failed")
         self.assertIn("did not report", result["error"])
@@ -835,9 +852,286 @@ class LiveTests(PresetFixture):
         assert self.make(runner).consume()["state"] == "done"
         body = {"id": "abcdefabcdef", "kind": "live", "revert": True, "expectedProfile": "user-room-a-night",
                 "requestedAt": time.time(), "requestedBy": "bryan"}
-        (self.env.spool / "request.json").write_text(json.dumps(body))
+        self.env.drop(body)
         result = self.make(runner).consume()
         self.assertEqual(result["state"], "done", result)
         self.assertEqual(result["liveUpdate"]["sha256"], __import__("hashlib").sha256(self.artifact).hexdigest())
         self.assertEqual((self.env.run_dir / "dsp-live.dsp").read_bytes(), self.artifact)
         self.assertFalse(any(c[:2] == ["systemctl", "stop"] for c in runner.calls))
+
+
+# ---------------------------------------------------------------- the inbox and the state directory (1.9.0)
+
+class InboxTests(PresetFixture):
+    """Requests arrive as <id>.request in an inbox the web user writes; the
+    applier reads every file there as untrusted and writes only under its own
+    state directory."""
+
+    def outside(self, name="target.txt", text="do not touch\n"):
+        path = Path(self.tmp.name) / name
+        path.write_text(text)
+        return path
+
+    def assertNoRootFiles(self):
+        self.assertEqual(self.env.root_files(), [], "the applier wrote into the inbox")
+        self.assertEqual(list((self.env.state / "check").iterdir()), [], "the loader check's copy is removed")
+
+    def assertOnlyShows(self, runner):
+        self.assertEqual([c for c in runner.calls if c[0] != "systemctl" or c[1] != "show"], [])
+
+    def test_a_symlinked_request_is_refused_and_its_target_untouched(self):
+        target = self.outside()
+        os.symlink(target, self.env.inbox / "abcdef0123.request")
+        runner = FakeRunner(self.env)
+        result = make(self.env, runner).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertEqual(result["id"], "abcdef0123")
+        self.assertIn("cannot be opened as a plain file", result["error"])
+        self.assertEqual(target.read_text(), "do not touch\n")
+        self.assertEqual(list(self.env.inbox.iterdir()), [], "the link itself is removed")
+        self.assertOnlyShows(runner)
+        self.assertNoRootFiles()
+
+    def test_a_symlinked_artifact_is_refused_and_its_target_untouched(self):
+        target = Path(self.tmp.name) / "elsewhere.dsp"
+        target.write_bytes(self.artifact)
+        self.preset_request()
+        (self.env.inbox / "abcdef0123.dsp").unlink()
+        os.symlink(target, self.env.inbox / "abcdef0123.dsp")
+        runner = PresetRunner(self.env)
+        result = self.make(runner).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("artifact abcdef0123.dsp cannot be opened", result["error"])
+        self.assertEqual(target.read_bytes(), self.artifact)
+        self.assertEqual(list(self.dsp_dir.iterdir()), [])
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
+        self.assertNoRootFiles()
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "no FIFOs on this platform")
+    def test_a_fifo_does_not_block(self):
+        os.mkfifo(self.env.inbox / "abcdef0123.request")
+        result = make(self.env, FakeRunner(self.env)).consume()   # would hang without O_NONBLOCK
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("not a regular file", result["error"])
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
+        self.preset_request(id="1234567890ab")
+        (self.env.inbox / "1234567890ab.dsp").unlink()
+        os.mkfifo(self.env.inbox / "1234567890ab.dsp")
+        result = self.make(PresetRunner(self.env)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("not a regular file", result["error"])
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
+
+    def test_a_hard_linked_request_is_refused(self):
+        body = {"id": "abcdef0123", "profile": "dsp-loaded", "expectedProfile": "dsp-direct",
+                "requestedAt": time.time(), "requestedBy": "bryan"}
+        target = self.outside("linked.json", json.dumps(body))
+        os.link(target, self.env.inbox / "abcdef0123.request")
+        runner = FakeRunner(self.env)
+        result = make(self.env, runner).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("2 links", result["error"])
+        self.assertEqual(target.read_text(), json.dumps(body))
+        self.assertEqual(self.env.live_profile(), "dsp-direct")
+        self.assertOnlyShows(runner)
+
+    def test_an_oversize_request_is_refused(self):
+        self.env.request(padding="x" * (apply_module.MAX_REQUEST_BYTES + 1))
+        runner = FakeRunner(self.env)
+        result = make(self.env, runner).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn(f"larger than {apply_module.MAX_REQUEST_BYTES} bytes", result["error"])
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
+        self.assertOnlyShows(runner)
+
+    def test_the_body_id_must_be_the_file_name(self):
+        body = {"id": "1111111111", "profile": "dsp-loaded", "expectedProfile": "dsp-direct",
+                "requestedAt": time.time(), "requestedBy": "bryan"}
+        self.env.drop(body, "2222222222.request")
+        runner = FakeRunner(self.env)
+        result = make(self.env, runner).consume()
+        self.assertEqual((result["state"], result["id"]), ("refused", "2222222222"))
+        self.assertIn("does not match its file name", result["error"])
+        self.assertFalse((self.env.state / "receipts" / "1111111111.json").exists())
+        self.assertOnlyShows(runner)
+
+    def test_kind_rate_is_refused_from_the_inbox(self):
+        runner = FakeRunner(self.env)
+        self.env.request(kind="rate", rate=96000, source="usb")
+        result = make(self.env, runner).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("only from the rate-request trigger", result["error"])
+        self.assertOnlyShows(runner)
+
+    def test_the_envelope_is_checked_before_any_kind_acts(self):
+        # A user preset installed and not live, a live push applied: the
+        # starting point every kind below would act on.
+        self.preset_request()
+        assert self.make(PresetRunner(self.env)).consume()["state"] == "done"
+        self.env.set_profile("dsp-direct")
+        conf_before = self.env.conf.read_text()
+        files_before = sorted(p.name for p in self.dsp_dir.iterdir())
+        stale = time.time() - 1000
+        cases = [
+            dict(kind="remove", slug="room-a-night"),
+            dict(kind="preset", slug="other", name="Other"),
+            dict(kind="live", expectedProfile="user-room-a-night"),
+            dict(kind="commit", expectedProfile="user-room-a-night"),
+        ]
+        for index, fields in enumerate(cases):
+            for envelope, message in ((dict(requestedAt=stale), "old"), (dict(id="abcdef0123"), "already processed")):
+                with self.subTest(fields=fields, envelope=envelope):
+                    ident = envelope.get("id", f"{index + 1:010x}")
+                    (self.env.inbox / f"{ident}.dsp").write_bytes(self.artifact)
+                    body = {"id": ident, "requestedAt": time.time(), "artifactFile": f"{ident}.dsp",
+                            "artifactSha256": __import__("hashlib").sha256(self.artifact).hexdigest(),
+                            **fields, **{k: v for k, v in envelope.items() if k != "id"}}
+                    self.env.drop(body)
+                    runner = LiveRunner(self.env)
+                    result = self.make(runner).consume()
+                    self.assertEqual(result["state"], "refused")
+                    self.assertIn(message, result["error"])
+                    self.assertEqual([s["name"] for s in result["steps"]], ["validating"])
+                    self.assertOnlyShows(runner)
+                    self.assertEqual(self.env.conf.read_text(), conf_before)
+                    self.assertEqual(sorted(p.name for p in self.dsp_dir.iterdir()), files_before)
+                    self.assertFalse((self.env.run_dir / "dsp-live.dsp").exists())
+                    self.assertEqual(list(self.env.inbox.iterdir()), [])
+
+    def test_requests_are_taken_oldest_first_and_strays_swept(self):
+        first = self.env.drop({"id": "bbbbbbbbbb", "kind": "remove", "slug": "nothing", "requestedAt": time.time()})
+        second = self.env.drop({"id": "aaaaaaaaaa", "kind": "remove", "slug": "nothing", "requestedAt": time.time()})
+        os.utime(first, (time.time() - 30, time.time() - 30))
+        os.utime(second, (time.time() - 60, time.time() - 60))
+        old = self.env.inbox / "9999999999.dsp"
+        old.write_bytes(b"left behind")
+        os.utime(old, (time.time() - 3600, time.time() - 3600))
+        old_tmp = self.env.inbox / "9999999998.request.tmp"
+        old_tmp.write_text("{")
+        os.utime(old_tmp, (time.time() - 3600, time.time() - 3600))
+        young = self.env.inbox / "8888888888.dsp"
+        young.write_bytes(b"its request is on its way")
+        # One operation that is not a live update per run, as it has always been;
+        # the path unit fires again when the request leaves the inbox.
+        results = make(self.env, FakeRunner(self.env)).drain()
+        self.assertEqual([r["id"] for r in results], ["aaaaaaaaaa"])
+        results = make(self.env, FakeRunner(self.env)).drain()
+        self.assertEqual([r["id"] for r in results], ["bbbbbbbbbb"])
+        self.assertEqual(sorted(p.name for p in self.env.inbox.iterdir()), ["8888888888.dsp"])
+        self.assertEqual(make(self.env, FakeRunner(self.env)).drain(), [], "nothing pending: quiet")
+        self.assertNoRootFiles()
+
+    def test_a_request_dropped_during_a_restart_waits_for_the_next_run(self):
+        env = self.env
+
+        class Dropper(FakeRunner):
+            dropped = False
+            def run(self, argv, timeout=60.0):
+                if argv[:2] == ["systemctl", "stop"] and not self.dropped:
+                    self.dropped = True
+                    env.drop({"id": "cccccccccc", "kind": "remove", "slug": "nothing", "requestedAt": time.time()})
+                return super().run(argv, timeout)
+
+        self.env.conf.write_text(CONF)
+        self.env.request()
+        results = make(self.env, Dropper(self.env)).drain()
+        self.assertEqual([(r["id"], r["state"]) for r in results], [("abcdef0123", "done")])
+        self.assertTrue((self.env.inbox / "cccccccccc.request").exists(), "left for the next trigger")
+        results = make(self.env, FakeRunner(self.env)).drain()
+        self.assertEqual([(r["id"], r["state"]) for r in results], [("cccccccccc", "refused")])
+
+    def test_a_preset_writes_nothing_into_the_inbox(self):
+        self.preset_request()
+        self.assertEqual(self.make(PresetRunner(self.env)).consume()["state"], "done")
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
+        self.assertNoRootFiles()
+        self.assertTrue((self.env.state / "receipts" / "abcdef0123.json").exists())
+
+    def test_receipts_clamp_the_free_text_fields(self):
+        self.env.request(requestedBy="a\x1b[31mred", id="0000000001", profile="nope")
+        result = make(self.env, FakeRunner(self.env)).consume()
+        self.assertEqual(result["request"]["requestedBy"], "invalid")
+        self.env.request(requestedBy="b" * 200, id="0000000002", kind=["x"])
+        result = make(self.env, FakeRunner(self.env)).consume()
+        self.assertEqual(result["request"]["requestedBy"], "b" * 64)
+        self.assertEqual((result["kind"], result["request"]["kind"]), ("invalid", "invalid"))
+        self.assertIn("unknown request kind 'invalid'", result["error"])
+
+
+class StateDirTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = Env(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_created_0755_with_receipts_and_a_private_check_dir(self):
+        self.env.request()
+        make(self.env, FakeRunner(self.env)).consume()
+        self.assertEqual(self.env.state.stat().st_mode & 0o7777, 0o755)
+        self.assertEqual((self.env.state / "check").stat().st_mode & 0o7777, 0o700)
+        self.assertEqual((self.env.state / "receipts").stat().st_mode & 0o7777, 0o755)
+        self.assertEqual((self.env.state / "receipts" / "abcdef0123.json").stat().st_mode & 0o7777, 0o644)
+
+    def test_a_symlinked_state_dir_is_refused(self):
+        real = Path(self.tmp.name) / "real-state"
+        real.mkdir(mode=0o755)
+        os.symlink(real, self.env.state)
+        self.env.request()
+        with self.assertRaisesRegex(apply_module.BrokenEnvironment, "symlink"):
+            make(self.env, FakeRunner(self.env)).drain()
+        self.assertEqual(list(real.iterdir()), [])
+        self.assertTrue((self.env.inbox / "abcdef0123.request").exists(), "nothing consumed")
+
+    def test_a_world_writable_state_dir_is_refused(self):
+        self.env.state.mkdir()
+        os.chmod(self.env.state, 0o777)
+        self.env.request()
+        with self.assertRaisesRegex(apply_module.BrokenEnvironment, "writable by group or others"):
+            make(self.env, FakeRunner(self.env)).consume()
+        with self.assertRaises(apply_module.BrokenEnvironment):
+            make(self.env, FakeRunner(self.env)).apply({"id": "abcdef0123"})
+
+    def test_a_symlinked_receipts_dir_is_refused(self):
+        self.env.state.mkdir(mode=0o755)
+        os.symlink(Path(self.tmp.name), self.env.state / "receipts")
+        with self.assertRaisesRegex(apply_module.BrokenEnvironment, "symlink"):
+            make(self.env, FakeRunner(self.env)).drain()
+
+    def test_state_writes_never_follow_a_planted_name(self):
+        # Even inside the state directory, the temporary is O_EXCL | O_NOFOLLOW
+        # and renamed over the name, so a symlink there is replaced, not followed.
+        target = Path(self.tmp.name) / "victim"
+        target.write_text("intact\n")
+        self.env.state.mkdir(mode=0o755)
+        os.symlink(target, self.env.state / "current.json")
+        self.env.request()
+        make(self.env, FakeRunner(self.env)).consume()
+        self.assertEqual(target.read_text(), "intact\n")
+        self.assertFalse((self.env.state / "current.json").is_symlink())
+
+
+class MainTests(unittest.TestCase):
+    def test_the_old_spool_option_and_variable_are_refused(self):
+        with self.assertRaises(SystemExit) as caught, \
+                unittest.mock.patch("sys.stderr", new_callable=__import__("io").StringIO) as err:
+            apply_module.main(["--spool", "/tmp/x"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--inbox DIR", err.getvalue())
+        self.assertIn("--state DIR", err.getvalue())
+        with unittest.mock.patch.dict(os.environ, {"USB16X16_APPLY_DIR": "/tmp/x"}), \
+                unittest.mock.patch("sys.stderr", new_callable=__import__("io").StringIO) as err:
+            self.assertEqual(apply_module.main([]), 2)
+        self.assertIn("USB16X16_APPLY_INBOX", err.getvalue())
+
+    def test_untrusted_reads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "f"
+            path.write_bytes(b"x" * 10)
+            self.assertEqual(apply_module.read_untrusted(path, 10, remove=False), b"x" * 10)
+            with self.assertRaisesRegex(apply_module.Refused, "larger than 9"):
+                apply_module.read_untrusted(path, 9)
+            self.assertFalse(path.exists())
+            with self.assertRaises(apply_module.Missing):
+                apply_module.read_untrusted(path, 9)

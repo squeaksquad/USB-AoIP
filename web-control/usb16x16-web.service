@@ -1,5 +1,5 @@
 [Unit]
-Description=USB 16x16 read-only web control service
+Description=USB-AoIP web control service
 Documentation=file:///home/bdimaio/usb-16x16-work/web-control/README.md
 After=network-online.target
 Wants=network-online.target
@@ -8,24 +8,32 @@ Wants=network-online.target
 Type=simple
 User=bdimaio
 Group=bdimaio
-SupplementaryGroups=adm
+# Reads the audio services' journal for the page's log panel.
+SupplementaryGroups=systemd-journal
+# The installer writes web.env: the TLS certificate and an explicit bind
+# address, when install.conf sets them (USB_AOIP_WEB_ARGS).
+EnvironmentFile=-/etc/usb-aoip/web.env
 ExecStart=/usr/local/bin/usb16x16-web \
   --static /home/bdimaio/usb-16x16-work/web-ui \
   --presets /home/bdimaio/usb-16x16-work/web-presets \
-  --auth-file /home/bdimaio/usb-16x16-work/web-auth \
+  --auth-file /etc/usb-aoip/web-auth \
   --management-interface wlan0 \
-  --port 8088
+  --port 8088 $USB_AOIP_WEB_ARGS
+# With no address on the management interface yet the service exits 75 and is
+# started again, instead of listening where nobody can reach it.
 Restart=on-failure
 RestartSec=5
 
-# The service refuses to start with no users in the auth file, so a missing or
-# unreadable credentials file fails closed rather than serving open. Add a user
-# with: usb16x16-web --auth-file /home/bdimaio/usb-16x16-work/web-auth --add-user NAME
+# The service refuses to start with no users in the login file, so a missing or
+# unreadable file fails closed rather than serving open. The file is root's,
+# readable by this service's group; add a login with:
+#   sudo install/install.sh set-password NAME
 
 # The audio stack owns this machine. This service is background work: it must
 # never win a CPU or IO contest against the bridge, and it must not be able to
-# change anything outside its own preset directory and the Apply spool, where
-# the one file it writes is a request that usb16x16-apply.path acts on as root.
+# change anything outside its own preset directory and the request inbox, a
+# root-owned directory it can drop files into and cannot list; a request there
+# is what usb16x16-apply.path acts on as root.
 Nice=15
 IOSchedulingClass=idle
 CPUWeight=20
@@ -36,7 +44,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/bdimaio/usb-16x16-work/web-presets /home/bdimaio/usb-16x16-work/web-apply
+ReadWritePaths=/home/bdimaio/usb-16x16-work/web-presets /var/spool/usb-aoip/inbox
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
@@ -46,6 +54,14 @@ LockPersonality=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+RestrictNamespaces=yes
+RemoveIPC=yes
+UMask=0027
 
 [Install]
 WantedBy=multi-user.target

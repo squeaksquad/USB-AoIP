@@ -18,6 +18,8 @@ Notes:
   are not part of this repository; they keep their own licences
   (aes67-linux-daemon GPL-3.0, Inferno GPL-3.0-or-later / AGPL-3.0-or-later,
   Statime Apache-2.0 / MIT).
+- `dante/patches/statime/` is a patch to Statime, offered under Statime's own
+  terms (Apache-2.0 or MIT), which need no exception here.
 - `usb16x16-dante-owner` is Apache-2.0. At run time ALSA loads the Inferno
   plugin (GPL-3.0-or-later) into it; Apache-2.0 is compatible with GPL-3.0, and
   anyone distributing that combination as one work takes on the GPL-3.0's

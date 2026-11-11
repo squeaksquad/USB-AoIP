@@ -93,6 +93,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -q && sudo apt-get install -y -q build-essential cmake pkg-config libasound2-dev curl git patch
       - run: USB_AOIP_JOBS=4 install/install.sh build --build-dir "$RUNNER_TEMP/usb-aoip-build"
+      - name: The same with the draft Statime port-state patch (PTP_STATE=1), to prove it applies and compiles
+        run: USB_AOIP_JOBS=4 install/install.sh build --build-dir "$RUNNER_TEMP/usb-aoip-build" --with-port-state
       - run: file "$RUNNER_TEMP"/usb-aoip-build/out/* && "$RUNNER_TEMP/usb-aoip-build/out/usb16x16-dante-owner" --help | head -5 || true
 
   # The gadget modules for the pinned kernel, built by DKMS exactly as the
