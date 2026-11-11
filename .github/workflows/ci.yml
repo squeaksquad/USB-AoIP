@@ -107,8 +107,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Raspberry Pi package archive
         run: |
-          curl -fsSL https://archive.raspberrypi.com/debian/raspberrypi.gpg.key | gpg --dearmor -o /usr/share/keyrings/raspberrypi-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/raspberrypi-archive-keyring.gpg] http://archive.raspberrypi.com/debian/ trixie main" > /etc/apt/sources.list.d/raspi.list
+          # The archive's current keyring is its own package; the key file on the
+          # website is one Debian trixie's verifier no longer accepts.
+          deb=$(curl -fsSL http://archive.raspberrypi.com/debian/dists/trixie/main/binary-arm64/Packages.gz | gunzip | awk '/^Package: raspberrypi-archive-keyring$/{p=1} p&&/^Filename:/{print $2; exit}')
+          curl -fsSL -o /tmp/keyring.deb "http://archive.raspberrypi.com/debian/$deb"
+          dpkg -i /tmp/keyring.deb
+          echo "deb [signed-by=/usr/share/keyrings/raspberrypi-archive-keyring.pgp] http://archive.raspberrypi.com/debian/ trixie main" > /etc/apt/sources.list.d/raspi.list
           apt-get update -q
           apt-get install -y -q dkms build-essential "linux-headers-6.18.34+rpt-rpi-2712"
       - run: install/install.sh build-modules "6.18.34+rpt-rpi-2712"
