@@ -9,17 +9,11 @@ Pi Testing/
 **/Session File Backups/
 **/WaveCache.wfm
 
-# Generated test media and captures
-outputs/*.wav
+# Measurement evidence: its own repository, cloned here as outputs/ (EVIDENCE.md)
+/outputs/
+*.wav
 *.log
 *.pcap
-# ...except the measurement evidence the handoff and findings cite directly.
-# These are the record behind the documented n= claims, not build noise.
-!outputs/latency/phase4-candidate-*/bridge.log
-!outputs/latency/phase4-candidate-*/daemon.log
-!outputs/latency/phase5-20260905/*.log
-!outputs/latency/*-api/sap-timeline.log
-!outputs/latency/*-api/settle.log
 
 # Build products
 *.ko
@@ -33,9 +27,6 @@ build-*/
 .build/
 *.dSYM/
 node_modules/
-# Local reference replay executables; source and bounded evidence are retained.
-/outputs/dsp-service/**/reference-export
-
 # Reproducible upstream checkout; pinned revisions are documented in the handoff
 history/aes67/aes67-linux-daemon/
 

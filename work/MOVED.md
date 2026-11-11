@@ -5,7 +5,7 @@ On 2026-11-10 the repository was laid out so that what is installed and run sits
 - Files moved with no content change except path references in documentation, tests and the Mac-side tools; nothing that is installed on the Pi changed a byte. The layout the handoff was written against is the tag `layout-2026-11-01`: `git show layout-2026-11-01:work/dante-mode/RESULTS.md`, or `git worktree add ../USB-AoIP-old layout-2026-11-01` for the whole tree.
 - `work/protected-baseline-2026-08-31/` did not move.
 - The scripts under `history/` are kept as written. They name their sibling files by the old layout, so run one from a checkout of the tag (or from the Pi's staging directory, which mirrors the old layout), not from `history/`.
-- `outputs/` (the measurement evidence) moved to its own repository; see `outputs/MOVED.md`.
+- `outputs/` (the measurement evidence) moved to its own repository; see `EVIDENCE.md`.
 
 ## Directories
 
