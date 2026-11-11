@@ -1,0 +1,5 @@
+# The two modules of drivers/usb/gadget/function that the patches touch,
+# built out of tree from the files prepare-sources.sh lays down here.
+obj-m += u_audio.o
+obj-m += usb_f_uac2.o
+usb_f_uac2-y := f_uac2.o

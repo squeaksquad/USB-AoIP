@@ -60,13 +60,13 @@ systemctl=${USB16X16_STARTCHECK_SYSTEMCTL:-systemctl}
 owner_conf=${USB16X16_STARTCHECK_OWNER_CONF:-/etc/usb16x16/dante/owner.conf}
 conf_rate=$(sed -n 's/^RATE=\([0-9]*\)[[:space:]]*$/\1/p' "$owner_conf" 2>/dev/null | tail -1)
 sample_rate=${USB16X16_STARTCHECK_RATE:-${conf_rate:-48000}}
-tolerance=60        # distance from the multiple that still counts as whole
-floor=1000          # under this no audio flow is up
+tolerance=${USB16X16_STARTCHECK_TOLERANCE:-60}   # distance from the multiple that still counts as whole
+floor=${USB16X16_STARTCHECK_FLOOR:-1000}         # under this no audio flow is up
 window=${USB16X16_STARTCHECK_WINDOW:-10}          # seconds a reading
 settle=${USB16X16_STARTCHECK_SETTLE:-45}          # seconds after the start before the first reading
 flows_timeout=${USB16X16_STARTCHECK_FLOWS:-180}   # seconds to wait for audio to arrive at all
 max_restarts=${USB16X16_STARTCHECK_MAX:-4}
-episode=900         # seconds after which the restart count starts again
+episode=${USB16X16_STARTCHECK_EPISODE:-900}      # seconds after which the restart count starts again
 
 say() { echo "startcheck: $*"; }
 

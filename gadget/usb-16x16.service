@@ -1,0 +1,23 @@
+# The USB audio gadget: the device the host sees. A oneshot that builds the
+# configfs gadget and binds it to the USB device controller, and takes it
+# down again at stop. Restarting it makes the device disappear and reappear
+# on the host.
+#
+# Written 2026-11-10 for the from-scratch installer. The development unit's
+# own usb-16x16.service predates the repository and is not in it (only its
+# hash, 99c87e86, is recorded); there it runs the same script through the
+# drop-in usb-16x16.service.d/10-usb-aoip.conf. This unit names the script
+# directly and needs no drop-in.
+[Unit]
+Description=USB-AoIP USB audio gadget (UAC2, 16 in / 16 out)
+After=sys-kernel-config.mount systemd-modules-load.service
+Wants=sys-kernel-config.mount
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/setup-usb-aoip start
+ExecStop=/usr/local/sbin/setup-usb-aoip stop
+
+[Install]
+WantedBy=multi-user.target

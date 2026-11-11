@@ -15288,3 +15288,99 @@ three shell tests, all passing, as before the move. Not verified: anything
 on the Pi (nothing there depends on this repository's layout, but a
 re-staging to `~/usb-16x16-work` from the new layout has not been done and
 the old installers would not find their files if it were).
+
+**DONE 2026-11-10: a from-scratch installer, written and tested off the Pi
+(packaging workstream 2 of 3). Not run on a Pi; nothing installed; the
+audio path as accepted on 2026-11-01 is what it installs.** Branch
+`install/from-scratch`, pull request squeaksquad/USB-AoIP#2, stacked on #1.
+
+Why: the unit was built by about twenty incremental installers pinned to
+binaries that exist only on the author's Pi, with his user name and
+addresses in 65 files. A second unit could not be built from the
+repository.
+
+What there is now:
+
+1. `install/install.sh`: `config` (write `/etc/usb-aoip/install.conf` with
+   detected values), `install`, `status`, `uninstall [--purge]`, `adopt`,
+   `set-password`, and the parts `render`, `build`, `build-modules`.
+   Idempotent. It does not depend on anything under `history/`.
+2. `/etc/usb-aoip/install.conf` (operator's decision: shell-style KEY=value,
+   read and validated, never sourced) holds everything site-specific: the
+   operator, web and owner users, the work directory, the audio and
+   management interfaces, the port, the device name, the USB identity, the
+   Dante device ID, the kernel pin. A fresh unit's USB serial is `UA` plus
+   the last eight hex digits of the Pi's serial; its Dante device ID is the
+   audio port's MAC plus `0000`.
+3. Installed names are unchanged (operator's decision): `usb16x16-*` units
+   and binaries, `/etc/usb16x16/`. The author's Pi maps one to one
+   (`docs/install/author-pi-mapping.md`).
+4. Every installed text file is a repository file with the site's values
+   substituted for the development unit's. `install/test-render.sh` proves
+   the point: with the development unit's values (`install/test/
+   development-unit.conf`) all 45 rendered files are byte for byte the
+   repository's, and the audio-path ones hash to the point of record (start
+   wrapper df6a1b0b, transport.conf add1bc21, Inferno config 85a5256f,
+   Statime config 11b055df, Dante unit 27b68877, gadget script 65d26567,
+   applier 347a7062, web 6b98e7cf); with another unit's values nothing
+   rendered carries the author's name, addresses, serial or device ID, and
+   the audio-path files are unchanged but for names and addresses.
+5. Builds on the machine from pinned sources (`install/sources.pins`, the
+   revisions of `dante/SOURCES.lock`; `install/pins.sha256` for the five
+   Inferno patches, the four kernel patches, the owner source and the
+   bridge core): Rust 1.99.0 by rustup (hash-checked), Statime, the plugin
+   with patches 0001 to 0005 applied with no fuzz, the owner, the DSP
+   runner. Built-artifact hashes are recorded in `/var/lib/usb-aoip/
+   manifest`, not compared with the author's.
+6. The owner is built from `dante/owner/point-of-record/main.cpp`
+   (operator's decision): commit c4b273d's source, sha256 ec8d60bc, the
+   source of the installed c84e6a36. `dante/owner/main.cpp` at HEAD is the
+   later `--chan-holes` candidate (d4a39b8c), never accepted as the
+   service's owner. Headers and bridge core are unchanged between the two.
+7. Kernel modules by DKMS (`kernel/dkms/`: `dkms.conf`, `Kbuild`,
+   `prepare-sources.sh`, `upstream.sha256`). Before each build it fetches
+   the five gadget source files of the kernel being built for from the
+   stable tag, checks them against pinned hashes where the version has
+   them, applies the four patches with no fuzz, and refuses with the reason
+   when one does not apply.
+
+**FOUND 2026-11-10: the gadget patches apply to Linux 6.18.34 through
+6.18.49 and not to 6.18.50 or later; Raspberry Pi OS now installs 6.18.60.**
+Checked against each release's upstream sources (the gadget function
+directory is identical in Raspberry Pi's tree and the stable tree at
+6.18.34). For 6.18.34 the fetched sources plus the first two patches are
+byte for byte `kernel/source/f_uac2.c.shared-clock`. From 6.18.50
+`uac2-rate-request-6.18.34.patch` fails one hunk: `u_audio.c` gained an
+error path and a card-free callback upstream. `linux-image-6.18.34+rpt-
+rpi-2712` and its headers are still in Raspberry Pi's archive. Operator's
+decision: the installer installs and holds 6.18.34 (`KERNEL_PIN`), the
+kernel every measurement was made on; the patch is not ported.
+
+One change to an installed file, asked for by the operator: the start
+check's `tolerance`, `floor` and `episode` are now environment keys with the
+same defaults (`usb16x16-dante-startcheck` 4017da79, was fccfdd62; three
+lines; `test-dante-startcheck.sh` passes). A new drop-in reads them from
+`/etc/usb16x16/dante/startcheck.conf`, shipped with the same values. The
+author's Pi keeps fccfdd62 until it is ever reinstalled. Transport depths
+were already keys in `transport.conf`, installed unchanged. What both
+assume about a network is in `docs/INSTALL.md`.
+
+Also written: `gadget/usb-16x16.service` (the base gadget unit is not in
+the repository, only its hash 99c87e86; this is a new oneshot around the
+same script); `docs/INSTALL.md`; `docs/upstream/kernel-uac2.md` (which
+kernel patches look upstreamable, a draft cover letter, not sent);
+`docs/install/TO-VERIFY.md`.
+
+Verified off the Pi (CI, GitHub Actions): the render test; the installer's
+`build` step on arm64 (all four artifacts built, patches applied exactly);
+the gadget modules built by DKMS against Raspberry Pi's
+`linux-headers-6.18.34+rpt-rpi-2712` in a Debian trixie arm64 container;
+6.18.60 refused with the reason. See the pull request for the run.
+
+Not verified, and listed in `docs/install/TO-VERIFY.md` for the operator:
+the installer end to end on a Pi; the kernel downgrade on Raspberry Pi OS;
+the `dtoverlay=dwc2,dr_mode=peripheral` line (the development unit's boot
+configuration is not in the record); `AUDIO_IF_SETUP=link-local`; DKMS
+installing over the in-tree modules; the web service as a dedicated user;
+`adopt` on the author's Pi. A unit built this way has its own owner, plugin
+and module binaries and is a new operating point until measured.

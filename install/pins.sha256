@@ -1,0 +1,12 @@
+04c6832ef2f2276a7256e6a3c8461c8d53fec68df2d447b00fcc4e0d6b94ffbe  dante/patches/0001-alsa-plugin-xrun-report-option.patch
+4fad88cfb55bed80ed6c955af7eef1850b177839c858701a0185a1d020beacf4  dante/patches/0002-subscriber-retry-after-1s.patch
+02f420e4183dbe395a1f08c91c13066dc8c7e4cac52ff790f9658bcf079cb734  dante/patches/0003-tx-confirm-neighbour-on-keepalive.patch
+25adf7e7b1114ab443af1c80c31a086e217023d15a4a491401e0c73484da2424  dante/patches/0004-sample-rate-status.patch
+31211d3a711a132bbacdddea01919e6a67c58452703386b992af63993c26aa5d  dante/patches/0005-sample-rate-request-to-arbiter.patch
+273d878e7534e323917437e2417adbfe1bda4f3cc20778a1f9b86139f89442df  kernel/uac2-shared-clock-6.18.34.patch
+696dc9129766b4d23e569617936f9e3bdffce71c77e307d78dad1713009c22f3  kernel/uac2-discrete-channel-names-6.18.34.patch
+5c5eb32454dffaf62d78ca742a97c7a5ceb19df53d9d9358a6a042e56edbbef7  kernel/uac2-rate-report-6.18.34.patch
+45beecea2c6c67d2bf371bd3168a0b8b7af20cbbcc348729d88e6c51039c35ec  kernel/uac2-rate-request-6.18.34.patch
+ec8d60bc3e7427d90b1352c7226948c58b1369b81207a5df41c5c7ac8876c805  dante/owner/point-of-record/main.cpp
+bbaec39ef0cab29bd9a493db9eefaff47507f4fa916389a3c5d01612e41453f2  dsp-core/src/bridge_core.cpp
+c8558c992032923826e7c326b2f190b95f7c99e1be35100d060577202a99622d  dsp-core/include/usb16x16/bridge_core.hpp
