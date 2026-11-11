@@ -50,7 +50,7 @@ and the clock discipline. It replaces `alsaloop`, and on the Dante path it
 replaces `usb16x16-rt-bridge`.
 
 It is a separate executable, built from its own source under
-`work/dante-mode/owner/` and linking `usb16x16_bridge_core` for what carries
+`dante/owner/` and linking `usb16x16_bridge_core` for what carries
 over unchanged: the sample conversions, `WindowedLinearRegression`,
 `SharedDriftEstimator`, `LevelServo`, `ZeroRunDetector`, and later `DspStage`
 and `LevelMeter`. It is not a third mode of the bridge. The bridge's loop is

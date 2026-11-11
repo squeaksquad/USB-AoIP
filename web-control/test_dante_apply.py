@@ -1,7 +1,7 @@
 """Tests for usb16x16-apply's Dante backend: the same requests against
 usb16x16-dante.service, with systemd and the owner stood in by a scripted
 runner and the configuration checked by the real usb16x16-dante-start.
-Run: python3 -m unittest work/web-control/test_dante_apply.py"""
+Run: python3 -m unittest web-control/test_dante_apply.py"""
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -14,13 +14,13 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parent.parent
+REPO = HERE.parent
 loader = importlib.machinery.SourceFileLoader("usb16x16_apply_dante", str(HERE / "usb16x16-apply"))
 spec = importlib.util.spec_from_loader("usb16x16_apply_dante", loader)
 apply_module = importlib.util.module_from_spec(spec)
 loader.exec_module(apply_module)
 
-START = REPO / "work/dante-mode/service/usb16x16-dante-start"
+START = REPO / "dante/service/usb16x16-dante-start"
 
 
 def artifact(gain=1.0, inputs=16, name="straight", rate=48000):

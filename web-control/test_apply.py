@@ -1,6 +1,6 @@
 """Tests for usb16x16-apply: request validation, the operation's state
 machine, verification, and rollback, with the Pi stood in by files and a
-scripted runner. Run: python3 -m unittest work/web-control/test_apply.py"""
+scripted runner. Run: python3 -m unittest web-control/test_apply.py"""
 import importlib.machinery
 import importlib.util
 import json
@@ -299,8 +299,8 @@ if __name__ == "__main__":
 
 # ------------------------------------------------------------- presets
 
-REPO = HERE.parent.parent
-REAL_ARTIFACT = REPO / "outputs/dsp-service/review-20260911/candidate/transparent.dsp"
+REPO = HERE.parent
+REAL_ARTIFACT = HERE / "fixtures/transparent.dsp"
 
 PRESET_CONF = """PROFILE=dsp-direct
 PROFILE_DSP_DIRECT_DESCRIPTION="sd103 transport on the DSP bridge, no preset"

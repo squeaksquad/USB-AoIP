@@ -2,7 +2,7 @@
 
 The Raspberry Pi appliance UI. It runs two ways from the same files.
 
-**Connected**, served by `work/web-control/usb16x16-web` on the Pi: live device
+**Connected**, served by `web-control/usb16x16-web` on the Pi: live device
 health, live journal reads and presets stored on the Pi. Everything it shows is
 read; the service has no endpoint that can change device state, so mode
 switching, service restarts and DSP application remain manual work on the Pi.
@@ -21,7 +21,7 @@ unchanged.
 The Pi now runs the Dante service, and this page serves it as it serves the
 AES67 one. The rest of this file was written for AES67 and still describes
 that stack; what is different on Dante is here, and the backend's side of it
-is `work/web-control/README.md`, "Two stacks, one service".
+is `web-control/README.md`, "Two stacks, one service".
 
 - **The page asks, it does not assume.** `/api/health` carries `stack`
   (`dante` or `aes67`). Every word that names the stack comes from
@@ -57,7 +57,7 @@ plus `USB16X16_APPLY_DIR`), `--no-auth --bind 127.0.0.1`.
 
 ## Run and check
 
-Connected, on the Pi — see `work/web-control/README.md` for the install:
+Connected, on the Pi — see `web-control/README.md` for the install:
 
 ```sh
 sudo systemctl enable --now usb16x16-web.service
@@ -71,7 +71,7 @@ is a lock on a trusted LAN, not wire protection — there is no TLS.
 Standalone, from the repository root:
 
 ```sh
-python3 -m http.server 8765 --bind 127.0.0.1 --directory work/web-ui
+python3 -m http.server 8765 --bind 127.0.0.1 --directory web-ui
 ```
 
 Open <http://127.0.0.1:8765>. No package installation, frontend build, external font,
@@ -79,8 +79,8 @@ CDN, or cloud service is required. Serve via HTTP; ES modules are not intended t
 be opened with a `file:` URL. The Python server is a local preview server only.
 
 ```sh
-node --test work/web-ui/*.test.mjs
-node --check work/web-ui/app.mjs work/web-ui/backend.mjs
+node --test web-ui/*.test.mjs
+node --check web-ui/app.mjs web-ui/backend.mjs
 ```
 
 ## What the backend supplies
@@ -281,7 +281,7 @@ wording is in its tooltip and accessible name.
   not have this property. A 12 dB/oct slope on an input that drives nothing is
   not flagged, and the LFE branch is judged on the LFE slope rather than its
   input row's. `crossover-notes.mjs` decides this and is shared with
-  `work/dsp-compiler`, so the panel and the compiler's report cannot disagree.
+  `dsp-compiler`, so the panel and the compiler's report cannot disagree.
 - **LFE:** choose its input, low-pass frequency/slope and trim independently. There
   is no implicit +10 dB gain. Changing the designated LFE input clears sends from
   both affected rows; reassign them explicitly. Speaker-source mapping can still
@@ -403,7 +403,7 @@ this text importer. Input is parsed locally and never uploaded to a server.
 REW documentation: [EQ filter text export](https://www.roomeqwizard.com/help/help_en-GB/html/eqwindow.html),
 [equaliser definitions](https://www.roomeqwizard.com/help/help_en-GB/html/equaliser.html).
 
-### Live preview (2026-09-13, step 5 of `work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md`)
+### Live preview (2026-09-13, step 5 of `docs/design/dsp/LIVE_COEFFICIENTS_DESIGN.md`)
 
 When the Pi is running a user preset that the bridge takes live updates on,
 edits go to the running bridge as they are made, with no restart. Whether an
@@ -499,14 +499,14 @@ CamillaDSP's metering API when DSP is active; bridge metering needs a separately
 benchmarked tap. The prototype uses a 10 Hz cosmetic meter animation only.
 
 The existing bridge has a telemetry thread and atomic counters in
-`work/phase4-bridge/src/main.cpp`. The AES67 supervisor provides a `status` command
+`dsp-core/src/main.cpp`. The AES67 supervisor provides a `status` command
 and profile switching, but **switch-profile restarts audio**. Polling that command
 at meter rate is inappropriate. Read status slowly and share cached snapshots.
 The current `/api/sink/status/N` arrival-lead minimum resets when read. Give it one
 collector owner and expose interval boundaries/sequence IDs to dashboards and the
 measurement harness; independent readers would invalidate interval comparisons.
 
-Application contract. `work/web-control/usb16x16-web` implements the read half:
+Application contract. `web-control/usb16x16-web` implements the read half:
 
 | Operation | Behavior | State |
 | --- | --- | --- |
@@ -552,7 +552,7 @@ release; never expose unauthenticated CamillaDSP control to arbitrary clients.
 2. **Read-only backend:** live health and metering behind bounded collection; compare
    UI disconnected, one active client, multiple clients and reconnect storms with
    the accepted bridge, keeping its operating profile fixed.
-   *Health, logs and presets are implemented in `work/web-control`. Metering is
+   *Health, logs and presets are implemented in `web-control`. Metering is
    not: it needs the separately benchmarked bridge tap this document asks for.
    The multi-client and reconnect-storm comparison is still outstanding — the
    single cached snapshot makes client count cheap by construction, but that has
@@ -568,14 +568,14 @@ release; never expose unauthenticated CamillaDSP control to arbitrary clients.
    access can follow with configuration ownership clearly defined.
    *First cut 2026-09-11, after the DSP bridge and its two pinned presets were
    accepted: the Settings page's "Service profile" panel switches the AES67
-   service between accepted profiles through `work/web-control`'s Apply
+   service between accepted profiles through `web-control`'s Apply
    (request file, root path unit, verified restart, automatic rollback, receipt).
    Draft and applied state stay distinct: the editor's preset is compiled here,
    in the browser, with the verified compiler served as `./compiler/*.mjs`, and
    only the resulting artifact goes to the Pi, where the applier validates it by
    loading it through the bridge's own code before installing it as a
    `user-<slug>` profile (STATUS user, never accepted; see
-   `work/web-control/README.md`, "User presets"). Metering and AoIP-only mode
+   `web-control/README.md`, "User presets"). Metering and AoIP-only mode
    remain out of scope. Reworked 2026-09-14 after the switch menu had grown to
    nineteen flat entries: the panel now leads with a "Running now" card (name,
    kind, description, live-since from the last receipt), then "Your presets on
@@ -603,8 +603,8 @@ is established by this browser prototype.
 - [CamillaGUI](https://github.com/HEnquist/camillagui)
 - [Sphere bass-management reference](https://www.gingeraudio.com/sphere-immersive-monitor-controller)
 - [W3C Audio EQ Cookbook](https://www.w3.org/TR/audio-eq-cookbook/) for the response plot
-- Local integration evidence: `work/NEXT_SESSION_PROMPT.md`,
-  `work/phase4-bridge/src/main.cpp`, `work/aes67-bridge/usb16x16-aes67-supervisor`,
+- Local integration evidence: `docs/NEXT_SESSION_PROMPT.md`,
+  `dsp-core/src/main.cpp`, `history/aes67/aes67-bridge/usb16x16-aes67-supervisor`,
   and `PROJECT_HANDOFF.md` rollback rules. Consult the latest live state before deployment.
 
 ## Verification of this prototype
@@ -802,7 +802,7 @@ is established by this browser prototype.
 
 ### 2026-10-11: the Dante stack
 
-`node --test work/web-ui/*.test.mjs`: 114 pass, among them the Dante cases
+`node --test web-ui/*.test.mjs`: 114 pass, among them the Dante cases
 in `backend.test.mjs` and `workflows.test.mjs`, each of which also asserts
 that the text it produces carries none of AES67, bridge, PTP, supervisor,
 RAVENNA. In a browser against the real service run locally in Dante mode:
@@ -813,5 +813,5 @@ the operator started for the purpose: Compile & apply of the example draft
 from 0 to -6 dB moved that output's meter from -36.6 to -42.8 dBFS with
 output 2 unchanged and no restart; Commit; Switch to `direct`; Remove. Three
 wording points found there and fixed (the DSP row said "Under development";
-two run-on sentences). Record: `work/dante-mode/RESULTS.md`, "The page
+two run-on sentences). Record: `docs/design/dante/RESULTS.md`, "The page
 against the Pi".

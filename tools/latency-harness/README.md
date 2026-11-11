@@ -27,7 +27,7 @@ swift build -c release
 ## Sample rate of `continuous` and `bitexact`
 
 Both commands run at the device's nominal rate instead of a fixed 48 kHz, so a
-soak can run on the multi-rate gadget (`work/pi-tuning/setup-usb-16x16-multirate`).
+soak can run on the multi-rate gadget (`history/experiments/multirate-gadget/setup-usb-16x16-multirate`).
 Accepted rates are 44.1, 48, 88.2 and 96 kHz; anything else, or any input or output
 stream format whose rate differs from the nominal rate, is refused before audio
 starts (`<rate> kHz interleaved Float32 16x16`). `--seconds` is wall time, so the
@@ -38,7 +38,7 @@ samples' worth of 48 kHz time (360 s). Both JSON reports carry `sampleRate`. At
 set the rate: set it in Audio MIDI Setup first. `measure` already took its rate
 from the device. At 88.2 kHz, wait 10 s after the switch before running anything:
 macOS can pass silence on the device if audio starts sooner, and the run would
-measure that (`work/pi-tuning/MULTIRATE_GADGET_PLAN.md`, "88.2 kHz and macOS").
+measure that (`history/experiments/multirate-gadget/MULTIRATE_GADGET_PLAN.md`, "88.2 kHz and macOS").
 
 ## Continuous-load event capture
 
@@ -70,7 +70,7 @@ across a known missing interval. JSON construction happens after audio stops.
 
 The DSP service validator provides a single 90-second loaded diagnostic run via
 `--phase capture`, requiring a fresh preflight from the same harness and service
-process. See `work/dsp-service/README.md` for the controlled live procedure.
+process. See `history/experiments/dsp-service/README.md` for the controlled live procedure.
 
 ## Inspect the device
 

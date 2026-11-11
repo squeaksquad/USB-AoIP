@@ -1,7 +1,7 @@
 """Tests for soak_reference.py: the evidence rules and the comparison, on
 synthetic captures with a reference made here, and the exporter's stimulus
 against an independent implementation.
-Run: python3 -m unittest work/dante-mode/test_soak_reference.py"""
+Run: python3 -m unittest dante/test_soak_reference.py"""
 import copy
 import json
 import random

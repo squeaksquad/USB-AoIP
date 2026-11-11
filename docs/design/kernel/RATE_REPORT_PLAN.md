@@ -5,13 +5,13 @@ Status: steps 1-4 DONE (trace; patch, build and arbiter guard written and built,
 end). Step 1 (the trace) DONE 2026-10-28 18:36-18:40 UTC with a clear
 answer, and the operator's answers are in (see "Results and decisions" at the
 end, which amends the steps above it). Nothing is built or installed.
-Open item 1 of `work/NEXT_SESSION_PROMPT.md` (2026-10-28), the operator's
+Open item 1 of `docs/NEXT_SESSION_PROMPT.md` (2026-10-28), the operator's
 question "can the gadget just report the last set sample rate?".
 
 ## The gap
 
-The owner (`work/dante-mode/owner/main.cpp`, `read_gadget_rates`) and the
-arbiter (`work/web-control/usb16x16-apply`, `host_rates`) learn the Mac's rate
+The owner (`dante/owner/main.cpp`, `read_gadget_rates`) and the
+arbiter (`web-control/usb16x16-apply`, `host_rates`) learn the Mac's rate
 from the gadget card's `Capture Rate` / `Playback Rate` controls. With nothing
 streaming they read 0 (seen 2026-10-28 on the Pi: both `values=0`), and both
 readers take 0 as "not known". So with the Mac idle:
@@ -283,7 +283,7 @@ module is the one loaded).
   controls read 0 and a Dante-side set to 48 is accepted as today.
 - B7 The point-of-record battery for a new kernel module (CLAUDE.md rule): four
   loaded 800-impulse runs and a ten-minute sixteen-channel soak at 48
-  (`work/dante-mode/measure-candidate.sh`), level inside 330-365 /
+  (`dante/measure-candidate.sh`), level inside 330-365 /
   `daw_timeline` 480-515; `usb16x16-latency bitexact` (monitors muted); one
   loaded run at 44.1; Audio MIDI Setup still shows one `USB 16x16` duplex
   device with labels 1-16.
@@ -777,7 +777,7 @@ with `host_rate=match`, which the follow causes. Tests in `test_dante_apply.py`:
 `test_a_dante_set_asks_the_mac_to_follow_after_the_move` (one write, after the
 restart), `test_without_the_control_a_dante_set_still_stands`,
 `test_no_follow_request_when_the_mac_chose_or_already_agrees`; 125 pass with
-`test_apply`, `test_web`, `test_dante_web`. `work/web-ui/backend.mjs` names the
+`test_apply`, `test_web`, `test_dante_web`. `web-ui/backend.mjs` names the
 step ("Asking the Mac to follow the rate"); the UI's 119 tests pass. No
 sandboxing in `usb16x16-dante-rate.service` or `usb16x16-apply.service` stands
 between the applier (root) and `/dev/snd`.
@@ -927,7 +927,7 @@ move. `usb16x16-apply` 1.8.0
   `test_web`, `test_dante_web`; the UI's 119 pass.
 - Not provoked live: a settle failure after the follow (Mac-tested only).
 
-Install: `work/web-control/install-apply-early-follow.sh` (3cd9e0a8), the
+Install: `history/installers/web-control/install-apply-early-follow.sh` (3cd9e0a8), the
 applier alone, pinned 1.7.0 -> 1.8.0, keeping
 `/usr/local/bin/usb16x16-apply.pre-early-follow`; `rollback` returns to 1.7.0.
 Staged in `~/usb-16x16-work/apply-early-follow/`. Checks after it (an applier

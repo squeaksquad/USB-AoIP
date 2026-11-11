@@ -15,7 +15,7 @@
 set -uo pipefail
 
 script_dir=${0:A:h}
-repo_root=${script_dir:h:h}
+repo_root=${script_dir:h}
 label=${1:-dsp-verify}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 out_dir="$repo_root/outputs/dsp-verify/${label}-${timestamp}"
@@ -45,8 +45,8 @@ print -r -- "engine: $version"
 mkdir -p "$out_dir"
 
 # ---------------------------------------------------------------- compile
-compile="$repo_root/work/dsp-compiler/usb16x16-dsp-compile"
-presets="$repo_root/work/dsp-compiler/verify-presets.mjs"
+compile="$repo_root/dsp-compiler/usb16x16-dsp-compile"
+presets="$repo_root/dsp-compiler/verify-presets.mjs"
 for name in crossover clip phones; do
   node "$presets" "$name" > "$out_dir/$name.json" || { print -r -- "exit=3"; exit 3; }
 done
@@ -70,7 +70,7 @@ for file in crossover.yml phones.yml clip-s32.yml clip-f64.yml; do
       bdimaio@192.168.1.201:"$pi_dir/" || { print -r -- "exit=4"; exit 4; }
 done
 for file in verify-crossover.py verify-clip.py verify-run.py; do
-  scp -q -o HostKeyAlias=audio-dev.local "$repo_root/work/dsp-compiler/$file" \
+  scp -q -o HostKeyAlias=audio-dev.local "$repo_root/dsp-compiler/$file" \
       bdimaio@192.168.1.201:"$pi_dir/" || { print -r -- "exit=4"; exit 4; }
 done
 

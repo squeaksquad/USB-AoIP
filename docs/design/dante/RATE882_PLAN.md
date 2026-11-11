@@ -28,7 +28,7 @@ Missing:
 4. Unknown: whether the Pulse, the D2USB and DVS run Dante at 88.2. The Metric Halo
    offers it (`dante-sync status`). MADI at 2x carries half the channels, so the
    loop is MADI 25-32, 8 channels, as at 96.
-5. The macOS rule (`work/pi-tuning/MULTIRATE_GADGET_PLAN.md`, 2026-10-18): after the
+5. The macOS rule (`history/experiments/multirate-gadget/MULTIRATE_GADGET_PLAN.md`, 2026-10-18): after the
    device is switched to 88.2, audio started on it within about 7 s puts macOS in a
    state where it passes silence both ways until the next rate change (bad 7 of 7
    at about 2.5 s; clean from about 7 s). Nothing on the Pi can make a Mac app wait.

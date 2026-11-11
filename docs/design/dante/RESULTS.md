@@ -775,7 +775,7 @@ latencies set to 2,000,000 ns through the wrapper's third argument (run from
 - The 2 ms run ended on its 600 s timer at 04:03:59 UTC with no xrun or
   transmit-lag line in its whole log and the pitch controls untouched.
 - `measure-candidate.sh FRAMES IMPULSES [LABEL]` is the Dante counterpart of
-  `work/aes67-candidate/measure-under-service.sh`: the same harness and the
+  `history/aes67/aes67-candidate/measure-under-service.sh`: the same harness and the
   same signal gating, with Pi-side checks for the Dante stack (AES67 stopped,
   Statime running, an endpoint process running) and the endpoint log read
   before and after for xrun, lag and error lines. `measure-candidate.sh noise
@@ -1880,7 +1880,7 @@ from a screenshot.
   screen (computer use, full control); after that Measure RTL is an ordinary
   button and can be pressed in the background while the app stays open.
   Before pressing, the application log must show `CoreAudio: Opened: USB
-  16x16` for both sides. `work/latency-harness/read-rtl-log.sh [COUNT]
+  16x16` for both sides. `tools/latency-harness/read-rtl-log.sh [COUNT]
   [HARNESS] [BUFFER]` then reads the newest lines, refuses anything that is
   not the standard reading or that the app marked invalid, checks harness
   plus 188 when the harness level is given, and saves the lines under
@@ -2441,7 +2441,7 @@ holes now in about 280 minutes of all-channel load.
   late. That would be invisible to every counter read so far and would
   match: transmit only, all flows at once, no trace in Inferno.
 
-**The test now running** (from 02:48 UTC): `work/dante-mode/diag/eth-tx-watch.py`
+**The test now running** (from 02:48 UTC): `tools/diag/eth-tx-watch.py`
 on the Pi, unprivileged on CPU 0, reading eth0's byte-queue `inflight`
 (bytes handed to the driver and not yet completed) and `tx_packets` about
 2,000 times a second, with another loaded hour. In its first minute:
@@ -2593,7 +2593,7 @@ bridge; DSP for the Dante owner is the next piece of work, in a new
 session); the password-free rule for the hand-run scripts replaced by one
 for the units.
 
-`work/dante-mode/service/`:
+`dante/service/`:
 
 - `usb16x16-statime.service`: the pinned Statime (e1952224) as root, with
   the measured config, `Conflicts=usb16x16-aes67.service` (the same PTP
@@ -2903,7 +2903,7 @@ Service active again at 13:37 UTC (22fd2622, aged anchor).
 ## Live coefficients in the owner, and a capture fault that never recovered, found and fixed (2026-10-11 13:47-13:54 UTC)
 
 **What was added.** `owner/dsp_live.hpp` (`DspLive`): the bridge's live
-control thread (`work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md`, step 3) as
+control thread (`docs/design/dsp/LIVE_COEFFICIENTS_DESIGN.md`, step 3) as
 an object with a `poll()`, same file protocol and the same `DSPLIVE` status
 line, so what writes a live file for the bridge writes one for the owner.
 `--dsp-live-file PATH` (and `--dsp-live-status`, default the file with
@@ -3177,7 +3177,7 @@ boot, a preset and live following only once one is applied; the unit takes
 its options from a configuration file; and the DSP owner is installed once,
 together with this form, not ahead of it.
 
-| File (`work/dante-mode/service/`) | Hash | What it is |
+| File (`dante/service/`) | Hash | What it is |
 |---|---|---|
 | `usb16x16-dante-start` | 1f83825b | the unit's `ExecStart`: reads `/etc/usb16x16/dante/owner.conf` (KEY=value, read, never sourced: `METERS`, `DSP_PRESET`, `DSP_SHA256`, `DSP_LIVE`), builds the owner's command line and execs it |
 | `usb16x16-dante-dsp.service` | 9f5289dd | the unit, installed as `usb16x16-dante.service`: as 4c27c544 with the wrapper as `ExecStart`, `RuntimeDirectory=usb16x16-dante` (meter file, live file, live status in `/run/usb16x16-dante/`) and `RestartPreventExitStatus=2` |
@@ -3252,7 +3252,7 @@ this form; the applier and the page, which do not exist for Dante yet.
 
 ## The applier's Dante backend: written, tested, staged (2026-10-11, about 21:00 UTC)
 
-`work/web-control/usb16x16-apply` 1.4.0 (e453d50f) serves whichever stack is
+`web-control/usb16x16-apply` 1.4.0 (e453d50f) serves whichever stack is
 installed: `DanteApplier` when `usb16x16-dante.service` is the unit enabled
 at boot (or `USB16X16_STACK=dante`), the AES67 `Applier` otherwise. The
 AES67 class is untouched apart from one word in three messages; its 43 tests
@@ -3359,7 +3359,7 @@ preset, and word their answers for the stack; logs read the Dante units
 every read this adds.
 
 **The page.** Every word that names the stack comes from `stackTerms(health)`
-in `work/web-ui/backend.mjs`. On a Dante Pi: "Dante service", "Dante
+in `web-ui/backend.mjs`. On a Dante Pi: "Dante service", "Dante
 endpoint", "Dante network", `dante-<slug>`, the Direct button without
 "bridge", the outage as a few seconds with return channels up to about 20 s,
 the endpoint's loader, Dante log choices and commands, an Operating-modes
@@ -3479,7 +3479,7 @@ objection; with a preset running it must now be answered, run by run. The
 harness's `continuous` stimulus is deterministic (xorshift32 from a fixed
 seed) and its report already keeps a window of all sixteen channels around
 every such run (16 frames before, the run, 16 after; up to 32 runs).
-`work/dante-mode/soak_reference.py` regenerates what the Dante wire should
+`dante/soak_reference.py` regenerates what the Dante wire should
 carry from the installed artifact and requires, for every run:
 
 1. one alignment, found on another channel in the 16 frames before the run,
@@ -3498,7 +3498,7 @@ wrapper reports as a failure, never a pass.
 **The reference.** `owner/reference_export.cpp` (1a487a7b): the stimulus,
 macOS's gain of 0.999998 and rounding to 24 bits, then the owner's own
 `OutDsp` path with the artifact. It is the bridge's loaded event reference
-criterion v1 (`work/dsp-service/REFERENCE_VALIDATION.md`) carried over, with
+criterion v1 (`history/experiments/dsp-service/REFERENCE_VALIDATION.md`) carried over, with
 three differences: any artifact rather than one pinned preset; captures up
 to an hour; the host's gain modelled, each way, rather than left to the
 tolerance. Like v1 it is an activity criterion: samples outside the windows
@@ -4867,7 +4867,7 @@ fresh read before it says anything about the setting.
 Thirteen hours against a rate of four in 42 is encouraging, not decisive.
 
 **STAGED** in `~/usb-16x16-work/dante-mode/service/` and
-`work/dante-mode/service/`: `90-usb16x16-compaction.conf` (2db7c8b9, the
+`dante/service/`: `90-usb16x16-compaction.conf` (2db7c8b9, the
 one line `vm.compact_unevictable_allowed = 0`) and
 `install-compaction-sysctl.sh` (b975d110): installs the file to
 `/etc/sysctl.d/`, applies it, restarts nothing; refuses if another sysctl
@@ -5134,7 +5134,7 @@ What changed:
   at `--rate`; `owner/dsp_live.hpp` loads each live file at the running
   stage's rate. `usb16x16-dsp-offline` takes `--rate`. The installed
   bridge's `main.cpp` calls the default and is unchanged in behaviour.
-- **Compiler** (`work/dsp-compiler`): coefficients, delays (whole samples
+- **Compiler** (`dsp-compiler`): coefficients, delays (whole samples
   at the rate), `maxdelay` and `rate` all come from the devices section's
   `samplerate`, which must be a Dante rate. `fileDevices` / `alsaDevices`
   take it as a last argument; `usb16x16-dsp-compile --rate`;
@@ -5380,7 +5380,7 @@ off 48 kHz).
   form, kept parallel): optional `RATE=` in `owner.conf`, a Dante rate, turned
   into `--rate N`. Anything else is a refusal (exit 2). `test-dante-start.sh`
   +4 cases in both forms, +2 for the transport form.
-- **Applier 1.5.0** (`work/web-control/usb16x16-apply`, Dante backend): a
+- **Applier 1.5.0** (`web-control/usb16x16-apply`, Dante backend): a
   preset carries `rateArtifacts` beside its 48 kHz artifact. Each one is
   hash-checked, parsed with the guards at its own rate (`parse_artifact(text,
   rate)`; maxdelay is rate / 100) and load-checked with `--rate`. They are
@@ -5414,7 +5414,7 @@ the page yet. Installing any of this means new hashes in
 
 ## CamillaDSP head-to-head on the unity-skip core: every figure unchanged; the first run read stale binaries (2026-10-17 04:37-04:40 UTC)
 
-Operator's go. `work/dsp-compiler/run-headtohead.sh` builds the bridge core
+Operator's go. `dsp-compiler/run-headtohead.sh` builds the bridge core
 and offline runner on the Pi, runs the core test suite there, and compares
 CamillaDSP 4.1.3 with the bridge's stage sample by sample on the same inputs.
 A fourth case was added for this: the shipped layout (`default`) in the fixed
@@ -5703,12 +5703,12 @@ either candidate.
 **Staged, nothing installed** (sources copied to the Pi; every pin checked
 there against the staged source, and every replaced file against what is
 installed):
-- `work/web-control/install-web-control.sh`: usb16x16-web 1.6.0
+- `history/installers/web-control/install-web-control.sh`: usb16x16-web 1.6.0
   (6b98e7cf), usb16x16-apply 1.5.0 with the rate kind (4a4aef82), and the
   offline runner 4492a19c. That runner is the unity-skip core with
   `--rate`; `run-headtohead.sh` rebuilt it in place this morning, so the
   old pin 8469c2e8 would now refuse.
-- `work/dante-mode/service/install-dante-rate-arbiter.sh`, with `rollback`:
+- `history/installers/dante/service/install-dante-rate-arbiter.sh`, with `rollback`:
   - owner 62879558 -> c8b484ac;
   - plugin d3a6b40a -> c6b012ae;
   - Inferno config 7beabf1a -> 0a1688e1;
@@ -5718,14 +5718,14 @@ installed):
   - the two rate units, new, path unit enabled.
 
   It refuses unless the installed applier has `--rate-request`.
-- `work/web-ui/stage-page.sh`: copies the page and its compiler modules to
+- `web-ui/stage-page.sh`: copies the page and its compiler modules to
   the served directory. It refuses unless web 1.6 is installed, because
   the new page's six-artifact requests are larger than 1.5.0 accepts.
 
 Install order (the operator's sudo):
 1. On the Pi: `cd ~/usb-16x16-work/web-control && sudo ./install-web-control.sh`,
    then `sudo systemctl restart usb16x16-web`.
-2. From the Mac: `work/web-ui/stage-page.sh`.
+2. From the Mac: `web-ui/stage-page.sh`.
 3. On the Pi: `cd ~/usb-16x16-work/dante-mode/service && sudo ./install-dante-rate-arbiter.sh`.
 4. `sudo systemctl restart usb16x16-dante`, a gadget restart, then the
    installed-form battery and hour.
@@ -5739,7 +5739,7 @@ Installed by the operator in the order given:
 1. `install-web-control.sh`: usb16x16-web 6b98e7cf (1.6.0), usb16x16-apply
    4a4aef82 (1.5.0), offline runner 4492a19c. Web service restarted, active
    at 16:22:21, serving 1.6.0.
-2. The page staged from the Mac by `work/web-ui/stage-page.sh`; every file
+2. The page staged from the Mac by `web-ui/stage-page.sh`; every file
    matched afterwards.
 3. `install-dante-rate-arbiter.sh`: owner c8b484ac, plugin c6b012ae, config
    0a1688e1, wrapper a6c3a197, `transport.conf` 1434f79f, the rate units

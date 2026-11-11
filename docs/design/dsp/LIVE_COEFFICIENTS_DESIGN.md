@@ -447,7 +447,7 @@ place where they state a rule, and this records why.
 Built and tested on the Mac; not installed on the Pi (`install-web-control.sh`
 re-pinned, the install is a separate sudo step).
 
-- **Applier** (`work/web-control/usb16x16-apply` 1.2.0): `artifact_shape` and
+- **Applier** (`web-control/usb16x16-apply` 1.2.0): `artifact_shape` and
   `shape_key` in Python, pinned to the same vector as the compiler and the
   bridge; request kinds `live` (validate as a preset, plus: live profile is a
   user preset with `DSP_LIVE=1`, shape key equals the installed file's; load
@@ -497,8 +497,8 @@ Built and tested on the Mac; nothing installed on the Pi.
   file's shape key, cached on its mtime) and `dspSha256`, so the page never
   has to compile the installed file; the `live` kind takes `revert: true` to
   push the installed file back.
-- **Tests**: 159 across `work/web-ui` and `work/dsp-compiler`, 56 across
-  `work/web-control`. The standalone page was loaded in a browser with no
+- **Tests**: 159 across `web-ui` and `dsp-compiler`, 56 across
+  `web-control`. The standalone page was loaded in a browser with no
   backend and reports Not previewable, as designed.
 - **Corrections**: the confirm text's section count regex matched the
   preset's name line when it had four words (a pre-existing off-by-one); it

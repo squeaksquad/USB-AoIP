@@ -1,7 +1,7 @@
 # DSP mode inside the bridge — step 4 design
 
 Status: **installed and accepted 2026-09-11** under the reference-events-v1
-criterion (`work/dsp-service/REFERENCE_VALIDATION.md`), bridge 406699bd,
+criterion (`history/experiments/dsp-service/REFERENCE_VALIDATION.md`), bridge 406699bd,
 supervisor cdc0768d, profiles `dsp-direct` (the default, no preset),
 `dsp-transparent` and `dsp-loaded`; the handoff's ACCEPTED 2026-09-11 entry
 is the record. Acceptance item 3 below was met by the continuous all-16
@@ -12,7 +12,7 @@ See "MEASURED 2026-09-10: the budget" at the end for what the numbers turned
 out to be. Where they contradict what this note predicted, the measurement
 wins and the prediction is marked.
 
-Step 4 of the delivery sequence in `work/web-ui/README.md` is the isolated DSP
+Step 4 of the delivery sequence in `web-ui/README.md` is the isolated DSP
 service. This note decides where the engine sits, and says what that costs, what
 it risks, and what would have to be true before any of it is accepted.
 
@@ -33,7 +33,7 @@ Three alternatives were weighed and rejected:
 What makes the chosen option affordable is measured, not assumed: run
 `load-20260910T165857Z` puts the full acceptance load — 16 outputs, 256 bands,
 26 crossovers — at **0.0607 cores at 1024-frame chunks and 0.0923 at 48**, the
-quantum the bridge already works in. See `work/dsp-compiler/README.md`.
+quantum the bridge already works in. See `dsp-compiler/README.md`.
 
 ## Where the stage goes
 
@@ -140,7 +140,7 @@ thread; a coefficient swap does not reset it, so a gain change does not click.
 Changing the pipeline *shape* — the channel count, the routing, the number of
 active bands — is not a live operation. It stops the filter stage, swaps, and
 restarts it, and the UI must say so. This is the `restart requirement` the
-application contract in `work/web-ui/README.md` already anticipates.
+application contract in `web-ui/README.md` already anticipates.
 
 ## Mode and rollback
 
@@ -161,7 +161,7 @@ in `artifacts/pi-aarch64/` as the rollback, per the existing rules.
   separate problem: the existing supervisor's failure model is built around
   the USB host — the storm detector, the frozen-input detector, `host_absent`
   waiting on `dwc2 ... new device` kernel lines at
-  `work/aes67-bridge/usb16x16-aes67-supervisor:846`, and the 60 s retry. A mode
+  `history/aes67/aes67-bridge/usb16x16-aes67-supervisor:846`, and the 60 s retry. A mode
   with no USB host does not need that gate relaxed so much as it needs its own
   supervision path, or a mode flag threaded through four separate detectors.
 - **The `--target alsa` device section**, which stays stamped unvalidated. This
@@ -389,6 +389,6 @@ which is what `transparent` in `verify-presets.mjs` exists for.
 The 1042/1061 separate-start comparison is encouraging but does not establish
 latency neutrality: startup variation can conceal a small cost. The loaded-arm
 recovery explanation remains a hypothesis until tested without probe retries.
-The current procedure is `work/dsp-service/README.md`: direct/transparent impulse
+The current procedure is `history/experiments/dsp-service/README.md`: direct/transparent impulse
 latency, loaded continuous stability, short preflights before the full battery.
 The package is prepared, not installed or accepted. No DSP arithmetic changed.

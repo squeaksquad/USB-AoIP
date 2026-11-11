@@ -33,7 +33,7 @@
 set -uo pipefail
 
 script_dir=${0:A:h}
-repo_root=${script_dir:h:h}
+repo_root=${script_dir:h}
 mode=impulse
 if [[ "${1:-}" == noise || "${1:-}" == soak ]]; then mode=$1; shift; fi
 if [[ $mode == soak ]]; then
@@ -49,10 +49,10 @@ probe_attempts=${USB16X16_SIGNAL_PROBE_ATTEMPTS:-40}
 other_load=${USB16X16_OTHER_LOAD:-}
 load_args=()
 if [[ -n "$other_load" ]]; then load_args=(--other-channel-load-amplitude "$other_load"); fi
-app_binary="$repo_root/work/latency-harness/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
+app_binary="$repo_root/tools/latency-harness/.build/USB16x16 Latency.app/Contents/MacOS/usb16x16-latency"
 # The Mac's name for the gadget (USB 16x16 until 2026-10-30); USB16X16_DEVICE overrides it.
 device=${USB16X16_DEVICE:-USB-AoIP}
-zeros_py="$repo_root/outputs/latency/usb-holes-20260904/zeros.py"
+zeros_py="$repo_root/tools/analysis/zeros.py"
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 out_dir="$repo_root/outputs/latency"
 stem="${label}-roundtrip-${frames}f-${timestamp}"

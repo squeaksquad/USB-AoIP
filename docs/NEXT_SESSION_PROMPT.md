@@ -4,7 +4,7 @@
 
 You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16, bridged to Dante
 through Inferno). Read `CLAUDE.md` (repo map), then `PROJECT_HANDOFF.md`'s tail from "INSTALLED
-2026-10-31 21:52 UTC" to the end, and `work/dante-mode/RATE96_PLAN.md`'s last two sections. The
+2026-10-31 21:52 UTC" to the end, and `docs/design/dante/RATE96_PLAN.md`'s last two sections. The
 handoff is authoritative where anything disagrees; the sections below this one are history.
 
 **Where it stands (ACCEPTED 2026-11-01).** The Dante point of record:
@@ -59,7 +59,7 @@ Halo, which the first does not set. `dante-sync` is `~/Development/Dante Switche
   settings, ask the operator.
 
 **Open, recommended order (2026-11-01).**
-1. 88.2 kHz (operator wants it, 2026-11-01): measured the same afternoon (`work/dante-mode/RATE882_PLAN.md`,
+1. 88.2 kHz (operator wants it, 2026-11-01): measured the same afternoon (`docs/design/dante/RATE882_PLAN.md`,
    "Results"; handoff MEASURED 2026-11-01 13:57). The macOS silent state now lasts one IO session (audio
    started about 0.3 s after the switch), not until the next change; 3.5 s after was clean 6 of 6. The domain
    runs at 88.2. Candidate at 96's arm A with `--prime-drop 72`: 888-889 (10.07 ms) at every open, battery
@@ -68,7 +68,7 @@ Halo, which the first does not set. `dante-sync` is `~/Development/Dante Switche
    under the service passed (handoff MEASURED 2026-11-01 17:30): 889 at every open after a Dante-side or a
    Mac-side move, a page preset follows to its `@88200` file, soaks PASS, 528 at 48. ACCEPTED 2026-11-01.
    Pro Tools at 88.2 works (operator, 2026-11-01). Still open: the one unlocated swap.
-2. The Mac driver question (`work/mac-driver-spike/SPIKE_PLAN.md`): DriverKit / ASIO named USB-AoIP.
+2. The Mac driver question (`history/experiments/mac-driver-spike/SPIKE_PLAN.md`): DriverKit / ASIO named USB-AoIP.
    The owner now gives the same round trip at every open with Apple's driver at 48 and 96, the main
    reason for a driver; a go/no-go for the operator.
 3. Lower latency at 96: DONE 2026-11-01, drop 96 INSTALLED and ACCEPTED (911 at every open; handoff
@@ -83,7 +83,7 @@ Halo, which the first does not set. `dante-sync` is `~/Development/Dante Switche
 You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16,
 bridged to Dante through Inferno; called USB 16x16 until 2026-10-30). Read
 `CLAUDE.md` (repo map), then `PROJECT_HANDOFF.md`'s tail from "ACCEPTED
-2026-10-30 06:45 UTC" to the end, and `work/mac-driver-spike/SPIKE_PLAN.md`'s
+2026-10-30 06:45 UTC" to the end, and `history/experiments/mac-driver-spike/SPIKE_PLAN.md`'s
 "Phase C results" for how the per-open draw was found and removed. The handoff is
 authoritative where anything disagrees; the sections below this one are history.
 
@@ -164,7 +164,7 @@ authoritative where anything disagrees; the sections below this one are history.
    Switcher 98c3a2b) defaults to `en7` and runs beside DVS. Original item:
    96 kHz on the real loop (8 channels): DEFERRED 2026-10-29 with the loaded-hour
    holes on ch3, 5, 6, 8 unlocated; the catch plan is the last section of
-   `work/dante-mode/RATE96_PLAN.md` (owner per-channel `back` zero-run line as the
+   `docs/design/dante/RATE96_PLAN.md` (owner per-channel `back` zero-run line as the
    trigger, a Pulse -> Pi tcpdump ring, `diag/dante-pcap-zeros.py`). Run it on the
    deterministic owner. The 96 kHz DSP budget is 45 % of a 1 ms wake.
 4. Watch item: the single 8-sample zero run of 2026-10-28 (ch5-12) has not
@@ -204,10 +204,10 @@ is asked again at 10 s, doubling to 5 minutes (rate8). A Dante-side set (Dante
 Switcher, Controller) reaches the same arbiter through patch 0005. Only 44.1 and
 48 are offered; the page stores every Dante preset at all six Dante rates, so a
 rate added to Inferno's list needs no resave (`OFFERED_RATES` in
-`work/dsp-compiler/compile.mjs` is `[44100, 48000]`, a label kept in step).
+`dsp-compiler/compile.mjs` is `[44100, 48000]`, a label kept in step).
 
 **Open, by the operator's call on 2026-10-28.**
-1. DONE, ACCEPTED 2026-10-29 02:16 UTC (handoff tail; `work/uac2-discrete-channels/RATE_REPORT_PLAN.md`):
+1. DONE, ACCEPTED 2026-10-29 02:16 UTC (handoff tail; `docs/design/kernel/RATE_REPORT_PLAN.md`):
    the rate-report modules and applier 1.6.0 are installed. Below is the item as it was opened.
    The gadget reports the Mac's last rate (operator: "can the gadget just report
    the last set sample rate?"). The rate controls read 0 whenever the Mac is not
@@ -242,13 +242,13 @@ rate added to Inferno's list needs no resave (`OFFERED_RATES` in
    re-mapped on the fly; or a far end that is Dante only (DVS was tried
    2026-10-27: clean from the Pi, holes and about 19.8 ms from DVS itself), or a
    second Inferno instance as a reflector (the self-loop is impossible: Inferno
-   ignores its own mDNS). `work/dante-mode/RATE96_PLAN.md` has the phases and the
+   ignores its own mDNS). `docs/design/dante/RATE96_PLAN.md` has the phases and the
    operator's answers; the 96 kHz candidate files exist
    (`config/asound-inferno-owner-rate96-candidate.conf`, `dsp-*@96000.dsp`).
 4. Watch item: the first rate8 loaded hour (2026-10-28 15:48) had one 8-sample
    zero run on ch5-12 together, unexplained, no owner counter moved. If another
    one-flow hole appears on any owner, capture eth0's Dante flows through a loaded
-   hour (`work/dante-mode/diag/dante-pcap-zeros.py`).
+   hour (`tools/diag/dante-pcap-zeros.py`).
 
 **Rules that bit on 2026-10-28.**
 - The gadget's rate controls report the Mac's rate only while it streams; for any
@@ -271,8 +271,8 @@ You are picking up the USB 16x16 project (Raspberry Pi 5 UAC2 gadget, 16x16,
 bridged to Dante through Inferno). Read `CLAUDE.md` (repo map), then
 `PROJECT_HANDOFF.md`'s tail from the 2026-10-17 ACCEPTED entries to the end
 (the multi-rate gadget, the 88.2 kHz finding, the 2026-10-18 ACCEPTED entry),
-then `work/dante-mode/SAMPLE_RATE_DESIGN.md` from "Transparent switching" to the
-end, then `work/pi-tuning/MULTIRATE_GADGET_PLAN.md` (its last section is the
+then `docs/design/dante/SAMPLE_RATE_DESIGN.md` from "Transparent switching" to the
+end, then `history/experiments/multirate-gadget/MULTIRATE_GADGET_PLAN.md` (its last section is the
 88.2 kHz rule). The handoff is authoritative where anything disagrees. The
 operator was away for a few days from 2026-10-18; nothing was left running.
 
@@ -283,7 +283,7 @@ applier 1.5.0, web 1.6.0) on the **multi-rate gadget**: `usb-16x16.service` runs
 `/usr/local/sbin/setup-usb-16x16-rates` (d4f0ee7b, rates
 `48000,44100,88200,96000`, bInterval 1) through the drop-in
 `usb-16x16.service.d/10-rates.conf`, installed by
-`work/pi-tuning/install-gadget-rates.sh` (its `rollback` restores the protected
+`history/installers/gadget/install-gadget-rates.sh` (its `rollback` restores the protected
 48 kHz gadget, which it never writes). Level 338 / `daw_timeline` 490
 (10.208 ms); five other anchors 328-350. The USB side offers four rates; the
 Dante side still runs and offers 48 kHz only, so a Mac at another rate gives the
@@ -306,7 +306,7 @@ the Pi's Inferno all move a band up and may drop channels): the operator's go,
 at the Mac. Back to 48 the same way at the end.
 
 **Measurement tools need two fixes before any reading at 96.**
-`work/dante-mode/measure-candidate.sh` hard-codes 48 kHz: the soak's "short"
+`dante/measure-candidate.sh` hard-codes 48 kHz: the soak's "short"
 check (`(seconds - 3) * 48000`, line ~140, which would pass a short capture at
 96) and the `daw_timeline` milliseconds (`/ 48`, line ~218). The harness itself
 follows the rate since 2026-10-17 (`continuous`, `bitexact` and `measure` all
@@ -349,8 +349,8 @@ unidentified poller of the Pi's ARC port (since 2026-10-17); Dante Switcher's
 You are picking up the USB 16x16 project (Raspberry Pi 5 UAC2 gadget, 16x16,
 bridged to Dante through Inferno). Read `CLAUDE.md` (repo map), then
 `PROJECT_HANDOFF.md`'s tail from the last ACCEPTED entry (2026-10-17), then
-`work/dante-mode/SAMPLE_RATE_DESIGN.md` from "Transparent switching" to the
-end, then `work/dante-mode/RESULTS.md`'s 2026-10-17 sections. The handoff is
+`docs/design/dante/SAMPLE_RATE_DESIGN.md` from "Transparent switching" to the
+end, then `docs/design/dante/RESULTS.md`'s 2026-10-17 sections. The handoff is
 authoritative where anything disagrees.
 
 **Where it stands.** Point of record ACCEPTED 2026-10-17: owner c8b484ac
@@ -369,7 +369,7 @@ used at every rate (benches say it is not needed).
 
 **The task: step 5, the multi-rate gadget, as an experiment.** The protected
 gadget (`work/protected-baseline-2026-08-31/`, and the installed
-`work/pi-tuning/setup-usb-16x16-req` that `usb-16x16.service` runs) offers
+`history/installers/gadget/setup-usb-16x16-req` that `usb-16x16.service` runs) offers
 48000 only and must not be edited. Write a parallel setup script under a new
 name (`setup-usb-16x16-multirate`: the same gadget with `c_srate` / `p_srate`
 listing 44100,48000,88200,96000), with its own rollback to the protected one.
@@ -403,7 +403,7 @@ USB side.
 - `run-headtohead.sh` rebuilds the offline runner in
   `~/usb-16x16-work/dsp-verify/bridge-build/`, a path
   `install-web-control.sh` pins.
-- The page must be staged with `work/web-ui/stage-page.sh`, only after the web
+- The page must be staged with `web-ui/stage-page.sh`, only after the web
   service it needs is installed.
 
 **Also owed, smaller:** the per-rate DSP cost estimate on the page
@@ -529,7 +529,7 @@ candidates run with `--log-every 1`); its `THREADS` lines; `--stall-at` /
 password-free on the Pi: `/usr/local/sbin/run-cyclictest-safe.sh` and
 `/usr/local/sbin/usb16x16-stall-tuning` (governor, IRQ pinning; pinning
 was tried on 2026-10-11 for the ARP holes and removed);
-`work/dante-mode/diag/eth-tx-watch.py`; the handoff's Phase 6 material on
+`tools/diag/eth-tx-watch.py`; the handoff's Phase 6 material on
 scheduler latency and the AES67 bridge's gap bar
 (`outputs/latency/phase6-gapbar-20260907/`), where the same class of
 event was chased on the bridge: grep the handoff for it before designing
@@ -554,7 +554,7 @@ split it); a boot, a preset and the fault paths at the accepted settings;
 
 **Added 2026-10-12 03:45 UTC: the three fault paths were run direct; read
 this before the CHOSEN block below.** Handoff tail (two FOUND, one
-MEASURED) and the last three sections of `work/dante-mode/RESULTS.md`.
+MEASURED) and the last three sections of `docs/design/dante/RESULTS.md`.
 Controller restart: PASS, no cost. Mac sleep, three times: the service
 rides through (silence and a new level each time), but the first wake left
 four-sample zero runs on a 32-sample grid on the return for at least nine
@@ -744,7 +744,7 @@ to the Pi's flows because that is what the Pi advertises; its Latency tab
 for those flows read peak 583 us, average 550 us on 2026-10-12 with AES67
 mode off. Both `RX_LATENCY_NS` and `TX_LATENCY_NS` are 2,000,000
 in `/etc/usb16x16/dante/asound-inferno-owner.conf` (repo
-`work/dante-mode/config/asound-inferno-owner.conf`); 2 ms is the only
+`history/installers/dante/config/asound-inferno-owner.conf`); 2 ms is the only
 value below the 10 ms default ever run, nothing at 1 ms is in the record.
 Each is a receive latency for one direction and the two knobs are crossed
 in this Inferno revision (RESULTS.md, "Latency settings as wired"): after
@@ -776,8 +776,8 @@ cause.
 ## Current pickup — 2026-10-09: Dante (Inferno) is the development line; the alsaloop prototype reads level with AES67
 
 Read the handoff's last two entries (`DONE 2026-10-08 / 09` and `DECIDED
-2026-10-09`), then `work/dante-mode/RESULTS.md` from "Stage 2 gates after the
-first night" to its end, then `work/dante-mode/PLAN.md` stage 3a. The sections
+2026-10-09`), then `docs/design/dante/RESULTS.md` from "Stage 2 gates after the
+first night" to its end, then `docs/design/dante/PLAN.md` stage 3a. The sections
 below this one describe the AES67 service; they are the rollback, not the
 work.
 
@@ -792,7 +792,7 @@ terminals.
 
 **What exists.** On the Pi under `~/usb-16x16-work/dante-mode/`: the Statime
 fork and the Inferno ALSA plugin, built; the probe; the prototype wrapper;
-configs. In the repo under `work/dante-mode/`: the same scripts,
+configs. In the repo under `dante/`: the same scripts,
 `measure-candidate.sh` for the Mac harness (impulse runs, `noise`, `soak`),
 `SOURCES.lock`, `RESULTS.md`, `PLAN.md`. Nothing is a service and nothing
 starts at boot.
@@ -833,7 +833,7 @@ of the Inferno endpoint itself passed over 30 minutes with
   and passed later; if it is blocked, hand him the command.
 
 **Added 2026-10-09 ~14:45 UTC (second session, no audio run).** Item 3 below
-now has its design, `work/dante-mode/OWNER_DESIGN.md`: read it whole before
+now has its design, `docs/design/dante/OWNER_DESIGN.md`: read it whole before
 touching the owner, and RESULTS.md's last section for what it rests on. Two
 readings changed the picture: an ioplug only xruns when the plugin's pointer
 says so, and the transmit thread sends whatever the mmap buffer holds, so a
@@ -877,7 +877,7 @@ control opcodes, not faults. Bring-up after a Mac reboot is only Statime and
 **ACCEPTED 2026-10-11 09:15 UTC: the installed services are the Dante point
 of record (465 / `daw_timeline` 653, 13.604 ms; band 465 to 507). Start
 here.** Both services are running and enabled at boot. The next work is DSP
-for the Dante owner (`work/phase4-bridge/DSP_MODE_DESIGN.md` and
+for the Dante owner (`docs/design/dsp/DSP_MODE_DESIGN.md` and
 `LIVE_COEFFICIENTS_DESIGN.md` describe the stage in the AES67 bridge;
 `OWNER_DESIGN.md` says where it would sit in the owner, which today copies
 integers and has no float stage). Before relying on the candidate launcher:
@@ -907,7 +907,7 @@ operator the same morning: owner 22fd2622 on plugin 0ee61f2f is the Dante
 point of record, 472 / `daw_timeline` 660 (13.750 ms) at 32 frames, with a
 loaded hour behind it. It now runs as two services on the Pi, enabled at
 boot: `usb16x16-statime.service` and `usb16x16-dante.service` (user
-`usb16x16-dante` with two capabilities; `work/dante-mode/service/`). Operate
+`usb16x16-dante` with two capabilities; `dante/service/`). Operate
 with `sudo -n /usr/bin/systemctl start|stop|restart usb16x16-dante` (and
 `usb16x16-statime`); fresh anchor: `sudo -n /usr/bin/systemctl restart
 usb-16x16.service`; logs: `journalctl -u usb16x16-dante`. The old
@@ -950,7 +950,7 @@ Check the neighbour state first whenever a Dante receiver changes.
 owner to CPUs 2-3) did not stop the holes: one in its hour. The suspect is
 now the Pi 5's Ethernet controller: a known RP1 MACB transmit stall (missed
 TSTART), one `TX stall detected ... re-kicking TSTART` in this boot's kernel
-log, upstream patch thread June 2026. `work/dante-mode/diag/eth-tx-watch.py`
+log, upstream patch thread June 2026. `tools/diag/eth-tx-watch.py`
 watches eth0's in-flight bytes and tx counter at 2 kHz without root; run it
 on CPU 0 beside a soak and match its EVENT lines to the owner's `back_holes`
 times. State on the Pi: IRQ pinning in place (`sudo -n
@@ -1040,7 +1040,7 @@ quit afterwards.
 RTL Utility logs every measurement to `~/Library/Logs/RTL Utility/RTL Utility
 measurements log.txt`. Set Input USB 16x16 FIRST, then Output, then buffer 32
 (needs screen control), check the application log says both sides `Opened:
-USB 16x16`, press Measure RTL, run `work/latency-harness/read-rtl-log.sh 1
+USB 16x16`, press Measure RTL, run `tools/latency-harness/read-rtl-log.sh 1
 <harness>`. First such reading: 654 (13.625 ms) on harness 466. The operator
 decides whether these count for acceptance. Standing permission now covers
 owner, services, Statime and installs on the Pi.
@@ -1201,8 +1201,8 @@ posts `/api/apply/shutdown` (confirm word required).
 read `~/usb-16x16-work/web-apply/receipts/` and the web journal's POST
 lines first: they say whether anything reached the Pi at all before any
 page code is suspected. The connected-page mock must serve
-`/compiler/*.mjs` from `work/dsp-compiler` and `/web-ui/*.mjs` from
-`work/web-ui` or compileDraft fails with "compiler is not served"; the
+`/compiler/*.mjs` from `dsp-compiler` and `/web-ui/*.mjs` from
+`web-ui` or compileDraft fails with "compiler is not served"; the
 browser pane caches `style.css` and modules across server restarts, so
 `fetch(url, {cache: 'reload'})` before `location.reload()`. Light theme is
 what the operator sees: colours in new CSS must come from the theme
@@ -1219,9 +1219,9 @@ so give each one a class.
 
 Read the handoff from `STAGED 2026-09-13 (design only)` to the tail: one
 day, about thirty entries, ending in ACCEPTED 2026-09-14. Then
-`work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md` (its Corrections and
+`docs/design/dsp/LIVE_COEFFICIENTS_DESIGN.md` (its Corrections and
 Results sections carry what changed against the plan) and
-`work/phase4-bridge/LIVE_INSTALL_PLAN.md` (the sequence that ran).
+`history/aes67/phase4-bridge/LIVE_INSTALL_PLAN.md` (the sequence that ran).
 
 **In service.** Bridge 7e8f1064 (the meter-tap bridge plus two coefficient
 sets in `DspStage`, a control thread polling `/run/usb16x16/dsp-live.dsp`,
@@ -1266,7 +1266,7 @@ dsp-direct first if a user block is live: the old supervisor does not know
 
 **Rules learned on 2026-09-13, all in memory too.** Page changes must be
 tried in a browser against a mock of the control service (the scratchpad
-pattern: serve `work/web-ui` with a fake `/api/health` built from the real
+pattern: serve `web-ui` with a fake `/api/health` built from the real
 profile row, on a fresh port each time because the browser pane caches
 modules); Node's tests cannot see `crypto.subtle` missing on plain HTTP,
 timers called with the wrong receiver, or the 1 Hz Settings rebuild. Two
@@ -1297,7 +1297,7 @@ transport, the supervisor validates the file, then the switch). The full
 cycle passed from the user's browser (outputs/dsp-service/user-preset-
 20260911/). Installed: supervisor f3f099b9, usb16x16-web 1.3.0,
 usb16x16-apply 1.1.0, usb16x16-dsp-offline 8469c2e8; the service runs
-dsp-direct. Read work/web-control/README.md before touching any of it.
+dsp-direct. Read web-control/README.md before touching any of it.
 
 The level meter tap is ACCEPTED (2026-09-11 23:55 UTC): bridge 947e8b4d on
 dsp-direct with METERS=1, 703 at 64 (4 x 800, spread 0), RTL at 32
@@ -1305,7 +1305,7 @@ dsp-direct with METERS=1, 703 at 64 (4 x 800, spread 0), RTL at 32
 mean / 56 us max on the audio thread; supervisor 23e40f8c, conf b01588df
 live (repo conf carries the new labels, one copy behind), usb16x16-web
 1.4.0 with /api/meters, the page drawing live peaks. The battery runner is
-work/dsp-service/meter_battery.py (no bundle). Lesson kept: never create a
+history/experiments/dsp-service/meter_battery.py (no bundle). Lesson kept: never create a
 std::thread after capture start in the bridge. dsp-transparent and
 dsp-loaded keep their 406699bd figures, unmeasured on 947e8b4d.
 Rollback: METERS=0 and a restart, or 406699bd from commit 47a6f42.
@@ -1329,12 +1329,12 @@ zero runs in four minutes of 15-channel noise (handoff CORRECTION
 2026-09-13 02:00). No switch. Read the lead pair at the start of every
 measuring day; a lead under ~0.3 ms or any ravenna-capture zero-run
 event under signal triggers a >=133 profile. The frame model of
-stamp-phase.py disagreeing with the measured lead is an open item. The Wi-Fi keepalive unit is installed (work/pi-tuning). aoip-stream-stop.sh is the timed helper for the sink test. Read work/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
+stamp-phase.py disagreeing with the measured lead is an open item. The Wi-Fi keepalive unit is installed (gadget). aoip-stream-stop.sh is the timed helper for the sink test. Read history/aes67/phase4-bridge/AOIP_LOOP_DESIGN.md first (status
 paragraph, then "Steps"). Bridge --mode aoip-loop with --loop-impulse in
 main.cpp (syntax-checked on the Mac, the accepted binary untouched),
 loop-measure preset 1e417960 (outputs/dsp-service/aoip-loop-20260912/),
-work/aes67-candidate/run-aoip-candidate-safe.sh (hash pin FILL-AFTER-PI-BUILD),
-work/phase4-bridge/build-aoip-candidate.sh, analyze-aoip-loop.sh, and
+history/aes67/aes67-candidate/run-aoip-candidate-safe.sh (hash pin FILL-AFTER-PI-BUILD),
+history/aes67/phase4-bridge/build-aoip-candidate.sh, analyze-aoip-loop.sh, and
 rtp-impulses.py --loop. Next: stage and build on the Pi with the service
 stopped, pin the hash, first candidate run, then the stream-stop test and
 the supervisor MODE work (steps 5-8 of the design).
@@ -1355,7 +1355,7 @@ start draw that predates the stage's first filtered render; n = 1 per arm, so
 "accounted for", not "proven equal". Keep it separate from the now-explained
 filter/quantization events.
 
-Implementation and policy: `work/dsp-service/REFERENCE_VALIDATION.md`.
+Implementation and policy: `history/experiments/dsp-service/REFERENCE_VALIDATION.md`.
 The legacy gate remains default; new receipts bind the chosen criterion,
 checker/exporter/validator hashes, bundle, harness and service/bridge identity.
 Only retained event windows are compared; wholeRunValidated=false. No general
@@ -1403,13 +1403,13 @@ Raspberry Pi 5 USB 16x16 / AES67 bridge. Repo: ~/Development/USB 16x16
 (github.com/squeaksquad/usb-16x16-aes67, main, pushed and clean).
 
 If you are picking up the DSP work, read first:
-work/phase4-bridge/DSP_MODE_DESIGN.md whole (the decision, where the stage
+docs/design/dsp/DSP_MODE_DESIGN.md whole (the decision, where the stage
 sits, the real-time budget, the acceptance criteria, and the three MEASURED
 sections at the end -- the last one carries what is and is not established),
-then work/dsp-compiler/README.md's verification sections, then
-work/aes67-candidate/run-dsp-candidate-safe.sh (the wrapper's four
+then dsp-compiler/README.md's verification sections, then
+history/aes67/aes67-candidate/run-dsp-candidate-safe.sh (the wrapper's four
 differences from run-phase4-candidate-safe.sh are in its header comment),
-and the DspStage block in work/phase4-bridge/include/usb16x16/bridge_core.hpp
+and the DspStage block in dsp-core/include/usb16x16/bridge_core.hpp
 plus its use in src/main.cpp (search --dsp-preset, renders_after_prime and
 dsp_us_max). The transport work below is unchanged and still applies.
 
@@ -1419,13 +1419,13 @@ gate, the sd103 set and its acceptance)
 (chronological, bold lead-ins; a CORRECTION paragraph wins over the entry
 it amends), then the BUDGET entry "BUDGET 2026-09-06 00:40 UTC" for the
 lever pricing (its sink-delay pricing is corrected in the 17:23 UTC
-MEASURED entry of 2026-09-07), then work/aes67-bridge/aes67.conf's blocks
+MEASURED entry of 2026-09-07), then history/aes67/aes67-bridge/aes67.conf's blocks
 for ...-rxtrim-age50-sd132 and ...-rxtrim-age50-sd103 (the point of record),
-work/ravenna-lead-export/README.md (the export: units, what sink_min_time
+history/aes67/ravenna-lead-export/README.md (the export: units, what sink_min_time
 means, the frame step, how the phase is read),
 outputs/latency/stage-trace-20260906/stamp-phase.py (its docstring is the
 phase arithmetic) and stamp-phase-20260906-captures.txt beside it, and
-work/phase4-bridge/src/main.cpp: the aligned
+dsp-core/src/main.cpp: the aligned
 TX prime (the hold, the front drop, the target, kAlignPrimeMarginNs and
 kAlignPrimeAgeMarginDefaultUs near line 85-100, the prime itself from
 about 1400), the PRIMED overshoot/trim code just after it, and
@@ -1439,7 +1439,7 @@ still pins it. The sd103 labels are copied; nothing pending on the Pi.
 Every read starts with a fresh anchor as always. Playback is on.
 
 THE DSP STAGE (built and measured 2026-09-10/11, NOT installed, NOT accepted)
-Step 4 of work/web-ui/README.md's sequence. The filtering goes inside the
+Step 4 of web-ui/README.md's sequence. The filtering goes inside the
 bridge rather than into a separate engine; DSP_MODE_DESIGN.md has the
 reasoning and the three alternatives it rejected.
 
@@ -1450,7 +1450,7 @@ float only at the buffer boundary). Wired into main.cpp behind
 renders_after_prime is the gate, because the prime block falls through to
 the same render call and `primed` is already true by then -- and the stage
 engages on the next render. The bridge reports dsp_us_max and dsp_us_mean
-on the BRIDGE line and in SUMMARY. work/dsp-compiler emits the coefficient
+on the BRIDGE line and in SUMMARY. dsp-compiler emits the coefficient
 artifact from the same compilation as the CamillaDSP YAML, so the two
 cannot describe different pipelines.
 
@@ -1548,7 +1548,7 @@ WHAT THE RECORD SETTLED (do not re-derive)
   1000), seeded its minimum, and carries it to GET /api/sink/status/N as
   sink_min_time, the least lead in microseconds since the previous GET of
   that sink, -1 with no packet, negative for a late packet (a hole). Read
-  it in pairs around a run (work/ravenna-lead-export/read-lead.sh
+  it in pairs around a run (history/aes67/ravenna-lead-export/read-lead.sh
   [label]). Both Ferrofish sinks read within 25 us of each other:
   0.93-1.06 ms per interval at 144 and at 132, worst 930 us over 35
   loaded minutes.
@@ -1602,7 +1602,7 @@ THE PROCEDURE (every measurement session starts with it)
    the scratchpad, zeros.py in outputs/latency/usb-holes-20260904/): 0.0%
    zeros, no run. A Mac hole state is cleared by sudo killall coreaudiod
    on the Mac (itself a fresh anchor).
-4. Read: work/aes67-candidate/measure-under-service.sh 64 100 <label>,
+4. Read: history/aes67/aes67-candidate/measure-under-service.sh 64 100 <label>,
    a lead read after it. Then copy /run/usb16x16/bridge.log into
    outputs/latency/stage-trace-20260906/ (between runs, never during)
    and split it: python3 outputs/latency/stage-trace-20260906/impulse-index.py
@@ -1624,7 +1624,7 @@ makes it acceptable rather than reconnaissance:
 2. Install the candidate bridge so it is service-versus-service, the way
    the accepted figures were taken. That moves THREE pins (see BUILD AND
    INSTALL RULES) and the supervisor's expected_bridge_sha256, and the
-   rollback is the artifact in work/phase4-bridge/artifacts/pi-aarch64/.
+   rollback is the artifact in dsp-core/artifacts/pi-aarch64/.
    Without this every figure carries the candidate caveat.
 3. The channel-2 noise probe FIRST (procedure step 3). It is the only form
    that answers the Mac-hole question; an impulse capture cannot.
@@ -1670,7 +1670,7 @@ unchanged and still correct.)
    share of the USB legs are not reachable by profile.
 2. Standing rule for the sink delay: after any Ferrofish, switch or Dante
    Controller change, and after unexplained ravenna-capture zero runs,
-   read the lead pair first (work/ravenna-lead-export/read-lead.sh). Near
+   read the lead pair first (history/aes67/ravenna-lead-export/read-lead.sh). Near
    zero or negative on both sinks means the flow re-drew its phase:
    switch-profile ...-rxtrim-age50 (144), then a fresh 4 s root capture
    (sudo timeout 4 tcpdump -i eth0 -s 1500 -B 65536 -c 8000 -w
@@ -1707,7 +1707,7 @@ DSP BUILD AND MEASUREMENT RULES (learned the expensive way on 2026-09-10)
   -DALSA_LIBRARY=/usr/lib/aarch64-linux-gnu/libasound.so.2. No sudo
   needed. The Pi has no node, so presets and artifacts compile on the Mac.
 - The Pi has no bc. The supervisor's mawk is there; use awk.
-- work/dsp-compiler/run-headtohead.sh re-runs the CamillaDSP comparison and
+- dsp-compiler/run-headtohead.sh re-runs the CamillaDSP comparison and
   refuses while the service is up; run-verifications.sh and run-load.sh the
   same.
 
@@ -1723,7 +1723,7 @@ BUILD AND INSTALL RULES
   it); stage the source in a fresh ~/usb-16x16-work/phase4-<tag>-src/
   with a build.sh that refuses while the service is active (copy
   phase4-age50-src/build.sh). Module changes: a patch on top of 0001 and
-  0002, work/ravenna-lead-export/build.sh's form, ~/usb-16x16-work/
+  0002, history/aes67/ravenna-lead-export/build.sh's form, ~/usb-16x16-work/
   ravenna-<tag>-src/ and ravenna-<tag>-install/, the supervisor's
   module_binary and expected_module_sha256 moved after the build. No
   transfers while a measurement runs; stage file by file while the
@@ -1731,7 +1731,7 @@ BUILD AND INSTALL RULES
 - A new bridge binary needs THREE pins moved: install-candidate.sh,
   install-aes67-service.sh (bridge and supervisor pins, the full 64-hex
   hash), and the supervisor's expected_bridge_sha256; the artifact in
-  work/phase4-bridge/artifacts/pi-aarch64/ and the README paragraph.
+  dsp-core/artifacts/pi-aarch64/ and the README paragraph.
   Stage phase4-<tag>-install/ (binary, wrapper 6282b108, installer) and
   aes67-<tag>-install/ (supervisor, unit, conf, installer, block); the
   user installs (state the exact sudo commands and wait). A supervisor

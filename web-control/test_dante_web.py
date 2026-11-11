@@ -1,7 +1,7 @@
 """Unit tests for usb16x16-web on the Dante stack: what it reads (owner.conf,
 installed presets, the owner's journal lines, its meter and live files) and
 how the snapshot is shaped for the page.
-Run: python3 -m unittest work/web-control/test_dante_web.py"""
+Run: python3 -m unittest web-control/test_dante_web.py"""
 import importlib.machinery
 import importlib.util
 import os

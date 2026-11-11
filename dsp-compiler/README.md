@@ -1,7 +1,7 @@
 # `usb16x16-dsp-compile` — preset to CamillaDSP
 
 Turns a USB 16x16 UI preset into a CamillaDSP configuration. Step 3 of the
-delivery sequence in `work/web-ui/README.md`.
+delivery sequence in `web-ui/README.md`.
 
 Offline and inert. It reads a preset, writes YAML and a JSON report, and exits.
 It does not talk to the Pi, start an engine, own a PCM device, or apply
@@ -10,9 +10,9 @@ anything. Nothing in this directory is installed on the Pi.
 ## Use
 
 ```sh
-node --test work/dsp-compiler/*.test.mjs
-work/dsp-compiler/usb16x16-dsp-compile preset.json -o config.yml --report report.json
-work/dsp-compiler/run-verifications.sh          # the engine runs, on the Pi
+node --test dsp-compiler/*.test.mjs
+dsp-compiler/usb16x16-dsp-compile preset.json -o config.yml --report report.json
+dsp-compiler/run-verifications.sh          # the engine runs, on the Pi
 ```
 
 Exit status is `0` on success, `1` when an output can clip (the configuration is
@@ -62,7 +62,7 @@ nothing. Two outputs sharing a speaker source share one main branch.
 `compile(preset, devices, {shape: 'fixed'})`, or `--shape fixed` on the CLI,
 emits the same audio in a shape that depends on the routing alone, so that a
 value edit changes only numbers in the bridge artifact. This is step 1 of
-`work/phase4-bridge/LIVE_COEFFICIENTS_DESIGN.md`; nothing downstream consumes
+`docs/design/dsp/LIVE_COEFFICIENTS_DESIGN.md`; nothing downstream consumes
 it yet, and the UI still compiles the minimal shape.
 
 What the fixed shape pads, and how:
@@ -127,14 +127,14 @@ subs reach −2.43 dBFS, which is the −18 dB trim doing its job.
   frequency, so main and sub usually need opposite polarity to sum. The compiler
   warns and **inverts nothing**. Set polarity per output and verify acoustically.
   The same note appears in the UI's Bass management panel, from the same module
-  (`work/web-ui/crossover-notes.mjs`), so the two cannot drift. That module also
+  (`web-ui/crossover-notes.mjs`), so the two cannot drift. That module also
   decides which crossovers are *active*: a 12 dB/oct slope on an input that
   drives nothing is not flagged, and the LFE branch is scored on the LFE
   low-pass slope rather than its input row's.
 - **Devices.** `compile()` requires a devices section from the caller. Choosing
   capture and playback is an integration decision the compiler has no basis to
   make.
-- **Applying anything.** There is no apply path, here or in `work/web-control`.
+- **Applying anything.** There is no apply path, here or in `web-control`.
 
 ## Verification
 
@@ -203,7 +203,7 @@ evidence the LFE branch uses its own low-pass. The coherent sum lands 0.04 dB
 *below* the reported ceiling, which is the direction a ceiling should err.
 
 Band response, on a preset shaping each output differently, comparing the
-engine's magnitude against `eqResponse` in `work/web-ui/model.mjs` at 50
+engine's magnitude against `eqResponse` in `web-ui/model.mjs` at 50
 frequencies from 20 Hz to 20 kHz — 800 comparison points:
 
 | Output | Configuration | Max deviation |
@@ -339,7 +339,7 @@ be a measurement of process startup.
 | `loaded` | 256 | 0.0640 | 15.6× | 50.1 °C |
 | `loaded` | 48 | 0.0923 | 10.8× | 51.2 °C |
 
-`loaded` is the acceptance criterion in `work/web-ui/README.md` built as a
+`loaded` is the acceptance criterion in `web-ui/README.md` built as a
 preset: every output active, all 256 bands shaped, crossovers and multiple sub
 sums, with the bands varied in type, Q and sign so no shortcut a uniform filter
 might allow can flatter the result.
@@ -349,7 +349,7 @@ Three things follow.
 **The Pi is not the constraint.** The full acceptance load costs about **6% of
 one core**, and 9% even in 48-frame chunks — the quantum the bridge already
 works in. The 12.288 million biquad evaluations per second the sizing
-arithmetic in `work/web-ui/README.md` predicted are real, and they cost about
+arithmetic in `web-ui/README.md` predicted are real, and they cost about
 0.042 cores between the two rows: roughly 0.16 millicores per biquad. Nothing
 about step 4 needs to be designed around processing cost.
 

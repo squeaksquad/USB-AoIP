@@ -59,7 +59,7 @@ follow the rate or refuse cleanly):
 - The owner: `kRate`, its period and queue depths in samples
   (`transport.conf`'s `RX_QUEUE=96` is 2 ms at 48 kHz, 1 ms at 96 kHz).
 - DSP: biquad coefficients and delays are computed for 48 kHz in
-  `work/dsp-compiler` (`coefficients.mjs`, `compile.mjs`,
+  `dsp-compiler` (`coefficients.mjs`, `compile.mjs`,
   `bridge-artifact.mjs`); the artifact must carry its rate and the owner
   must refuse one that does not match.
 - Meters (window lengths), the start check (it judges a flow by its
@@ -436,7 +436,7 @@ as 96 frames did at 48 kHz.
 Realistically the offered list is 44.1, 48, 88.2 and 96 kHz. 88.2 has a
 macOS-side condition: nothing may start audio on the USB 16x16 for 10 s
 after a switch to it, or macOS can pass only silence until the next change
-(`work/pi-tuning/MULTIRATE_GADGET_PLAN.md`, "88.2 kHz and macOS"; Dante
+(`history/experiments/multirate-gadget/MULTIRATE_GADGET_PLAN.md`, "88.2 kHz and macOS"; Dante
 Switcher holds that long). The arbiter's restart of the endpoint after an
 88.2 change has to respect the same wait. 176.4 and 192
 kHz only if the gadget, the domain and the DSP all clear them (the DSP by

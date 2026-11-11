@@ -37,7 +37,7 @@ node_modules/
 /outputs/dsp-service/**/reference-export
 
 # Reproducible upstream checkout; pinned revisions are documented in the handoff
-work/aes67-linux-daemon/
+history/aes67/aes67-linux-daemon/
 
 # Editor and temporary files
 *~
@@ -47,6 +47,6 @@ __pycache__/
 # Local preview launcher for the desktop app; not part of the project
 .claude/launch.json
 
-# Dante mode upstream checkouts; pinned revisions in work/dante-mode/SOURCES.lock
-work/dante-mode/upstream/
+# Dante mode upstream checkouts; pinned revisions in dante/SOURCES.lock
+dante/upstream/
 *.pcap[0-9]

@@ -1,8 +1,8 @@
 // Mac-side test of the owner's DSP adapter: the integer boundary around
 // DspStage, not the filters (those are the bridge core's tests and the
 // work/dsp-compiler harnesses).
-//   c++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
-//       -o /tmp/dsp_path_test dsp_path_test.cpp ../../phase4-bridge/src/bridge_core.cpp && /tmp/dsp_path_test [ARTIFACT.dsp...]
+//   c++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../dsp-core/include
+//       -o /tmp/dsp_path_test dsp_path_test.cpp ../../dsp-core/src/bridge_core.cpp && /tmp/dsp_path_test [ARTIFACT.dsp...]
 // (one line)
 // Each artifact named is loaded and run for a second of noise as well: it
 // must load, keep the low byte zero and never wrap.

@@ -20,7 +20,7 @@
 set -uo pipefail
 
 script_dir=${0:A:h}
-repo_root=${script_dir:h:h}
+repo_root=${script_dir:h}
 label=${1:-load}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 out_dir="$repo_root/outputs/dsp-verify/${label}-${timestamp}"
@@ -43,8 +43,8 @@ fi
 print -r -- "service: ${state%% *}   recovers so far: ${state##* }"
 mkdir -p "$out_dir"
 
-compile="$repo_root/work/dsp-compiler/usb16x16-dsp-compile"
-presets="$repo_root/work/dsp-compiler/verify-presets.mjs"
+compile="$repo_root/dsp-compiler/usb16x16-dsp-compile"
+presets="$repo_root/dsp-compiler/verify-presets.mjs"
 for name in default loaded; do
   node "$presets" "$name" > "$out_dir/$name.json" || { print -r -- "exit=3"; exit 3; }
 done
@@ -62,7 +62,7 @@ for point in $points; do
 done
 
 pi "mkdir -p $pi_dir"
-scp -q -o HostKeyAlias=audio-dev.local "$repo_root/work/dsp-compiler/measure-load.py" \
+scp -q -o HostKeyAlias=audio-dev.local "$repo_root/dsp-compiler/measure-load.py" \
     bdimaio@192.168.1.201:"$pi_dir/" || { print -r -- "exit=4"; exit 4; }
 for file in "$out_dir"/*-*-{short,long}.yml; do
   scp -q -o HostKeyAlias=audio-dev.local "$file" \

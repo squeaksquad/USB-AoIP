@@ -1,6 +1,6 @@
 // Mac-side test of the owner's live coefficient follower against real files.
-//   c++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../phase4-bridge/include
-//       -o /tmp/dsp_live_test dsp_live_test.cpp ../../phase4-bridge/src/bridge_core.cpp && /tmp/dsp_live_test
+//   c++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I ../../dsp-core/include
+//       -o /tmp/dsp_live_test dsp_live_test.cpp ../../dsp-core/src/bridge_core.cpp && /tmp/dsp_live_test
 // (one line)
 #include "dsp_live.hpp"
 #include "dsp_path.hpp"

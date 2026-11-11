@@ -1,5 +1,5 @@
 """Unit tests for the Apply half of usb16x16-web: the conf reader, the spool
-state reader and the request writer. Run: python3 -m unittest work/web-control/test_web.py"""
+state reader and the request writer. Run: python3 -m unittest web-control/test_web.py"""
 import importlib.machinery
 import importlib.util
 import hashlib

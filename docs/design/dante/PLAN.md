@@ -25,22 +25,22 @@ Changes made for this planning task:
 
 | File | Purpose |
 |---|---|
-| `work/dante-mode/PLAN.md` | Scope, implementation sequence, acceptance and rollback. |
+| `docs/design/dante/PLAN.md` | Scope, implementation sequence, acceptance and rollback. |
 | `CLAUDE.md` | A discovery pointer to this plan; no changes to recorded measurements. |
 
 Proposed implementation artifacts; create only as their stages are reached:
 
 | File or directory | Purpose |
 |---|---|
-| `work/dante-mode/SOURCES.lock` | Exact Inferno/Statime commits, submodules, compiler versions and artifact hashes. |
-| `work/dante-mode/build-candidate.sh` | Reproducible isolated build with pinned Cargo lockfiles. |
-| `work/dante-mode/config/` | Application-scoped ALSA config, explicit channel/latency/identity settings and one selected PTP config. |
-| `work/dante-mode/run-candidate-safe.sh` | Preflight, owned-process lifecycle, telemetry and verified rollback. |
-| `work/dante-mode/measure-candidate.sh` | Existing CoreAudio harness with Dante-specific readiness and evidence collection. |
-| `work/dante-mode/RESULTS.md` | Stage outcomes, commands, hashes, screenshots and measured limitations. |
+| `dante/SOURCES.lock` | Exact Inferno/Statime commits, submodules, compiler versions and artifact hashes. |
+| `dante/build-candidate.sh` | Reproducible isolated build with pinned Cargo lockfiles. |
+| `history/installers/dante/config/` | Application-scoped ALSA config, explicit channel/latency/identity settings and one selected PTP config. |
+| `dante/run-candidate-safe.sh` | Preflight, owned-process lifecycle, telemetry and verified rollback. |
+| `dante/measure-candidate.sh` | Existing CoreAudio harness with Dante-specific readiness and evidence collection. |
+| `docs/design/dante/RESULTS.md` | Stage outcomes, commands, hashes, screenshots and measured limitations. |
 | `outputs/latency/dante-<UTC>/` | Per-run configurations, raw results, event logs and Controller evidence. |
 
-If the ALSA compatibility gate passes, use a separately built copy of the existing bridge before proposing small shared-source changes. If it fails, record the precise contract mismatch and propose a bounded adapter under `work/dante-mode/`; do not create a general transport framework preemptively. Persistent service files are specified only after the prototype passes.
+If the ALSA compatibility gate passes, use a separately built copy of the existing bridge before proposing small shared-source changes. If it fails, record the precise contract mismatch and propose a bounded adapter under `dante/`; do not create a general transport framework preemptively. Persistent service files are specified only after the prototype passes.
 
 ## Approach
 

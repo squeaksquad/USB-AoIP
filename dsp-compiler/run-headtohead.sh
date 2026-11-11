@@ -17,7 +17,7 @@
 set -uo pipefail
 
 script_dir=${0:A:h}
-repo_root=${script_dir:h:h}
+repo_root=${script_dir:h}
 label=${1:-headtohead}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 out_dir="$repo_root/outputs/dsp-verify/${label}-${timestamp}"
@@ -48,8 +48,8 @@ print -r -- "service: ${state%% *}   recovers so far: $recovers_before"
 mkdir -p "$out_dir"
 
 # ---------------------------------------------------------------- compile
-compile="$repo_root/work/dsp-compiler/usb16x16-dsp-compile"
-presets="$repo_root/work/dsp-compiler/verify-presets.mjs"
+compile="$repo_root/dsp-compiler/usb16x16-dsp-compile"
+presets="$repo_root/dsp-compiler/verify-presets.mjs"
 # name:format[:shape] -- the format each preset's comparison runs in, and the
 # compiler's shape (minimal unless given). default:s32le:fixed is the shipped
 # layout in the fixed shape: 256 empty band slots as unity sections, which the
@@ -71,16 +71,16 @@ done
 # ---------------------------------------------------------------- build
 print -r -- "--- building the bridge core and offline runner on the Pi"
 pi "mkdir -p $pi_dir/src $pi_dir/include/usb16x16 $pi_dir/tests"
-put "$repo_root/work/phase4-bridge/CMakeLists.txt" "$pi_dir/"
-put "$repo_root/work/phase4-bridge/src/bridge_core.cpp" "$pi_dir/src/"
-put "$repo_root/work/phase4-bridge/src/dsp_offline.cpp" "$pi_dir/src/"
+put "$repo_root/dsp-core/CMakeLists.txt" "$pi_dir/"
+put "$repo_root/dsp-core/src/bridge_core.cpp" "$pi_dir/src/"
+put "$repo_root/dsp-core/src/dsp_offline.cpp" "$pi_dir/src/"
 # Every source CMakeLists.txt names, or the configure step fails and the build
 # directory keeps whatever an earlier run left (2026-10-17: a run read the
 # September binaries this way).
-put "$repo_root/work/phase4-bridge/src/meter_bench.cpp" "$pi_dir/src/"
-put "$repo_root/work/phase4-bridge/src/main.cpp" "$pi_dir/src/"
-put "$repo_root/work/phase4-bridge/include/usb16x16/bridge_core.hpp" "$pi_dir/include/usb16x16/"
-put "$repo_root/work/phase4-bridge/tests/bridge_tests.cpp" "$pi_dir/tests/"
+put "$repo_root/dsp-core/src/meter_bench.cpp" "$pi_dir/src/"
+put "$repo_root/dsp-core/src/main.cpp" "$pi_dir/src/"
+put "$repo_root/dsp-core/include/usb16x16/bridge_core.hpp" "$pi_dir/include/usb16x16/"
+put "$repo_root/dsp-core/tests/bridge_tests.cpp" "$pi_dir/tests/"
 pi "rm -f $offline $pi_build/usb16x16_bridge_tests"
 build_log=$(pi "cd $pi_dir && cmake -S . -B bridge-build -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -3 && cmake --build bridge-build --target usb16x16-dsp-offline usb16x16_bridge_tests 2>&1 | tail -4; echo build=\$?")
 print -r -- "$build_log"
@@ -96,7 +96,7 @@ print -r -- "--- the core suite, on the Pi"
 pi "$pi_build/usb16x16_bridge_tests" || { print -r -- "core tests failed on the Pi"; print -r -- "exit=5"; exit 5; }
 
 for file in bridge-engine-shim compare-engines.py verify-crossover.py verify-run.py; do
-  put "$repo_root/work/dsp-compiler/$file" "$pi_dir/"
+  put "$repo_root/dsp-compiler/$file" "$pi_dir/"
 done
 for entry in $cases; do
   name=$(case_name $entry)

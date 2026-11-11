@@ -50,8 +50,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 EXPORTER = HERE / 'owner' / 'reference_export.cpp'
-CORE = HERE.parent / 'phase4-bridge' / 'src' / 'bridge_core.cpp'
-INCLUDE = HERE.parent / 'phase4-bridge' / 'include'
+CORE = HERE.parent / 'dsp-core' / 'src' / 'bridge_core.cpp'
+INCLUDE = HERE.parent / 'dsp-core' / 'include'
 POLICY = {'id': 'dante-event-reference-v2', 'maximumErrorLSB': 2.0, 'maximumSearchLagFrames': 9600,
           'minimumAnchorRangeLSB': 256, 'inputModel': 'measured host output gain, nearest 24-bit',
           'returnModel': 'measured host input gain', 'gainFitting': False,

@@ -50,19 +50,19 @@ own handoff entry (FOUND).
 | DSP | Artifacts compile at all six rates on the Mac; the bench says 96 fits (about 25-30 % of the period) | `transparent` and `loaded` compiled at 96000, staged | an applied preset filed `@96000` |
 | Start check | `--rate` exists; the unit runs it with no rate (48000) | not involved (candidate runs bypass the unit) | the rate read from owner.conf |
 | Arbiter | Refuses 96 (not offered) | not involved | the offered line above, and a live 48 -> 96 -> 48 |
-| Page | `OFFERED_RATES = [48000]` (`work/dsp-compiler/compile.mjs`) | not involved | `[48000, 96000]` |
+| Page | `OFFERED_RATES = [48000]` (`dsp-compiler/compile.mjs`) | not involved | `[48000, 96000]` |
 | Harness wrappers | Four 48 kHz pins (below) | fixed first | — |
 
 ## Measurement tools pinned to 48 kHz (fix first, Mac side only)
 
-1. `work/dante-mode/measure-candidate.sh:140`: the soak's short check uses
+1. `dante/measure-candidate.sh:140`: the soak's short check uses
    `(seconds - 3) * 48000`, so a short capture at 96 would pass.
-2. `work/dante-mode/measure-candidate.sh:218`: `daw_timeline` milliseconds
+2. `dante/measure-candidate.sh:218`: `daw_timeline` milliseconds
    divide by 48.
-3. `work/dante-mode/soak_reference.py:93-99`: frame totals use 48000 and it
+3. `dante/soak_reference.py:93-99`: frame totals use 48000 and it
    refuses any `nominalSampleRate` other than 48000. That means no soak on a
    preset at 96.
-4. `work/dante-mode/owner/reference_export.cpp:49`: `kMaxFrames = 3600 * 48000`
+4. `dante/owner/reference_export.cpp:49`: `kMaxFrames = 3600 * 48000`
    (an hour at 96 is twice that), and `dsp->load(text)` takes no rate, so a 96
    artifact is loaded as 48 or refused. It needs `--rate`, and a rebuild on the
    Pi with the service stopped.

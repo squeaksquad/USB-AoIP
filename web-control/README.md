@@ -1,10 +1,10 @@
 # `usb16x16-web` — control service, and `usb16x16-apply` — its privileged half
 
-The backend the web UI talks to. It serves `work/web-ui` and a small JSON API
+The backend the web UI talks to. It serves `web-ui` and a small JSON API
 describing the running stack: service states, bridge telemetry, PTP, AoIP
 streams, network and thermal state, the journal, durable presets, and, since
 2026-09-11, the live service profile and one staged operation: a switch
-between accepted profiles (step 5 of `work/web-ui/README.md`, "staged Apply").
+between accepted profiles (step 5 of `web-ui/README.md`, "staged Apply").
 
 The web service itself still changes no device state. Apply is two halves
 with a file between them:
@@ -51,16 +51,16 @@ still describes it; on the Dante stack the differences are these.
 | Logs | `usb16x16-aes67`, `usb-16x16` | `usb16x16-dante`, `usb16x16-statime`, `usb-16x16` (`service=stack` names the network service on either) |
 
 `/api/health` carries `"stack"`, and the page takes every stack-naming word
-from it (`stackTerms` in `work/web-ui/backend.mjs`): on a Dante Pi it does
+from it (`stackTerms` in `web-ui/backend.mjs`): on a Dante Pi it does
 not say AES67, bridge, PTP or supervisor. An AoIP DSP source is not offered
 there; the endpoint filters what the USB host sends. Tests:
 `test_dante_apply.py`, `test_dante_web.py`, and the Dante cases in
-`work/web-ui/backend.test.mjs` and `workflows.test.mjs`.
+`web-ui/backend.test.mjs` and `workflows.test.mjs`.
 
 ## User presets (browser-compiled)
 
 Since 2026-09-11 evening the page can send its own draft. The compiler is the
-verified one in `work/dsp-compiler`, served beside the UI as
+verified one in `dsp-compiler`, served beside the UI as
 `web-ui/compiler/*.mjs` (symlinks in the repo, copies on the Pi), so the
 browser compiles the draft to the bridge artifact and posts the text. The Pi
 never trusts it: the applier recomputes the hash, parses the artifact with the
@@ -91,7 +91,7 @@ POST   /api/apply/shutdown          {"confirm": "shutdown", "expectedProfile"?} 
 `rateArtifacts` is `{rate: artifact text}`: the same draft compiled at the
 other Dante rates (44100, 88200, 96000, 176400, 192000 for a preset; any rate
 for a commit). The page sends it on the Dante stack only
-(`compileOtherRates` in `work/web-ui/backend.mjs`). This process checks form
+(`compileOtherRates` in `web-ui/backend.mjs`). This process checks form
 and size and writes each beside the request as `<id>-<rate>.dsp`. The Dante
 applier checks each at its own rate (hash, guards, the offline runner with
 `--rate`) and installs them as `/etc/usb16x16/dsp/dante-<slug>@<rate>.dsp`
@@ -180,7 +180,7 @@ touched). A `current.json` left in a non-terminal state for ten minutes is
 treated as abandoned so a new request is not blocked for ever; the applier's
 unit times out at 480 s.
 
-Tests: `python3 -m unittest work/web-control/test_apply.py work/web-control/test_web.py`
+Tests: `python3 -m unittest web-control/test_apply.py web-control/test_web.py`
 (the applier's state machine against a scripted stack, the artifact parser on
 the shipped transparent artifact and on broken copies, the preset install /
 replace / cap / conflict / remove flows; the request writer and state reader). `sudo /usr/local/bin/usb16x16-apply --check` validates a pending
