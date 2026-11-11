@@ -194,9 +194,11 @@ noise probe first; a dropped sample anywhere invalidates a latency reading.
   default, encrypted with a certificate the unit makes itself, so each
   browser warns once. Anyone with a login can do everything, including
   shutting the unit down. Do not expose it to the internet.
-- **The page cannot tell you whether the clock has a leader.** The clock
-  service does not report it. A silent, otherwise healthy unit usually
-  means no other Dante device is leading the clock.
+- **By default the page cannot tell you whether the clock has a leader.**
+  The clock service as measured does not report it; an optional, not yet
+  measured build does (`PTP_STATE` in `docs/INSTALL.md`). A silent,
+  otherwise healthy unit usually means no other Dante device is leading the
+  clock.
 - **Not a product.** One unit exists, and the installer for a second has
   not yet been run on hardware.
 

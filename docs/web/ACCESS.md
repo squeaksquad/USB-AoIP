@@ -88,6 +88,12 @@ ALSA config), so nothing is patched. It is off by default because it changes
 three files of the accepted audio path and has not been measured:
 `docs/INSTALL.md`, "The clock service as an ordinary user".
 
+**The page can show whether the clock has a leader, when you choose.**
+`PTP_STATE=1` builds Statime with a draft patch that publishes its PTP port
+state to a file the page's service reads. Without it the page says the clock
+state is unknown, because the pinned Statime reports nothing that shows it.
+Off by default: it changes the clock service's binary and has not been run.
+
 ## What it does not do
 
 - It does not make the page safe to expose to the internet. It is a control

@@ -81,6 +81,13 @@ DANTE_STATE_ID=5553423136783136
 #    service as an ordinary user".
 PTP_SANDBOX=0
 
+# 0: Statime is built from the pinned source, as measured; the page cannot
+#    then say whether the clock has a leader. 1: it is built with one extra
+#    patch that publishes its PTP port state, and the page shows it. A draft,
+#    not yet measured: docs/INSTALL.md, "Showing whether the clock has a
+#    leader".
+PTP_STATE=0
+
 # --- Kernel --------------------------------------------------------------
 # The kernel release the gadget modules are built for and the unit is held
 # on. The patches in kernel/ apply to 6.18.34 through 6.18.49; every

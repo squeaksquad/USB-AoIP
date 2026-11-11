@@ -139,6 +139,11 @@ STARTCHECK_STATUS = Path(os.environ.get("USB16X16_STARTCHECK_STATUS", "/run/usb1
 STARTCHECK_STATES = ("ok", "checking", "restarting", "gave-up", "idle", "unknown")
 # Statime's config, read only for its loglevel (see clock_state).
 STATIME_CONF = Path(os.environ.get("USB16X16_STATIME_CONF", "/etc/usb16x16/dante/statime.toml"))
+# The PTP port state a Statime built with dante/patches/statime/0001 publishes
+# (PTP_STATE=1 in install.conf). Absent on a stock build: the clock is then unknown.
+CLOCK_STATE_FILE = Path(os.environ.get("USB16X16_CLOCK_STATE_FILE", "/run/usb16x16-clock/port-state"))
+# A port that has only just started listening has not failed to find a leader yet.
+CLOCK_LISTENING_GRACE_SECONDS = 20.0
 
 _stack: dict = {"name": None}
 
@@ -575,8 +580,37 @@ def parse_statime_loglevel(text: str | None) -> str | None:
     return None
 
 
-def clock_state(statime: str | None, loglevel: str | None) -> dict:
+def read_port_state(path: Path) -> tuple[str, str, float] | None:
+    """(state, leader, age in seconds) from the one-line file a patched
+    Statime replaces at each port-state change, e.g.
+    "state=Slave port=1 leader=001dc1fffe0a0b0c0001"; None when there is no
+    such file or it does not parse."""
+    try:
+        age = time.time() - path.stat().st_mtime
+    except OSError:
+        return None
+    text = read_text(path, 512)
+    if text is None:
+        return None
+    fields = dict(part.split("=", 1) for part in text.split() if "=" in part)
+    state = fields.get("state", "")
+    leader = fields.get("leader", "")
+    if state not in ("Slave", "Master", "Listening", "Passive", "Faulty"):
+        return None
+    if not re.fullmatch(r"[0-9a-f]{0,40}", leader):
+        leader = ""
+    return state, leader, max(0.0, age)
+
+
+def clock_state(statime: str | None, loglevel: str | None,
+                port: tuple[str, str, float] | None = None) -> dict:
     """Whether the PTP follower has a clock leader, as far as can be known.
+
+    With a Statime that publishes its port state (`port`, from
+    read_port_state) the answer is that state: Slave is following a leader;
+    Master means no other device leads and this one has elected itself,
+    which a follower-only unit cannot act on; Listening past a short grace
+    is no leader found. Without it, the rest of this note applies.
 
     Statime, not running, follows nothing: that is the one firm answer.
     Running, it says nothing that tells lock from no lock at the level it is
@@ -594,6 +628,17 @@ def clock_state(statime: str | None, loglevel: str | None) -> dict:
         return {"state": "no-leader", "detail": f"Statime (the PTP follower) is {statime}"}
     if statime != "active":
         return {"state": "unknown", "detail": f"Statime's service state is {statime or 'unknown'}"}
+    if port is not None:
+        state, leader, age = port
+        if state == "Slave":
+            return {"state": "locked", "detail": f"following leader {leader}" if leader else "following a leader"}
+        if state == "Master":
+            return {"state": "no-leader", "detail": "no other device on the network is leading the clock"}
+        if state == "Listening":
+            if age < CLOCK_LISTENING_GRACE_SECONDS:
+                return {"state": "unknown", "detail": "looking for a clock leader"}
+            return {"state": "no-leader", "detail": "no clock leader has been heard on the network"}
+        return {"state": "unknown", "detail": f"the PTP port is {state.lower()}"}
     if loglevel in (None, "warn", "error"):
         return {"state": "unknown",
                 "detail": f"Statime runs at loglevel {loglevel or 'unknown'}, which does not log "
@@ -933,7 +978,7 @@ class Collector:
             "stack": "dante",
             "device": {"name": DEFAULT_DEVICE_NAME},
             "startCheck": {"state": "unknown", "rate": None, "restarts": None, "time": None},
-            "clock": clock_state(statime, getattr(self, "_statime_loglevel", None)),
+            "clock": clock_state(statime, getattr(self, "_statime_loglevel", None), read_port_state(CLOCK_STATE_FILE)),
             "mode": {
                 "actual": "direct" if selected in (None, DANTE_DIRECT) else "dsp",
                 "running": bool(running),

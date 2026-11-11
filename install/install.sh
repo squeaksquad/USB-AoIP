@@ -61,9 +61,11 @@ KEEPALIVE_TARGETS DEVICE_NAME USB_MANUFACTURER USB_SERIAL USB_VID USB_PID USB_UD
 DANTE_RATES DANTE_DEVICE_ID DANTE_STATE_ID KERNEL_PIN"
 # Keys added after the first release of this file: absent from an older
 # install.conf they take these values, which are the behaviour it had.
-optional_keys="WEB_BIND= WEB_TLS=off WEB_TLS_CERT= WEB_TLS_KEY= PTP_SANDBOX=0"
+optional_keys="WEB_BIND= WEB_TLS=off WEB_TLS_CERT= WEB_TLS_KEY= PTP_SANDBOX=0 PTP_STATE=0"
 optional_names=$(for k in $optional_keys; do printf '%s ' "${k%%=*}"; done)
 clock_dir=/run/usb16x16-statime
+clock_state_file=/run/usb16x16-clock/port-state
+with_port_state=0
 
 # Each value is checked against the characters its use allows, so that what
 # is rendered into units, scripts and sudoers can never be more than a value.
@@ -88,7 +90,7 @@ check_key() {
     WEB_BIND)          [[ -z $v || $v =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] ;;
     WEB_TLS)           [[ $v =~ ^(self-signed|provided|off)$ ]] ;;
     WEB_TLS_CERT|WEB_TLS_KEY) [[ -z $v || ( $v =~ ^/[A-Za-z0-9/_.-]+$ && $v != *..* ) ]] ;;
-    PTP_SANDBOX)       [[ $v =~ ^[01]$ ]] ;;
+    PTP_SANDBOX|PTP_STATE) [[ $v =~ ^[01]$ ]] ;;
     *) return 1 ;;
   esac
 }
@@ -255,8 +257,23 @@ usrvclock-path = \"$sock\"|")
     ptp_asound=(-e "s|^\\([[:space:]]*\\)BIND_IP \\(.*\\)\$|\\1BIND_IP \\2\\
 \\1CLOCK_PATH \"$sock\"|")
   fi
+  # PTP_STATE=1 (docs/INSTALL.md, "Showing whether the clock has a leader"): a
+  # Statime built with dante/patches/statime/0001 is told where to publish its
+  # port state; the directory comes from tmpfiles.d, so it is there before any start.
+  local ptp_state=() state_user=root
+  if [ "$PTP_STATE" = 1 ]; then
+    [ "$PTP_SANDBOX" = 1 ] && state_user=$OWNER_USER
+    ptp_state=(-e "s|^ExecStart=\\(.*\\)\$|Environment=STATIME_PORT_STATE_FILE=$clock_state_file\\
+ReadWritePaths=-$(dirname "$clock_state_file")\\
+ExecStartPre=-/usr/bin/rm -f $clock_state_file\\
+ExecStart=\\1|")
+    put 644 /etc/tmpfiles.d/usb-aoip-clock.conf <<EOF
+# Where the clock service publishes its PTP port state for the control page.
+d $(dirname "$clock_state_file") 0755 $state_user $state_user -
+EOF
+  fi
   put_file 644 $d/usb16x16-statime.service              $units/usb16x16-statime.service \
-    -e "s|/tmp/ptp-usrvclock|$sock|g" ${ptp_unit[@]+"${ptp_unit[@]}"}
+    -e "s|/tmp/ptp-usrvclock|$sock|g" ${ptp_unit[@]+"${ptp_unit[@]}"} ${ptp_state[@]+"${ptp_state[@]}"}
   put_file 644 $d/usb16x16-dante-dsp-linkwait.service   $units/usb16x16-dante.service \
     -e "s|/tmp/ptp-usrvclock|$sock|g" -e "s|^User=usb16x16-dante\$|User=$OWNER_USER|" -e "s|^Group=usb16x16-dante\$|Group=$OWNER_USER|"
   put_file 644 $d/usb16x16-dante-startcheck.service     $units/usb16x16-dante-startcheck.service
@@ -425,12 +442,19 @@ cmd_build() {
     as_builder patch -s -p1 -F 0 -d "$build_dir/inferno" < "$p" || refuse "$(basename "$p") does not apply to the pinned Inferno"
   done
 
+  if [ "${PTP_STATE:-0}" = 1 ] || [ "$with_port_state" = 1 ]; then
+    say "applying the Statime port-state patch (PTP_STATE=1: a draft, not the measured build)"
+    for p in "$repo"/dante/patches/statime/0001-*.patch; do
+      as_builder patch -s -p1 -F 0 -d "$build_dir/statime" < "$p" || refuse "$(basename "$p") does not apply to the pinned Statime"
+    done
+  fi
   say "building Statime (several minutes on a Pi 5)"
   ( cd "$build_dir/statime" && as_builder cargo build --release --locked -j"$jobs" -p statime-linux )
   say "building the Inferno ALSA plugin"
   ( cd "$build_dir/inferno" && as_builder cargo build --release --locked -j"$jobs" -p alsa_pcm_inferno )
-  # The checkout goes back to the pinned tree, so a second run starts from it.
+  # The checkouts go back to the pinned trees, so a second run starts from them.
   as_builder git -C "$build_dir/inferno" reset --quiet --hard "$(pin inferno_rev)"
+  as_builder git -C "$build_dir/statime" reset --quiet --hard "$(pin statime_rev)"
 
   say "building the owner (the point-of-record source)"
   as_builder g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
@@ -666,6 +690,7 @@ cmd_install() {
 
   setup_audio_if
   setup_tls
+  [ ! -e /etc/tmpfiles.d/usb-aoip-clock.conf ] || systemd-tmpfiles --create /etc/tmpfiles.d/usb-aoip-clock.conf
   sysctl -q -p /etc/sysctl.d/90-usb16x16-compaction.conf
   systemctl reload NetworkManager 2>/dev/null || true
   systemctl daemon-reload
@@ -842,6 +867,7 @@ while [ $# -gt 0 ]; do
     --config)    conf_file=${2:?--config FILE}; shift 2 ;;
     --build-dir) build_dir=${2:?--build-dir DIR}; shift 2 ;;
     --with-dev-tools) with_dev_tools=1; shift ;;
+    --with-port-state) with_port_state=1; shift ;;
     --purge)     purge=1; shift ;;
     *)           args+=("$1"); shift ;;
   esac

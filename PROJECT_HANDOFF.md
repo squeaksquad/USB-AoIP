@@ -15485,3 +15485,36 @@ verified: anything under a real systemd or as two real accounts;
 service are new builds of installed files outside the audio path: by the
 2026-10-29 rule they are accepted on those checks plus a noise probe and
 one two-minute soak, on the Pi.
+
+**STAGED 2026-11-10: a draft patch to the Statime fork that publishes its PTP
+port state, and the page reading it. Opt-in (`PTP_STATE=1`), default off;
+never run.** The operator asked for the draft after the page was found
+unable to say whether the clock has a leader (the entry above).
+
+- `dante/patches/statime/0001-publish-port-state.patch` (against 244f20a5,
+  hash in `install/pins.sha256`). In `set_forced_port_state()`
+  (`statime/src/port/mod.rs`), when the environment variable
+  `STATIME_PORT_STATE_FILE` is set, one line is written to that file by a
+  temporary file and a rename at each port-state change:
+  `state=Slave port=1 leader=<hex>`, `state=Master ...`, `state=Listening
+  ...`. Without the variable the added code does nothing. The write is in
+  the thread that runs the port, on a state change only.
+- `install.sh`: with `PTP_STATE=1` (or `build --with-port-state`) the patch
+  is applied, with no fuzz, before Statime is built; the Statime unit gains
+  three lines (the variable, a writable path, removal of a stale file) and
+  a tmpfiles.d entry makes `/run/usb16x16-clock`. With `PTP_STATE=0` the
+  patch is not applied and the unit renders as accepted; the render test
+  checks both.
+- `usb16x16-web`: `clock.state` is `locked` for `Slave`, `no-leader` for
+  `Master` or for `Listening` older than 20 s, `unknown` otherwise and
+  whenever the file is absent (a stock Statime). A stopped Statime is
+  `no-leader` whatever an old file says.
+
+Verified: the patch applies exactly to the pinned source; the installer's
+arm64 build in CI compiles Statime with it (see the pull request's run); 12
+new assertions on the reading side. Not verified: that Statime behaves the
+same with it, that the states it writes are the ones a real leader coming
+and going produces, anything on a Pi. It changes the Statime binary, part
+of the audio path's build: a unit built with `PTP_STATE=1` is a new
+operating point until it passes the battery
+(`docs/install/TO-VERIFY.md`, item 20a).

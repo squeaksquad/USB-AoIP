@@ -27,7 +27,7 @@ JOURNAL = """1791757664.000100 audio-dev usb16x16-dante[76423]: DSP t=1260.1 dsp
 
 ENV_KEYS = ("USB16X16_APPLY_INBOX", "USB16X16_APPLY_STATE", "USB16X16_DANTE_CONF", "USB16X16_DANTE_RUN_DIR",
             "USB16X16_DSP_DIR", "USB16X16_STACK", "USB16X16_INFERNO_CONF", "USB16X16_STARTCHECK_STATUS",
-            "USB16X16_STATIME_CONF")
+            "USB16X16_STATIME_CONF", "USB16X16_CLOCK_STATE_FILE")
 
 
 def load(root):
@@ -40,6 +40,7 @@ def load(root):
     os.environ["USB16X16_INFERNO_CONF"] = str(root / "asound-inferno-owner.conf")
     os.environ["USB16X16_STARTCHECK_STATUS"] = str(root / "startcheck-status")
     os.environ["USB16X16_STATIME_CONF"] = str(root / "statime.toml")
+    os.environ["USB16X16_CLOCK_STATE_FILE"] = str(root / "port-state")
     loader = importlib.machinery.SourceFileLoader("usb16x16_web_dante", str(HERE / "usb16x16-web"))
     spec = importlib.util.spec_from_loader("usb16x16_web_dante", loader)
     module = importlib.util.module_from_spec(spec)
@@ -248,6 +249,33 @@ class DanteWebTests(unittest.TestCase):
         snapshot = self.snapshot()
         self.assertEqual(set(snapshot["clock"]), {"state", "detail"})
         self.assertEqual(snapshot["clock"]["state"], "unknown")
+
+    def test_clock_from_a_published_port_state(self):
+        clock, read = self.web.clock_state, self.web.read_port_state
+        self.assertEqual(clock("active", "warn", ("Slave", "001dc1fffe0a0b0c0001", 300.0)),
+                         {"state": "locked", "detail": "following leader 001dc1fffe0a0b0c0001"})
+        self.assertEqual(clock("active", "warn", ("Slave", "", 1.0))["state"], "locked")
+        self.assertEqual(clock("active", "warn", ("Master", "", 5.0))["state"], "no-leader")
+        self.assertEqual(clock("active", "warn", ("Listening", "", 2.0))["state"], "unknown", "only just started")
+        self.assertEqual(clock("active", "warn", ("Listening", "", 60.0))["state"], "no-leader")
+        self.assertEqual(clock("active", "warn", ("Passive", "", 60.0))["state"], "unknown")
+        self.assertEqual(clock("active", "warn", ("Faulty", "", 60.0))["state"], "unknown")
+        # A stopped follower follows nothing, whatever an old file says.
+        self.assertEqual(clock("inactive", "warn", ("Slave", "ab", 5.0))["state"], "no-leader")
+        self.assertEqual(clock(None, "warn", ("Slave", "ab", 5.0))["state"], "unknown")
+        path = self.root / "port-state"
+        self.assertIsNone(read(path), "no file: a stock Statime")
+        path.write_text("state=Slave port=1 leader=001dc1fffe0a0b0c0001\n")
+        state, leader, age = read(path)
+        self.assertEqual((state, leader), ("Slave", "001dc1fffe0a0b0c0001"))
+        self.assertLess(age, 30)
+        for garbled in ("", "state=Locked port=1 leader=\n", "nonsense", "state=\n"):
+            path.write_text(garbled)
+            self.assertIsNone(read(path), repr(garbled))
+        path.write_text("state=Slave port=1 leader=$(reboot)\n")
+        self.assertEqual(read(path)[:2], ("Slave", ""), "a leader that is not hex is dropped, not shown")
+        path.write_text("state=Master port=1 leader=\n")
+        self.assertEqual(read(path)[:2], ("Master", ""))
         slow = {"services": {"statime": {"state": "failed"}}, "profile": {}}
         self.assertEqual(self.snapshot(slow)["clock"]["state"], "no-leader")
 

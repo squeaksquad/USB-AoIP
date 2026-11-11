@@ -94,6 +94,12 @@ stack, never run on a Pi.
     and the notices when the Dante service is stopped by hand.
 20. `PTP_SANDBOX=1`: see `docs/INSTALL.md`, "The clock service as an
     ordinary user". This one is a change to the audio path.
+20a. `PTP_STATE=1`: the draft Statime patch. `cat
+    /run/usb16x16-clock/port-state` should read `state=Slave ...` with a
+    leader on the network; power the leader off and it should change
+    (`Master` or `Listening`), and the page should show the warning within a
+    few seconds; power it on again and it should return to `Slave`. Then the
+    battery: this is a different Statime binary.
 21. The applier and the web service are new builds of installed files
     (applier 1.9.0, web 1.7.0). By the 2026-10-29 rule: their behavioural
     checks above, a noise probe at 32 and one two-minute sixteen-channel

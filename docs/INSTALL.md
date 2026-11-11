@@ -214,6 +214,26 @@ permission errors, that the Dante service starts, and that audio passes;
 then measure as for any change to the audio path. `PTP_SANDBOX=0` and
 `install` puts everything back.
 
+## Showing whether the clock has a leader
+
+The unit is a PTP follower: with no other Dante device leading the clock, no
+audio flows. As built from the pinned sources, the clock service says nothing
+that shows whether it has a leader, so the page reports the clock state as
+unknown.
+
+`PTP_STATE=1` in `install.conf`, then `install` again, builds Statime with
+one extra patch (`dante/patches/statime/0001-publish-port-state.patch`) that
+writes its PTP port state to `/run/usb16x16-clock/port-state` each time it
+changes. The page then shows "Locked to a leader", or a warning that no
+device is leading the clock.
+
+It is off by default because it changes the clock service's binary, and the
+patch is a draft: it applies and compiles (CI builds it), and has never run.
+With the option off the patch is not applied and the unit file is the
+accepted one. If you turn it on, check the file appears and changes when you
+unplug the leader, then measure as for any change to the audio path.
+`PTP_STATE=0` and `install` builds the pinned Statime again.
+
 ## Kernel upgrades
 
 The gadget needs two kernel modules (`u_audio`, `usb_f_uac2`) with this

@@ -10,3 +10,4 @@
 ec8d60bc3e7427d90b1352c7226948c58b1369b81207a5df41c5c7ac8876c805  dante/owner/point-of-record/main.cpp
 bbaec39ef0cab29bd9a493db9eefaff47507f4fa916389a3c5d01612e41453f2  dsp-core/src/bridge_core.cpp
 c8558c992032923826e7c326b2f190b95f7c99e1be35100d060577202a99622d  dsp-core/include/usb16x16/bridge_core.hpp
+97576bc7481563bb6e3f8d5b91cb5fe2e70e160bd9d08e62ac301e3a4c89812b  dante/patches/statime/0001-publish-port-state.patch
