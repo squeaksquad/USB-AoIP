@@ -1,0 +1,75 @@
+name: CI
+
+# Everything here builds and runs off the Pi. Nothing in it touches hardware,
+# so a green run says the logic holds, not that an audio-path change is
+# acceptable: that still takes measurement (PROJECT_HANDOFF.md).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Web UI and DSP compiler (node --test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test web-ui/*.test.mjs
+      - run: node --test dsp-compiler/*.test.mjs
+
+  python:
+    name: Web control and Dante tools (unittest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: web-control
+        run: python3 -m unittest discover -v -s web-control -p 'test_*.py'
+      - name: dante (soak reference; compiles the reference exporter)
+        run: python3 -m unittest discover -v -s dante -t dante -p 'test_soak_reference.py'
+      - name: tools/diag
+        run: python3 -m unittest discover -v -s tools/diag -p 'test_*.py'
+
+  cpp:
+    name: Owner headers and DSP core (C++20)
+    runs-on: ubuntu-latest
+    env:
+      CXXFLAGS_STRICT: -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror
+    steps:
+      - uses: actions/checkout@v4
+      - name: DSP core (cmake, ctest)
+        run: |
+          cmake -S dsp-core -B build/dsp-core -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/dsp-core -j
+          ctest --test-dir build/dsp-core --output-on-failure
+      - name: Owner header tests
+        working-directory: dante/owner
+        run: |
+          mkdir -p "$RUNNER_TEMP/owner"
+          for t in servo chan_holes seq_check rate_check; do
+            c++ $CXXFLAGS_STRICT -o "$RUNNER_TEMP/owner/${t}_test" "${t}_test.cpp"
+            "$RUNNER_TEMP/owner/${t}_test"
+          done
+          for t in dsp_path dsp_live meter_tap; do
+            c++ $CXXFLAGS_STRICT -I ../../dsp-core/include \
+              -o "$RUNNER_TEMP/owner/${t}_test" "${t}_test.cpp" ../../dsp-core/src/bridge_core.cpp
+            "$RUNNER_TEMP/owner/${t}_test"
+          done
+
+  shell:
+    name: Start wrapper and start check (bash)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash dante/service/test-dante-start.sh
+      - run: bash dante/service/test-dante-start.sh transport
+      - run: bash dante/service/test-dante-startcheck.sh
