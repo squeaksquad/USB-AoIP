@@ -73,3 +73,48 @@ jobs:
       - run: bash dante/service/test-dante-start.sh
       - run: bash dante/service/test-dante-start.sh transport
       - run: bash dante/service/test-dante-startcheck.sh
+
+  install-render:
+    name: Installer render test (development unit reproduces the point of record)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash install/test-render.sh
+
+  # The installer's own build step on arm64, as on the Pi: Statime and the
+  # patched Inferno plugin at the pinned revisions, the owner, the DSP runner.
+  # It proves the sources, pins, patches and build lines hold. The binaries
+  # are not the Pi's (another distribution's compiler and libraries).
+  install-build-arm64:
+    name: Installer build step (arm64)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -q && sudo apt-get install -y -q build-essential cmake pkg-config libasound2-dev curl git patch
+      - run: USB_AOIP_JOBS=4 install/install.sh build --build-dir "$RUNNER_TEMP/usb-aoip-build"
+      - run: file "$RUNNER_TEMP"/usb-aoip-build/out/* && "$RUNNER_TEMP/usb-aoip-build/out/usb16x16-dante-owner" --help | head -5 || true
+
+  # The gadget modules for the pinned kernel, built by DKMS exactly as the
+  # installer does it, against Raspberry Pi's own headers package.
+  kernel-modules-arm64:
+    name: Gadget modules by DKMS (Raspberry Pi 6.18.34 headers, arm64)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    container: debian:trixie
+    steps:
+      - run: apt-get update -q && apt-get install -y -q ca-certificates curl gnupg git patch perl kmod
+      - uses: actions/checkout@v4
+      - name: Raspberry Pi package archive
+        run: |
+          curl -fsSL https://archive.raspberrypi.com/debian/raspberrypi.gpg.key | gpg --dearmor -o /usr/share/keyrings/raspberrypi-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/raspberrypi-archive-keyring.gpg] http://archive.raspberrypi.com/debian/ trixie main" > /etc/apt/sources.list.d/raspi.list
+          apt-get update -q
+          apt-get install -y -q dkms build-essential "linux-headers-6.18.34+rpt-rpi-2712"
+      - run: install/install.sh build-modules "6.18.34+rpt-rpi-2712"
+      - name: A kernel the patches do not apply to is refused, with the reason
+        run: |
+          set +e
+          kernel/dkms/prepare-sources.sh 6.18.60+rpt-rpi-2712 /tmp/refused 2> /tmp/refused.log; rc=$?
+          cat /tmp/refused.log
+          [ "$rc" = 5 ] && grep -q 'REFUSED: uac2-rate-request' /tmp/refused.log

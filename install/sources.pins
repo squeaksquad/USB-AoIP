@@ -1,0 +1,16 @@
+# Upstream sources the installer builds, pinned. The same revisions and
+# hashes as dante/SOURCES.lock, which holds the history; this file is the
+# form install.sh reads (name, whitespace, value). install/test-render.sh
+# checks that every value here appears in SOURCES.lock.
+inferno_url                 https://gitlab.com/lumifaza/inferno.git
+inferno_rev                 9767558e0905c9e9c960f5a60e050fbdc38300b7
+inferno_alsa_sys_all        83324fc89b831f3da107e6d704bc7149f08b4e0f
+inferno_searchfire          ccb19023aaaae6e5cc7e812e32453e106814ea0c
+inferno_usrvclock_rs        7d847750d5ddbe969d34dbc5875a03b95c2ce16e
+inferno_cargo_lock          e7648507cb2809eaf122bb51416122be0b7f03a849bd2f2aa6436bd02310274f
+statime_url                 https://github.com/teodly/statime
+statime_rev                 244f20a56c173b1881f2e5e83652bb8b8209b2ab
+statime_clock_steering      7335adfbe18f7a4776b451b23ee503983fb24a3c
+statime_timestamped_socket  beb690d7735d3bfea0e77fad771910cb1522054d
+statime_cargo_lock          9b658fa662fd4391a50f816d70c7fc86f503c4056e31aa4cde996ae2ac6e719d
+rust_toolchain              1.99.0

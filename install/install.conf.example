@@ -1,0 +1,68 @@
+# /etc/usb-aoip/install.conf: everything about one USB-AoIP unit that differs
+# from another. KEY=value lines, read, never executed; no quotes, no spaces
+# around the =. `install.sh config` writes this file with values detected on
+# the machine; edit it, then run `install.sh install`. Changing a value later
+# and running `install.sh install` again re-renders the installed files.
+#
+# Nothing here tunes the audio path. The buffer depths are in
+# /etc/usb16x16/dante/transport.conf and the start check's thresholds in
+# /etc/usb16x16/dante/startcheck.conf, both installed with the values the
+# project was measured at (docs/INSTALL.md, "What the tuning assumes").
+
+# --- Users ---------------------------------------------------------------
+# Your login on the Pi: gets password-free `systemctl` for the audio services
+# (and nothing else). Empty: no sudoers rule is installed.
+OPERATOR_USER=
+# The account the web page's service runs as. Created if missing.
+WEB_USER=usb-aoip-web
+# The account the audio process runs as. Created if missing.
+OWNER_USER=usb16x16-dante
+
+# --- Directories ---------------------------------------------------------
+# The web page's files, presets, password file and request spool, and the
+# build tree.
+WORK_DIR=/var/lib/usb-aoip
+
+# --- Network -------------------------------------------------------------
+# The wired port on the Dante network. Dante audio and PTP use it.
+AUDIO_IF=eth0
+# How the installer sets that port up in NetworkManager:
+#   none        leave it as it is (it must get an address by DHCP or link-local)
+#   link-local  make a connection `aoip-<port>` with a 169.254.x.y address,
+#               what a Dante network without a DHCP server uses
+AUDIO_IF_SETUP=none
+# The interface the web page listens on. Keep it off the audio port if you
+# can. It falls back to 127.0.0.1 when the interface has no address.
+MGMT_IF=wlan0
+WEB_PORT=8088
+# Optional: addresses to ping from MGMT_IF every 20 s, space separated, for
+# access points that drop an idle Wi-Fi client. Empty: nothing is installed.
+KEEPALIVE_TARGETS=
+
+# --- What the host and the network see -----------------------------------
+# The USB product name and the Dante device name. Letters, digits, - only.
+DEVICE_NAME=USB-AoIP
+USB_MANUFACTURER=USB-AoIP project
+# Unique per unit, so two on one host do not collide. `install.sh config`
+# derives it from the Pi's serial number.
+USB_SERIAL=
+# Prototype IDs (Linux Foundation, multifunction composite gadget). A product
+# needs its own.
+USB_VID=0x1d6b
+USB_PID=0x0104
+# The USB device controller; on a Pi 5 the USB-C port.
+USB_UDC=1000480000.usb
+# The first rate is what the host sees until it sets one. Both lists hold the
+# same rates.
+USB_RATES=48000,44100,88200,96000
+DANTE_RATES=44100,48000,88200,96000
+# 16 hex digits, unique on the network. `install.sh config` uses AUDIO_IF's
+# MAC address followed by 0000.
+DANTE_DEVICE_ID=
+DANTE_STATE_ID=5553423136783136
+
+# --- Kernel --------------------------------------------------------------
+# The kernel release the gadget modules are built for and the unit is held
+# on. The patches in kernel/ apply to 6.18.34 through 6.18.49; every
+# measurement was made on 6.18.34 (docs/INSTALL.md, "Kernel upgrades").
+KERNEL_PIN=6.18.34+rpt-rpi-2712
