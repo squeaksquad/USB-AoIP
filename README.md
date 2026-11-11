@@ -92,26 +92,39 @@ The research record:
 
 ## Installing
 
-**There is not yet a one-step install.** The development unit was built up
-by a chain of about twenty incremental installers (`history/installers/`),
-each pinned to the hashes of binaries built on that one Pi, with that unit's
-user name and addresses written in. They are a record, not a procedure, and
-will not work on another machine as they stand.
+[`docs/INSTALL.md`](docs/INSTALL.md) is the procedure, from a blank SD card.
+In short, on a Pi 5 running Raspberry Pi OS Lite (64-bit):
 
-A single installer that takes a fresh Raspberry Pi OS to the current state,
-with site settings in one config file and kernel modules rebuilt on kernel
-upgrades, is the next piece of work. Until it lands, reproducing this means
-reading these and doing by hand what they describe:
+```bash
+git clone https://github.com/squeaksquad/USB-AoIP.git && cd USB-AoIP
+```
 
-1. Kernel: build `usb_f_uac2` and `u_audio` with the patches in `kernel/`
-   (`build-rate-request.sh production`). They apply to `6.18.34` and have not
-   been tried on another version.
-2. Gadget: `gadget/setup-usb-aoip` run by `usb-16x16.service`.
-3. Network side: build Statime and the patched Inferno ALSA plugin at the
-   revisions in `dante/SOURCES.lock` with `dante/patches/` applied in order,
-   build the owner (the command is in the header of `dante/owner/main.cpp`),
-   and install the units and configs in `dante/service/` and `dante/config/`.
-4. Page: `web-control/` and `web-ui/`.
+```bash
+sudo install/install.sh config
+```
+
+```bash
+sudo install/install.sh install
+```
+
+```bash
+sudo install/install.sh set-password yourname
+```
+
+`config` writes `/etc/usb-aoip/install.conf`, the one file with everything
+specific to your unit (interfaces, device name, USB serial, Dante device
+ID); check it before installing. `install` builds everything on the Pi from
+pinned, hash-checked sources, installs the kernel the project was measured
+on and holds it, builds the two patched kernel modules with DKMS, and
+starts the services. It stops and tells you when a reboot is needed, and is
+safe to run again. `status` and `uninstall` do what they say.
+
+**The installer has not yet been run end to end on a Pi.** Everything that
+can be checked off one is checked in CI: the files it installs are compared
+byte for byte with the development unit's, and its builds, including the
+kernel modules against Raspberry Pi's 6.18.34 headers, run on arm64.
+[`docs/install/TO-VERIFY.md`](docs/install/TO-VERIFY.md) lists what is left
+to try on hardware.
 
 ## Operating
 
@@ -169,15 +182,17 @@ noise probe first; a dropped sample anywhere invalidates a latency reading.
   switching to 88.2 kHz can be silent for that session. Wait a few seconds
   after the switch.
 - **Do not change the rate under an open DAW session.**
-- **One kernel version.** The modules are built for `6.18.34+rpt-rpi-2712`.
-  A kernel upgrade leaves the gadget without them until they are rebuilt.
+- **A narrow range of kernels.** The gadget patches apply to Linux 6.18.34
+  through 6.18.49; current Raspberry Pi OS ships a newer kernel, so the
+  installer installs 6.18.34 and holds it. DKMS rebuilds the modules on a
+  kernel change and refuses, with the reason, where the patches do not apply.
 - **Hosts other than macOS are untested.** The gadget is class compliant,
   but the per-rate latency figures and the rate-follow behaviour were only
   ever measured against Apple's driver.
 - **The page uses a password over plain HTTP.** Fine on a network you
   control, not protection against anyone who can watch it.
-- **Not a product.** One unit exists. The record of how it got here is
-  thorough; the path for a second unit is still being written.
+- **Not a product.** One unit exists, and the installer for a second has
+  not yet been run on hardware.
 
 ## Contributing and tests
 
