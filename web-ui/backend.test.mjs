@@ -59,8 +59,8 @@ test('fetchLogs falls back to a default line count for junk input', async () => 
 });
 
 test('connectionLine distinguishes offline, running and stopped', () => {
-  assert.equal(connectionLine(null), 'Not connected · Local draft · Simulated meters');
-  assert.match(connectionLine(live), /^Connected · audio-dev · Direct bridge running · PTP locked · jitter 33 · Simulated meters$/);
+  assert.equal(connectionLine(null), 'Not connected · Demonstration only');
+  assert.match(connectionLine(live), /^Connected · audio-dev · Direct bridge running · PTP locked · jitter 33 · No level data$/);
   const stopped = {...live, mode: {running: false, detail: 'AES67 service inactive, USB gadget active'}};
   assert.match(connectionLine(stopped), /AES67 service inactive/);
 });
@@ -371,7 +371,8 @@ test('fetchMeters returns the body only when the tap is available', async () => 
 });
 
 test('the connection line says whether meters are live', () => {
-  assert.match(connectionLine(live), /Simulated meters/);
+  assert.match(connectionLine(live), /No level data$/);
+  assert.doesNotMatch(connectionLine(live), /[Ss]imulated/, 'a connected page never claims made-up levels');
   assert.match(connectionLine({...live, meters: {available: true}}), /Live meters/);
   assert.equal(factFor({...live, meters: {available: true, reason: ''}}, 'Metering').value, 'Live');
 });
@@ -635,4 +636,219 @@ test('runningRate reads the snapshot and falls back to 48 kHz', () => {
   assert.equal(runningRate({profile: {}}), 48000);
   assert.equal(runningRate({profile: {rate: 96000}}), 96000);
   assert.equal(runningRate({profile: {rate: 'x'}}), 48000);
+});
+
+// ------------------------------------------- device state (audit 2026-11-10, group 1)
+import { readHealth, accessProblem, sendRequest, onAccessProblem, REQUEST_HEADER, formatRate, formatLine, deviceName,
+  pageNotices, pillState, meterAbsence, clockFact, startCheckFact, deviceModeLabel, editStatus, draftModeNote } from './backend.mjs';
+
+const healthy = {...danteLive, device: {name: 'USB-AoIP'}, clock: {state: 'locked', detail: 'leader 00-1d-c1'},
+  startCheck: {state: 'ok', rate: 1500, restarts: 0, time: '2026-11-10T10:00:00Z'}};
+const withService = (key, state) => ({...healthy, services: {...healthy.services, [key]: {...healthy.services[key], state}}});
+
+test('formatRate and formatLine show the four rates properly and never invent one', () => {
+  assert.equal(formatRate(44100), '44.1 kHz');
+  assert.equal(formatRate(48000), '48 kHz');
+  assert.equal(formatRate(88200), '88.2 kHz');
+  assert.equal(formatRate(96000), '96 kHz');
+  assert.equal(formatRate(undefined), null);
+  assert.equal(formatLine(null), '16 × 16', 'not connected: no rate is claimed');
+  assert.equal(formatLine({...healthy, audio: {sampleRate: 88200, inputs: 16, outputs: 16}}), '88.2 kHz · 16 × 16');
+  assert.equal(formatLine({...healthy, audio: {inputs: 16, outputs: 16}}), 'Rate unknown · 16 × 16');
+  assert.equal(factFor({...healthy, audio: {sampleRate: 44100, inputs: 16, outputs: 16}}, 'Audio format').value, '44.1 kHz · 16 in / 16 out');
+  assert.equal(factFor({...healthy, audio: {sampleRate: 96000, inputs: 16, outputs: 16}}, 'Audio format').value, '96 kHz · 16 in / 16 out');
+});
+
+test('deviceName reads health.device.name and is null when absent', () => {
+  assert.equal(deviceName(healthy), 'USB-AoIP');
+  assert.equal(deviceName({...healthy, device: {name: ' Studio B '}}), 'Studio B');
+  assert.equal(deviceName(danteLive), null);
+  assert.equal(deviceName(null), null);
+});
+
+test('pillState: not connected, connected, and each warning in words', () => {
+  assert.deepEqual(pillState(null).text, 'NOT CONNECTED');
+  assert.equal(pillState(null).state, 'offline');
+  assert.equal(pillState(healthy).text, 'CONNECTED');
+  assert.equal(pillState(healthy).state, 'ok');
+  assert.doesNotMatch(pillState(healthy).title, /read-only|no control endpoint/i);
+  assert.equal(pillState(withService('dante', 'failed')).text, 'DANTE SERVICE DOWN');
+  assert.equal(pillState(withService('dante', 'inactive')).state, 'warn');
+  assert.equal(pillState(withService('statime', 'failed')).text, 'CLOCK SERVICE DOWN');
+  assert.equal(pillState(withService('gadget', 'failed')).text, 'USB SERVICE DOWN');
+  assert.equal(pillState({...healthy, clock: {state: 'no-leader', detail: ''}}).text, 'NO CLOCK LEADER');
+  assert.equal(pillState({...healthy, startCheck: {state: 'restarting', restarts: 2}}).text, 'RESTARTING');
+  assert.equal(pillState({...healthy, startCheck: {state: 'gave-up', restarts: 4}}).text, 'LOSING PACKETS');
+  assert.equal(pillState(withService('dante', 'activating')).text, 'STARTING');
+  // The warning carries its reason in the tooltip too.
+  assert.match(pillState(withService('dante', 'failed')).title, /The Dante service is not running/);
+});
+
+test('pillState: sign-in problems keep the words of the problem, connected or not', () => {
+  assert.equal(pillState(healthy, {status: 401, message: ''}).text, 'SIGNED OUT');
+  assert.equal(pillState(null, {status: 401, message: ''}).text, 'SIGNED OUT');
+  assert.equal(pillState(healthy, {status: 429, message: ''}).text, 'SIGN-IN PAUSED');
+  assert.equal(pillState(healthy, {status: 403, message: 'missing header'}).text, 'REQUEST REFUSED');
+});
+
+test('pillState and notices: fields an older service does not send are unknown, never good or bad', () => {
+  // danteLive has no clock, startCheck or device: nothing is raised for them.
+  assert.deepEqual(pageNotices(danteLive), []);
+  assert.equal(pillState(danteLive).text, 'CONNECTED');
+  const noServices = {...danteLive, services: {}};
+  assert.equal(pillState(noServices).text, 'CONNECTED · STATE UNKNOWN', 'missing service states are not read as running');
+  assert.equal(pillState(withService('dante', 'unknown')).state, 'unknown');
+  assert.equal(clockFact(undefined).value, 'Clock state unknown');
+  assert.equal(startCheckFact(undefined).value, 'Unknown');
+  const rows = systemFacts(danteLive);
+  assert.equal(rows.find(r => r.label === 'Clock').value, 'Clock state unknown');
+  assert.equal(rows.find(r => r.label === 'Network audio check').value, 'Unknown');
+  // The AES67 stack gets neither row.
+  assert.ok(!systemFacts(live).some(r => r.label === 'Clock' || r.label === 'Network audio check'));
+  assert.equal(pillState(live).text, 'CONNECTED');
+});
+
+test('pageNotices: each condition, worded with what to do', () => {
+  const down = pageNotices(withService('dante', 'failed'));
+  assert.equal(down.length, 1);
+  assert.equal(down[0].text, 'The Dante service is not running. It usually restarts by itself within a few seconds; if it stays down, restart the device or read its log under System & presets.');
+  assert.equal(pageNotices({...healthy, clock: {state: 'no-leader'}})[0].id, 'no-leader');
+  assert.match(pageNotices({...healthy, clock: {state: 'no-leader'}})[0].text, /^No clock leader on the network: audio will not flow until another Dante device leads the clock/);
+  assert.match(pageNotices({...healthy, startCheck: {state: 'restarting', restarts: 2}})[0].text, /restarting the Dante service \(attempt 2 of 4\)/);
+  assert.match(pageNotices({...healthy, startCheck: {state: 'gave-up', restarts: 4}})[0].text, /still losing packets after 4 restarts; audio may have gaps\. Check the switch and cabling\./);
+  assert.deepEqual(pageNotices({...healthy, startCheck: {state: 'checking'}}), []);
+  assert.deepEqual(pageNotices({...healthy, startCheck: {state: 'idle'}}), []);
+  assert.deepEqual(pageNotices({...healthy, clock: {state: 'unknown', detail: 'x'}}), []);
+  assert.equal(pageNotices(null).length, 0, 'not connected: the pill says so, no notice');
+  assert.equal(pageNotices(null, {status: 401})[0].text, 'Signed out: reload the page to sign in again. Until then the page cannot read or change the device.');
+  assert.equal(pageNotices(null, {status: 429})[0].text, 'Too many sign-in attempts: wait a minute, then reload the page.');
+  assert.equal(pageNotices(healthy, {status: 403, message: 'Missing X-USB-AoIP header.'})[0].text, 'The device refused a request from this page: Missing X-USB-AoIP header. Reload the page and try again.');
+  // AES67 stack: its own service.
+  const aes = {...live, services: {...live.services, aes67: {unit: 'usb16x16-aes67.service', state: 'failed'}}};
+  assert.match(pageNotices(aes)[0].text, /^The AES67 service is not running/);
+});
+
+test('pageNotices: most severe first, and no duplicate when the clock service itself is down', () => {
+  const many = {...healthy,
+    services: {...healthy.services, statime: {unit: 'u', state: 'failed'}},
+    clock: {state: 'no-leader'}, startCheck: {state: 'restarting', restarts: 1}};
+  const ids = pageNotices(many, {status: 401}).map(n => n.id);
+  assert.deepEqual(ids, ['signed-out', 'clock-service-down', 'start-check-restarting']);
+  const order = pageNotices({...healthy, startCheck: {state: 'restarting', restarts: 1}, clock: {state: 'no-leader'},
+    services: {...healthy.services, gadget: {unit: 'g', state: 'failed'}}}).map(n => [n.id, n.severity]);
+  assert.deepEqual(order, [['no-leader', 'bad'], ['usb-down', 'bad'], ['start-check-restarting', 'warn']]);
+  for (const notice of pageNotices(many, {status: 401})) assert.doesNotMatch(notice.text, /!|simply|applier|owner|endpoint/i);
+});
+
+test('meterAbsence says why there are no levels, in plain words', () => {
+  assert.equal(meterAbsence(null), null);
+  assert.equal(meterAbsence(withService('dante', 'failed')), 'No level data: the Dante service is not running.');
+  assert.equal(meterAbsence({...healthy, meters: {available: false, reason: 'No meter snapshot: the Dante endpoint is not running or runs with METERS=0.'}}), 'No level data: the Dante service is not publishing levels.');
+  assert.equal(meterAbsence({...healthy, meters: {available: false, reason: 'The meter snapshot is 9 s old: the Dante endpoint has stopped publishing, or no audio is moving through it.'}}), 'No level data: no audio is passing through the device.');
+  assert.equal(meterAbsence({...healthy, meters: {available: false, reason: 'not yet read'}}), 'No level data yet: waiting for the first reading.');
+  assert.equal(meterAbsence({...healthy, meters: {available: false, reason: 'Something else.'}}), 'No level data: Something else.');
+  assert.equal(meterAbsence({...healthy, meters: {available: false}}), 'No level data from the device.');
+  assert.equal(meterAbsence({...healthy, meters: {available: true}}), 'No level data: waiting for a reading from the device.');
+  assert.equal(factFor({...healthy, meters: {available: false, reason: 'not yet read'}}, 'Metering').value, 'No level data yet: waiting for the first reading.');
+});
+
+test('clockFact and startCheckFact read each state plainly', () => {
+  assert.deepEqual([clockFact({state: 'locked', detail: 'd'}).value, clockFact({state: 'locked'}).state], ['Locked to a leader', 'ok']);
+  assert.equal(clockFact({state: 'no-leader'}).value, 'No clock leader on the network: audio will not flow until another Dante device leads the clock');
+  assert.equal(clockFact({state: 'no-leader'}).state, 'bad');
+  assert.equal(clockFact({state: 'unknown', detail: 'socket unreadable'}).value, 'Clock state unknown · socket unreadable');
+  assert.equal(clockFact({state: 'unknown'}).state, '', 'unknown is the usual answer on a running unit: neutral');
+  // The service's no-leader while its clock service is down or starting is about that service.
+  assert.equal(clockFact({state: 'no-leader', detail: 'x'}, 'failed').value, 'No clock: the clock service is not running, so audio will not flow');
+  assert.equal(clockFact({state: 'no-leader'}, 'activating').value, 'The clock service is starting');
+  assert.equal(clockFact({state: 'locked'}, 'active').value, 'Locked to a leader');
+  const starting = {...healthy, services: {...healthy.services, statime: {unit: 'u', state: 'activating'}}, clock: {state: 'no-leader'}};
+  assert.deepEqual(pageNotices(starting).map(n => n.id), ['clock-service-starting']);
+  assert.equal(pillState(starting).text, 'CLOCK STARTING');
+  assert.equal(startCheckFact({state: 'ok'}).value, 'Network audio checked after the last start: all packets arriving');
+  assert.match(startCheckFact({state: 'checking'}).value, /^Checking/);
+  assert.equal(startCheckFact({state: 'restarting', restarts: 3}).value, 'Some packets were missing after the last start: restarting the Dante service (attempt 3 of 4)');
+  assert.equal(startCheckFact({state: 'gave-up', restarts: 4}).value, 'Still losing packets after 4 restarts; audio may have gaps. Check the switch and cabling');
+  assert.equal(startCheckFact({state: 'gave-up', restarts: 1}).value, 'Still losing packets after 1 restart; audio may have gaps. Check the switch and cabling');
+  assert.equal(startCheckFact({state: 'idle'}).value, 'No audio is being sent to the device yet');
+  assert.equal(startCheckFact({state: 'unknown'}).value, 'Unknown');
+  assert.equal(factFor(healthy, 'Clock').value, 'Locked to a leader');
+  assert.equal(factFor(healthy, 'Network audio check').state, 'ok');
+});
+
+test('deviceModeLabel, editStatus and draftModeNote say what reaches the device', () => {
+  assert.equal(deviceModeLabel(null), null);
+  assert.equal(deviceModeLabel(healthy), 'Direct (no DSP)');
+  const onPreset = {...healthy, profile: {...healthy.profile, selected: 'dante-room-a'}};
+  assert.equal(deviceModeLabel(onPreset), 'DSP preset dante-room-a');
+  assert.equal(deviceModeLabel({...healthy, mode: {running: false}}), 'Direct (no DSP) · not running');
+  assert.equal(deviceModeLabel({...healthy, profile: {}}), 'Unknown');
+  assert.equal(editStatus(null, null, 'dsp').state, 'offline');
+  assert.match(editStatus(null, null, 'dsp').text, /^Not connected: .*Nothing reaches a device\.$/);
+  const liveNow = liveState(onPreset, 'f'.repeat(64));
+  assert.equal(editStatus(onPreset, liveNow, 'dsp').state, 'live');
+  assert.match(editStatus(onPreset, liveNow, 'dsp').text, /^Edits are live: .*reach the device as you make them\. .*Commit preview/);
+  assert.equal(editStatus(onPreset, liveNow, 'direct').state, 'draft', 'a Direct draft sends nothing');
+  assert.match(editStatus(onPreset, liveState(onPreset, 'e'.repeat(64)), 'dsp').text, /^Editing a draft: this change alters the processing layout/);
+  assert.match(editStatus(healthy, liveState(healthy, null), 'dsp').text, /^Editing a draft: nothing reaches the device until you apply it/);
+  for (const direct of [true, false]) {
+    const note = draftModeNote(healthy, direct);
+    assert.match(note, /^Mode sets this draft only\./);
+    assert.doesNotMatch(note, /change nothing on the Pi|Previewing/);
+  }
+  assert.match(draftModeNote(null, true), /No device is connected\.$/);
+});
+
+test('readHealth tells a sign-in problem from a missing service', async () => {
+  assert.deepEqual(await readHealth(async () => ok(live)), {health: live, access: null});
+  assert.deepEqual(await readHealth(async () => fail(401, {ok: false, error: 'Authentication required'})), {health: null, access: {status: 401, message: 'Authentication required'}});
+  assert.deepEqual((await readHealth(async () => fail(429, {ok: false, error: 'slow down'}))).access, {status: 429, message: 'slow down'});
+  assert.deepEqual((await readHealth(async () => fail(403, null))).access, {status: 403, message: ''});
+  assert.deepEqual(await readHealth(async () => fail(404, {})), {health: null, access: null});
+  assert.deepEqual(await readHealth(async () => fail(503, {})), {health: null, access: null});
+  assert.deepEqual(await readHealth(async () => { throw new Error('offline'); }), {health: null, access: null});
+  // probeHealth keeps its old contract: null for any failure.
+  assert.equal(await probeHealth(async () => fail(401, {})), null);
+  assert.equal(accessProblem(500), null);
+});
+
+test('every state-changing request carries the page header and, with a body, a JSON content type', async () => {
+  const calls = [];
+  const fake = async (url, init = {}) => { calls.push({url, init}); return ok({ok: true, id: 'x', profile: 'p', artifactSha256: 'ab', preset: {}, presets: []}); };
+  const store = piStore(fake);
+  await store.save('A', {version: 2});
+  await store.remove('A');
+  await requestProfile('direct', 'direct', fake);
+  await requestPreset('A', 'usb16x16-dsp 1\nend\n', 'direct', fake);
+  await removePreset('a', fake);
+  await requestLive('x', 'p', 's', fake);
+  await requestLive(null, 'p', 's', fake);
+  await requestCommit('p', 's', fake);
+  await requestShutdown('direct', fake);
+  const changing = calls.filter(c => c.init.method && c.init.method !== 'GET');
+  assert.equal(changing.length, 9);
+  for (const {url, init} of changing) {
+    assert.equal(init.headers[REQUEST_HEADER], '1', url);
+    assert.equal(REQUEST_HEADER, 'X-USB-AoIP');
+    if (init.body !== undefined) assert.equal(init.headers['content-type'], 'application/json', url);
+    else assert.equal(init.method, 'DELETE', url);
+  }
+  // Reads carry no such header and no method.
+  for (const {url, init} of calls.filter(c => !c.init.method)) assert.ok(!(init.headers && REQUEST_HEADER in init.headers), url);
+});
+
+test('a state-changing request that meets 401, 403 or 429 reports it, and nothing else does', async () => {
+  const seen = [];
+  onAccessProblem(problem => seen.push(problem));
+  try {
+    const answer = (status, body) => async () => ({...fail(status, body), clone() { return fail(status, body); }});
+    await assert.rejects(requestLive('x', 'p', 's', answer(401, {ok: false, error: 'Authentication required'})), /Authentication required/);
+    await assert.rejects(requestCommit('p', 's', answer(403, {ok: false, error: 'refused'})), /refused/);
+    await assert.rejects(requestShutdown('d', answer(429, {ok: false, error: 'too many'})), /too many/);
+    await assert.rejects(requestShutdown('d', answer(409, {ok: false, error: 'busy'})), /busy/);
+    assert.deepEqual(seen.map(p => p.status), [401, 403, 429]);
+    assert.equal(seen[1].message, 'refused');
+    const response = await sendRequest('/x', {method: 'DELETE'}, async (url, init) => ok({ok: true, init}));
+    assert.equal((await response.json()).init.body, undefined);
+  } finally { onAccessProblem(null); }
 });

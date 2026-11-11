@@ -5,7 +5,7 @@ import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphoneP
 import { resetEq, setEqBypass, linkedEqOutputs, mirrorLinkedEq } from './eq-tools.mjs';
 import { createSlots, switchSlot, copySlot, slotSummary, SLOTS } from './profiles.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { probeHealth, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, stackTerms } from './backend.mjs';
+import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, editStatus, draftModeNote, formatLine, deviceName, fetchLogs, connectionLine, systemFacts, dspNote, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, meterLevels, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, stackTerms } from './backend.mjs';
 import { LiveQueue } from './live.mjs';
 
 let config = createConfig(), selected = 0, tab = 'outputs', metersRunning = true, dirty = true;
@@ -16,6 +16,8 @@ let selectedBand = 0, eqDrag = null, eqObserver;
 let logService = 'all', logQuery = '';
 // Live state from the Pi control service; null whenever no backend answers.
 let health = null, logBusy = false;
+// A sign-in problem (401, 403, 429) seen on the last health read or request; null otherwise.
+let access = null;
 // The bridge's meter tap: the last window read, when, and a clip hold per strip.
 let liveMeters = null, liveMetersAt = 0, meterBusy = false;
 const clipHold = {inputs: new Array(16).fill(0), outputs: new Array(16).fill(0)};
@@ -175,6 +177,7 @@ function liveStateHtml() {
 }
 let lastLiveStateHtml = '';
 function renderLiveState() {
+  renderEditStatus();
   const html = liveStateHtml();
   if (html === lastLiveStateHtml) return;
   lastLiveStateHtml = html;
@@ -204,26 +207,51 @@ function render() {
   renderSlots(); renderBuses(); renderLayout(); renderBank(); renderOverview(); renderInspector(); renderBass(); renderSettings(); updateMeters();
 }
 
-/** What the mode buttons mean, given what the Pi is actually running. */
-function modeNote(isDirect) {
-  const draft = isDirect
-    ? 'Previewing direct mode. DSP edits are disabled; the DSP draft is retained.'
-    : 'Previewing DSP mode.';
-  if (!health) return `${draft} No device has been switched.`;
-  const profile = health.profile?.selected ? ` on profile ${health.profile.selected}` : '';
-  const running = health.mode?.running ? `The Pi is running the ${terms().transport}${profile}.` : `The Pi stack is not running: ${health.mode?.detail || 'state unknown'}.`;
-  const dsp = isDirect ? '' : ` ${dspNote(health)}`;
-  return `${draft} ${running} Browser edits change nothing on the Pi; profile switches go through Apply on the Settings page.${dsp}`;
-}
+/** What the mode buttons mean: they set the draft, never the device. */
+function modeNote(isDirect) { return draftModeNote(health, isDirect); }
 
+let lastNoticesHtml = '';
 function renderConnection() {
   $('#connection-line').textContent = connectionLine(health);
-  const pill = $('#preview-pill');
-  pill.lastChild.textContent = health ? ' LIVE · READ-ONLY' : ' DESIGN PREVIEW';
-  pill.classList.toggle('live', Boolean(health));
-  pill.title = health ? 'Connected to the Pi control service. Status and logs are live; no control endpoint exists.' : 'No Pi control service is answering.';
-  const rate = health?.audio?.sampleRate;
-  $('#format-line').textContent = `${(rate ?? 48000) / 1000} kHz · ${health?.audio?.inputs ?? 16} × ${health?.audio?.outputs ?? 16}`;
+  const pill = $('#preview-pill'), state = pillState(health, access);
+  pill.lastChild.textContent = ` ${state.text}`;
+  pill.classList.toggle('live', state.state === 'ok');
+  pill.classList.toggle('warn', state.state === 'warn');
+  pill.dataset.state = state.state;
+  pill.title = state.title;
+  $('#format-line').textContent = formatLine(health);
+  // Names: the device's own when the service gives one.
+  const name = deviceName(health);
+  document.title = name || 'USB-AoIP';
+  const brandDevice = $('#brand-device');
+  brandDevice.textContent = name && name !== 'USB-AoIP' ? name : '';
+  brandDevice.hidden = !brandDevice.textContent;
+  $('#footer-note').textContent = health ? '' : '/ not connected to a device';
+  // What the device runs, beside the draft's mode buttons.
+  const running = deviceModeLabel(health);
+  $('#device-mode').hidden = !running;
+  $('#device-running').textContent = running || '';
+  // One notice area for both tabs, most severe first; no space when empty.
+  const notices = pageNotices(health, access);
+  const html = notices.map(n => `<p class="page-notice notice-${n.severity}" data-notice="${n.id}"><strong>${n.severity === 'bad' ? 'Problem' : 'Warning'}:</strong> ${esc(n.text)}</p>`).join('');
+  if (html !== lastNoticesHtml) {
+    lastNoticesHtml = html;
+    const box = $('#page-notices');
+    box.innerHTML = html;
+    box.hidden = !html;
+  }
+  renderEditStatus();
+}
+
+/** The line at the top of the Channels page: does an edit here reach the device? */
+function renderEditStatus() {
+  const node = $('#edit-status');
+  if (!node) return;
+  const status = editStatus(health, health ? liveState(health, draftShapeKey) : null, config.mode);
+  if (node.textContent !== status.text) node.textContent = status.text;
+  node.dataset.state = status.state;
+  node.classList.toggle('banner-warn', status.state === 'live');
+  node.classList.toggle('banner-note', status.state !== 'live');
 }
 
 function renderSlots() {
@@ -916,6 +944,12 @@ document.addEventListener('click', event => {
   if (b.dataset.action==='live-commit') {commitLive();return;}
   if (b.dataset.action==='live-discard') {discardLive();return;}
   if (b.dataset.tab) { tab = b.dataset.tab; render(); return; }
+  if (b.dataset.action === 'goto-switch') {
+    tab = 'settings'; render();
+    const panel = $('#apply-panel');
+    if (panel) { panel.scrollIntoView({block: 'start'}); panel.setAttribute('tabindex', '-1'); panel.focus({preventScroll: true}); }
+    return;
+  }
   if (b.dataset.select !== undefined) { selected = Number(b.dataset.select); selectedBand = 0; renderBank(); renderOverview(); renderInspector(); updateMeters(); return; }
   if (b.id === 'meter-toggle') { metersRunning = !metersRunning; syncMeterLabels(); updateMeters(); return; }
   if (b.dataset.mode) { config.mode = b.dataset.mode; markDraft(); render(); return; }
@@ -1014,7 +1048,7 @@ document.addEventListener('click', event => {
   } else if (action === 'reset') { config = createConfig(); selected = 0; layoutUndo=null; busUndo=null; }
   else if (action === 'export') {
     const url = URL.createObjectURL(new Blob([JSON.stringify(config,null,2)],{type:'application/json'}));
-    const a = document.createElement('a'); a.href = url; a.download = 'usb16x16-ui-preset.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('Exported a UI preset, not a device configuration.'); return;
+    const a = document.createElement('a'); a.href = url; a.download = 'usb-aoip-preset.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('Exported a UI preset, not a device configuration.'); return;
   } else return;
   markDraft(); render();
 });
@@ -1171,12 +1205,30 @@ function currentLiveMeters() {
   return liveMeters && performance.now() - liveMetersAt < 1500 ? liveMeters : null;
 }
 
+/** Which of three things the meters show: 'live' levels, 'none' (connected,
+ *  no level data: drawn empty, never invented) or 'demo' (not connected). */
+function meterMode() {
+  if (currentLiveMeters()) return 'live';
+  return health ? 'none' : 'demo';
+}
+
 function syncMeterLabels() {
-  const live = Boolean(currentLiveMeters());
+  const mode = meterMode();
   const toggle = $('#meter-toggle');
-  if (toggle) toggle.textContent = live ? (metersRunning ? 'Pause meters' : 'Resume meters') : (metersRunning ? 'Pause demo meters' : 'Resume demo meters');
+  if (toggle) {
+    toggle.hidden = mode === 'none';
+    toggle.textContent = mode === 'live' ? (metersRunning ? 'Pause meters' : 'Resume meters') : (metersRunning ? 'Pause demo meters' : 'Resume demo meters');
+  }
   const summary = $('#input-meters summary');
-  if (summary) summary.textContent = live ? 'Input meters · USB from the host · live, before the DSP stage' : 'Input meters · selected source · simulated';
+  if (summary) summary.textContent = mode === 'live' ? 'Input meters · USB from the host · live, before the DSP stage'
+    : mode === 'none' ? 'Input meters · no level data' : 'Input meters · demonstration levels, not audio';
+  const note = $('#meter-note');
+  if (note) {
+    const text = mode === 'none' ? meterAbsence(health)
+      : mode === 'demo' ? 'Demonstration levels: not connected to a device, so these meters show made-up movement, not audio.' : '';
+    if (note.textContent !== text) note.textContent = text;
+    note.hidden = !text;
+  }
 }
 
 // One strip from a live channel: the window's peak in dBFS, a clip hold of
@@ -1194,14 +1246,18 @@ function drawLiveStrip(bank, i, channel, bar, label, now) {
 }
 
 function updateMeters() {
+  syncMeterLabels();
   if (document.hidden || tab!=='outputs') return;
   const now = performance.now(), t = now/1000;
   const live = currentLiveMeters();
+  // Connected without level data: empty meters. Invented movement is only
+  // ever drawn when no device is connected, and is labelled as such.
+  const empty = !live && Boolean(health);
   config.outputs.forEach((o,i)=>{
     const bar = $(`#meter-${i}`), label = $(`#level-${i}`);
     if (live) { drawLiveStrip('outputs', i, live.outputs[i], bar, label, now); return; }
     const bus = config.buses?.find(b=>b.id===o.busId);
-    const quiet = !metersRunning || (config.mode==='dsp' && (o.role==='unused'||o.mute||bus?.mute));
+    const quiet = empty || !metersRunning || (config.mode==='dsp' && (o.role==='unused'||o.mute||bus?.mute));
     // Deliberately synthetic display activity, never represented as a DSP/audio simulation.
     const db = quiet ? -60 : -25 + 8*Math.sin(t*1.4+i*.67) + 3*Math.sin(t*3.1+i);
     if (bar) bar.style.setProperty('--level',`${Math.max(0,(db+60)/60*100)}%`);
@@ -1210,9 +1266,10 @@ function updateMeters() {
   if ($('#input-meters').open) config.inputs.forEach((o,i)=>{
     const bar = $(`#input-meter-${i}`), label = $(`#input-level-${i}`);
     if (live) { drawLiveStrip('inputs', i, live.inputs[i], bar, label, now); return; }
-    const db = metersRunning ? -29+9*Math.sin(t*1.2+i*.6) : -60;
+    const moving = metersRunning && !empty;
+    const db = moving ? -29+9*Math.sin(t*1.2+i*.6) : -60;
     bar.style.setProperty('--level',`${Math.max(0,(db+60)/60*100)}%`);
-    label.textContent = metersRunning ? db.toFixed(1) : '—';
+    label.textContent = moving ? db.toFixed(1) : '—';
     label.classList.remove('clip');
   });
 }
@@ -1251,13 +1308,26 @@ setInterval(updateMeters,100);
 // The page is fully usable with no backend. One probe decides which world we
 // are in; after that a single slow poll keeps the status panel current. The
 // service publishes a cached snapshot, so this poll costs the Pi the same
-// whether one browser or ten are open. Nothing here can change device state:
-// the service has no control endpoint to call.
+// whether one browser or ten are open. Changes to the device go through
+// sendRequest in backend.mjs (Apply, live edits, commit, shutdown).
 
 let pollTimer = null;
+// A state-changing request that meets a sign-in problem raises the same notice as the poll.
+onAccessProblem(problem => { access = problem; renderConnection(); });
 
 async function pollHealth() {
-  const next = await probeHealth();
+  const read = await readHealth();
+  if (read.access) {
+    // Signed out, refused or rate-limited: the service is there, so the page
+    // stays connected (on its last snapshot) and keeps its preset store. The
+    // notice says what to do; a later good read clears it.
+    access = read.access;
+    renderConnection();
+    syncMeterLabels();
+    return;
+  }
+  access = null;
+  const next = read.health;
   const wasConnected = Boolean(health);
   health = next;
   if (!wasConnected && next) {

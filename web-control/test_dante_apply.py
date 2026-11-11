@@ -2,7 +2,9 @@
 usb16x16-dante.service, with systemd and the owner stood in by a scripted
 runner and the configuration checked by the real usb16x16-dante-start.
 Run: python3 -m unittest web-control/test_dante_apply.py"""
+import contextlib
 import hashlib
+import io
 import importlib.machinery
 import importlib.util
 import json
@@ -143,8 +145,9 @@ class FakeRunner:
 class Env:
     def __init__(self, root):
         self.root = Path(root)
-        self.spool = self.root / "spool"
-        (self.spool / "presets").mkdir(parents=True)
+        self.inbox = self.root / "inbox"
+        self.inbox.mkdir()
+        self.state = self.root / "state"
         self.run_dir = self.root / "run"
         self.run_dir.mkdir()
         self.dsp_dir = self.root / "dsp"
@@ -208,8 +211,11 @@ class DanteApplyTest(unittest.TestCase):
 
     def make(self, runner=None, **options):
         self.runner = runner or FakeRunner(self.env, **options)
-        return apply_module.DanteApplier(spool=self.env.spool, conf_path=self.env.conf, run_dir=self.env.run_dir,
-                                         runner=self.runner, start_timeout=20, settle=5, poll=1)
+        applier = apply_module.DanteApplier(inbox=self.env.inbox, state_dir=self.env.state, conf_path=self.env.conf,
+                                            run_dir=self.env.run_dir, runner=self.runner, start_timeout=20, settle=5, poll=1)
+        # The arbiter's kind as the --rate-request entry passes it; the inbox never can.
+        applier.apply_rate = lambda request: applier.apply(request, rate_trigger=True)
+        return applier
 
     def request(self, **fields):
         self.counter += 1
@@ -219,16 +225,16 @@ class DanteApplyTest(unittest.TestCase):
 
     def with_artifact(self, data, **fields):
         request = self.request(**fields)
-        (self.env.spool / "presets" / f"{request['id']}.dsp").write_bytes(data)
+        (self.env.inbox / f"{request['id']}.dsp").write_bytes(data)
         request.update(artifactFile=f"{request['id']}.dsp", artifactSha256=sha(data))
         return request
 
     def with_rates(self, request, rates):
-        """Add rateArtifacts {rate: data} to a request, files in the spool as the web service writes them."""
+        """Add rateArtifacts {rate: data} to a request, files in the inbox as the web service writes them."""
         extra = {}
         for rate, data in rates.items():
             name = f"{request['id']}-{rate}.dsp"
-            (self.env.spool / "presets" / name).write_bytes(data)
+            (self.env.inbox / name).write_bytes(data)
             extra[str(rate)] = {"file": name, "sha256": sha(data)}
         request["rateArtifacts"] = extra
         return request
@@ -279,7 +285,7 @@ class DanteApplyTest(unittest.TestCase):
         self.assertEqual(result["live"], "dante-room")
         self.assertEqual(result["stack"], "dante")
         self.assertTrue(any(v.startswith("DSP loaded") for v in result["startLines"]["dante-room"]))
-        self.assertTrue((self.env.spool / "receipts" / f"{result['id']}.json").exists())
+        self.assertTrue((self.env.state / "receipts" / f"{result['id']}.json").exists())
         result = self.make().apply(self.request(profile="direct", expectedProfile="dante-room"))
         self.assertEqual(result["state"], "done", result["error"])
         self.assertEqual(self.env.conf_values(), {"METERS": "1"})
@@ -397,7 +403,7 @@ class DanteApplyTest(unittest.TestCase):
         self.assertEqual(self.env.conf_values()["DSP_SHA256"], sha(data))
         self.assertEqual(result["stats"]["biquads"], 0)
         self.assertTrue(any(c[0] == apply_module.OFFLINE_RUNNER for c in self.runner.calls), "load-checked first")
-        self.assertFalse((self.env.spool / "presets" / result["request"]["artifactSha256"]).exists())
+        self.assertFalse((self.env.inbox / result["request"]["artifactSha256"]).exists())
 
     def test_reapplying_the_live_slug_restarts_onto_the_new_file(self):
         self.assertEqual(self.make().apply(self.with_artifact(artifact(0.5), kind="preset", name="Room", slug="room"))["state"], "done")
@@ -548,11 +554,11 @@ class DanteApplyTest(unittest.TestCase):
 
     def test_consume_takes_the_request_file_and_the_artifact(self):
         request = self.with_artifact(artifact(0.5), kind="preset", name="Room", slug="room")
-        (self.env.spool / "request.json").write_text(json.dumps(request))
+        (self.env.inbox / f"{request['id']}.request").write_text(json.dumps(request))
         result = self.make().consume()
         self.assertEqual(result["state"], "done", result["error"])
-        self.assertFalse((self.env.spool / "request.json").exists())
-        self.assertFalse((self.env.spool / "presets" / request["artifactFile"]).exists())
+        self.assertFalse((self.env.inbox / f"{request['id']}.request").exists())
+        self.assertFalse((self.env.inbox / request["artifactFile"]).exists())
         self.assertIsNone(self.make().consume())
 
     # ---- rates (SAMPLE_RATE_DESIGN.md, step 4d): one artifact per rate, the file for owner.conf's RATE run
@@ -663,9 +669,9 @@ class DanteApplyTest(unittest.TestCase):
     def test_consume_takes_the_rate_artifacts_too(self):
         request = self.with_rates(self.with_artifact(artifact(0.5), kind="preset", name="Room", slug="room"),
                                   {96000: artifact(0.5, rate=96000)})
-        (self.env.spool / "request.json").write_text(json.dumps(request))
+        (self.env.inbox / f"{request['id']}.request").write_text(json.dumps(request))
         self.assertEqual(self.make().consume()["state"], "done")
-        self.assertEqual(list((self.env.spool / "presets").iterdir()), [])
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
 
 
     # ---- the arbiter (SAMPLE_RATE_DESIGN.md, step 4)
@@ -688,7 +694,7 @@ class DanteApplyTest(unittest.TestCase):
 
     def test_a_request_for_the_running_rate_restarts_nothing(self):
         before = (self.env.conf.read_text(), self.env.inferno.read_text())
-        result = self.make().apply(self.rate(48000, source="dante"))
+        result = self.make().apply_rate(self.rate(48000, source="dante"))
         self.assertEqual(result["state"], "done", result["error"])
         self.assertIn("nothing restarted", result["steps"][-1]["detail"])
         self.assertEqual(self.commands(), [])
@@ -696,7 +702,7 @@ class DanteApplyTest(unittest.TestCase):
 
     def test_a_rate_that_is_not_offered_is_refused(self):
         before = (self.env.conf.read_text(), self.env.inferno.read_text())
-        result = self.make(host=(96000, 96000)).apply(self.rate(96000))
+        result = self.make(host=(96000, 96000)).apply_rate(self.rate(96000))
         self.assertEqual(result["state"], "refused")
         self.assertIn("96000 Hz is not an offered rate (offered: 48000)", result["error"])
         self.assertEqual(self.commands(), [])
@@ -704,21 +710,21 @@ class DanteApplyTest(unittest.TestCase):
 
     def test_an_offered_rate_moves_both_files_and_restarts_once(self):
         self.env.set_inferno(48000, "48000,96000")
-        result = self.make(host=(96000, 96000)).apply(self.rate(96000))
+        result = self.make(host=(96000, 96000)).apply_rate(self.rate(96000))
         self.assertEqual(result["state"], "done", result["error"])
         self.assertEqual(self.env.conf_values(), {"METERS": "1", "RATE": "96000"})
         self.assertEqual(self.env.inferno_rate(), 96000)
         self.assertEqual(self.commands(), ["systemctl stop", "systemctl start"])
         self.assertEqual(result["rate"], {"from": 48000, "to": 96000, "source": "usb"})
         # The second signal of the same change on the Mac (Inferno's set) finds it done.
-        again = self.make(host=(96000, 96000)).apply(self.rate(96000, source="dante"))
+        again = self.make(host=(96000, 96000)).apply_rate(self.rate(96000, source="dante"))
         self.assertEqual(again["state"], "done")
         self.assertEqual(self.commands(), [], "one change, one restart")
         # And back to 48 kHz, once the change is older than the tug-of-war window,
         # writes owner.conf as it was before rates.
-        history = self.env.spool / "rate-history.json"
+        history = self.env.state / "rate-history.json"
         history.write_text(json.dumps({**json.loads(history.read_text()), "at": time.time() - apply_module.RATE_REVERSAL_S - 1}))
-        back = self.make(host=(48000, 48000)).apply(self.rate(48000))
+        back = self.make(host=(48000, 48000)).apply_rate(self.rate(48000))
         self.assertEqual(back["state"], "done", back["error"])
         self.assertEqual(self.env.conf_values(), {"METERS": "1"})
         self.assertEqual(self.env.inferno_rate(), 48000)
@@ -727,22 +733,22 @@ class DanteApplyTest(unittest.TestCase):
         # The Mac's half of the same change arriving within the window is waited
         # for (Dante Switcher sets the Mac beside the Dante devices): nothing overridden.
         self.env.set_inferno(48000, "48000,96000")
-        result = self.make(host=(48000, 48000), host_after=(2, (96000, 96000))).apply(self.rate(96000, source="dante"))
+        result = self.make(host=(48000, 48000), host_after=(2, (96000, 96000))).apply_rate(self.rate(96000, source="dante"))
         self.assertEqual(result["state"], "done", result["error"])
-        history = self.env.spool / "rate-history.json"
+        history = self.env.state / "rate-history.json"
         self.assertNotIn("overrode", json.loads(history.read_text()))
         # A Mac that stays at another rate no longer blocks a Dante-side set
         # (operator, 2026-10-28: the Mac follows Dante); its rate is recorded.
         self.env.set_inferno(48000, "48000,96000")
         self.env.conf.write_text("METERS=1\n")
-        result = self.make(host=(48000, 48000)).apply(self.rate(96000, source="dante"))
+        result = self.make(host=(48000, 48000)).apply_rate(self.rate(96000, source="dante"))
         self.assertEqual(result["state"], "done", result["error"])
         self.assertEqual(self.env.inferno_rate(), 96000)
         self.assertEqual(json.loads(history.read_text())["overrode"], 48000)
         # The owner asking for the Mac's old rate is refused while the Mac has not
         # followed, also once the reversal window is over.
         history.write_text(json.dumps({**json.loads(history.read_text()), "at": time.time() - apply_module.RATE_REVERSAL_S - 1}))
-        result = self.make(host=(48000, 48000)).apply(self.rate(48000))
+        result = self.make(host=(48000, 48000)).apply_rate(self.rate(48000))
         self.assertEqual(result["state"], "refused")
         self.assertIn("the Mac has not followed yet", result["error"])
         self.assertEqual(self.commands(), [])
@@ -751,7 +757,7 @@ class DanteApplyTest(unittest.TestCase):
         applier = self.make(host=(48000, 48000))
         self.runner.log.append("USBOPEN device=hw:CARD=UAC2Gadget,DEV=0 capture period=48 buffer=480 playback period=48 "
                                "buffer=480 rate=96000 host_rate=match host_capture=96000 host_playback=96000")
-        result = applier.apply(self.rate(48000))
+        result = applier.apply_rate(self.rate(48000))
         self.assertEqual(result["state"], "done", result["error"])
         self.assertEqual(self.env.inferno_rate(), 48000)
         self.assertNotIn("overrode", json.loads(history.read_text()))
@@ -759,7 +765,7 @@ class DanteApplyTest(unittest.TestCase):
     def test_a_dante_set_asks_the_mac_to_follow_after_the_move(self):
         self.env.set_inferno(48000, "48000,96000")
         runner = FakeRunner(self.env, host=(48000, 48000), rate_request=True)
-        result = self.make(runner=runner).apply(self.rate(96000, source="dante"))
+        result = self.make(runner=runner).apply_rate(self.rate(96000, source="dante"))
         self.assertEqual(result["state"], "done", result["error"])
         writes = [c for c in runner.calls if c[:1] == ["amixer"] and c[3] == "cset"]
         self.assertEqual(writes, [["amixer", "-c", "UAC2Gadget", "cset", "iface=PCM,name=Device Rate Request", "96000"]])
@@ -772,7 +778,7 @@ class DanteApplyTest(unittest.TestCase):
         names = [s["name"] for s in result["steps"]]
         self.assertEqual(names[names.index("verifying"):], ["verifying", "host-follow", "settling"])
         # The overrode guard stays as the fallback; it lifts when the owner joins the Mac.
-        self.assertEqual(json.loads((self.env.spool / "rate-history.json").read_text())["overrode"], 48000)
+        self.assertEqual(json.loads((self.env.state / "rate-history.json").read_text())["overrode"], 48000)
 
     def test_a_move_that_fails_its_settle_sends_the_mac_back(self):
         self.env.set_inferno(48000, "48000,96000")
@@ -790,7 +796,7 @@ class DanteApplyTest(unittest.TestCase):
                     self.log.append("NETERROR count=1 last=-32 (Broken pipe) t=3.000")
 
         runner = FailsFirstSettle(self.env, host=(48000, 48000), rate_request=True)
-        result = self.make(runner=runner).apply(self.rate(96000, source="dante"))
+        result = self.make(runner=runner).apply_rate(self.rate(96000, source="dante"))
         self.assertEqual(result["state"], "rolled-back", result["error"])
         self.assertEqual((self.env.conf.read_text(), self.env.inferno.read_text()), before)
         writes = [c[-1] for c in runner.calls if c[:1] == ["amixer"] and c[3] == "cset"]
@@ -802,13 +808,13 @@ class DanteApplyTest(unittest.TestCase):
                                         "settling"])
         # A Mac that was never told is not told on a rollback either.
         runner = FailsFirstSettle(self.env, host=(48000, 48000))
-        result = self.make(runner=runner).apply(self.rate(96000, source="dante"))
+        result = self.make(runner=runner).apply_rate(self.rate(96000, source="dante"))
         self.assertEqual(result["state"], "rolled-back", result["error"])
         self.assertEqual(len([s for s in result["steps"] if s["name"] == "host-follow"]), 1)
 
     def test_without_the_control_a_dante_set_still_stands(self):
         self.env.set_inferno(48000, "48000,96000")
-        result = self.make(host=(48000, 48000)).apply(self.rate(96000, source="dante"))
+        result = self.make(host=(48000, 48000)).apply_rate(self.rate(96000, source="dante"))
         self.assertEqual(result["state"], "done", result["error"])
         follow = [s for s in result["steps"] if s["name"] == "host-follow"]
         self.assertEqual(len(follow), 1)
@@ -819,16 +825,16 @@ class DanteApplyTest(unittest.TestCase):
     def test_no_follow_request_when_the_mac_chose_or_already_agrees(self):
         self.env.set_inferno(48000, "48000,96000")
         runner = FakeRunner(self.env, host=(96000, 96000), rate_request=True)
-        self.assertEqual(self.make(runner=runner).apply(self.rate(96000))["state"], "done")
+        self.assertEqual(self.make(runner=runner).apply_rate(self.rate(96000))["state"], "done")
         self.env.set_inferno(48000, "48000,96000")
         self.env.conf.write_text("METERS=1\n")
-        (self.env.spool / "rate-history.json").unlink()
-        self.assertEqual(self.make(runner=runner).apply(self.rate(96000, source="dante"))["state"], "done")
+        (self.env.state / "rate-history.json").unlink()
+        self.assertEqual(self.make(runner=runner).apply_rate(self.rate(96000, source="dante"))["state"], "done")
         self.assertEqual([c for c in runner.calls if c[:1] == ["amixer"] and c[3] == "cset"], [])
 
     def test_a_mac_request_the_mac_no_longer_agrees_with_is_refused(self):
         self.env.set_inferno(48000, "48000,96000")
-        result = self.make(host=(44100, 44100)).apply(self.rate(96000))
+        result = self.make(host=(44100, 44100)).apply_rate(self.rate(96000))
         self.assertEqual(result["state"], "refused")
         self.assertIn("the Mac's USB 16x16 is at 44100 Hz, not the 96000 Hz asked for", result["error"])
         self.assertEqual(self.commands(), [])
@@ -838,20 +844,20 @@ class DanteApplyTest(unittest.TestCase):
         # rate-report module (0), and unreadable controls, record nothing.
         self.env.set_inferno(96000, "48000,96000,44100")
         self.env.conf.write_text("METERS=1\nRATE=96000\n")
-        self.assertEqual(self.make(host=(0, 0)).apply(self.rate(44100, source="dante"))["state"], "done")
-        self.assertNotIn("overrode", json.loads((self.env.spool / "rate-history.json").read_text()))
+        self.assertEqual(self.make(host=(0, 0)).apply_rate(self.rate(44100, source="dante"))["state"], "done")
+        self.assertNotIn("overrode", json.loads((self.env.state / "rate-history.json").read_text()))
 
     def test_a_preset_without_an_artifact_for_the_rate_is_refused(self):
         self.env.set_inferno(48000, "48000,96000")
         self.env.install("room", artifact())
         self.assertEqual(self.make().apply(self.request(profile="dante-room"))["state"], "done")
-        result = self.make(host=(96000, 96000)).apply(self.rate(96000))
+        result = self.make(host=(96000, 96000)).apply_rate(self.rate(96000))
         self.assertEqual(result["state"], "refused")
         self.assertIn("no artifact for 96000 Hz", result["error"])
         self.assertEqual(self.env.inferno_rate(), 48000)
         at96 = self.env.dsp_dir / "dante-room@96000.dsp"
         at96.write_bytes(artifact(rate=96000))
-        result = self.make(host=(96000, 96000)).apply(self.rate(96000))
+        result = self.make(host=(96000, 96000)).apply_rate(self.rate(96000))
         self.assertEqual(result["state"], "done", result["error"])
         self.assertEqual(self.env.conf_values()["DSP_PRESET"], str(at96))
         self.assertEqual(self.env.conf_values()["DSP_SHA256"], sha(artifact(rate=96000)))
@@ -859,7 +865,7 @@ class DanteApplyTest(unittest.TestCase):
     def test_an_owner_that_does_not_come_up_at_the_rate_rolls_both_files_back(self):
         self.env.set_inferno(48000, "48000,96000")
         before = (self.env.conf.read_text(), self.env.inferno.read_text())
-        result = self.make(host=(96000, 96000), old_owner=True).apply(self.rate(96000))
+        result = self.make(host=(96000, 96000), old_owner=True).apply_rate(self.rate(96000))
         self.assertEqual(result["state"], "rolled-back", result["error"])
         self.assertEqual((self.env.conf.read_text(), self.env.inferno.read_text()), before)
         self.assertEqual(self.commands(), ["systemctl stop", "systemctl start", "systemctl stop", "systemctl start"])
@@ -870,21 +876,21 @@ class DanteApplyTest(unittest.TestCase):
                 if argv[:2] == ["systemctl", "start"]:
                     self.log = [line.replace("rate=96000", "rate=48000") for line in self.log]
                 return code, out
-        result = self.make(runner=Liar(self.env, host=(96000, 96000))).apply(self.rate(96000))
+        result = self.make(runner=Liar(self.env, host=(96000, 96000))).apply_rate(self.rate(96000))
         self.assertEqual(result["state"], "rolled-back")
         self.assertIn("started at 48000 Hz, not 96000", result["error"])
 
     def test_a_change_straight_back_is_a_tug_of_war(self):
         self.env.set_inferno(48000, "48000,96000")
-        self.assertEqual(self.make(host=(96000, 96000)).apply(self.rate(96000))["state"], "done")
-        result = self.make(host=(48000, 48000)).apply(self.rate(48000))
+        self.assertEqual(self.make(host=(96000, 96000)).apply_rate(self.rate(96000))["state"], "done")
+        result = self.make(host=(48000, 48000)).apply_rate(self.rate(48000))
         self.assertEqual(result["state"], "refused")
         self.assertIn("tug-of-war", result["error"])
         self.assertEqual(self.env.inferno_rate(), 96000)
 
     def test_mismatched_configuration_is_refused(self):
         self.env.set_inferno(96000, "48000,96000")
-        result = self.make().apply(self.rate(96000))
+        result = self.make().apply_rate(self.rate(96000))
         self.assertEqual(result["state"], "refused")
         self.assertIn("owner.conf runs at 48000 Hz but", result["error"])
 
@@ -898,6 +904,101 @@ class DanteApplyTest(unittest.TestCase):
         self.assertIsNone(self.make().consume_rate_request(), "nothing pending")
         self.env.rate_request.write_text("rate=12345 source=usb\n")
         self.assertEqual(self.make().consume_rate_request()["state"], "refused")
+
+
+    # ---- the inbox, the state directory and the rate-request file (1.9.0)
+
+    def test_kind_rate_from_the_inbox_is_refused(self):
+        self.env.set_inferno(48000, "48000,96000")
+        request = self.rate(96000, source="usb")
+        (self.env.inbox / f"{request['id']}.request").write_text(json.dumps(request))
+        result = self.make(host=(96000, 96000)).consume()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("only from the rate-request trigger", result["error"])
+        self.assertEqual(self.commands(), [])
+        self.assertEqual(self.env.inferno_rate(), 48000)
+        # and apply() without the trigger refuses it the same way
+        result = self.make(host=(96000, 96000)).apply(self.rate(96000))
+        self.assertIn("only from the rate-request trigger", result["error"])
+
+    def test_a_malformed_rate_history_is_empty(self):
+        self.env.set_inferno(48000, "48000,96000")
+        history = self.env.state / "rate-history.json"
+        for text in ("{not json", "[1, 2]", '{"from": 96000, "at": "yesterday"}', '{"overrode": [48000]}'):
+            with self.subTest(text=text):
+                self.env.conf.write_text("METERS=1\n")
+                self.env.set_inferno(48000, "48000,96000")
+                self.env.state.mkdir(exist_ok=True)
+                history.write_text(text)
+                with contextlib.redirect_stderr(io.StringIO()) as err:
+                    result = self.make(host=(96000, 96000)).apply_rate(self.rate(96000))
+                self.assertEqual(result["state"], "done", result["error"])
+                self.assertIn("malformed; treated as empty", err.getvalue())
+                self.assertEqual(json.loads(history.read_text())["to"], 96000, "rewritten whole")
+
+    def test_the_rate_request_file_is_read_as_untrusted(self):
+        target = self.env.root / "elsewhere"
+        target.write_text(f"rate=96000 source=usb at={int(time.time())}\n")
+        self.env.set_inferno(48000, "48000,96000")
+        os.symlink(target, self.env.rate_request)
+        result = self.make(host=(96000, 96000)).consume_rate_request()
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("cannot be opened as a plain file", result["error"])
+        self.assertFalse(os.path.lexists(self.env.rate_request))
+        self.assertTrue(target.exists())
+        self.assertEqual(self.commands(), [])
+        if hasattr(os, "mkfifo"):
+            os.mkfifo(self.env.rate_request)
+            result = self.make().consume_rate_request()    # would hang without O_NONBLOCK
+            self.assertIn("not a regular file", result["error"])
+        self.env.rate_request.write_text("rate=96000 source=usb " + "x" * 5000)
+        result = self.make().consume_rate_request()
+        self.assertIn("larger than 4096 bytes", result["error"])
+        self.assertEqual(self.env.inferno_rate(), 48000)
+
+    def test_the_live_push_creates_an_unpredictable_temporary(self):
+        self.live_setup()
+        runner = self.runner
+        names = []
+        real_open = os.open
+        def spy(path, flags, *args, **kw):
+            if Path(path).parent == self.env.run_dir and Path(path).name.startswith(".dsp-live.dsp."):
+                names.append(Path(path).name)
+                self.assertTrue(flags & os.O_EXCL and flags & os.O_NOFOLLOW and flags & os.O_CREAT)
+            return real_open(path, flags, *args, **kw)
+        apply_module.os.open = spy
+        try:
+            result = self.make(runner=runner).apply(self.with_artifact(artifact(0.5), kind="live"))
+        finally:
+            apply_module.os.open = real_open
+        self.assertEqual(result["state"], "done", result["error"])
+        self.assertEqual(len(names), 1)
+        self.assertNotIn(result["id"], names[0], "not derived from the request id")
+        self.assertEqual(sorted(p.name for p in self.env.run_dir.iterdir()), ["dsp-live.dsp", "dsp-live.status"])
+        self.assertEqual(self.env.run_dir.joinpath("dsp-live.dsp").stat().st_mode & 0o777, 0o644)
+
+    def test_the_envelope_is_checked_before_a_remove(self):
+        self.env.install("room", artifact())
+        result = self.make().apply(self.request(kind="remove", slug="room", requestedAt=time.time() - 600))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("old", result["error"])
+        self.assertTrue((self.env.dsp_dir / "dante-room.dsp").exists())
+
+    def test_drain_takes_one_restart_a_run_and_writes_nothing_into_the_inbox(self):
+        self.env.install("room", artifact())
+        first = self.request(profile="dante-room", expectedProfile="direct")
+        second = self.request(profile="direct", expectedProfile="dante-room")
+        for body, age in ((first, 20), (second, 10)):
+            path = self.env.inbox / f"{body['id']}.request"
+            path.write_text(json.dumps(body))
+            os.utime(path, (time.time() - age, time.time() - age))
+        results = self.make().drain()
+        self.assertEqual([(r["id"], r["state"]) for r in results], [(first["id"], "done")])
+        self.assertEqual(self.env.live(), "dante-room")
+        results = self.make().drain()
+        self.assertEqual([(r["id"], r["state"]) for r in results], [(second["id"], "done")])
+        self.assertEqual(self.env.live(), "direct")
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
 
 
 class FakeRunnerNoConf:

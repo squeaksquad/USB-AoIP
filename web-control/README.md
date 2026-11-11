@@ -1,5 +1,35 @@
 # `usb16x16-web` — control service, and `usb16x16-apply` — its privileged half
 
+> **Access changed on 2026-11-10 (web 1.7.0, applier 1.9.0).** Where this file
+> disagrees with the list below, the list is right; `docs/web/ACCESS.md` has
+> the design and its reasons. The rest of this file is older and still
+> describes the single `web-apply/` spool, plain HTTP and the author's paths.
+>
+> - Requests go into `/var/spool/usb-aoip/inbox` (root's, group the web
+>   account's, mode 1730) as `<id>.request`, with any artifact beside it as
+>   `<id>.dsp` or `<id>-<rate>.dsp`. There is no `request.json`.
+> - The applier's `current.json`, `receipts/`, lock and rate history are in
+>   `/var/lib/usb16x16-apply`, which only root writes. The service reads
+>   `current.json` there. `USB16X16_APPLY_INBOX` and `USB16X16_APPLY_STATE`
+>   replace `USB16X16_APPLY_DIR`.
+> - Every POST, PUT and DELETE needs the header `X-USB-AoIP: 1`, a JSON
+>   content type when it has a body, and an `Origin` that matches `Host` when
+>   one is sent. Otherwise 403.
+> - `--tls-cert` and `--tls-key` turn on TLS; the installer supplies them
+>   from `WEB_TLS` in `install.conf`.
+> - Without `--bind`, an interface with no address makes the service exit 75
+>   and be restarted, not listen on 127.0.0.1.
+> - The login file is `/etc/usb-aoip/web-auth`, root's, readable by the web
+>   account's group. Add a login with `sudo install/install.sh set-password
+>   NAME`, as root.
+> - `/api/health` on the Dante stack also carries `device.name`, the real
+>   `audio.sampleRate`, `startCheck` and `clock`. `clock.state` is `unknown`
+>   whenever Statime is running: at its configured log level it reports
+>   nothing that shows whether it has a leader.
+> - Routes this file's API table omits: `POST /api/apply/preset`,
+>   `/api/apply/live`, `/api/apply/commit`, `/api/apply/shutdown`, and
+>   `DELETE /api/apply/preset/<slug>`.
+
 The backend the web UI talks to. It serves `web-ui` and a small JSON API
 describing the running stack: service states, bridge telemetry, PTP, AoIP
 streams, network and thermal state, the journal, durable presets, and, since

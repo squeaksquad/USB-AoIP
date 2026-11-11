@@ -22,3 +22,11 @@ SyslogIdentifier=usb16x16-apply
 # while the bridge is starting.
 Nice=10
 IOSchedulingClass=idle
+# Root, because it rewrites the audio service's configuration and restarts it.
+# It needs nothing of anyone's home directory, no new privileges and no
+# kernel modules.
+NoNewPrivileges=yes
+ProtectHome=read-only
+ProtectKernelModules=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

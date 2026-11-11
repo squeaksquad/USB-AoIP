@@ -55,6 +55,7 @@ machine and prints it. Check, and edit if needed:
 | `DEVICE_NAME` | The name the computer and Dante Controller show. |
 | `USB_SERIAL` | Derived from the Pi's serial number, so two units on one computer do not collide. |
 | `DANTE_DEVICE_ID` | The wired port's MAC address followed by `0000`; unique on the network. |
+| `WEB_TLS` | `self-signed` (the default) encrypts the page with a certificate made on the unit; your browser warns once. `provided` uses your own; `off` is plain HTTP. `docs/web/ACCESS.md` explains the choice. |
 | `OPERATOR_USER` | Your login. It gets password-free `systemctl start/stop/restart` for the audio services and nothing else. Empty it to install no such rule. |
 
 `install/install.conf.example` describes every key. Nothing in this file
@@ -104,13 +105,25 @@ not compared with anyone else's build.
 
 ## 5. The web page login
 
+When `install` is run at a terminal it ends by asking for a password for a
+first login, named after `OPERATOR_USER`. To add one later, or another:
+
 ```bash
 sudo install/install.sh set-password yourname
 ```
 
-It asks for the password twice. The page is then at
-`http://<the Pi's Wi-Fi address>:8088`. It is a password over plain HTTP:
-fine on a network you control, not protection against someone watching it.
+It asks for the password twice and prints the page's address,
+`https://<the Pi's Wi-Fi address>:8088`.
+
+The first time a browser opens it, it warns that the certificate is not
+trusted: the unit made it itself, and nobody vouches for it. The installer
+printed the certificate's SHA-256 fingerprint; the browser's warning has a
+"view certificate" link that shows one too. If they match, the page is your
+unit and the connection is encrypted; accept it. The warning returns only
+if the Pi's address changes and the certificate is remade.
+
+Anyone with a login can do everything the page can, including shutting the
+unit down. The page is for a local network, not the internet.
 
 ## 6. Check it
 
@@ -185,6 +198,22 @@ If it restarts the endpoint over and over on a network that sounds fine,
 raise `USB16X16_STARTCHECK_TOLERANCE` or set `USB16X16_STARTCHECK_MAX=0`;
 `journalctl -u usb16x16-dante-startcheck` shows the rates it read.
 
+## The clock service as an ordinary user
+
+By default the PTP follower, Statime, runs as root with its clock socket in
+`/tmp`, as the project was measured. `PTP_SANDBOX=1` in `install.conf`,
+then `install` again, runs it as the audio account with only the two
+capabilities it needs, sandboxed, with the socket in
+`/run/usb16x16-statime` where only that account can reach it.
+
+It is off by default for one reason: it changes the Statime unit and
+config, one line of the Inferno config and the socket path in the Dante
+unit, and the clock is what the whole audio path hangs on. Nobody has run
+it. If you turn it on, check that `journalctl -u usb16x16-statime` shows no
+permission errors, that the Dante service starts, and that audio passes;
+then measure as for any change to the audio path. `PTP_SANDBOX=0` and
+`install` puts everything back.
+
 ## Kernel upgrades
 
 The gadget needs two kernel modules (`u_audio`, `usb_f_uac2`) with this
@@ -225,6 +254,9 @@ is enabled. `docs/install/author-pi-mapping.md` has the mapping.
 | Path | What |
 |---|---|
 | `/etc/usb-aoip/install.conf` | The site config |
+| `/etc/usb-aoip/web-auth`, `web.env`, `tls/` | The page's logins; its TLS and bind arguments; its key and certificate |
+| `/var/spool/usb-aoip/inbox` | Requests from the page to the root helper: the page can drop files here and cannot list them |
+| `/var/lib/usb16x16-apply` | The root helper's status and receipts |
 | `/etc/usb16x16/dante/` | Inferno and Statime configs, `transport.conf`, `startcheck.conf`, `owner.conf` (written by the page) |
 | `/etc/usb16x16/dsp/` | DSP presets applied from the page |
 | `/usr/local/libexec/usb16x16-dante/` | The owner, Statime, the start wrapper, the start check |
@@ -234,7 +266,7 @@ is enabled. `docs/install/author-pi-mapping.md` has the mapping.
 | `/etc/systemd/system/usb-16x16.service`, `usb16x16-*` | Units |
 | `/lib/modules/<kernel>/updates/dkms/` | The two gadget modules |
 | `/var/lib/usb16x16-dante/` | The Dante identity, saved subscriptions, the learned clock offset |
-| `/var/lib/usb-aoip/` | The page's files, presets, logins and request spool; the build tree; the manifest |
+| `/var/lib/usb-aoip/` | The page's files and presets; the build tree; the manifest |
 | `/etc/sysctl.d/90-usb16x16-compaction.conf`, `/etc/NetworkManager/conf.d/90-usb16x16-eth0-carrier.conf` | One sysctl; keep the audio port's address through a cable pull |
 
 Unit, binary and directory names keep the project's older `usb16x16`

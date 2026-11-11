@@ -66,6 +66,40 @@ guesses at (see `author-pi-mapping.md`, section 4).
 13. `uninstall`, then `install` again: the Dante identity and subscriptions
     survive; `uninstall --purge` leaves nothing but packages.
 
+## The web page and access (workstream 3)
+
+Built 2026-11-10; unit-tested and looked at in a browser against a mock
+stack, never run on a Pi.
+
+14. The request path end to end as two accounts: the page (as
+    `usb-aoip-web`) drops a request in `/var/spool/usb-aoip/inbox`, the path
+    unit fires on it, the applier (root) acts and writes
+    `/var/lib/usb16x16-apply/current.json`, the page shows the result. Try
+    Apply, a live edit, Commit and Shut down. The inbox mode (1730) and the
+    `PathChanged=` trigger on a directory are the parts only a real systemd
+    can show.
+15. From the web account, try to misuse the inbox: `ls` it (must fail),
+    plant a symbolic link named `<id>.request` pointing at a root file (the
+    applier must refuse it and leave the target alone).
+16. TLS: the certificate is made, the fingerprint the installer prints
+    matches the browser's, the page loads over `https://`, plain `http://`
+    to the same port fails. Change the Pi's address and run `install`: a new
+    certificate.
+17. The page with no address on `MGMT_IF` at boot: the service exits and is
+    restarted until the address is there (`systemctl status usb16x16-web`).
+18. The page's sandbox additions do not break it: the log panel (group
+    `systemd-journal`), temperature and throttling (`vcgencmd`), meters.
+19. The new status on the page against a real unit: the device name, the
+    rate after a rate change, the "Network audio check" row through a start,
+    and the notices when the Dante service is stopped by hand.
+20. `PTP_SANDBOX=1`: see `docs/INSTALL.md`, "The clock service as an
+    ordinary user". This one is a change to the audio path.
+21. The applier and the web service are new builds of installed files
+    (applier 1.9.0, web 1.7.0). By the 2026-10-29 rule: their behavioural
+    checks above, a noise probe at 32 and one two-minute sixteen-channel
+    soak. The rate arbiter's decisions were not changed, but it runs through
+    the same file: a rate move from the Mac and one from Dante Controller.
+
 ## Acceptance
 
 A fresh install builds its own owner, plugin and modules, so by the

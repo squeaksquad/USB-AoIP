@@ -3,11 +3,41 @@
 profiles on request, verify the result, roll back on failure, leave a receipt.
 
 The web service (usb16x16-web) runs unprivileged with NoNewPrivileges and can
-write exactly one thing outside its preset store: a request file in the spool
-directory. A root systemd path unit (usb16x16-apply.path) runs this program
-whenever that file changes. Nothing in the request is executed; it names an
-accepted profile and the profile the browser believed was live, and this
-program decides everything else from the live configuration.
+write exactly one kind of thing outside its preset store: files in the inbox.
+A root systemd path unit (usb16x16-apply.path) runs this program whenever the
+inbox is not empty. Nothing in a request is executed; it names an accepted
+profile and the profile the browser believed was live, and this program
+decides everything else from the live configuration.
+
+Two directories (1.9.0), neither owned by the web user:
+
+  inbox   /var/spool/usb-aoip/inbox (--inbox, USB16X16_APPLY_INBOX), owned
+          root:<web group>, mode 1730: the web user can create files in it
+          but cannot list it or remove or replace another's. For each request
+          it picks a fresh random id (8-32 lower-case hex) and writes any
+          uploaded artifacts first, <id>.dsp and <id>-<rate>.dsp, then the
+          request as <id>.request.tmp renamed to <id>.request. The JSON body
+          carries the same id. This program processes every <id>.request,
+          oldest mtime first, and scans again before it exits. Every read from
+          the inbox opens the name with O_NOFOLLOW | O_NONBLOCK, requires a
+          regular file with one link, reads at most a cap (64 KiB for a
+          request, 256 KiB for an artifact) and removes the name. A request
+          whose body id differs from its file name is refused. Other files
+          older than 10 minutes are removed. Nothing is written to the inbox.
+  state   /var/lib/usb16x16-apply (--state, USB16X16_APPLY_STATE), root:root
+          0755, created if missing; this program refuses to run if it is a
+          symlink, not a directory, not owned by the user running it, or
+          writable by group or others. It holds current.json (the operation
+          in progress), receipts/<id>.json (one per request; an existing
+          receipt makes a request a replay), apply.lock (one operation at a
+          time), rate-history.json (the arbiter's last change) and check/
+          (0700, the loader check's temporary copy). Every write here goes
+          through a temporary file created with O_EXCL | O_NOFOLLOW, then
+          fsync and rename.
+
+Every request's envelope (id, requestedAt within 120 s, no receipt yet) is
+checked before its kind acts. The kind "rate" is taken only from the
+--rate-request trigger, never from the inbox.
 
 One operation, in order, each step recorded in current.json as it happens:
 
@@ -35,7 +65,7 @@ write, and it is the supervisor's own command.
 
 A second request kind, "preset" (2026-09-11), installs a user preset the
 browser compiled with work/dsp-compiler and switches to it. The artifact text
-arrives beside the request in the spool's presets/ directory; this program
+arrives beside the request in the inbox as <id>.dsp; this program
 recomputes its hash, parses it with the same bounds as the bridge's loader,
 requires every biquad section to be stable and the total to stay within the
 count the loaded soak passed, loads it through the bridge's own code
@@ -78,7 +108,9 @@ The operator then unplugs the USB data cable, then PoE, as the handoff's
 clean shutdown says.
 
 Exit status is 0 when a receipt was written (even for a refused or failed
-request: the outcome is the receipt), 2 for a broken environment.
+request: the outcome is the receipt) or when nothing was pending, 2 for a
+broken environment (including a state directory that fails its checks, or the
+removed --spool option or USB16X16_APPLY_DIR variable).
 """
 
 from __future__ import annotations
@@ -88,14 +120,17 @@ import hashlib
 import json
 import os
 import re
+import secrets
+import stat
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 
-SPOOL_DIR = Path(os.environ.get("USB16X16_APPLY_DIR", "/home/bdimaio/usb-16x16-work/web-apply"))
+INBOX_DIR = Path(os.environ.get("USB16X16_APPLY_INBOX", "/var/spool/usb-aoip/inbox"))
+STATE_DIR = Path(os.environ.get("USB16X16_APPLY_STATE", "/var/lib/usb16x16-apply"))
 CONF_PATH = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 SUPERVISOR = os.environ.get("USB16X16_SUPERVISOR", "/usr/local/sbin/usb16x16-aes67-supervisor")
@@ -125,9 +160,17 @@ LIVE_STATUS = "dsp-live.status"
 LIVE_TIMEOUT_S = 3.0                 # the bridge polls every 50 ms; a publish waits at most one more poll
 LIVE_POLL_S = 0.1
 
-REQUEST_NAME = "request.json"
+REQUEST_SUFFIX = ".request"         # <id>.request in the inbox
 STATE_NAME = "current.json"
 RECEIPT_DIR = "receipts"
+CHECK_DIR = "check"
+LOCK_NAME = "apply.lock"
+RATE_HISTORY_NAME = "rate-history.json"
+MAX_REQUEST_BYTES = 1 << 16
+MAX_RATE_REQUEST_BYTES = 4096
+STRAY_AGE_S = 600.0                 # inbox files no request claimed are removed after this
+DRAIN_LIMIT = 100
+RECEIPT_TEXT_MAX = 64
 
 PROFILE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 PRESET_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._·-]{0,63}$")
@@ -158,15 +201,47 @@ def read_text(path: Path, limit: int = 1 << 20) -> str | None:
         return None
 
 
+CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+def write_bytes_atomic(path: Path, data: bytes, mode: int = 0o644) -> None:
+    """A new file under an unpredictable name that must not exist (no symlink
+    is followed), fsync, then rename over `path`."""
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    fd = os.open(temporary, CREATE_FLAGS, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+            os.fchmod(handle.fileno(), mode)
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
+
 def write_atomic(path: Path, payload: dict) -> None:
-    text = json.dumps(payload, indent=2, sort_keys=True)
-    temporary = path.with_name(path.name + ".tmp")
-    with open(temporary, "w", encoding="utf-8") as handle:
-        handle.write(text)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.chmod(temporary, 0o644)
-    os.replace(temporary, path)
+    write_bytes_atomic(path, json.dumps(payload, indent=2, sort_keys=True).encode("utf-8"))
+
+
+def clamp_text(value):
+    """requestedBy, from and kind as a receipt records them: None stays None;
+    a string of printable ASCII is kept, cut to 64 characters; anything else
+    is 'invalid'."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or any(not (" " <= c <= "~") for c in value):
+        return "invalid"
+    return value[:RECEIPT_TEXT_MAX]
+
+
+def request_record(request: dict, keys: tuple) -> dict:
+    """The request as a receipt records it; the free-text fields clamped."""
+    return {k: clamp_text(request.get(k)) if k in ("kind", "requestedBy", "from") else request.get(k) for k in keys}
 
 
 def utc(stamp: float | None = None) -> str:
@@ -244,6 +319,102 @@ class Refused(Exception):
 
 class Failed(Exception):
     """A live push the bridge did not take: nothing to roll back, but not a refusal."""
+
+
+class Missing(Exception):
+    """The name is not there (any more)."""
+
+
+class BrokenEnvironment(Exception):
+    """The state directory cannot be trusted; nothing is done."""
+
+
+UNTRUSTED_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+
+
+def remove_entry(path: Path) -> None:
+    """Remove a name without following it; an empty directory too."""
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        try:
+            os.rmdir(path)
+        except OSError:
+            pass
+
+
+def read_untrusted(path: Path, cap: int, remove: bool = True) -> bytes:
+    """A file another user can write: no symlink followed, never blocks on a
+    FIFO, a regular file with one link only, at most `cap` bytes. The name is
+    removed afterwards (whether or not it passed) unless `remove` is False.
+    Raises Missing when nothing is there, Refused when it fails a check."""
+    name = path.name
+    try:
+        try:
+            fd = os.open(path, UNTRUSTED_FLAGS)
+        except FileNotFoundError:
+            raise Missing(name)
+        except OSError as error:
+            raise Refused(f"{name} cannot be opened as a plain file ({error.strerror or error})")
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                raise Refused(f"{name} is not a regular file")
+            if info.st_nlink != 1:
+                raise Refused(f"{name} has {info.st_nlink} links; one is required")
+            chunks = []
+            left = cap + 1
+            while left > 0:
+                chunk = os.read(fd, min(left, 1 << 16))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                left -= len(chunk)
+            data = b"".join(chunks)
+            if len(data) > cap:
+                raise Refused(f"{name} is larger than {cap} bytes")
+            return data
+        finally:
+            os.close(fd)
+    finally:
+        if remove:
+            remove_entry(path)
+
+
+def prepare_state_dir(path: Path) -> None:
+    """Create the state directory (0755) if missing and refuse one that is a
+    symlink, not a directory, not owned by this user, or group/world-writable.
+    receipts/ (0755) and check/ (0700) are made inside it the same way."""
+    if not path.exists() and not path.is_symlink():
+        try:
+            os.mkdir(path, 0o755)
+            os.chmod(path, 0o755)
+        except FileExistsError:
+            pass
+        except OSError as error:
+            raise BrokenEnvironment(f"cannot create the state directory {path}: {error}")
+    for directory, mode in ((path, None), (path / RECEIPT_DIR, 0o755), (path / CHECK_DIR, 0o700)):
+        if mode is not None and not directory.exists() and not directory.is_symlink():
+            os.mkdir(directory, mode)
+            os.chmod(directory, mode)
+        try:
+            info = os.lstat(directory)
+        except OSError as error:
+            raise BrokenEnvironment(f"cannot read {directory}: {error}")
+        if stat.S_ISLNK(info.st_mode):
+            raise BrokenEnvironment(f"{directory} is a symlink; refusing to write state through it")
+        if not stat.S_ISDIR(info.st_mode):
+            raise BrokenEnvironment(f"{directory} is not a directory")
+        if info.st_uid != os.geteuid():
+            raise BrokenEnvironment(f"{directory} is owned by uid {info.st_uid}, not {os.geteuid()}")
+        if info.st_mode & 0o022:
+            raise BrokenEnvironment(f"{directory} is writable by group or others (mode {info.st_mode & 0o7777:o})")
+
+
+def open_lock(state_dir: Path) -> int:
+    return os.open(state_dir / LOCK_NAME, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
 
 
 # ------------------------------------------------------------------ artifact
@@ -544,11 +715,12 @@ def with_user_block(conf_text: str, slug: str, block: str | None) -> str:
 class Applier:
     ENGINE = "bridge"   # what follows the live file, for messages
 
-    def __init__(self, spool: Path = SPOOL_DIR, conf_path: Path = CONF_PATH, run_dir: Path = RUN_DIR,
-                 runner: Runner | None = None, supervisor: str = SUPERVISOR,
+    def __init__(self, inbox: Path = INBOX_DIR, state_dir: Path = STATE_DIR, conf_path: Path = CONF_PATH,
+                 run_dir: Path = RUN_DIR, runner: Runner | None = None, supervisor: str = SUPERVISOR,
                  bridge_binary: Path = BRIDGE_BINARY, start_timeout: float = START_TIMEOUT_S,
                  settle: float = SETTLE_S, poll: float = POLL_S) -> None:
-        self.spool = spool
+        self.inbox = inbox
+        self.state_dir = state_dir
         self.conf_path = conf_path
         self.run_dir = run_dir
         self.runner = runner or Runner()
@@ -562,16 +734,85 @@ class Applier:
     # ---- state and receipts
 
     @property
-    def request_path(self) -> Path:
-        return self.spool / REQUEST_NAME
-
-    @property
     def state_path(self) -> Path:
-        return self.spool / STATE_NAME
+        return self.state_dir / STATE_NAME
 
     @property
     def receipt_dir(self) -> Path:
-        return self.spool / RECEIPT_DIR
+        return self.state_dir / RECEIPT_DIR
+
+    def ensure_state(self) -> None:
+        prepare_state_dir(self.state_dir)
+
+    # ---- the inbox
+
+    def read_artifact(self, file_name: str, what: str) -> bytes:
+        """An uploaded artifact, named by a field the caller has already
+        matched against its pattern; consumed by the read."""
+        try:
+            return read_untrusted(self.inbox / file_name, MAX_ARTIFACT_BYTES)
+        except Missing:
+            raise Refused(f"{what} {file_name} is missing from the inbox")
+        except Refused as error:
+            raise Refused(f"{what} {error}")
+
+    def stage_check(self, data: bytes) -> Path:
+        """The loader check's copy, root-only, under the state directory."""
+        staged = self.state_dir / CHECK_DIR / f"{self.state['id']}.dsp"
+        remove_entry(staged)
+        fd = os.open(staged, CREATE_FLAGS, 0o600)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        return staged
+
+    def pending_requests(self) -> list[Path]:
+        """Every <name>.request in the inbox, oldest mtime first (lstat: a
+        symlink is listed so it can be refused and removed)."""
+        found = []
+        try:
+            with os.scandir(self.inbox) as entries:
+                for entry in entries:
+                    if not entry.name.endswith(REQUEST_SUFFIX):
+                        continue
+                    try:
+                        info = entry.stat(follow_symlinks=False)
+                    except OSError:
+                        continue
+                    if stat.S_ISDIR(info.st_mode):
+                        remove_entry(Path(entry.path))
+                        continue
+                    found.append((info.st_mtime, entry.name, Path(entry.path)))
+        except FileNotFoundError:
+            return []
+        return [path for _, _, path in sorted(found)]
+
+    def sweep_inbox(self, now: float | None = None) -> list[str]:
+        """Remove anything that is not a pending request and is older than
+        STRAY_AGE_S: artifacts no request claimed, abandoned .tmp files."""
+        now = time.time() if now is None else now
+        removed = []
+        try:
+            with os.scandir(self.inbox) as entries:
+                listed = list(entries)
+        except FileNotFoundError:
+            return removed
+        for entry in listed:
+            if entry.name.endswith(REQUEST_SUFFIX):
+                continue
+            try:
+                info = entry.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            if now - info.st_mtime > STRAY_AGE_S:
+                remove_entry(Path(entry.path))
+                removed.append(entry.name)
+        return removed
+
+    def remove_artifacts_of(self, ident: str) -> None:
+        if REQUEST_ID.match(ident):
+            remove_entry(self.inbox / f"{ident}.dsp")
+            for rate in DANTE_RATES:
+                remove_entry(self.inbox / f"{ident}-{rate}.dsp")
 
     def step(self, name: str, detail: str = "", ok: bool = True) -> None:
         self.state["state"] = name
@@ -588,7 +829,6 @@ class Applier:
         self.state["live"] = self.live_profile()
         self.state["identity"] = self.identity()
         write_atomic(self.state_path, self.state)
-        self.receipt_dir.mkdir(mode=0o755, exist_ok=True)
         write_atomic(self.receipt_dir / f"{self.state['id']}.json", self.state)
         return self.state
 
@@ -653,16 +893,25 @@ class Applier:
 
     # ---- request validation
 
-    def load_request(self) -> dict:
-        text = read_text(self.request_path, 65536)
-        if text is None:
-            raise Refused("no request file")
+    def load_request(self, path: Path | None = None, remove: bool = True) -> dict:
+        """One <id>.request from the inbox (the oldest when `path` is None),
+        read through read_untrusted and consumed unless `remove` is False.
+        Raises Missing when nothing is pending."""
+        if path is None:
+            pending = self.pending_requests()
+            if not pending:
+                raise Missing("no request file")
+            path = pending[0]
+        stem = path.name[:-len(REQUEST_SUFFIX)]
+        data = read_untrusted(path, MAX_REQUEST_BYTES, remove=remove)
         try:
-            request = json.loads(text)
+            request = json.loads(data.decode("utf-8", errors="replace"))
         except ValueError:
             raise Refused("request is not JSON")
         if not isinstance(request, dict):
             raise Refused("request is not an object")
+        if request.get("id") != stem:
+            raise Refused(f"the request's id does not match its file name {path.name[:48]!r}")
         return request
 
     def validate_envelope(self, request: dict) -> None:
@@ -757,12 +1006,8 @@ class Applier:
             raise Refused("artifactSha256 must be 64 hex characters")
         file_name = request.get("artifactFile")
         if not isinstance(file_name, str) or not re.match(r"^[a-f0-9]{8,32}\.dsp$", file_name):
-            raise Refused("artifactFile must be <request id>.dsp in the spool's presets directory")
-        source = self.spool / "presets" / file_name
-        try:
-            data = source.read_bytes()
-        except OSError:
-            raise Refused(f"artifact {file_name} is missing from the spool")
+            raise Refused("artifactFile must be <request id>.dsp in the inbox")
+        data = self.read_artifact(file_name, "artifact")
         if hashlib.sha256(data).hexdigest() != digest:
             raise Refused("artifact hash does not match artifactSha256")
         stats = parse_artifact(data.decode("utf-8", errors="replace"))
@@ -788,8 +1033,7 @@ class Applier:
         """Load-check, install the file, write the block, validate, replace."""
         slug = spec["slug"]
         self.step("checking", f"{OFFLINE_RUNNER} --bench 1 on the artifact ({spec['stats']['biquads']} biquads)")
-        staged = self.spool / "presets" / f"check-{self.state['id']}.dsp"
-        staged.write_bytes(spec["data"])
+        staged = self.stage_check(spec["data"])
         try:
             code, out = self.runner.run([OFFLINE_RUNNER, str(staged), "--bench", "1"], timeout=60)
         finally:
@@ -843,6 +1087,14 @@ class Applier:
     def live_status_path(self) -> Path:
         return self.run_dir / LIVE_STATUS
 
+    def read_live_file(self) -> bytes | None:
+        """The live file as the bridge or owner holds it, in the audio user's
+        run directory: read as untrusted, left in place."""
+        try:
+            return read_untrusted(self.live_file, MAX_ARTIFACT_BYTES, remove=False)
+        except (Missing, Refused):
+            return None
+
     def live_status(self) -> dict | None:
         return parse_live_status(read_text(self.live_status_path, 4096))
 
@@ -884,12 +1136,8 @@ class Applier:
             raise Refused("artifactSha256 must be 64 hex characters")
         file_name = request.get("artifactFile")
         if not isinstance(file_name, str) or not re.match(r"^[a-f0-9]{8,32}\.dsp$", file_name):
-            raise Refused("artifactFile must be <request id>.dsp in the spool's presets directory")
-        source = self.spool / "presets" / file_name
-        try:
-            data = source.read_bytes()
-        except OSError:
-            raise Refused(f"artifact {file_name} is missing from the spool")
+            raise Refused("artifactFile must be <request id>.dsp in the inbox")
+        data = self.read_artifact(file_name, "artifact")
         if hashlib.sha256(data).hexdigest() != digest:
             raise Refused("artifact hash does not match artifactSha256")
         text = data.decode("utf-8", errors="replace")
@@ -909,8 +1157,7 @@ class Applier:
     def push_live(self, spec: dict) -> None:
         """Load-check, write the live file by rename, wait for the bridge."""
         self.step("checking", f"{OFFLINE_RUNNER} --bench 1 on the artifact ({spec['stats']['biquads']} biquads)")
-        staged = self.spool / "presets" / f"check-{self.state['id']}.dsp"
-        staged.write_bytes(spec["data"])
+        staged = self.stage_check(spec["data"])
         try:
             code, out = self.runner.run([OFFLINE_RUNNER, str(staged), "--bench", "1"], timeout=60)
         finally:
@@ -923,11 +1170,14 @@ class Applier:
         # not changed since before the push is an old answer, whatever hash it
         # names (t_us makes every answer distinct).
         before = read_text(self.live_status_path, 4096)
-        temporary = self.live_file.with_name(f".{LIVE_FILE}.{self.state['id']}")
-        with open(temporary, "wb") as handle:
+        # The run directory belongs to the audio user: a fresh name it cannot
+        # predict, created exclusively, never through a symlink.
+        temporary = self.live_file.with_name(f".{LIVE_FILE}.{secrets.token_hex(16)}")
+        fd = os.open(temporary, CREATE_FLAGS, 0o600)
+        with os.fdopen(fd, "wb") as handle:
             handle.write(spec["data"])
             handle.flush()
-        os.chmod(temporary, 0o644)
+            os.fchmod(handle.fileno(), 0o644)
         os.replace(temporary, self.live_file)
         self.step("verifying", f"waiting up to {LIVE_TIMEOUT_S:.0f} s for the {self.ENGINE} to report {spec['digest'][:12]}")
         deadline = self.runner.now() + LIVE_TIMEOUT_S
@@ -951,11 +1201,7 @@ class Applier:
         if not status or status.get("state") != "applied":
             raise Refused(f"nothing applied to commit (bridge status: {status.get('state') if status else 'none'})")
         digest = status.get("sha256") or ""
-        data = None
-        try:
-            data = self.live_file.read_bytes()
-        except OSError:
-            pass
+        data = self.read_live_file()
         if data is None or hashlib.sha256(data).hexdigest() != digest:
             raise Refused("the live file no longer matches what the bridge applied; push it again")
         text = data.decode("utf-8", errors="replace")
@@ -1073,16 +1319,21 @@ class Applier:
         self.state.setdefault("startLines", {})[label] = [
             v[:400] for v in self.bridge_log_head() if v.startswith(keep)][:12]
 
-    def apply(self, request: dict) -> dict:
-        self.spool.mkdir(mode=0o755, exist_ok=True)
+    def check_kind(self, kind, rate_trigger: bool) -> None:
+        """After the envelope, before any kind acts."""
+        if kind == "rate" and not rate_trigger:
+            raise Refused("kind 'rate' is taken only from the rate-request trigger, never from the inbox")
+
+    def apply(self, request: dict, rate_trigger: bool = False) -> dict:
+        self.ensure_state()
         ident = request.get("id") if isinstance(request.get("id"), str) and REQUEST_ID.match(request.get("id", "")) else "invalid"
-        kind = request.get("kind") or "profile"
+        kind = clamp_text(request.get("kind") or "profile")
         self.state = {
             "version": VERSION,
             "id": ident,
             "kind": kind,
-            "request": {k: request.get(k) for k in ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
-                                                     "name", "slug", "artifactSha256", "expectedLiveSha256", "revert")},
+            "request": request_record(request, ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
+                                                "name", "slug", "artifactSha256", "expectedLiveSha256", "revert")),
             "startedAt": utc(self.runner.now()),
             "steps": [],
             "previousProfile": None,
@@ -1091,6 +1342,8 @@ class Applier:
             "error": None,
         }
         try:
+            self.validate_envelope(request)
+            self.check_kind(kind, rate_trigger)
             conf = self.conf()
             if kind == "preset":
                 spec = self.validate_preset(request, conf)
@@ -1127,7 +1380,6 @@ class Applier:
                 self.state["committed"] = {"sha256": outcome["digest"], "changed": outcome["changed"]}
                 return self.finish("done")
             elif kind == "shutdown":
-                self.validate_envelope(request)
                 return self.shutdown(conf)
             elif kind == "profile":
                 target = self.validate(request, conf)
@@ -1180,31 +1432,57 @@ class Applier:
         return self.state
 
     def consume(self) -> dict | None:
-        """One path-unit trigger: take the request file, act, leave receipts."""
-        try:
-            request = self.load_request()
-        except Refused as error:
-            if str(error) == "no request file":
-                return None
-            self.state = {"version": VERSION, "id": "invalid", "request": None, "startedAt": utc(self.runner.now()),
-                          "steps": [], "previousProfile": None, "profile": None, "state": "validating", "error": None}
-            self.request_path.unlink(missing_ok=True)
-            return self.finish("refused", str(error))
-        # The request is consumed before acting so a re-trigger finds nothing.
-        self.request_path.unlink(missing_ok=True)
-        try:
-            return self.apply(request)
-        finally:
-            artifact = request.get("artifactFile") if isinstance(request, dict) else None
-            if isinstance(artifact, str) and re.match(r"^[a-f0-9]{8,32}\.dsp$", artifact):
-                (self.spool / "presets" / artifact).unlink(missing_ok=True)
-            # The other rates' artifacts a Dante preset or commit carries.
-            extra = request.get("rateArtifacts") if isinstance(request, dict) else None
-            if isinstance(extra, dict):
-                for entry in extra.values():
-                    name = entry.get("file") if isinstance(entry, dict) else None
-                    if isinstance(name, str) and RATE_ARTIFACT_FILE.match(name):
-                        (self.spool / "presets" / name).unlink(missing_ok=True)
+        """Take the oldest <id>.request from the inbox, act, leave receipts.
+        None when nothing is pending. The request file is consumed by the read,
+        before acting, so a re-trigger does not find it again."""
+        self.ensure_state()
+        for path in self.pending_requests():
+            stem = path.name[:-len(REQUEST_SUFFIX)]
+            ident = stem if REQUEST_ID.match(stem) else "invalid"
+            try:
+                request = self.load_request(path)
+            except Missing:
+                continue
+            except Refused as error:
+                self.state = {"version": VERSION, "id": ident, "request": None, "startedAt": utc(self.runner.now()),
+                              "steps": [], "previousProfile": None, "profile": None, "state": "validating", "error": None}
+                self.remove_artifacts_of(ident)
+                return self.finish("refused", str(error))
+            try:
+                return self.apply(request)
+            finally:
+                artifact = request.get("artifactFile")
+                if isinstance(artifact, str) and re.match(r"^[a-f0-9]{8,32}\.dsp$", artifact):
+                    remove_entry(self.inbox / artifact)
+                # The other rates' artifacts a Dante preset or commit carries.
+                extra = request.get("rateArtifacts")
+                if isinstance(extra, dict):
+                    for entry in extra.values():
+                        name = entry.get("file") if isinstance(entry, dict) else None
+                        if isinstance(name, str) and RATE_ARTIFACT_FILE.match(name):
+                            remove_entry(self.inbox / name)
+                self.remove_artifacts_of(ident)
+        return None
+
+    def drain(self, limit: int = DRAIN_LIMIT) -> list[dict]:
+        """One path-unit trigger: pending requests, oldest first, scanning the
+        inbox again after each, so a live update that lands during a run is
+        taken in the same run. An operation that restarts or stops the audio
+        service ends the run, one per invocation as it has always been: taking
+        the request out of the inbox fires the path unit again, and the next
+        run takes the next. Strays are swept before and after."""
+        self.ensure_state()
+        self.sweep_inbox()
+        handled = []
+        while len(handled) < limit:
+            result = self.consume()
+            if result is None:
+                break
+            handled.append(result)
+            if result.get("kind") not in ("live", "commit"):
+                break
+        self.sweep_inbox()
+        return handled
 
 
 # ------------------------------------------------------------------ the Dante stack
@@ -1338,10 +1616,10 @@ def dante_profile_of(conf: dict[str, str]) -> str:
 class DanteApplier(Applier):
     ENGINE = "owner"
 
-    def __init__(self, spool: Path = SPOOL_DIR, conf_path: Path = DANTE_CONF_PATH, run_dir: Path = DANTE_RUN_DIR,
-                 runner: Runner | None = None, start_timeout: float = DANTE_START_TIMEOUT_S,
+    def __init__(self, inbox: Path = INBOX_DIR, state_dir: Path = STATE_DIR, conf_path: Path = DANTE_CONF_PATH,
+                 run_dir: Path = DANTE_RUN_DIR, runner: Runner | None = None, start_timeout: float = DANTE_START_TIMEOUT_S,
                  settle: float = DANTE_SETTLE_S, poll: float = POLL_S) -> None:
-        super().__init__(spool=spool, conf_path=conf_path, run_dir=run_dir, runner=runner,
+        super().__init__(inbox=inbox, state_dir=state_dir, conf_path=conf_path, run_dir=run_dir, runner=runner,
                          start_timeout=start_timeout, settle=settle, poll=poll)
 
     # ---- reads
@@ -1433,13 +1711,10 @@ class DanteApplier(Applier):
             file_name = entry.get("file") if isinstance(entry, dict) else None
             digest = entry.get("sha256") if isinstance(entry, dict) else None
             if not isinstance(file_name, str) or not RATE_ARTIFACT_FILE.match(file_name) or not file_name.endswith(f"-{rate}.dsp"):
-                raise Refused(f"rateArtifacts {rate}: file must be <request id>-{rate}.dsp in the spool's presets directory")
+                raise Refused(f"rateArtifacts {rate}: file must be <request id>-{rate}.dsp in the inbox")
             if not isinstance(digest, str) or not re.match(r"^[0-9a-f]{64}$", digest):
                 raise Refused(f"rateArtifacts {rate}: sha256 must be 64 hex characters")
-            try:
-                data = (self.spool / "presets" / file_name).read_bytes()
-            except OSError:
-                raise Refused(f"rateArtifacts {rate}: {file_name} is missing from the spool")
+            data = self.read_artifact(file_name, f"rateArtifacts {rate}:")
             if hashlib.sha256(data).hexdigest() != digest:
                 raise Refused(f"rateArtifacts {rate}: the artifact does not hash to its sha256")
             stats = parse_artifact(data.decode("utf-8", errors="replace"), rate)
@@ -1489,11 +1764,8 @@ class DanteApplier(Applier):
             raise Refused("artifactSha256 must be 64 hex characters")
         file_name = request.get("artifactFile")
         if not isinstance(file_name, str) or not re.match(r"^[a-f0-9]{8,32}\.dsp$", file_name):
-            raise Refused("artifactFile must be <request id>.dsp in the spool's presets directory")
-        try:
-            data = (self.spool / "presets" / file_name).read_bytes()
-        except OSError:
-            raise Refused(f"artifact {file_name} is missing from the spool")
+            raise Refused("artifactFile must be <request id>.dsp in the inbox")
+        data = self.read_artifact(file_name, "artifact")
         if hashlib.sha256(data).hexdigest() != digest:
             raise Refused("artifact hash does not match artifactSha256")
         stats = parse_artifact(data.decode("utf-8", errors="replace"))
@@ -1518,8 +1790,7 @@ class DanteApplier(Applier):
         # --rate only off 48 kHz: the installed runner may predate the option.
         at = [] if rate == NOMINAL_RATE else ["--rate", str(rate)]
         self.step("checking", f"{OFFLINE_RUNNER} --bench 1 {' '.join(at) + ' ' if at else ''}on the artifact ({biquads} biquads)")
-        staged = self.spool / "presets" / f"check-{self.state['id']}.dsp"
-        staged.write_bytes(data)
+        staged = self.stage_check(data)
         try:
             code, out = self.runner.run([OFFLINE_RUNNER, str(staged), *at, "--bench", "1"], timeout=60)
         finally:
@@ -1608,10 +1879,7 @@ class DanteApplier(Applier):
         if not status or status.get("state") != "applied":
             raise Refused(f"nothing applied to commit (owner status: {status.get('state') if status else 'none'})")
         digest = status.get("sha256") or ""
-        try:
-            data = self.live_file.read_bytes()
-        except OSError:
-            data = None
+        data = self.read_live_file()
         if data is None or hashlib.sha256(data).hexdigest() != digest:
             raise Refused("the live file no longer matches what the owner applied; push it again")
         text = data.decode("utf-8", errors="replace")
@@ -1687,10 +1955,23 @@ class DanteApplier(Applier):
         return True, f"asked the Mac to follow to {rate} Hz (gadget clock interrupt)"
 
     def rate_history(self) -> dict:
+        """The last change, from the state directory. Missing is empty; so is
+        anything malformed (one line to the journal), never an exception."""
+        path = self.state_dir / RATE_HISTORY_NAME
         try:
-            return json.loads((self.spool / "rate-history.json").read_text())
-        except (OSError, ValueError):
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
             return {}
+        try:
+            history = json.loads(text)
+        except ValueError:
+            history = None
+        if (not isinstance(history, dict)
+                or not all(isinstance(history.get(k, 0), (int, float)) and not isinstance(history.get(k, 0), bool)
+                           for k in ("from", "to", "at", "overrode"))):
+            print(f"usb16x16-apply: {path} is malformed; treated as empty", file=sys.stderr)
+            return {}
+        return history
 
     def mac_followed(self) -> bool:
         """Whether the owner has joined the Mac at the running rate since this
@@ -1725,7 +2006,7 @@ class DanteApplier(Applier):
             raise Refused(f"the endpoint moved to {running} Hz on the Dante side over the Mac's {rate} Hz and the Mac "
                           f"has not followed yet; its {rate} Hz is the old rate, not a new choice, so nothing changes")
         if history.get("from") == rate and self.runner.now() - float(history.get("at", 0)) < RATE_REVERSAL_S:
-            raise Refused(f"the rate moved {history['from']} -> {history['to']} "
+            raise Refused(f"the rate moved {history['from']} -> {history.get('to')} "
                           f"{self.runner.now() - float(history['at']):.0f} s ago; going straight back looks like a "
                           "tug-of-war between the two ends, so nothing changes")
         # Wait a little for the Mac's USB 16x16 to agree (the other half of one
@@ -1793,7 +2074,7 @@ class DanteApplier(Applier):
             history = {"from": spec["running"], "to": rate, "at": self.runner.now(), "source": spec["source"]}
             if spec["overrode"] is not None:
                 history["overrode"] = spec["overrode"]
-            write_atomic(self.spool / "rate-history.json", history)
+            write_atomic(self.state_dir / RATE_HISTORY_NAME, history)
             return self.finish("done")
         self.step("rolling-back", f"{reason}; returning to {spec['running']} Hz", ok=False)
         rollback_target = {"name": target["name"], "dspPreset": conf.get("DSP_PRESET") or None, "rate": spec["running"]}
@@ -1806,13 +2087,20 @@ class DanteApplier(Applier):
 
     def consume_rate_request(self) -> dict | None:
         """One trigger of the rate-request path unit: take the line, act on it."""
+        self.ensure_state()
+        # The audio user's run directory: read as untrusted, then removed.
         try:
-            text = DANTE_RATE_REQUEST.read_text()
-        except OSError:
+            data = read_untrusted(DANTE_RATE_REQUEST, MAX_RATE_REQUEST_BYTES)
+            refusal = None
+        except Missing:
             return None
-        DANTE_RATE_REQUEST.unlink(missing_ok=True)
+        except Refused as error:
+            data, refusal = b"", error
+        text = data.decode("utf-8", errors="replace")
         ident = hashlib.sha256(f"{text}{self.runner.now()}".encode()).hexdigest()[:16]
         try:
+            if refusal is not None:
+                raise refusal
             fields = parse_rate_request(text)
         except Refused as error:
             self.state = {"version": VERSION, "stack": "dante", "id": ident, "kind": "rate", "request": None,
@@ -1821,7 +2109,8 @@ class DanteApplier(Applier):
             return self.finish("refused", str(error))
         at = fields["at"] if fields["at"] is not None else self.runner.now()
         return self.apply({"id": ident, "kind": "rate", "rate": fields["rate"], "source": fields["source"],
-                           "from": fields["from"], "requestedAt": at, "requestedBy": f"{fields['source']} {fields['from']}".strip()})
+                           "from": fields["from"], "requestedAt": at, "requestedBy": f"{fields['source']} {fields['from']}".strip()},
+                          rate_trigger=True)
 
     # ---- the configuration file
 
@@ -1925,17 +2214,18 @@ class DanteApplier(Applier):
             v[:400] for v in self.owner_log(invocation) if v.startswith(("START ", "DSP loaded ", "DSPLIVE following ", "METERS publishing ", "NETSTART ", "USBLINK "))][:12]
         return None
 
-    def apply(self, request: dict) -> dict:
-        self.spool.mkdir(mode=0o755, exist_ok=True)
+    def apply(self, request: dict, rate_trigger: bool = False) -> dict:
+        self.ensure_state()
         ident = request.get("id") if isinstance(request.get("id"), str) and REQUEST_ID.match(request.get("id", "")) else "invalid"
-        kind = request.get("kind") or "profile"
+        kind = clamp_text(request.get("kind") or "profile")
         self.state = {
             "version": VERSION,
             "stack": "dante",
             "id": ident,
             "kind": kind,
-            "request": {k: request.get(k) for k in ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
-                                                     "name", "slug", "artifactSha256", "expectedLiveSha256", "revert", "rate", "source", "from")},
+            "request": request_record(request, ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
+                                                "name", "slug", "artifactSha256", "expectedLiveSha256", "revert", "rate",
+                                                "source", "from")),
             "startedAt": utc(self.runner.now()),
             "steps": [],
             "previousProfile": None,
@@ -1946,10 +2236,11 @@ class DanteApplier(Applier):
         if isinstance(request.get("rateArtifacts"), dict):
             self.state["request"]["rates"] = sorted(str(key)[:6] for key in request["rateArtifacts"])
         try:
+            self.validate_envelope(request)
+            self.check_kind(kind, rate_trigger)
             conf = self.conf()
             previous_text = read_text(self.conf_path) or ""
             if kind == "preset":
-                self.validate_envelope(request)
                 spec = self.validate_preset(request, conf)
                 self.step("validating", f"{spec['stats']['biquads']} biquads, internal {spec['stats']['internal']}, "
                                         f"{'replacing' if spec['replacing'] else 'new'} {DANTE_PREFIX}{spec['slug']}")
@@ -1958,11 +2249,9 @@ class DanteApplier(Applier):
                 # Re-applying the live preset's slug is a restart onto the new file.
                 target = self.validate({**request, "profile": name}, conf, reapply=True)
             elif kind == "remove":
-                self.validate_envelope(request)
                 self.state["profile"] = self.remove_preset(request, conf)
                 return self.finish("done")
             elif kind == "live":
-                self.validate_envelope(request)
                 spec = self.validate_live(request, conf)
                 self.state["profile"] = spec["profile"]
                 self.state["stats"] = spec["stats"]
@@ -1975,7 +2264,6 @@ class DanteApplier(Applier):
                     return self.finish("failed", str(error))
                 return self.finish("done")
             elif kind == "commit":
-                self.validate_envelope(request)
                 outcome = self.commit_live(request, conf, previous_text)
                 self.state["profile"] = outcome["profile"]
                 self.state["stats"] = outcome["stats"]
@@ -1983,10 +2271,8 @@ class DanteApplier(Applier):
                 self.state["rates"] = outcome["rates"]
                 return self.finish("done")
             elif kind == "shutdown":
-                self.validate_envelope(request)
                 return self.shutdown(conf)
             elif kind == "rate":
-                self.validate_envelope(request)
                 spec = self.validate_rate(request, conf)
                 if spec is None:
                     self.state["profile"] = dante_profile_of(conf)
@@ -2052,17 +2338,31 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Apply a profile or preset on request from the web UI, "
                                                  "to whichever of the AES67 and Dante services is the installed one")
     parser.add_argument("--check", action="store_true",
-                        help="validate the pending request against the live configuration and exit; no changes")
-    parser.add_argument("--spool", default=str(SPOOL_DIR))
+                        help="validate the oldest pending request against the live configuration and exit; no changes")
+    parser.add_argument("--inbox", default=str(INBOX_DIR),
+                        help="where the web service drops <id>.request and its artifacts (root:<web group> 1730)")
+    parser.add_argument("--state", default=str(STATE_DIR),
+                        help="where this program keeps current.json, receipts, the lock and the rate history (root 0755)")
+    # Removed in 1.9.0; kept only to say so.
+    parser.add_argument("--spool", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--rate-request", action="store_true",
-                        help=f"act on {DANTE_RATE_REQUEST} (the owner's or Inferno's rate request) instead of the spool")
+                        help=f"act on {DANTE_RATE_REQUEST} (the owner's or Inferno's rate request) instead of the inbox")
     arguments = parser.parse_args(argv)
+    if arguments.spool is not None:
+        parser.error("--spool was removed in 1.9.0: use --inbox DIR (requests in) and --state DIR (receipts out)")
+    if os.environ.get("USB16X16_APPLY_DIR"):
+        print("USB16X16_APPLY_DIR was removed in 1.9.0: use USB16X16_APPLY_INBOX and USB16X16_APPLY_STATE "
+              "(or --inbox and --state)", file=sys.stderr)
+        return 2
     stack = detect_stack()
-    applier = (DanteApplier if stack == "dante" else Applier)(spool=Path(arguments.spool))
+    applier = (DanteApplier if stack == "dante" else Applier)(inbox=Path(arguments.inbox), state_dir=Path(arguments.state))
     if arguments.check:
         try:
-            request = applier.load_request()
+            request = applier.load_request(remove=False)
             target = applier.validate(request, applier.conf())
+        except Missing:
+            print("refused: no request file")
+            return 1
         except Refused as error:
             print(f"refused: {error}")
             return 1
@@ -2072,11 +2372,15 @@ def main(argv: list[str] | None = None) -> int:
     if os.geteuid() != 0:
         print("run as root (the path unit does)", file=sys.stderr)
         return 2
-    # One operation at a time, whichever unit started this: the page's spool and
+    try:
+        applier.ensure_state()
+    except BrokenEnvironment as error:
+        print(f"refusing to run: {error}", file=sys.stderr)
+        return 2
+    # One operation at a time, whichever unit started this: the page's inbox and
     # the rate request both restart the endpoint, and must not do it at once.
     import fcntl
-    Path(arguments.spool).mkdir(mode=0o755, exist_ok=True)
-    lock = open(Path(arguments.spool) / "apply.lock", "w")
+    lock = open_lock(applier.state_dir)
     fcntl.flock(lock, fcntl.LOCK_EX)
     if arguments.rate_request:
         if stack != "dante":
@@ -2088,19 +2392,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     # Drain: live updates arrive about one a second, and a fresh process per
     # request is what tripped systemd's start burst limit on 2026-09-13. One
-    # invocation takes every request that lands while it runs, bounded.
-    handled = 0
-    while handled < 100:
-        result = applier.consume()
-        if result is None:
-            break
-        handled += 1
+    # invocation takes every live update in the inbox, and every one that lands
+    # while it runs, bounded, and at most one restart operation; with nothing
+    # pending it exits quietly.
+    for result in applier.drain():
         print(f"{result['id']}: {result['state']}"
               f"{' — ' + result['error'] if result.get('error') else ''}")
-        if result["kind"] not in ("live", "commit"):
-            break   # a restart operation is one per invocation, as before
-    if handled == 0:
-        print("no request pending")
     return 0
 
 
