@@ -1,0 +1,12 @@
+[Unit]
+Description=USB 16x16 UAC2 gadget
+After=local-fs.target systemd-modules-load.service sys-kernel-config.mount
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/setup-usb-16x16 start
+ExecStop=/usr/local/sbin/setup-usb-16x16 stop
+
+[Install]
+WantedBy=multi-user.target

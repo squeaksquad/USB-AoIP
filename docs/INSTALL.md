@@ -50,7 +50,7 @@ machine and prints it. Check, and edit if needed:
 | Key | What to check |
 |---|---|
 | `AUDIO_IF` | The wired port on the Dante network. `eth0` on Raspberry Pi OS. |
-| `AUDIO_IF_SETUP` | `none` leaves the port's network settings alone: right when the Dante network has a DHCP server. `link-local` makes a NetworkManager connection with a 169.254.x.y address: right for a Dante network with no DHCP server, which is most small ones. *(unverified on hardware)* |
+| `AUDIO_IF_SETUP` | `none` leaves the port's network settings alone: right when the Dante network has a DHCP server. `link-local` makes a NetworkManager connection with a 169.254.x.y address: right for a Dante network with no DHCP server, which is most small ones. It is the connection the development unit runs with (link-local, never the default route); the installer making it has not been tried. |
 | `MGMT_IF` | Where the web page listens. `wlan0` if the Pi has Wi-Fi. |
 | `DEVICE_NAME` | The name the computer and Dante Controller show. |
 | `USB_SERIAL` | Derived from the Pi's serial number, so two units on one computer do not collide. |
@@ -80,8 +80,8 @@ safe to run again:
 2. **The USB-C port.** If the port is not yet a USB device controller, the
    installer adds `dtoverlay=dwc2,dr_mode=peripheral` to
    `/boot/firmware/config.txt` (keeping the old file beside it) and stops.
-   Reboot, run `install` again. *(unverified on hardware: the development
-   unit's own boot configuration is not in the record)*
+   Reboot, run `install` again. That line is the development unit's own; the
+   installer adding it has not been tried.
 
 Then it runs to the end, most of the time compiling Rust (the two Rust
 builds took about five minutes together on the development unit):

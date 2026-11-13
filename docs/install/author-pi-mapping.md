@@ -76,7 +76,7 @@ Pi `status` will find the hash it expects.
 | `/etc/NetworkManager/conf.d/90-usb16x16-eth0-carrier.conf` | 3a1842a6 | Rendered: interface |
 | `/etc/sysctl.d/90-usb16x16-compaction.conf` | 2db7c8b9 | Same bytes |
 | `/usr/local/sbin/setup-usb-aoip` | 65d26567 | Identity strings, rates and UDC read from config; everything else the same lines. With the Pi's values the configfs writes are identical; the render test checks the script's write list |
-| `/etc/systemd/system/usb-16x16.service` | 99c87e86, **not in the repository** | See "to read off the Pi" |
+| `/etc/systemd/system/usb-16x16.service` | 99c87e86 (`history/installers/gadget/usb-16x16.service`, read off the Pi 2026-11-13) | `gadget/usb-16x16.service`: the same unit with the script named directly, no drop-in |
 | `/etc/systemd/system/usb-16x16.service.d/10-usb-aoip.conf` | 91449df9 | Same bytes |
 | `/lib/modules/<kernel>/updates/usb-16x16/{u_audio,usb_f_uac2}.ko` | ed539ca8, 505c6ad0 | DKMS puts its builds in `updates/dkms/`. `adopt` leaves the Pi's modules where they are and only records them |
 | `/usr/local/sbin/usb16x16-stall-tuning`, `usb16x16-governor.service` | bde240b8, 00644010 | Tuning script rendered (IRQ patterns from config); unit same bytes |
@@ -118,6 +118,13 @@ should be the same, but that build was run as a candidate, not accepted as
 the service's owner.
 
 ## 4. To read off the Pi before `adopt` or the install doc can be finished
+
+**Read 2026-11-13** (handoff entry of that date): the base unit is
+`history/installers/gadget/usb-16x16.service` (99c87e86); device mode is
+`[all] dtoverlay=dwc2,dr_mode=peripheral` in `config.txt`; `aoip-eth0` is a
+link-local, never-default connection; the running kernel is
+`6.18.34+rpt-rpi-2712` (Debian `1:6.18.34-1+rpt1`). The package list and the
+origin of `~/src/linux-6.18.34` were not read. What was asked:
 
 None of these is recorded in the repository. All are read-only.
 

@@ -6,8 +6,20 @@ Pi. Strike items as they are tried, with the date and what happened.
 
 ## Before anything: four read-outs from the development unit
 
-Read-only. They fill gaps in the record that the installer currently
-guesses at (see `author-pi-mapping.md`, section 4).
+**DONE 2026-11-13.** The operator ran all four; each confirmed the guess or
+replaced it (handoff entry of that date):
+
+- item 1: the base unit is now in the repository as
+  `history/installers/gadget/usb-16x16.service`, and it hashes to 99c87e86.
+  The fresh-install unit was aligned with its ordering.
+- item 2: `[all] dtoverlay=dwc2,dr_mode=peripheral`, the line the installer
+  adds. Nothing gadget-related in `cmdline.txt`.
+- item 3: `aoip-eth0` is `ipv4.method link-local`, `ipv4.never-default yes`,
+  `ipv6.method link-local`, autoconnect; the installer now sets
+  never-default too.
+- item 4: the staged patches 0003, 0004 and 0005 hash to the pinned values.
+
+The original list, for the record:
 
 1. `systemctl cat usb-16x16.service`: the base gadget unit, hash 99c87e86,
    is not in the repository. `gadget/usb-16x16.service` is a new unit written
