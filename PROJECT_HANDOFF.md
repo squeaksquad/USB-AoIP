@@ -15739,3 +15739,43 @@ switch in the outer repository to any commit that still tracks `outputs/`
 files over and a switch back will delete them. Use `git worktree add` to
 look at an old commit, as `work/MOVED.md` says, never a checkout in place;
 and run `git -C outputs status` after any branch switch here.
+
+**MEASURED 2026-11-13 15:55-16:13 UTC (session, in the operator's Chrome,
+signed in by him): the page's own checks pass on the Pi. With the entry
+above, every acceptance criterion for the access update is met; ACCEPTED is
+the operator's to say.** Web 1.7.0 e7f6ba5a, applier 1.9.0 32b13a72, the
+page from the bundle of 4a04b9f.
+
+- The page loads signed in: title `USB-AoIP`, pill `CONNECTED`, no notices,
+  `48 kHz · 16 × 16`, "Live meters" (the owner's tap, 0.03 s old), start
+  check `ok` 6017. The clock row reads "unknown", as it must on the pinned
+  Statime.
+- Behind the new sandbox directives: the log panel reads the journal
+  (through group `systemd-journal`), and the System overview has the
+  temperature (60.4 C) and throttling (`0x0`) from `vcgencmd`.
+- The page reads the applier's status from `/var/lib/usb16x16-apply`: it
+  showed the morning's Dante-side rate receipt.
+- Apply: the saved document "Claude page trial", renamed "Acceptance check"
+  so that no saved preset of the operator's was overwritten, compiled in
+  the browser and installed as `dante-acceptance-check` (302 biquad
+  sections, 23 internal channels): validating, six checks, installing,
+  stopping, switching, starting, verifying, settling, `done` in about 16 s.
+  The page then read "Edits are live".
+- Live edit: the Speakers bus gain 0 to -0.5 dB; request kind `live`,
+  `done`, the endpoint's live state `applied`, no restart.
+- Commit: `done`, no restart; the Commit and Discard buttons went away.
+- Back: Switch to `direct`, `done` in about 16 s. Then Remove of
+  `dante-acceptance-check` (`done`, no restart) and the saved document
+  "Acceptance check" deleted. Saved documents and `/etc/usb16x16/dsp` are as
+  they were before the test.
+- After the last restart the start check read `ok` 6017 with no restart,
+  and a noise probe at 32 (`access19-final`, `20261113T161129Z`) returned
+  from sample 528 with no zero run of 4 or more and endpoint lines +0.
+
+The browser dialogs (one prompt, four confirms) were answered by the
+session through the page's own `confirm` and `prompt`, each read first;
+their texts are the ones in `web-ui/app.mjs`.
+
+State at the close: 48 kHz everywhere, the Pulse's word clock locked,
+profile `direct`, meters on, no installed presets, the Dante service active.
+Ten receipts in `/var/lib/usb16x16-apply/receipts` from today's requests.
