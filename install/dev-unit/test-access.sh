@@ -81,6 +81,26 @@ diff "$tmp/before.a" "$tmp/after.a" >/dev/null || bad "rollback: not every file 
 run install >/dev/null 2>&1 || bad "install after a rollback failed"
 [ $fail = $before ] && ok "a second install does nothing; rollback restores every byte; install works again after it"
 
+# --- a unit that already has the first bundle (web 1.7.0 e7f6ba5a) is updated in place
+before=$fail
+fresh_root u
+run install >/dev/null 2>&1 || bad "update: the first install failed"
+git -C "$repo" show 639dff7:web-control/usb16x16-web > "$root/usr/local/bin/usb16x16-web"
+run status > "$tmp/status.u" 2>&1; grep -q 'usb16x16-web  *earlier bundle (e7f6ba5a)' "$tmp/status.u" || bad "update: status does not call 1.7.0 an earlier bundle: $(grep usb16x16-web "$tmp/status.u" | head -1)"
+kept_before=$(sha "$root/usr/local/bin/usb16x16-web.pre-access")
+run install > "$tmp/update.out" 2>&1 || bad "update: install over the first bundle failed: $(tail -2 "$tmp/update.out")"
+[ "$(sha "$root/usr/local/bin/usb16x16-web")" = "$(new_of bin/usb16x16-web)" ] || bad "update: the web service is not the new one"
+[ "$(sha "$root/usr/local/bin/usb16x16-web.pre-access")" = "$kept_before" ] || bad "update: the kept copy of the old chain's file was replaced"
+[ "$(sha "$root/usr/local/bin/usb16x16-web.pre-access" | cut -c1-8)" = 6b98e7cf ] || bad "update: the kept copy is not the old chain's 6b98e7cf"
+find "$root" -name '*.access-undo' | grep -q . && bad "update: undo copies were left behind"
+run rollback >/dev/null 2>&1 || bad "update: rollback failed"
+( cd "$root" && find . -type f | LC_ALL=C sort | grep -Ev '^\./(etc/usb-aoip|var/)' | while read -r f; do printf '%s  %s\n' "$(sha "$f")" "$f"; done ) > "$tmp/after.u"
+diff "$tmp/before.u" "$tmp/after.u" >/dev/null || bad "update: rollback did not return to the old chain's files"
+# a file that is neither the old chain's, an earlier bundle's nor the new one is refused
+fresh_root v; run install >/dev/null 2>&1; echo "# local edit" >> "$root/usr/local/bin/usb16x16-web"
+run install >/dev/null 2>&1 && bad "update: installed over a locally edited file"
+[ $fail = $before ] && ok "a unit on the first bundle is updated in place; its kept copies stay the old chain's and rollback goes all the way back"
+
 # --- refusals
 before=$fail
 fresh_root b; echo "# edited" >> "$root/usr/local/bin/usb16x16-apply"

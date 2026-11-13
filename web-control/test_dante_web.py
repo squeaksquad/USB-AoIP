@@ -284,7 +284,7 @@ class DanteWebTests(unittest.TestCase):
         for key in ("ok", "generated", "service", "host", "audio", "stack", "mode", "meters", "dsp", "owner",
                     "apply", "dspLive"):
             self.assertIn(key, snapshot)
-        self.assertEqual(snapshot["service"]["version"], "1.7.0")
+        self.assertEqual(snapshot["service"]["version"], "1.7.1")
 
     def test_the_dante_dsp_answer_runs_no_engine_probe(self):
         collector = self.web.Collector(self.root, self.root)

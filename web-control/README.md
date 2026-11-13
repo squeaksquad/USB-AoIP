@@ -20,8 +20,11 @@
 > - Without `--bind`, an interface with no address makes the service exit 75
 >   and be restarted, not listen on 127.0.0.1.
 > - The login file is `/etc/usb-aoip/web-auth`, root's, readable by the web
->   account's group. Add a login with `sudo install/install.sh set-password
->   NAME`, as root.
+>   account's group. Add a login as root with `sudo usb16x16-web --auth-file
+>   /etc/usb-aoip/web-auth --add-user NAME` (since 1.7.1 it keeps the file's
+>   owner, group and mode, so the service can still read it); `sudo
+>   install/install.sh set-password NAME` does the same and restarts the
+>   service, on a unit the new installer built.
 > - `/api/health` on the Dante stack also carries `device.name`, the real
 >   `audio.sampleRate`, `startCheck` and `clock`. `clock.state` is `unknown`
 >   whenever Statime is running: at its configured log level it reports
