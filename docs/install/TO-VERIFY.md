@@ -55,6 +55,10 @@ The original list, for the record:
 applier 1.9.0 on the unit the old chain built, with a rollback. Tested
 against a stand-in root only.
 
+**Installed 2026-11-13**: all five files read "new" in `status`, the web
+service is active under its new unit. The acceptance steps below are still
+owed.
+
 7a. On the Mac: `install/dev-unit/stage-access.sh`, copy the bundle over (not
     during a measurement), then on the Pi `./install-access.sh status` and
     `sudo ./install-access.sh install`. It prints the acceptance steps: the

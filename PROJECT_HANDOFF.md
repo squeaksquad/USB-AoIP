@@ -15610,3 +15610,36 @@ tightened web unit on the Pi. Acceptance on the Pi, by the 2026-10-29 rule
 for changes outside the audio path: the checks the installer prints, a
 noise probe at 32 and `soak 120 32`
 (`docs/install/TO-VERIFY.md`, items 7a to 7c).
+
+**INSTALLED 2026-11-13 (operator): the access update on the Pi, by
+`install/dev-unit/install-access.sh` from the bundle staged at 4a04b9f
+(list b241f557). Not yet accepted.** The operator copied the bundle over
+Wi-Fi and ran `sudo ./install-access.sh install`. `./install-access.sh
+status` afterwards, as pasted:
+
+- `/usr/local/bin/usb16x16-web`: new (1.7.0 e7f6ba5a), kept 6b98e7cf
+- `/usr/local/bin/usb16x16-apply`: new (1.9.0 32b13a72), kept 347a7062
+- `usb16x16-web.service`: new (c908894d), kept f7c7d48c
+- `usb16x16-apply.path`: new (60e7d451), kept 6d53b053
+- `usb16x16-apply.service`: new (bfdf2432), kept 23cb5b2e
+- inbox, state directory and login file present
+- `usb16x16-web.service`, `usb16x16-apply.path`, `usb16x16-dante-rate.path`
+  and `usb16x16-dante.service` active
+
+So the web service started under its tightened unit, which the stand-in
+test could not show, and the installer's own checks passed (it reports
+"new" only for a file whose hash is the pinned one). The audio service was
+not restarted by it. The two access faults found on 2026-11-10 are no
+longer in what the Pi runs.
+
+Owed before ACCEPTED, by the 2026-10-29 rule for changes outside the audio
+path (`docs/install/TO-VERIFY.md`, 7a and 7b): the page reloaded and
+signed in to; the log panel and the temperature row (the sandboxed parts);
+one Apply to a preset and back, one live edit and Commit; one rate move
+from the Mac and one from Dante Controller, through the new applier; the
+noise probe at 32 and `measure-candidate.sh soak 120 32`. None of these has
+been reported yet.
+
+Rollback: `sudo ./install-access.sh rollback` in `~/usb-aoip-access` on the
+Pi restores the five files (from `*.pre-access`) and the page (from
+`web-ui.pre-access`). The page is still on plain HTTP.
