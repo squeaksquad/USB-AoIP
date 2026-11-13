@@ -15714,3 +15714,28 @@ and the file's group and mode put back).
 
 State at the close: every device at 48 kHz, the Pulse's word clock locked,
 profile `direct`, the Dante service active, start check `ok`.
+
+**CORRECTION 2026-11-13: the session removed the evidence files from the
+local `outputs/` working tree on 2026-11-10 and did not notice; found and
+restored today, nothing lost.** After the three packaging pull requests were
+merged, the session ran `git checkout main && git pull --ff-only` in this
+repository (23:08 EST, 2026-11-10). Local `main` still tracked `outputs/`;
+the checkout took those paths over from the nested evidence clone (they were
+ignored on the branch, so git overwrote them without a word) and the
+fast-forward to the merged `main`, which no longer has them, then deleted
+all 10,278 from disk. The nested clone's own `.git` was untouched, as were
+the untracked captures, logs and audio (the 6.9 GB that was never in either
+repository), and the evidence repository on GitHub.
+
+Found on 2026-11-13 when `git status` in `outputs/` listed every tracked
+file as deleted. Restored with `git checkout -- .` there: 10,281 files
+tracked and present, `git fsck` clean, the only untracked files the three
+`access19` runs of today. Between the two dates nothing read those files:
+the measurement tools write new results and read none of the old ones.
+
+The lesson for a session: after `outputs/` became a nested clone, a branch
+switch in the outer repository to any commit that still tracks `outputs/`
+(anything before aa9541e, and the tag `layout-2026-11-01`) will take those
+files over and a switch back will delete them. Use `git worktree add` to
+look at an old commit, as `work/MOVED.md` says, never a checkout in place;
+and run `git -C outputs status` after any branch switch here.
