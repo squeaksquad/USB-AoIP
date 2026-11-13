@@ -6,6 +6,12 @@
 > `~/usb-16x16-work` still mirrors the old layout. The work in hand is the
 > packaging: workstream 1 (layout) done, 2 (a from-scratch installer) and
 > 3 (web UI and access) to come. The audio-path state below is unchanged.
+>
+> **2026-11-13.** All three workstreams are merged. The Pi runs web 1.7.0 and
+> applier 1.9.0 (ACCEPTED that day, `install/dev-unit/`); the installer for a
+> fresh unit has still not run on hardware (`docs/install/TO-VERIFY.md`).
+> `outputs/` is a nested clone of the evidence repository: never check out a
+> commit that tracks `outputs/` in place (CLAUDE.md, working rules).
 
 ## Current pickup — 2026-11-01: 44.1, 48, 88.2 and 96 kHz on the point of record. Start here.
 

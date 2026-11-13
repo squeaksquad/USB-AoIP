@@ -15643,3 +15643,165 @@ been reported yet.
 Rollback: `sudo ./install-access.sh rollback` in `~/usb-aoip-access` on the
 Pi restores the five files (from `*.pre-access`) and the page (from
 `web-ui.pre-access`). The page is still on plain HTTP.
+
+**MEASURED 2026-11-13 15:00-15:18 UTC (session, at the operator's request):
+the access update on the Pi passes every acceptance step but the page's own;
+not yet ACCEPTED.** Web 1.7.0 e7f6ba5a and applier 1.9.0 32b13a72 as
+installed that morning; the Dante service was not restarted except by the
+two rate moves below. The operator confirmed beforehand that the monitors
+were muted and the 8-channel loop in place; Pro Tools was not running.
+
+Read on the Pi (read-only, over SSH):
+- Ownership and modes, which the stand-in test could not show:
+  `/var/spool/usb-aoip/inbox` `drwx-wx--T root:bdimaio`,
+  `/var/lib/usb16x16-apply` `drwxr-xr-x root:root`, `/etc/usb-aoip/web-auth`
+  `-rw-r----- root:bdimaio`. The web account cannot list the inbox.
+- `usb16x16-web` 1.7.0 started under its tightened unit and serves
+  (`TLS off: plain HTTP`, one login). An unauthenticated request gets 401
+  with the security headers. One cosmetic line at start: systemd notes that
+  `USB_AOIP_WEB_ARGS` is unset (there is no `web.env` on this unit).
+
+The request path under a real systemd, with three harmless requests dropped
+into the inbox as the web account:
+- a `remove` of a preset that is not installed: refused with that reason, a
+  receipt written to `/var/lib/usb16x16-apply/receipts`, the request taken
+  out of the inbox. So the path unit fires on a rename into the directory.
+- a symbolic link named `<id>.request` pointing at `/etc/hostname`: refused
+  ("cannot be opened as a plain file"), the link removed, the target
+  unchanged.
+- a `rate` request from the inbox: refused ("taken only from the
+  rate-request trigger").
+The Dante service's invocation was the same before and after: none of the
+three touched audio.
+
+Rate moves, both through the new applier (receipts `done`):
+- From the Mac: the USB-AoIP's CoreAudio rate set 48 to 44.1 kHz at
+  15:06:59. The arbiter's receipt reads source `usb`, 48000 to 44100; the Pi
+  was at 44.1 with the endpoint restarted by 15:07:21. `dante-sync sync
+  --source usb-aoip` then brought the Pulse, DVS, the D2USB and the Metric
+  Halo along; the start check read whole (5528, 5528) with no restart.
+- From the Dante side: `dante-sync sync --rate 48000` at 15:15:05. The
+  receipt reads source `dante`, 44100 to 48000; done by 15:15:48; the Mac's
+  device read 48000. The start check read `ok`, 6017, no restart. That sync
+  does not set the Metric Halo (as the pickup notes say): it stayed at 44.1
+  and the Pulse's word clock unlocked until `dante-sync sync --source
+  usb-aoip` set it to 48 and the clock locked again, about two minutes.
+
+From the Mac, `dante/measure-candidate.sh`, label `access19`, all at 48 kHz
+and 32 frames, judged on the 8 looped channels:
+- noise probe before the rate moves (`20261113T150304Z`): return from
+  sample 528, no zero run of 4 or more, endpoint xrun/lag/error lines +0.
+- soak 120 s (`20261113T150352Z`, `USB16X16_LOOP_CHANNELS=8`): PASS, longest
+  zero run 1, discontinuities in 0 out 0, endpoint lines +0.
+- noise probe after the rate moves and the re-lock
+  (`access19-after-rates`, `20261113T151710Z`): return from sample 528, no
+  zero run of 4 or more, endpoint lines +0.
+The evidence is in the evidence repository's working tree
+(`outputs/latency/access19-*`), not yet committed there.
+
+Not done: the page's own checks, which need a signed-in browser. The
+session's browser pane shows the service's "Sign-in needed" page and no
+prompt for a name and password, so it could not sign in; the operator's own
+browser does prompt. Owed there: a full reload and sign-in, the log panel
+and the temperature row (the parts behind the new sandbox directives), one
+Apply to a preset and back, one live edit and Commit.
+
+Found while doing this, for later: the "Sign-in needed" page tells the
+reader to run `sudo install/install.sh set-password NAME`, which does not
+exist on this unit (it was built by the old chain; there a login is added
+with `sudo usb16x16-web --auth-file /etc/usb-aoip/web-auth --add-user NAME`
+and the file's group and mode put back).
+
+State at the close: every device at 48 kHz, the Pulse's word clock locked,
+profile `direct`, the Dante service active, start check `ok`.
+
+**CORRECTION 2026-11-13: the session removed the evidence files from the
+local `outputs/` working tree on 2026-11-10 and did not notice; found and
+restored today, nothing lost.** After the three packaging pull requests were
+merged, the session ran `git checkout main && git pull --ff-only` in this
+repository (23:08 EST, 2026-11-10). Local `main` still tracked `outputs/`;
+the checkout took those paths over from the nested evidence clone (they were
+ignored on the branch, so git overwrote them without a word) and the
+fast-forward to the merged `main`, which no longer has them, then deleted
+all 10,278 from disk. The nested clone's own `.git` was untouched, as were
+the untracked captures, logs and audio (the 6.9 GB that was never in either
+repository), and the evidence repository on GitHub.
+
+Found on 2026-11-13 when `git status` in `outputs/` listed every tracked
+file as deleted. Restored with `git checkout -- .` there: 10,281 files
+tracked and present, `git fsck` clean, the only untracked files the three
+`access19` runs of today. Between the two dates nothing read those files:
+the measurement tools write new results and read none of the old ones.
+
+The lesson for a session: after `outputs/` became a nested clone, a branch
+switch in the outer repository to any commit that still tracks `outputs/`
+(anything before aa9541e, and the tag `layout-2026-11-01`) will take those
+files over and a switch back will delete them. Use `git worktree add` to
+look at an old commit, as `work/MOVED.md` says, never a checkout in place;
+and run `git -C outputs status` after any branch switch here.
+
+**MEASURED 2026-11-13 15:55-16:13 UTC (session, in the operator's Chrome,
+signed in by him): the page's own checks pass on the Pi. With the entry
+above, every acceptance criterion for the access update is met; ACCEPTED is
+the operator's to say.** Web 1.7.0 e7f6ba5a, applier 1.9.0 32b13a72, the
+page from the bundle of 4a04b9f.
+
+- The page loads signed in: title `USB-AoIP`, pill `CONNECTED`, no notices,
+  `48 kHz · 16 × 16`, "Live meters" (the owner's tap, 0.03 s old), start
+  check `ok` 6017. The clock row reads "unknown", as it must on the pinned
+  Statime.
+- Behind the new sandbox directives: the log panel reads the journal
+  (through group `systemd-journal`), and the System overview has the
+  temperature (60.4 C) and throttling (`0x0`) from `vcgencmd`.
+- The page reads the applier's status from `/var/lib/usb16x16-apply`: it
+  showed the morning's Dante-side rate receipt.
+- Apply: the saved document "Claude page trial", renamed "Acceptance check"
+  so that no saved preset of the operator's was overwritten, compiled in
+  the browser and installed as `dante-acceptance-check` (302 biquad
+  sections, 23 internal channels): validating, six checks, installing,
+  stopping, switching, starting, verifying, settling, `done` in about 16 s.
+  The page then read "Edits are live".
+- Live edit: the Speakers bus gain 0 to -0.5 dB; request kind `live`,
+  `done`, the endpoint's live state `applied`, no restart.
+- Commit: `done`, no restart; the Commit and Discard buttons went away.
+- Back: Switch to `direct`, `done` in about 16 s. Then Remove of
+  `dante-acceptance-check` (`done`, no restart) and the saved document
+  "Acceptance check" deleted. Saved documents and `/etc/usb16x16/dsp` are as
+  they were before the test.
+- After the last restart the start check read `ok` 6017 with no restart,
+  and a noise probe at 32 (`access19-final`, `20261113T161129Z`) returned
+  from sample 528 with no zero run of 4 or more and endpoint lines +0.
+
+The browser dialogs (one prompt, four confirms) were answered by the
+session through the page's own `confirm` and `prompt`, each read first;
+their texts are the ones in `web-ui/app.mjs`.
+
+State at the close: 48 kHz everywhere, the Pulse's word clock locked,
+profile `direct`, meters on, no installed presets, the Dante service active.
+Ten receipts in `/var/lib/usb16x16-apply/receipts` from today's requests.
+
+**ACCEPTED 2026-11-13 (operator): the access update on the Pi. Web 1.7.0
+e7f6ba5a and applier 1.9.0 32b13a72, with their three units (c908894d,
+60e7d451, bfdf2432) and the page from the bundle of 4a04b9f, are part of
+the Dante point of record.** Accepted on the 2026-10-29 rule for changes
+outside the audio path, on the two MEASURED entries above: the request path
+under systemd, a rate move from each side, Apply, a live edit, Commit and
+back, the log panel and temperature behind the tightened unit, noise probes
+at 32 before, between and after (return from sample 528 each time), and the
+two-minute soak on the 8 looped channels.
+
+The audio path is unchanged: owner c84e6a36, plugin c6b012ae, Inferno
+config 85a5256f, start wrapper df6a1b0b, transport.conf add1bc21, gadget
+65d26567 and the kernel modules are as accepted on 2026-11-01. The start
+check on the Pi is still fccfdd62 (the config-key version 4017da79 is the
+new installer's, not installed here).
+
+Rollback: `sudo ./install-access.sh rollback` in `~/usb-aoip-access` on the
+Pi (web 1.6.0 6b98e7cf, applier 1.8.0 347a7062, the old units and page,
+from `*.pre-access`). It comes before any rollback of the old chain.
+
+Open after this: the page is on plain HTTP on this unit (`WEB_TLS` is the
+new installer's); the "Sign-in needed" page names a command this unit does
+not have; the Pi has no `/etc/usb-aoip/install.conf` yet (`install.sh
+adopt` was not run); the evidence of today's runs (`access19-*`) is not
+committed in the evidence repository.
