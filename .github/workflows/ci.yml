@@ -79,7 +79,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # test-access.sh reads the development unit's files from the tag layout-2026-11-01
       - run: bash install/test-render.sh
+      - name: The development unit's access update, against a stand-in root
+        run: git fetch --tags --quiet && bash install/dev-unit/test-access.sh
 
   # The installer's own build step on arm64, as on the Pi: Statime and the
   # patched Inferno plugin at the pinned revisions, the owner, the DSP runner.

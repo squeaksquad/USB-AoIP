@@ -15564,3 +15564,49 @@ installer does not need either: it fetches the gadget sources by release).
 
 Still owed on hardware: everything else in `docs/install/TO-VERIFY.md`. The
 installer has still not run on a Pi.
+
+**STAGED 2026-11-13: an installer that puts the 2026-11-10 access work on
+the author's Pi, in the old chain's manner. Tested against a stand-in root;
+not run on the Pi; nothing installed.** The Pi runs web 1.6.0 (6b98e7cf)
+and applier 1.8.0 (347a7062), which have the two access faults found on
+2026-11-10; `install.sh install` refuses a unit the old chain built.
+
+- `install/dev-unit/stage-access.sh` (on the Mac) makes a bundle of the
+  repository's own files: `usb16x16-web` 1.7.0 (e7f6ba5a), `usb16x16-apply`
+  1.9.0 (32b13a72), `usb16x16-web.service` (c908894d),
+  `usb16x16-apply.path` (60e7d451), `usb16x16-apply.service` (bfdf2432),
+  and the page (fifteen files with the three compiler modules). It refuses
+  unless the bundle is the one `install/dev-unit/access.sha256` pins, and
+  writes that list's hash into the installer it puts in the bundle.
+- `install-access.sh install` (on the Pi, with sudo, from the bundle):
+  verifies the bundle; reads the page's user and directory from the
+  installed web unit and refuses a bundle made for another unit; refuses
+  unless the five installed files are exactly the ones it replaces
+  (6b98e7cf, 347a7062, f7c7d48c, 6d53b053, 23cb5b2e), while the applier or
+  the rate arbiter is running, with a request waiting in the old spool, or
+  with no logins to carry over. Then it stops the page, the Apply watcher
+  and the rate watcher; makes `/var/spool/usb-aoip/inbox` (root, the web
+  user's group, 1730), `/var/lib/usb16x16-apply` and `/etc/usb-aoip/
+  web-auth` (a copy of the login file the old unit names, root's, group
+  readable; the old file stays); keeps each replaced file as `*.pre-access`
+  and the page as `web-ui.pre-access`; puts the new files in by rename;
+  checks the hashes and that both programs run; starts the three units
+  again. Any failure after the first change puts everything back.
+- `rollback` restores the five files and the page from the kept copies,
+  verified against the old hashes, and removes the copies.
+- It never names `usb16x16-dante.service`, `usb16x16-statime.service` or
+  `usb-16x16.service`: audio keeps playing. The page stays on plain HTTP.
+
+The new page and the new service must go together (the service refuses
+state-changing requests without the header only the new page sends), which
+is why one installer carries both.
+
+Tested by `install/dev-unit/test-access.sh` (in CI): a stand-in root built
+from the tag's files, `systemctl` replaced by a recorder. Install replaces
+and keeps what it should and acts on no audio unit; a second install does
+nothing; rollback restores every byte; seven wrong situations are refused.
+Not tested: ownership (the stand-in root has no root), a real systemd, the
+tightened web unit on the Pi. Acceptance on the Pi, by the 2026-10-29 rule
+for changes outside the audio path: the checks the installer prints, a
+noise probe at 32 and `soak 120 32`
+(`docs/install/TO-VERIFY.md`, items 7a to 7c).
