@@ -15779,3 +15779,29 @@ their texts are the ones in `web-ui/app.mjs`.
 State at the close: 48 kHz everywhere, the Pulse's word clock locked,
 profile `direct`, meters on, no installed presets, the Dante service active.
 Ten receipts in `/var/lib/usb16x16-apply/receipts` from today's requests.
+
+**ACCEPTED 2026-11-13 (operator): the access update on the Pi. Web 1.7.0
+e7f6ba5a and applier 1.9.0 32b13a72, with their three units (c908894d,
+60e7d451, bfdf2432) and the page from the bundle of 4a04b9f, are part of
+the Dante point of record.** Accepted on the 2026-10-29 rule for changes
+outside the audio path, on the two MEASURED entries above: the request path
+under systemd, a rate move from each side, Apply, a live edit, Commit and
+back, the log panel and temperature behind the tightened unit, noise probes
+at 32 before, between and after (return from sample 528 each time), and the
+two-minute soak on the 8 looped channels.
+
+The audio path is unchanged: owner c84e6a36, plugin c6b012ae, Inferno
+config 85a5256f, start wrapper df6a1b0b, transport.conf add1bc21, gadget
+65d26567 and the kernel modules are as accepted on 2026-11-01. The start
+check on the Pi is still fccfdd62 (the config-key version 4017da79 is the
+new installer's, not installed here).
+
+Rollback: `sudo ./install-access.sh rollback` in `~/usb-aoip-access` on the
+Pi (web 1.6.0 6b98e7cf, applier 1.8.0 347a7062, the old units and page,
+from `*.pre-access`). It comes before any rollback of the old chain.
+
+Open after this: the page is on plain HTTP on this unit (`WEB_TLS` is the
+new installer's); the "Sign-in needed" page names a command this unit does
+not have; the Pi has no `/etc/usb-aoip/install.conf` yet (`install.sh
+adopt` was not run); the evidence of today's runs (`access19-*`) is not
+committed in the evidence repository.
