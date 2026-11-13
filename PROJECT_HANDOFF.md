@@ -15643,3 +15643,74 @@ been reported yet.
 Rollback: `sudo ./install-access.sh rollback` in `~/usb-aoip-access` on the
 Pi restores the five files (from `*.pre-access`) and the page (from
 `web-ui.pre-access`). The page is still on plain HTTP.
+
+**MEASURED 2026-11-13 15:00-15:18 UTC (session, at the operator's request):
+the access update on the Pi passes every acceptance step but the page's own;
+not yet ACCEPTED.** Web 1.7.0 e7f6ba5a and applier 1.9.0 32b13a72 as
+installed that morning; the Dante service was not restarted except by the
+two rate moves below. The operator confirmed beforehand that the monitors
+were muted and the 8-channel loop in place; Pro Tools was not running.
+
+Read on the Pi (read-only, over SSH):
+- Ownership and modes, which the stand-in test could not show:
+  `/var/spool/usb-aoip/inbox` `drwx-wx--T root:bdimaio`,
+  `/var/lib/usb16x16-apply` `drwxr-xr-x root:root`, `/etc/usb-aoip/web-auth`
+  `-rw-r----- root:bdimaio`. The web account cannot list the inbox.
+- `usb16x16-web` 1.7.0 started under its tightened unit and serves
+  (`TLS off: plain HTTP`, one login). An unauthenticated request gets 401
+  with the security headers. One cosmetic line at start: systemd notes that
+  `USB_AOIP_WEB_ARGS` is unset (there is no `web.env` on this unit).
+
+The request path under a real systemd, with three harmless requests dropped
+into the inbox as the web account:
+- a `remove` of a preset that is not installed: refused with that reason, a
+  receipt written to `/var/lib/usb16x16-apply/receipts`, the request taken
+  out of the inbox. So the path unit fires on a rename into the directory.
+- a symbolic link named `<id>.request` pointing at `/etc/hostname`: refused
+  ("cannot be opened as a plain file"), the link removed, the target
+  unchanged.
+- a `rate` request from the inbox: refused ("taken only from the
+  rate-request trigger").
+The Dante service's invocation was the same before and after: none of the
+three touched audio.
+
+Rate moves, both through the new applier (receipts `done`):
+- From the Mac: the USB-AoIP's CoreAudio rate set 48 to 44.1 kHz at
+  15:06:59. The arbiter's receipt reads source `usb`, 48000 to 44100; the Pi
+  was at 44.1 with the endpoint restarted by 15:07:21. `dante-sync sync
+  --source usb-aoip` then brought the Pulse, DVS, the D2USB and the Metric
+  Halo along; the start check read whole (5528, 5528) with no restart.
+- From the Dante side: `dante-sync sync --rate 48000` at 15:15:05. The
+  receipt reads source `dante`, 44100 to 48000; done by 15:15:48; the Mac's
+  device read 48000. The start check read `ok`, 6017, no restart. That sync
+  does not set the Metric Halo (as the pickup notes say): it stayed at 44.1
+  and the Pulse's word clock unlocked until `dante-sync sync --source
+  usb-aoip` set it to 48 and the clock locked again, about two minutes.
+
+From the Mac, `dante/measure-candidate.sh`, label `access19`, all at 48 kHz
+and 32 frames, judged on the 8 looped channels:
+- noise probe before the rate moves (`20261113T150304Z`): return from
+  sample 528, no zero run of 4 or more, endpoint xrun/lag/error lines +0.
+- soak 120 s (`20261113T150352Z`, `USB16X16_LOOP_CHANNELS=8`): PASS, longest
+  zero run 1, discontinuities in 0 out 0, endpoint lines +0.
+- noise probe after the rate moves and the re-lock
+  (`access19-after-rates`, `20261113T151710Z`): return from sample 528, no
+  zero run of 4 or more, endpoint lines +0.
+The evidence is in the evidence repository's working tree
+(`outputs/latency/access19-*`), not yet committed there.
+
+Not done: the page's own checks, which need a signed-in browser. The
+session's browser pane shows the service's "Sign-in needed" page and no
+prompt for a name and password, so it could not sign in; the operator's own
+browser does prompt. Owed there: a full reload and sign-in, the log panel
+and the temperature row (the parts behind the new sandbox directives), one
+Apply to a preset and back, one live edit and Commit.
+
+Found while doing this, for later: the "Sign-in needed" page tells the
+reader to run `sudo install/install.sh set-password NAME`, which does not
+exist on this unit (it was built by the old chain; there a login is added
+with `sudo usb16x16-web --auth-file /etc/usb-aoip/web-auth --add-user NAME`
+and the file's group and mode put back).
+
+State at the close: every device at 48 kHz, the Pulse's word clock locked,
+profile `direct`, the Dante service active, start check `ok`.
