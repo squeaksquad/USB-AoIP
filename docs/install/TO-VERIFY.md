@@ -49,6 +49,24 @@ The original list, for the record:
    `startcheck.conf`, `asound-inferno-owner.conf` only if the unit is not at
    48 kHz, and `owner.conf` (the page's).
 
+## On the development unit: the access update
+
+`install/dev-unit/` (2026-11-13) puts the new page, web service 1.7.0 and
+applier 1.9.0 on the unit the old chain built, with a rollback. Tested
+against a stand-in root only.
+
+7a. On the Mac: `install/dev-unit/stage-access.sh`, copy the bundle over (not
+    during a measurement), then on the Pi `./install-access.sh status` and
+    `sudo ./install-access.sh install`. It prints the acceptance steps: the
+    page's checks, an Apply and back, a live edit and Commit, a rate move
+    from each side, then the noise probe and `soak 120 32`.
+7b. What only the Pi can show: the web service starts under its tightened
+    unit (the log panel through group `systemd-journal`, temperature through
+    `vcgencmd`), the path unit fires on a file renamed into the inbox, and
+    the applier's status reaches the page from `/var/lib/usb16x16-apply`.
+7c. `sudo ./install-access.sh rollback` if anything is wrong; then tell the
+    session what failed.
+
 ## On a second Pi, or a spare SD card in the same one
 
 8. The whole of `docs/INSTALL.md`, sections 1 to 6. The steps marked
