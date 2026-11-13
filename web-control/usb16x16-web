@@ -49,6 +49,7 @@ import calendar
 import getpass
 import hashlib
 import hmac
+import html
 import json
 import os
 import re
@@ -66,7 +67,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -1385,7 +1386,22 @@ class PasswordFile:
             raise ValueError("Use a password of at least 8 characters")
         users = self.load()
         users[name] = self.hash_password(password)
+        self.write(users)
+
+    def write(self, users: dict) -> None:
+        """Replace the file, keeping who owns it and who may read it.
+
+        The installed file is root's and readable by the service's group, and
+        logins are added by root: a replacement that came out root-only would
+        lock the running service out of its own logins. So an existing file's
+        owner, group and mode (never wider than owner and group) carry over;
+        a new file is 0600 and the caller's.
+        """
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            existing = os.stat(self.path)
+        except OSError:
+            existing = None
         temporary = self.path.with_suffix(".tmp")
         # 0600 before any content is written, so the hashes are never briefly
         # world-readable between creation and chmod.
@@ -1396,6 +1412,13 @@ class PasswordFile:
                 out.write(f"{user}:{stored}\n")
             out.flush()
             os.fsync(out.fileno())
+            if existing is not None:
+                try:
+                    os.fchown(out.fileno(), existing.st_uid, existing.st_gid)
+                except OSError:
+                    pass   # not root: the file stays the caller's, at 0600
+                else:
+                    os.fchmod(out.fileno(), existing.st_mode & 0o660)
         os.replace(temporary, self.path)
 
     def remove_user(self, name: str) -> bool:
@@ -1406,16 +1429,7 @@ class PasswordFile:
         if not users:
             raise ValueError("Refusing to remove the last user; the service would "
                              "not start. Add another user first, or pass --no-auth.")
-        # Rewrite through set_user's path by re-hashing nothing: write directly.
-        temporary = self.path.with_suffix(".tmp")
-        handle = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(handle, "w", encoding="utf-8") as out:
-            out.write("# usb16x16-web credentials. Generated; do not edit by hand.\n")
-            for user, stored in sorted(users.items()):
-                out.write(f"{user}:{stored}\n")
-            out.flush()
-            os.fsync(out.fileno())
-        os.replace(temporary, self.path)
+        self.write(users)
         return True
 
 
@@ -1524,8 +1538,11 @@ AUTH_PAGE = """<!doctype html>
 h1{{font-size:1.3em}}code{{background:#e4e8e6;padding:1px 4px;border-radius:3px}}
 @media (prefers-color-scheme: dark){{body{{color:#e4ece9;background:#141a1a}}code{{background:#26302f}}}}</style>
 </head><body><h1>{title}</h1><p>{what}</p>
-<p>Logins are created on the device itself: <code>sudo install/install.sh set-password NAME</code>
-in the USB-AoIP checkout, which adds a login or changes its password.</p></body></html>
+<p>If this page appeared without your being asked for a name and password, this browser
+does not ask for them: open the same address in Safari, Chrome or Firefox.</p>
+<p>Logins are made on the device, not from this page. In a terminal on the device,
+<code>sudo usb16x16-web --auth-file {auth_file} --add-user NAME</code>
+adds a login called NAME, or changes its password. It asks for the password twice.</p></body></html>
 """
 
 
@@ -1538,6 +1555,8 @@ class Handler(BaseHTTPRequestHandler):
 
     collector: Collector
     presets: PresetStore
+    # The login file, named on the sign-in page so its instruction can be run as it stands.
+    auth_file: str = "/etc/usb-aoip/web-auth"
     auth: Authenticator | None = None
     tls: bool = False
 
@@ -1624,7 +1643,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def auth_body(self, message: str, title: str, what: str) -> tuple[bytes, str]:
         if self.wants_html():
-            return (AUTH_PAGE.format(title=title, what=what).encode("utf-8"), "text/html; charset=utf-8")
+            return (AUTH_PAGE.format(title=title, what=what, auth_file=html.escape(self.auth_file)).encode("utf-8"),
+                    "text/html; charset=utf-8")
         return json.dumps({"ok": False, "error": message}).encode(), "application/json; charset=utf-8"
 
     def send_auth_challenge(self, message: str = "Authentication required") -> None:
@@ -2379,6 +2399,7 @@ def main() -> int:
     Handler.presets = PresetStore(Path(arguments.presets))
     Handler.auth = authenticator
     Handler.tls = context is not None
+    Handler.auth_file = str(arguments.auth_file)
 
     thread = threading.Thread(target=collector.loop, name="collector", daemon=True)
     thread.start()

@@ -8,7 +8,8 @@
 # `rollback` puts all of it back.
 #
 # What it replaces (docs/web/ACCESS.md says why):
-#   /usr/local/bin/usb16x16-web             1.6.0 6b98e7cf -> 1.7.0
+#   /usr/local/bin/usb16x16-web             1.6.0 6b98e7cf -> 1.7.1 (or 1.7.0 e7f6ba5a -> 1.7.1,
+#                                           on a unit that already has the first bundle)
 #   /usr/local/bin/usb16x16-apply           1.8.0 347a7062 -> 1.9.0
 #   /etc/systemd/system/usb16x16-web.service, usb16x16-apply.path, usb16x16-apply.service
 #   the page: <work dir>/web-ui (index.html, style.css, the modules, compiler/)
@@ -51,8 +52,10 @@ auth=$root/etc/usb-aoip/web-auth
 # and install/test-render.sh both check it against the repository's files.
 manifest_sha256=@MANIFEST@
 
-# bundle file | installed path | mode | the hash it replaces
-files="bin/usb16x16-web|$root/usr/local/bin/usb16x16-web|755|6b98e7cfc171fb9c41d113dcdd1ad015f19b649b9289626a8e25cf4d4db71f8c
+# bundle file | installed path | mode | the hash the old chain left | hashes of earlier bundles
+# A unit already on an earlier bundle is updated in place: its kept copies (the old
+# chain's files) stay as they are, so `rollback` still goes all the way back.
+files="bin/usb16x16-web|$root/usr/local/bin/usb16x16-web|755|6b98e7cfc171fb9c41d113dcdd1ad015f19b649b9289626a8e25cf4d4db71f8c|e7f6ba5a19922f75aef1669fa0afc5ec6217a44e7f1b4b62d10e54c3b71d4bec
 bin/usb16x16-apply|$root/usr/local/bin/usb16x16-apply|755|347a70621f3c6bb9c10092f42ac52a0d280a756b14ba9c9f71175e7a3b28f3eb
 units/usb16x16-web.service|$units/usb16x16-web.service|644|f7c7d48cab8b12b9b7ed9f5a920efc497e9874760cc9434c979c25ee68b59761
 units/usb16x16-apply.path|$units/usb16x16-apply.path|644|6d53b053014a3cb7203de36f9e7472d370ccced6aee2c1d9a6d309b2d35bec61
@@ -78,7 +81,9 @@ status() {
   local line dest old new now state_word
   while IFS= read -r line; do
     dest=$(field "$line" 2); old=$(field "$line" 4); new=$(new_of "$(field "$line" 1)"); now=$(sha "$dest")
-    if [ "$now" = "$new" ]; then state_word=new; elif [ "$now" = "$old" ]; then state_word=old; else state_word="NEITHER ($(short "$now"))"; fi
+    if [ "$now" = "$new" ]; then state_word=new; elif [ "$now" = "$old" ]; then state_word=old
+    elif [ -n "$now" ] && [[ " $(field "$line" 5) " == *" $now "* ]]; then state_word="earlier bundle ($(short "$now"))"
+    else state_word="NEITHER ($(short "$now"))"; fi
     printf '  %-52s %s   kept: %s\n' "${dest#"$root"}" "$state_word" "$(short "$(sha "$dest$suffix")")"
   done <<< "$files"
   echo "  inbox $( [ -d "$inbox" ] && echo present || echo absent ), state $( [ -d "$state" ] && echo present || echo absent ), logins $( [ -f "$auth" ] && echo present || echo absent )"
@@ -152,24 +157,42 @@ if [ "$mode" = rollback ]; then
 fi
 
 # install
-installed_new=0; installed_old=0; count=0
+installed_new=0; installed_old=0; installed_earlier=0; count=0
 while IFS= read -r line; do
   count=$((count + 1)); now=$(sha "$(field "$line" 2)")
-  [ "$now" = "$(new_of "$(field "$line" 1)")" ] && installed_new=$((installed_new + 1))
-  [ "$now" = "$(field "$line" 4)" ] && installed_old=$((installed_old + 1))
+  if [ "$now" = "$(new_of "$(field "$line" 1)")" ]; then installed_new=$((installed_new + 1))
+  elif [ "$now" = "$(field "$line" 4)" ]; then installed_old=$((installed_old + 1))
+  elif [[ " $(field "$line" 5) " == *" $now "* ]]; then installed_earlier=$((installed_earlier + 1)); fi
 done <<< "$files"
-if [ "$installed_new" = "$count" ]; then say "already installed"; status; exit 0; fi
-[ "$installed_old" = "$count" ] || die 5 "the installed files are not all the ones this replaces (see: $0 status); nothing changed"
-while IFS= read -r line; do
-  kept=$(field "$line" 2)$suffix
-  [ ! -e "$kept" ] || [ "$(sha "$kept")" = "$(field "$line" 4)" ] || die 5 "${kept#"$root"} exists with another hash; nothing changed"
-done <<< "$files"
-[ ! -e "$page$suffix" ] || die 5 "$page$suffix exists already; nothing changed"
-old_spool=$( [ -n "$root" ] && echo "$root$work/web-apply" || echo "$work/web-apply" )
-[ ! -e "$old_spool/request.json" ] || die 4 "a request is waiting in $old_spool; let it finish first"
-old_auth=$(unit_value 's/.*--auth-file \([^ ]*\).*/\1/p' "$web_unit")
-[ -n "$root" ] && old_auth=$root$old_auth
-[ -s "$old_auth" ] || [ -s "$auth" ] || die 3 "no logins found at $old_auth: the new service would refuse to start"
+page_current=1
+( cd "$here/web-ui" && find . -type f ) | while read -r f; do cmp -s "$here/web-ui/$f" "$page/$f" || exit 1; done || page_current=0
+if [ "$installed_new" = "$count" ] && [ "$page_current" = 1 ]; then say "already installed"; status; exit 0; fi
+if [ "$installed_old" = "$count" ]; then
+  update=0     # the unit as the old chain left it
+elif [ "$installed_old" = 0 ] && [ $((installed_new + installed_earlier)) = "$count" ]; then
+  update=1     # the unit already has an earlier bundle
+else
+  die 5 "the installed files are not all the ones this replaces (see: $0 status); nothing changed"
+fi
+if [ "$update" = 1 ]; then
+  while IFS= read -r line; do
+    kept=$(field "$line" 2)$suffix
+    [ "$(sha "$kept")" = "$(field "$line" 4)" ] || die 5 "${kept#"$root"} is not the old chain's file; this unit was not updated by this installer; nothing changed"
+  done <<< "$files"
+  [ -d "$page$suffix" ] || die 5 "no kept page at $page$suffix; nothing changed"
+  [ -s "$auth" ] || die 3 "no logins at ${auth#"$root"}"
+else
+  while IFS= read -r line; do
+    kept=$(field "$line" 2)$suffix
+    [ ! -e "$kept" ] || [ "$(sha "$kept")" = "$(field "$line" 4)" ] || die 5 "${kept#"$root"} exists with another hash; nothing changed"
+  done <<< "$files"
+  [ ! -e "$page$suffix" ] || die 5 "$page$suffix exists already; nothing changed"
+  old_spool=$( [ -n "$root" ] && echo "$root$work/web-apply" || echo "$work/web-apply" )
+  [ ! -e "$old_spool/request.json" ] || die 4 "a request is waiting in $old_spool; let it finish first"
+  old_auth=$(unit_value 's/.*--auth-file \([^ ]*\).*/\1/p' "$web_unit")
+  [ -n "$root" ] && old_auth=$root$old_auth
+  [ -s "$old_auth" ] || [ -s "$auth" ] || die 3 "no logins found at $old_auth: the new service would refuse to start"
+fi
 
 stop_page
 # 1. the directories and the login file
@@ -178,20 +201,31 @@ install -d -m 1730 "$inbox"
 owned root:root "$root/var/spool/usb-aoip" "$state" "$root/etc/usb-aoip"
 owned root:"$web_group" "$inbox"
 if [ ! -s "$auth" ]; then
-  install -m 640 "$old_auth" "$auth"
+  install -m 640 "${old_auth:?}" "$auth"
   owned root:"$web_group" "$auth"
 fi
-# 2. keep what is there
+# 2. keep what is there. From the old chain's files: the copies `rollback` restores.
+#    Always: a copy of this moment, which a failure below puts straight back.
+undo=.access-undo
 while IFS= read -r line; do
-  dest=$(field "$line" 2); [ -e "$dest$suffix" ] || { cp -p "$dest" "$dest$suffix"; }
+  dest=$(field "$line" 2)
+  [ "$update" = 1 ] || [ -e "$dest$suffix" ] || cp -p "$dest" "$dest$suffix"
+  cp -p "$dest" "$dest$undo"
 done <<< "$files"
-cp -a "$page" "$page$suffix"
+[ "$update" = 1 ] || cp -a "$page" "$page$suffix"
+rm -rf "$page$undo"; cp -a "$page" "$page$undo"
+drop_undo() { while IFS= read -r line; do rm -f "$(field "$line" 2)$undo"; done <<< "$files"; rm -rf "$page$undo"; }
 # 3. the new files
-fail() {   # put everything back and say why
-  while IFS= read -r line; do dest=$(field "$line" 2); place "$dest$suffix" "$dest" "$(field "$line" 3)"; done <<< "$files"
-  rm -rf "$page"; mv "$page$suffix" "$page"
+fail() {   # put this moment back and say why
+  while IFS= read -r line; do dest=$(field "$line" 2); place "$dest$undo" "$dest" "$(field "$line" 3)"; done <<< "$files"
+  rm -rf "$page"; mv "$page$undo" "$page"
+  if [ "$update" = 0 ]; then
+    while IFS= read -r line; do rm -f "$(field "$line" 2)$suffix"; done <<< "$files"
+    rm -rf "$page$suffix"
+  fi
+  drop_undo
   start_page || true
-  die 7 "$1; the old files were put back"
+  die 7 "$1; what was installed before was put back"
 }
 while IFS= read -r line; do
   src=$here/$(field "$line" 1); dest=$(field "$line" 2)
@@ -210,7 +244,8 @@ start_page || fail "the page's units did not start"
 sleep "${USB_AOIP_TEST_SETTLE:-4}"
 [ -n "$root" ] || [ "$("$systemctl" is-active usb16x16-web.service)" = active ] || fail "usb16x16-web is not active (journalctl -u usb16x16-web -n 30)"
 
-say "installed: web 1.7.0 $(short "$(new_of bin/usb16x16-web)"), applier 1.9.0 $(short "$(new_of bin/usb16x16-apply)"), the page. Kept as *$suffix."
+drop_undo
+say "installed: web $(short "$(new_of bin/usb16x16-web)"), applier $(short "$(new_of bin/usb16x16-apply)"), the page. The old chain's files are kept as *$suffix."
 status
 cat <<EOF
 install-access: the audio service was not restarted. To accept this:

@@ -15805,3 +15805,40 @@ new installer's); the "Sign-in needed" page names a command this unit does
 not have; the Pi has no `/etc/usb-aoip/install.conf` yet (`install.sh
 adopt` was not run); the evidence of today's runs (`access19-*`) is not
 committed in the evidence repository.
+
+**STAGED 2026-11-13: usb16x16-web 1.7.1 (d6f6d1ab), a sign-in page whose
+instruction works on any unit, and a login writer that keeps the file's
+owner and mode. Not installed; the Pi runs 1.7.0 e7f6ba5a.** Found the same
+day on the Pi: the page shown to a browser that fails to sign in told the
+reader to run `sudo install/install.sh set-password NAME`, which exists
+only in a checkout; the operator ran it on the Pi and got "command not
+found". And `--add-user` run as root replaced the login file with one only
+root could read, so the running service lost its logins until the file's
+group and mode were put back by hand.
+
+- The page now names the installed program and the login file the service
+  was started with: `sudo usb16x16-web --auth-file <file> --add-user NAME`.
+  It also says what to do when a browser shows the page without asking for a
+  name and password (the session's embedded browser does this): open the
+  address in Safari, Chrome or Firefox.
+- `PasswordFile.write` (both `--add-user` and removal go through it) gives
+  the replacement the existing file's owner and group, and its mode limited
+  to owner and group. A new file is still 0600 and the caller's.
+- `install/dev-unit/install-access.sh` now also updates a unit that already
+  has the first bundle: a file that is an earlier bundle's (web e7f6ba5a) is
+  replaced, the kept `*.pre-access` copies stay the old chain's, and
+  `rollback` still returns to web 1.6.0 and applier 1.8.0. A failed update
+  puts back what was installed at that moment, not the old chain's files.
+  `access.sha256` is re-pinned for the new bundle; the applier, the three
+  units and the page in it are unchanged from what the Pi runs.
+
+Tested off the Pi: the web tests (the page's text, the path escaped, the
+file's mode kept at 0640, narrowed from 0644, 0600 when new) and
+`test-access.sh` (an update over the first bundle, its rollback, a locally
+edited file refused). To put it on the Pi: `install/dev-unit/stage-access.sh`
+and `sudo ./install-access.sh install` as before; only `usb16x16-web`
+changes there. Outside the audio path; no audio service is touched.
+
+Also, for the record: the `access19` evidence the ACCEPTED entry above
+lists as uncommitted was committed to the evidence repository the same day
+(0972994).

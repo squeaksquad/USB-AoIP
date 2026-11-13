@@ -563,7 +563,12 @@ class HeaderAndAuthPageTests(ServerCase):
         self.assertTrue(response.getheader("Content-Type").startswith("text/html"))
         page = data.decode()
         self.assertIn("Reload", page)
-        self.assertIn("sudo install/install.sh set-password NAME", page)
+        # The instruction must be one that runs on any unit: the installed program and the
+        # login file this service was started with, not a script only a checkout has.
+        self.assertIn("sudo usb16x16-web --auth-file ", page)
+        self.assertIn(" --add-user NAME", page)
+        self.assertNotIn("install.sh", page)
+        self.assertIn("Safari, Chrome or Firefox", page)
         self.assertNotIn("http://", page.replace('"http://www.w3.org', ""), "no external resources")
         self.assertNotIn("<script", page)
         status, response, data = self.call("GET", "/api/health", auth=False, headers={"Accept": "application/json"})
@@ -593,6 +598,31 @@ class HeaderAndAuthPageTests(ServerCase):
 
     def test_handler_has_a_socket_timeout(self):
         self.assertEqual(self.web.Handler.timeout, 30)
+
+
+    def test_the_sign_in_page_names_the_login_file_it_runs_with(self):
+        self.web.Handler.auth_file = "/etc/usb-aoip/web-auth"
+        _, _, data = self.call("GET", "/", auth=False, headers={"Accept": "text/html"})
+        self.assertIn("sudo usb16x16-web --auth-file /etc/usb-aoip/web-auth --add-user NAME", data.decode())
+        self.web.Handler.auth_file = '/tmp/a<b>&"c'
+        _, _, data = self.call("GET", "/", auth=False, headers={"Accept": "text/html"})
+        self.assertIn("/tmp/a&lt;b&gt;&amp;&quot;c", data.decode())
+        self.assertNotIn("a<b>", data.decode())
+
+    def test_adding_a_login_keeps_who_may_read_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "web-auth"
+            store = self.web.PasswordFile(path)
+            store.set_user("first", "a-long-password")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600, "a new file is the caller's alone")
+            os.chmod(path, 0o640)   # as installed: root's, readable by the service's group
+            store.set_user("second", "another-password")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o640, "the group can still read it")
+            self.assertEqual(sorted(store.load()), ["first", "second"])
+            os.chmod(path, 0o644)
+            store.remove_user("second")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o640, "never wider than owner and group")
+            self.assertEqual(sorted(store.load()), ["first"])
 
 
 class BindTests(unittest.TestCase):
