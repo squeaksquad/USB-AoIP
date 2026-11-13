@@ -516,6 +516,7 @@ EOF
   rm -rf "$state/kernel-check"
 }
 
+# The line added is the development unit's own (its config.txt, read 2026-11-13).
 ensure_udc() {   # the USB-C port in device mode
   [ -e "/sys/class/udc/$USB_UDC" ] && return
   local cfg=/boot/firmware/config.txt
@@ -630,13 +631,18 @@ install_modules() {
   esac
 }
 
+# The development unit's own connection, read off it on 2026-11-13: link-local
+# for IPv4 and IPv6, never the default route, autoconnect. The priority is
+# added here so that it wins over the profile Raspberry Pi OS ships for the
+# port (there, that profile is simply not active).
 setup_audio_if() {
   [ "$AUDIO_IF_SETUP" = link-local ] || return 0
   command -v nmcli >/dev/null || refuse "AUDIO_IF_SETUP=link-local needs NetworkManager"
   nmcli -t -f NAME connection show | grep -qx "aoip-$AUDIO_IF" && return 0
   say "creating the NetworkManager connection aoip-$AUDIO_IF (IPv4 link-local)"
   nmcli connection add type ethernet ifname "$AUDIO_IF" con-name "aoip-$AUDIO_IF" \
-    ipv4.method link-local ipv6.method link-local connection.autoconnect yes connection.autoconnect-priority 10 >/dev/null
+    ipv4.method link-local ipv4.never-default yes ipv6.method link-local \
+    connection.autoconnect yes connection.autoconnect-priority 10 >/dev/null
   warn "aoip-$AUDIO_IF takes over $AUDIO_IF at the next link change or reboot; if you are logged in over that port, expect the address to change"
 }
 

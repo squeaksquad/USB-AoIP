@@ -15518,3 +15518,49 @@ and going produces, anything on a Pi. It changes the Statime binary, part
 of the audio path's build: a unit built with `PTP_STATE=1` is a new
 operating point until it passes the battery
 (`docs/install/TO-VERIFY.md`, item 20a).
+
+**FOUND 2026-11-13 (operator, four read-only read-outs from the Pi): the
+installer's three guesses about the development unit were right or are now
+corrected; nothing on the Pi changed.** The read-outs asked for on
+2026-11-10 (`docs/install/TO-VERIFY.md`, items 1 to 4).
+
+1. The base gadget unit. `systemctl cat usb-16x16.service` gave a twelve-line
+   oneshot (`After=local-fs.target systemd-modules-load.service
+   sys-kernel-config.mount`, `ExecStart=/usr/local/sbin/setup-usb-16x16
+   start`, `WantedBy=multi-user.target`) with the drop-in
+   `10-usb-aoip.conf` over it. Written out, it hashes to 99c87e86, the hash
+   this handoff has carried since the protected set was recorded, so the
+   text is the unit and not a paraphrase. It is now in the repository as
+   `history/installers/gadget/usb-16x16.service`
+   (`work/protected-baseline-2026-08-31/` is not edited). The fresh-install
+   unit `gadget/usb-16x16.service` was aligned with it: the same ordering,
+   type and install target, the script named directly; the render test
+   checks both the hash and that the two differ only in description and
+   script.
+2. Device mode. `/boot/firmware/config.txt` ends its `[all]` section with
+   `dtoverlay=dwc2,dr_mode=peripheral`, the line the installer adds when no
+   USB device controller is present. (Raspberry Pi OS's own `[cm5]`
+   `dr_mode=host` line is there too and does not apply to a Pi 5.)
+   `cmdline.txt` has nothing gadget-related: no `modules-load`. The fan
+   curve block recorded earlier is there.
+3. The audio port's address. NetworkManager connection `aoip-eth0` on
+   `eth0`: `ipv4.method link-local`, `ipv4.never-default yes`,
+   `ipv4.may-fail yes`, `ipv6.method link-local`, autoconnect, priority 0.
+   `AUDIO_IF_SETUP=link-local` made the same connection without
+   `never-default`; it now sets it. The installer keeps an autoconnect
+   priority of 10, which the Pi does not have: on the Pi the stock profile
+   for the port (`netplan-eth0`) exists and is simply not active, and a
+   fresh system needs the new profile to win.
+4. Patches 0003, 0004 and 0005 as staged on the Pi hash to 02f420e4,
+   25adf7e7 and 31211d3a, the values pinned in `install/pins.sha256` from
+   the repository's files on 2026-11-10. With 0001 and 0002 already in
+   `SOURCES.lock`, all five patches the installer applies are the ones the
+   installed plugin c6b012ae was built from.
+
+Also read: the running kernel is `6.18.34+rpt-rpi-2712`, Debian package
+version `1:6.18.34-1+rpt1`, the release `KERNEL_PIN` names. Not read: the
+installed package list and where `~/src/linux-6.18.34` came from (the
+installer does not need either: it fetches the gadget sources by release).
+
+Still owed on hardware: everything else in `docs/install/TO-VERIFY.md`. The
+installer has still not run on a Pi.

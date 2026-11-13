@@ -28,6 +28,11 @@ while read -r name value; do
   grep -q "$value" "$repo/dante/SOURCES.lock" || bad "sources.pins: $name $value is not in dante/SOURCES.lock"
 done < "$repo/install/sources.pins"
 grep -q "rustc *$(sed -n 's/^rust_toolchain *//p' "$repo/install/sources.pins") " "$repo/dante/SOURCES.lock" || bad "sources.pins: the Rust toolchain is not SOURCES.lock's"
+# The development unit's base gadget unit, as read off it: the hash the handoff records.
+[ "$(sha "$repo/history/installers/gadget/usb-16x16.service" | cut -c1-8)" = 99c87e86 ] || bad "pin: history/installers/gadget/usb-16x16.service is not 99c87e86"
+# The fresh-install unit is that unit with the script named directly: same ordering, type and target.
+diff <(grep -vE '^#|^Description=|^Exec' "$repo/gadget/usb-16x16.service") <(grep -vE '^#|^Description=|^Exec' "$repo/history/installers/gadget/usb-16x16.service") >/dev/null ||
+  bad "gadget/usb-16x16.service differs from the development unit's in more than its description and script"
 [ $fail = 0 ] && ok "pins: patches, sources and upstream revisions"
 
 # --- 2. the development unit renders to the repository's own files
