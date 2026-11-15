@@ -67,7 +67,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -345,6 +345,31 @@ def parse_meters(text: str) -> dict | None:
 
 _meters_cache: dict = {"mtime": None, "body": None}
 _meters_lock = threading.Lock()
+# stage -> (sequence last seen, when it was first seen at that value). The owner
+# rewrites its file twenty times a second whether or not audio is moving, and a
+# tap that has had no frames keeps its last window in it: a file that is fresh
+# says nothing about a tap that is not. A tap is live while its sequence moves.
+_tap_progress: dict = {}
+METER_FLOOR_DB = -144.0
+
+
+def settle_taps(taps: dict, now: float) -> tuple[dict, list[str]]:
+    """The taps with every one whose sequence has stood still for longer than
+    METERS_FRESH_S reported as silent and marked idle, and the idle stages'
+    names. The readings a still tap holds are of audio that stopped some time
+    ago (found 2026-11-15: the last window of a test two days earlier, shown
+    as live); what is true of it now is that nothing is passing."""
+    settled, idle = {}, []
+    for stage, tap in taps.items():
+        seen = _tap_progress.get(stage)
+        if seen is None or seen[0] != tap["sequence"]:
+            _tap_progress[stage] = seen = (tap["sequence"], now)
+        if now - seen[1] > METERS_FRESH_S:
+            idle.append(stage)
+            tap = {**tap, "idle": True, "peakDb": [METER_FLOOR_DB] * 16,
+                   "rmsDb": [METER_FLOOR_DB] * 16, "clipped": [0] * 16}
+        settled[stage] = tap
+    return settled, sorted(idle)
 
 
 def read_meters(now: float | None = None) -> dict:
@@ -374,6 +399,10 @@ def read_meters(now: float | None = None) -> dict:
                 "reason": f"The meter snapshot is {age:.0f} s old: the {engine} has stopped publishing, "
                           "or no audio is moving through it." if dante else
                           f"The meter snapshot is {age:.0f} s old: the bridge has stopped publishing."}
+    if dante:
+        with _meters_lock:
+            taps, idle = settle_taps(body["taps"], now)
+        body = {**body, "taps": taps, "idleStages": idle}
     return {"ok": True, "available": True, "ageSeconds": round(age, 2),
             "source": "owner-tap" if dante else "bridge-tap",
             "windowMs": round((body.get("windowFrames") or 0) / 48.0, 1), **body}

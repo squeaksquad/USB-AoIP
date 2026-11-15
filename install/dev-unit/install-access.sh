@@ -8,8 +8,8 @@
 # `rollback` puts all of it back.
 #
 # What it replaces (docs/web/ACCESS.md says why):
-#   /usr/local/bin/usb16x16-web             1.6.0 6b98e7cf -> 1.7.1 (or 1.7.0 e7f6ba5a -> 1.7.1,
-#                                           on a unit that already has the first bundle)
+#   /usr/local/bin/usb16x16-web             1.6.0 6b98e7cf -> the bundle's (or from an earlier
+#                                           bundle's: 1.7.0 e7f6ba5a, 1.7.1 d6f6d1ab)
 #   /usr/local/bin/usb16x16-apply           1.8.0 347a7062 -> 1.9.0
 #   /etc/systemd/system/usb16x16-web.service, usb16x16-apply.path, usb16x16-apply.service
 #   the page: <work dir>/web-ui (index.html, style.css, the modules, compiler/)
@@ -55,7 +55,7 @@ manifest_sha256=@MANIFEST@
 # bundle file | installed path | mode | the hash the old chain left | hashes of earlier bundles
 # A unit already on an earlier bundle is updated in place: its kept copies (the old
 # chain's files) stay as they are, so `rollback` still goes all the way back.
-files="bin/usb16x16-web|$root/usr/local/bin/usb16x16-web|755|6b98e7cfc171fb9c41d113dcdd1ad015f19b649b9289626a8e25cf4d4db71f8c|e7f6ba5a19922f75aef1669fa0afc5ec6217a44e7f1b4b62d10e54c3b71d4bec
+files="bin/usb16x16-web|$root/usr/local/bin/usb16x16-web|755|6b98e7cfc171fb9c41d113dcdd1ad015f19b649b9289626a8e25cf4d4db71f8c|e7f6ba5a19922f75aef1669fa0afc5ec6217a44e7f1b4b62d10e54c3b71d4bec d6f6d1ab9ea7626adb052749d8a6e79950a014310a865d864483af5eee0375db
 bin/usb16x16-apply|$root/usr/local/bin/usb16x16-apply|755|347a70621f3c6bb9c10092f42ac52a0d280a756b14ba9c9f71175e7a3b28f3eb
 units/usb16x16-web.service|$units/usb16x16-web.service|644|f7c7d48cab8b12b9b7ed9f5a920efc497e9874760cc9434c979c25ee68b59761
 units/usb16x16-apply.path|$units/usb16x16-apply.path|644|6d53b053014a3cb7203de36f9e7472d370ccced6aee2c1d9a6d309b2d35bec61

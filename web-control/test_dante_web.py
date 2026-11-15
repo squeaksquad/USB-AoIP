@@ -154,6 +154,42 @@ class DanteWebTests(unittest.TestCase):
         self.assertFalse(stale["available"])
         self.assertIn("no audio is moving", stale["reason"])
 
+    def test_a_tap_whose_sequence_stands_still_is_silent_not_its_last_window(self):
+        """Found on the Pi 2026-11-15: the owner rewrites the file with the host idle, the USB
+        taps keep the last window they saw, and the page showed it as live levels."""
+        self.web._tap_progress.clear()
+        peaks = ",".join(["-20.0"] * 16)
+        tap = lambda stage, seq: (f"TAP stage={stage} seq={seq} frames=2400 position=7200 peak_dbfs={peaks} "
+                                  f"rms_dbfs={peaks} clip={','.join(['1'] * 16)}\n")
+        path = self.root / "run" / "meters.txt"
+        def write(usb_seq, dante_seq, n):
+            path.write_text(f"METERS v=1 t_us={n} window_frames=2400 writes={n}\n" + tap("usb-capture", usb_seq)
+                            + tap("dante-playback", usb_seq) + tap("dante-capture", dante_seq))
+            os.utime(path, (self.t0 + n, self.t0 + n))   # a new version of the file, and fresh at that moment
+        self.t0 = time.time()
+        write(696, 100, 0)
+        first = self.web.read_meters(now=self.t0)
+        self.assertEqual(first["idleStages"], [], "a tap just seen is given the benefit of the doubt")
+        self.assertEqual(first["taps"]["usb-capture"]["peakDb"][3], -20.0)
+        # Two seconds on: the file is new again, the return tap has moved, the USB taps have not.
+        write(696, 140, 2)
+        later = self.web.read_meters(now=self.t0 + 2)
+        self.assertTrue(later["available"])
+        self.assertEqual(later["idleStages"], ["dante-playback", "usb-capture"])
+        usb = later["taps"]["usb-capture"]
+        self.assertTrue(usb["idle"])
+        self.assertEqual((usb["peakDb"], usb["rmsDb"], usb["clipped"]), ([-144.0] * 16, [-144.0] * 16, [0] * 16))
+        self.assertEqual(usb["sequence"], 696)
+        self.assertNotIn("idle", later["taps"]["dante-capture"])
+        self.assertEqual(later["taps"]["dante-capture"]["peakDb"][0], -20.0)
+        # Audio starts again: the sequence moves and the readings are back at once.
+        write(697, 180, 4)
+        again = self.web.read_meters(now=self.t0 + 4)
+        self.assertEqual(again["idleStages"], [])
+        self.assertEqual(again["taps"]["usb-capture"]["peakDb"][3], -20.0)
+        # The cached file is not altered by the silencing: the same version read again is the same.
+        self.assertEqual(self.web.read_meters(now=self.t0 + 4)["taps"]["usb-capture"]["peakDb"][3], -20.0)
+
     def test_live_status_comes_from_the_owners_directory(self):
         self.assertIn("no preset is running", self.web.read_live_status()["reason"])
         (self.root / "run" / "dsp-live.status").write_text(f'DSPLIVE gen=2 sha256={"b" * 64} state=applied reason="" t_us=5\n')
@@ -284,7 +320,7 @@ class DanteWebTests(unittest.TestCase):
         for key in ("ok", "generated", "service", "host", "audio", "stack", "mode", "meters", "dsp", "owner",
                     "apply", "dspLive"):
             self.assertIn(key, snapshot)
-        self.assertEqual(snapshot["service"]["version"], "1.7.1")
+        self.assertEqual(snapshot["service"]["version"], "1.7.2")
 
     def test_the_dante_dsp_answer_runs_no_engine_probe(self):
         collector = self.web.Collector(self.root, self.root)
