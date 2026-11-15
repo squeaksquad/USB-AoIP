@@ -15894,3 +15894,8 @@ sixteen channels at -144, `idleStages` naming both, and `dante-capture`
 moving and not idle. Not checked: the readings coming back on the Pi when
 audio starts (tested off the Pi only). Applier 1.9.0 and the audio path are
 as they were.
+
+**MEASURED 2026-11-15 (operator): on web 1.7.2 the page's meters work with
+audio playing.** This closes what the INSTALLED entry above left unchecked
+on the Pi: the readings come back when audio starts. Reported by the
+operator from the page; no figures were taken.
