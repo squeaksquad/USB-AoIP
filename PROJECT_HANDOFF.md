@@ -15880,3 +15880,17 @@ is not changed. `install-access.sh` accepts 1.7.1 as an earlier bundle;
 the bundle is re-pinned. Tested off the Pi: a still tap silenced while
 another in the same file moves, the readings back as soon as the sequence
 moves, the cached file not altered.
+
+**INSTALLED 2026-11-15 (operator): usb16x16-web 1.7.2 (5b374f74) on the Pi, by
+`install-access.sh install` from bundle bcb5a54c (repository c5e30a5).**
+Read back the same hour, read-only: the installed file is 5b374f74 and
+`/api/health` answers version 1.7.2; the web service restarted at 19:44:01
+UTC and nothing else did (`usb16x16-dante` up since 2026-11-13 16:10 UTC,
+Statime since 2026-10-14, the gadget since 2026-10-30); the kept
+`*.pre-access` copies are still the old chain's. With the host idle the
+meter file's USB taps still stand at `seq=696`, and `/api/meters` now
+returns `usb-capture` and `dante-playback` with `idle: true` and all
+sixteen channels at -144, `idleStages` naming both, and `dante-capture`
+moving and not idle. Not checked: the readings coming back on the Pi when
+audio starts (tested off the Pi only). Applier 1.9.0 and the audio path are
+as they were.
