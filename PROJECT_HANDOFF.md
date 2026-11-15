@@ -15842,3 +15842,41 @@ changes there. Outside the audio path; no audio service is touched.
 Also, for the record: the `access19` evidence the ACCEPTED entry above
 lists as uncommitted was committed to the evidence repository the same day
 (0972994).
+
+**INSTALLED 2026-11-15 (operator): usb16x16-web 1.7.1 d6f6d1ab on the Pi,
+by `install-access.sh` over the first bundle.** Read from the Pi the same
+day: `/usr/local/bin/usb16x16-web` hashes to d6f6d1ab. The operator reports
+the page looks right. Only that file changed; the audio service was not
+touched.
+
+**FOUND 2026-11-15 (operator, then read from the Pi): with nothing playing,
+the page shows -20.0 on inputs 2 to 16 and nothing on input 1. The values
+are real and two days old.** `/run/usb16x16-dante/meters.txt`, read twice
+two seconds apart with the host idle (`usb=open tx=idle rx=idle`): the
+file is rewritten twenty times a second (`writes` 3495233 then 3495273),
+the `dante-capture` tap's sequence moves and reads silence, and the
+`usb-capture` and `dante-playback` taps stand at `seq=696` with
+`peak_dbfs=-144.0,-20.0 x15`. That is the last window of the session's
+final noise probe on 2026-11-13 (channel 1 the probe's, the other fifteen
+its 0.1 load, which is -20 dBFS). The owner publishes a tap's last window
+until new frames replace it; the service judged freshness by the file's age
+alone, so a stale tap in a fresh file was served as live.
+
+It predates the access work (the reader is unchanged from 1.6.0) and is in
+the owner's meter tap as accepted on 2026-10-11; nothing about the audio is
+wrong. It was not noticed before because a session that ends by silencing
+the host leaves silence in the last window; a harness run ends mid-signal.
+
+**STAGED 2026-11-15: usb16x16-web 1.7.2 (5b374f74): a tap whose sequence stands
+still for more than a second is reported silent.** `settle_taps` keeps,
+per stage, the sequence last seen and when; on the Dante stack a tap that
+has not moved for longer than `METERS_FRESH_S` is returned with every
+channel at -144 dBFS, no clip flags and `idle: true`, and the answer lists
+`idleStages`. The page needs no change: it draws -144 as an empty meter.
+A tap seen for the first time is given one second before it can be called
+idle, so a restart of the service can show a stale window for that long.
+The owner is not changed (it is the audio path); the AES67 stack's reader
+is not changed. `install-access.sh` accepts 1.7.1 as an earlier bundle;
+the bundle is re-pinned. Tested off the Pi: a still tap silenced while
+another in the same file moves, the readings back as soon as the sequence
+moves, the cached file not altered.
