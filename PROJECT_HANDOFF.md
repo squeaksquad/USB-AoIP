@@ -16090,3 +16090,21 @@ the page installed now is set aside as `~/usb-aoip-access.page-0991131e`.
 Not done: the 30 files are still in the page directory. The installer
 removes nothing, so installing the clean bundle leaves them there; they
 need removing by hand.
+
+**DONE 2026-11-17 03:58 UTC (session, on the operator's word): the 30 "._"
+files are removed from the Pi's page directory.** Looked at first: all 30
+were 163 bytes, began with the AppleDouble mark (00 05 16 07) and held
+only `com.apple.provenance`, each sat beside a real file of the same name,
+and all were owned by bdimaio. Deleted with `find ... -name "._*" -size
+163c -delete` in `/home/bdimaio/usb-16x16-work/web-ui` only. Read back:
+none left there, 39 files where there were 69, all 28 files of the
+installed page (bundle 0991131e) still byte for byte the bundle's, the web
+service not restarted (up since 03:40:15 UTC) and answering, Dante active.
+
+One of the 30, `._profiles.mjs`, was dated 2026-11-15 14:44 local: the
+install of web 1.7.2 on 2026-11-15 put companions there too, and the
+03:40 install replaced all but that one. So the archive has carried them
+since at least that bundle, not only since this session's. Left alone:
+other "._" files elsewhere under `/home/bdimaio/usb-16x16-work` (18 within
+three levels, outside the page directory) and those inside the two bundles
+set aside in the home directory.
