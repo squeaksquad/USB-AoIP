@@ -169,3 +169,15 @@ test('Dante: commands and the journal command name the Dante units only', async 
   assert.match(journalCommand('aes67'), /usb16x16-aes67\.service/);
   assert.throws(() => journalCommand('aes67', 'dante'), /known log service/);
 });
+
+test('a blank preset passes sixteen outputs straight through', async () => {
+  const { blankConfig } = await import('./workflows.mjs');
+  const config = blankConfig('Empty');
+  assert.equal(config.name, 'Empty');
+  assert.deepEqual(config.outputs.map(o => o.source), Array.from({length: 16}, (_, i) => i));
+  assert.ok(config.outputs.every((o, i) => o.role === 'speaker' && o.label === `Out ${i + 1}` && o.gainDb === 0 && !o.mute));
+  assert.equal(config.bassEnabled, false);
+  assert.equal(config.headroomDb, 0);
+  assert.ok(config.sends.flat().every(v => v === null));
+  assert.ok(config.inputs.every(v => v.crossover === false));
+});

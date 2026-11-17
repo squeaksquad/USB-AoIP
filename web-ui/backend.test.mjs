@@ -852,3 +852,46 @@ test('a state-changing request that meets 401, 403 or 429 reports it, and nothin
     assert.equal((await response.json()).init.body, undefined);
   } finally { onAccessProblem(null); }
 });
+
+// ------------------------------------------- Status tab (redesign 2026-11, phase 1)
+import { statusCards, meterRows } from './backend.mjs';
+
+test('statusCards: five cards, none of them good when not connected', () => {
+  const cards = statusCards(null);
+  assert.deepEqual(cards.map(c => c.id), ['clock', 'rate', 'computer', 'network', 'preset']);
+  assert.ok(cards.every(c => c.value === 'Not connected' && c.state === ''));
+});
+
+test('statusCards: a healthy Dante device', () => {
+  const by = Object.fromEntries(statusCards({...healthy, audio: {sampleRate: 48000}}).map(c => [c.id, c]));
+  assert.equal(by.clock.value, 'Locked'); assert.equal(by.clock.state, 'ok');
+  assert.equal(by.rate.value, '48 kHz'); assert.match(by.rate.detail, /Dante Controller/);
+  assert.equal(by.computer.value, 'Connected'); assert.match(by.computer.detail, /Sending audio: yes · receiving: yes/);
+  assert.equal(by.network.state, 'ok'); assert.match(by.network.value, /Dante · 1000 Mbit\/s/);
+  assert.equal(by.preset.value, 'Direct (no DSP)'); assert.match(by.preset.detail, /unchanged/);
+});
+
+test('statusCards: problems are named, unknowns are not shown as good', () => {
+  const by = h => Object.fromEntries(statusCards(h).map(c => [c.id, c]));
+  assert.equal(by({...healthy, clock: {state: 'no-leader'}}).clock.state, 'bad');
+  assert.equal(by({...healthy, clock: undefined}).clock.state, '');
+  assert.equal(by({...healthy, audio: {}}).rate.value, 'Unknown');
+  assert.equal(by({...healthy, usb: {present: true, state: 'not attached'}}).computer.state, 'warn');
+  assert.equal(by({...healthy, network: {interface: 'eth0', carrier: false}}).network.value, 'Cable unplugged');
+  assert.equal(by({...healthy, network: {...healthy.network, speedMbit: 100}}).network.state, 'warn');
+  assert.equal(by(withService('dante', 'failed')).network.state, 'bad');
+  assert.equal(by({...healthy, startCheck: {state: 'gave-up', restarts: 4}}).network.state, 'bad');
+  const preset = by({...healthy, profile: {selected: 'dante-room', profiles: []}}).preset;
+  assert.equal(preset.value, 'room'); assert.match(preset.detail, /dante-room/);
+});
+
+test('meterRows: three banks by name, null where a tap is missing', () => {
+  const tap = v => ({peakDb: new Array(16).fill(v), rmsDb: new Array(16).fill(v - 10), clipped: new Array(16).fill(0)});
+  const rows = meterRows({taps: {'usb-capture': tap(-10), 'dante-playback': tap(-20)}});
+  assert.deepEqual(rows.map(r => r.id), ['computer', 'to-network', 'from-network']);
+  assert.equal(rows[0].bank[0].peak, -10);
+  assert.equal(rows[1].bank[15].rms, -30);
+  assert.equal(rows[2].bank, null);
+  assert.equal(meterRows({taps: {'ravenna-capture': tap(-5)}})[2].bank[3].peak, -5);
+  assert.ok(meterRows(null).every(r => r.bank === null));
+});
