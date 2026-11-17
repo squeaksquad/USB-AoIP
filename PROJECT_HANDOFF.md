@@ -16000,3 +16000,6 @@ says so. Not changed by this: the installer's logic, the bundle, anything
 on the Pi. One thing it leaves behind: the installer adds and replaces
 page files and removes none, so `profiles.mjs`, which the new page no
 longer loads, stays in the Pi's page directory after an install.
+
+The "Install pinning" paragraph of `docs/web/REDESIGN-2026-11.md` was
+corrected the same day to say this.
