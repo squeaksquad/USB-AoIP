@@ -16003,3 +16003,36 @@ longer loads, stays in the Pi's page directory after an install.
 
 The "Install pinning" paragraph of `docs/web/REDESIGN-2026-11.md` was
 corrected the same day to say this.
+
+**INSTALLED 2026-11-17 03:40 UTC (operator): the phase 1 page on the Pi, by
+`install-access.sh install` from bundle 0991131e (repository ea2315f).**
+The page only. Read back the same minute, read-only: every one of the
+bundle's page files is the file in `/home/bdimaio/usb-16x16-work/web-ui`;
+the web service is still 1.7.2 (5b374f74) and the applier 1.9.0
+(32b13a72), and the installer's status calls all five files new with the
+old chain's copies kept (web 6b98e7cf, applier 347a7062);
+`web-ui.pre-access` is in place and no `.access-undo` copy is left.
+`usb16x16-web`, `usb16x16-apply.path` and `usb16x16-dante-rate.path`
+restarted at 03:40:15 UTC and nothing else did: `usb16x16-dante` up since
+2026-11-13 16:10 UTC, Statime since 2026-10-14, the gadget since
+2026-10-30. A browser at 192.168.1.58 was reading `/api/meters` from the
+new service within seconds, answered 200.
+
+Before the install the session checked the same services and versions and
+that no applier, rate or candidate operation was running, set the 1.7.2
+bundle in the home directory aside as `usb-aoip-access.web-1.7.2` (and its
+`.tgz`) so its page files could not mix into the new one, and verified the
+copied archive and all 33 files against the list. The copy went over eth0.
+
+Left behind, as the CORRECTION above expected: `profiles.mjs` is still in
+the page directory, unused, with the test files and README of an older
+copy that were already there.
+
+Not ACCEPTED. Owed on the Pi: the page's behaviour against the real
+applier (a live edit with Keep and Discard, Apply and restart audio to a
+preset and back to Direct, the presets list), one rate move from the Mac
+and one from Dante Controller, a noise probe at 32, and
+`measure-candidate.sh soak 120 32`. `install-access.sh rollback` returns
+to web 1.6.0, applier 1.8.0 and the old chain's page, not to the page of
+2026-11-15; that page is the bundle set aside as
+`~/usb-aoip-access.web-1.7.2` on the Pi.
