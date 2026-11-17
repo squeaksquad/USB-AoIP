@@ -15922,6 +15922,10 @@ than 16 Dante channels, gate and calibration noise), each under the full
 battery. Stopping after phase 1 is a complete result. The sample rate stays
 off the page.
 
+CORRECTION 2026-11-16 (same day, entry after this one): `install-access.sh`
+does not need web 1.7.2 added to its list to install this; the "Owed"
+paragraph below says it does.
+
 **IMPLEMENTED 2026-11-16 (Mac side, nothing on the Pi): phase 1 of the page
 redesign, the new page on today's engine, as a change to `web-ui/` only.**
 Branch `web/redesign-phase1`, pull request squeaksquad/USB-AoIP#13, head
@@ -15977,3 +15981,22 @@ list web 1.7.2 among the versions it upgrades from (it lists 1.7.0 and
 against the real applier, a noise probe at 32, and
 `measure-candidate.sh soak 120 32`. `web-ui/README.md`'s top section
 describes the page and what was checked.
+
+**CORRECTION 2026-11-16: `install-access.sh` already installs phase 1's
+page on a unit running web 1.7.2; its list of earlier versions needs no
+change.** The entry above, pull request 13's first description and
+`docs/web/REDESIGN-2026-11.md` ("Install pinning") all say the list has to
+be extended. It does not: the bundle's web service is still 1.7.2
+(5b374f74, the hash `access.sha256` pins and the one installed on
+2026-11-15), and the installer counts a file that is already the bundle's
+as installed. With all five files the bundle's and the page an earlier
+one, it updates in place: the page is replaced, the five files and the
+kept `*.pre-access` copies are left as they are, and `rollback` still goes
+back to the old chain. `test-access.sh` now has that case (a unit on the
+bundle's five files with the page of 94b3d79) and passes. The list of
+earlier hashes matters the next time the web service itself changes: the
+hash it replaces, 5b374f74, has to be added then. The installer's header
+says so. Not changed by this: the installer's logic, the bundle, anything
+on the Pi. One thing it leaves behind: the installer adds and replaces
+page files and removes none, so `profiles.mjs`, which the new page no
+longer loads, stays in the Pi's page directory after an install.

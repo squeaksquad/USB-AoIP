@@ -10,6 +10,12 @@
 # What it replaces (docs/web/ACCESS.md says why):
 #   /usr/local/bin/usb16x16-web             1.6.0 6b98e7cf -> the bundle's (or from an earlier
 #                                           bundle's: 1.7.0 e7f6ba5a, 1.7.1 d6f6d1ab)
+#                                           A unit already on the bundle's own (1.7.2 5b374f74
+#                                           since 2026-11-15) needs no entry here: files that
+#                                           are the bundle's count as installed, and a bundle
+#                                           with a newer page then replaces the page alone.
+#                                           When the bundle's web service changes, add the
+#                                           hash it replaces to the list in `files` below.
 #   /usr/local/bin/usb16x16-apply           1.8.0 347a7062 -> 1.9.0
 #   /etc/systemd/system/usb16x16-web.service, usb16x16-apply.path, usb16x16-apply.service
 #   the page: <work dir>/web-ui (index.html, style.css, the modules, compiler/)

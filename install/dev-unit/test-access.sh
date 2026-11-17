@@ -101,6 +101,28 @@ fresh_root v; run install >/dev/null 2>&1; echo "# local edit" >> "$root/usr/loc
 run install >/dev/null 2>&1 && bad "update: installed over a locally edited file"
 [ $fail = $before ] && ok "a unit on the first bundle is updated in place; its kept copies stay the old chain's and rollback goes all the way back"
 
+# --- a unit whose five files are already the bundle's but whose page is an earlier one
+#     (the development unit on web 1.7.2 with the page of 94b3d79) takes the page alone
+before=$fail
+fresh_root p
+run install >/dev/null 2>&1 || bad "page: the first install failed"
+rm -rf "$root$work/web-ui"; mkdir -p "$root$work/web-ui/compiler"
+git -C "$repo" archive 94b3d79 web-ui | tar -x -C "$root$work" --exclude='*.test.mjs' --exclude=README.md --exclude=stage-page.sh
+# In the repository web-ui/compiler holds links into dsp-compiler; on a unit they are the files.
+for f in compile bridge-artifact coefficients; do rm -f "$root$work/web-ui/compiler/$f.mjs"; git -C "$repo" show "94b3d79:dsp-compiler/$f.mjs" > "$root$work/web-ui/compiler/$f.mjs"; done
+cmp -s "$root$work/web-ui/app.mjs" "$repo/web-ui/app.mjs" && bad "page: the earlier page is the same as this one; the case tests nothing"
+web_before=$(sha "$root/usr/local/bin/usb16x16-web")
+run install > "$tmp/page.out" 2>&1 || bad "page: install over an earlier page failed: $(tail -2 "$tmp/page.out")"
+grep -q 'already installed' "$tmp/page.out" && bad "page: an earlier page was called already installed"
+( cd "$tmp/bundle/web-ui" && find . -type f ) | while read -r f; do cmp -s "$tmp/bundle/web-ui/$f" "$root$work/web-ui/$f" || exit 1; done || bad "page: not every page file is the bundle's"
+[ "$(sha "$root/usr/local/bin/usb16x16-web")" = "$web_before" ] || bad "page: the web service changed"
+[ "$(sha "$root/usr/local/bin/usb16x16-web.pre-access" | cut -c1-8)" = 6b98e7cf ] || bad "page: the kept copy is not the old chain's 6b98e7cf"
+find "$root" -name '*.access-undo' | grep -q . && bad "page: undo copies were left behind"
+run rollback >/dev/null 2>&1 || bad "page: rollback failed"
+( cd "$root" && find . -type f | LC_ALL=C sort | grep -Ev '^\./(etc/usb-aoip|var/)' | while read -r f; do printf '%s  %s\n' "$(sha "$f")" "$f"; done ) > "$tmp/after.p"
+diff "$tmp/before.p" "$tmp/after.p" >/dev/null || bad "page: rollback did not return to the old chain's files"
+[ $fail = $before ] && ok "a unit already on the bundle's five files takes a newer page alone; its kept copies stay the old chain's and rollback goes all the way back"
+
 # --- refusals
 before=$fail
 fresh_root b; echo "# edited" >> "$root/usr/local/bin/usb16x16-apply"
