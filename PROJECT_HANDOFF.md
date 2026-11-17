@@ -16140,3 +16140,33 @@ preset and back to Direct, the presets list and its More menu), one rate
 move from the Mac and one from Dante Controller, a noise probe at 32, and
 `measure-candidate.sh soak 120 32`. The bundle of the page before this one
 is `~/usb-aoip-access.page-0991131e` on the Pi.
+
+**MEASURED 2026-11-17 03:58-04:04 UTC (session, on the operator's word):
+with the phase 1 page installed (bundle 1a022f7d), the noise probe at 32
+and the two-minute soak pass on the eight looped channels. Not yet
+ACCEPTED: the page's own checks and the two rate moves are still owed.**
+Web 1.7.2 and applier 1.9.0 as before; the Dante service has not been
+restarted since 2026-11-13 16:10 UTC; the endpoint was running direct at
+48 kHz (`prime_drop=28`, `rx_queue=96`), the start check `ok`. Pro Tools
+and RTL Utility were not running. The operator was told beforehand that
+the probe plays noise on all sixteen outputs.
+
+From the Mac, `dante/measure-candidate.sh`, 48 kHz, 32 frames:
+- noise probe (`page1`, `20261117T035840Z`): return from sample 528, no
+  zero run of 4 or more, zeros inside the span 0.0%, endpoint
+  xrun/lag/error lines +0.
+- soak 120 s judged on all sixteen (`page1`, `20261117T035929Z`): FAIL,
+  and located before anything else was done: channels 1 to 8 each had a
+  longest zero run of 1 and peak 0.1000; channels 9 to 16 were silent for
+  the whole run (zero run 5664000, peak 0), which is a loop eight channels
+  wide, as on 2026-11-13, not holes. Discontinuities in 0 out 0, endpoint
+  lines +0.
+- soak 120 s judged on the loop (`page1-loop8`, `20261117T040154Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peak 0.1000 on
+  all eight, discontinuities in 0 out 0, endpoint lines +0.
+
+This is the same measure the access update was accepted on (2026-11-13,
+eight looped channels). It is not the sixteen-channel soak the light rule
+names: channels 9 to 16 are loaded but not judged while the far loop is
+eight wide. The evidence is in the evidence repository's working tree
+(`outputs/latency/page1-*`), not committed there.
