@@ -16309,3 +16309,52 @@ eight wide. Still owed before ACCEPTED, none during a session: the bundle
 made and read through, the password changed and signed in with, restart
 audio, restart clock service, reboot. None of the actions was run by the
 session.
+
+**ACCEPTED 2026-11-17 (operator): phase 2 of the page redesign on the Pi,
+the System actions, bundle d006b0a2 (repository b23619d): web 1.8.0
+(956c8569), applier 1.10.0 (d8a97b2c) and the page with the Actions
+panel are the point of record for the page and its backend.** The
+operator's words: "everything worked well", and "If those tests are all
+that's needed for me to call it accepted, then it's accepted". Behind it:
+the MEASURED entry above (noise probe at 32, the two-minute soak on the
+eight looped channels; channels 9 to 16 not judged) and the operator's
+run of each action from the page, which the session did not watch but
+read back afterwards from root's receipts on the Pi (all `done`, no
+error):
+- bundle, 23:17:22 UTC: 385,504 bytes, `26cb4a43aafcccc2.json` in
+  `/var/lib/usb16x16-apply/bundles` (directory 750 and file 640,
+  `root:bdimaio`). The operator saved the download as
+  `outputs/support bundles/usb-aoip-support.json`; the session read it:
+  format `usb-aoip-support/1`, versions 1.10.0 and 1.8.0, the hashes of
+  the applier, web service, owner (c84e6a36), start wrapper, plugin and
+  Statime, three configs, seven units' logs, not truncated, and no login
+  hash, no `web-auth` text and no private key in it.
+- password, 23:18:29 and 23:18:49 UTC (twice), user `bdimaio`; the login
+  file is still `root:bdimaio` 640.
+- restart-audio, 23:19:02 and 23:19:24 UTC (twice).
+- restart-clock, 23:19:52 UTC, `endpointRestarted` true.
+- reboot, receipt 23:20:16 UTC; the Pi booted at 23:20:40, Statime and
+  the endpoint were up by 23:21:20, the start check reads `state=ok
+  restarts=0` (23:22:25 UTC), and the web service, the gadget and the
+  apply watcher are active.
+So the things the IMPLEMENTED entry listed as not verified held on the
+unit: real systemd, the bundle's group and modes, the login file's owner
+and group, the applier unit's sandbox against the journal and the
+temperature file, the clock restart's wait for the endpoint.
+
+FOUND in the bundle, small and open: `hashes.usb_f_uac2` is null. The
+applier asks `modinfo` for the module's path and the unit has it only as
+`/usr/sbin/modinfo` (it answers
+`/lib/modules/6.18.34+rpt-rpi-2712/updates/usb-16x16/usb_f_uac2.ko`
+there); whether the applier's PATH or its sandbox is what hides it was
+not looked at. `config.startcheck.conf` is null because the unit has no
+such file, which is correct. Not seen by the session: the browser's
+sign-in prompt after the password change and the page's reconnect after
+the reboot, which are covered by the operator's word only. The audio was
+restarted four times and the Pi rebooted after the MEASURED entry's
+probe and soak; no measurement was taken after them.
+
+Next is phase 3 of `docs/web/REDESIGN-2026-11.md`, in a new session, its
+own branch and pull request. Pull requests 12, 13 and 14 are open and
+stack in that order; merging them in order leaves phase 3 to branch from
+`main`.
