@@ -2,6 +2,7 @@
 usb16x16-dante.service, with systemd and the owner stood in by a scripted
 runner and the configuration checked by the real usb16x16-dante-start.
 Run: python3 -m unittest web-control/test_dante_apply.py"""
+import base64
 import contextlib
 import hashlib
 import io
@@ -307,7 +308,7 @@ class DanteApplyTest(unittest.TestCase):
             (dict(profile="dante-room", expectedProfile="dante-other"), "the page expected"),
             (dict(profile="dante-room", requestedAt=time.time() - 600), "old"),
             (dict(profile="dante-room", id="nothex"), "request id"),
-            (dict(kind="reboot"), "unknown request kind"),
+            (dict(kind="halt"), "unknown request kind"),
         ]
         for fields, expected in cases:
             result = self.make().apply(self.request(**fields))
@@ -999,6 +1000,465 @@ class DanteApplyTest(unittest.TestCase):
         self.assertEqual([(r["id"], r["state"]) for r in results], [(second["id"], "done")])
         self.assertEqual(self.env.live(), "direct")
         self.assertEqual(list(self.env.inbox.iterdir()), [])
+
+
+def login_hash(iterations=210000):
+    """PasswordFile.hash_password's form (16-byte salt, 32-byte digest); the
+    digest need not be a real one for the applier, which never verifies it."""
+    b64 = lambda data: base64.b64encode(data).decode()
+    return f"pbkdf2_sha256${iterations}${b64(os.urandom(16))}${b64(os.urandom(32))}"
+
+
+class SystemRunner(FakeRunner):
+    """The Dante model plus the clock unit, reboot, and what a bundle asks."""
+
+    def __init__(self, env, partof=True, clock_fails=False, clock_restart_fails=False, reboot_fails=False,
+                 journal_lines=3, **options):
+        super().__init__(env, **options)
+        self.partof = partof                  # the installed endpoint unit is PartOf= the clock's
+        self.clock_fails = clock_fails
+        self.clock_restart_fails = clock_restart_fails
+        self.reboot_fails = reboot_fails
+        self.journal_lines = journal_lines
+        self.clock_unit = "active"
+        self.endpoint_pending = 0
+        self.receipt_at_reboot = None
+
+    def sleep(self, seconds):
+        super().sleep(seconds)
+        if self.clock_unit == "activating":
+            self.clock_unit = "failed" if self.clock_fails else "active"
+        if self.endpoint_pending:
+            self.endpoint_pending -= 1
+            if not self.endpoint_pending:
+                self.unit = "active"
+
+    def run(self, argv, timeout=60.0, env=None):
+        if argv[:3] == ["systemctl", "show", "-p"] and argv[-1] == apply_module.STATIME_UNIT:
+            self.calls.append(argv)
+            return 0, self.clock_unit
+        if argv[:2] == ["systemctl", "restart"]:
+            self.calls.append(argv)
+            assert argv[2] == apply_module.STATIME_UNIT, argv
+            if self.clock_restart_fails:
+                return 1, "Job for usb16x16-statime.service failed"
+            self.clock_unit = "activating"
+            if self.partof:
+                # systemd stops the endpoint, restarts the clock, then starts the
+                # endpoint again (a new invocation) once the clock is up.
+                self.invocation += 1
+                self.ticks = 0
+                self.log = self.env.start_lines(self.env.live(), netstart=self.never_netstart_for != self.env.live())
+                self.unit = "activating"
+                self.endpoint_pending = 2
+            return 0, ""
+        if argv[:2] == ["systemctl", "is-active"]:
+            self.calls.append(argv)
+            return 0, "active"
+        if argv[0] == "journalctl" and "-n" in argv:
+            self.calls.append(argv)
+            return 0, "\n".join(f"2026-11-17T00:00:{i:02d}+0000 pi {argv[2]}[1]: line {i}" for i in range(self.journal_lines))
+        if argv[0] == "modinfo":
+            self.calls.append(argv)
+            return 1, "modinfo: ERROR: Module usb_f_uac2 not found."
+        if argv[:2] == ["systemctl", "reboot"]:
+            self.calls.append(argv)
+            receipts = list((self.env.state / "receipts").glob("*.json"))
+            self.receipt_at_reboot = json.loads(receipts[0].read_text()) if receipts else None
+            return (1, "Failed to reboot: Access denied") if self.reboot_fails else (0, "")
+        return super().run(argv, timeout, env)
+
+
+class DanteSystemTest(unittest.TestCase):
+    """The System actions (1.10.0) on the Dante stack."""
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.env = Env(self.directory.name)
+        root = Path(self.directory.name)
+        self.login = root / "etc-usb-aoip" / "web-auth"
+        self.login.parent.mkdir()
+        self.login_text = ("# usb16x16-web credentials. Generated; do not edit by hand.\n"
+                           f"alice:{login_hash()}\nbryan:{login_hash()}\ncarol:{login_hash()}\n").encode()
+        self.login.write_bytes(self.login_text)
+        os.chmod(self.login, 0o640)
+        names = ("DSP_DIR", "OFFLINE_RUNNER", "DANTE_INFERNO_CONF", "DANTE_RATE_REQUEST", "WEB_BINARY", "APPLY_BINARY",
+                 "DANTE_TRANSPORT_CONF", "DANTE_STARTCHECK_CONF", "DANTE_STARTCHECK_STATUS", "DANTE_PLUGIN",
+                 "DANTE_STATIME", "DANTE_OWNER", "BUNDLE_MAX_BYTES", "read_bounded", "hash_bounded")
+        self.saved = {name: getattr(apply_module, name) for name in names}
+        (root / "offline").write_text("")
+        (root / "web").write_text('#!/usr/bin/env python3\n"""doc"""\nVERSION = "1.8.0"\nVERSION = "9.9.9"\n')
+        (root / "apply").write_bytes(b"applier")
+        (root / "transport.conf").write_text("PRIME_DROP=28\n")
+        (root / "startcheck.conf").write_text("USB16X16_STARTCHECK_MAX=4\n")
+        (root / "startcheck-status").write_text("2026-11-17T00:00:00Z ok flows=2 rate=48000\nsecond line\n")
+        apply_module.DSP_DIR = self.env.dsp_dir
+        apply_module.OFFLINE_RUNNER = str(root / "offline")
+        apply_module.DANTE_INFERNO_CONF = self.env.inferno
+        apply_module.DANTE_RATE_REQUEST = self.env.rate_request
+        apply_module.WEB_BINARY = root / "web"
+        apply_module.APPLY_BINARY = root / "apply"
+        apply_module.DANTE_TRANSPORT_CONF = root / "transport.conf"
+        apply_module.DANTE_STARTCHECK_CONF = root / "startcheck.conf"
+        apply_module.DANTE_STARTCHECK_STATUS = root / "startcheck-status"
+        apply_module.DANTE_PLUGIN = root / "missing-plugin.so"
+        apply_module.DANTE_STATIME = root / "missing-statime"
+        apply_module.DANTE_OWNER = root / "missing-owner"
+        self.counter = 0
+
+    def tearDown(self):
+        for name, value in self.saved.items():
+            setattr(apply_module, name, value)
+        self.directory.cleanup()
+
+    def make(self, **options):
+        self.runner = options.pop("runner", None) or SystemRunner(self.env, **options)
+        return apply_module.DanteApplier(inbox=self.env.inbox, state_dir=self.env.state, conf_path=self.env.conf,
+                                         run_dir=self.env.run_dir, runner=self.runner, start_timeout=20, settle=5,
+                                         poll=1, web_auth=self.login)
+
+    def request(self, **fields):
+        self.counter += 1
+        base = {"id": f"{self.counter:08x}", "requestedAt": time.time(), "requestedBy": "test"}
+        base.update(fields)
+        return base
+
+    def drop(self, body):
+        path = self.env.inbox / f"{body['id']}.request"
+        path.write_text(json.dumps(body))
+        return path
+
+    def acted(self):
+        """Every command that changes something (not the reads)."""
+        return [" ".join(c[:3]) for c in self.runner.calls
+                if c[0] == "systemctl" and c[1] in ("stop", "start", "restart", "reboot", "poweroff")]
+
+    def on_room(self):
+        path = self.env.install("room", artifact())
+        self.env.conf.write_text(apply_module.render_owner_conf("1", path, sha(artifact())))
+
+    def all_written(self):
+        """Every byte the applier left behind: the state directory and the inbox."""
+        found = b""
+        for directory in (self.env.state, self.env.inbox):
+            for path in directory.rglob("*"):
+                if path.is_file():
+                    found += path.read_bytes()
+        return found
+
+    # ---- reboot
+
+    def test_reboot_stops_the_endpoint_writes_the_receipt_then_reboots(self):
+        result = self.make().apply(self.request(kind="reboot"))
+        self.assertEqual((result["kind"], result["state"], result["error"]), ("reboot", "done", None))
+        self.assertEqual(self.acted(), ["systemctl stop usb16x16-dante.service", "systemctl reboot --no-block"])
+        self.assertEqual([s["name"] for s in result["steps"]], ["validating", "stopping", "rebooting"])
+        self.assertEqual(self.runner.receipt_at_reboot["state"], "done", "the receipt is on disk before the reboot")
+        self.assertEqual(result["profile"], "direct")
+
+    def test_a_reboot_that_fails_is_a_failed_receipt(self):
+        result = self.make(reboot_fails=True).apply(self.request(kind="reboot"))
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("systemctl reboot exited 1", result["error"])
+
+    def test_reboot_takes_the_envelope_checks(self):
+        for fields, message in ((dict(requestedAt=time.time() - 600), "old"), (dict(id="nothex"), "request id")):
+            result = self.make().apply(self.request(kind="reboot", **fields))
+            self.assertEqual(result["state"], "refused")
+            self.assertIn(message, result["error"])
+            self.assertEqual(self.acted(), [])
+
+    def test_reboot_with_an_unreadable_owner_conf_still_reboots(self):
+        applier = self.make()
+        self.env.conf.unlink()
+        result = applier.apply(self.request(kind="reboot"))
+        self.assertEqual(result["state"], "done")
+        self.assertIsNone(result["profile"])
+
+    # ---- restart-audio
+
+    def test_restart_audio_restarts_on_the_configuration_as_it_is(self):
+        self.on_room()
+        before = self.env.conf.read_bytes()
+        inode = self.env.conf.stat().st_ino
+        result = self.make().apply(self.request(kind="restart-audio"))
+        self.assertEqual((result["state"], result["error"]), ("done", None))
+        self.assertEqual([s["name"] for s in result["steps"]], ["validating", "stopping", "starting", "verifying", "settling"])
+        self.assertEqual(self.acted(), ["systemctl stop usb16x16-dante.service", "systemctl start usb16x16-dante.service"])
+        self.assertEqual(self.env.conf.read_bytes(), before)
+        self.assertEqual(self.env.conf.stat().st_ino, inode, "owner.conf is not even rewritten")
+        self.assertEqual(result["profile"], "dante-room")
+        self.assertIn("dante-room", result["startLines"])
+        self.assertTrue(any(c[0] == apply_module.DANTE_START for c in self.runner.calls), "the wrapper checks it first")
+
+    def test_restart_audio_with_a_bad_start_is_failed_and_nothing_is_rolled_back(self):
+        self.on_room()
+        before = self.env.conf.read_bytes()
+        result = self.make(fail_start_for="dante-room").apply(self.request(kind="restart-audio"))
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("usb16x16-dante.service is failed", result["error"])
+        self.assertEqual(self.acted(), ["systemctl stop usb16x16-dante.service", "systemctl start usb16x16-dante.service"])
+        self.assertEqual(result["steps"][-1]["name"], "verifying")
+        self.assertFalse(result["steps"][-1]["ok"])
+        self.assertEqual(self.env.conf.read_bytes(), before)
+
+    def test_restart_audio_with_a_fatal_line_in_the_settle_is_failed(self):
+        result = self.make(fatal_after_start_for="direct").apply(self.request(kind="restart-audio"))
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("NETERROR", result["error"])
+
+    def test_restart_audio_refuses_a_configuration_that_cannot_start(self):
+        self.env.conf.write_text(f"METERS=1\nDSP_PRESET={self.env.dsp_dir}/dante-gone.dsp\nDSP_SHA256={'0' * 64}\nDSP_LIVE=1\n")
+        result = self.make().apply(self.request(kind="restart-audio"))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("rejects the configuration", result["error"])
+        self.assertEqual(self.acted(), [], "audio is untouched")
+
+    def test_restart_audio_refuses_an_unsettled_unit(self):
+        runner = SystemRunner(self.env)
+        runner.unit = "activating"
+        result = self.make(runner=runner).apply(self.request(kind="restart-audio"))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("settled", result["error"])
+        self.assertEqual(self.acted(), [])
+
+    # ---- restart-clock
+
+    def test_restart_clock_with_the_endpoint_restarted_by_partof(self):
+        self.on_room()
+        before = self.env.conf.read_bytes()
+        result = self.make().apply(self.request(kind="restart-clock"))
+        self.assertEqual((result["state"], result["error"]), ("done", None))
+        self.assertEqual(self.acted(), ["systemctl restart usb16x16-statime.service"])
+        self.assertEqual([s["name"] for s in result["steps"]], ["validating", "restarting-clock", "verifying", "settling"])
+        self.assertTrue(result["endpointRestarted"])
+        self.assertIn("restarted with the clock", result["steps"][2]["detail"])
+        self.assertEqual(self.env.conf.read_bytes(), before)
+
+    def test_restart_clock_with_an_endpoint_that_kept_running(self):
+        result = self.make(partof=False).apply(self.request(kind="restart-clock"))
+        self.assertEqual((result["state"], result["error"]), ("done", None))
+        self.assertFalse(result["endpointRestarted"])
+        self.assertIn("kept its start", result["steps"][2]["detail"])
+
+    def test_restart_clock_that_does_not_come_back_is_failed(self):
+        result = self.make(clock_fails=True).apply(self.request(kind="restart-clock"))
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("usb16x16-statime.service is failed", result["error"])
+        result = self.make(clock_restart_fails=True).apply(self.request(kind="restart-clock"))
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("clock restart failed", result["error"])
+
+    def test_restart_clock_with_an_endpoint_that_does_not_come_up_is_failed(self):
+        result = self.make(never_netstart_for="direct").apply(self.request(kind="restart-clock"))
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("both streams", result["error"])
+
+    # ---- password
+
+    def password(self, user="bryan", stored=None, **fields):
+        stored = stored or login_hash()
+        return self.request(kind="password", user=user, hash=stored, **fields), stored
+
+    def test_password_replaces_one_line_and_keeps_the_rest_byte_for_byte(self):
+        body, stored = self.password()
+        self.drop(body)
+        result = self.make().consume()
+        self.assertEqual((result["kind"], result["state"], result["error"]), ("password", "done", None))
+        self.assertEqual(result["user"], "bryan")
+        self.assertEqual(result["request"]["user"], "bryan")
+        old = self.login_text.split(b"\n")
+        new = self.login.read_bytes().split(b"\n")
+        self.assertEqual(len(new), len(old))
+        self.assertEqual(new[2], f"bryan:{stored}".encode())
+        self.assertEqual([line for i, line in enumerate(new) if i != 2], [line for i, line in enumerate(old) if i != 2])
+        self.assertEqual(self.login.stat().st_mode & 0o777, 0o640, "the mode is kept")
+        self.assertEqual([s["name"] for s in result["steps"]], ["validating", "writing"])
+        self.assertEqual(self.acted(), [], "nothing is restarted")
+        self.assertEqual(list(self.env.inbox.iterdir()), [])
+        self.assertNotIn(stored.encode(), self.all_written())
+        self.assertNotIn(stored, json.dumps(result))
+        self.assertEqual([p.name for p in self.login.parent.iterdir()], ["web-auth"], "no temporary is left")
+
+    def test_password_mode_is_never_wider_than_owner_and_group(self):
+        os.chmod(self.login, 0o644)
+        body, _ = self.password()
+        result = self.make().apply(body)
+        self.assertEqual(result["state"], "done")
+        self.assertEqual(self.login.stat().st_mode & 0o777, 0o640)
+
+    def test_password_refusals_leave_the_file_alone_and_never_echo_the_hash(self):
+        good = login_hash()
+        scheme, iterations, salt, digest = good.split("$")
+        cases = [
+            (dict(stored="plain-text-password"), "pbkdf2_sha256 hash"),
+            (dict(stored=good + "\n"), "pbkdf2_sha256 hash"),
+            (dict(stored=f"pbkdf2_sha1${iterations}${salt}${digest}"), "pbkdf2_sha256 hash"),
+            (dict(stored=f"{scheme}${iterations}${salt[:-3]}=${digest}"), "pbkdf2_sha256 hash"),
+            (dict(stored=f"{scheme}${iterations}${salt}${digest[:-1]}"), "pbkdf2_sha256 hash"),
+            (dict(stored=f"{scheme}$12345${salt}${digest}"), "pbkdf2_sha256 hash"),
+            (dict(stored=f"{scheme}$100000${salt}${digest}"), "iteration count"),
+            (dict(stored=f"{scheme}$20000000${salt}${digest}"), "iteration count"),
+            (dict(user="dave"), "has no login"),
+            (dict(user="../alice"), "user must be"),
+            (dict(user="bryan\n"), "user must be"),
+            (dict(user="a" * 65), "user must be"),
+            (dict(user=""), "user must be"),
+            (dict(user=["bryan"]), "user must be"),
+        ]
+        for fields, message in cases:
+            with self.subTest(fields=fields):
+                stored = fields.pop("stored", good)
+                body = self.request(kind="password", hash=stored, user=fields.pop("user", "bryan"))
+                result = self.make().apply(body)
+                self.assertEqual(result["state"], "refused")
+                self.assertIn(message, result["error"])
+                self.assertEqual(self.login.read_bytes(), self.login_text)
+                self.assertNotIn(stored, json.dumps(result))
+                self.assertNotIn(good.encode(), self.all_written())
+
+    def test_password_refuses_a_symlinked_or_linked_login_file(self):
+        real = self.login.with_name("real-auth")
+        os.replace(self.login, real)
+        os.symlink(real, self.login)
+        body, stored = self.password()
+        result = self.make().apply(body)
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("plain file", result["error"])
+        self.assertEqual(real.read_bytes(), self.login_text)
+        self.assertTrue(self.login.is_symlink())
+        self.login.unlink()
+        os.link(real, self.login)
+        body, stored = self.password()
+        result = self.make().apply(body)
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("links", result["error"])
+        self.assertEqual(real.read_bytes(), self.login_text)
+
+    def test_password_with_no_login_file_adds_nothing(self):
+        self.login.unlink()
+        body, _ = self.password()
+        result = self.make().apply(body)
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("never adds", result["error"])
+        self.assertFalse(self.login.exists())
+
+    # ---- bundle
+
+    def bundle_of(self, result):
+        return json.loads((self.env.state / "bundles" / result["bundle"]["file"]).read_bytes())
+
+    def test_bundle_writes_one_document_and_restarts_nothing(self):
+        self.on_room()
+        # The operation before this one: current.json goes into the bundle as it was.
+        first = self.make().apply(self.request(kind="password", user="alice", hash=login_hash()))
+        result = self.make().apply(self.request(kind="bundle"))
+        self.assertEqual((result["kind"], result["state"], result["error"]), ("bundle", "done", None))
+        self.assertEqual(result["bundle"]["file"], f"{result['id']}.json")
+        path = self.env.state / "bundles" / result["bundle"]["file"]
+        self.assertEqual(result["bundle"]["bytes"], path.stat().st_size)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+        self.assertEqual((self.env.state / "bundles").stat().st_mode & 0o777, 0o750)
+        self.assertEqual(self.acted(), [])
+        document = self.bundle_of(result)
+        self.assertEqual(document["format"], "usb-aoip-support/1")
+        self.assertEqual(document["stack"], "dante")
+        self.assertEqual(document["versions"], {"applier": apply_module.VERSION, "web": "1.8.0"})
+        self.assertEqual(document["running"], {"profile": "dante-room", "rate": 48000})
+        self.assertEqual(document["startCheck"], "2026-11-17T00:00:00Z ok flows=2 rate=48000")
+        self.assertEqual(sorted(document["config"]), ["asound-inferno-owner.conf", "owner.conf", "startcheck.conf", "transport.conf"])
+        self.assertEqual(document["config"]["transport.conf"], "PRIME_DROP=28\n")
+        self.assertEqual(document["hashes"][str(apply_module.APPLY_BINARY)], sha(b"applier"))
+        self.assertIsNone(document["hashes"][str(apply_module.DANTE_OWNER)])
+        self.assertIsNone(document["hashes"]["usb_f_uac2"])
+        units = ["usb16x16-dante", "usb16x16-statime", "usb16x16-dante-startcheck", "usb16x16-dante-rate",
+                 "usb16x16-apply", "usb16x16-web", "usb-16x16"]
+        self.assertEqual(list(document["units"]), units)
+        self.assertEqual(list(document["logs"]), units)
+        self.assertIn(["journalctl", "-u", "usb16x16-statime", "-n", "400", "--no-pager", "-o", "short-iso"], self.runner.calls)
+        self.assertEqual(document["apply"]["current"]["id"], first["id"])
+        self.assertEqual([r["id"] for r in document["apply"]["receipts"]], [first["id"]])
+        self.assertIsNone(document["truncated"])
+        self.assertEqual(set(document["system"]), {"uname", "uptime", "temperature"})
+
+    def test_bundles_are_pruned_to_the_newest_two(self):
+        directory = self.env.state / "bundles"
+        self.make().ensure_state()
+        directory.mkdir(mode=0o750)
+        for index, age in enumerate((300, 200, 100)):
+            old = directory / f"{index:08x}aa.json"
+            old.write_text("{}")
+            os.utime(old, (time.time() - age, time.time() - age))
+        result = self.make().apply(self.request(kind="bundle"))
+        self.assertEqual(sorted(p.name for p in directory.iterdir()), sorted(["00000002aa.json", result["bundle"]["file"]]))
+
+    def test_a_bundle_never_reads_the_login_file_or_key_material(self):
+        stored = login_hash()
+        self.make().apply(self.request(kind="password", user="bryan", hash=stored))
+        # Every configuration path a bundle reads pointed at a secret, one way or another.
+        link = Path(self.directory.name) / "startcheck-link.conf"
+        os.symlink(self.login, link)
+        apply_module.DANTE_TRANSPORT_CONF = self.login
+        apply_module.DANTE_STARTCHECK_CONF = link
+        apply_module.DANTE_PLUGIN = Path(self.directory.name) / "server.pem"
+        apply_module.DANTE_PLUGIN.write_text("-----BEGIN PRIVATE KEY-----\n")
+        opened = []
+        record = lambda real: lambda path, cap: (opened.append(os.path.realpath(path)), real(path, cap))[1]
+        apply_module.read_bounded = record(self.saved["read_bounded"])
+        apply_module.hash_bounded = record(self.saved["hash_bounded"])
+        result = self.make().apply(self.request(kind="bundle"))
+        self.assertEqual(result["state"], "done")
+        self.assertNotIn(os.path.realpath(self.login), opened)
+        self.assertNotIn(os.path.realpath(apply_module.DANTE_PLUGIN), opened)
+        self.assertTrue(opened, "the recorder saw the bundle's reads")
+        data = (self.env.state / "bundles" / result["bundle"]["file"]).read_bytes()
+        self.assertNotIn(stored.encode(), data)
+        self.assertNotIn(b"PRIVATE KEY", data)
+        for line in self.login_text.split(b"\n")[1:-1]:
+            self.assertNotIn(line.split(b":")[1], data)
+        document = json.loads(data)
+        self.assertIsNone(document["config"]["web-auth"])
+        self.assertIsNone(document["config"]["startcheck-link.conf"])
+        self.assertEqual(sorted(document["withheld"]), sorted([str(self.login), str(link), str(apply_module.DANTE_PLUGIN)]))
+
+    def test_the_secret_rule(self):
+        login = Path("/elsewhere/web-auth")
+        for path, secret in (("/etc/usb-aoip/web.env", True), ("/etc/usb-aoip", True), ("/etc/usb-aoip/tls/unit.key", True),
+                             ("/srv/cert.pem", True), ("/elsewhere/web-auth", True), ("/etc/usb-aoip-other/x", False),
+                             ("/etc/usb16x16/dante/owner.conf", False)):
+            self.assertEqual(apply_module.is_secret(Path(path), login), secret, path)
+
+    def test_a_bundle_over_the_cap_loses_journal_lines_oldest_first(self):
+        apply_module.BUNDLE_MAX_BYTES = 60000
+        result = self.make(journal_lines=400).apply(self.request(kind="bundle"))
+        self.assertEqual(result["state"], "done")
+        self.assertLessEqual(result["bundle"]["bytes"], 60000)
+        document = self.bundle_of(result)
+        self.assertGreater(document["truncated"]["droppedLines"], 0)
+        lines = document["logs"]["usb16x16-dante"]
+        self.assertTrue(lines and lines[-1].endswith("line 399"), "the newest lines are the ones kept")
+
+    # ---- the drain and --check
+
+    def test_a_drain_continues_after_a_bundle_or_a_password_and_stops_after_a_restart(self):
+        bodies = [self.request(kind="bundle"), self.password()[0], self.request(kind="restart-audio"),
+                  self.request(kind="bundle")]
+        for age, body in zip((40, 30, 20, 10), bodies):
+            path = self.drop(body)
+            os.utime(path, (time.time() - age, time.time() - age))
+        results = self.make().drain()
+        self.assertEqual([(r["kind"], r["state"]) for r in results],
+                         [("bundle", "done"), ("password", "done"), ("restart-audio", "done")])
+        self.assertEqual([r["kind"] for r in self.make().drain()], ["bundle"])
+
+    def test_check_judges_a_system_request_without_acting(self):
+        applier = self.make()
+        self.assertIn("would replace the login line for bryan", applier.check_system(self.password()[0]))
+        self.assertIn("would restart-clock on direct", applier.check_system(self.request(kind="restart-clock")))
+        with self.assertRaises(apply_module.Refused):
+            applier.check_system(self.request(kind="password", user="bryan", hash="x"))
+        self.assertEqual(self.acted(), [])
+        self.assertEqual(self.login.read_bytes(), self.login_text)
 
 
 class FakeRunnerNoConf:

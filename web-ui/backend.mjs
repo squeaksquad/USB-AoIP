@@ -15,6 +15,8 @@ export const POLL_MS = 2000;
 export const METERS_PATH = '/api/meters';
 export const METER_POLL_MS = 100;
 
+import { actionNote, isActionReceipt } from './actions.mjs';
+
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // ------------------------------------------------------------- vocabulary
@@ -651,6 +653,7 @@ const stepWords = {
   validating: 'Validating the request', stopping: 'Stopping the AES67 service', switching: 'Switching the profile',
   starting: 'Starting the AES67 service', verifying: 'Waiting for the stack to run', settling: 'Settling with zero recoveries',
   'rolling-back': 'Rolling back to the previous profile', 'powering-off': 'Powering off the Pi',
+  rebooting: 'Rebooting the Pi', 'restarting-clock': 'Restarting the clock service',
   done: 'Applied', 'rolled-back': 'Rolled back', failed: 'Failed', refused: 'Refused',
 };
 const danteStepWords = {
@@ -661,6 +664,7 @@ const danteStepWords = {
   removing: 'Removing the preset', pushing: 'Handing the coefficients to the endpoint', committing: 'Committing the preview',
   'host-follow': 'Asking the Mac to follow the rate',
 };
+const ACTION_LABELS = {'restart-audio': 'restart audio', 'restart-clock': 'restart clock service', bundle: 'support bundle', password: 'page password', reboot: 'reboot'};
 /** A step of an Apply receipt in words. `stack` is the receipt's own (current.stack), or the Pi's. */
 export const applyStepLabel = (name, stack) => (stack === 'dante' ? danteStepWords : stepWords)[name] || name;
 
@@ -679,6 +683,13 @@ export function applyLine(status) {
       case 'refused': return `Refused: ${current.error || 'no detail'}`;
       default: return `${applyStepLabel(current.state, current.stack)} (shutdown)…`;
     }
+  }
+  if (isActionReceipt(current)) {
+    // Reboot, restart audio or the clock, the support bundle, the password:
+    // the Actions panel's words, with who asked and the step in progress.
+    const note = actionNote(current);
+    if (note.tone !== 'busy') return note.tone === 'ok' && who ? note.text.replace(/ at /, `${who} at `) : note.text;
+    return `${applyStepLabel(current.state, current.stack)} (${ACTION_LABELS[current.kind]})…`;
   }
   switch (current.state) {
     case 'done': return `Applied ${target}${who} · live since ${current.finishedAt || '?'}.`;
@@ -878,6 +889,34 @@ export async function requestShutdown(expectedProfile, fetchImpl = globalThis.fe
     throw new Error(isObject(result) && result.error ? result.error : `Shutdown request failed (${response.status})`);
   }
   return result;
+}
+
+// The System tab's Actions (phase 2): each is one request to the applier,
+// answered 202 with the request id; the receipt says how it went.
+async function requestAction(path, body, what, fetchImpl) {
+  const response = await sendRequest(path, {body}, fetchImpl);
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !isObject(result) || result.ok !== true) {
+    throw new Error(isObject(result) && result.error ? result.error : `${what} request failed (${response.status})`);
+  }
+  return result;
+}
+export const requestReboot = (fetchImpl = globalThis.fetch) => requestAction('/api/apply/reboot', {confirm: 'reboot'}, 'Reboot', fetchImpl);
+export const requestRestartAudio = (fetchImpl = globalThis.fetch) => requestAction('/api/apply/restart-audio', {confirm: 'restart-audio'}, 'Restart audio', fetchImpl);
+export const requestRestartClock = (fetchImpl = globalThis.fetch) => requestAction('/api/apply/restart-clock', {confirm: 'restart-clock'}, 'Restart clock service', fetchImpl);
+export const requestBundle = (fetchImpl = globalThis.fetch) => requestAction('/api/apply/bundle', {}, 'Support bundle', fetchImpl);
+/** The password goes to the service, which hashes it; it is never kept by the page. */
+export const requestPassword = (password, fetchImpl = globalThis.fetch) => requestAction('/api/apply/password', {password: String(password)}, 'Password', fetchImpl);
+
+/** The support bundle the applier made, as a Blob, from its path (actions.mjs bundlePath). */
+export async function fetchSupportBundle(path, fetchImpl = globalThis.fetch) {
+  if (!/^\/api\/support\/[a-f0-9]{8,32}$/.test(String(path))) throw new Error('the receipt names no bundle');
+  const response = await fetchImpl(path, {credentials: 'same-origin', cache: 'no-store', headers: {accept: 'application/json'}});
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(isObject(body) && body.error ? body.error : response.status === 404 ? 'the bundle is no longer on the device' : `Bundle download failed (${response.status})`);
+  }
+  return response.blob();
 }
 
 /**

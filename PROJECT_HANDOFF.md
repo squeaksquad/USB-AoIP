@@ -16187,3 +16187,93 @@ entry's read-back of 03:57 UTC and the MEASURED entry of 03:58-04:04 UTC
 channels; channels 9 to 16 not judged). The page of the redesign's phase 1
 is the page of record. Phase 2 (the System actions, as applier request
 kinds) is next, in its own branch and pull request.
+
+**IMPLEMENTED 2026-11-17 (Mac side, nothing on the Pi): phase 2 of the page
+redesign, the System actions, as applier 1.10.0, web 1.8.0 and the page's
+Actions panel.** Branch `web/redesign-phase2`, cut from the tip of
+`web/redesign-phase1` (ae67492) because pull requests 12 and 13 were both
+still open; not pushed, no pull request yet. Not installed: the Pi still
+runs web 1.7.2 (5b374f74), applier 1.9.0 (32b13a72) and the phase 1 page of
+bundle 1a022f7d. The owner, the gadget, the kernel modules, Inferno,
+Statime and every unit file are not changed.
+
+Five new request kinds in `usb16x16-apply` (d8a97b2c), each taking the
+envelope checks only, as `shutdown` does:
+
+- `reboot`: `shutdown` with `systemctl reboot --no-block`, receipt first.
+- `restart-audio`: stops and starts the audio unit on the configuration as
+  it is, writes no file, then the switch's verify and settle. On the Dante
+  stack `owner.conf` must pass the start wrapper's parser before anything
+  stops. A bad start is `failed`; there is nothing to roll back to.
+- `restart-clock` (Dante only): restarts `usb16x16-statime.service`, waits
+  for it and for the endpoint, then verifies the endpoint the same way. The
+  endpoint's unit in the repository (`usb16x16-dante-dsp-linkwait.service`)
+  is `PartOf=` the clock's, so the clock restart is an audio restart too;
+  the page says so. The receipt's `endpointRestarted` records what
+  happened. Read from the repository's unit, not from the Pi.
+- `bundle`: one JSON file, `bundles/<id>.json` in the state directory
+  (0750 / 0640, group the inbox's, newest two kept): versions, hashes,
+  running profile and rate, the start check's line, unit states,
+  configuration, `current.json`, ten receipts, 400 journal lines a unit.
+  It never reads the login file, anything under `/etc/usb-aoip` or key
+  material. JSON was the operator's choice over an archive.
+- `password`: replaces one existing user's line in
+  `/etc/usb-aoip/web-auth` with a hash the web service made; owner, group,
+  mode and the other lines kept. The plain password is never written and
+  the hash is in no receipt or log.
+
+`usb16x16-web` (956c8569) has `POST /api/apply/{reboot,restart-audio,
+restart-clock,bundle,password}`, `GET /api/support/<id>`,
+`control.apply.actions` in `/api/health`, and drops its cache of verified
+logins when the login file changes. It is still unprivileged. The page has
+an Actions panel on the System tab in place of Power (`web-ui/actions.mjs`,
+`view-system.mjs`), drawing only what the device lists, with the mockup's
+wording except that no duration is invented and the clock restart is
+called an audio restart. `renderLive` also stopped replacing every System
+panel on every poll (it compared HTML text with the browser's
+serialisation, which never matched). The AES67 stack has the same kinds
+except `restart-clock`; it was tested less.
+
+`install/dev-unit/access.sha256` is re-pinned (list d006b0a2): the two
+programs, `app.mjs`, `backend.mjs`, `style.css`, `view-system.mjs` and the
+new `actions.mjs`. `install-access.sh` lists 5b374f74 and 32b13a72 as
+earlier bundles' files, and `test-access.sh` has the case of a unit on
+those two with the phase 1 page.
+
+Tested off the Pi, all passing: `node --test web-ui/*.test.mjs` (180),
+`node --test dsp-compiler/*.test.mjs` (66), the `web-control` Python tests
+(251), `install/test-render.sh`, `install/dev-unit/test-access.sh`. End to
+end on the Mac, the real web service and the real applier code draining
+one inbox, with systemd, the journal and the owner replaced by the applier
+tests' stand-in (`SystemRunner`): all five actions through the API with
+sign-in, each followed to its receipt by id. Restart audio ran stop and
+start and left `owner.conf` byte for byte; restart clock ran one restart
+of Statime; the bundle downloaded with its headers and withheld a login
+file it was pointed at on purpose; after the password change the old
+password got 401 on the next request and the new one 200, the other
+login's line was unchanged, and no hash was in any state file, inbox file
+or log; reboot wrote its receipt and ran stop, then reboot. In a browser
+on a `--no-auth` service: five cards and no password card, restart audio
+asked, confirmed and followed. The page's own flows (password dialog,
+bundle save, reboot and reconnect, shut down) were checked by the
+subagent that wrote them against a stand-in in the page's `fetch`.
+
+Not verified anywhere: real systemd (how far the endpoint's restart has
+got when the clock restart returns), anything that needs root (the
+bundle's group and modes, the login file's owner and group carried over),
+the browser's own sign-in prompt after a password change, a real save of
+the bundle, and the applier unit's sandbox against the new reads
+(`journalctl`, `modinfo`, `/sys/class/thermal`).
+
+Owed before ACCEPTED: an install by the operator
+(`install/dev-unit/stage-access.sh`, then `install-access.sh install` on
+the Pi), then under the light rule: each action once on the Pi (the
+bundle read through, the password changed and signed in with, restart
+audio, restart clock service, reboot; none of them during a session), a
+noise probe at 32, and `USB16X16_LOOP_CHANNELS=8
+dante/measure-candidate.sh soak 120 32` while the far loop is eight wide.
+`install-access.sh rollback` still returns to web 1.6.0 and applier 1.8.0,
+not to 1.7.2 and 1.9.0. The way back to those is two steps: `rollback`,
+then `install` from the bundle on the Pi as `~/usb-aoip-access`
+(1a022f7d). That bundle's installer does not know 1.8.0 and 1.10.0 and
+would refuse to install straight over them. Not tried.

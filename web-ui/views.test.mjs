@@ -15,7 +15,8 @@ import { routingView, crosspoint } from './view-routing.mjs';
 import { setsView } from './view-sets.mjs';
 import { bassView } from './view-bass.mjs';
 import { chooserView } from './view-chooser.mjs';
-import { systemView } from './view-system.mjs';
+import { systemView, actionsPanel } from './view-system.mjs';
+import { ACTION_KINDS } from './actions.mjs';
 
 function state(config = createConfig(), extra = {}) {
   return {
@@ -26,7 +27,7 @@ function state(config = createConfig(), extra = {}) {
     headphoneIds: config.buses.filter(b => b.kind === 'headphones').flatMap(b => b.outputIds),
     route: {row: null, col: null}, setDetail: null, polarity: null,
     chooser: null, layouts: LAYOUTS.map(l => ({id: l.id, label: l.label, outputs: l.routing.length, fits: true})),
-    facts: systemFacts(null), big: false, busy: false, shutdownRequested: false, canApply: false, applyReason: '', outage: 'audio stops',
+    facts: systemFacts(null), big: false, busy: false, shutdownRequested: false, rebootRequested: false, actions: [], actionNote: null, canApply: false, applyReason: '', outage: 'audio stops',
     presetRows: presetRows({stored: {'Room A': {}}}), editing: null, applyLine: '', applySteps: [],
     logServices: [['all', 'All']], logService: 'all', logQuery: '', logBusy: false, logText: '', logShown: '', logCount: '',
     ...extra,
@@ -47,9 +48,13 @@ const everyView = () => {
     systemView(state()), systemView(state(createConfig(), {connected: true, canApply: true})),
   ];
 };
+const actionViews = () => {
+  const online = extra => systemView(state(createConfig(), {connected: true, canApply: true, actions: [...ACTION_KINDS], ...extra}));
+  return [online(), online({busy: true, actionNote: {text: 'Restarting audio…', tone: 'busy'}}), online({actionNote: {text: 'Restart audio failed: <x>', tone: 'bad'}}), online({rebootRequested: true}), online({shutdownRequested: true})];
+};
 
 test('no view writes an inline style or an inline handler', () => {
-  for (const html of everyView()) {
+  for (const html of [...everyView(), ...actionViews()]) {
     assert.doesNotMatch(html, /\sstyle\s*=/i);
     assert.doesNotMatch(html, /\son[a-z]+\s*=/i);
   }
@@ -98,13 +103,43 @@ test('Bass management: no subwoofer, nothing to manage; with one, a row per sour
 });
 
 test('System: only what the device can do today', () => {
-  const offline = systemView(state());
-  assert.doesNotMatch(offline, /data-act="shutdown"/);
+  const offline = systemView(state(createConfig(), {actions: [...ACTION_KINDS]}));
+  assert.doesNotMatch(offline, /data-act="sys-action"|id="actions-panel"/, 'not connected: no Actions panel, whatever the last list said');
   assert.match(offline, /Presets in this browser/);
-  const online = systemView(state(createConfig(), {connected: true, canApply: true}));
-  assert.match(online, /data-act="shutdown"/);
+  const online = systemView(state(createConfig(), {connected: true, canApply: true, actions: ['shutdown']}));
+  assert.match(online, /data-act="sys-action" data-v="shutdown"/);
   assert.match(online, /Larger controls/);
   assert.match(online, /Last change to the device/);
+  assert.doesNotMatch(systemView(state(createConfig(), {connected: true, canApply: true})), /id="actions-panel"/, 'an empty list: no panel');
+});
+
+test('Actions: each action the device lists, in order, and nothing it does not', () => {
+  const kinds = html => [...html.matchAll(/data-act="sys-action" data-v="([^"]+)"/g)].map(m => m[1]);
+  const subsets = [[], ...ACTION_KINDS.map(kind => [kind]), ['shutdown', 'bundle'], ['reboot', 'restart-audio', 'password'], [...ACTION_KINDS].reverse()];
+  for (const subset of subsets) {
+    const html = actionsPanel(state(createConfig(), {connected: true, actions: subset}));
+    assert.deepEqual(kinds(html), ACTION_KINDS.filter(kind => subset.includes(kind)), subset.join());
+    if (!subset.length) assert.equal(html, '');
+  }
+  const all = actionsPanel(state(createConfig(), {connected: true, actions: [...ACTION_KINDS, 'format-disk']}));
+  assert.doesNotMatch(all, /format-disk/);
+  assert.match(all, /<span role="status" class="action-note">/);
+  for (const label of ['Restart audio', 'Restart clock service', 'Download support bundle', 'Change page password', 'Reboot the Pi', 'Shut down the Pi']) assert.match(all, new RegExp(`>${label}</button>`));
+  assert.match(all, /class="caution" data-act="sys-action" data-v="reboot"/);
+  assert.match(all, /class="danger" data-act="sys-action" data-v="shutdown"/);
+  assert.match(all, /audio stops/, 'the stack\'s outage words');
+  assert.doesNotMatch(all, /disabled/);
+  assert.doesNotMatch(actionsPanel(state(createConfig(), {connected: true, actions: ['bundle']})), /reboot|shut down|password|restart/i, 'what is not listed is left out, not disabled');
+});
+
+test('Actions: busy disables every button; the note is the receipt\'s, escaped', () => {
+  const busy = actionsPanel(state(createConfig(), {connected: true, busy: true, actions: [...ACTION_KINDS], actionNote: {text: 'Restarting audio…', tone: 'busy'}}));
+  assert.equal((busy.match(/data-act="sys-action"[^>]*disabled>/g) || []).length, 6);
+  assert.match(busy, /class="action-note tone-busy">Restarting audio…</);
+  const failed = actionsPanel(state(createConfig(), {connected: true, actions: ['restart-audio'], actionNote: {text: 'Restart audio failed: <b>', tone: 'bad'}}));
+  assert.match(failed, /tone-bad">Restart audio failed: &lt;b&gt;</);
+  assert.match(actionsPanel(state(createConfig(), {connected: true, actions: ['reboot'], rebootRequested: true})), /disabled>Rebooting…</);
+  assert.match(actionsPanel(state(createConfig(), {connected: true, actions: ['shutdown'], shutdownRequested: true})), /disabled>Shutting down…</);
 });
 
 test('EQ editor: sixteen handles and chips, three numbers for the band, and the ear link only on headphones', () => {

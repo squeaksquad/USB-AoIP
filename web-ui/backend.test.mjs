@@ -272,6 +272,62 @@ test('requestShutdown posts the confirm word and surfaces refusals', async () =>
   await assert.rejects(requestShutdown(null, async () => fail(503, {})), /503/);
 });
 
+import { requestReboot, requestRestartAudio, requestRestartClock, requestBundle, requestPassword, fetchSupportBundle } from './backend.mjs';
+
+test('the five System actions post their path, body and the page header, and surface refusals', async () => {
+  const cases = [
+    [requestReboot, [], '/api/apply/reboot', {confirm: 'reboot'}],
+    [requestRestartAudio, [], '/api/apply/restart-audio', {confirm: 'restart-audio'}],
+    [requestRestartClock, [], '/api/apply/restart-clock', {confirm: 'restart-clock'}],
+    [requestBundle, [], '/api/apply/bundle', {}],
+    [requestPassword, ['a new pass phrase'], '/api/apply/password', {password: 'a new pass phrase'}],
+  ];
+  for (const [send, args, path, body] of cases) {
+    const calls = [];
+    const result = await send(...args, async (url, init) => { calls.push([url, init]); return ok({ok: true, id: 'abc123', kind: 'k', note: 'queued'}); });
+    assert.equal(result.id, 'abc123', path);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], path);
+    assert.equal(calls[0][1].method, 'POST');
+    assert.equal(calls[0][1].headers[REQUEST_HEADER], '1', path);
+    assert.equal(calls[0][1].headers['content-type'], 'application/json', path);
+    assert.deepEqual(JSON.parse(calls[0][1].body), body, path);
+    await assert.rejects(send(...args, async () => fail(409, {ok: false, error: 'this stack has no separate clock service'})), /no separate clock service/, path);
+    await assert.rejects(send(...args, async () => fail(503, {})), /503/, path);
+    await assert.rejects(send(...args, async () => ok({ok: false})), /request failed/, path);
+  }
+  await assert.rejects(requestPassword('short', async () => fail(400, {ok: false, error: 'Use at least 8 characters.'})), /Use at least 8 characters\./);
+});
+
+test('fetchSupportBundle reads the bundle with the page\'s sign-in, and only from a bundle path', async () => {
+  const calls = [];
+  const blob = new Blob(['{"format": "usb-aoip-support/1"}'], {type: 'application/json'});
+  const got = await fetchSupportBundle('/api/support/0123abcd', async (url, init) => { calls.push([url, init]); return {ok: true, status: 200, blob: async () => blob}; });
+  assert.equal(got, blob);
+  assert.equal(calls[0][0], '/api/support/0123abcd');
+  assert.equal(calls[0][1].credentials, 'same-origin');
+  assert.equal(calls[0][1].method, undefined, 'a read: no method, no page header');
+  assert.ok(!(REQUEST_HEADER in calls[0][1].headers));
+  await assert.rejects(fetchSupportBundle('/api/support/0123abcd', async () => fail(404, null)), /no longer on the device/);
+  await assert.rejects(fetchSupportBundle('/api/support/0123abcd', async () => fail(500, {ok: false, error: 'boom'})), /boom/);
+  for (const path of [null, '/api/support/../etc', '/api/support/XYZ12345', 'https://elsewhere/api/support/0123abcd']) await assert.rejects(fetchSupportBundle(path, async () => { throw new Error('fetched'); }), /names no bundle/, String(path));
+});
+
+test('applyLine reads the System actions\' receipts in their own words', () => {
+  assert.equal(applyLine({current: {kind: 'reboot', stack: 'dante', state: 'rebooting'}}), 'Rebooting the Pi (reboot)…');
+  assert.equal(applyLine({current: {kind: 'reboot', state: 'done', finishedAt: 'T', request: {requestedBy: 'bryan'}}}), 'Reboot issued by bryan at T: the Pi is restarting.');
+  assert.equal(applyLine({current: {kind: 'restart-audio', stack: 'dante', state: 'starting'}}), 'Starting the Dante service (restart audio)…');
+  assert.equal(applyLine({current: {kind: 'restart-audio', state: 'done', finishedAt: 'T'}}), 'Audio restarted at T.');
+  assert.equal(applyLine({current: {kind: 'restart-audio', state: 'failed', error: 'the owner did not start'}}), 'Restart audio failed: the owner did not start');
+  assert.equal(applyLine({current: {kind: 'restart-clock', stack: 'dante', state: 'restarting-clock'}}), 'Restarting the clock service (restart clock service)…');
+  assert.equal(applyLine({current: {kind: 'restart-clock', state: 'refused', error: 'this stack has no separate clock service'}}), 'Restart clock service: refused. This stack has no separate clock service');
+  assert.equal(applyLine({current: {kind: 'bundle', state: 'done', finishedAt: 'T', bundle: {file: 'abcdef12.json', bytes: 9}}}), 'Support bundle made at T (9 bytes).');
+  assert.equal(applyLine({current: {kind: 'password', state: 'done', finishedAt: 'T', user: 'bryan', request: {requestedBy: 'bryan'}}}), 'Page password changed for bryan by bryan at T.');
+  assert.doesNotMatch(applyLine({current: {kind: 'password', state: 'validating'}}), /undefined/);
+  assert.equal(applyStepLabel('rebooting', 'dante'), 'Rebooting the Pi');
+  assert.equal(applyStepLabel('restarting-clock'), 'Restarting the clock service');
+});
+
 test('applyLine reads a shutdown receipt as a power-off, not an applied profile', () => {
   assert.match(applyLine({current: {kind: 'shutdown', state: 'done', profile: 'dsp-direct', finishedAt: '2026-09-14T03:00:00Z', request: {requestedBy: 'bryan'}}}), /Shutdown issued by bryan at 2026-09-14T03:00:00Z: the Pi is powering off/);
   assert.match(applyLine({current: {kind: 'shutdown', state: 'powering-off', profile: 'dsp-direct'}}), /Powering off the Pi \(shutdown\)/);

@@ -1,6 +1,8 @@
-// System: what the device is and how it is doing, the display setting, power,
-// the presets on the device, the last change made to it, and its logs.
+// System: what the device is and how it is doing, the display setting, the
+// actions (restarts, support bundle, password, reboot, shut down), the presets
+// on the device, the last change made to it, and its logs.
 import { esc, pressed, disabledAttr, options } from './ui.mjs';
+import { actionCards } from './actions.mjs';
 
 /** The live facts. Rebuilt on each health poll; holds no input. */
 export function devicePanel(S) {
@@ -36,12 +38,27 @@ export function lastChangePanel(S) {
     ${steps.length ? `<ol class="steps">${steps.map(step => `<li class="${step.ok ? '' : 'warn-text'}"><strong>${esc(step.label)}</strong>${step.detail ? ` <span class="muted">${esc(step.detail)}</span>` : ''}</li>`).join('')}</ol>` : ''}</section>`;
 }
 
+/**
+ * Restart audio or the clock, the support bundle, the page password, reboot,
+ * shut down: the ones the device lists (S.actions), in that order. Not
+ * connected, or nothing listed: no panel.
+ */
+export function actionsPanel(S) {
+  const cards = S.connected ? actionCards(S.actions, {outage: S.outage}) : [];
+  if (!cards.length) return '';
+  const note = S.actionNote;
+  const off = S.busy || S.shutdownRequested || S.rebootRequested;
+  const label = card => card.kind === 'shutdown' && S.shutdownRequested ? 'Shutting down…' : card.kind === 'reboot' && S.rebootRequested ? 'Rebooting…' : card.label;
+  return `<section class="panel" id="actions-panel" aria-label="Actions"><div class="row-head"><strong class="title">Actions</strong><span role="status" class="action-note${note ? ` tone-${esc(note.tone)}` : ''}">${esc(note?.text || '')}</span></div>
+    <div class="action-cards">${cards.map(card => `<div class="action-card"><span class="muted">${esc(card.text)}</span>
+      <button type="button" class="${card.tone === 'danger' ? 'danger' : card.tone === 'caution' ? 'caution' : ''}" data-act="sys-action" data-v="${esc(card.kind)}" ${disabledAttr(off)}>${esc(label(card))}</button></div>`).join('')}</div></section>`;
+}
+
 export function systemView(S) {
   return `${devicePanel(S)}
     <section class="panel" aria-label="Display"><div class="row-head split"><div><strong class="title">Display</strong> <span class="muted">Larger controls suit a tablet or touch screen; the page gets taller. This is remembered in this browser only.</span></div>
       <button type="button" class="toggle" data-act="big-toggle" ${pressed(S.big)}>${S.big ? 'Larger controls: on' : 'Larger controls: off'}</button></div></section>
-    ${S.connected ? `<section class="panel" aria-label="Power"><div class="row-head split"><div><strong class="title">Power</strong> <span class="muted">Stops audio in order, then powers the device off. This page loses its connection. When its lights stop, unplug the USB cable first, then the network cable; plugging the network cable back in starts it again.</span></div>
-      <button type="button" class="danger" data-act="shutdown" ${disabledAttr(S.busy || S.shutdownRequested || !S.canApply)} title="${esc(S.canApply ? 'Power the device off' : S.applyReason)}">${S.shutdownRequested ? 'Shutting down…' : 'Shut down'}</button></div></section>` : ''}
+    ${actionsPanel(S)}
     ${presetsPanel(S)}
     ${S.connected ? lastChangePanel(S) : ''}
     <section class="panel" aria-label="Logs"><div class="row-head"><strong class="title">Service logs</strong>
