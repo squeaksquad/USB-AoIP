@@ -16170,3 +16170,7 @@ eight looped channels). It is not the sixteen-channel soak the light rule
 names: channels 9 to 16 are loaded but not judged while the far loop is
 eight wide. The evidence is in the evidence repository's working tree
 (`outputs/latency/page1-*`), not committed there.
+
+The evidence of the MEASURED entry above was committed and pushed in the
+evidence repository the same hour (`squeaksquad/USB-AoIP-evidence`,
+a3c6f69, `outputs/latency/page1-*`).
