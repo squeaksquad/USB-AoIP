@@ -16041,8 +16041,8 @@ to web 1.6.0, applier 1.8.0 and the old chain's page, not to the page of
 the operator's screenshots of it on the Pi; `web-ui/` only.** Not
 installed: the Pi still has the page of bundle 0991131e. The header lines
 up with the content column. Status: six scale marks that do not collide,
-an unlit bar plain. Outputs: a column of fixed width with a fixed meter in
-each row. The EQ editor opens over the page as a large pop-up (the
+an unlit bar plain. Outputs: a column of at most 960 px in which the name
+has a fixed width and the meter takes the rest of the row. The EQ editor opens over the page as a large pop-up (the
 operator's request), not beside the rows; handles no longer overlap at the
 default frequencies. System: device facts as label and value on one line
 in two columns; Display and Power keep their button beside the text; file

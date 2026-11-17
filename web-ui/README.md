@@ -84,8 +84,8 @@ Things that work differently from the page before:
 
 Design fixes of 2026-11-17, after the first install on the Pi: the header
 lines up with the content column; meter scales carry six marks that do not
-collide and an unlit bar is plain; the Outputs rows are a column of fixed
-width with a fixed meter; the EQ editor is a pop-up, not a panel beside the
+collide and an unlit bar is plain; the Outputs rows are a column of at most
+960 px in which the meter takes the width the name does not need; the EQ editor is a pop-up, not a panel beside the
 rows; on System the device facts are label and value on one line in two
 columns, Display and Power keep their button beside the text, file pickers
 look like the other buttons, and each preset row has Run it, Open and a
