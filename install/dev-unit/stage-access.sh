@@ -34,7 +34,12 @@ if ! cmp -s "$out/access.sha256" "$repo/install/dev-unit/access.sha256"; then
   echo "  A file that goes into it changed. If that is intended: cp $out/access.sha256 $repo/install/dev-unit/access.sha256" >&2
   exit 1
 fi
-tar -C "$(dirname "$out")" -czf "$out.tgz" "$(basename "$out")"
+# Files only: no extended attributes and none of macOS's "._" companion entries, which
+# GNU tar on the unit unpacks as files that install-access.sh would then copy into the page.
+COPYFILE_DISABLE=1 tar --no-xattrs -C "$(dirname "$out")" -czf "$out.tgz" "$(basename "$out")"
+if python3 -c 'import sys, tarfile; sys.exit(any(n.rsplit("/", 1)[-1].startswith("._") for n in tarfile.open(sys.argv[1]).getnames()))' "$out.tgz"; then :; else
+  echo "stage-access: the archive holds \"._\" entries; not a bundle to install" >&2; exit 1
+fi
 echo "stage-access: bundle $out ($(wc -l < "$out/access.sha256" | tr -d ' ') files, list $(sha "$out/access.sha256" | cut -c1-8))"
 echo "  repository $(git -C "$repo" rev-parse --short HEAD 2>/dev/null)$(git -C "$repo" status --porcelain 2>/dev/null | grep -q . && echo ' WITH UNCOMMITTED CHANGES')"
 cat <<EOF
