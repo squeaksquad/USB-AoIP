@@ -1,20 +1,144 @@
-# USB 16x16 web control / DSP design prototype
+# USB-AoIP page
 
-The Raspberry Pi appliance UI. It runs two ways from the same files.
+The device's own page. It runs two ways from the same files.
 
-**Connected**, served by `web-control/usb16x16-web` on the Pi: live device
-health, live journal reads and presets stored on the Pi. Everything it shows is
-read; the service has no endpoint that can change device state, so mode
-switching, service restarts and DSP application remain manual work on the Pi.
+**Connected**, served by `web-control/usb16x16-web` on the device: live
+state, live meters, the presets kept on the device, and changes to what it
+runs (through the applier; `docs/web/ACCESS.md`).
 
-**Standalone**, served by any static file server: an interactive design
-prototype. Every live panel falls back to "Not connected" rather than showing a
-stale or invented value, and presets go to browser storage.
+**Standalone**, served by any static file server: every live part says "Not
+connected" rather than showing a stale or invented value, and presets go to
+browser storage. Nothing can be run.
 
-Either way it does not process audio, invoke services, or generate deployable
-CamillaDSP YAML. Meters are the bridge's live tap when the service reports one, synthetic display activity otherwise; measured
-latency and added DSP cost remain explicitly unavailable. The existing bridge is
-unchanged.
+## The page since 2026-11-16 (redesign, phase 1)
+
+`docs/web/REDESIGN-2026-11.md` is the design and the build order. Phase 1 is
+this: the new page on today's audio engine, as a change to `web-ui/` only.
+The web service, the applier, the compiler and the preset model (version 2)
+are as they were. A feature the engine lacks is left out, not shown disabled.
+
+Three tabs.
+
+- **Status.** Five cards (clock, sample rate, computer, network audio, what
+  is running) from `/api/health`, and three rows of sixteen meters from
+  `/api/meters`: from the computer, to the network, from the network. Each
+  bar has a peak hold; a clip light stays on until "Clear clip lights".
+  Connected with no level data, the row says why; not connected, it says so.
+  The page no longer draws made-up movement.
+- **Processor.** The preset being edited, with Undo and Redo, "Change
+  speaker layout" and "New preset".
+  - *Outputs*: a row per output in use with name, level, delay (0 to 10 ms),
+    polarity, EQ and On/Off, grouped by speaker set and headphones. On/Off is
+    the model's `mute` field shown the other way round. "Align by distance"
+    fills the delays from typed distances. The EQ editor opens beside the
+    rows: sixteen bands, drag or type, import (an EQ file from this page, or
+    REW's text), export, copy and paste, reset.
+  - *Routing*: computer channels across, outputs down. A speaker's feed, a
+    bass send to a subwoofer, a headphone feed or mix. Click an output's
+    name to move it to another channel or change its job; click a computer
+    channel to name it.
+  - *Speakers & headphones*: the speaker set and the headphones, add or
+    remove headphones, what they are fed from.
+  - *Bass management*: redirection on or off, a crossover for all speakers,
+    LFE low-pass and level, slopes, and per source: high-pass on or off and
+    frequency, bass low-pass, and a send to each subwoofer.
+- **System.** Device facts (including the processing cost the engine
+  reports), larger controls, shut down, the presets, the last change made to
+  the device, and its logs.
+
+The **change bar** at the bottom says what is pending and offers what can be
+done about it. Whether an edit is heard at once or needs a restart is not
+decided in the page: it is `liveState`'s answer, from the compiled draft's
+shape key against the running preset's.
+
+| The bar says | When | Offers |
+|---|---|---|
+| N changes playing now, not saved yet | the draft is the running preset and has its shape | Discard, Keep changes (no restart), Save as… |
+| N changes not applied: needs a restart | the draft's shape differs, or the device runs something else | Discard, Apply and restart audio, Save as… |
+| This preset is not running | no changes, but the device runs another preset or none (Processor tab only) | Apply and restart audio |
+| N changes in this page only | not connected | Discard, Save |
+
+Things that work differently from the page before:
+
+- **Live edits go only to the preset the draft is.** The draft's name must
+  be the running preset's. Before, any draft with the running preset's shape
+  was sent to the engine, whatever it was called.
+- **Mode and source are not on the page.** Every preset is a processing
+  preset on what the computer sends (`mode: 'dsp'`, `source: 'usb'` are
+  written on load). Running without processing is "Direct" in the presets
+  list on System.
+- **Presets are one list.** A preset is saved (its settings, in the preset
+  store), installed (it can run), or both. "Run it" switches to an installed
+  preset, or installs a saved one first. Rename and Duplicate work on the
+  saved settings; a renamed preset is installed under its new name the next
+  time it is run.
+- **Gone:** the A/B slots, the Direct/DSP and USB/AoIP switches, the
+  copyable service commands, the pasted log snapshot, demonstration meters,
+  copy and paste of a whole channel (EQ copy and paste remains).
+- **A set's own level** (`bus.gainDb`, `bus.mute`) has no control: level
+  lives on each output. A preset that carries one says so on Speakers &
+  headphones and offers to clear it.
+- The sample rate is never set from the page.
+
+### Files
+
+`app.mjs` owns the state, the events and everything that talks to the
+device. The tabs are drawn by `view-status.mjs`, `view-outputs.mjs`,
+`view-routing.mjs`, `view-sets.mjs`, `view-bass.mjs`, `view-chooser.mjs` and
+`view-system.mjs`, which are pure (state in, HTML text out, no document) and
+are tested in `views.test.mjs`. `ui.mjs` holds what they share. Every style
+is a class in `style.css`; the views write no inline styles.
+
+New logic, each with its test beside it: `history.mjs` (undo and redo),
+`align.mjs` (delays from distances), `meter-hold.mjs` (peak hold, clip
+latch), `changes.mjs` (counting changes, the change bar), `presets.mjs`
+(names, and the one list of presets), `prefs.mjs` (larger controls, in this
+browser). `backend.mjs` gained `statusCards` and `meterRows`; `eq-tools.mjs`
+`exportEq` and `importEq`; `workflows.mjs` `blankConfig`.
+
+All modules stay flat in `web-ui/`: the installer and
+`install/dev-unit/stage-access.sh` copy `web-ui/*.mjs` and nothing below it.
+
+### Run and check
+
+```sh
+node --test web-ui/*.test.mjs
+python3 -m http.server 8765 --bind 127.0.0.1 --directory web-ui   # standalone
+```
+
+Standalone cannot compile a preset: the compiler imports `../web-ui/...`,
+which only the web service's layout provides. To see the connected page
+without a device, copy the page as the installer lays it out (the files of
+`web-ui/` and, in `compiler/`, the three modules from `dsp-compiler/`) and
+run the real service on it with `USB16X16_STACK=dante`, its paths pointed at
+a scratch directory, `--no-auth --bind 127.0.0.1 --static <that copy>`.
+
+Checked in a browser on 2026-11-16, with no device:
+
+- Standalone: every tab; a typed level followed at once by a click on
+  another control (both take effect); EQ drag, undo and redo; routing
+  toggles, moving an output, changing its job; headphones added and mixed;
+  crossover steps; align by distance; EQ import (REW) and export; new preset
+  from a layout and layout change; save, and the presets list; larger
+  controls; a 375 px wide screen.
+- The real web service run on the Mac with a meter file written by a script:
+  the Status cards, three live meter rows with peak hold and a latched clip
+  light, System.
+- The same page with the device's answers replaced in the browser by a
+  stand-in that keeps the running preset's hashes: following the running
+  preset on connect, a live edit, Keep changes (a commit), Discard (a
+  revert), a change of shape, Apply and restart audio (the other
+  sample rates' files sent with it), Run Direct, Duplicate, running a saved preset that was not
+  installed, Rename, Remove.
+
+Not checked: anything on the device itself. Nothing is installed.
+
+## The record below
+
+Everything from here down was written for the page before the redesign and
+is kept as its record. The backend facts (what `/api/health` carries, the
+two stacks, live coefficient updates, the applier's routes) still hold; the
+descriptions of the page's own controls and layout do not.
 
 ## On a Dante Pi (2026-10-11)
 
