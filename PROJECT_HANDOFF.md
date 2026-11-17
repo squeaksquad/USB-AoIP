@@ -16004,6 +16004,10 @@ longer loads, stays in the Pi's page directory after an install.
 The "Install pinning" paragraph of `docs/web/REDESIGN-2026-11.md` was
 corrected the same day to say this.
 
+CORRECTION 2026-11-17 (entry at the tail): this install also put 30 macOS
+"._" companion files into the page directory; the read-back below did not
+see them.
+
 **INSTALLED 2026-11-17 03:40 UTC (operator): the phase 1 page on the Pi, by
 `install-access.sh install` from bundle 0991131e (repository ea2315f).**
 The page only. Read back the same minute, read-only: every one of the
@@ -16059,3 +16063,30 @@ Outputs, the EQ pop-up with a drag, a step, export over it, next output
 and close, System with the menu open, and a scan of every tab for controls that
 overlap, at normal size and with larger controls: none). The checks owed on the Pi are
 unchanged and are for the page once this is installed.
+
+**CORRECTION 2026-11-17 03:55 UTC: the install of 03:40 UTC left 30 macOS
+"._" companion files in the Pi's page directory, and the bundle archive
+was the cause.** Found while copying the next bundle, before installing
+it. The archive `stage-access.sh` made on the Mac held a "._" entry beside
+every file (39 in the second archive, counted with Python's tarfile;
+macOS's own tar does not list them). GNU tar on the Pi unpacks them as
+163-byte files, and `install-access.sh` copies every file under the
+bundle's `web-ui` into the page. On the Pi now: 27 in
+`/home/bdimaio/usb-16x16-work/web-ui` and 3 in its `compiler/`, all dated
+22:40:14 local (03:40:14 UTC), owned by bdimaio. They hold only macOS file
+attributes; the page does not load them. The INSTALLED entry's read-back
+missed them twice over: the bundle was checked with `sha256sum -c`, which
+looks only at listed files, and the page directory was listed without
+hidden files. Every listed page file is still the bundle's, as that entry
+says. The two earlier bundles set aside in the home directory hold the
+same companions.
+
+Fixed in the repository (e07763e): `stage-access.sh` makes the archive
+with no extended attributes and fails if a "._" entry is in it. The bundle
+now on the Pi as `~/usb-aoip-access` is from that script (repository
+e07763e, list 1a022f7d, archive a59ca41f): 33 files unpacked, 33 listed,
+all verifying, no "._" file. It is copied, not installed; the bundle of
+the page installed now is set aside as `~/usb-aoip-access.page-0991131e`.
+Not done: the 30 files are still in the page directory. The installer
+removes nothing, so installing the clean bundle leaves them there; they
+need removing by hand.
