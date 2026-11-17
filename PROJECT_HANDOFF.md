@@ -16277,3 +16277,35 @@ not to 1.7.2 and 1.9.0. The way back to those is two steps: `rollback`,
 then `install` from the bundle on the Pi as `~/usb-aoip-access`
 (1a022f7d). That bundle's installer does not know 1.8.0 and 1.10.0 and
 would refuse to install straight over them. Not tried.
+
+**INSTALLED 2026-11-17 (operator, read back by the session at 11:27 UTC)
+and MEASURED 11:27-11:31 UTC: the phase 2 bundle (list d006b0a2,
+repository b23619d) is on the Pi, and the noise probe at 32 and the
+two-minute soak pass on the eight looped channels. Not yet ACCEPTED: the
+five actions' own checks on the unit are still owed.** The operator ran
+`install-access.sh install` and said "installed"; the session did not see
+the install's output. Read back over SSH: `/usr/local/bin/usb16x16-web`
+956c8569 (1.8.0), `/usr/local/bin/usb16x16-apply` d8a97b2c (1.10.0),
+`usb16x16-web`, `usb16x16-apply.path`, `usb16x16-statime` and
+`usb-16x16` active, the endpoint running direct at 48 kHz
+(`prime_drop=28`, `rx_queue=96`), the start check `state=ok restarts=0`
+for the endpoint start of 04:29:37 UTC (a start after the phase 1
+measurement; the session does not know what made it), the page answering
+401 without a login. The phase 1 bundle is kept on the Pi as
+`~/usb-aoip-access-phase1`. Pull request squeaksquad/USB-AoIP#14 is open
+for the branch. Pro Tools and RTL Utility were not running.
+
+From the Mac, `dante/measure-candidate.sh`, 48 kHz, 32 frames:
+- noise probe (`page2`, `20261117T112757Z`): return from sample 529 (528
+  on the phase 1 run), no zero run of 4 or more, zeros inside the span
+  0.0%, endpoint xrun/lag/error lines +0.
+- soak 120 s judged on the loop (`page2-loop8`, `20261117T112844Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peak 0.1000 on
+  all eight, discontinuities in 0 out 0, endpoint lines +0.
+
+As on the phase 1 run this is not the sixteen-channel soak the light rule
+names: channels 9 to 16 are loaded but not judged while the far loop is
+eight wide. Still owed before ACCEPTED, none during a session: the bundle
+made and read through, the password changed and signed in with, restart
+audio, restart clock service, reboot. None of the actions was run by the
+session.
