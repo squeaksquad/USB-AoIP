@@ -16091,8 +16091,10 @@ Not done: the 30 files are still in the page directory. The installer
 removes nothing, so installing the clean bundle leaves them there; they
 need removing by hand.
 
-**DONE 2026-11-17 03:58 UTC (session, on the operator's word): the 30 "._"
-files are removed from the Pi's page directory.** Looked at first: all 30
+**DONE 2026-11-17, between 03:54:55 and 03:55:58 UTC (session, on the
+operator's word): the 30 "._" files are removed from the Pi's page
+directory.** (This heading first said 03:58; the read-back times bound it
+as now written, before the install recorded below.) Looked at first: all 30
 were 163 bytes, began with the AppleDouble mark (00 05 16 07) and held
 only `com.apple.provenance`, each sat beside a real file of the same name,
 and all were owned by bdimaio. Deleted with `find ... -name "._*" -size
@@ -16108,3 +16110,33 @@ since at least that bundle, not only since this session's. Left alone:
 other "._" files elsewhere under `/home/bdimaio/usb-16x16-work` (18 within
 three levels, outside the page directory) and those inside the two bundles
 set aside in the home directory.
+
+**INSTALLED 2026-11-17 03:55:58 UTC (operator): the phase 1 page with the
+design fixes, by `install-access.sh install` from bundle 1a022f7d
+(repository e07763e, archive a59ca41f).** The page only, as before. Read
+back at 03:57 UTC, read-only: all 28 page files of the bundle are the
+files in `/home/bdimaio/usb-16x16-work/web-ui`; the directory holds 39
+files with hidden ones counted and no "._" file. The 11 that are not the
+bundle's were there before: `profiles.mjs`, nine `*.test.mjs` and a
+README, none of which the page loads. Web 1.7.2 (5b374f74) and applier
+1.9.0 (32b13a72) are unchanged, the installer's status calls all five
+files new with the old chain's copies kept (web 6b98e7cf),
+`web-ui.pre-access` is in place and no `.access-undo` copy is left.
+`usb16x16-web`, `usb16x16-apply.path` and `usb16x16-dante-rate.path`
+restarted at 03:55:58 UTC and nothing else did: `usb16x16-dante` up since
+2026-11-13 16:10 UTC, Statime since 2026-10-14, the gadget since
+2026-10-30. A browser at 192.168.1.58 loaded the new modules at 03:56:08
+UTC and has had 343 requests answered 200 since.
+
+Looked at and not new: the web service's journal shows "Request timed
+out" lines from that browser, 5 since this install, about 30 s after the
+page load. There were 5 in the fifteen minutes on the previous page and 57
+between 2026-11-15 14:44 and this evening on the page before the
+redesign, so they are not this page's.
+
+Still not ACCEPTED. Owed on the Pi, unchanged: the page against the real
+applier (a live edit with Keep and Discard, Apply and restart audio to a
+preset and back to Direct, the presets list and its More menu), one rate
+move from the Mac and one from Dante Controller, a noise probe at 32, and
+`measure-candidate.sh soak 120 32`. The bundle of the page before this one
+is `~/usb-aoip-access.page-0991131e` on the Pi.
