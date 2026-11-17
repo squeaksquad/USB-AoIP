@@ -16174,3 +16174,16 @@ eight wide. The evidence is in the evidence repository's working tree
 The evidence of the MEASURED entry above was committed and pushed in the
 evidence repository the same hour (`squeaksquad/USB-AoIP-evidence`,
 a3c6f69, `outputs/latency/page1-*`).
+
+**ACCEPTED 2026-11-17 (operator): the phase 1 page on the Pi, bundle
+1a022f7d (repository e07763e), with web 1.7.2 and applier 1.9.0 as they
+were.** The operator's words: "accepted, it all looks good". The session
+did not see the operator's checks on the page and was given no figures;
+which of the owed steps were made (the live edit with Keep and Discard,
+Apply and back to Direct, the presets list, the two rate moves) was not
+reported one by one. Behind the acceptance on the record: the INSTALLED
+entry's read-back of 03:57 UTC and the MEASURED entry of 03:58-04:04 UTC
+(noise probe at 32 and the two-minute soak passing on the eight looped
+channels; channels 9 to 16 not judged). The page of the redesign's phase 1
+is the page of record. Phase 2 (the System actions, as applier request
+kinds) is next, in its own branch and pull request.
