@@ -28,8 +28,9 @@ export function parseSend(text) {
 }
 
 /** A text field holding one number of the draft. `f` names the field, `i` its index or id. */
-export function numField({f, i = '', value, label, unit = '', off = false, cls = ''}) {
-  return `<label class="unit-field ${cls}"><input type="text" inputmode="decimal" data-f="${esc(f)}" data-i="${esc(i)}" data-k="${esc(f)}:${esc(i)}" value="${esc(value)}" aria-label="${esc(label)}" ${disabledAttr(off)}>${unit ? `<span aria-hidden="true">${esc(unit)}</span>` : ''}</label>`;
+/** `unitSpace` keeps the unit's place when there is no unit, so a column of fields lines up. */
+export function numField({f, i = '', value, label, unit = '', off = false, cls = '', unitSpace = false}) {
+  return `<label class="unit-field ${cls}"><input type="text" inputmode="decimal" data-f="${esc(f)}" data-i="${esc(i)}" data-k="${esc(f)}:${esc(i)}" value="${esc(value)}" aria-label="${esc(label)}" ${disabledAttr(off)}>${unit || unitSpace ? `<span aria-hidden="true">${esc(unit)}</span>` : ''}</label>`;
 }
 
 /** A group of buttons of which one is on. */

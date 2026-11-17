@@ -10,7 +10,7 @@ import { LAYOUTS, blankConfig } from './workflows.mjs';
 import { statusCards, meterRows, systemFacts } from './backend.mjs';
 import { presetRows } from './presets.mjs';
 import { statusView } from './view-status.mjs';
-import { outputsView, thumbPoints } from './view-outputs.mjs';
+import { outputsView, eqView, thumbPoints } from './view-outputs.mjs';
 import { routingView, crosspoint } from './view-routing.mjs';
 import { setsView } from './view-sets.mjs';
 import { bassView } from './view-bass.mjs';
@@ -38,6 +38,7 @@ const everyView = () => {
   return [
     statusView(state()),
     outputsView(state()), outputsView(state(withPhones, {eqOpen: 14, eqImport: {text: '', error: '', note: '', ready: false}, align: {open: true, unit: 'ft', text: ['3'], preview: {delays: [0], limited: [], farthest: 3}, error: '', note: ''}, confirmResetAll: true})),
+    eqView(state(withPhones, {eqOpen: 14, eqImport: {text: '', error: '', note: '', ready: false}})), eqView(state(createConfig(), {eqOpen: 0, band: 3})),
     routingView(state()), routingView(state(withPhones, {route: {row: 3, col: 0}})), routingView(state(withPhones, {route: {row: 14, col: null}})), routingView(state(createConfig(), {route: {row: null, col: 2}})),
     setsView(state()), setsView(state(withPhones, {setDetail: 'headphones'})),
     bassView(state()), bassView(state(blankConfig())),
@@ -104,4 +105,15 @@ test('System: only what the device can do today', () => {
   assert.match(online, /data-act="shutdown"/);
   assert.match(online, /Larger controls/);
   assert.match(online, /Last change to the device/);
+});
+
+test('EQ editor: sixteen handles and chips, three numbers for the band, and the ear link only on headphones', () => {
+  const html = eqView(state(createConfig(), {eqOpen: 0, band: 3}));
+  assert.equal((html.match(/data-eq-node=/g) || []).length, 16);
+  assert.equal((html.match(/data-act="band-pick"/g) || []).length, 16);
+  for (const f of ['band.frequency', 'band.gainDb', 'band.q']) assert.match(html, new RegExp(`data-f="${f}" data-i="3"`));
+  assert.equal((html.match(/class="stepper"[\s\S]*?<\/label>/g) || []).filter(row => /<span aria-hidden="true">/.test(row)).length, 3, 'every row keeps the place of a unit, Q included');
+  assert.doesNotMatch(html, /data-act="eq-link"/);
+  assert.match(eqView(state(phones(), {eqOpen: 14})), /data-act="eq-link"/);
+  assert.doesNotMatch(outputsView(state(createConfig(), {eqOpen: 0})), /data-eq-node=/, 'the editor is not drawn among the rows');
 });

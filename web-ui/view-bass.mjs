@@ -16,7 +16,7 @@ export function bassView(S) {
   const slope = common(mains.map(i => c.inputs[i].slope));
   const stepper = (label, f, value, unit) => `<div class="stepper"><span>${label}</span>
     <button type="button" data-act="bass-step" data-v="${f},-1" aria-label="${label} down">−</button>
-    ${numField({f, value, label, unit})}
+    ${numField({f, value, label, unit, unitSpace: true})}
     <button type="button" data-act="bass-step" data-v="${f},1" aria-label="${label} up">+</button></div>`;
   if (!subs.length) {
     return `<section class="panel" aria-label="Bass management"><strong class="title">Bass management</strong>

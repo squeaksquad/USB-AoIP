@@ -18,7 +18,7 @@ import { readPrefs, savePrefs } from './prefs.mjs';
 import { presetSlug, storeName, nameProblem, presetRows } from './presets.mjs';
 import { esc, parseNumber, parseSend, msText } from './ui.mjs';
 import { statusView } from './view-status.mjs';
-import { outputsView, BAND_COLORS } from './view-outputs.mjs';
+import { outputsView, eqView, BAND_COLORS } from './view-outputs.mjs';
 import { routingView, crosspoint } from './view-routing.mjs';
 import { setsView } from './view-sets.mjs';
 import { bassView } from './view-bass.mjs';
@@ -30,13 +30,20 @@ import { systemView, devicePanel, presetsPanel, lastChangePanel } from './view-s
 /** Phase 1 runs on today's engine: the processing is on what the computer
  *  sends, and a preset is always a processing preset. Older presets may say
  *  otherwise; the page has no control for either field any more. */
-const normalise = doc => { doc.mode = 'dsp'; doc.source = 'usb'; return doc; };
+const normalise = doc => {
+  doc.mode = 'dsp'; doc.source = 'usb';
+  // One spelling of a preset's name everywhere: the one the preset store keeps.
+  doc.name = storeName(doc.name) || 'Preset';
+  return doc;
+};
 
 let config = normalise(createConfig());
 // What the draft is compared with: the preset as last loaded, saved, applied or kept.
 let baseline = structuredClone(config);
 // A new preset that was never saved or applied.
 let fresh = false;
+// The saved preset the draft was opened from or last saved as; null for the built-in example and a new one.
+let draftStoreName = null;
 const history = new History();
 let tab = 'status', ptab = 'outputs';
 let eqOpen = null, band = 0, eqDrag = null, eqObserver = null, eqClipboard = null, eqImport = null, nudgeKey = null;
@@ -157,8 +164,9 @@ function edit(change) {
 }
 
 /** Put a whole preset in the editor: loaded, new, or discarded back to. */
-function adopt(document, {asBaseline = true, isFresh = false} = {}) {
+function adopt(document, {asBaseline = true, isFresh = false, from = null} = {}) {
   config = normalise(document);
+  draftStoreName = from;
   if (asBaseline) baseline = clone(config);
   fresh = isFresh; history.clear(); draftShapeKey = null; liveQueue.cancel();
   eqOpen = null; band = 0; eqImport = null; chooser = null; setDetail = null; route = {row: null, col: null};
@@ -190,7 +198,7 @@ function followLivePreset(next) {
   if (editedSinceLoad) return;
   const found = presetForLiveProfile(next);
   if (!found) return;
-  try { adopt(validateConfig(parsePreset(JSON.stringify(found.document)))); render(); }
+  try { adopt(validateConfig(parsePreset(JSON.stringify(found.document))), {from: found.name}); render(); }
   catch (e) { toast(`The saved settings of ${found.name} could not be opened: ${e.message}`); }
 }
 
@@ -198,7 +206,7 @@ function followLivePreset(next) {
  *  under the draft's name, so a reload finds them. */
 async function saveDraft() {
   const name = storeName(config.name) || 'preset';
-  try { validateConfig(config); await presetStore.save(name, clone(config)); baseline = clone(config); fresh = false; return true; }
+  try { validateConfig(config); await presetStore.save(name, clone(config)); baseline = clone(config); fresh = false; draftStoreName = name; return true; }
   catch (e) { toast(`Could not save the preset's settings: ${e.message}`); return false; }
 }
 
@@ -352,7 +360,7 @@ async function runPreset(kind, name) {
       await requestPreset(name, compiled.artifact, liveProfile(), undefined, others);
     } else await requestProfile(target, liveProfile());
     // With nothing unsaved in the editor, show what is about to run.
-    if (row?.stored && !changes() && !fresh) { try { adopt(validateConfig(parsePreset(JSON.stringify(presetStore.cache[name])))); } catch { /* the list still runs it */ } }
+    if (row?.stored && !changes() && !fresh) { try { adopt(validateConfig(parsePreset(JSON.stringify(presetStore.cache[name]))), {from: name}); } catch { /* the list still runs it */ } }
     began();
   } catch (e) { toast(`The device refused: ${e.message}`); }
   applyBusy = false;
@@ -361,7 +369,7 @@ async function runPreset(kind, name) {
 
 async function openPreset(name) {
   if ((changes() || fresh) && !await ask({title: `Open ${name}?`, text: 'The preset you are editing has unsaved changes. Opening another leaves them behind.', ok: 'Open'})) return;
-  try { adopt(validateConfig(parsePreset(JSON.stringify(presetStore.cache[name])))); editedSinceLoad = true; tab = 'processor'; ptab = 'outputs'; render(); }
+  try { adopt(validateConfig(parsePreset(JSON.stringify(presetStore.cache[name]))), {from: name}); editedSinceLoad = true; tab = 'processor'; ptab = 'outputs'; render(); }
   catch (e) { toast(`${name} could not be opened: ${e.message}`); }
 }
 
@@ -382,7 +390,7 @@ async function renamePreset(name) {
     await presetStore.save(next, document);
     await presetStore.remove(name);
     if (row?.installed && presetSlug(next) !== row.slug) await removeInstalled(row.slug);
-    if (storeName(config.name) === name) { config.name = next; baseline.name = next; }
+    if (draftStoreName === name) { config.name = next; baseline.name = next; draftStoreName = next; }
     toast(`Renamed to ${next}.`);
   } catch (e) { toast(`Could not rename: ${e.message}`); }
   applyBusy = false;
@@ -403,7 +411,7 @@ async function removeListed(name) {
   if (!row || !await ask({title: `Remove ${name}?`, text: `It is removed from ${presetStore.kind === 'pi' ? 'the device' : 'this browser'}${row.installed ? ' and can no longer be run' : ''}. This cannot be undone; export it first to keep a copy.`, ok: 'Remove', danger: true})) return;
   applyBusy = true; renderLive();
   try {
-    if (row.stored) await presetStore.remove(name);
+    if (row.stored) { await presetStore.remove(name); if (draftStoreName === name) draftStoreName = null; }
     if (row.installed) await removeInstalled(row.slug);
     toast(`${name} removed.`);
   } catch (e) { toast(`Could not remove: ${e.message}`); }
@@ -485,7 +493,7 @@ function viewState() {
     chooser, layouts: LAYOUTS.map(l => ({id: l.id, label: l.label, outputs: l.routing.length, fits: chooser?.mode === 'new' || l.routing.length <= (main?.outputIds.length || 0) + free})),
     facts: systemFacts(health), generated: health?.generated, big: prefs.big, busy: busyNow(), shutdownRequested,
     canApply: Boolean(health) && choices.available, applyReason: health && !choices.available ? (choices.reason || 'This device cannot switch presets.') : '',
-    outage: terms().outage, presetRows: rowsNow(), editing: fresh ? null : storeName(config.name),
+    outage: terms().outage, presetRows: rowsNow(), editing: draftStoreName,
     applyLine: applyLine(status), applySteps: (current?.steps || []).map(step => ({ok: step.ok, detail: step.detail, label: applyStepLabel(step.name, current.stack || terms().stack)})),
     logServices: terms().logs, logService, logQuery, logBusy, logText: logLive[logService],
     logShown: !health ? 'Not connected: the logs are read from the device.' : !lines.length ? 'Nothing read yet.' : shown.length ? shown.join('\n') : 'No line contains that text.',
@@ -518,7 +526,8 @@ function focusKey(el) {
 }
 function refocus(key) {
   if (!key) return;
-  const view = $('#view');
+  // The EQ editor is a pop-up outside the view; a control in either can hold the keyboard.
+  const view = $('#eq-dialog').open ? $('#eq-dialog') : $('#view');
   const el = key.k ? [...view.querySelectorAll('[data-k]')].find(node => node.dataset.k === key.k)
     : key.act ? [...view.querySelectorAll('[data-act]')].find(node => node.dataset.act === key.act && (node.dataset.v ?? '') === key.v && (node.dataset.i ?? '') === key.i)
     : key.node !== undefined ? view.querySelector(`[data-eq-node="${key.node}"]`) : document.getElementById(key.id);
@@ -531,17 +540,25 @@ function render() {
   renderQueued = false;
   endEqDrag(true);
   eqObserver?.disconnect();
-  const key = $('#view').contains(document.activeElement) ? focusKey(document.activeElement) : null;
+  const key = $('#view').contains(document.activeElement) || $('#eq-dialog').contains(document.activeElement) ? focusKey(document.activeElement) : null;
   const S = viewState();
   document.body.classList.toggle('big', prefs.big);
   for (const button of document.querySelectorAll('[data-tab]')) { if (button.dataset.tab === tab) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); }
   const view = $('#view');
   view.dataset.tab = tab;
   view.innerHTML = tab === 'status' ? statusView(S) : tab === 'system' ? systemView(S) : processorView(S);
+  // The EQ editor opens over the page, large, as a pop-up.
+  const eqDialog = $('#eq-dialog');
   if (tab === 'processor' && !chooser && ptab === 'outputs' && eqOpen !== null) {
+    eqDialog.innerHTML = eqView(S);
+    if (!eqDialog.open) eqDialog.showModal();
     drawEq();
     eqObserver = new ResizeObserver(drawEq);
     eqObserver.observe($('#eq-display'));
+  } else {
+    eqOpen = null;
+    if (eqDialog.open) eqDialog.close();
+    eqDialog.innerHTML = '';
   }
   refocus(key);
   renderChrome();
@@ -767,6 +784,9 @@ document.addEventListener('dblclick', event => {
   edit(c => { c.outputs[eqOpen].bands[index] = resetBand(c.outputs[eqOpen].bands[index], index); return mirrorLinkedEq(c, eqOpen); });
 });
 
+$('#eq-dialog').addEventListener('cancel', event => { event.preventDefault(); if (eqDrag) return; eqOpen = null; eqImport = null; render(); });
+$('#eq-dialog').addEventListener('pointerdown', event => { if (event.target === event.currentTarget) { eqOpen = null; eqImport = null; requestRender(); } });
+
 /** The EQ of the next output in use, in either direction. */
 function gotoEq(direction) {
   for (let n = 1; n <= CHANNELS; n += 1) {
@@ -943,6 +963,7 @@ function act(name, v, i) {
 }
 
 document.addEventListener('click', event => {
+  for (const menu of document.querySelectorAll('details.menu[open]')) if (!menu.contains(event.target) || event.target.closest('.menu-items button')) menu.open = false;
   const b = event.target.closest('button');
   if (!b || b.disabled) return;
   if (b.dataset.tab) { tab = b.dataset.tab; render(); return; }

@@ -16036,3 +16036,26 @@ and one from Dante Controller, a noise probe at 32, and
 to web 1.6.0, applier 1.8.0 and the old chain's page, not to the page of
 2026-11-15; that page is the bundle set aside as
 `~/usb-aoip-access.web-1.7.2` on the Pi.
+
+**IMPLEMENTED 2026-11-17 (Mac side): design fixes to the phase 1 page, from
+the operator's screenshots of it on the Pi; `web-ui/` only.** Not
+installed: the Pi still has the page of bundle 0991131e. The header lines
+up with the content column. Status: six scale marks that do not collide,
+an unlit bar plain. Outputs: a column of fixed width with a fixed meter in
+each row. The EQ editor opens over the page as a large pop-up (the
+operator's request), not beside the rows; handles no longer overlap at the
+default frequencies. System: device facts as label and value on one line
+in two columns; Display and Power keep their button beside the text; file
+pickers styled as buttons; each preset row is Run it, Open and a "More"
+menu. A preset's name has one spelling, the preset store's, written on
+load; "Open in Processor" marks the saved preset the draft came from, not
+any preset with the same name. Two more from the operator while this was
+being made: the number boxes in a column of steppers line up (the Q row
+had no unit and sat further right), and the polarity button stays inside
+its column (it ran into the EQ button). `access.sha256` is re-pinned for
+the page files. Checked off the Pi: the page tests and the other four test
+commands, and in a browser against the web service run on the Mac (Status,
+Outputs, the EQ pop-up with a drag, a step, export over it, next output
+and close, System with the menu open, and a scan of every tab for controls that
+overlap, at normal size and with larger controls: none). The checks owed on the Pi are
+unchanged and are for the page once this is installed.

@@ -30,8 +30,8 @@ Three tabs.
   - *Outputs*: a row per output in use with name, level, delay (0 to 10 ms),
     polarity, EQ and On/Off, grouped by speaker set and headphones. On/Off is
     the model's `mute` field shown the other way round. "Align by distance"
-    fills the delays from typed distances. The EQ editor opens beside the
-    rows: sixteen bands, drag or type, import (an EQ file from this page, or
+    fills the delays from typed distances. The EQ editor opens over the
+    page as a large pop-up: sixteen bands, drag or type, import (an EQ file from this page, or
     REW's text), export, copy and paste, reset.
   - *Routing*: computer channels across, outputs down. A speaker's feed, a
     bass send to a subwoofer, a headphone feed or mix. Click an output's
@@ -79,6 +79,19 @@ Things that work differently from the page before:
   lives on each output. A preset that carries one says so on Speakers &
   headphones and offers to clear it.
 - The sample rate is never set from the page.
+- A preset has one spelling of its name, the preset store's: a name is
+  rewritten to it when a preset is loaded (`·` becomes `-`).
+
+Design fixes of 2026-11-17, after the first install on the Pi: the header
+lines up with the content column; meter scales carry six marks that do not
+collide and an unlit bar is plain; the Outputs rows are a column of fixed
+width with a fixed meter; the EQ editor is a pop-up, not a panel beside the
+rows; on System the device facts are label and value on one line in two
+columns, Display and Power keep their button beside the text, file pickers
+look like the other buttons, and each preset row has Run it, Open and a
+"More" menu (Rename, Duplicate, Export, Remove). "Open in Processor" marks
+the saved preset the draft was opened from or saved as, no longer any
+preset that shares the draft's name.
 
 ### Files
 

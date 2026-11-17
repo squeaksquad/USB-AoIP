@@ -3,7 +3,7 @@
 // second (app.mjs, drawMeters). Nothing on this tab changes the device.
 import { esc, pad } from './ui.mjs';
 
-export const SCALE_MARKS = [0, -6, -12, -24, -36, -48, -60];
+export const SCALE_MARKS = [0, -12, -24, -36, -48, -60];
 
 /** S.cards: statusCards(health). S.rows: meterRows(...) with their titles. S.meterNote: why there are no levels, or ''. */
 export function statusView(S) {
