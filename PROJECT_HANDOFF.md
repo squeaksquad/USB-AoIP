@@ -15921,3 +15921,59 @@ to 6, engine work (a ramped monitor block, Dante inputs into the mix, more
 than 16 Dante channels, gate and calibration noise), each under the full
 battery. Stopping after phase 1 is a complete result. The sample rate stays
 off the page.
+
+**IMPLEMENTED 2026-11-16 (Mac side, nothing on the Pi): phase 1 of the page
+redesign, the new page on today's engine, as a change to `web-ui/` only.**
+Branch `web/redesign-phase1`, pull request squeaksquad/USB-AoIP#13, head
+b62d9c4 before this entry. Not installed: the Pi still runs web 1.7.2 and
+applier 1.9.0 with the page as it was. The web service, the applier, the
+compiler, the owner and the preset model (version 2) are not changed.
+
+Three tabs. Status: five cards and three rows of sixteen meters with peak
+hold and a clip light that stays on until cleared. Processor: Outputs
+(name, level, delay, polarity, EQ, On/Off), Routing, Speakers & headphones,
+Bass management, undo and redo, align by distance, new preset and change of
+layout. System: device facts, larger controls, shut down, the presets, the
+last change, logs. A change bar says what is pending and whether it is
+playing already or needs a restart; that split is `liveState`'s shape-key
+answer, not the mockup's. A feature the engine lacks is left out: no
+Control Room, no Sources, no solo.
+
+What works differently from the page before:
+
+- Live edits go only to the running preset that the draft is, matched by
+  name. Before, any draft with the running preset's shape was sent to the
+  engine.
+- Mode and source are off the page: every preset is a processing preset on
+  what the computer sends (`mode: 'dsp'`, `source: 'usb'` written on load),
+  and running without processing is the Direct row in the presets list.
+- Removed: the A/B slots (`profiles.mjs`), the copyable service commands,
+  the pasted log snapshot, the demonstration meters, whole-channel copy and
+  paste (EQ copy and paste stays), "Add speaker bus", and the control for a
+  set's own level (a preset that carries one says so and offers to clear
+  it).
+- Change layout resets the speaker set's level, delay, EQ and bass sends
+  (the existing `applyBusLayout`); the page says so first and Undo restores
+  it.
+
+`install/dev-unit/access.sha256` is re-pinned for the page files only; the
+two binaries and the three units keep their hashes.
+
+Tested off the Pi: `node --test web-ui/*.test.mjs` (168),
+`node --test dsp-compiler/*.test.mjs` (66), the `web-control` Python tests
+(189), `install/test-render.sh` and `install/dev-unit/test-access.sh`, all
+passing. In a browser: standalone, every tab and control and a 375 px wide
+screen; against the real web service run on the Mac with a scripted meter
+file, the Status cards, live meters and System; with the device's answers
+replaced in the page by a stand-in, following the running preset on
+connect, a live edit, Keep changes, Discard, a change of shape, Apply and
+restart audio, Run Direct, running a saved preset, Duplicate, Rename and
+Remove. The applier itself was not exercised, and the AES67 stack's page
+was not viewed.
+
+Owed before ACCEPTED: installing it, which needs `install-access.sh` to
+list web 1.7.2 among the versions it upgrades from (it lists 1.7.0 and
+1.7.1); then the light rule's checks on the Pi: the page's behaviour
+against the real applier, a noise probe at 32, and
+`measure-candidate.sh soak 120 32`. `web-ui/README.md`'s top section
+describes the page and what was checked.
