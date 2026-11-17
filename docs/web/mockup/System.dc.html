@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB-AoIP · System</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="display: flex; flex-direction: column; gap: 24px; color: #E6EDEF; font-family: Inter, system-ui, sans-serif; font-size: 15px">
+<section aria-label="Device" style="padding: 16px 18px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 12px">
+<strong style="font-size: 17px">Device</strong>
+<div style="display: flex; flex-wrap: wrap; gap: 12px 32px">
+<sc-for list="{{sysFacts}}" as="sf" hint-placeholder-count="6">
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 150px">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #A3B3B9">{{sf.label}}</span>
+<strong>{{sf.value}}</strong>
+</div>
+</sc-for>
+</div>
+</section>
+<section aria-label="Display" style="padding: 16px 18px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<strong style="font-size: 17px">Display</strong>
+<span style="font-size: 13px; color: #A3B3B9">Larger controls suit a tablet or touch screen; the page gets taller. This is remembered in this browser only.</span>
+</div>
+<button onClick="{{bigToggle}}" aria-pressed="{{bigOn}}" style="min-height: 44px; padding: 0 16px; background: {{bigBg}}; color: {{bigColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 600">{{bigLabel}}</button>
+</section>
+<section aria-label="Level safety" style="padding: 16px 18px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<strong style="font-size: 17px">Level safety</strong>
+<span style="font-size: 13px; color: #A3B3B9">Limits on the Control Room knobs. They are kept on the device and are not part of a preset.</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px 24px">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 14px">Loudest the knobs can go
+<input type="text" inputmode="decimal" value="{{sf.max.field}}" onFocus="{{sf.max.focus}}" onChange="{{sf.max.type}}" onBlur="{{sf.max.blur}}" onKeyDown="{{sf.max.key}}" style="width: 120px; min-height: 44px; box-sizing: border-box; padding: 0 8px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 15px; font-weight: 600; text-align: center">
+<span style="font-size: 13px; color: #A3B3B9">{{sf.maxNote}}</span>
+</label>
+<div role="group" aria-label="Level at power-up" style="display: flex; flex-direction: column; gap: 4px; font-size: 14px">Level when the device starts
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{sf.boots}}" as="bo" hint-placeholder-count="3">
+<button onClick="{{bo.pick}}" aria-pressed="{{bo.on}}" style="min-height: 44px; padding: 0 14px; background: {{bo.bg}}; color: {{bo.color}}; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 600">{{bo.label}}</button>
+</sc-for>
+<sc-if value="{{sf.bootFixed}}" hint-placeholder-val="{{false}}">
+<input type="text" inputmode="decimal" value="{{sf.bootLvl.field}}" onFocus="{{sf.bootLvl.focus}}" onChange="{{sf.bootLvl.type}}" onBlur="{{sf.bootLvl.blur}}" onKeyDown="{{sf.bootLvl.key}}" aria-label="Fixed start level in dB" style="width: 110px; min-height: 44px; box-sizing: border-box; padding: 0 8px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 15px; font-weight: 600; text-align: center">
+</sc-if>
+</div>
+<span style="font-size: 13px; color: #A3B3B9">{{sf.bootNote}}</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 14px">Reference level
+<button onClick="{{sf.toggleLock}}" aria-pressed="{{sf.lockOn}}" style="align-self: flex-start; min-height: 44px; padding: 0 14px; background: {{sf.lockBg}}; color: {{sf.lockColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 600">{{sf.lockLabel}}</button>
+<span style="font-size: 13px; color: #A3B3B9">When locked, Set and the Reference field in the Control Room do nothing.</span>
+</div>
+</div>
+</section>
+<section aria-label="Actions" style="padding: 16px 18px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px">
+<strong style="font-size: 17px">Actions</strong>
+<span role="status" style="min-height: 22px; font-weight: 600; color: {{sysNoteColor}}">{{sysNote}}</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<sc-for list="{{sysActions}}" as="sa" hint-placeholder-count="6">
+<div style="flex: 1 1 240px; min-width: 0; box-sizing: border-box; padding: 12px 14px; background: #0F1416; border: 1px solid #36474E; border-radius: 10px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: #A3B3B9">{{sa.text}}</span>
+<button onClick="{{sa.run}}" style="align-self: flex-start; margin-top: auto; min-height: 44px; padding: 0 16px; background: {{sa.bg}}; color: {{sa.color}}; border: 1px solid {{sa.border}}; border-radius: 8px; font-size: 14px; font-weight: 700">{{sa.label}}</button>
+</div>
+</sc-for>
+</div>
+</section>
+<section aria-label="Events" style="padding: 16px 18px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 12px">
+<strong style="font-size: 17px">What happened</strong>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+<sc-for list="{{events}}" as="e" hint-placeholder-count="4">
+<li style="display: flex; gap: 16px; padding: 12px 0; border-top: 1px solid #2A373D">
+<span style="flex: 0 0 48px; color: #A3B3B9; font-variant-numeric: tabular-nums">{{e.at}}</span>
+<span style="flex: 1; min-width: 0">{{e.text}}</span>
+</li>
+</sc-for>
+</ol>
+</section>
+<section aria-label="Presets on the device" style="padding: 16px 18px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px">
+<strong style="font-size: 17px">Presets on the device</strong>
+<label style="min-height: 44px; padding: 0 14px; display: flex; align-items: center; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer">Import a preset file
+<input type="file" accept=".json,application/json" onChange="{{presetImport}}" style="position: absolute; width: 1px; height: 1px; opacity: 0">
+</label>
+</div>
+<sc-if value="{{hasPresetNote}}" hint-placeholder-val="{{false}}">
+<span role="status" style="color: #7EDAC4; font-weight: 600">{{presetNote}}</span>
+</sc-if>
+<sc-for list="{{sysPresets}}" as="sp2" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 44px; padding: 8px 0; border-top: 1px solid #2A373D">
+<span style="flex: 1 1 200px"><strong>{{sp2.name}}</strong> <span style="color: #7EDAC4; font-weight: 600">{{sp2.tag}}</span> <span style="font-size: 13px; color: #A3B3B9">{{sp2.note}}</span></span>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-if value="{{sp2.canRun}}" hint-placeholder-val="{{false}}">
+<button onClick="{{sp2.run}}" style="min-height: 44px; padding: 0 14px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 600">Run it</button>
+</sc-if>
+<sc-if value="{{sp2.canEdit}}" hint-placeholder-val="{{true}}">
+<button onClick="{{sp2.rename}}" aria-label="{{sp2.renameAria}}" style="min-height: 44px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">Rename</button>
+<button onClick="{{sp2.dup}}" aria-label="{{sp2.dupAria}}" style="min-height: 44px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">Duplicate</button>
+<button onClick="{{sp2.exp}}" aria-label="{{sp2.expAria}}" style="min-height: 44px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">Export</button>
+</sc-if>
+<sc-if value="{{sp2.canRemove}}" hint-placeholder-val="{{false}}">
+<button onClick="{{sp2.remove}}" style="min-height: 44px; padding: 0 14px; background: transparent; color: #FFB3A6; border: 1px solid #7A4A44; border-radius: 8px; font-size: 14px; font-weight: 600">Remove</button>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</section>
+<section aria-label="Logs" style="padding: 16px 18px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px">
+<strong style="font-size: 17px">Service logs</strong>
+<button onClick="{{logCopy}}" style="min-height: 44px; padding: 0 14px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 600">{{logCopyLabel}}</button>
+</div>
+<div style="overflow-x: auto; padding: 10px 12px; background: #0F1416; border: 1px solid #2A373D; border-radius: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.6; white-space: pre">{{logText}}</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"v":{"editor":null,"default":null},"$preview":{"width":1232,"height":1100}}'>
+class Component extends DCLogic {
+renderVals() {
+return this.props.v || {};
+}
+}
+</script>
+</body>
+</html>

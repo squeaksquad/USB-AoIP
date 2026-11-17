@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB-AoIP · Processor · Bass management</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="display: flex; flex-direction: column; gap: 24px; color: #E6EDEF; font-family: Inter, system-ui, sans-serif; font-size: 15px">
+<section aria-label="Bass management" style="padding: 10px 14px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<strong style="font-size: 17px">Bass management</strong>
+<span style="font-size: 13px; color: #A3B3B9">{{bassTitle}}</span>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-size: 13px; color: #8CC4FF; font-weight: 600">Needs a restart</span>
+<button onClick="{{toggleBass}}" aria-pressed="{{bassOn}}" style="min-height: 32px; padding: 0 16px; background: {{bassOnBg}}; color: {{bassOnColor}}; border: 1px solid {{bassOnBorder}}; border-radius: 8px; font-size: 14px; font-weight: 700">{{bassOnLabel}}</button>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 20px">
+<sc-for list="{{bassFields}}" as="bf" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #A3B3B9">{{bf.label}} <span style="color: {{hintColor}}; font-weight: 600">· {{liveTag}}</span></span>
+<div style="display: flex; align-items: center; gap: 8px">
+<button onClick="{{bf.down}}" aria-label="{{bf.downLabel}}" style="min-width: 44px; min-height: 32px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 18px; font-weight: 600">−</button>
+<input type="text" inputmode="decimal" value="{{bf.field}}" onFocus="{{bf.focus}}" onChange="{{bf.type}}" onBlur="{{bf.blur}}" onKeyDown="{{bf.key}}" aria-label="{{bf.inputLabel}}" style="width: 92px; min-height: 32px; box-sizing: border-box; padding: 0 4px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 14px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums">
+<button onClick="{{bf.up}}" aria-label="{{bf.upLabel}}" style="min-width: 44px; min-height: 32px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 18px; font-weight: 600">+</button>
+</div>
+</div>
+</sc-for>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #A3B3B9">Crossover slope <span style="color: #8CC4FF; font-weight: 600">· needs a restart</span></span>
+<div role="group" aria-label="Crossover slope" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{slopes}}" as="sl" hint-placeholder-count="3">
+<button onClick="{{sl.pick}}" aria-pressed="{{sl.on}}" style="min-height: 32px; padding: 0 14px; background: {{sl.bg}}; color: {{sl.color}}; border: 1px solid {{sl.border}}; border-radius: 8px; font-size: 14px; font-weight: 600">{{sl.label}}</button>
+</sc-for>
+</div>
+</div>
+</div>
+<sc-if value="{{subModeOpen}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid #2A373D">
+<span style="font-size: 13px; color: #A3B3B9">How this set's subwoofers are fed <span style="color: #8CC4FF; font-weight: 600">· needs a restart</span></span>
+<div role="group" aria-label="How the subwoofers are fed" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{subModeBtns}}" as="sb" hint-placeholder-count="2">
+<button onClick="{{sb.pick}}" aria-pressed="{{sb.on}}" style="min-height: 32px; padding: 0 14px; background: {{sb.bg}}; color: {{sb.color}}; border: 1px solid {{sb.border}}; border-radius: 8px; font-size: 14px; font-weight: 600">{{sb.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid #2A373D">
+<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px 16px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<strong>Speakers and sub feeds</strong>
+<span style="font-size: 13px; color: #A3B3B9">One row per source. Crossover frequencies and send levels are <span style="color: {{hintColor}}; font-weight: 600">{{liveTag}}</span>; switching a high-pass or a send on or off <span style="color: #8CC4FF; font-weight: 600">needs a restart</span>. Type a level into a send, or type off. With the high-pass off a speaker plays full range and still sends its bass to the subs.</span>
+</div>
+<sc-if value="{{bassSeparate}}" hint-placeholder-val="{{true}}">
+<button onClick="{{allSendsOn}}" style="flex: 0 0 auto; min-height: 32px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">Turn every send on</button>
+</sc-if>
+</div>
+<div style="overflow-x: auto">
+<div role="table" aria-label="Speakers and sub feeds" style="display: flex; flex-direction: column; gap: 3px; min-width: min-content">
+<div role="row" style="display: flex; align-items: flex-end; gap: 6px; padding-bottom: 3px; border-bottom: 1px solid #2A373D; font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: #A3B3B9">
+<span role="columnheader" style="flex: 0 0 64px">Source</span>
+<span role="columnheader" style="flex: 0 0 84px; text-align: center">Crossover</span>
+<span role="columnheader" style="flex: 0 0 96px; text-align: center">High-pass</span>
+<span aria-hidden="true" style="flex: 0 0 13px; margin-right: 6px"></span>
+<sc-for list="{{bassCols}}" as="sh" hint-placeholder-count="2">
+<span role="columnheader" style="flex: 0 0 84px; text-align: center; font-size: 13px; color: #8CC4FF">{{sh.t}}</span>
+</sc-for>
+</div>
+<sc-for list="{{bassRows}}" as="br" hint-placeholder-count="8">
+<div role="row" style="display: flex; align-items: center; gap: 6px">
+<strong role="rowheader" style="flex: 0 0 64px; font-size: 14px; color: {{br.color}}">{{br.label}}</strong>
+<sc-if value="{{br.isSpk}}" hint-placeholder-val="{{true}}">
+<input type="text" inputmode="decimal" value="{{br.sx.field}}" onFocus="{{br.sx.focus}}" onChange="{{br.sx.type}}" onBlur="{{br.sx.blur}}" onKeyDown="{{br.sx.key}}" aria-label="{{br.sx.inputLabel}}" style="flex: 0 0 84px; width: 84px; min-height: 32px; box-sizing: border-box; padding: 0 4px; background: #0F1416; color: #E6EDEF; border: 2px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 13px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums">
+<button onClick="{{br.sx.toggleHp}}" aria-pressed="{{br.sx.hpOn}}" aria-label="{{br.sx.hpAria}}" style="flex: 0 0 96px; min-height: 32px; padding: 0 4px; background: {{br.sx.hpBg}}; color: {{br.sx.hpColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 13px; font-weight: 600">{{br.sx.hpShort}}</button>
+</sc-if>
+<sc-if value="{{br.isLfe}}" hint-placeholder-val="{{false}}">
+<span style="flex: 0 0 186px; height: 32px; line-height: 32px; text-align: center; font-size: 13px; color: #A3B3B9; white-space: nowrap">{{br.lfeText}}</span>
+</sc-if>
+<span aria-hidden="true" style="flex: 0 0 13px; align-self: stretch; box-sizing: border-box; border-right: 1px solid #2A373D; margin-right: 6px"></span>
+<sc-for list="{{br.cells}}" as="mc" hint-placeholder-count="2">
+<input type="text" inputmode="decimal" value="{{mc.field}}" onFocus="{{mc.focus}}" onChange="{{mc.type}}" onBlur="{{mc.blur}}" onKeyDown="{{mc.key}}" aria-label="{{mc.label}}" style="flex: 0 0 84px; width: 84px; box-sizing: border-box; min-height: 32px; padding: 0 2px; text-align: center; font-family: inherit; background: {{mc.bg}}; color: {{mc.color}}; border: 2px solid {{mc.border}}; border-radius: 8px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums">
+</sc-for>
+<sc-for list="{{br.fixed}}" as="fx" hint-placeholder-count="0">
+<span style="flex: 0 0 84px; text-align: center; font-size: 13px; font-weight: 600; color: #A3B3B9; font-variant-numeric: tabular-nums">{{fx.t}}</span>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+<sc-if value="{{bassSameNote}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 13px; color: #A3B3B9">{{bassText}} Choose separate sub feeds to set a level for each send.</span>
+</sc-if>
+<sc-if value="{{cellOpen}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 10px; background: #0F1416; border: 1px solid #7EDAC4; border-radius: 8px">
+<strong style="flex: 1 1 140px">{{cellName}}</strong>
+<button onClick="{{toggleCell}}" aria-pressed="{{cellOn}}" style="min-width: 64px; min-height: 32px; padding: 0 14px; background: {{cellOnBg}}; color: {{cellOnColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 700">{{cellOnLabel}}</button>
+<button onClick="{{cellDown}}" aria-label="Lower this send by 0.5 dB" style="min-width: 44px; min-height: 32px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 18px; font-weight: 600">−</button>
+<input type="text" inputmode="decimal" value="{{cf.field}}" onFocus="{{cf.focus}}" onChange="{{cf.type}}" onBlur="{{cf.blur}}" onKeyDown="{{cf.key}}" aria-label="Send level in dB" style="width: 92px; min-height: 32px; box-sizing: border-box; padding: 0 4px; background: #172024; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 14px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums">
+<button onClick="{{cellUp}}" aria-label="Raise this send by 0.5 dB" style="min-width: 44px; min-height: 32px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 18px; font-weight: 600">+</button>
+</div>
+</sc-if>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"v":{"editor":null,"default":null},"$preview":{"width":1232,"height":700}}'>
+class Component extends DCLogic {
+renderVals() {
+return this.props.v || {};
+}
+}
+</script>
+</body>
+</html>

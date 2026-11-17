@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB-AoIP · Status</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="display: flex; flex-direction: column; gap: 24px; color: #E6EDEF; font-family: Inter, system-ui, sans-serif; font-size: 15px">
+<sc-if value="{{clockFault}}" hint-placeholder-val="{{false}}">
+<section role="alert" style="padding: 16px 20px; border: 1px solid #FF9A8A; border-radius: 10px; background: #2A1917; display: flex; flex-direction: column; gap: 6px">
+<strong style="color: #FFB3A6; font-size: 16px">Problem: no clock leader on the network</strong>
+<span>Audio cannot pass until one Dante device is the clock leader. In Dante Controller, open Clock Status and tick Preferred Leader on one device.</span>
+</section>
+</sc-if>
+
+<section aria-label="Device state" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px">
+<sc-for list="{{cards}}" as="c" hint-placeholder-count="5">
+<div style="flex: 1 1 200px; min-width: 0; padding: 16px 18px; background: #172024; border: 1px solid {{c.border}}; border-radius: 10px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #A3B3B9">{{c.label}}</span>
+<strong style="font-size: 20px">{{c.value}}</strong>
+<span style="font-size: 13px; color: #A3B3B9">{{c.detail}}</span>
+<span style="font-size: 13px; font-weight: 600; color: {{c.stateColor}}">{{c.state}}</span>
+</div>
+</sc-for>
+</section>
+
+<section aria-label="Meters" style="display: flex; flex-direction: column; gap: 16px">
+<sc-for list="{{meterRows}}" as="row" hint-placeholder-count="3">
+<div style="padding: 16px 18px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px">
+<strong>{{row.title}}</strong>
+<span style="font-size: 13px; color: #A3B3B9">{{row.note}}</span>
+</div>
+<sc-if value="{{row.hasAudio}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; gap: 8px">
+<div aria-hidden="true" style="position: relative; flex: 0 0 26px; height: 120px; margin-top: 10px">
+<sc-for list="{{scaleMarks}}" as="m" hint-placeholder-count="6">
+<span style="position: absolute; right: 0; top: {{m.top}}%; transform: translateY(-50%); font-size: 12px; line-height: 1; color: #A3B3B9; font-variant-numeric: tabular-nums">{{m.t}}</span>
+</sc-for>
+</div>
+<div style="flex: 1; min-width: 0; display: grid; grid-template-columns: repeat({{row.cols}}, minmax(0, 1fr)); gap: {{row.gap}}px">
+<sc-for list="{{row.bars}}" as="b" hint-placeholder-count="16">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+<div style="width: {{row.bw}}px; height: 6px; background: {{b.over}}"></div>
+<div style="position: relative; width: {{row.bw}}px; height: 120px; background: #26343A">
+<div style="position: absolute; inset: 0; background: linear-gradient(to top, #00B418 0%, #00D600 47%, #8CE000 54%, #FFF000 62.3%, #FF9800 80%, #FF2A00 90%, #E00000 100%); clip-path: inset({{b.clip}}% 0 0 0)"></div>
+<div style="position: absolute; inset: 0; background: repeating-linear-gradient(to top, transparent 0 3px, #172024 3px 4px)"></div>
+</div>
+<span style="font-size: 12px; color: #A3B3B9">{{b.n}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{row.silent}}" hint-placeholder-val="{{false}}">
+<div style="padding: 22px 0; color: #A3B3B9; font-size: 14px">{{row.silentText}}</div>
+</sc-if>
+</div>
+</sc-for>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"v":{"editor":null,"default":null},"$preview":{"width":1232,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return this.props.v || {};
+}
+}
+</script>
+</body>
+</html>

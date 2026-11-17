@@ -1,0 +1,1798 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB-AoIP control page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1416}
+.big button,.big input[type=text],.big select{min-height:44px !important}
+.big .dense button,.big .dense input,.big .cr-map button{min-height:0 !important}
+.cr-narrow-only{display:none}
+@media (max-width:980px){.cr-map.cr-auto{display:none !important}.cr-narrow-only{display:inline-block}.cr-side{flex:1 1 100% !important}}
+a{color:#7EDAC4}a:hover{color:#A8EBDB}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid #7EDAC4;outline-offset:2px}
+</style>
+</helmet>
+<div class="{{rootCls}}" onKeyDown="{{rootKey}}" style="min-height: 100vh; display: flex; flex-direction: column; background: #0F1416; color: #E6EDEF; font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.45">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 12px 24px; border-bottom: 1px solid #2A373D; background: #131A1D">
+<div style="display: flex; flex-direction: column">
+<strong style="font-size: 18px; letter-spacing: 0.2px">USB-AoIP</strong>
+<span style="font-size: 12px; color: #A3B3B9">16 in, 16 out</span>
+</div>
+<nav aria-label="Pages" style="display: flex; gap: 4px; flex: 1 1 auto">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+<button onClick="{{t.go}}" aria-current="{{t.current}}" style="min-height: 44px; padding: 0 16px; background: {{t.bg}}; color: {{t.color}}; border: 0; border-bottom: 2px solid {{t.line}}; border-radius: 6px 6px 0 0; font-size: 15px; font-weight: 600">{{t.label}}</button>
+</sc-for>
+</nav>
+<div role="status" style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid {{pillColor}}; border-radius: 999px; font-size: 13px; font-weight: 600; color: {{pillColor}}">
+<svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="{{pillColor}}"></circle></svg>
+<span>{{pillText}}</span>
+</div>
+</header>
+
+<main style="flex: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+<sc-if value="{{devOff}}" hint-placeholder-val="{{false}}">
+<section role="alert" style="padding: 16px 20px; border: 1px solid #F2B366; border-radius: 10px; background: #2A2216; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px">
+<strong style="color: #F2B366; font-size: 16px">{{devOffText}}</strong>
+<sc-if value="{{devOffCanPower}}" hint-placeholder-val="{{false}}">
+<button onClick="{{devPowerOn}}" style="min-height: 44px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">Power it back on (mockup only)</button>
+</sc-if>
+</section>
+</sc-if>
+<sc-if value="{{isStatus}}" hint-placeholder-val="{{true}}">
+<dc-import name="Status" v="{{vals}}" hint-size="100%,600px"></dc-import>
+</sc-if>
+
+<sc-if value="{{isControl}}" hint-placeholder-val="{{false}}">
+<dc-import name="ControlRoom" v="{{vals}}" hint-size="100%,600px"></dc-import>
+</sc-if>
+<sc-if value="{{isProcessor}}" hint-placeholder-val="{{false}}">
+<section style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 16px 18px; background: #172024; border: 1px solid #2A373D; border-radius: 10px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #A3B3B9">Running on the device</span>
+<strong style="font-size: 20px">{{runningName}}</strong>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #A3B3B9">Editing</span>
+<strong style="font-size: 20px">{{draftName}}</strong>
+<span style="font-size: 13px; font-weight: 600; color: {{hintColor}}">{{draftNote}}</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{undo}}" aria-label="Undo the last preset change" title="Undo (Cmd or Ctrl + Z)" style="min-height: 44px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600; opacity: {{undoOp}}">Undo</button>
+<button onClick="{{redo}}" aria-label="Redo the change you undid" title="Redo (Shift + Cmd or Ctrl + Z)" style="min-height: 44px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600; opacity: {{redoOp}}">Redo</button>
+<button onClick="{{openLayoutEdit}}" style="min-height: 44px; padding: 0 16px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">Change speaker layout</button>
+<button onClick="{{openChooser}}" style="min-height: 44px; padding: 0 16px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">New preset</button>
+</div>
+</section>
+
+<sc-if value="{{chooserOpen}}" hint-placeholder-val="{{false}}">
+<dc-import name="Chooser" v="{{vals}}" hint-size="100%,600px"></dc-import>
+</sc-if>
+<sc-if value="{{ptabsOpen}}" hint-placeholder-val="{{true}}">
+<nav aria-label="Processor sections" style="display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #2A373D">
+<sc-for list="{{ptabs}}" as="pt" hint-placeholder-count="3">
+<button onClick="{{pt.go}}" aria-current="{{pt.current}}" style="min-height: 44px; padding: 0 16px; background: {{pt.bg}}; color: {{pt.color}}; border: 0; border-bottom: 2px solid {{pt.line}}; border-radius: 6px 6px 0 0; font-size: 15px; font-weight: 600">{{pt.label}}</button>
+</sc-for>
+</nav>
+</sc-if>
+<sc-if value="{{bassPickOpen}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="Speaker bus" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+<span style="font-size: 13px; color: #A3B3B9">Bass management for</span>
+<sc-for list="{{bassPicks}}" as="bp" hint-placeholder-count="2">
+<button onClick="{{bp.pick}}" aria-pressed="{{bp.on}}" style="min-height: 44px; padding: 0 16px; background: {{bp.bg}}; color: {{bp.color}}; border: 1px solid {{bp.border}}; border-radius: 8px; font-size: 14px; font-weight: 600">{{bp.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{bassEmpty}}" hint-placeholder-val="{{false}}">
+<section style="padding: 20px 18px; border: 1px dashed #4A5D65; border-radius: 10px; display: flex; flex-direction: column; gap: 4px">
+<strong>{{bassEmptyTitle}}</strong>
+<span style="color: #A3B3B9">{{bassEmptyText}}</span>
+</section>
+</sc-if>
+<sc-if value="{{showSources}}" hint-placeholder-val="{{false}}">
+<dc-import name="Sources" v="{{vals}}" hint-size="100%,600px"></dc-import>
+</sc-if>
+<sc-if value="{{showRouting}}" hint-placeholder-val="{{false}}">
+<dc-import name="Routing" v="{{vals}}" hint-size="100%,600px"></dc-import>
+</sc-if>
+<sc-if value="{{showBuses}}" hint-placeholder-val="{{false}}">
+<dc-import name="Buses" v="{{vals}}" hint-size="100%,500px"></dc-import>
+</sc-if>
+<sc-if value="{{showBass}}" hint-placeholder-val="{{false}}">
+<dc-import name="Bass" v="{{vals}}" hint-size="100%,600px"></dc-import>
+</sc-if>
+<sc-if value="{{editorOpen}}" hint-placeholder-val="{{true}}">
+<dc-import name="Outputs" v="{{vals}}" hint-size="100%,600px"></dc-import>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{isSystem}}" hint-placeholder-val="{{false}}">
+<dc-import name="System" v="{{vals}}" hint-size="100%,600px"></dc-import>
+</sc-if>
+
+</main>
+
+<sc-if value="{{nameDlgOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box">
+<div role="dialog" aria-modal="true" aria-label="{{nameDlgTitle}}" style="width: 460px; max-width: 100%; box-sizing: border-box; padding: 20px; background: #172024; border: 1px solid #7EDAC4; border-radius: 12px; display: flex; flex-direction: column; gap: 12px">
+<strong style="font-size: 20px">{{nameDlgTitle}}</strong>
+<span style="color: #A3B3B9">{{nameDlgText}}</span>
+<input type="text" value="{{nameDlgVal}}" onChange="{{nameDlgType}}" onKeyDown="{{nameDlgKey}}" maxlength="32" aria-label="Preset name" style="min-height: 44px; box-sizing: border-box; padding: 0 10px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 16px; font-weight: 600">
+<span role="alert" style="min-height: 20px; color: #FFB3A6; font-weight: 600">{{nameDlgErr}}</span>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{nameDlgGo}}" style="min-height: 44px; padding: 0 18px; background: #7EDAC4; color: #0F1416; border: 1px solid #7EDAC4; border-radius: 8px; font-size: 15px; font-weight: 700">{{nameDlgBtn}}</button>
+<button onClick="{{nameDlgCancel}}" style="min-height: 44px; padding: 0 18px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 15px; font-weight: 600">Cancel</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{sysDlgOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box">
+<div role="alertdialog" aria-modal="true" aria-label="{{sysDlgTitle}}" style="width: 460px; max-width: 100%; max-height: 100%; overflow-y: auto; box-sizing: border-box; padding: 20px; background: #172024; border: 1px solid {{sysDlgBorder}}; border-radius: 12px; display: flex; flex-direction: column; gap: 14px">
+<strong style="font-size: 20px">{{sysDlgTitle}}</strong>
+<span style="color: #A3B3B9">{{sysDlgText}}</span>
+<sc-if value="{{sysDlgPw}}" hint-placeholder-val="{{false}}">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #A3B3B9">New password, at least 8 characters
+<input type="password" value="{{pw1}}" onChange="{{pw1Type}}" autocomplete="new-password" style="min-height: 44px; box-sizing: border-box; padding: 0 10px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 15px">
+</label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #A3B3B9">New password again
+<input type="password" value="{{pw2}}" onChange="{{pw2Type}}" autocomplete="new-password" style="min-height: 44px; box-sizing: border-box; padding: 0 10px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 15px">
+</label>
+<span role="alert" style="min-height: 20px; color: #FFB3A6; font-weight: 600">{{pwErr}}</span>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{sysDlgGo}}" style="min-height: 44px; padding: 0 18px; background: {{sysDlgBtnBg}}; color: #0F1416; border: 1px solid {{sysDlgBtnBg}}; border-radius: 8px; font-size: 15px; font-weight: 700">{{sysDlgBtn}}</button>
+<button onClick="{{sysDlgCancel}}" style="min-height: 44px; padding: 0 18px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 15px; font-weight: 600">Cancel</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{expOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box">
+<div role="dialog" aria-modal="true" aria-label="Export EQ" style="width: 560px; max-width: 100%; max-height: 100%; overflow-y: auto; box-sizing: border-box; padding: 20px; background: #172024; border: 1px solid #7EDAC4; border-radius: 12px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<strong style="font-size: 20px">Export EQ</strong>
+<button onClick="{{expClose}}" style="min-height: 44px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">Close</button>
+</div>
+<sc-if value="{{expHasScope}}" hint-placeholder-val="{{true}}">
+<div role="group" aria-label="What to export" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{expScopes}}" as="es" hint-placeholder-count="3">
+<button onClick="{{es.pick}}" aria-pressed="{{es.on}}" style="min-height: 44px; padding: 0 16px; background: {{es.bg}}; color: {{es.color}}; border: 1px solid {{es.border}}; border-radius: 8px; font-size: 14px; font-weight: 600">{{es.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<span style="color: #A3B3B9">{{expSummary}}</span>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #A3B3B9">What goes in the file
+<textarea rows="9" readonly value="{{expText}}" onChange="{{expNoop}}" style="box-sizing: border-box; width: 100%; padding: 8px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: ui-monospace, Menlo, monospace; font-size: 12px"></textarea>
+</label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #A3B3B9">File name
+<input type="text" value="{{expName}}" onChange="{{expNameType}}" style="min-height: 44px; box-sizing: border-box; width: 100%; padding: 0 10px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 15px">
+</label>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<button onClick="{{expDownload}}" style="min-height: 44px; padding: 0 18px; background: #7EDAC4; color: #0F1416; border: 1px solid #7EDAC4; border-radius: 8px; font-size: 15px; font-weight: 700">Download</button>
+<span style="font-size: 13px; color: #A3B3B9">Saves as {{expFile}}</span>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{barOpen}}" hint-placeholder-val="{{false}}">
+<div role="region" aria-label="Pending changes" style="position: sticky; bottom: 0; z-index: 30; border-top: 1px solid #36474E; background: #1B262B; padding: 14px 24px">
+<div style="max-width: 1280px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px">
+
+<sc-if value="{{barEditing}}" hint-placeholder-val="{{true}}">
+<div role="status" style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 280px; min-width: 0">
+<sc-if value="{{hasLive}}" hint-placeholder-val="{{true}}">
+<span><strong style="color: #7EDAC4">{{liveText}}</strong> playing now, not saved yet</span>
+</sc-if>
+<sc-if value="{{hasRestart}}" hint-placeholder-val="{{false}}">
+<span><strong style="color: #8CC4FF">{{restartText}}</strong> not applied: needs a restart, about 3 seconds of silence</span>
+</sc-if>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{discard}}" style="min-height: 44px; padding: 0 18px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 15px; font-weight: 600">Discard</button>
+<sc-if value="{{canKeep}}" hint-placeholder-val="{{true}}">
+<button onClick="{{keep}}" style="min-height: 44px; padding: 0 18px; background: #7EDAC4; color: #0F1416; border: 1px solid #7EDAC4; border-radius: 8px; font-size: 15px; font-weight: 700">Keep changes</button>
+<button onClick="{{saveAs}}" style="min-height: 44px; padding: 0 18px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 15px; font-weight: 600">Save as…</button>
+</sc-if>
+<sc-if value="{{hasRestart}}" hint-placeholder-val="{{false}}">
+<button onClick="{{apply}}" style="min-height: 44px; padding: 0 18px; background: #7EDAC4; color: #0F1416; border: 1px solid #7EDAC4; border-radius: 8px; font-size: 15px; font-weight: 700">Apply and restart audio</button>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{barApplying}}" hint-placeholder-val="{{false}}">
+<ol role="status" style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 28px">
+<sc-for list="{{steps}}" as="st" hint-placeholder-count="3">
+<li style="display: flex; flex-direction: column">
+<span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: {{st.color}}">{{st.mark}}</span>
+<span style="color: {{st.textColor}}">{{st.label}}</span>
+</li>
+</sc-for>
+</ol>
+</sc-if>
+
+<sc-if value="{{barDone}}" hint-placeholder-val="{{false}}">
+<span role="status" style="flex: 1 1 280px"><strong style="color: #7EDAC4">{{doneText}}</strong></span>
+<button onClick="{{dismiss}}" style="min-height: 44px; padding: 0 18px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 15px; font-weight: 600">Dismiss</button>
+</sc-if>
+
+</div>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"scenario":{"editor":"enum","options":["Healthy","No clock leader","Computer idle"],"default":"Healthy"},"setup":{"editor":"enum","options":["7.2.4 room","5.1 with alt speakers"],"default":"7.2.4 room"},"$preview":{"width":1360,"height":1080}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+var zeros = [], offs = [];
+var eq = [], FREQ = [25, 40, 63, 100, 160, 250, 400, 630, 1000, 1600, 2500, 4000, 6300, 10000, 14000, 18000];
+for (var i = 0; i < 16; i++) {
+zeros.push(0); offs.push(false);
+eq.push(FREQ.map(function (f) { return { f: f, g: 0, q: 1, t: 'bell', on: true }; }));
+if (i < 2) { eq[i][3].g = -3; eq[i][3].q = 2; eq[i][10].g = 2; eq[i][10].q = 1.5; }
+}
+this.FREQ = FREQ;
+this.seq = 0;
+this.LAYOUTS = {
+main: { label: 'Main room', inputs: this.padInputs(['L', 'R', 'C', 'LFE', 'Ls', 'Rs', 'Lrs', 'Rrs', 'Ltf', 'Rtf', 'Ltr', 'Rtr']), subs: 2, mode: 'separate', speakers: [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11], subsIdx: [3, 12], names: ['L', 'R', 'C', 'Sub 1', 'Ls', 'Rs', 'Lrs', 'Rrs', 'Ltf', 'Rtf', 'Ltr', 'Rtr', 'Sub 2', 'Out 14', 'Out 15', 'Out 16'],
+buses: [{ id: 'spk', kind: 'speakers', label: 'Speakers', outs: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], mode: '', gain: 0, mute: false }, { id: 'hp1', kind: 'phones', label: 'Headphones', outs: [14, 15], mode: 'downmix', gain: 0, mute: false, linkEq: true }] },
+blank: { label: 'blank', inputs: this.padInputs([]), subs: 0, mode: 'same', speakers: [], subsIdx: [], buses: [], names: this.padNames([]) }
+};
+this.LAYOUTS.main.buses[1].mix = this.fillMix(this.LAYOUTS.main.inputs, 'downmix');
+var altIn = this.padInputs(['L', 'R', 'C', 'LFE', 'Ls', 'Rs']);
+this.LAYOUTS.alt = { label: 'Studio B', keep: 'Studio B', inputs: altIn, subs: 1, mode: 'same', speakers: [0, 1, 2, 4, 5], subsIdx: [3], names: ['L', 'R', 'C', 'Sub', 'Ls', 'Rs', 'Out 7', 'Out 8', 'Out 9', 'Out 10', 'Out 11', 'Out 12', 'Out 13', 'Out 14', 'Out 15', 'Out 16'],
+buses: [{ id: 'spk', kind: 'speakers', label: 'Main 5.1', outs: [0, 1, 2, 3, 4, 5], mode: '', gain: 0, mute: false },
+{ id: 'alt', kind: 'speakers', extra: true, num: 2, label: 'Alt 2.1', outs: [6, 7], spk: [6, 7], subs: [], subShare: true, subMode: 'same', names: ['L 2', 'R 2'], mode: '', gain: 0, mute: false },
+{ id: 'hp1', kind: 'phones', label: 'Headphones 1', outs: [8, 9], mode: 'downmix', gain: 0, mute: false, linkEq: true, mix: this.fillMix(altIn, 'downmix') },
+{ id: 'hp2', kind: 'phones', label: 'Headphones 2', outs: [10, 11], mode: 'downmix', gain: 0, mute: false, linkEq: true, mix: this.fillMix(altIn, 'downmix') }] };
+this.LAYOUTS.alt.src = this.srcFor(this.LAYOUTS.alt); this.LAYOUTS.alt.src[6] = 0; this.LAYOUTS.alt.src[7] = 1;
+this.LAYOUTS.main.src = this.srcFor(this.LAYOUTS.main);
+this.LAYOUTS.blank.src = this.srcFor(this.LAYOUTS.blank);
+var bass0 = this.freshBass(this.LAYOUTS.main, true);
+var cfg0 = { h: 7, v: 4, subs: 2, mode: 'same', hp: 0, hpMode: 'downmix' };
+cfg0.map = this.reconcile([], this.cfgNames(cfg0));
+this.COLORS = ['#f39364', '#e6b35c', '#d9d464', '#add875', '#6bdaa3', '#65d5c8', '#68b8eb', '#849af3', '#aa92ec', '#cd8ee0', '#e486b9', '#ed8694', '#c6ac83', '#95b9aa', '#a6add5', '#b6c878'];
+this.lastY = 0;
+this.drag = null;
+var io0 = { ext: [this.newSrc('x0', 'Second computer', 16)], busUsb: {}, dout: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], uin: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] };
+this.state = {
+tab: 'status',
+eq: eq, baseEq: JSON.parse(JSON.stringify(eq)), eqCh: null, band: 0,
+eqBypass: false, baseEqBypass: false, confirmAll: false,
+solos: offs.slice(), gainEdit: null, outView: 'rows', groups: [], grpEdit: null, crPost: false, crMapOpen: false, histN: 0, futN: 0, keysOpen: false, refOpen: {}, big: false, cal: { open: false, on: false, band: 'full', spk: null }, safety: { max: 0, boot: 'last', bootLvl: -30, lock: false }, clipLatch: {}, busOpen: null, srcSel: 'x0', srcAdv: false, routeOpen: {}, crMute: offs.slice(), cr: { lvl: {}, dim: {}, mute: {}, sel: {}, cue: {}, sum: {}, fold: {}, follow: {}, bypass: false, ab: null, talk: false, talkCh: 63, ref: {}, refNote: {}, trim: {} }, io: io0, baseIo: JSON.parse(JSON.stringify(io0)),
+layout: 'main', baseLayout: 'main', runningName: 'Main room', chooser: false, chooserEdit: false,
+layouts: this.LAYOUTS, cfg: cfg0, cfgPick: null,
+buses: JSON.parse(JSON.stringify(this.LAYOUTS.main.buses)), baseBuses: JSON.parse(JSON.stringify(this.LAYOUTS.main.buses)),
+bassAll: { spk: bass0 }, baseBassAll: { spk: JSON.parse(JSON.stringify(bass0)) }, bassBus: 'spk', cell: null, bfEdit: null, ptab: 'outputs', mixOpen: null, mixCell: null, imp: null, impNote: '', exp: null, rcell: null, rrow: null, rtype: null,
+sysConfirm: null, sysNote: '', sysBusy: false, devOff: false, devOffText: '', devOffCanPower: false, saved: ['Main room', 'Studio B', 'Late night'], pw1: '', pw2: '', pwErr: '', copied: false, upText: '3 days 4 hours',
+perm: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], basePerm: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+spkSrc: this.LAYOUTS.main.src.slice(), baseSpkSrc: this.LAYOUTS.main.src.slice(),
+gains: zeros.slice(), baseGains: zeros.slice(), delays: zeros.slice(), baseDelays: zeros.slice(), pol: offs.slice(), basePol: offs.slice(), align: null, nameDlg: null,
+mutes: offs.slice(), baseMutes: offs.slice(),
+slope: 24, baseSlope: 24,
+bar: 'idle', step: 0, doneText: '',
+events: [
+{ at: '09:12', text: 'Audio restarted after the rate change (3 seconds of silence).' },
+{ at: '09:12', text: 'Sample rate changed from 96 kHz to 48 kHz, from the computer.' },
+{ at: '08:55', text: 'Audio restarted by the start check: packets from the network were being lost.' },
+{ at: '08:54', text: 'Device started.' }
+]
+};
+this.timers = [];
+}
+componentWillUnmount() { this.timers.forEach(clearTimeout); if (this.kEnd) this.kEnd(); }
+now() { return new Date().toTimeString().slice(0, 5); }
+log(text) { return [{ at: this.now(), text: text }].concat(this.state.events); }
+setGain(i, d) {
+if (this.state.bar === 'applying') return;
+var g = this.state.gains.slice();
+g[i] = Math.max(-24, Math.min(12, Math.round((g[i] + d) * 10) / 10));
+this.setState({ gains: g, bar: 'idle' });
+}
+eqLevel(bands) {
+if (!bands.some(function (b) { return b.g && b.on; })) return 0;
+var sum = 0, n = 24;
+for (var k = 0; k < n; k++) sum += Math.pow(10, this.resp(bands, 20 * Math.pow(1000, (k + 0.5) / n)) / 10);
+return 10 * Math.log10(sum / n);
+}
+toggleMute(i) {
+if (this.state.bar === 'applying') return;
+var m = this.state.mutes.slice();
+m[i] = !m[i];
+this.setState({ mutes: m, bar: 'idle' });
+}
+eqChanged(i) { return JSON.stringify(this.state.eq[i]) !== JSON.stringify(this.state.baseEq[i]); }
+setBand(ch, bi, patch) {
+if (this.state.bar === 'applying') return;
+var eq = JSON.parse(JSON.stringify(this.state.eq)), b = eq[ch][bi];
+if (patch.t) b.t = patch.t;
+if (patch.on !== undefined) b.on = patch.on;
+if (patch.fMul) patch.f = b.f * patch.fMul;
+if (patch.gAdd) patch.g = b.g + patch.gAdd;
+if (patch.qMul) patch.q = b.q * patch.qMul;
+if (patch.f !== undefined) b.f = Math.max(20, Math.min(20000, patch.f));
+if (patch.g !== undefined) b.g = Math.max(-18, Math.min(18, Math.round(patch.g * 10) / 10));
+if (patch.q !== undefined) b.q = Math.max(0.1, Math.min(18, Math.round(patch.q * 100) / 100));
+var pr = this.eqPartner(ch);
+if (pr !== null) eq[pr] = JSON.parse(JSON.stringify(eq[ch]));
+this.setState({ eq: eq, bar: 'idle' });
+}
+eqPartner(ch) {
+var p = null;
+this.state.buses.forEach(function (b) { if (b.kind === 'phones' && b.linkEq) { var k = b.outs.indexOf(ch); if (k >= 0) p = b.outs[1 - k]; } });
+return p;
+}
+toggleLink(id) {
+var s = this.state, bus = s.buses.filter(function (b) { return b.id === id; })[0], on = !bus.linkEq;
+var patch = { buses: s.buses.map(function (b) { return b.id === id ? Object.assign({}, b, { linkEq: on }) : b; }) };
+if (on && s.bar !== 'applying') { var eq = JSON.parse(JSON.stringify(s.eq)); eq[bus.outs[1]] = JSON.parse(JSON.stringify(eq[bus.outs[0]])); patch.eq = eq; patch.bar = 'idle'; }
+this.setState(patch);
+}
+parseEq(fmt, text, wanted) {
+var out = [], preamp = null;
+function lim(v, a, b) { return Math.max(a, Math.min(b, v)); }
+if (fmt === 'own') {
+try {
+var j = JSON.parse(text), arr = Array.isArray(j) ? j : j.bands || [];
+if (j.outputs) { var hit = j.outputs.filter(function (o) { return (wanted || []).indexOf(o.name) >= 0; })[0] || j.outputs[0]; arr = hit ? hit.bands || [] : []; }
+arr.forEach(function (b) {
+var f = parseFloat(b.frequency), g = parseFloat(b.gainDb), q = parseFloat(b.q);
+if (isNaN(f) || isNaN(g)) return;
+out.push({ f: lim(f, 20, 20000), g: lim(Math.round(g * 10) / 10, -18, 18), q: lim(isNaN(q) ? 1 : q, 0.1, 18), t: b.type === 'lowShelf' ? 'ls' : b.type === 'highShelf' ? 'hs' : 'bell', on: b.enabled !== false });
+});
+} catch (e) {}
+} else {
+var pm = /Preamp:\s*(-?[\d.]+)\s*dB/i.exec(text);
+if (pm) preamp = pm[1];
+var re = /Filter\s+\d+:\s+ON\s+([A-Za-z]+)\s+Fc\s+([\d.]+)\s*Hz\s+Gain\s+(-?[\d.]+)\s*dB(?:\s+Q\s+([\d.]+))?/gi, m;
+while ((m = re.exec(text))) {
+var ty = m[1].toUpperCase(), t = ty === 'PK' || ty === 'PEQ' ? 'bell' : ty.indexOf('LS') === 0 ? 'ls' : ty.indexOf('HS') === 0 ? 'hs' : null;
+if (t) out.push({ f: lim(parseFloat(m[2]), 20, 20000), g: lim(Math.round(parseFloat(m[3]) * 10) / 10, -18, 18), q: lim(m[4] ? parseFloat(m[4]) : 0.71, 0.1, 18), t: t, on: true });
+}
+}
+return { bands: out.slice(0, 16), preamp: preamp };
+}
+resp(bands, f) {
+var db = 0, w = 2 * Math.PI * f / 48000, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
+bands.forEach(function (b) {
+if (!b.g || !b.on) return;
+var A = Math.pow(10, b.g / 40), w0 = 2 * Math.PI * b.f / 48000, al = Math.sin(w0) / (2 * b.q), c = Math.cos(w0), sq = 2 * Math.sqrt(A) * al;
+var b0, b1, b2, a0, a1, a2;
+if (b.t === 'ls') {
+b0 = A * ((A + 1) - (A - 1) * c + sq); b1 = 2 * A * ((A - 1) - (A + 1) * c); b2 = A * ((A + 1) - (A - 1) * c - sq);
+a0 = (A + 1) + (A - 1) * c + sq; a1 = -2 * ((A - 1) + (A + 1) * c); a2 = (A + 1) + (A - 1) * c - sq;
+} else if (b.t === 'hs') {
+b0 = A * ((A + 1) + (A - 1) * c + sq); b1 = -2 * A * ((A - 1) + (A + 1) * c); b2 = A * ((A + 1) + (A - 1) * c - sq);
+a0 = (A + 1) - (A - 1) * c + sq; a1 = 2 * ((A - 1) - (A + 1) * c); a2 = (A + 1) - (A - 1) * c - sq;
+} else {
+b0 = 1 + al * A; b1 = -2 * c; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * c; a2 = 1 - al / A;
+}
+var num = Math.pow(b0 + b1 * c1 + b2 * c2, 2) + Math.pow(b1 * s1 + b2 * s2, 2);
+var den = Math.pow(a0 + a1 * c1 + a2 * c2, 2) + Math.pow(a1 * s1 + a2 * s2, 2);
+db += 10 * Math.log10(num / den);
+});
+return db;
+}
+points(bands, W, H, n) {
+var out = [];
+for (var k = 0; k <= n; k++) {
+var y = H / 2 - this.resp(bands, 20 * Math.pow(1000, k / n)) / 18 * (H / 2);
+out.push((W * k / n).toFixed(1) + ',' + Math.max(0, Math.min(H, y)).toFixed(1));
+}
+return out.join(' ');
+}
+freqText(f) { return f >= 1000 ? (Math.round(f / 10) / 100) + ' kHz' : Math.round(f) + ' Hz'; }
+padNames(list) { var out = list.slice(); for (var k = out.length; k < 16; k++) out.push('Out ' + (k + 1)); return out; }
+cfgNames(cfg) {
+var H = { 1: ['C'], 2: ['L', 'R'], 3: ['L', 'R', 'C'], 4: ['L', 'R', 'Ls', 'Rs'], 5: ['L', 'R', 'C', 'Ls', 'Rs'], 6: ['L', 'R', 'C', 'Ls', 'Rs', 'Cs'], 7: ['L', 'R', 'C', 'Ls', 'Rs', 'Lrs', 'Rrs'], 8: ['L', 'R', 'C', 'Ls', 'Rs', 'Lrs', 'Rrs', 'Cs'], 9: ['L', 'R', 'C', 'Lw', 'Rw', 'Ls', 'Rs', 'Lrs', 'Rrs'] };
+var V = { 0: [], 2: ['Ltm', 'Rtm'], 4: ['Ltf', 'Rtf', 'Ltr', 'Rtr'], 6: ['Ltf', 'Rtf', 'Ltm', 'Rtm', 'Ltr', 'Rtr'] };
+var subs = [];
+for (var k = 1; k <= cfg.subs; k++) subs.push(cfg.subs === 1 ? 'Sub' : 'Sub ' + k);
+var hp = [];
+for (var j = 1; j <= cfg.hp; j++) { var p = cfg.hp === 1 ? 'HP ' : 'HP ' + j + ' '; hp.push(p + 'L', p + 'R'); }
+return H[cfg.h].concat(V[cfg.v], subs, hp);
+}
+srcFor(L) {
+var a = [];
+for (var i = 0; i < 16; i++) a.push(null);
+L.speakers.forEach(function (o) { a[o] = L.inputs.indexOf(L.names[o]); });
+return a;
+}
+reconcile(map, roles) {
+var out = [], placed = {};
+for (var i = 0; i < 16; i++) { var r = map[i]; if (r && roles.indexOf(r) >= 0 && !placed[r]) { out.push(r); placed[r] = true; } else out.push(null); }
+roles.forEach(function (r) { if (!placed[r]) { var k = out.indexOf(null); if (k >= 0) out[k] = r; } });
+return out;
+}
+padInputs(list) { var out = list.slice(); for (var k = out.length; k < 16; k++) out.push('In ' + (k + 1)); return out; }
+fillMix(inputs, mode) {
+return inputs.map(function (n, i) {
+if (mode === 'pair') return i === 14 ? [0, null] : i === 15 ? [null, 0] : [null, null];
+if (n === 'L') return [0, null];
+if (n === 'R') return [null, 0];
+if (n === 'LFE' || n.indexOf('In ') === 0) return [null, null];
+if (n[0] === 'C') return [-3, -3];
+if (n[0] === 'L') return [-3, null];
+if (n[0] === 'R') return [null, -3];
+return [null, null];
+});
+}
+busDiff() {
+var a = this.state.buses, b = this.state.baseBuses, live = false;
+function sig(x) { return x.id + ':' + (x.subShare ? 's' : '') + x.outs.join('.') + (x.mix ? x.mix.map(function (r) { return (r[0] === null ? 0 : 1) + '' + (r[1] === null ? 0 : 1); }).join('') : ''); }
+var struct = a.map(sig).join() !== b.map(sig).join();
+a.forEach(function (x) { b.forEach(function (y) {
+if (x.id !== y.id) return;
+if (x.gain !== y.gain || x.mute !== y.mute || x.label !== y.label) live = true;
+if (x.mix && y.mix) x.mix.forEach(function (r, i) { [0, 1].forEach(function (c) { if (r[c] !== null && y.mix[i][c] !== null && r[c] !== y.mix[i][c]) live = true; }); });
+}); });
+return { live: live, struct: struct };
+}
+setMix(id, r, c, v) {
+var bus = this.state.buses.filter(function (b) { return b.id === id; })[0], mix = JSON.parse(JSON.stringify(bus.mix));
+mix[r][c] = v === null ? null : Math.max(-60, Math.min(12, Math.round(v * 10) / 10));
+this.setBus(id, { mix: mix, mode: 'custom' });
+}
+setBus(id, patch) {
+if (this.state.bar === 'applying') return;
+this.setState({ buses: this.state.buses.map(function (b) { return b.id === id ? Object.assign({}, b, patch) : b; }), bar: 'idle' });
+}
+cfgLabel(cfg) { return cfg.h + '.' + cfg.subs + (cfg.v ? '.' + cfg.v : ''); }
+draftName() { var s = this.state, L = s.layouts[s.layout]; return s.layout === s.baseLayout ? s.runningName : L.keep ? L.keep : 'New ' + L.label + ' preset'; }
+freshBass(L, prefill) {
+var rows = L.speakers.length + 1, sends = [];
+for (var r = 0; r < rows; r++) {
+var row = [];
+for (var c = 0; c < L.subs; c++) {
+if (L.mode !== 'separate') row.push(0);
+else if (!prefill) row.push(null);
+else if (r === rows - 1) row.push(0);
+else { var ch = L.names[L.speakers[r]][0]; row.push(ch === 'L' ? (c === 0 ? 0 : null) : ch === 'R' ? (c === 1 ? 0 : null) : -3); }
+}
+sends.push(row);
+}
+var xos = [], hp = [];
+for (var k = 0; k < rows - 1; k++) { xos.push(80); hp.push(true); }
+return { on: true, slope: 24, xo: 80, lfeLp: 120, lfeTrim: 0, sends: sends, xos: xos, hp: hp };
+}
+bassDiff() {
+var A = this.state.bassAll, Bb = this.state.baseBassAll, live = false, struct = false, self = this;
+Object.keys(A).forEach(function (id) {
+var a = A[id], b = Bb[id];
+if (!b || a.sends.length !== b.sends.length || (a.sends[0] || []).length !== (b.sends[0] || []).length) return;
+var d = self.bassDiffOne(a, b);
+if (d.live) live = true;
+if (d.struct) struct = true;
+});
+return { live: live, struct: struct };
+}
+curBassId() {
+var s = this.state, spk = s.buses.filter(function (b) { return b.kind === 'speakers'; });
+var hit = spk.filter(function (b) { return b.id === s.bassBus; })[0] || spk[0];
+return hit ? hit.id : 'spk';
+}
+bassDiffOne(a, b) {
+var live = a.xo !== b.xo || a.lfeLp !== b.lfeLp || a.lfeTrim !== b.lfeTrim || a.xos.join() !== b.xos.join(), struct = a.on !== b.on || a.slope !== b.slope || a.hp.join() !== b.hp.join();
+for (var r = 0; r < a.sends.length; r++) for (var c = 0; c < a.sends[r].length; c++) {
+var x = a.sends[r][c], y = b.sends[r] ? b.sends[r][c] : undefined;
+if ((x === null) !== (y === null)) struct = true;
+else if (x !== null && x !== y) live = true;
+}
+return { live: live, struct: struct };
+}
+setBass(patch, id) {
+if (this.state.bar === 'applying') return;
+id = id || this.curBassId();
+var all = Object.assign({}, this.state.bassAll);
+all[id] = Object.assign({}, all[id], patch);
+this.setState({ bassAll: all, bar: 'idle' });
+}
+setSend(r, c, v, id) {
+id = id || this.curBassId();
+var sends = JSON.parse(JSON.stringify(this.state.bassAll[id].sends));
+sends[r][c] = v === null ? null : Math.max(-60, Math.min(12, Math.round(v * 10) / 10));
+this.setBass({ sends: sends }, id);
+}
+choose(key, layouts) {
+if (layouts) this.setState({ layouts: layouts });
+this.setState(this.layoutPatch((layouts || this.state.layouts)[key], key));
+}
+layoutPatch(L, key) {
+var self = this, bass = { spk: this.freshBass(L, false) };
+L.buses.forEach(function (b) { if (b.extra) bass[b.id] = self.freshBass({ speakers: b.spk, subs: b.subs.length, mode: b.subMode, names: [] }, false); });
+var F = this.FREQ, zeros = [], offs = [], eq = [];
+for (var i = 0; i < 16; i++) { zeros.push(0); offs.push(false); eq.push(F.map(function (f) { return { f: f, g: 0, q: 1, t: 'bell', on: true }; })); }
+return { perm: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], rrow: null, rtype: null, spkSrc: L.src.slice(), rcell: null, bassAll: bass, bassBus: 'spk', cell: null, buses: JSON.parse(JSON.stringify(L.buses)),
+layout: key, gains: zeros, delays: zeros.slice(), pol: offs.slice(), mutes: offs, solos: offs.slice(), eq: eq, eqBypass: false, slope: 24, chooser: false, chooserEdit: false, eqCh: null, band: 0, bar: 'idle' };
+}
+setupPatch(key, name) {
+var p = this.layoutPatch(this.LAYOUTS[key], key), J = function (x) { return JSON.parse(JSON.stringify(x)); };
+return Object.assign(p, { basePerm: p.perm.slice(), baseSpkSrc: p.spkSrc.slice(), baseBuses: J(p.buses), baseBassAll: J(p.bassAll), baseEq: J(p.eq), baseGains: p.gains.slice(), baseDelays: p.delays.slice(), basePol: p.pol.slice(), baseMutes: p.mutes.slice(), baseEqBypass: false, baseSlope: 24, baseLayout: key, runningName: name, crMute: p.mutes.slice(), groups: [], grpEdit: null });
+}
+setupKey(props) { return (props || {}).setup === '5.1 with alt speakers' ? ['alt', 'Studio B'] : ['main', 'Main room']; }
+componentDidMount() { var k = this.setupKey(this.props); if (k[0] !== 'main') this.setState(this.setupPatch(k[0], k[1])); }
+presetSnap() { var s = this.state, o = {}; ['gains', 'mutes', 'delays', 'pol', 'eq', 'eqBypass', 'buses', 'bassAll', 'spkSrc', 'perm', 'io', 'slope', 'layout'].forEach(function (k) { o[k] = s[k]; }); return o; }
+trackHistory() {
+var cur = this.presetSnap(), last = this.lastSnap, self = this;
+if (!this.hist) { this.hist = []; this.future = []; }
+if (!last) { this.lastSnap = cur; return; }
+var keys = Object.keys(cur).filter(function (k) { return cur[k] !== last[k]; });
+if (!keys.length) return;
+if (this.histSkip) this.histSkip = false;
+else {
+var now = Date.now(), sig = keys.join();
+if (!(this.lastPushSig === sig && now - (this.lastPushAt || 0) < 700)) { this.hist.push(last); if (this.hist.length > 30) this.hist.shift(); }
+this.lastPushSig = sig; this.lastPushAt = now; this.future = [];
+}
+this.lastSnap = cur;
+if (this.state.histN !== this.hist.length || this.state.futN !== this.future.length) this.setState({ histN: this.hist.length, futN: this.future.length });
+}
+stepHistory(back) {
+if (this.state.bar === 'applying' || !this.hist) return;
+var from = back ? this.hist : this.future, to = back ? this.future : this.hist;
+if (!from.length) return;
+to.push(this.presetSnap()); var snap = from.pop();
+this.histSkip = true; this.lastPushSig = null;
+this.setState(Object.assign({}, snap, { bar: 'idle', histN: this.hist.length, futN: this.future.length, eqCh: null, cell: null, rcell: null }));
+}
+componentDidUpdate(prev) {
+this.trackHistory();
+var lc = this.lastClips || [], cl = this.state.clipLatch, add = lc.filter(function (i) { return !cl[i]; });
+if (add.length) { var m2 = Object.assign({}, cl); add.forEach(function (i) { m2[i] = true; }); this.setState({ clipLatch: m2 }); }
+ if (prev && (prev.setup || '7.2.4 room') !== (this.props.setup || '7.2.4 room')) { var k = this.setupKey(this.props); this.setState(this.setupPatch(k[0], k[1])); } }
+sysRun(kind) {
+var self = this, s = this.state, t = this.now();
+function later(ms, fn) { self.timers.push(setTimeout(fn, ms)); }
+function done(note, text) { self.setState({ sysBusy: false, sysNote: note, events: self.log(text) }); }
+this.setState({ sysConfirm: null, pwErr: '' });
+if (kind === 'audio') { this.setState({ sysBusy: true, sysNote: 'Restarting audio…' }); later(3000, function () { done('Audio restarted at ' + self.now() + '.', 'Audio restarted from the System tab (3 seconds of silence).'); }); }
+else if (kind === 'clock') { this.setState({ sysBusy: true, sysNote: 'Restarting the clock service…' }); later(2000, function () { done('Clock service restarted at ' + self.now() + '.', 'Clock service restarted. Locked to the network clock again.'); }); }
+else if (kind === 'reboot') {
+this.setState({ sysBusy: true, sysNote: 'Rebooting…', devOff: true, devOffCanPower: false, devOffText: 'The Pi is rebooting. This page reconnects by itself.', events: this.log('Reboot requested from the System tab.') });
+later(4000, function () { self.setState({ devOff: false, upText: 'under a minute' }); done('Rebooted at ' + self.now() + '.', 'Device started.'); });
+}
+else if (kind === 'shutdown') this.setState({ sysNote: 'Shut down at ' + t + '.', devOff: true, devOffCanPower: true, devOffText: 'The Pi is shut down. Power-cycle it to start it again.', events: this.log('Shutdown requested from the System tab.') });
+else if (kind === 'noproc' || kind.indexOf('run:') === 0) {
+var name = kind === 'noproc' ? 'No processing' : kind.slice(4);
+this.choose(kind === 'noproc' ? 'blank' : name === 'Studio B' ? 'alt' : 'main');
+this.setState({ bar: 'applying', step: 1, sysBusy: true, sysNote: 'Switching to ' + name + '…' });
+later(3000, function () { self.commit('Switched to ' + name + ' at ' + self.now() + '. Audio is passing.', self.log('Switched to ' + name + ' from the System tab. Audio restarted (3 seconds of silence).'), name); self.setState({ sysBusy: false, sysNote: 'Now running ' + name + '.' }); });
+}
+else if (kind.indexOf('remove:') === 0) { var rm = kind.slice(7); this.setState({ saved: s.saved.filter(function (n) { return n !== rm; }), sysNote: rm + ' removed.', events: this.log('Preset ' + rm + ' removed from the device.') }); }
+else if (kind === 'password') {
+if (s.pw1.length < 8) { this.setState({ sysConfirm: 'password', pwErr: 'Use at least 8 characters.' }); return; }
+if (s.pw1 !== s.pw2) { this.setState({ sysConfirm: 'password', pwErr: 'The two entries do not match.' }); return; }
+this.setState({ pw1: '', pw2: '', sysNote: 'Password changed at ' + t + '.', events: this.log('Page password changed.') });
+}
+}
+newSrc(id, name, ch) { return { id: id, name: name, from: 'dante', ch: ch, n: 2, gain: 0, lvl: -18, gate: false, thr: -40, range: 60, ratio: 10, knee: 6, attack: 1, hold: 50, release: 200, eq: 0, bands: [], to: {} }; }
+gateCurve(x, d) {
+var o = d < x.thr ? x.thr + (d - x.thr) * x.ratio : d;
+if (x.knee > 0 && Math.abs(d - x.thr) < x.knee / 2) o = d - (x.ratio - 1) * Math.pow(x.thr + x.knee / 2 - d, 2) / (2 * x.knee);
+return Math.max(o, d - x.range);
+}
+srcOut(x, shape) {
+var lvl = x.from === 'usb' ? shape[x.ch] : x.lvl;
+if (lvl === null || lvl === undefined) return null;
+var o = x.gate ? this.gateCurve(x, lvl) : lvl;
+return o <= -80 ? null : o;
+}
+crMulti() { return this.state.buses.filter(function (b) { return b.kind === 'speakers'; }).length > 1; }
+crKey(bus) { return bus.kind === 'speakers' && this.crMulti() ? '__main' : bus.id; }
+crLvl(bus) { var cr = this.state.cr, k = this.crKey(bus), v = cr.lvl[k]; v = v === undefined ? -10 : v; return k === '__main' ? v + (cr.trim[bus.id] || 0) : v; }
+crFollows(bus) { return bus.kind === 'phones' && this.state.cr.follow[bus.id] !== false && this.state.buses.some(function (b) { return b.kind === 'speakers'; }); }
+crSel(bus, id) {
+var key = bus.id;
+if (this.crFollows(bus)) key = this.state.buses.filter(function (b) { return b.kind === 'speakers'; })[0].id;
+return !!(this.state.cr.sel[key] || { usb: true })[id];
+}
+saveFile(name, text) { try { var el = document.createElement('a'); el.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); el.download = name; document.body.appendChild(el); el.click(); el.remove(); } catch (e) {} }
+nameDlgRun() {
+var s = this.state, d = s.nameDlg, self = this; if (!d) return;
+var n = String(d.text).trim();
+if (!n) { this.setState({ nameDlg: Object.assign({}, d, { err: 'Give it a name.' }) }); return; }
+if (n === 'No processing' || (s.saved.indexOf(n) >= 0 && !(d.kind === 'rename' && n === d.from))) { this.setState({ nameDlg: Object.assign({}, d, { err: 'There is already a preset called ' + n + '.' }) }); return; }
+if (d.kind === 'saveas') { this.commit('Saved as ' + n + ' at ' + this.now() + '. It is the running preset now.', this.log('Saved as a new preset, ' + n + '. ' + s.runningName + ' is unchanged.'), n); this.setState({ nameDlg: null }); return; }
+if (d.kind === 'rename') this.setState({ saved: s.saved.map(function (x) { return x === d.from ? n : x; }), runningName: s.runningName === d.from ? n : s.runningName, nameDlg: null, presetNote: d.from + ' renamed to ' + n + '.', events: this.log('Preset ' + d.from + ' renamed to ' + n + '.') });
+if (d.kind === 'dup') this.setState({ saved: s.saved.concat([n]), nameDlg: null, presetNote: n + ' created from ' + d.from + '.', events: this.log('Preset ' + d.from + ' duplicated as ' + n + '.') });
+}
+cueOf(bus, id) { if (bus.kind !== 'phones' || this.crFollows(bus) || !this.state.cr.sum[bus.id]) return 0; var m = this.state.cr.cue[bus.id]; return m && typeof m[id] === 'number' ? m[id] : 0; }
+counts() {
+var s = this.state, live = 0;
+if (s.layout !== s.baseLayout) return { live: 0, restart: 1 };
+for (var i = 0; i < 16; i++) if (s.gains[i] !== s.baseGains[i] || s.mutes[i] !== s.baseMutes[i] || s.delays[i] !== s.baseDelays[i] || s.pol[i] !== s.basePol[i] || this.eqChanged(i)) live++;
+if (s.eqBypass !== s.baseEqBypass) live++;
+var bd = this.bassDiff(), ud = this.busDiff();
+if (bd.live) live++;
+var ioKey = function (o) { return JSON.stringify([o.ext.map(function (x) { return [x.id, x.name, x.from, x.ch, x.n, x.gate, x.eq, x.to]; }), o.busUsb, o.dout, o.uin]); };
+var ioStruct = ioKey(s.io) !== ioKey(s.baseIo);
+if (!ioStruct && JSON.stringify(s.io) !== JSON.stringify(s.baseIo)) live++;
+if (ud.live) live++;
+return { live: live, restart: (ioStruct ? 1 : 0) + (s.slope !== s.baseSlope ? 1 : 0) + (bd.struct ? 1 : 0) + (ud.struct ? 1 : 0) + (s.spkSrc.join() !== s.baseSpkSrc.join() ? 1 : 0) + (s.perm.join() !== s.basePerm.join() ? 1 : 0) };
+}
+resetBands(bands) { var F = this.FREQ; return bands.map(function (b, i) { return { f: F[i], g: 0, q: 1, t: 'bell', on: b.on }; }); }
+commit(text, events, name) {
+var s = this.state, rn = name || this.draftName();
+this.hist = []; this.future = []; this.lastSnap = null; this.setState({ histN: 0, futN: 0 });
+this.setState({ saved: rn !== 'No processing' && s.saved.indexOf(rn) < 0 ? s.saved.concat([rn]) : s.saved, basePerm: s.perm.slice(), baseSpkSrc: s.spkSrc.slice(), baseBuses: JSON.parse(JSON.stringify(s.buses)), baseBassAll: JSON.parse(JSON.stringify(s.bassAll)), runningName: rn, baseLayout: s.layout, baseEqBypass: s.eqBypass, baseEq: JSON.parse(JSON.stringify(s.eq)), baseGains: s.gains.slice(), baseMutes: s.mutes.slice(), baseDelays: s.delays.slice(), basePol: s.pol.slice(), baseSlope: s.slope, baseIo: JSON.parse(JSON.stringify(s.io)), bar: 'done', doneText: text, events: events });
+}
+renderVals() {
+var self = this, s = this.state;
+var scenario = this.props.scenario ?? 'Healthy';
+var clockFault = scenario === 'No clock leader';
+var idle = scenario === 'Computer idle';
+var c = this.counts();
+var OK = '#7EDAC4', BAD = '#FFB3A6', QUIET = '#F2B366', LINE = '#2A373D';
+
+var tabs = [['status', 'Status'], ['control', 'Control Room'], ['processor', 'Processor'], ['system', 'System']].map(function (t) {
+var on = s.tab === t[0];
+return { label: t[1], current: on ? 'page' : 'false', go: function () { self.setState({ tab: t[0] }); },
+bg: on ? '#172024' : 'transparent', color: on ? '#E6EDEF' : '#A3B3B9', line: on ? OK : 'transparent' };
+});
+
+var cards = [
+{ label: 'Clock', value: clockFault ? 'No leader found' : 'Locked', detail: clockFault ? 'Waiting for a Dante clock leader' : 'Following the network clock',
+state: clockFault ? 'Problem' : 'OK', stateColor: clockFault ? BAD : OK, border: clockFault ? '#FF9A8A' : LINE },
+{ label: 'Sample rate', value: '48 kHz', detail: 'Change it from the computer or Dante Controller', state: 'OK', stateColor: OK, border: LINE },
+{ label: 'Computer', value: idle ? 'Connected, idle' : 'Connected', detail: idle ? 'No program is using the device' : 'A program is playing and recording',
+state: idle ? 'Idle' : 'OK', stateColor: idle ? QUIET : OK, border: LINE },
+{ label: 'Network audio', value: clockFault ? 'Stopped' : 'Sending and receiving', detail: clockFault ? 'Starts when the clock is found' : '16 channels each way',
+state: clockFault ? 'Stopped' : 'OK', stateColor: clockFault ? BAD : OK, border: LINE },
+{ label: 'Running', value: s.runningName, detail: 'Round trip 528 samples (11.0 ms)', state: 'OK', stateColor: OK, border: LINE }
+];
+
+var shape = [-8, -10, -16, -24, -14, -15, -18, -19, -26, -27, -28, -27, -32, null, -40, -38];
+var PTS = [[-80, 0], [-70, 0.062], [-60, 0.136], [-50, 0.229], [-40, 0.339], [-30, 0.47], [-20, 0.623], [-10, 0.8], [0, 1]];
+function pos(db) {
+if (db <= -80) return 0;
+if (db >= 0) return 1;
+for (var k = 1; k < PTS.length; k++) if (db <= PTS[k][0]) return PTS[k - 1][1] + (db - PTS[k - 1][0]) / 10 * (PTS[k][1] - PTS[k - 1][1]);
+return 1;
+}
+var scaleMarks = [0, -10, -20, -30, -40, -60].map(function (d) { return { t: d === 0 ? '0' : '−' + (-d), top: ((1 - pos(d)) * 100).toFixed(1) }; });
+var silentText = s.devOff ? 'The Pi is off.' : s.sysBusy && s.sysNote.indexOf('Restarting audio') === 0 ? 'Audio is restarting.' : clockFault ? 'Audio is stopped until a clock leader is found.' : 'No audio from the computer right now.';
+var hasAudio = !clockFault && !idle && !s.devOff && !(s.sysBusy && s.sysNote.indexOf('Restarting audio') === 0);
+var soloCount = s.solos.filter(Boolean).length, anySolo = soloCount > 0;
+var live = s.layout === s.baseLayout, draftName = self.draftName();
+var dG = live ? s.gains : s.baseGains, dM = live ? s.mutes : s.baseMutes, dE = live ? s.eq : s.baseEq, dB = live ? s.eqBypass : s.baseEqBypass;
+var dBuses = live ? s.buses : s.baseBuses;
+var dSrc = live ? s.spkSrc : s.baseSpkSrc;
+var chanOf = s.perm, logAt = [], devAt = [];
+chanOf.forEach(function (p, i) { logAt[p] = i; });
+(live ? s.perm : s.basePerm).forEach(function (p, i) { devAt[p] = i; });
+function busOf(list, i) { for (var k = 0; k < list.length; k++) if (list[k].outs.indexOf(i) >= 0) return list[k]; return null; }
+var crGs = [], actBus0 = null, shareSub0 = false, firstSpk = (s.buses.filter(function (b) { return b.kind === 'speakers'; })[0] || {}).id;
+var nSpkBus = s.buses.filter(function (b) { return b.kind === 'speakers'; }).length;
+var actId0 = nSpkBus > 1 ? (s.cr.ab || firstSpk) : 'all';
+actBus0 = s.buses.filter(function (b) { return b.id === actId0; })[0] || null;
+shareSub0 = !!(actBus0 && actBus0.extra && actBus0.subShare && !actBus0.subs.length);
+var soloScope = {};
+s.solos.forEach(function (on, i) { if (on) { var sb = busOf(s.buses, i); soloScope[sb ? sb.id : 'free'] = true; } });
+var outLvl = shape.map(function (d, i) {
+var bus = busOf(dBuses, i);
+if (bus && bus.kind === 'phones' && bus.mix) {
+var ear = bus.outs.indexOf(i), sum = 0;
+bus.mix.forEach(function (row, k) { if (row[ear] !== null && shape[k] !== null) sum += Math.pow(10, (shape[k] + row[ear]) / 10); });
+var cueU = self.cueOf(bus, 'usb'); if (cueU) sum *= Math.pow(10, cueU / 10);
+d = sum > 0 ? 10 * Math.log10(sum) : null;
+}
+if (bus && bus.kind === 'speakers' && typeof dSrc[i] === 'number' && s.layouts[live ? s.layout : s.baseLayout].subsIdx.indexOf(i) < 0) d = shape[dSrc[i]];
+if (bus && (s.io.busUsb[bus.id] === false || !self.crSel(bus, 'usb'))) d = null;
+if (bus) { var es = 0, bk = bus.outs.indexOf(i); s.io.ext.forEach(function (x) { var o = self.srcOut(x, shape); if (x.to[bus.id] !== false && self.crSel(bus, x.id) && o !== null && (bus.kind === 'phones' || bk < Math.max(2, x.n))) es += Math.pow(10, (o + x.gain + self.cueOf(bus, x.id)) / 10); }); if (es > 0) d = 10 * Math.log10(es + (d === null ? 0 : Math.pow(10, d / 10))); }
+var crG = 0, lvlBus = null;
+if (s.cal.on && bus && bus.kind === 'speakers') d = (s.cal.spk === null ? (s.cal.band !== 'sub' || /^Sub/.test(s.layouts[live ? s.layout : s.baseLayout].names[i] || '')) : s.cal.spk === i) ? -18.5 : null;
+if (s.crMute[i]) d = null;
+if (bus) {
+var cr0 = s.cr;
+if (cr0.mute[self.crKey(bus)]) d = null;
+if (bus.kind === 'speakers') {
+var offSet = nSpkBus > 1 && actId0 !== 'all' && actId0 !== bus.id;
+var tk = ((bus.names ? bus.names[bus.outs.indexOf(i)] : s.layouts[live ? s.layout : s.baseLayout].names[i]) || '').split(' ')[0], fo = cr0.fold[bus.id] || 'full';
+if (offSet) { if (shareSub0 && !bus.extra && tk === 'Sub') { lvlBus = actBus0; fo = 'full'; } else d = null; }
+if (tk === 'Sub') { if (cr0.bypass) d = null; }
+else if ((fo === '5.1' && !/^(L|R|C|Ls|Rs)$/.test(tk)) || ((fo === 'stereo' || fo === 'mono') && !/^(L|R)$/.test(tk))) d = null;
+else if (fo !== 'full' && d !== null) d += 2;
+}
+if (bus.kind === 'phones' && cr0.talk) d = 10 * Math.log10(Math.pow(10, -1.2) + (d === null ? 0 : Math.pow(10, d / 10)));
+crG = self.crLvl(lvlBus || bus) + (cr0.dim[self.crKey(bus)] || (cr0.talk && bus.kind === 'speakers') ? -20 : 0);
+}
+crGs[i] = crG;
+if (d === null || dM[i] || (bus && bus.mute) || !hasAudio || (live && soloScope[bus ? bus.id : 'free'] && !s.solos[i])) return null;
+return crG + d - 1.5 + dG[i] + (bus ? bus.gain : 0) + (dB ? 0 : self.eqLevel(dE[i]));
+});
+self.lastClips = []; outLvl.forEach(function (d, i) { if (d !== null && d >= 0) self.lastClips.push(i); });
+var latched = function (i) { return !!s.clipLatch[i] || (outLvl[i] !== null && outLvl[i] >= 0); };
+function bars(levels, off) { return levels.map(function (d, i) {
+var p = d === null ? 0 : pos(d + off);
+return { n: i + 1, clip: (100 - Math.round(p * 30) / 30 * 100).toFixed(2), over: d !== null && d + off >= 0 ? '#FF2A00' : '#3A2622' };
+}); }
+var d64out = [], d64in = [];
+for (var c64 = 0; c64 < 64; c64++) { var pOut = s.io.dout.indexOf(c64); d64out.push(pOut >= 0 && devAt[pOut] !== undefined ? outLvl[devAt[pOut]] : null); d64in.push(c64 < 16 && devAt[c64] !== undefined && outLvl[devAt[c64]] !== null ? outLvl[devAt[c64]] - 0.5 : null); }
+s.io.ext.forEach(function (x) { if (x.from === 'dante' && hasAudio) for (var q = 0; q < x.n; q++) d64in[x.ch + q] = x.lvl; });
+var meterRows = [
+{ title: 'From the computer', note: 'USB, 16 channels', bars: bars(shape, 0) },
+{ title: 'To the network', note: 'Dante outputs, 64 channels, after processing', bars: bars(d64out, 0) },
+{ title: 'From the network', note: 'Dante inputs, 64 channels', bars: bars(d64in, 0) }
+].map(function (r) { if (r.cols === undefined) { r.cols = 16; r.gap = 6; r.bw = 12; } return r; }).map(function (r) { var wide = r.bars.length > 16; r.cols = r.bars.length; r.gap = wide ? 2 : 6; r.bw = wide ? 6 : 12; if (wide) r.bars.forEach(function (b, k) { b.n = k === 0 || (k + 1) % 8 === 0 ? String(k + 1) : ''; }); r.hasAudio = hasAudio; r.silent = !hasAudio; r.silentText = silentText; return r; });
+
+var names = s.layouts[s.layout].names.map(function (n, i) { return /^Out \d+$/.test(n) ? 'Out ' + (chanOf[i] + 1) : n; });
+var hpBuses = s.buses.filter(function (b) { return b.kind === 'phones'; });
+hpBuses.forEach(function (b, k) { var p = hpBuses.length > 1 ? 'HP ' + (k + 1) + ' ' : 'HP '; names[b.outs[0]] = p + 'L'; names[b.outs[1]] = p + 'R'; });
+s.buses.forEach(function (b) { if (b.names) b.outs.forEach(function (o, k) { names[o] = b.names[k]; }); });
+var POS = ['L', 'R', 'C', 'Ls', 'Rs', 'Lrs', 'Rrs', 'Ltf', 'Rtf', 'Ltr', 'Rtr'];
+function freeOuts() { var f = []; for (var i = 0; i < 16; i++) if (!busOf(s.buses, i)) f.push(i); return f.sort(function (a, c2) { return chanOf[a] - chanOf[c2]; }); }
+function srcForPos(k) { var ix = s.layouts[s.layout].inputs.indexOf(POS[k]); return ix >= 0 ? ix : k; }
+var strips = names.map(function (name, i) {
+var g = s.gains[i], muted = s.mutes[i], sel = s.eqCh === i;
+var changed = live && (g !== s.baseGains[i] || muted !== s.baseMutes[i] || s.delays[i] !== s.baseDelays[i] || s.pol[i] !== s.basePol[i] || self.eqChanged(i));
+var flip = !!s.pol[i];
+var soloed = s.solos[i], ed = s.gainEdit && s.gainEdit.i === i ? s.gainEdit : null;
+var lvl = live ? outLvl[i] : null;
+return { n: chanOf[i] + 1, name: name,
+gainField: ed ? ed.text : (g > 0 ? '+' : g < 0 ? '−' : '') + Math.abs(g).toFixed(1) + ' dB', gainLabel: name + ' level in dB, from −24 to +12',
+focusGain: function () { self.setState({ gainEdit: { i: i, text: g.toFixed(1) } }); },
+typeGain: function (e) { self.setState({ gainEdit: { i: i, text: e.target.value } }); },
+keyGain: function (e) { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { self.cancelGain = true; e.target.blur(); }
+if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && self.state.bar !== 'applying') { e.preventDefault(); var ng = Math.max(-24, Math.min(12, self.state.gains[i] + (e.key === 'ArrowUp' ? 0.5 : -0.5))), gs2 = self.state.gains.slice(); gs2[i] = ng; self.setState({ gains: gs2, gainEdit: { i: i, text: ng.toFixed(1) }, bar: 'idle' }); } },
+dl: msField('dl' + i, s.delays[i], function (v) { if (self.state.bar === 'applying') return; var d2 = self.state.delays.slice(); d2[i] = v; self.setState({ delays: d2, bar: 'idle' }); }), dlLabel: name + ' delay in milliseconds, from 0 to 50',
+polOn: flip ? 'true' : 'false', polBg: flip ? '#F2B366' : '#223036', polColor: flip ? '#0F1416' : '#93A3A9', polAria: name + (flip ? ' polarity is inverted. Set it back to normal.' : ' polarity is normal. Invert it.'),
+togglePol: function () { if (self.state.bar === 'applying') return; var p2 = self.state.pol.slice(); p2[i] = !p2[i]; self.setState({ pol: p2, bar: 'idle' }); },
+blurGain: function () {
+var cur = self.state.gainEdit, patch = { gainEdit: null };
+if (cur && cur.i === i && !self.cancelGain && self.state.bar !== 'applying') {
+var v = parseFloat(String(cur.text).replace(',', '.').replace('−', '-'));
+if (!isNaN(v)) { var gs = self.state.gains.slice(); gs[i] = Math.max(-24, Math.min(12, Math.round(v * 10) / 10)); patch.gains = gs; patch.bar = 'idle'; }
+}
+self.cancelGain = false;
+self.setState(patch);
+},
+soloed: soloed ? 'true' : 'false', soloBg: soloed ? '#F5D547' : '#223036', soloColor: soloed ? '#0F1416' : '#E6EDEF', soloBorder: soloed ? '#F5D547' : '#36474E',
+toggleSolo: function () { var so = s.solos.slice(); so[i] = !so[i]; self.setState({ solos: so }); }, notPicking: true, soloLabel: (soloed ? 'Stop soloing ' : 'Solo ') + name, muteAria: name + (muted ? ' is switched off in this preset. Switch it on.' : ' is on. Switch it off in this preset.'), i: i,
+clip: (100 - Math.round((lvl === null ? 0 : pos(lvl)) * 30) / 30 * 100).toFixed(2), over: lvl !== null && lvl >= 0 ? '#FF2A00' : '#3A2622', gainText: (g > 0 ? '+' : g < 0 ? '−' : '') + Math.abs(g).toFixed(1) + ' dB',
+curve: self.points(s.eqBypass ? [] : s.eq[i], 56, 22, 28), muted: muted ? 'true' : 'false',
+openEq: function () { self.setState({ eqCh: sel ? null : i, band: 0 }); }, eqLabel: 'EQ for ' + name, eqOn: sel ? 'true' : 'false',
+eqBg: sel ? '#1F3A36' : '#0F1416', eqBorder: sel ? '#7EDAC4' : '#36474E',
+up: function () { self.setGain(i, 0.5); }, down: function () { self.setGain(i, -0.5); }, toggle: function () { self.toggleMute(i); },
+upLabel: 'Raise ' + name + ' by 0.5 dB', downLabel: 'Lower ' + name + ' by 0.5 dB',
+onText: muted ? 'Off' : 'On', rowOp: muted ? '0.5' : '1', muteLabel: muted ? 'Muted' : 'Mute', muteBg: muted ? '#FF8A7A' : '#223036', muteColor: muted ? '#0F1416' : '#E6EDEF', muteBorder: muted ? '#FF8A7A' : '#36474E',
+mark: changed ? 'Edited' : '', dot: changed ? ' •' : '', border: changed ? '#F2B366' : LINE };
+});
+
+var slopes = [12, 24, 48].map(function (v) {
+var on = (s.bassAll[self.curBassId()] || {}).slope === v;
+return { label: v + ' dB/oct', on: on ? 'true' : 'false', pick: function () { self.setBass({ slope: v }); },
+bg: on ? '#8CC4FF' : '#223036', color: on ? '#0F1416' : '#E6EDEF', border: on ? '#8CC4FF' : '#36474E' };
+});
+
+var stepLabels = ['Checking the preset', 'Restarting audio', 'Checking audio is passing'];
+var steps = stepLabels.map(function (label, i) {
+var done = i < s.step, nowStep = i === s.step;
+return { label: label, mark: done ? 'Done' : nowStep ? 'Now' : 'Next', color: done ? OK : nowStep ? '#8CC4FF' : '#A3B3B9', textColor: nowStep || done ? '#E6EDEF' : '#A3B3B9' };
+});
+
+var ec = s.eqCh, eqOpen = ec !== null, eqBands = eqOpen ? s.eq[ec] : [], bi = s.band, sb = eqOpen ? eqBands[bi] : { f: 0, g: 0, q: 1, t: 'bell', on: true };
+var COLORS = self.COLORS;
+var bandLayers = [];
+eqBands.forEach(function (b, i) {
+if (!b.g || !b.on || s.eqBypass) return;
+var on = i === bi, line = 'M' + self.points([b], 400, 200, 96).replace(/ /g, ' L');
+bandLayers.push({ c: COLORS[i], line: line, fill: line + ' L400,100 L0,100 Z', fillOp: on ? 0.24 : 0.08, lineOp: on ? 0.95 : 0.5, w: on ? 2 : 1 });
+});
+var chips = eqBands.map(function (b, i) {
+var on = i === bi, c = COLORS[i];
+return { n: i + 1, on: on ? 'true' : 'false', pick: function () { self.setState({ band: i }); },
+label: 'Band ' + (i + 1) + ', ' + self.freqText(b.f) + ', ' + b.g.toFixed(1) + ' dB',
+bg: on ? c : '#0F1416', color: on ? '#0F1416' : c, border: on || b.g ? c : '#36474E', op: b.on ? 1 : 0.5 };
+});
+var handles = eqBands.map(function (b, i) {
+var on = i === bi, c = COLORS[i];
+return { n: i + 1, x: (Math.log(b.f / 20) / Math.log(1000) * 100).toFixed(2), y: ((18 - b.g) / 36 * 100).toFixed(2),
+label: 'Band ' + (i + 1) + ', ' + self.freqText(b.f) + ', ' + b.g.toFixed(1) + ' dB, Q ' + b.q.toFixed(2), on: on ? 'true' : 'false',
+c: c, bg: on ? c : '#172024', color: on ? '#0F1416' : c, z: on ? 3 : 1, bs: b.on ? 'solid' : 'dashed', op: b.on ? 1 : 0.55,
+pick: function () { self.setState({ band: i }); },
+reset: function () { self.setBand(ec, i, { f: self.FREQ[i], g: 0, q: 1, t: 'bell' }); },
+key: function (e) {
+var k = e.key, mod = e.metaKey || e.ctrlKey;
+if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(k) < 0) return;
+e.preventDefault();
+if (s.band !== i) self.setState({ band: i });
+if (mod) { if (k === 'ArrowUp') self.setBand(ec, i, { qMul: 1.06 }); if (k === 'ArrowDown') self.setBand(ec, i, { qMul: 1 / 1.06 }); return; }
+if (k === 'ArrowLeft') self.setBand(ec, i, { fMul: Math.pow(2, -1 / 24) });
+if (k === 'ArrowRight') self.setBand(ec, i, { fMul: Math.pow(2, 1 / 24) });
+if (k === 'ArrowUp') self.setBand(ec, i, { gAdd: 0.1 });
+if (k === 'ArrowDown') self.setBand(ec, i, { gAdd: -0.1 });
+},
+down: function (e) { self.drag = i; self.lastY = e.clientY; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) {} self.setState({ band: i }); },
+move: function (e) {
+if (self.drag !== i) return;
+if (e.buttons === 0) { self.drag = null; return; }
+if (e.metaKey || e.ctrlKey) {
+var dy = e.clientY - self.lastY; self.lastY = e.clientY;
+if (dy) self.setBand(ec, i, { qMul: Math.pow(2, -dy / 40) });
+return;
+}
+self.lastY = e.clientY;
+var r = e.currentTarget.parentElement.getBoundingClientRect();
+var fx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), fy = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+self.setBand(ec, i, { f: 20 * Math.pow(1000, fx), g: 18 - 36 * fy });
+},
+up: function () { self.drag = null; } };
+});
+var fStep = Math.pow(2, 1 / 6);
+var bandRows = [
+{ label: 'Frequency', value: self.freqText(sb.f), down: function () { self.setBand(ec, bi, { f: sb.f / fStep }); }, up: function () { self.setBand(ec, bi, { f: sb.f * fStep }); }, downLabel: 'Lower frequency', upLabel: 'Raise frequency' },
+{ label: 'Gain', value: (sb.g > 0 ? '+' : sb.g < 0 ? '−' : '') + Math.abs(sb.g).toFixed(1) + ' dB', down: function () { self.setBand(ec, bi, { g: sb.g - 0.5 }); }, up: function () { self.setBand(ec, bi, { g: sb.g + 0.5 }); }, downLabel: 'Lower gain by 0.5 dB', upLabel: 'Raise gain by 0.5 dB' },
+{ label: 'Width (Q)', value: sb.q.toFixed(2), down: function () { self.setBand(ec, bi, { q: sb.q / 1.25 }); }, up: function () { self.setBand(ec, bi, { q: sb.q * 1.25 }); }, downLabel: 'Wider band, lower Q', upLabel: 'Narrower band, higher Q' }
+];
+var cfg = s.cfg, cfgList = self.cfgNames(cfg), curLayout = s.layouts[s.layout];
+function bassCtx(bus) { return !bus ? { id: 'spk', speakers: [], subsIdx: [], mode: 'same', extra: false, label: '' } : bus.extra ? (bus.subShare && !bus.subs.length ? { id: bus.id, speakers: bus.spk, subsIdx: curLayout.subsIdx, mode: 'same', extra: true, shared: true, label: bus.label } : { id: bus.id, speakers: bus.spk, subsIdx: bus.subs, mode: bus.subMode, extra: true, label: bus.label }) : { id: bus.id, speakers: curLayout.speakers, subsIdx: curLayout.subsIdx, mode: curLayout.mode, extra: false, label: bus.label }; }
+var spkBuses = s.buses.filter(function (b) { return b.kind === 'speakers'; });
+var bassBus = spkBuses.filter(function (b) { return b.id === s.bassBus; })[0] || spkBuses[0], BC = bassCtx(bassBus);
+var B = s.bassAll[BC.id] || s.bassAll.spk, sepMode = BC.subsIdx.length > 1 && BC.mode === 'separate';
+function resizeBus(b, spk, subs, mode) {
+var nm = spk.map(function (o, k) { return POS[k] + ' ' + b.num; }).concat(subs.map(function (o, k) { var L = String.fromCharCode(64 + b.num); return subs.length === 1 ? 'Sub ' + L : 'Sub ' + L + (k + 1); }));
+var nb = Object.assign({}, b, { spk: spk, subs: subs, outs: spk.concat(subs), names: nm, subMode: mode || b.subMode }), a = s.spkSrc.slice();
+b.outs.forEach(function (o) { a[o] = null; });
+spk.forEach(function (o, k) { a[o] = b.spk.indexOf(o) >= 0 && typeof s.spkSrc[o] === 'number' ? s.spkSrc[o] : srcForPos(k); });
+var all = Object.assign({}, s.bassAll);
+all[b.id] = self.freshBass({ speakers: spk, subs: subs.length, mode: nb.subMode, names: [] }, false);
+if (s.bassAll[b.id]) all[b.id].slope = s.bassAll[b.id].slope;
+self.setState({ buses: s.buses.map(function (x) { return x.id === b.id ? nb : x; }), spkSrc: a, bassAll: all, cell: null, bar: 'idle' });
+}
+var cellSel = sepMode && s.cell && B.sends[s.cell.r] && B.sends[s.cell.r][s.cell.c] !== undefined, cellG = cellSel ? B.sends[s.cell.r][s.cell.c] : null;
+function dbText(g) { return (g > 0 ? '+' : g < 0 ? '−' : '') + Math.abs(g).toFixed(1) + ' dB'; }
+function msField(key, v, commit) {
+var ed = s.bfEdit && s.bfEdit.key === key ? s.bfEdit : null;
+return { field: ed ? ed.text : v.toFixed(2) + ' ms',
+focus: function () { self.setState({ bfEdit: { key: key, text: String(v) } }); },
+type: function (e) { self.setState({ bfEdit: { key: key, text: e.target.value } }); },
+key: function (e) { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { self.cancelBf = true; e.target.blur(); } },
+blur: function () {
+var cur = self.state.bfEdit;
+if (cur && cur.key === key && !self.cancelBf) { var n = parseFloat(String(cur.text).replace(',', '.')); if (!isNaN(n)) { n = Math.max(0, Math.min(50, Math.round(n * 100) / 100)); if (n !== v) commit(n); } }
+self.cancelBf = false;
+self.setState({ bfEdit: null });
+} };
+}
+function numField(key, v, min, max, isDb, commit, offOk) {
+var ed = s.bfEdit && s.bfEdit.key === key ? s.bfEdit : null;
+return { field: ed ? ed.text : v === null ? 'Off' : isDb ? dbText(v) : v + ' Hz',
+focus: function () { self.setState({ bfEdit: { key: key, text: v === null ? '' : String(v) } }); },
+type: function (e) { self.setState({ bfEdit: { key: key, text: e.target.value } }); },
+key: function (e) { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { self.cancelBf = true; e.target.blur(); } },
+blur: function () {
+var cur = self.state.bfEdit;
+if (cur && cur.key === key && !self.cancelBf) {
+var raw = String(cur.text).trim(), n = parseFloat(raw.replace(',', '.').replace('−', '-'));
+if (offOk && (raw === '' || /^off$/i.test(raw))) { if (v !== null) commit(null); }
+else if (!isNaN(n)) { n = Math.max(min, Math.min(max, isDb ? Math.round(n * 10) / 10 : Math.round(n))); if (n !== v) commit(n); }
+}
+self.cancelBf = false;
+self.setState({ bfEdit: null });
+} };
+}
+var mcell = s.mixCell, imp = s.imp;
+var spkN = BC.speakers.length, lfePos = spkN > 2 && names[BC.speakers[2]].indexOf('C') === 0 ? 3 : Math.min(2, spkN), mixOrder = [];
+for (var mo = 0; mo < spkN; mo++) { if (mo === lfePos) mixOrder.push(spkN); mixOrder.push(mo); }
+if (lfePos >= spkN) mixOrder.push(spkN);
+var eqBus = eqOpen ? busOf(s.buses, ec) : null, eqPh = !!(eqBus && eqBus.kind === 'phones'), eqPartner = eqPh ? eqBus.outs[1 - eqBus.outs.indexOf(ec)] : null;
+var IMP = { rew: ['REW', 'In REW, export the filter settings as text, then choose the file or paste it.', 'Filter 1: ON PK Fc 80.0 Hz Gain -3.0 dB Q 2.0'], autoeq: ['AutoEQ', 'Use the ParametricEQ.txt file from an AutoEQ result.', 'Preamp: -6.2 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.70'], own: ['USB-AoIP EQ file', 'An EQ file saved from this page: the bands as JSON.', '{"bands":[{"enabled":true,"type":"bell","frequency":80,"gainDb":-3,"q":2}]}'] };
+var impFmt = imp ? imp.fmt : 'rew';
+var hasSpk = s.buses.some(function (b) { return b.kind === 'speakers'; }), hasHp = hpBuses.length > 0;
+var expScopeList = [['speakers', 'Speakers', hasSpk], ['phones', 'Headphones', hasHp], ['both', 'Both', hasSpk && hasHp]].filter(function (o) { return o[2]; });
+var expScope = s.exp && expScopeList.some(function (o) { return o[0] === s.exp.scope; }) ? s.exp.scope : hasSpk && hasHp ? 'both' : hasSpk ? 'speakers' : hasHp ? 'phones' : 'all';
+var expDefault = 'usb-aoip-eq-' + (expScope === 'phones' ? 'headphones' : expScope);
+var expName = s.exp && typeof s.exp.name === 'string' ? s.exp.name : expDefault;
+var expText = '', expSummary = '', expFile = (expName.trim().replace(/\.json$/i, '').replace(/[\\/:*?"<>|]/g, '-') || expDefault) + '.json';
+if (s.exp) {
+var bandsOut = function (i) { return s.eq[i].map(function (b) { return { enabled: b.on, type: b.t === 'ls' ? 'lowShelf' : b.t === 'hs' ? 'highShelf' : 'bell', frequency: Math.round(b.f * 10) / 10, gainDb: b.g, q: b.q }; }); };
+var entries = [], nSpkOut = 0, nLinked = 0, nEars = 0;
+if (expScope === 'all') for (var xi = 0; xi < 16; xi++) entries.push({ name: names[xi], channel: chanOf[xi] + 1, bands: bandsOut(xi) });
+s.buses.forEach(function (b) {
+if (b.kind === 'speakers' && (expScope === 'speakers' || expScope === 'both')) b.outs.forEach(function (i) { nSpkOut++; entries.push({ name: names[i], channel: chanOf[i] + 1, bus: b.label, bands: bandsOut(i) }); });
+if (b.kind === 'phones' && (expScope === 'phones' || expScope === 'both')) {
+if (b.linkEq) { nLinked++; entries.push({ name: b.label, channels: [chanOf[b.outs[0]] + 1, chanOf[b.outs[1]] + 1], bus: b.label, linked: true, bands: bandsOut(b.outs[0]) }); }
+else b.outs.forEach(function (i) { nEars++; entries.push({ name: names[i], channel: chanOf[i] + 1, bus: b.label, linked: false, bands: bandsOut(i) }); });
+}
+});
+expText = JSON.stringify({ format: 'usb-aoip-eq', version: 1, outputs: entries }, null, 1);
+var parts = [];
+if (expScope === 'all') parts.push('All 16 outputs, each with its own EQ.');
+if (nSpkOut) parts.push(nSpkOut + ' speaker and subwoofer outputs, each with its own EQ.');
+if (nLinked) parts.push(nLinked + (nLinked === 1 ? ' headphone pair' : ' headphone pairs') + ' with linked EQ, exported as one EQ for both ears.');
+if (nEars) parts.push(nEars + ' unlinked headphone ears, each with its own EQ.');
+expSummary = parts.join(' ') + ' Unassigned outputs are left out.';
+if (expScope === 'all') expSummary = parts.join(' ');
+}
+var usedOuts = 0, outPanels = [], inBus = {}, roomOn = false, ge = s.grpEdit;
+var ROOM = { L: [24, 10], C: [50, 9], R: [76, 10], Lw: [9, 30], Rw: [91, 30], Ls: [9, 60.5], Rs: [91, 60.5], Lrs: [22, 92], Rrs: [78, 92], Cs: [50, 92], Ltf: [35, 45], Rtf: [65, 45], Ltm: [35, 60.5], Rtm: [65, 60.5], Ltr: [35, 76], Rtr: [65, 76] };
+var GDEFS = [['Fronts', /^(L|R|C)$/], ['Centre', /^C$/], ['Wides', /^[LR]w$/], ['Surrounds', /^[LR]s$/], ['Rears', /^([LR]rs|Cs)$/], ['Heights', /^[LR]t[fmr]$/], ['Left', /^L/], ['Right', /^R/]];
+function tok(i) { return names[i].split(' ')[0]; }
+function byChan(a, c2) { return chanOf[a] - chanOf[c2]; }
+function chip(b, name, outs, gid) {
+var allSolo = outs.every(function (i) { return s.solos[i]; }), allMute = outs.every(function (i) { return s.crMute[i]; });
+return { name: name, custom: !!gid, xCol: gid ? '24px' : '', border: allSolo ? '#F5D547' : allMute ? '#FF8A7A' : '#36474E',
+soloOn: allSolo ? 'true' : 'false', soloBg: allSolo ? '#F5D547' : '#223036', soloColor: allSolo ? '#0F1416' : '#E6EDEF', soloLabel: 'Solo ' + name + '. Hold Command or Control to add to the current solo.',
+muteOn: allMute ? 'true' : 'false', muteBg: allMute ? '#FF8A7A' : '#223036', muteColor: allMute ? '#0F1416' : '#E6EDEF', muteLabel: (allMute ? 'Unmute ' : 'Mute ') + name, muteRadius: gid ? '0' : '0 7px 7px 0',
+solo: function (e) {
+var so = s.solos.slice();
+if (e && (e.metaKey || e.ctrlKey)) outs.forEach(function (i) { so[i] = !allSolo; });
+else {
+var only = allSolo && b.outs.every(function (i) { return so[i] === (outs.indexOf(i) >= 0); });
+b.outs.forEach(function (i) { so[i] = false; });
+if (!only) outs.forEach(function (i) { so[i] = true; });
+}
+self.setState({ solos: so });
+},
+mute: function () { var m = s.crMute.slice(); outs.forEach(function (i) { m[i] = !allMute; }); self.setState({ crMute: m }); },
+removeLabel: 'Remove the group ' + name, remove: function () { self.setState({ groups: s.groups.filter(function (g) { return g.id !== gid; }) }); } };
+}
+s.buses.forEach(function (b) {
+usedOuts += b.outs.length;
+b.outs.forEach(function (i) { inBus[i] = true; });
+var order = b.outs.slice().sort(byChan);
+if (b.kind === 'phones') {
+var l = b.outs[0], r = b.outs[1], base = s.baseBuses.filter(function (x) { return x.id === b.id; })[0];
+var hpChanged = live && (!base || base.gain !== b.gain || base.mute !== b.mute || !!strips[l].mark || !!strips[r].mark);
+var eqOf = function (i, t, label) { var x = strips[i]; return { t: t, open: x.openEq, label: label, on: x.eqOn, bg: x.eqBg === '#0F1416' ? '#0F1416' : '#2C2440', border: x.eqBorder === '#36474E' ? '#36474E' : '#D9B8FF', curve: x.curve }; };
+outPanels.push({ title: b.label, tag: 'HEADPHONES', accent: '#D9B8FF', bg: '#1B1826', border: '#6B5A80', isSpk: false, isHp: true, showRoom: false, hasRows: false, rows: [],
+note: (b.mode === 'pair' ? 'Own stereo pair from the computer' : b.mode === 'custom' ? 'Custom routing' : 'Downmix of the speakers') + (b.linkEq ? ' · EQ linked' : ' · separate EQ for each ear'),
+hp: { chans: order.map(function (i) { return chanOf[i] + 1; }).join('–'), border: hpChanged ? '#F2B366' : LINE, mark: hpChanged ? 'Edited' : '', dot: hpChanged ? ' •' : '',
+ears: [{ t: 'L', clip: strips[l].clip, over: strips[l].over }, { t: 'R', clip: strips[r].clip, over: strips[r].over }],
+lvl: numField('hpg' + b.id, b.gain, -60, 12, true, function (v) { self.setBus(b.id, { gain: v }); }), lvlLabel: b.label + ' level in dB, from −60 to +12',
+down: function () { self.setBus(b.id, { gain: Math.max(-60, b.gain - 0.5) }); }, up: function () { self.setBus(b.id, { gain: Math.min(12, b.gain + 0.5) }); },
+downLabel: 'Lower ' + b.label + ' by 0.5 dB', upLabel: 'Raise ' + b.label + ' by 0.5 dB',
+eqs: (b.linkEq ? [eqOf(l, 'EQ', 'EQ for ' + b.label + ', both ears')] : [eqOf(l, 'L', 'EQ for ' + b.label + ', left ear'), eqOf(r, 'R', 'EQ for ' + b.label + ', right ear')]).map(function (q) { q.wide = !!b.linkEq; q.narrow = !b.linkEq; return q; }), onText: b.mute ? 'Off' : 'On', muteAria: b.label + (b.mute ? ' is switched off in this preset. Switch it on.' : ' is on. Switch it off in this preset.'),
+muted: b.mute ? 'true' : 'false', muteLabel: b.mute ? 'Muted' : 'Mute', muteBg: b.mute ? '#FF8A7A' : '#223036', muteColor: b.mute ? '#0F1416' : '#E6EDEF', muteBorder: b.mute ? '#FF8A7A' : '#36474E',
+toggleMute: function () { self.setBus(b.id, { mute: !b.mute }); } } });
+return;
+}
+var ctx = bassCtx(b), subs = ctx.subsIdx.filter(function (i) { return b.outs.indexOf(i) >= 0; }).sort(byChan), spk = order.filter(function (i) { return subs.indexOf(i) < 0; });
+var editing = !!ge && ge.bus === b.id, chips = [], seen = {};
+GDEFS.forEach(function (d) {
+var m = spk.filter(function (i) { return d[1].test(tok(i)); }), k = m.join(',');
+if (!m.length || m.length === spk.length || seen[k]) return;
+seen[k] = true;
+chips.push(chip(b, d[0], m, null));
+});
+if (subs.length) chips.push(chip(b, 'Subs', subs, null));
+s.groups.forEach(function (g) { if (g.bus !== b.id) return; var m = g.outs.filter(function (i) { return b.outs.indexOf(i) >= 0; }); if (m.length) chips.push(chip(b, g.name, m, g.id)); });
+order.forEach(function (i) {
+var x = strips[i], picked = editing && ge.outs.indexOf(i) >= 0;
+x.picking = editing; x.notPicking = !editing; x.pickText = ''; x.picked = picked ? 'true' : 'false'; x.pickText = picked ? 'In' : 'Add'; x.pickBg = picked ? '#7EDAC4' : 'transparent'; x.pickColor = picked ? '#0F1416' : '#E6EDEF';
+x.pickLabel = (picked ? 'Take ' + x.name + ' out of' : 'Add ' + x.name + ' to') + ' the new group';
+x.togglePick = function () { var o = ge.outs.slice(), k = o.indexOf(i); if (k >= 0) o.splice(k, 1); else o.push(i); self.setState({ grpEdit: Object.assign({}, ge, { outs: o }) }); };
+x.tileClick = editing ? x.togglePick : x.toggleSolo; x.tileLabel = editing ? x.pickLabel : x.soloLabel; x.tileOn = editing ? x.picked : x.soloed;
+x.tileBg = picked ? '#1F3A36' : '#172024'; x.tileSub = x.gainText;
+x.tileBorder = picked ? '#7EDAC4' : s.solos[i] ? '#F5D547' : s.crMute[i] ? '#FF8A7A' : LINE;
+var cm = s.crMute[i]; x.crT = { toggle: function () { var m = s.crMute.slice(); m[i] = !m[i]; self.setState({ crMute: m }); }, muted: cm ? 'true' : 'false', muteBg: cm ? '#FF8A7A' : '#223036', muteColor: cm ? '#0F1416' : '#E6EDEF', muteBorder: cm ? '#FF8A7A' : '#36474E', muteAria: (cm ? 'Unmute ' : 'Mute ') + x.name };
+});
+var tiles = [], unplaced = [];
+spk.forEach(function (i) { var p = ROOM[tok(i)]; if (p) tiles.push(Object.assign({}, strips[i], strips[i].crT, { x: p[0], y: p[1] })); else unplaced.push(strips[i]); });
+subs.forEach(function (i, k) { tiles.push(Object.assign({}, strips[i], strips[i].crT, { x: 50 + (k - (subs.length - 1) / 2) * 17, y: 27 })); });
+var room = roomOn && spk.length > unplaced.length, rows = room ? unplaced : order.map(function (i) { return strips[i]; });
+var nPick = editing ? ge.outs.length : 0;
+outPanels.push({ title: b.label, tag: 'SPEAKERS', accent: '#7EDAC4', bg: '#141C20', border: '#36474E', isSpk: true, isHp: false,
+note: spk.length + (spk.length === 1 ? ' speaker' : ' speakers') + (subs.length ? ', ' + subs.length + (subs.length === 1 ? ' subwoofer' : ' subwoofers') : '') ,
+chips: chips, grpIdle: !ge, grpEditing: editing, grpName: editing ? ge.name : '', grpHint: nPick ? nPick + ' picked.' : 'Pick speakers in the room below.',
+grpNew: function () { self.setState({ grpEdit: { bus: b.id, name: '', outs: [] } }); }, grpCancel: function () { self.setState({ grpEdit: null }); },
+grpType: function (e) { self.setState({ grpEdit: Object.assign({}, ge, { name: e.target.value }) }); },
+grpSave: function () { if (!ge.outs.length) return; var n = ge.name.trim() || 'Group ' + (s.groups.length + 1); self.setState({ groups: s.groups.concat([{ id: 'g' + (++self.seq), bus: b.id, name: n, outs: ge.outs.slice() }]), grpEdit: null }); },
+crTiles: tiles, crUnplaced: unplaced.map(function (u) { return u.name; }), showRoom: room, tiles: room ? tiles : [], hasUnplaced: room && unplaced.length > 0, rows: rows, hasRows: rows.length > 0 });
+});
+var freeIdx = []; for (var fi = 0; fi < 16; fi++) if (!inBus[fi]) freeIdx.push(fi);
+freeIdx.sort(byChan);
+if (freeIdx.length) outPanels.push({ title: s.buses.length ? 'Not assigned' : 'All outputs', tag: 'FREE', accent: '#A3B3B9', bg: '#141C20', border: '#2A373D', isSpk: false, isHp: false, showRoom: false, hasRows: true,
+note: s.buses.length ? 'Free outputs, passed straight through' : 'Passed straight through', rows: freeIdx.map(function (i) { return strips[i]; }) });
+var rc = s.rcell, routeRows = [], rt = { title: 'Pick a crosspoint', text: 'to see or change that send.', border: '#36474E', canToggle: false, canFeed: false, g: null };
+function xp(o, i) {
+var bus = busOf(s.buses, o);
+if (!bus) return i === chanOf[o] ? { kind: 'thru', g: 0 } : { kind: 'none', g: null };
+if (bus.kind === 'phones') { var ear = bus.outs.indexOf(o); return { kind: 'hp', g: bus.mix[i][ear], bus: bus, ear: ear }; }
+var xc = bassCtx(bus), xB = s.bassAll[xc.id], subPos = xc.subsIdx.indexOf(o), xn = xc.speakers.length;
+if (subPos >= 0 && xB) {
+var r = -1;
+if (curLayout.inputs[i] === 'LFE') r = xn; else for (var k = 0; k < xn; k++) if (s.spkSrc[xc.speakers[k]] === i) { r = k; break; }
+if (r < 0 || !xB.sends[r]) return { kind: 'none', g: null, sub: true };
+return { kind: 'sub', g: xB.sends[r][subPos], r: r, subPos: subPos, busId: xc.id, editable: xc.subsIdx.length > 1 && xc.mode === 'separate', dim: r !== xn && !xB.on };
+}
+return { kind: 'src', g: s.spkSrc[o] === i ? 0 : null };
+}
+function shortDb(g) { return g === 0 ? '0' : dbText(g).replace(' dB', '').replace('.0', ''); }
+if (!s.chooser && s.ptab === 'routing') {
+for (var ro = 0; ro < 16; ro++) (function (o, p) {
+var bus = busOf(s.buses, o), col = !bus ? '#A3B3B9' : bus.kind === 'phones' ? '#D9B8FF' : bassCtx(bus).subsIdx.indexOf(o) >= 0 ? '#8CC4FF' : '#E6EDEF', rowSel = s.rrow === o;
+routeRows.push({ label: (p + 1) + ' ' + names[o], color: col, rowSel: rowSel ? 'true' : 'false', rowLabel: 'Output ' + (p + 1) + ' ' + names[o] + ', move to another channel', rowBg: rowSel ? '#1F3A36' : 'transparent', rowBorder: rowSel ? '#7EDAC4' : '#2A373D',
+pickRow: function () { self.setState({ rrow: rowSel ? null : o, rcell: null }); },
+cells: curLayout.inputs.map(function (nm, i) {
+var x = xp(o, i), sel = !!rc && rc.o === o && rc.i === i, lit = x.g !== null, editing = !!s.rtype && s.rtype.o === o && s.rtype.i === i;
+var pal = x.kind === 'hp' ? ['#2C2440', '#D9B8FF'] : x.kind === 'sub' ? ['#1C2F45', '#8CC4FF'] : x.kind === 'src' ? ['#1F3A36', '#7EDAC4'] : ['transparent', '#4A5D65'];
+var canType = x.kind === 'hp' || (x.kind === 'sub' && x.editable), key = 'rx' + o + '_' + i;
+var cell = { t: !lit ? '' : x.kind === 'thru' ? '·' : shortDb(x.g), sel: sel ? 'true' : 'false', label: nm + ' to output ' + (p + 1) + ' ' + names[o] + (lit ? ', ' + x.g.toFixed(1) + ' dB' : ', off'),
+bg: lit ? pal[0] : '#0F1416', color: x.dim ? '#93A3A9' : '#E6EDEF', border: sel ? '#FFFFFF' : lit ? pal[1] : '#223036', bs: x.kind === 'thru' ? 'dashed' : 'solid', idle: !editing, editing: editing,
+pick: function () { self.setState({ rcell: sel ? null : { o: o, i: i }, rrow: null }); },
+dbl: function () {
+if (!canType || s.bar === 'applying') { self.setState({ rcell: { o: o, i: i }, rrow: null }); return; }
+self.setState({ rtype: { o: o, i: i }, rcell: { o: o, i: i }, rrow: null, bfEdit: { key: key, text: x.g === null ? '' : String(x.g) } });
+} };
+if (editing) {
+var nf = numField(key, x.g, -60, 12, true, x.kind === 'hp' ? function (v) { self.setMix(x.bus.id, i, x.ear, v); } : function (v) { self.setSend(x.r, x.subPos, v, x.busId); }, true), nb = nf.blur;
+Object.assign(cell, nf);
+cell.blur = function () { nb(); self.setState({ rtype: null }); };
+cell.ref = function (el) { if (el && document.activeElement !== el) { el.focus(); if (el.select) el.select(); } };
+}
+return cell;
+}) });
+})(logAt[ro], ro);
+if (s.rrow !== null) {
+rt.title = 'Output ' + (chanOf[s.rrow] + 1) + ' ' + names[s.rrow]; rt.text = 'Move it to channel'; rt.border = '#7EDAC4'; rt.canMove = true;
+rc = null;
+}
+if (rc) {
+var rx = xp(rc.o, rc.i);
+rt.title = (rc.i + 1) + ' ' + curLayout.inputs[rc.i] + ' → ' + (chanOf[rc.o] + 1) + ' ' + names[rc.o];
+rt.border = '#7EDAC4'; rt.g = rx.g; rt.text = '';
+if (rx.kind === 'hp') { rt.canToggle = true; rt.set = function (v) { self.setMix(rx.bus.id, rc.i, rx.ear, v); }; }
+else if (rx.kind === 'sub' && rx.editable) { rt.canToggle = true; rt.set = function (v) { self.setSend(rx.r, rx.subPos, v, rx.busId); }; if (rx.dim) rt.text = 'Bass redirection is off, so this send is silent.'; }
+else if (rx.kind === 'sub') rt.text = 'The subwoofers are all fed the same in this preset, so this send is fixed at 0 dB.';
+else if (rx.kind === 'src' && rx.g !== null) rt.text = 'This output is fed from this channel.';
+else if (rx.kind === 'src') { rt.canFeed = true; rt.text = 'Not connected.'; rt.feedLabel = 'Feed ' + names[rc.o] + ' from this channel (needs a restart)'; rt.feed = function () { if (s.bar === 'applying') return; var a = s.spkSrc.slice(); a[rc.o] = rc.i; self.setState({ spkSrc: a, bar: 'idle' }); }; }
+else if (rx.sub) rt.text = 'This channel carries no speaker bass, so there is nothing to send to a subwoofer.';
+else rt.text = 'Output ' + (chanOf[rc.o] + 1) + ' is not in a bus. It passes computer channel ' + (chanOf[rc.o] + 1) + ' straight through.';
+}
+}
+function setCfg(patch) {
+var n = Object.assign({}, cfg, patch), roles = self.cfgNames(n);
+if (roles.length > 16) return;
+n.map = self.reconcile(cfg.map.join() === self.reconcile([], cfgList).join() ? [] : cfg.map, roles);
+self.setState({ cfg: n, cfgPick: null });
+}
+var stdMap = self.reconcile([], cfgList);
+var LOGS = ['09:12:07 usb16x16-dante: rate 48000 Hz, endpoint started', '09:12:04 usb16x16-apply: rate request 96000 -> 48000 accepted', '08:55:31 usb16x16-dante-startcheck: restart, return flow losing packets', '08:54:02 usb16x16-statime: port state SLAVE', '08:54:00 usb16x16-web: listening on port 8088'];
+var sk = s.sysConfirm || '', drop = c.live + c.restart > 0 ? ' Changes you have not kept will be dropped.' : '';
+var dlg = sk === 'audio' ? { title: 'Restart audio?', text: 'Audio stops for about 3 seconds, then comes back on the same preset.', btn: 'Restart audio' }
+: sk === 'clock' ? { title: 'Restart the clock service?', text: 'Audio may drop for a few seconds while the device finds the clock leader again.', btn: 'Restart clock service' }
+: sk === 'reboot' ? { title: 'Reboot the Pi?', text: 'Audio stops and this page disconnects for about a minute. The computer loses the device until it is back.', btn: 'Reboot', danger: true }
+: sk === 'shutdown' ? { title: 'Shut down the Pi?', text: 'Audio stops and the computer loses the device. It cannot be started again from this page: it needs a power-cycle.', btn: 'Shut down', danger: true }
+: sk === 'noproc' ? { title: 'Switch to No processing?', text: 'Audio restarts, with about 3 seconds of silence, and then passes unchanged. Your presets stay saved.' + drop, btn: 'Switch' }
+: sk.indexOf('run:') === 0 ? { title: 'Run ' + sk.slice(4) + '?', text: 'Audio restarts, with about 3 seconds of silence, on this preset.' + drop, btn: 'Run it' }
+: sk.indexOf('remove:') === 0 ? { title: 'Remove ' + sk.slice(7) + '?', text: 'This deletes the preset from the device and cannot be undone. Export it first if you want a copy.', btn: 'Remove', danger: true }
+: sk === 'password' ? { title: 'Change page password', text: 'You will be asked to sign in again with the new password.', btn: 'Change password' }
+: { title: '', text: '', btn: '' };
+var pending = c.live + c.restart > 0;
+var editing = s.bar === 'idle' && pending;
+var bad = clockFault;
+var V = {
+tabs: tabs, isStatus: s.tab === 'status', isControl: s.tab === 'control', isProcessor: s.tab === 'processor', isSystem: s.tab === 'system',
+clockFault: clockFault, scaleMarks: scaleMarks, cards: cards, meterRows: meterRows, strips: strips, slopes: slopes, steps: steps, events: s.events,
+pillText: s.devOff ? 'Not connected' : bad ? 'Needs attention' : 'Connected', pillColor: s.devOff ? QUIET : bad ? BAD : OK,
+devOff: s.devOff, devOffText: s.devOffText, devOffCanPower: s.devOffCanPower,
+devPowerOn: function () { self.setState({ devOff: false, upText: 'under a minute', sysNote: '', events: self.log('Device started.') }); },
+sysFacts: [['Page', '1.7.2'], ['Applier', '1.9.0'], ['Audio engine', 'c84e6a36'], ['Uptime', s.devOff ? 'off' : s.upText], ['CPU temperature', s.devOff ? 'off' : '52 °C'], ['Last start check', 'Passed, no packets lost']].map(function (f) { return { label: f[0], value: f[1] }; }),
+sysNote: s.sysNote, sysNoteColor: s.sysBusy ? '#8CC4FF' : '#7EDAC4',
+sysActions: [
+['audio', 'Restart audio', 'Stops and restarts the audio service on the same preset. About 3 seconds of silence.', 0],
+['clock', 'Restart clock service', 'Use after a clock leader appears on the network and the device has not locked to it.', 0],
+['bundle', 'Download support bundle', 'One file with the logs, versions, start check result and the running preset.', 0],
+['password', 'Change page password', 'Sets a new password for this page.', 0],
+['reboot', 'Reboot the Pi', 'Audio stops and this page disconnects for about a minute.', 1],
+['shutdown', 'Shut down the Pi', 'Audio stops and the computer loses the device. It needs a power-cycle to start again.', 2]
+].map(function (a) {
+return { label: a[1], text: a[2], bg: a[3] === 2 ? '#FF8A7A' : a[3] === 1 ? '#F2B366' : '#223036', color: a[3] ? '#0F1416' : '#E6EDEF', border: a[3] === 2 ? '#FF8A7A' : a[3] === 1 ? '#F2B366' : '#36474E',
+run: function () {
+if (s.devOff || s.sysBusy || s.bar === 'applying') return;
+if (a[0] === 'bundle') {
+var txt = JSON.stringify({ versions: { page: '1.7.2', applier: '1.9.0', audioEngine: 'c84e6a36' }, running: s.runningName, startCheck: 'passed', events: s.events, logs: LOGS }, null, 1);
+try { var el = document.createElement('a'); el.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); el.download = 'usb-aoip-support.json'; document.body.appendChild(el); el.click(); el.remove(); } catch (e) {}
+self.setState({ sysNote: 'Support bundle downloaded.', events: self.log('Support bundle downloaded.') });
+return;
+}
+self.setState({ sysConfirm: a[0], pw1: '', pw2: '', pwErr: '' });
+} };
+}),
+sysPresets: [{ name: 'No processing', np: true }].concat(s.saved.map(function (n) { return { name: n }; })).map(function (p) {
+var running = s.runningName === p.name;
+return { name: p.name, tag: running ? '· running' : '', note: p.np ? 'Audio passes unchanged' : running ? 'Edit it on Processor' : 'Saved on the device', canRun: !running, canRemove: !running && !p.np,
+run: function () { if (!s.devOff && !s.sysBusy && s.bar !== 'applying') self.setState({ sysConfirm: p.np ? 'noproc' : 'run:' + p.name }); },
+remove: function () { if (!s.devOff && !s.sysBusy) self.setState({ sysConfirm: 'remove:' + p.name }); },
+canEdit: !p.np, renameAria: 'Rename ' + p.name, dupAria: 'Duplicate ' + p.name, expAria: 'Export ' + p.name + ' as a file',
+rename: function () { self.setState({ nameDlg: { kind: 'rename', from: p.name, text: p.name, err: '' } }); },
+dup: function () { self.setState({ nameDlg: { kind: 'dup', from: p.name, text: p.name + ' copy', err: '' } }); },
+exp: function () { self.saveFile('usb-aoip-preset-' + p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.json', JSON.stringify({ format: 'usb-aoip-preset', version: 1, name: p.name, note: 'Mockup export: a real file would carry every setting of the preset.' }, null, 2)); self.setState({ presetNote: p.name + ' exported.' }); } };
+}),
+logText: LOGS.join('\n'), logCopyLabel: s.copied ? 'Copied' : 'Copy logs',
+logCopy: function () { try { navigator.clipboard.writeText(LOGS.join('\n')); } catch (e) {} self.setState({ copied: true }); },
+sysDlgOpen: !!s.sysConfirm, sysDlgTitle: dlg.title, sysDlgText: dlg.text, sysDlgBtn: dlg.btn, sysDlgBtnBg: dlg.danger ? '#FF8A7A' : '#7EDAC4', sysDlgBorder: dlg.danger ? '#FF8A7A' : '#7EDAC4', sysDlgPw: s.sysConfirm === 'password',
+sysDlgGo: function () { self.sysRun(s.sysConfirm); }, sysDlgCancel: function () { self.setState({ sysConfirm: null, pw1: '', pw2: '', pwErr: '' }); },
+pw1: s.pw1, pw2: s.pw2, pwErr: s.pwErr, pw1Type: function (e) { self.setState({ pw1: e.target.value, pwErr: '' }); }, pw2Type: function (e) { self.setState({ pw2: e.target.value, pwErr: '' }); },
+nameDlgOpen: !!s.nameDlg, nameDlgVal: s.nameDlg ? s.nameDlg.text : '', nameDlgErr: s.nameDlg ? s.nameDlg.err : '',
+nameDlgTitle: !s.nameDlg ? '' : s.nameDlg.kind === 'saveas' ? 'Save as a new preset' : s.nameDlg.kind === 'rename' ? 'Rename ' + s.nameDlg.from : 'Duplicate ' + s.nameDlg.from,
+nameDlgText: !s.nameDlg ? '' : s.nameDlg.kind === 'saveas' ? 'Your changes are saved under this name and it becomes the running preset. ' + s.runningName + ' stays as it was.' : s.nameDlg.kind === 'rename' ? 'The preset keeps all its settings.' : 'A copy with all the same settings.',
+nameDlgBtn: !s.nameDlg ? '' : s.nameDlg.kind === 'saveas' ? 'Save' : s.nameDlg.kind === 'rename' ? 'Rename' : 'Duplicate',
+nameDlgType: function (e) { self.setState({ nameDlg: Object.assign({}, s.nameDlg, { text: e.target.value, err: '' }) }); },
+nameDlgKey: function (e) { if (e.key === 'Enter') self.nameDlgRun(); if (e.key === 'Escape') self.setState({ nameDlg: null }); },
+nameDlgGo: function () { self.nameDlgRun(); }, nameDlgCancel: function () { self.setState({ nameDlg: null }); },
+saveAs: function () { if (s.bar !== 'applying') self.setState({ nameDlg: { kind: 'saveas', from: s.runningName, text: s.runningName + ' 2', err: '' } }); },
+hasPresetNote: !!s.presetNote, presetNote: s.presetNote || '',
+presetImport: function (e) {
+var file = e.target.files && e.target.files[0]; if (!file) return;
+var fr = new FileReader();
+fr.onload = function () { var nm = ''; try { nm = String(JSON.parse(String(fr.result)).name || ''); } catch (x) {} nm = (nm || file.name.replace(/\.json$/i, '')).slice(0, 32); var st = self.state, k = 2, base = nm; while (st.saved.indexOf(nm) >= 0) nm = base + ' ' + (k++); self.setState({ saved: st.saved.concat([nm]), presetNote: nm + ' imported.', events: self.log('Preset ' + nm + ' imported from a file.') }); };
+fr.readAsText(file);
+},
+barOpen: editing || s.bar === 'applying' || s.bar === 'done',
+barEditing: editing, barApplying: s.bar === 'applying', barDone: s.bar === 'done',
+hasLive: c.live > 0, hasRestart: c.restart > 0, canKeep: c.live > 0 && c.restart === 0,
+liveText: c.live + (c.live === 1 ? ' change' : ' changes'), restartText: live ? c.restart + (c.restart === 1 ? ' change' : ' changes') : draftName,
+runningName: s.runningName, draftName: draftName, draftNote: live ? 'Same as the device, plus your changes' : 'Not on the device yet',
+hintColor: live ? '#7EDAC4' : '#8CC4FF', hintText: live ? 'heard as you change them' : 'not heard until you apply', bandHint: live ? 'Heard as you change it' : 'Not heard until you apply',
+chooserOpen: s.chooser, editorOpen: !s.chooser && s.ptab === 'outputs', pendingEdits: live && c.live > 0,
+openChooser: function () { if (s.bar !== 'applying') self.setState({ chooser: true, chooserEdit: false }); },
+openLayoutEdit: function () { if (s.bar !== 'applying') self.setState({ tab: 'processor', chooser: true, chooserEdit: true }); },
+chooserNew: !s.chooserEdit, chooserTitle: s.chooserEdit ? 'Change the speaker layout of ' + draftName : 'Start a new preset',
+chooserSub: s.chooserEdit ? 'The preset keeps its name. Outputs that keep their name keep their level, mute and EQ. Speaker sets, headphones, routing and bass management start again from the new layout. Nothing changes on the device until you apply it.' : 'Pick a starting point. Nothing changes on the device until you apply it.',
+chooserWarn: s.chooserEdit ? 'You have changes you have not kept. Set, routing and bass changes are dropped by a new layout.' : 'You have changes you have not kept. Starting a new preset drops them.',
+createLabel: s.chooserEdit ? 'Use this layout' : 'Create this layout', closeChooser: function () { self.setState({ chooser: false }); },
+startBlank: function () { self.choose('blank'); },
+quicks: [['2.0', 2, 0, 0], ['5.1', 5, 0, 1], ['7.1.4', 7, 4, 1], ['9.1.6', 9, 6, 1]].map(function (o) {
+return { label: o[0], pick: function () { setCfg({ h: o[1], v: o[2], subs: o[3], hp: Math.min(cfg.hp, Math.floor((16 - o[1] - o[2] - o[3]) / 2)) }); } };
+}),
+steppers: [
+{ label: 'Ear-level speakers', detail: 'Around you at ear height: front, sides and rear', value: cfg.h, key: 'h', min: 1, max: 9, step: 1 },
+{ label: 'Height speakers', detail: 'Overhead or high on the walls, added in pairs', value: cfg.v, key: 'v', min: 0, max: 6, step: 2 },
+{ label: 'Subwoofers', detail: 'Each on its own output', value: cfg.subs, key: 'subs', min: 0, max: 4, step: 1 },
+{ label: 'Headphone pairs', detail: 'Each pair takes two outputs', value: cfg.hp, key: 'hp', min: 0, max: 2, step: 1 }
+].map(function (r) {
+function move(d) { var v = cfg[r.key] + d, p = {}; if (v < r.min || v > r.max) return; p[r.key] = v; setCfg(p); }
+return { label: r.label, detail: r.detail, value: r.value, down: function () { move(-r.step); }, up: function () { move(r.step); }, downLabel: 'Fewer ' + r.label.toLowerCase(), upLabel: 'More ' + r.label.toLowerCase() };
+}),
+showSubMode: cfg.subs >= 2,
+subModes: [['same', 'Feed them all the same', 'Every speaker’s low frequencies and the LFE go to all the subs equally.'], ['separate', 'Manage each sub separately', 'Choose which subs each speaker’s bass goes to, with a level for each send, in the bass mixer.']].map(function (o) {
+var on = cfg.mode === o[0];
+return { label: o[1], text: o[2], on: on ? 'true' : 'false', mark: on ? '· chosen' : '', bg: on ? '#1F3A36' : '#172024', border: on ? '#7EDAC4' : '#36474E', pick: function () { setCfg({ mode: o[0] }); } };
+}),
+showHpMode: cfg.hp >= 1,
+hpModes: [['downmix', 'A downmix of the speakers', 'The speaker channels folded down to stereo, taken before the speaker crossovers. The headphones get their own EQ and level.'], ['pair', 'Their own stereo pair', 'Two channels from the computer that only the headphones hear, with their own EQ and level.']].map(function (o) {
+var on = cfg.hpMode === o[0];
+return { label: o[1], text: o[2], on: on ? 'true' : 'false', mark: on ? '· chosen' : '', bg: on ? '#1F3A36' : '#172024', border: on ? '#7EDAC4' : '#36474E', pick: function () { setCfg({ hpMode: o[0] }); } };
+}),
+showBuses: !s.chooser && s.ptab === 'buses', noBuses: s.buses.length === 0, hasBuses: s.buses.length > 0, busHelp: 'The main speakers follow the preset’s speaker layout. A speaker set added here shares the main subwoofer unless you choose otherwise in its Subwoofers column, and each speaker starts on the matching computer channel (Routing tab). Headphones need two free outputs.',
+busFooter: usedOuts + ' of 16 outputs assigned · ' + (16 - usedOuts) + ' free.' + (16 - usedOuts < 2 ? ' Adding one needs two free outputs.' : ''),
+busCards: s.buses.map(function (b) {
+var phones = b.kind === 'phones', chs = b.outs.map(function (i) { return chanOf[i] + 1; }).sort(function (a, c2) { return a - c2; }), lo = chs[0], hi = chs[chs.length - 1];
+var mc = phones && mcell && mcell.bus === b.id ? mcell : null, mg = mc ? b.mix[mc.r][mc.c] : null, mOpen = phones && s.mixOpen === b.id;
+return { rename: function (e) { self.setBus(b.id, { label: e.target.value.slice(0, 24) }); }, renameDone: function () { if (!String(b.label).trim()) self.setBus(b.id, { label: phones ? 'Headphones' : 'Speakers' }); }, renameLabel: 'Name of the ' + (phones ? 'headphones' : 'speaker set'), title: b.label, color: phones ? '#D9B8FF' : '#E6EDEF', border: phones ? '#6B5A80' : '#36474E', isPhones: phones,
+note: (phones ? 'Headphones, stereo' : b.extra && !b.subs.length ? 'Speakers, full range' : 'Speakers and subwoofers') + ' · outputs ' + (hi - lo + 1 === b.outs.length ? lo + ' to ' + hi : chs.join(', ')),
+gainText: dbText(b.gain), down: function () { self.setBus(b.id, { gain: Math.max(-60, b.gain - 0.5) }); }, up: function () { self.setBus(b.id, { gain: Math.min(12, b.gain + 0.5) }); },
+downLabel: 'Lower ' + b.label + ' by 0.5 dB', upLabel: 'Raise ' + b.label + ' by 0.5 dB',
+muted: b.mute ? 'true' : 'false', muteLabel: b.mute ? 'Bus muted' : 'Mute bus', muteBg: b.mute ? '#FF8A7A' : '#223036', muteColor: b.mute ? '#0F1416' : '#E6EDEF', muteBorder: b.mute ? '#FF8A7A' : '#36474E',
+toggleMute: function () { self.setBus(b.id, { mute: !b.mute }); },
+modes: [['downmix', 'Downmix of the speakers'], ['pair', 'Own stereo pair']].map(function (m) {
+var on = b.mode === m[0];
+return { label: m[1], on: on ? 'true' : 'false', pick: function () { self.setBus(b.id, { mode: m[0], mix: self.fillMix(curLayout.inputs, m[0]) }); self.setState({ mixCell: null }); }, bg: on ? '#8CC4FF' : '#223036', color: on ? '#0F1416' : '#E6EDEF', border: on ? '#8CC4FF' : '#36474E' };
+}),
+modeText: b.mode === 'pair' ? 'Hears computer channels 15 and 16 only, then its own EQ and level.' : b.mode === 'custom' ? 'Custom routing, set below, then its own EQ and level.' : 'Hears the speaker channels folded down to stereo, taken before the speaker crossovers, then its own EQ and level.',
+remove: function () {
+if (s.bar === 'applying') return;
+var a = s.spkSrc.slice();
+if (b.extra) b.outs.forEach(function (o) { a[o] = null; });
+self.setState({ buses: s.buses.filter(function (x) { return x.id !== b.id; }), spkSrc: a, bar: 'idle' });
+},
+subVal: !b.extra ? '' : b.subs.length ? String(b.subs.length) : b.subShare && curLayout.subsIdx.length ? 'share' : 'none', subAria: 'Subwoofers for ' + b.label,
+subOpts: (curLayout.subsIdx.length ? [{ v: 'share', t: curLayout.subsIdx.length === 1 ? 'Shares the main sub' : 'Shares the main subs' }] : []).concat([{ v: 'none', t: 'None, full range' }, { v: '1', t: 'Own sub' }, { v: '2', t: 'Own subs · 2' }, { v: '3', t: 'Own subs · 3' }, { v: '4', t: 'Own subs · 4' }]),
+pickSub: function (e) {
+if (!b.extra || s.bar === 'applying') return;
+var v = e.target.value, n = parseInt(v, 10) || 0, f = freeOuts(), subs = b.subs.slice(0, n);
+while (subs.length < n && f.length) subs.push(f.shift());
+resizeBus(Object.assign({}, b, { subShare: v === 'share' }), b.spk, subs);
+},
+isExtra: !!b.extra, isFixed: !b.extra, isMainSpk: !phones && !b.extra, canRemove: phones || !!b.extra, accent: phones ? '#D9B8FF' : '#7EDAC4',
+kindText: phones ? 'Headphones' : b.extra ? 'Speaker set' : 'Main speakers', shares: !!(b.extra && b.subShare && !b.subs.length && curLayout.subsIdx.length), outsText: (b.outs.length === 1 ? 'output ' : 'outputs ') + (hi - lo + 1 === b.outs.length ? (lo === hi ? lo : lo + ' to ' + hi) : chs.join(', ')),
+spkText: phones ? 'Stereo' : String(curLayout.speakers.length), subText: phones ? '–' : String(curLayout.subsIdx.length), fixedColor: phones ? '#A3B3B9' : '#E6EDEF',
+levelAria: b.label + ' bus level', muteAria: (b.mute ? 'Unmute ' : 'Mute ') + b.label, muteShort: b.mute ? 'Muted' : 'Mute', removeAria: 'Remove ' + b.label,
+detailOpen: phones && s.busOpen === b.id, detailAttr: phones && s.busOpen === b.id ? 'true' : 'false', detailBg: phones && s.busOpen === b.id ? '#2C2440' : '#223036', detailLabel: phones && s.busOpen === b.id ? 'Hide feed' : 'Feed and EQ',
+toggleDetail: function () { self.setState({ busOpen: s.busOpen === b.id ? null : b.id }); },
+extraText: b.extra && b.subShare && !b.subs.length ? 'Shares the main subwoofer.' : b.extra && b.subs.length ? 'Bass management for this set is on the Bass management tab. Each speaker starts on the matching computer channel; change that on the Routing tab.' : 'Full range until you add a subwoofer. Each speaker starts on the matching computer channel; change that on the Routing tab.',
+count: b.extra ? b.spk.length : b.outs.length, subCount: b.extra ? b.subs.length : 0,
+more: function () {
+var f = freeOuts();
+if (!b.extra || !f.length || b.spk.length >= POS.length || s.bar === 'applying') return;
+resizeBus(b, b.spk.concat([f[0]]), b.subs);
+},
+fewer: function () { if (b.extra && b.spk.length > 1 && s.bar !== 'applying') resizeBus(b, b.spk.slice(0, -1), b.subs); },
+subMore: function () {
+var f = freeOuts();
+if (!b.extra || !f.length || b.subs.length >= 4 || s.bar === 'applying') return;
+resizeBus(b, b.spk, b.subs.concat([f[0]]));
+},
+subFewer: function () { if (b.extra && b.subs.length && s.bar !== 'applying') resizeBus(b, b.spk, b.subs.slice(0, -1)); },
+linkOn: b.linkEq ? 'true' : 'false', linkLabel: b.linkEq ? 'Left and right EQ linked' : 'Link left and right EQ', linkBg: b.linkEq ? '#D9B8FF' : '#223036', linkColor: b.linkEq ? '#0F1416' : '#E6EDEF',
+toggleLink: function () { self.toggleLink(b.id); },
+mixOpen: mOpen, mixOpenAttr: mOpen ? 'true' : 'false', mixLabel: mOpen ? 'Hide routing and levels' : 'Edit routing and levels',
+toggleMix: function () { self.setState({ mixOpen: mOpen ? null : b.id, mixCell: null }); },
+mixRows: mOpen ? curLayout.inputs.map(function (nm, r) {
+return { label: (r + 1) + ' ' + nm, cells: [0, 1].map(function (c) {
+var g = b.mix[r][c], sel = !!mc && mc.r === r && mc.c === c, onC = g !== null;
+var xk = 'mxc' + b.id + '_' + r + '_' + c, xt = (c ? 'R ' : 'L ') + (onC ? dbText(g).replace(' dB', '') : 'off');
+var nf = numField(xk, g, -60, 12, true, function (n) { self.setMix(b.id, r, c, n); }, true), nfFocus = nf.focus;
+nf.focus = function () { self.setState({ mixCell: { bus: b.id, r: r, c: c } }); nfFocus(); };
+if (!(s.bfEdit && s.bfEdit.key === xk)) nf.field = xt;
+return Object.assign(nf, { t: xt, sel: sel ? 'true' : 'false', label: nm + ' to the ' + (c ? 'right' : 'left') + ' ear, ' + (onC ? g.toFixed(1) + ' dB' : 'off'),
+bg: onC ? '#2C2440' : '#172024', color: onC ? '#E6EDEF' : '#A3B3B9', border: sel ? '#7EDAC4' : onC ? '#6B5A80' : '#36474E',
+pick: function () { self.setState({ mixCell: sel ? null : { bus: b.id, r: r, c: c } }); } });
+}) };
+}) : [],
+mixCellOpen: !!mc, mixCellName: mc ? curLayout.inputs[mc.r] + ' to the ' + (mc.c ? 'right' : 'left') + ' ear' : '',
+mixCellOn: mg !== null ? 'true' : 'false', mixCellLabel: mg !== null ? 'On' : 'Off', mixCellBg: mg !== null ? '#7EDAC4' : '#223036', mixCellColor: mg !== null ? '#0F1416' : '#E6EDEF',
+toggleMixCell: function () { self.setMix(b.id, mc.r, mc.c, mg === null ? 0 : null); },
+mixDown: function () { if (mg !== null) self.setMix(b.id, mc.r, mc.c, mg - 0.5); }, mixUp: function () { if (mg !== null) self.setMix(b.id, mc.r, mc.c, mg + 0.5); },
+mf: mc ? numField('mx' + b.id, mg, -60, 12, true, function (n) { self.setMix(b.id, mc.r, mc.c, n); }) : {} };
+}),
+addSpeakers: function () {
+var f = freeOuts();
+if (s.bar === 'applying' || f.length < 2) return;
+var num = s.buses.filter(function (x) { return x.kind === 'speakers'; }).length + 1, a = s.spkSrc.slice();
+a[f[0]] = srcForPos(0); a[f[1]] = srcForPos(1);
+var nid = 'spk' + (++self.seq) + 'n', all = Object.assign({}, s.bassAll);
+all[nid] = self.freshBass({ speakers: [f[0], f[1]], subs: 0, mode: 'same', names: [] }, false);
+self.setState({ buses: s.buses.concat([{ id: nid, kind: 'speakers', extra: true, num: num, label: 'Speakers ' + num, outs: [f[0], f[1]], spk: [f[0], f[1]], subs: [], subShare: curLayout.subsIdx.length > 0, subMode: 'same', names: ['L ' + num, 'R ' + num], mode: '', gain: 0, mute: false }]), spkSrc: a, bassAll: all, bar: 'idle' });
+},
+addPhones: function () {
+if (s.bar === 'applying') return;
+var free = [];
+for (var i = 0; i < 16; i++) if (!busOf(s.buses, i)) free.push(i);
+if (free.length < 2) return;
+var n = hpBuses.length;
+self.setState({ buses: s.buses.concat([{ id: 'hp' + (++self.seq) + 'n', kind: 'phones', label: n ? 'Headphones ' + (n + 1) : 'Headphones', outs: free.slice(-2), mode: 'downmix', gain: 0, mute: false, linkEq: true, mix: self.fillMix(curLayout.inputs, 'downmix') }]), bar: 'idle' });
+},
+outPanels: outPanels, showOutViews: false, outViews: [['rows', 'Rows'], ['room', 'Room']].map(function (v) { var on = s.outView === v[0]; return { label: v[1], on: on ? 'true' : 'false', pick: function () { self.setState({ outView: v[0] }); }, bg: on ? '#7EDAC4' : '#223036', color: on ? '#0F1416' : '#E6EDEF', border: on ? '#7EDAC4' : '#36474E' }; }),
+expOpen: !!s.exp, expOpenIt: function () { self.setState({ exp: { scope: expScope } }); }, expClose: function () { self.setState({ exp: null }); }, expNoop: function () {},
+expHasScope: expScopeList.length > 1,
+expScopes: expScopeList.map(function (o) {
+var on = expScope === o[0];
+return { label: o[1], on: on ? 'true' : 'false', pick: function () { self.setState({ exp: Object.assign({}, s.exp, { scope: o[0] }) }); }, bg: on ? '#E6EDEF' : '#223036', color: on ? '#0F1416' : '#E6EDEF', border: on ? '#E6EDEF' : '#36474E' };
+}),
+expName: expName, expNameType: function (e) { self.setState({ exp: Object.assign({}, s.exp, { name: e.target.value }) }); },
+expText: expText, expSummary: expSummary, expFile: expFile,
+expDownload: function () {
+try {
+var a = document.createElement('a');
+a.href = URL.createObjectURL(new Blob([expText], { type: 'application/json' }));
+a.download = expFile;
+document.body.appendChild(a); a.click(); a.remove();
+} catch (e) {}
+},
+cfgName: self.cfgLabel(cfg) + (cfg.hp ? ' + ' + (cfg.hp === 1 ? 'headphones' : cfg.hp + ' headphone pairs') : ''), cfgUsed: cfgList.length === 16 ? 'All 16 outputs used' : cfgList.length + ' of 16 outputs used',
+cfgChips: cfgList.map(function (n, i) { var sub = n.indexOf('Sub') === 0, hp = n.indexOf('HP') === 0; return { t: (i + 1) + ' ' + n, color: sub ? '#8CC4FF' : hp ? '#D9B8FF' : '#E6EDEF', border: sub ? '#8CC4FF' : hp ? '#D9B8FF' : '#36474E' }; }),
+cfgSlots: cfg.map.map(function (role, i) {
+var sel = s.cfgPick === i, sub = !!role && role.indexOf('Sub') === 0, hp = !!role && role.indexOf('HP') === 0;
+return { n: i + 1, t: role || 'free', sel: sel ? 'true' : 'false', label: 'Channel ' + (i + 1) + ', ' + (role || 'free') + (sel ? ', picked up' : ''),
+bg: sel ? '#1F3A36' : role ? '#172024' : '#0F1416', color: !role ? '#A3B3B9' : sub ? '#8CC4FF' : hp ? '#D9B8FF' : '#E6EDEF', border: sel ? '#7EDAC4' : !role ? '#2A373D' : sub ? '#8CC4FF' : hp ? '#D9B8FF' : '#4A5D65',
+pick: function () {
+if (s.cfgPick === null) { self.setState({ cfgPick: i }); return; }
+if (s.cfgPick === i) { self.setState({ cfgPick: null }); return; }
+var m = cfg.map.slice(), a = m[s.cfgPick];
+m[s.cfgPick] = m[i]; m[i] = a;
+self.setState({ cfg: Object.assign({}, cfg, { map: m }), cfgPick: null });
+} };
+}),
+cfgMoved: cfg.map.join() !== stdMap.join(),
+cfgResetMap: function () { self.setState({ cfg: Object.assign({}, cfg, { map: stdMap }), cfgPick: null }); },
+createLayout: function () {
+var key = 'c' + (++self.seq), layouts = Object.assign({}, s.layouts);
+var nOut = cfgList.length - cfg.hp * 2, nSpk = nOut - cfg.subs, spk = [], subIdx = [], all = [];
+function slot(role) { return cfg.map.indexOf(role); }
+for (var k = 0; k < nOut; k++) { (k < nSpk ? spk : subIdx).push(slot(cfgList[k])); all.push(slot(cfgList[k])); }
+all.sort(function (a, b) { return a - b; });
+var ins = cfgList.slice(0, nSpk);
+if (cfg.subs) ins.splice(ins[2] === 'C' ? 3 : Math.min(2, nSpk), 0, 'LFE');
+ins = self.padInputs(ins);
+var newBuses = [{ id: 'spk', kind: 'speakers', label: 'Speakers', outs: all, mode: '', gain: 0, mute: false }];
+for (var j = 0; j < cfg.hp; j++) newBuses.push({ id: 'hp' + (j + 1), kind: 'phones', label: cfg.hp > 1 ? 'Headphones ' + (j + 1) : 'Headphones', outs: [slot(cfgList[nOut + 2 * j]), slot(cfgList[nOut + 2 * j + 1])], mode: cfg.hpMode, gain: 0, mute: false, linkEq: true, mix: self.fillMix(ins, cfg.hpMode) });
+layouts[key] = { inputs: ins, label: self.cfgLabel(cfg), subs: cfg.subs, mode: cfg.mode, speakers: spk, subsIdx: subIdx, buses: newBuses, names: self.padNames([]).map(function (d, i) { var r = cfg.map[i]; return r && r.indexOf('HP') !== 0 ? r : d; }) };
+layouts[key].src = self.srcFor(layouts[key]);
+if (s.chooserEdit) {
+layouts[key].keep = draftName;
+var oldNames = names, nn = layouts[key].names, eqK = [], gK = [], mK = [];
+self.choose(key, layouts);
+var st = self.state;
+for (var q = 0; q < 16; q++) { var j = /^Out \d+$/.test(nn[q]) ? -1 : oldNames.indexOf(nn[q]); eqK.push(j >= 0 ? JSON.parse(JSON.stringify(s.eq[j])) : st.eq[q]); gK.push(j >= 0 ? s.gains[j] : 0); mK.push(j >= 0 ? s.mutes[j] : false); }
+self.setState({ eq: eqK, gains: gK, mutes: mK });
+return;
+}
+self.choose(key, layouts);
+},
+showBass: !s.chooser && s.ptab === 'bass' && BC.subsIdx.length > 0, bassEmpty: !s.chooser && s.ptab === 'bass' && BC.subsIdx.length === 0,
+bassEmptyTitle: BC.extra ? 'No subwoofers in ' + BC.label : 'No subwoofers in this preset',
+bassEmptyText: BC.extra ? 'Give this set a subwoofer on the Speakers & headphones tab to give it bass management.' : 'Bass management needs at least one subwoofer output. Start a new preset with a speaker layout to add them.',
+bassPickOpen: !s.chooser && s.ptab === 'bass' && spkBuses.length > 1,
+bassPicks: spkBuses.map(function (b) {
+var on = b.id === BC.id;
+return { label: b.label, on: on ? 'true' : 'false', pick: function () { self.setState({ bassBus: b.id, cell: null }); }, bg: on ? '#E6EDEF' : '#223036', color: on ? '#0F1416' : '#E6EDEF', border: on ? '#E6EDEF' : '#36474E' };
+}),
+subModeOpen: BC.extra && BC.subsIdx.length > 1,
+subModeBtns: [['same', 'All fed the same'], ['separate', 'Managed separately']].map(function (m) {
+var on = BC.mode === m[0];
+return { label: m[1], on: on ? 'true' : 'false', pick: function () { if (!on && s.bar !== 'applying') resizeBus(bassBus, bassBus.spk, bassBus.subs, m[0]); }, bg: on ? '#8CC4FF' : '#223036', color: on ? '#0F1416' : '#E6EDEF', border: on ? '#8CC4FF' : '#36474E' };
+}),
+ptabsOpen: !s.chooser,
+showRouting: !s.chooser && s.ptab === 'routing',
+routeCols: curLayout.inputs.map(function (nm, i) { return { n: i + 1, t: nm }; }), routeRows: routeRows,
+rtCanMove: !!rt.canMove, mvVal: s.rrow !== null ? String(chanOf[s.rrow]) : '0',
+mvOpts: logAt.map(function (o, p) { return { v: String(p), t: (p + 1) + ' · ' + (s.rrow === o ? 'here now' : busOf(s.buses, o) ? 'trade with ' + names[o] : 'free') }; }),
+mvPick: function (e) {
+if (s.rrow === null || s.bar === 'applying') return;
+var p = parseInt(e.target.value, 10), a = s.perm.slice(), other = logAt[p];
+a[other] = a[s.rrow]; a[s.rrow] = p;
+self.setState({ perm: a, bar: 'idle' });
+},
+rtTitle: rt.title, rtText: rt.text, rtBorder: rt.border, rtCanToggle: rt.canToggle, rtCanFeed: rt.canFeed, rtFeedLabel: rt.feedLabel || '', rtFeed: rt.feed || function () {},
+rtOn: rt.g !== null && rt.g !== undefined ? 'true' : 'false', rtOnLabel: rt.g !== null && rt.g !== undefined ? 'On' : 'Off', rtOnBg: rt.g !== null && rt.g !== undefined ? '#7EDAC4' : '#223036', rtOnColor: rt.g !== null && rt.g !== undefined ? '#0F1416' : '#E6EDEF',
+rtToggle: function () { rt.set(rt.g === null ? 0 : null); },
+rf: rt.canToggle ? numField('rt', rt.g, -60, 12, true, rt.set, true) : {},
+cfgCols: cfg.map.map(function (role, i) { return { n: i + 1, color: role ? '#E6EDEF' : '#7C8C92' }; }),
+cfgRows: cfgList.map(function (role) {
+var cur = cfg.map.indexOf(role), col = role.indexOf('Sub') === 0 ? '#8CC4FF' : role.indexOf('HP') === 0 ? '#D9B8FF' : '#7EDAC4';
+return { label: role, color: col === '#7EDAC4' ? '#E6EDEF' : col, cells: cfg.map.map(function (other, i) {
+var on = i === cur;
+return { on: on ? 'true' : 'false', label: role + ' on channel ' + (i + 1) + (on ? ', connected' : other ? ', taken by ' + other : ''), bg: on ? col : other ? '#1E2A2F' : '#0F1416', border: on ? col : '#2A373D',
+pick: function () { if (on) return; var m = cfg.map.slice(); m[cur] = m[i]; m[i] = role; self.setState({ cfg: Object.assign({}, cfg, { map: m }) }); } };
+}) };
+}),
+ptabs: [['outputs', 'Outputs'], ['sources', 'Sources · ' + (s.io.ext.length + 1)], ['routing', 'Routing'], ['buses', 'Speakers & headphones'], ['bass', 'Bass management']].map(function (t) {
+var on = s.ptab === t[0];
+return { label: t[1], current: on ? 'page' : 'false', go: function () { self.setState({ ptab: t[0] }); }, bg: on ? '#172024' : 'transparent', color: on ? '#E6EDEF' : '#A3B3B9', line: on ? '#7EDAC4' : 'transparent' };
+}),
+bassTitle: (spkBuses.length > 1 ? BC.label + ' · ' : '') + (BC.subsIdx.length === 1 ? '1 subwoofer' : BC.subsIdx.length + ' subwoofers, ' + (sepMode ? 'managed separately' : 'all fed the same')),
+bassText: 'Every speaker’s low frequencies and the LFE go to ' + (BC.subsIdx.length === 1 ? 'the sub.' : 'all the subs equally.'),
+liveTag: live ? 'heard as you change it' : 'not heard until you apply',
+bassOn: B.on ? 'true' : 'false', bassOnLabel: B.on ? 'Redirection on' : 'Redirection off', bassOnBg: B.on ? '#7EDAC4' : '#223036', bassOnColor: B.on ? '#0F1416' : '#E6EDEF', bassOnBorder: B.on ? '#7EDAC4' : '#36474E',
+toggleBass: function () { self.setBass({ on: !B.on }); },
+bassFields: [['Crossover', 'xo', 40, 200, 5, ' Hz'], ['LFE low-pass', 'lfeLp', 40, 250, 5, ' Hz'], ['LFE level', 'lfeTrim', -24, 12, 0.5, ' dB']].map(function (f) {
+var v = B[f[1]];
+function withAll(p) { if (f[1] === 'xo') p.xos = B.xos.map(function () { return p.xo; }); return p; }
+function move(d) { var p = {}; p[f[1]] = Math.max(f[2], Math.min(f[3], v + d)); self.setBass(withAll(p)); }
+var ed = s.bfEdit && s.bfEdit.key === f[1] ? s.bfEdit : null;
+var mixed = f[1] === 'xo' && B.xos.some(function (x) { return x !== B.xos[0]; });
+return { label: f[0], field: ed ? ed.text : mixed ? 'Mixed' : f[5] === ' dB' ? dbText(v) : v + f[5], inputLabel: f[0] + ' in' + f[5] + ', from ' + f[2] + ' to ' + f[3],
+focus: function () { self.setState({ bfEdit: { key: f[1], text: String(v) } }); },
+type: function (e) { self.setState({ bfEdit: { key: f[1], text: e.target.value } }); },
+key: function (e) { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { self.cancelBf = true; e.target.blur(); } },
+blur: function () {
+var cur = self.state.bfEdit;
+if (cur && cur.key === f[1] && !self.cancelBf) {
+var n = parseFloat(String(cur.text).replace(',', '.').replace('−', '-'));
+if (!isNaN(n)) { var p = {}; p[f[1]] = Math.max(f[2], Math.min(f[3], f[5] === ' dB' ? Math.round(n * 10) / 10 : Math.round(n))); self.setBass(withAll(p)); }
+}
+self.cancelBf = false;
+self.setState({ bfEdit: null });
+},
+down: function () { move(-f[4]); }, up: function () { move(f[4]); }, downLabel: 'Lower ' + f[0], upLabel: 'Raise ' + f[0] };
+}),
+bassSame: !sepMode, bassSeparate: sepMode,
+spkXo: BC.speakers.map(function (oi, r) {
+var f = numField('xo' + r, B.xos[r], 40, 200, false, function (n) { var xs = B.xos.slice(); xs[r] = n; self.setBass({ xos: xs }); }), on = B.hp[r];
+f.label = names[oi]; f.inputLabel = names[oi] + ' crossover in Hz, from 40 to 200';
+f.hpOn = on ? 'true' : 'false'; f.hpLabel = on ? 'High-pass on' : 'Full range'; f.hpBg = on ? '#223036' : '#F2B366'; f.hpColor = on ? '#E6EDEF' : '#0F1416';
+f.toggleHp = function () { var h = B.hp.slice(); h[r] = !h[r]; self.setBass({ hp: h }); };
+return f;
+}),
+cf: cellSel ? numField('bcell', cellG, -60, 12, true, function (n) { self.setSend(s.cell.r, s.cell.c, n); }) : {},
+eqInPhones: eqPh, eqLinkOn: eqPh && eqBus.linkEq ? 'true' : 'false', eqLinkLabel: eqPh && eqBus.linkEq ? 'Linked with ' + names[eqPartner] : 'Link left and right EQ',
+eqLinkBg: eqPh && eqBus.linkEq ? '#D9B8FF' : '#223036', eqLinkColor: eqPh && eqBus.linkEq ? '#0F1416' : '#E6EDEF',
+eqToggleLink: function () { self.toggleLink(eqBus.id); },
+impOpen: !!imp, impOpenAttr: imp ? 'true' : 'false', impToggle: function () { self.setState({ imp: imp ? null : { fmt: 'rew', text: '', err: '' } }); },
+impFmts: ['rew', 'autoeq', 'own'].map(function (k) {
+var on = impFmt === k;
+return { label: IMP[k][0], on: on ? 'true' : 'false', pick: function () { self.setState({ imp: Object.assign({}, imp, { fmt: k, err: '' }) }); }, bg: on ? '#E6EDEF' : '#223036', color: on ? '#0F1416' : '#E6EDEF', border: on ? '#E6EDEF' : '#36474E' };
+}),
+impHint: IMP[impFmt][1], impPlaceholder: IMP[impFmt][2], impText: imp ? imp.text : '',
+impType: function (e) { self.setState({ imp: Object.assign({}, imp, { text: e.target.value }) }); },
+impFile: function (e) {
+var file = e.target.files && e.target.files[0];
+if (!file) return;
+var fr = new FileReader();
+fr.onload = function () { self.setState({ imp: Object.assign({}, self.state.imp, { text: String(fr.result), err: '' }) }); };
+fr.readAsText(file);
+},
+hasImpErr: !!(imp && imp.err), impErr: imp ? imp.err : '', hasImpNote: !!s.impNote && !imp, impNote: s.impNote,
+impRun: function () {
+if (s.bar === 'applying') return;
+var res = self.parseEq(imp.fmt, imp.text, [names[ec], eqBus ? eqBus.label : '']);
+if (!res.bands.length) { self.setState({ imp: Object.assign({}, imp, { err: 'No filters found in that text. Check the file type chosen above.' }) }); return; }
+var eq = JSON.parse(JSON.stringify(s.eq));
+eq[ec] = self.FREQ.map(function (f0, i) { return res.bands[i] || { f: f0, g: 0, q: 1, t: 'bell', on: true }; });
+if (eqPh && eqBus.linkEq) eq[eqPartner] = JSON.parse(JSON.stringify(eq[ec]));
+self.setState({ eq: eq, bar: 'idle', imp: null, band: 0, impNote: 'Imported ' + res.bands.length + (res.bands.length === 1 ? ' filter' : ' filters') + ' from ' + IMP[imp.fmt][0] + '.' + (res.preamp !== null ? ' The file’s preamp of ' + res.preamp + ' dB was not applied.' : '') });
+},
+subHeads: BC.subsIdx.map(function (i) { return { t: names[i] }; }),
+mixRows: sepMode ? mixOrder.map(function (r) {
+var row = B.sends[r];
+var src = r < BC.speakers.length ? names[BC.speakers[r]] : 'LFE';
+return { label: src, cells: row.map(function (g, c) {
+var sel = cellSel && s.cell.r === r && s.cell.c === c, onC = g !== null;
+var nf = numField('bs' + r + '_' + c, g, -60, 12, true, function (n) { self.setSend(r, c, n); }, true), nfFocus = nf.focus;
+nf.focus = function () { self.setState({ cell: { r: r, c: c } }); nfFocus(); };
+return Object.assign(nf, { t: onC ? dbText(g) : 'Off', sel: sel ? 'true' : 'false', label: src + ' to ' + names[BC.subsIdx[c]] + ', ' + (onC ? g.toFixed(1) + ' dB' : 'off'),
+bg: onC ? '#1F3A36' : '#0F1416', color: onC ? '#E6EDEF' : '#A3B3B9', border: sel ? '#7EDAC4' : onC ? '#2F5A52' : '#36474E',
+pick: function () { self.setState({ cell: sel ? null : { r: r, c: c } }); } });
+}) };
+}) : [],
+cellOpen: !!cellSel,
+cellName: cellSel ? (s.cell.r < BC.speakers.length ? names[BC.speakers[s.cell.r]] : 'LFE') + ' to ' + names[BC.subsIdx[s.cell.c]] : '',
+cellOn: cellG !== null ? 'true' : 'false', cellOnLabel: cellG !== null ? 'On' : 'Off', cellOnBg: cellG !== null ? '#7EDAC4' : '#223036', cellOnColor: cellG !== null ? '#0F1416' : '#E6EDEF',
+cellValue: cellG !== null ? dbText(cellG) : 'Off',
+toggleCell: function () { self.setSend(s.cell.r, s.cell.c, cellG === null ? 0 : null); },
+cellDown: function () { if (cellG !== null) self.setSend(s.cell.r, s.cell.c, cellG - 0.5); },
+cellUp: function () { if (cellG !== null) self.setSend(s.cell.r, s.cell.c, cellG + 0.5); },
+allSendsOn: function () { self.setBass({ sends: B.sends.map(function (row) { return row.map(function (g) { return g === null ? 0 : g; }); }) }); },
+doneText: s.doneText,
+eqOpen: eqOpen, eqName: eqOpen ? names[ec] : '', eqNumber: eqOpen ? chanOf[ec] + 1 : '', eqPoints: self.points(s.eqBypass ? [] : eqBands, 400, 200, 96),
+handles: handles, bandRows: bandRows, bandNumber: bi + 1, bandLayers: bandLayers, chips: chips, bandColor: COLORS[bi],
+bandReset: function () { self.setBand(ec, bi, { f: self.FREQ[bi], g: 0, q: 1, t: 'bell' }); },
+anySolo: anySolo, soloText: 'Solo: ' + soloCount + (soloCount === 1 ? ' output.' : ' outputs.'),
+clearSolo: function () { self.setState({ solos: s.solos.map(function () { return false; }) }); },
+eqBypassed: s.eqBypass, bypassOn: s.eqBypass ? 'true' : 'false', bypassLabel: s.eqBypass ? 'All EQ bypassed' : 'Bypass all EQ',
+bypassBg: s.eqBypass ? '#F2B366' : 'transparent', bypassColor: s.eqBypass ? '#0F1416' : '#E6EDEF', bypassBorder: s.eqBypass ? '#F2B366' : '#4A5D65',
+toggleBypass: function () { if (s.bar !== 'applying') self.setState({ eqBypass: !s.eqBypass, bar: 'idle' }); },
+confirmAll: s.confirmAll, askResetAll: function () { self.setState({ confirmAll: true }); }, cancelResetAll: function () { self.setState({ confirmAll: false }); },
+resetAll: function () { if (s.bar !== 'applying') self.setState({ eq: s.eq.map(function (bands) { return self.resetBands(bands); }), confirmAll: false, bar: 'idle' }); },
+resetEq: function () {
+if (s.bar === 'applying') return;
+var eq = JSON.parse(JSON.stringify(s.eq)); eq[ec] = self.resetBands(eq[ec]);
+if (eqPh && eqBus.linkEq) eq[eqPartner] = self.resetBands(eq[eqPartner]);
+self.setState({ eq: eq, bar: 'idle' });
+},
+bandOn: sb.on ? 'true' : 'false', bandOnLabel: sb.on ? 'On' : 'Off', bandOnBg: sb.on ? COLORS[bi] : '#223036', bandOnColor: sb.on ? '#0F1416' : '#E6EDEF',
+toggleBand: function () { self.setBand(ec, bi, { on: !sb.on }); },
+types: [['bell', 'Bell'], ['ls', 'Low shelf'], ['hs', 'High shelf']].map(function (t) {
+var on = sb.t === t[0];
+return { label: t[1], on: on ? 'true' : 'false', pick: function () { self.setBand(ec, bi, { t: t[0] }); },
+bg: on ? '#E6EDEF' : '#223036', color: on ? '#0F1416' : '#E6EDEF', border: on ? '#E6EDEF' : '#36474E' };
+}),
+eqPrev: function () { self.setState({ eqCh: (ec + 15) % 16, band: 0, imp: null, impNote: '' }); },
+eqNext: function () { self.setState({ eqCh: (ec + 1) % 16, band: 0, imp: null, impNote: '' }); },
+eqClose: function () { self.setState({ eqCh: null, imp: null, impNote: '' }); },
+discard: function () {
+self.setState({ delays: s.baseDelays.slice(), pol: s.basePol.slice(), io: JSON.parse(JSON.stringify(s.baseIo)), perm: s.basePerm.slice(), rrow: null, rtype: null, spkSrc: s.baseSpkSrc.slice(), rcell: null, buses: JSON.parse(JSON.stringify(s.baseBuses)), bassAll: JSON.parse(JSON.stringify(s.baseBassAll)), cell: null, layout: s.baseLayout, chooser: false, eqCh: null, eqBypass: s.baseEqBypass, confirmAll: false, eq: JSON.parse(JSON.stringify(s.baseEq)), gains: s.baseGains.slice(), mutes: s.baseMutes.slice(), slope: s.baseSlope, bar: 'idle', events: self.log('Changes discarded. The device is on ' + s.runningName + ' as saved.') });
+},
+keep: function () { self.commit('Kept at ' + self.now() + '. Main room is saved with these changes.', self.log('Main room saved with ' + c.live + (c.live === 1 ? ' live change.' : ' live changes.'))); },
+apply: function () {
+self.setState({ bar: 'applying', step: 0 });
+self.timers.push(setTimeout(function () { self.setState({ step: 1 }); }, 900));
+self.timers.push(setTimeout(function () { self.setState({ step: 2 }); }, 2400));
+self.timers.push(setTimeout(function () {
+self.commit('Applied at ' + self.now() + '. Audio is passing.', self.log(live ? s.runningName + ' applied with ' + c.restart + (c.restart === 1 ? ' change' : ' changes') + ' that needed a restart. Audio restarted (3 seconds of silence).' : draftName + ' applied in place of ' + s.runningName + '. Audio restarted (3 seconds of silence).'));
+}, 3400));
+},
+dismiss: function () { self.setState({ bar: 'idle' }); }
+};
+var mrBy = {};
+V.mixRows.forEach(function (m, k) { mrBy[mixOrder[k]] = m; });
+var nSubs = BC.subsIdx.length;
+V.bassCols = sepMode ? V.subHeads : nSubs ? [{ t: nSubs === 1 ? names[BC.subsIdx[0]] : 'All subs' }] : [];
+V.bassSameNote = !sepMode && nSubs > 0;
+V.bassRows = mixOrder.filter(function (r) { return r < spkN || nSubs > 0; }).map(function (r) {
+var isSpk = r < spkN, sx = isSpk ? V.spkXo[r] : {}, m = mrBy[r];
+if (isSpk) { sx.hpShort = sx.hpOn === 'true' ? 'On' : 'Full range'; sx.hpAria = sx.label + ' high-pass, ' + (sx.hpOn === 'true' ? 'on' : 'off, full range'); }
+return { label: isSpk ? sx.label : 'LFE', color: isSpk ? '#E6EDEF' : '#8CC4FF', isSpk: isSpk, isLfe: !isSpk, sx: sx,
+lfeText: 'Low-pass and level: above', cells: m ? m.cells : [], fixed: !sepMode && nSubs ? [{ t: !B.on && isSpk ? 'Off' : '0.0 dB' }] : [] };
+});
+var io = s.io;
+function setIo(patch) { if (s.bar === 'applying') return; self.setState({ io: Object.assign({}, io, patch), bar: 'idle' }); }
+function setExt(id, patch) { setIo({ ext: io.ext.map(function (x) { return x.id === id ? Object.assign({}, x, patch) : x; }) }); }
+function feedChips(get, set) { return s.buses.map(function (b) { var on = get(b.id); return { label: b.label, on: on ? 'true' : 'false', bg: on ? (b.kind === 'phones' ? '#D9B8FF' : '#7EDAC4') : '#223036', color: on ? '#0F1416' : '#E6EDEF', toggle: function () { set(b.id, !on); } }; }); }
+V.showSources = !s.chooser && s.ptab === 'sources';
+if (V.showSources) {
+var used = 52;
+io.ext.forEach(function (x) { used += x.n * (1 + (x.gate ? 1.5 : 0) + x.eq * 0.5); });
+V.dspPct = Math.min(100, used).toFixed(0); V.dspText = used.toFixed(0) + '% used'; V.dspColor = used > 100 ? '#FF8A7A' : used > 85 ? '#F2B366' : '#7EDAC4'; V.dspOver = used > 100;
+var WIDTHS = [[1, 'Mono'], [2, 'Stereo'], [6, '5.1 (6 channels)'], [8, '7.1 (8 channels)'], [12, '7.1.4 (12 channels)'], [16, '16 channels']];
+var chText = function (x) { return (x.from === 'usb' ? 'USB ' : 'Dante in ') + (x.ch + 1) + (x.n > 1 ? '–' + (x.ch + x.n) : ''); };
+var wText = function (n) { return n === 1 ? 'Mono' : n === 2 ? 'Stereo' : n === 6 ? '5.1' : n === 8 ? '7.1' : n === 12 ? '7.1.4' : n + ' channels'; };
+var clipOf = function (d) { return (100 - Math.round((d === null ? 0 : pos(d)) * 30) / 30 * 100).toFixed(2); };
+var selId = s.srcSel, selX = io.ext.filter(function (x) { return x.id === selId; })[0] || null;
+V.srcMainOpen = !selX; V.srcOpen = !!selX; V.srcPanelTitle = selX ? 'Selected source' : 'Main feed';
+var chips = function (get, set, who) { return feedChips(get, set).map(function (f) { f.aria = who + (f.on === 'true' ? ' plays to ' : ' does not play to ') + f.label; return f; }); };
+V.srcList = [{ name: 'Computer', summary: 'USB 1–16 · main feed', sel: !selX ? 'true' : 'false', pickLabel: 'Show the computer feed', pick: function () { self.setState({ srcSel: null }); },
+bg: !selX ? '#1B2A2E' : '#172024', border: !selX ? '#7EDAC4' : LINE, clip: clipOf(hasAudio ? -8 : null),
+feeds: chips(function (id) { return io.busUsb[id] !== false; }, function (id, v) { var m = Object.assign({}, io.busUsb); m[id] = v; setIo({ busUsb: m }); }, 'Computer') }]
+.concat(io.ext.map(function (x) {
+var on = selX && selX.id === x.id, out = self.srcOut(x, shape);
+return { name: x.name, summary: chText(x) + ' · ' + wText(x.n) + (x.gate ? ' · gate' : '') + (x.eq ? ' · EQ ' + x.eq : ''), sel: on ? 'true' : 'false', pickLabel: 'Set up ' + x.name, pick: function () { self.setState({ srcSel: x.id }); },
+bg: on ? '#1B2A2E' : '#172024', border: on ? '#7EDAC4' : LINE, clip: clipOf(hasAudio && out !== null ? out + x.gain : null),
+feeds: chips(function (id) { return x.to[id] !== false; }, function (id, v) { var m = Object.assign({}, x.to); m[id] = v; setExt(x.id, { to: m }); }, x.name) };
+}));
+V.addExt = function () {
+if (io.ext.length >= 8) return;
+var taken = {}; io.ext.forEach(function (x) { if (x.from === 'dante') taken[x.ch - x.ch % 2] = true; });
+var ch = 16; while (ch < 62 && taken[ch]) ch += 2;
+var id = 'x' + (++self.seq);
+if (s.bar === 'applying') return;
+self.setState({ io: Object.assign({}, io, { ext: io.ext.concat([self.newSrc(id, 'Source ' + (io.ext.length + 1), ch)]) }), srcSel: id, bar: 'idle' });
+};
+V.extNote = io.ext.length >= 8 ? 'Eight added sources is the most this mockup allows.' : s.buses.length ? '' : 'This preset has no speaker sets or headphones, so a source has nowhere to play.';
+V.sd = {};
+if (selX) {
+var x = selX, max = x.from === 'usb' ? 16 : 64, chOpts = [];
+for (var k = 0; k + x.n <= max; k += x.n > 1 ? 2 : 1) chOpts.push({ v: String(k), t: chText({ from: x.from, ch: k, n: x.n }) });
+var uF = function (key, v, min, max2, unit, dec, commit) {
+var ed = s.bfEdit && s.bfEdit.key === key ? s.bfEdit : null;
+return { field: ed ? ed.text : unit === 'sdB' ? dbText(v) : unit === ':1' ? v + ':1' : v.toFixed(dec) + ' ' + unit,
+focus: function () { self.setState({ bfEdit: { key: key, text: String(v) } }); },
+type: function (e) { self.setState({ bfEdit: { key: key, text: e.target.value } }); },
+key: function (e) { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { self.cancelBf = true; e.target.blur(); } },
+blur: function () {
+var cur = self.state.bfEdit;
+if (cur && cur.key === key && !self.cancelBf) { var n = parseFloat(String(cur.text).replace(',', '.').replace('−', '-')), p = Math.pow(10, dec); if (!isNaN(n)) { n = Math.max(min, Math.min(max2, Math.round(n * p) / p)); if (n !== v) commit(n); } }
+self.cancelBf = false;
+self.setState({ bfEdit: null });
+} };
+};
+var gf = function (label, help, prop, min, max2, unit, dec, step) { var set = function (n) { var p = {}; p[prop] = n; setExt(x.id, p); }, f = uF('g_' + prop + x.id, x[prop], min, max2, unit, dec, set); f.label = label; f.help = help; f.min = String(min); f.max = String(max2); f.step = String(step); f.val = String(x[prop]); f.accent = prop === 'thr' ? '#F2B366' : '#7EDAC4'; f.sliderLabel = label + ' slider. ' + help; f.fieldLabel = label + ', typed'; f.slide = function (e) { var n = parseFloat(e.target.value); if (!isNaN(n) && n !== x[prop]) set(n); }; return f; };
+var lvl = x.from === 'usb' ? shape[x.ch] : x.lvl, has = hasAudio && lvl !== null && lvl !== undefined, outG = has ? self.gateCurve(x, lvl) : null, red = has ? lvl - outG : 0;
+var X = function (d) { return ((Math.max(-80, Math.min(0, d)) + 80) * 2.5).toFixed(1); }, Y = function (d) { return (200 - (Math.max(-80, Math.min(0, d)) + 80) * 2.5).toFixed(1); };
+var pts = []; for (var d = -80; d <= 0; d += 1) pts.push(X(d) + ',' + Y(self.gateCurve(x, d)));
+var barPct = function (d) { return ((1 - (d === null ? 0 : (Math.max(-80, d) + 80) / 80)) * 100).toFixed(1); };
+var GRAD = 'linear-gradient(to top, #00B418 0%, #00D600 47%, #8CE000 54%, #FFF000 62.3%, #FF9800 80%, #FF2A00 90%, #E00000 100%)';
+V.sd = { name: x.name, typeName: function (e) { setExt(x.id, { name: e.target.value }); },
+remove: function () { if (s.bar === 'applying') return; self.setState({ io: Object.assign({}, io, { ext: io.ext.filter(function (y) { return y.id !== x.id; }) }), srcSel: null, bar: 'idle' }); },
+froms: [['usb', 'Computer (USB)'], ['dante', 'Dante']].map(function (f) { var on = x.from === f[0]; return { label: f[1], on: on ? 'true' : 'false', bg: on ? '#7EDAC4' : '#223036', color: on ? '#0F1416' : '#E6EDEF', pick: function () { if (!on) setExt(x.id, { from: f[0], n: Math.min(x.n, 16), ch: f[0] === 'usb' ? Math.max(0, 16 - Math.min(x.n, 16)) - (Math.max(0, 16 - Math.min(x.n, 16)) % 2) : 16 }); } }; }),
+nVal: String(x.n), nOpts: WIDTHS.map(function (w) { return { v: String(w[0]), t: w[1] }; }), pickN: function (e) { var n = parseInt(e.target.value, 10), c = x.ch - (n > 1 ? x.ch % 2 : 0); if (c + n > max) c = max - n; setExt(x.id, { n: n, ch: c }); },
+chVal: String(x.ch), chOpts: chOpts, pickCh: function (e) { setExt(x.id, { ch: parseInt(e.target.value, 10) }); },
+gain: numField('xg' + x.id, x.gain, -60, 12, true, function (v) { setExt(x.id, { gain: v }); }),
+eqText: x.eq ? x.eq + (x.eq === 1 ? ' band' : ' bands') : 'None', eqDown: function () { if (x.eq > 0) setExt(x.id, { eq: x.eq - 1, bands: (x.bands || []).slice(0, x.eq - 1) }); },
+eqUp: function () { if (x.eq < 4) setExt(x.id, { eq: x.eq + 1, bands: (x.bands || []).concat([{ f: [100, 400, 2500, 8000][x.eq], g: 0, q: 1, t: 'bell', on: true }]) }); },
+hasBands: x.eq > 0, eqCurve: self.points(x.bands || [], 300, 70, 60),
+bandRows: (x.bands || []).map(function (bd, k) {
+var setB = function (patch) { var bs = x.bands.map(function (q, j) { return j === k ? Object.assign({}, q, patch) : q; }); setExt(x.id, { bands: bs }); };
+var nextT = bd.t === 'bell' ? 'ls' : bd.t === 'ls' ? 'hs' : 'bell';
+return { n: k + 1, on: bd.on ? 'true' : 'false', onLabel: bd.on ? 'On' : 'Off', onBg: bd.on ? '#7EDAC4' : '#223036', onColor: bd.on ? '#0F1416' : '#E6EDEF', toggleOn: function () { setB({ on: !bd.on }); },
+typeLabel: bd.t === 'ls' ? 'Low shelf' : bd.t === 'hs' ? 'High shelf' : 'Bell', cycleType: function () { setB({ t: nextT }); }, typeAria: 'Band ' + (k + 1) + ' is a ' + (bd.t === 'ls' ? 'low shelf' : bd.t === 'hs' ? 'high shelf' : 'bell') + '. Change its type.',
+fq: uF('sbf' + x.id + k, bd.f, 20, 20000, 'Hz', 0, function (n) { setB({ f: n }); }), gn: uF('sbg' + x.id + k, bd.g, -18, 18, 'sdB', 1, function (n) { setB({ g: n }); }), qq: uF('sbq' + x.id + k, bd.q, 0.3, 12, 'Q', 2, function (n) { setB({ q: n }); }) };
+}),
+playNote: x.n === 1 ? 'A mono source plays equally to the first two outputs of a speaker set, and to both ears of headphones.' : x.n === 2 ? 'A stereo source plays to the first two outputs of a speaker set, and to both ears of headphones.' : 'Its ' + x.n + ' channels play to the first ' + x.n + ' outputs of a speaker set in order, and are folded down to stereo for headphones.',
+gate: x.gate, gateOn: x.gate ? 'true' : 'false', gateLabel: x.gate ? 'On' : 'Off', gateBg: x.gate ? '#7EDAC4' : '#223036', gateColor: x.gate ? '#0F1416' : '#E6EDEF', toggleGate: function () { setExt(x.id, { gate: !x.gate }); },
+gateState: !x.gate ? 'Passes everything.' : !has ? 'No signal.' : red < 0.5 ? 'Open.' : 'Closed, reducing by ' + red.toFixed(0) + ' dB.', gateStateColor: x.gate && has && red >= 0.5 ? '#F2B366' : '#A3B3B9',
+curve: pts.join(' '), area: '0,200 ' + pts.join(' ') + ' 200,200', tx: X(x.thr), ttx: Math.min(150, parseFloat(X(x.thr)) + 4).toFixed(1),
+lx: has ? X(lvl) : '-20', ly: has ? Y(outG) : '-20', liny: has ? Y(lvl) : '-20', dotOp: has ? '1' : '0',
+graphLabel: 'Gate curve. Threshold ' + x.thr + ' dB, range ' + x.range + ' dB, ratio ' + x.ratio + ' to 1. ' + (has ? 'Signal at ' + lvl + ' dB in, ' + outG.toFixed(0) + ' dB out.' : 'No signal.'),
+bars: [{ t: 'In', fill: GRAD, top: barPct(has ? lvl : null), bottom: '0' }, { t: 'Out', fill: GRAD, top: barPct(has ? outG : null), bottom: '0' }, { t: 'GR', fill: '#F2B366', top: '0', bottom: (100 - Math.min(100, red / 80 * 100)).toFixed(1) }],
+gateFields: [gf('Threshold', 'Opens above this', 'thr', -80, 0, 'sdB', 1, 0.5), gf('Range', 'How far it turns down', 'range', 0, 80, 'dB', 1, 0.5), gf('Ratio', 'How sharply it closes', 'ratio', 1, 100, ':1', 0, 1), gf('Knee', 'Softens the corner', 'knee', 0, 30, 'dB', 1, 0.5),
+gf('Attack', 'Time to open', 'attack', 0, 100, 'ms', 1, 0.5), gf('Hold', 'Stays open after', 'hold', 0, 1000, 'ms', 0, 10), gf('Release', 'Time to close', 'release', 10, 2000, 'ms', 0, 10)],
+gainVal: String(x.gain), slideGain: function (e) { var n = parseFloat(e.target.value); if (!isNaN(n) && n !== x.gain) setExt(x.id, { gain: n }); } };
+}
+}
+V.ioGrids = [];
+if (V.showRouting) {
+var heads = []; for (var hg = 0; hg < 8; hg++) heads.push({ t: (hg * 8 + 1) + '–' + (hg * 8 + 8) });
+var mkGrid = function (title, note, colTitle, accent, labels, get, pick, colWord) {
+return { title: title, note: note, colTitle: colTitle, accent: accent, heads: heads, rows: labels.map(function (lab, r) {
+var cur = get(r), cells = [];
+for (var col = 0; col < 64; col++) (function (col) {
+var on = cur === col;
+cells.push({ on: on ? 'true' : 'false', bg: on ? accent : '#141C20', border: on ? accent : '#2A373D', ml: col % 8 === 0 ? '5px' : '0', label: lab + ' to ' + colWord + ' ' + (col + 1) + (on ? ', connected' : ''), pick: function () { pick(r, col, on); } });
+})(col);
+return { label: lab, at: cur === null ? '· none' : '· ' + (cur + 1), cells: cells };
+}) };
+};
+var outLabels = [], inLabels = [];
+for (var gp = 0; gp < 16; gp++) { outLabels.push((gp + 1) + ' ' + names[logAt[gp]]); inLabels.push('USB in ' + (gp + 1)); }
+V.ioGrids = [
+mkGrid('Dante outputs', 'Which of the 64 Dante outputs each of the 16 outputs is sent on. Picking one already in use swaps the two.', 'Dante out', '#7EDAC4', outLabels, function (r) { return io.dout[r]; },
+function (r, col) { var d = io.dout.slice(), o = d.indexOf(col); if (o >= 0 && o !== r) d[o] = d[r]; d[r] = col; setIo({ dout: d }); }, 'Dante output'),
+mkGrid('To the computer', 'Which of the 64 Dante inputs the computer records on each of its 16 inputs. Click a lit square to disconnect it.', 'Dante in', '#8CC4FF', inLabels, function (r) { return io.uin[r]; },
+function (r, col, on) { var u = io.uin.slice(); u[r] = on ? null : col; setIo({ uin: u }); }, 'Dante input')
+];
+}
+V.crMon = []; V.crRooms = []; V.crSrcRows = []; V.crBusHeads = [];
+if (V.isControl) {
+var setCr = function (p) { self.setState({ cr: Object.assign({}, self.state.cr, p) }); };
+var mapSet = function (k, id, v) { var m = Object.assign({}, self.state.cr[k]); m[id] = v; var p = {}; p[k] = m; setCr(p); };
+var crs = s.cr, hasSpkBus = spkBuses.length > 0, REF = -10;
+var actSet = spkBuses.length > 1 ? (crs.ab || spkBuses[0].id) : 'all';
+V.crHasSets = spkBuses.length > 1;
+V.crSets = spkBuses.map(function (b) { return [b.id, b.label, b]; }).concat([['all', 'All sets']]).map(function (o) {
+var on = actSet === o[0], isAll = o[0] === 'all', loud = null;
+if (o[2]) o[2].outs.forEach(function (i) { if (outLvl[i] !== null && (loud === null || outLvl[i] > loud)) loud = outLvl[i]; });
+return { label: o[1], on: on ? 'true' : 'false', flex: isAll ? '0 1 150px' : '1 1 200px', hasMeter: !isAll, clip: (100 - Math.round((loud === null ? 0 : pos(loud)) * 30) / 30 * 100).toFixed(2),
+sub: on ? (isAll ? 'Every set is playing' : 'Playing') : isAll ? 'Play every set' : actSet === 'all' ? 'Playing · click to solo' : 'Click to switch', subColor: on ? '#7EDAC4' : '#A3B3B9',
+aria: on ? o[1] + ', playing' : 'Switch to ' + o[1], bg: on ? '#1B2F2C' : '#172024', border: on ? '#7EDAC4' : '#36474E', dot: on || (actSet === 'all' && !isAll) ? '#7EDAC4' : '#36474E', pick: function () { setCr({ ab: o[0] }); } };
+});
+V.crCardsStyle = s.buses.length > 2 || spkBuses.length > 1 ? 'display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px' : 'display: flex; flex-wrap: wrap; gap: 12px';
+V.crSrcW = Math.max(420, 236 + s.buses.length * 66);
+var cClip = function (d) { return (100 - Math.round((d === null || d === undefined ? 0 : pos(d)) * 30) / 30 * 100).toFixed(2); };
+var crSrcs = [{ id: 'usb', name: 'Computer', sub: 'USB 1–16', lvl: hasAudio ? -8 : null, avail: function (b) { return io.busUsb[b.id] !== false; } }].concat(io.ext.map(function (x) {
+var o = self.srcOut(x, shape);
+return { id: x.id, name: x.name, sub: (x.from === 'usb' ? 'USB ' : 'Dante in ') + (x.ch + 1) + (x.n > 1 ? '–' + (x.ch + x.n) : ''), lvl: hasAudio && o !== null ? o + x.gain : null, avail: function (b) { return x.to[b.id] !== false; } };
+}));
+V.crGridCols = 'minmax(110px, 1fr) 64px' + (s.buses.length ? ' repeat(' + s.buses.length + ', 60px)' : '');
+var nSp = 0, nHp = 0, shortOf = {};
+s.buses.forEach(function (b) { shortOf[b.id] = b.kind === 'phones' ? 'HP' + (++nHp > 1 ? ' ' + nHp : '') : 'Spk' + (++nSp > 1 ? ' ' + nSp : ''); });
+V.crBusHeads = s.buses.map(function (b) {
+var fol = self.crFollows(b), sum = !!crs.sum[b.id], canF = b.kind === 'phones' && hasSpkBus;
+return { label: b.label, short: shortOf[b.id], color: b.kind === 'phones' ? '#D9B8FF' : '#7EDAC4', sumOn: sum ? 'true' : 'false', sumBg: sum ? '#E6EDEF' : '#223036', sumColor: sum ? '#0F1416' : '#E6EDEF', sumOp: fol ? '0.4' : '1',
+sumAria: 'Sum sources on ' + b.label, toggleSum: function () { if (!fol) mapSet('sum', b.id, !sum); },
+canFollow: canF, followOn: fol ? 'true' : 'false', followBg: fol ? '#D9B8FF' : '#223036', followColor: fol ? '#0F1416' : '#E6EDEF', followAria: b.label + ' follows the speakers’ sources', toggleFollow: function () { mapSet('follow', b.id, !fol); } };
+});
+V.crSrcRows = crSrcs.map(function (sr) {
+return { name: sr.name, sub: sr.sub, clip: cClip(sr.lvl), cells: s.buses.map(function (b) {
+var fol = self.crFollows(b), avail = sr.avail(b), on = avail && self.crSel(b, sr.id), acc = b.kind === 'phones' ? '#D9B8FF' : '#7EDAC4';
+return { on: on ? 'true' : 'false', label: !avail ? '–' : on ? 'On' : 'Off', bg: on ? acc : '#223036', color: on ? '#0F1416' : avail ? '#E6EDEF' : '#93A3A9', border: on ? acc : '#36474E', op: fol || !avail ? '0.55' : '1',
+aria: sr.name + ' to ' + b.label + (!avail ? ', not offered here' : on ? ', on' : ', off') + (fol ? ', following the speakers' : ''),
+toggle: function () {
+if (!avail || fol) return;
+var cur = self.state.cr.sel[b.id] || { usb: true }, m = {};
+if (self.state.cr.sum[b.id]) { m = Object.assign({}, cur); m[sr.id] = !m[sr.id]; } else m[sr.id] = true;
+mapSet('sel', b.id, m);
+} };
+}) };
+});
+V.crSrcNote = 'Click to switch what a column hears. A dash means the source is not offered there (Edit sources).';
+V.crEmpty = s.buses.length === 0;
+var monList = spkBuses.length > 1 ? [{ main: true, bus: spkBuses.filter(function (x) { return x.id === actSet; })[0] || spkBuses[0] }].concat(hpBuses.map(function (x) { return { bus: x }; })) : s.buses.map(function (x) { return { bus: x }; });
+V.crMon = monList.map(function (it) {
+var b = it.bus, key = it.main ? '__main' : b.id, ttl = it.main ? 'Speakers' : b.label;
+var lvl = it.main ? (crs.lvl.__main === undefined ? -10 : crs.lvl.__main) : self.crLvl(b), dim = !!crs.dim[key], mute = !!crs.mute[key], ph = b.kind === 'phones', acc = ph ? '#D9B8FF' : '#7EDAC4';
+var REFv = crs.ref[key] === undefined ? REF : crs.ref[key], note = crs.refNote[key] || '', inactive = false;
+var setRows = !it.main ? [] : spkBuses.map(function (sb) {
+var on = actSet === 'all' || actSet === sb.id, tr = crs.trim[sb.id] || 0, f = numField('crt' + sb.id, tr, -12, 12, true, function (v) { mapSet('trim', sb.id, v); });
+return { label: sb.label, on: on ? 'true' : 'false', dot: on ? '#7EDAC4' : '#36474E', tag: on ? 'Playing' : 'Switch', bg: on ? '#7EDAC4' : '#223036', color: on ? '#0F1416' : '#E6EDEF', border: on ? '#7EDAC4' : '#2A373D', pick: function () { setCr({ ab: sb.id }); },
+aria: on ? sb.label + ' is playing' : 'Switch to ' + sb.label, f: f, trimLabel: sb.label + ' trim in dB, from −12 to +12', eff: 'plays at ' + dbText(lvl + tr),
+down: function () { mapSet('trim', sb.id, Math.max(-12, tr - 0.5)); }, up: function () { mapSet('trim', sb.id, Math.min(12, tr + 0.5)); }, downLabel: 'Lower the ' + sb.label + ' trim by 0.5 dB', upLabel: 'Raise the ' + sb.label + ' trim by 0.5 dB' };
+});
+var MAXL = s.safety.max, locked = s.safety.lock;
+var set = function (v) { mapSet('lvl', key, Math.max(-60, Math.min(MAXL, Math.round(v * 2) / 2))); };
+var leds = [];
+for (var k = 0; k <= 30; k++) { var db = -60 + k * 2, lit = !mute && lvl >= db && (lvl > -60 || k === 0); leds.push({ rot: (-135 + k * 9).toFixed(0), bg: db > MAXL ? '#3A2622' : !lit ? (Math.abs(db - REFv) < 1 ? '#8A7440' : '#26343A') : db > -4 ? '#FF6A4D' : db > REFv ? '#F2B366' : dim ? '#4E8F82' : acc }); }
+var ctx = bassCtx(b), outs = b.outs.slice().sort(function (a, c2) { return chanOf[a] - chanOf[c2]; }), fold = crs.fold[b.id] || 'full';
+if (ctx.shared) outs = outs.concat(ctx.subsIdx);
+var loud = null; outs.forEach(function (i) { if (outLvl[i] !== null && (loud === null || outLvl[i] > loud)) loud = outLvl[i]; });
+var extras = [];
+if (!ph && ctx.subsIdx.length) extras.push({ label: crs.bypass ? 'Subwoofers off' : 'Subwoofers on', on: crs.bypass ? 'false' : 'true', bg: crs.bypass ? '#FF8A7A' : '#223036', color: crs.bypass ? '#0F1416' : '#E6EDEF', toggle: function () { setCr({ bypass: !crs.bypass }); } });
+var selNames = crSrcs.filter(function (sr) { return sr.avail(b) && self.crSel(b, sr.id); }).map(function (sr) { return sr.name; });
+var big0 = !ph && !inactive;
+var bank = outs.map(function (i, bi) { var d = outLvl[i], sub = ctx.subsIdx.indexOf(i) >= 0; return { lt: outs.length > 8 && bi % 2 ? 13 : 0, t: ph ? (i === b.outs[0] ? 'L' : 'R') : names[i].split(' ')[0] === 'Sub' ? 'S' + (names[i].split(' ')[1] || '') : names[i].split(' ')[0], color: sub ? '#8CC4FF' : '#A3B3B9', clip: cClip(d), hold: d === null ? '-10' : (Math.min(1, pos(d + 3)) * 100).toFixed(1), over: d !== null && d >= 0 ? '#FF2A00' : latched(i) ? '#B3261E' : '#3A2622' }; });
+var big = !ph && !inactive;
+var multi = s.buses.length > 2, playing = !inactive;
+var cueOn = ph && !self.crFollows(b) && !!crs.sum[b.id], cueMap = crs.cue[b.id] || {};
+var cueRows = !cueOn ? [] : crSrcs.filter(function (sr) { return sr.avail(b) && self.crSel(b, sr.id); }).map(function (sr) {
+var cv = typeof cueMap[sr.id] === 'number' ? cueMap[sr.id] : 0, put = function (v) { var all = Object.assign({}, self.state.cr.cue), m = Object.assign({}, all[b.id] || {}); m[sr.id] = Math.max(-60, Math.min(12, Math.round(v * 2) / 2)); all[b.id] = m; setCr({ cue: all }); };
+return { name: sr.name, f: numField('cue' + b.id + sr.id, cv, -60, 12, true, put), label: sr.name + ' level in ' + b.label, down: function () { put(cv - 1); }, up: function () { put(cv + 1); }, downLabel: 'Lower ' + sr.name + ' in ' + b.label + ' by 1 dB', upLabel: 'Raise ' + sr.name + ' in ' + b.label + ' by 1 dB' };
+});
+var pk = null; outs.forEach(function (i) { if (outLvl[i] !== null && (pk === null || outLvl[i] > pk)) pk = outLvl[i]; });
+var ftok = b.outs.filter(function (i) { return ctx.subsIdx.indexOf(i) < 0; }).map(function (i) { return names[i].split(' ')[0]; });
+var foldOpts = [['full', 'Full']].concat(ftok.some(function (k) { return !/^(L|R|C|Ls|Rs)$/.test(k); }) ? [['5.1', '5.1']] : [], ftok.some(function (k) { return !/^(L|R)$/.test(k); }) ? [['stereo', 'Stereo']] : [], ftok.length > 1 ? [['mono', 'Mono']] : []);
+if (!foldOpts.some(function (f) { return f[0] === fold; })) fold = 'full';
+return { refOpen: !!s.refOpen[key], refOpenAttr: s.refOpen[key] ? 'true' : 'false', showRefRow: !!s.refOpen[key] || extras.length > 0, refToggleAria: 'Reference settings for ' + ttl, refToggle: function () { var m = Object.assign({}, s.refOpen); m[key] = !m[key]; self.setState({ refOpen: m }); },
+hasCue: cueRows.length > 0, cue: cueRows, peakText: pk === null ? 'No signal' : 'Peak ' + dbText(Math.round(pk * 10) / 10), op: '1', showFolds: !ph && foldOpts.length > 1, foldCols: foldOpts.length, gridCol: it.main || (multi && outs.length > 6) ? '1 / -1' : 'auto',
+isMain: !!it.main, sets: setRows, hasSets: false, playing: playing ? 'true' : 'false', setLabel: playing ? 'Playing' : 'Switch to ' + b.label, setBtnAria: playing ? b.label + ' is playing' : 'Play ' + b.label + ' and silence the other speaker sets',
+setBg: playing ? '#7EDAC4' : 'transparent', setColor: playing ? '#0F1416' : '#7EDAC4', setBorder: '#7EDAC4', pickSet: function () { setCr({ ab: b.id }); }, note: note, noteLabel: 'What the ' + b.label + ' reference measures', typeNote: function (e) { mapSet('refNote', key, e.target.value); },
+rf: numField('crr' + key, REFv, -60, 0, true, function (v) { if (!locked) mapSet('ref', key, Math.min(v, MAXL)); }), setOp: locked ? '0.4' : '1', rfLabel: b.label + ' reference level in dB',
+setRef: function () { if (!locked) mapSet('ref', key, lvl); }, setAria: locked ? 'The reference is locked on the System tab' : 'Store ' + dbText(lvl) + ' as the reference for ' + b.label,
+showHears: true, hBank: outs.length <= 2, vBank: outs.length > 2, sideFlex: outs.length <= 2 ? '1 1 130px' : '1 1 ' + Math.max(120, outs.length * 15) + 'px', sideJust: outs.length <= 2 ? 'center' : 'space-between', kBox: 112, kSize: 82, kHalf: 41, ringR: 51, ledW: 3, ledH: 8, ledHy: 4, ledHx: 1.5, ptrH: 19, ptrO: 36, fldFont: 15, cardFlex: ph ? '1 1 410px' : '1.4 1 484px', ctlFlex: '1 1 118px', barMax: 400, bankH: outs.length > 8 ? 44 : 52, hasExtras: extras.length > 0, bank: bank, hears: selNames.length ? 'Hearing ' + selNames.join(' + ') + (self.crFollows(b) ? ' (following)' : '') : 'No source selected', levelAria: ttl + ' level', title: it.main ? 'Main volume' : b.label, tag: ph ? 'HEADPHONES' : 'SPEAKERS', accent: acc, bg: ph ? '#1B1826' : '#172024', border: ph ? '#6B5A80' : '#2A373D', isSpk: !ph,
+leds: leds, rot: (-135 + (lvl + 60) / 60 * 270).toFixed(1), ptr: mute ? '#FF8A7A' : '#E6EDEF', val: String(lvl), valText: dbText(lvl), knobAria: b.label + ' level. Drag up or down, or use the arrow keys.',
+kDown: function (e) {
+if (self.kEnd) self.kEnd();
+var y0 = e.clientY, v0 = lvl;
+var mv = function (ev) { if (ev.buttons === 0) { end(); return; } set(v0 + (y0 - ev.clientY) * 0.25); };
+var end = function () { self.kEnd = null; if (typeof window !== 'undefined') { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); window.removeEventListener('blur', end); } };
+self.kEnd = end;
+if (typeof window !== 'undefined') { window.addEventListener('pointermove', mv); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end); window.addEventListener('blur', end); }
+if (e.preventDefault) e.preventDefault();
+},
+kMove: function () {}, kUp: function () {},
+kKey: function (e) { if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); set(lvl + 0.5); } if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); set(lvl - 0.5); } },
+down: function () { set(lvl - 1); }, up: function () { set(lvl + 1); }, downLabel: 'Lower ' + b.label + ' by 1 dB', upLabel: 'Raise ' + b.label + ' by 1 dB',
+fld: numField('crl' + key, lvl, -60, 0, true, function (v) { set(v); }), fldLabel: b.label + ' level in dB, from −60 to 0',
+state: inactive ? 'Not selected' : mute ? 'Muted' : crs.talk && !ph ? 'Dimmed for talkback' : dim ? 'Dimmed to ' + dbText(lvl - 20) : lvl === REFv ? 'At reference' + (note ? ' · ' + note : '') : (lvl > REFv ? '+' : '−') + Math.abs(lvl - REFv).toFixed(1) + ' dB from ref', stateColor: mute ? '#FFB3A6' : dim || (crs.talk && !ph) ? '#F2B366' : '#A3B3B9',
+dimOn: dim ? 'true' : 'false', dimBg: dim ? '#F2B366' : '#223036', dimColor: dim ? '#0F1416' : '#E6EDEF', toggleDim: function () { mapSet('dim', key, !dim); },
+muteOn: mute ? 'true' : 'false', muteBg: mute ? '#FF8A7A' : '#223036', muteColor: mute ? '#0F1416' : '#E6EDEF', toggleMute: function () { mapSet('mute', key, !mute); },
+toRef: function () { set(REFv); }, refAria: 'Go to the reference level, ' + dbText(REFv),
+bars: ph ? [{ t: 'L', clip: cClip(outLvl[b.outs[0]]) }, { t: 'R', clip: cClip(outLvl[b.outs[1]]) }] : [{ t: 'Peak', clip: cClip(loud) }],
+folds: foldOpts.map(function (f) { var on = fold === f[0]; return { label: f[1], aria: 'Listen as ' + f[1], on: on ? 'true' : 'false', bg: on ? '#7EDAC4' : '#223036', color: on ? '#0F1416' : '#E6EDEF', pick: function () { mapSet('fold', b.id, f[0]); } }; }),
+extras: extras };
+});
+var tOpts = []; for (var tc = 0; tc < 64; tc++) tOpts.push({ v: String(tc), t: 'Dante in ' + (tc + 1) });
+V.crTaps = [[false, 'Pre', 'Meters before the level knob, Dim and talkback dimming'], [true, 'Post', 'Meters after the level knob']].map(function (tp) { var on = s.crPost === tp[0]; return { label: tp[1], title: tp[2], on: on ? 'true' : 'false', bg: on ? '#E6EDEF' : '#172024', color: on ? '#0F1416' : '#E6EDEF', pick: function () { self.setState({ crPost: tp[0] }); } }; });
+V.crMapCls = s.crMapOpen ? 'cr-open' : 'cr-auto'; V.crMapOpen = s.crMapOpen ? 'true' : 'false'; V.crMapLabel = s.crMapOpen ? 'Hide overview' : 'Show overview'; V.crMapToggle = function () { self.setState({ crMapOpen: !s.crMapOpen }); };
+V.crTalkShow = hpBuses.length > 0; V.crTalkOn = crs.talk ? 'true' : 'false'; V.crTalkLabel = crs.talk ? 'Talking' : 'Talkback'; V.crTalkBg = crs.talk ? '#F5D547' : '#223036'; V.crTalkColor = crs.talk ? '#0F1416' : '#E6EDEF';
+V.crTalkToggle = function () { setCr({ talk: !crs.talk }); }; V.crTalkCh = String(crs.talkCh); V.crTalkOpts = tOpts; V.crTalkPick = function (e) { setCr({ talkCh: parseInt(e.target.value, 10) }); };
+V.crTalkNote = crs.talk ? 'The microphone is in the headphones and the speakers are dimmed.' : 'Sends the microphone to the headphones and dims the speakers.';
+var spkPanels = V.outPanels.filter(function (p) { return p.isSpk; });
+V.crRooms = spkPanels.map(function (p, k) { return { p: p, bus: spkBuses[k] }; }).filter(function (o) { return actSet === 'all' || o.bus.id === actSet; }).map(function (o) {
+var p = o.p, baseTiles = p.crTiles;
+if (bassCtx(o.bus).shared) baseTiles = baseTiles.concat(spkPanels[0].crTiles.filter(function (tl) { return /^Sub/.test(tl.name); }));
+var maxY = 0; baseTiles.forEach(function (tl) { if (tl.y > maxY) maxY = tl.y; });
+var roomH = Math.min(420, Math.max(92, Math.round(maxY / 100 * 420 + 46)));
+var tl2 = baseTiles.map(function (tl) { var d = outLvl[tl.i], o = {}; if (s.cal.on) { o.tileClick = function () { self.setState({ cal: Object.assign({}, s.cal, { spk: s.cal.spk === tl.i ? null : tl.i }) }); }; o.tileLabel = 'Send the test signal to ' + tl.name + ' only'; if (s.cal.spk === tl.i) o.tileBorder = '#F2B366'; } if (!s.crPost) o.clip = cClip(d === null ? null : d - (crGs[tl.i] || 0)); return Object.assign({}, tl, o); });
+return Object.assign({}, p, { roomH: roomH, showListener: roomH >= 290, listenTop: 254, tiles: tl2, hasRoom: baseTiles.length > 0, roomAria: p.title + ', seen from above. Click a speaker to solo it. Solo and mute here are not saved.', crHasNote: p.crUnplaced.length > 0, crNote: 'Not shown in the room: ' + p.crUnplaced.join(', ') + '.' });
+});
+}
+var anyLimit = io.ext.some(function (xx) { return Object.keys(xx.to).some(function (k) { return xx.to[k] === false; }); }) || Object.keys(io.busUsb).some(function (k) { return io.busUsb[k] === false; });
+V.srcAdv = s.srcAdv || anyLimit; V.srcBasic = !V.srcAdv; V.srcAdvOn = V.srcAdv ? 'true' : 'false';
+V.srcCols = V.srcAdv ? 'minmax(130px, 1fr) 64px minmax(110px, 244px)' : 'minmax(130px, 1fr) 64px 0px';
+V.srcAvailHead = V.srcAdv ? 'Offered to' : ''; V.srcAdvLabel = V.srcAdv ? (anyLimit ? 'Limits are in use' : 'Hide limits') : 'Limit where a source is offered';
+V.toggleSrcAdv = function () { if (!anyLimit) self.setState({ srcAdv: !s.srcAdv }); };
+V.goSources = function () { self.setState({ tab: 'processor', ptab: 'sources', chooser: false }); };
+V.ioGrids.forEach(function (g, k) {
+var key = k === 0 ? 'dout' : 'uin', open = !!s.routeOpen[key], arr = k === 0 ? io.dout : io.uin, same = arr.every(function (c, r) { return c === r; });
+g.open = open; g.openAttr = open ? 'true' : 'false'; g.chev = open ? '90' : '0';
+g.summary = same ? (k === 0 ? 'outputs 1–16 on Dante 1–16' : 'Dante 1–16 into inputs 1–16') : 'custom patch';
+g.toggle = function () { var m = Object.assign({}, s.routeOpen); m[key] = !open; self.setState({ routeOpen: m }); };
+});
+var al = s.align;
+V.alignOpen = !!al && V.editorOpen; V.alignOpenAttr = al ? 'true' : 'false';
+V.alignOpenIt = function () { self.setState({ align: al ? null : { unit: 'm', d: {} } }); }; V.alignClose = function () { self.setState({ align: null }); };
+V.alignRows = []; V.alignUnits = []; V.alignNote = '';
+if (al) {
+var spd = al.unit === 'm' ? 343 : 1125, aOuts = [];
+spkBuses.forEach(function (b) { b.outs.slice().sort(function (a, c2) { return chanOf[a] - chanOf[c2]; }).forEach(function (i) { aOuts.push(i); }); });
+var dist = {}, far = 0;
+aOuts.forEach(function (i) { var n = parseFloat(String(al.d[i] === undefined ? '' : al.d[i]).replace(',', '.')); if (!isNaN(n) && n >= 0) { dist[i] = n; if (n > far) far = n; } });
+var msOf = function (i) { return dist[i] === undefined ? null : Math.min(50, Math.round((far - dist[i]) / spd * 1000 * 100) / 100); };
+V.alignUnits = [['m', 'Metres'], ['ft', 'Feet']].map(function (u) { var on = al.unit === u[0]; return { label: u[1], on: on ? 'true' : 'false', bg: on ? '#E6EDEF' : '#223036', color: on ? '#0F1416' : '#E6EDEF', pick: function () { self.setState({ align: Object.assign({}, al, { unit: u[0] }) }); } }; });
+V.alignRows = aOuts.map(function (i) { var ms = msOf(i); return { name: names[i], text: al.d[i] === undefined ? '' : al.d[i], ph: al.unit, label: 'Distance to ' + names[i] + ' in ' + (al.unit === 'm' ? 'metres' : 'feet'),
+type: function (e) { var d2 = Object.assign({}, al.d); d2[i] = e.target.value; self.setState({ align: Object.assign({}, al, { d: d2 }) }); },
+ms: ms === null ? 'no distance yet' : ms.toFixed(2) + ' ms', msColor: ms === null ? '#93A3A9' : '#7EDAC4' }; });
+var nSet = Object.keys(dist).length;
+V.alignNote = nSet < 2 ? 'Enter at least two distances.' : nSet + ' of ' + aOuts.length + ' speakers have a distance. The others keep their delay.';
+V.alignApply = function () { if (nSet < 2 || s.bar === 'applying') return; var d3 = s.delays.slice(); aOuts.forEach(function (i) { var ms = msOf(i); if (ms !== null) d3[i] = ms; }); self.setState({ delays: d3, bar: 'idle', align: null }); };
+}
+var sfy = s.safety, setSf = function (p) { self.setState({ safety: Object.assign({}, self.state.safety, p) }); };
+V.sf = { max: numField('sfmax', sfy.max, -30, 0, true, function (v) { setSf({ max: v }); var lv = Object.assign({}, self.state.cr.lvl), ch2 = false; Object.keys(lv).forEach(function (k) { if (lv[k] > v) { lv[k] = v; ch2 = true; } }); if (ch2) self.setState({ cr: Object.assign({}, self.state.cr, { lvl: lv }) }); }),
+maxNote: sfy.max === 0 ? 'No limit: the knobs reach 0 dB.' : 'The knobs stop at ' + dbText(sfy.max) + '. The ring shows the blocked part in dark red.',
+boots: [['last', 'Where it was'], ['ref', 'The reference'], ['fixed', 'A fixed level']].map(function (o) { var on = sfy.boot === o[0]; return { label: o[1], on: on ? 'true' : 'false', bg: on ? '#7EDAC4' : '#223036', color: on ? '#0F1416' : '#E6EDEF', pick: function () { setSf({ boot: o[0] }); } }; }),
+bootFixed: sfy.boot === 'fixed', bootLvl: numField('sfboot', sfy.bootLvl, -60, 0, true, function (v) { setSf({ bootLvl: Math.min(v, self.state.safety.max) }); }),
+bootNote: sfy.boot === 'last' ? 'Starts at the level it was left at.' : sfy.boot === 'ref' ? 'Starts at each knob’s reference level.' : 'Starts every knob at ' + dbText(sfy.bootLvl) + '.',
+lockOn: sfy.lock ? 'true' : 'false', lockLabel: sfy.lock ? 'Locked' : 'Not locked', lockBg: sfy.lock ? '#F2B366' : '#223036', lockColor: sfy.lock ? '#0F1416' : '#E6EDEF', toggleLock: function () { setSf({ lock: !sfy.lock }); } };
+var calS = s.cal, setCal = function (p) { self.setState({ cal: Object.assign({}, self.state.cal, p) }); };
+var calBus = spkBuses.filter(function (b) { return b.id === (spkBuses.length > 1 ? (s.cr.ab || spkBuses[0].id) : (spkBuses[0] || {}).id); })[0] || spkBuses[0];
+var calOuts = calBus ? calBus.outs.slice().sort(function (a, c2) { return chanOf[a] - chanOf[c2]; }) : [];
+var calStep = function (dir) { var k = calOuts.indexOf(calS.spk), n = calOuts.length; if (!n) return; setCal({ spk: k < 0 ? calOuts[dir > 0 ? 0 : n - 1] : (k + dir < 0 || k + dir >= n) ? null : calOuts[k + dir] }); };
+V.calOpen = calS.open; V.calOpenAttr = calS.open ? 'true' : 'false'; V.calBtnBg = calS.on ? '#F2B366' : calS.open ? '#223036' : 'transparent'; V.calBtnColor = calS.on ? '#0F1416' : '#E6EDEF';
+V.calToggle = function () { setCal(calS.open ? { open: false, on: false, spk: null } : { open: true }); };
+V.calOn = calS.on ? 'true' : 'false'; V.calNoiseLabel = calS.on ? 'Pink noise on' : 'Pink noise off'; V.calNoiseBg = calS.on ? '#F2B366' : 'transparent'; V.calNoiseColor = calS.on ? '#0F1416' : '#F2B366';
+V.calNoise = function () { setCal({ on: !calS.on }); };
+V.calBands = [['full', 'Full range'], ['sub', 'Sub band']].map(function (o) { var on = calS.band === o[0]; return { label: o[1], on: on ? 'true' : 'false', bg: on ? '#E6EDEF' : '#223036', color: on ? '#0F1416' : '#E6EDEF', pick: function () { setCal({ band: o[0] }); } }; });
+V.calTarget = calS.spk === null || calOuts.indexOf(calS.spk) < 0 ? 'All speakers' : names[calS.spk] + ' only'; V.calPrev = function () { calStep(-1); }; V.calNext = function () { calStep(1); };
+V.calHelp = calS.on ? '−20 dBFS pink noise replaces the sources on the speakers. Step through them or click one in the overview, set the knob for your target on an SPL meter, then press Set.' : 'Turn the noise on, then step through the speakers.';
+V.anyClip = Object.keys(s.clipLatch).length > 0 || self.lastClips.length > 0; V.clearClips = function () { self.setState({ clipLatch: {} }); };
+V.rootCls = s.big ? 'big' : ''; V.bigOn = s.big ? 'true' : 'false'; V.bigLabel = s.big ? 'Larger controls: on' : 'Larger controls: off'; V.bigBg = s.big ? '#7EDAC4' : '#223036'; V.bigColor = s.big ? '#0F1416' : '#E6EDEF';
+V.bigToggle = function () { self.setState({ big: !s.big }); };
+V.undo = function () { self.stepHistory(true); }; V.redo = function () { self.stepHistory(false); }; V.undoOp = s.histN > 0 ? '1' : '0.4'; V.redoOp = s.futN > 0 ? '1' : '0.4';
+V.keysOpen = s.keysOpen; V.keysOpenAttr = s.keysOpen ? 'true' : 'false'; V.keysToggle = function () { self.setState({ keysOpen: !s.keysOpen }); };
+V.keyList = [['↑ ↓', 'Main volume up or down 1 dB'], ['M', 'Mute the speakers'], ['D', 'Dim the speakers'], ['R', 'Go to the reference level'], ['1 – 9', 'Switch speaker set'], ['0', 'Play every speaker set'], ['T', 'Talkback on or off'], ['Esc', 'Clear solo'], ['?', 'Show or hide this list']].map(function (o) { return { k: o[0], t: o[1] }; });
+V.rootKey = function (e) {
+var tg = e.target || {}, tn = String(tg.tagName || '').toLowerCase(), typing = tn === 'input' || tn === 'select' || tn === 'textarea';
+if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === 'z' && !typing) { e.preventDefault(); self.stepHistory(!e.shiftKey); return; }
+if (s.tab !== 'control' || typing || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+var m0 = V.crMon[0], k = String(e.key), hit = true;
+if (k === '?') self.setState({ keysOpen: !s.keysOpen });
+else if (k === 'Escape') V.clearSolo();
+else if (!m0) hit = false;
+else if (k === 'ArrowUp') m0.up(); else if (k === 'ArrowDown') m0.down();
+else if (k === 'm' || k === 'M') m0.toggleMute(); else if (k === 'd' || k === 'D') m0.toggleDim(); else if (k === 'r' || k === 'R') m0.toRef();
+else if ((k === 't' || k === 'T') && V.crTalkShow) V.crTalkToggle();
+else if (/^[0-9]$/.test(k) && V.crHasSets) { var n = parseInt(k, 10), st = n === 0 ? V.crSets[V.crSets.length - 1] : V.crSets[n - 1]; if (st && (n === 0 || n < V.crSets.length)) st.pick(); else hit = false; }
+else hit = false;
+if (hit && e.preventDefault) e.preventDefault();
+};
+V.vals = V;
+return V;
+}
+}
+</script>
+</body>
+</html>
