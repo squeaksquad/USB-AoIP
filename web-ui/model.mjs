@@ -5,7 +5,7 @@ export function createConfig() {
   const labels = ['L', 'R', 'C', 'LFE', 'Ls', 'Rs', 'Lrs', 'Rrs', 'Ltf', 'Rtf', 'Ltr', 'Rtr', 'Input 13', 'Input 14', 'Input 15', 'Input 16'];
   const sources = [0, 1, 2, null, 4, 5, 6, 7, 8, 9, 10, 11, null, null, null, null];
   const config = {
-    version: 2, name: 'Immersive · stereo subs', mode: 'dsp', source: 'usb', sampleRate: 48000,
+    version: 3, name: 'Immersive · stereo subs', mode: 'dsp', source: 'usb', sampleRate: 48000,
     headroomDb: -18, bassEnabled: true, eqBypass: false,
     lfe: { input: 3, lowpassHz: 120, slope: 24, trimDb: 0 },
     inputs: labels.map(label => ({ label, crossover: true, highpassHz: 80, lowpassHz: 80, slope: 24 })),
@@ -17,7 +17,7 @@ export function createConfig() {
     })),
     sends: Array.from({ length: CHANNELS }, () => Array(CHANNELS).fill(null)),
     buses: [
-      { id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds: Array.from({ length: 13 }, (_, i) => i), layoutId: '7.2.4', gainDb: 0, mute: false }
+      { id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds: Array.from({ length: 13 }, (_, i) => i), layoutId: '7.2.4' }
     ]
   };
   config.outputs.forEach((output, i) => { output.busId = i < 13 ? 'speakers' : null; });
@@ -44,7 +44,34 @@ export function setOutputRole(config, index, role) {
     config.outputs[index].role = role;
     // A newly assigned sub starts silent; never resurrect hidden routes.
     config.sends.forEach(row => { row[index] = null; });
+    settleSubShares(config);
   }
+}
+
+/**
+ * Keep every added speaker set's subwoofer choice possible after an edit, in
+ * place: a set with sub outputs of its own uses them; one that lost its last
+ * one shares the main subwoofer, or has none when there is none to share, as
+ * does a set sharing a main subwoofer that is gone. The first speakers set
+ * carries no choice. Returns one sentence per set changed, for the caller.
+ */
+export function settleSubShares(config) {
+  const said = [];
+  const speakerSets = (config.buses || []).filter(bus => bus.kind === 'speakers');
+  const hasSub = bus => bus.outputIds.some(i => config.outputs[i]?.role === 'sub');
+  speakerSets.forEach((bus, n) => {
+    if (n === 0) { delete bus.subShare; return; }
+    const before = bus.subShare;
+    if (hasSub(bus)) bus.subShare = 'own';
+    else if (bus.subShare === 'own' || bus.subShare === undefined) bus.subShare = hasSub(speakerSets[0]) ? 'main' : 'none';
+    else if (bus.subShare === 'main' && !hasSub(speakerSets[0])) bus.subShare = 'none';
+    if (before !== undefined && before !== bus.subShare) {
+      said.push(bus.subShare === 'own' ? `${bus.label} now uses its own subwoofer.`
+        : bus.subShare === 'main' ? `${bus.label} now shares the main subwoofer.`
+        : `${bus.label} has no subwoofer now: its speakers play full range.`);
+    }
+  });
+  return said;
 }
 
 export function validateConfig(c) {
@@ -56,7 +83,7 @@ export function validateConfig(c) {
   const bool = (v, label) => { if (typeof v !== 'boolean') fail(`${label}: expected on/off`); };
   const label = v => { if (typeof v !== 'string' || !v.trim() || v.length > 64) fail('Labels must contain 1–64 characters'); };
   const slope = v => { if (![12, 24, 48].includes(v)) fail('Crossover slope must be 12, 24 or 48 dB/oct'); };
-  if (!c || c.version !== 2 || c.sampleRate !== 48000) fail('Expected a version 2, 48 kHz UI preset');
+  if (!c || c.version !== 3 || c.sampleRate !== 48000) fail('Expected a version 3, 48 kHz UI preset');
   label(c.name);
   if (!['dsp', 'direct'].includes(c.mode) || !['usb', 'aoip'].includes(c.source)) fail('Invalid mode or source');
   num(c.headroomDb, -36, 0, 'Headroom trim'); bool(c.bassEnabled, 'Bass management');
@@ -87,7 +114,8 @@ export function validateConfig(c) {
     if (!['speakers', 'headphones'].includes(bus.kind)) fail(`Bus ${bus.id}: invalid kind`);
     if (!Array.isArray(bus.outputIds) || bus.outputIds.some(i => !Number.isInteger(i) || i < 0 || i >= 16)) fail(`Bus ${bus.id}: invalid output membership`);
     for (const i of bus.outputIds) { if (memberships.has(i)) fail(`Output ${i + 1} belongs to multiple buses`); memberships.set(i, bus.id); }
-    num(bus.gainDb, -60, 12, `Bus ${bus.id} gain`); bool(bus.mute, `Bus ${bus.id} mute`);
+    // Level and mute belong to the Control Room since v3; a saved one would be a second, hidden level.
+    if ('gainDb' in bus || 'mute' in bus) fail(`${bus.label}: a speaker set or headphones carries no level or mute of its own`);
     if (bus.layoutId !== undefined) label(bus.layoutId);
     if (bus.kind === 'headphones') {
       if (bus.outputIds.length !== 2) fail('Headphones bus must have exactly two outputs');
@@ -101,6 +129,19 @@ export function validateConfig(c) {
       if (!bus.sourcePreCrossover) fail('Headphones source must be pre-crossover');
     }
   });
+  const speakerSets = c.buses.filter(bus => bus.kind === 'speakers');
+  const subsOf = bus => bus.outputIds.filter(i => c.outputs[i].role === 'sub');
+  c.buses.forEach(bus => {
+    if (bus.kind !== 'speakers' || bus === speakerSets[0]) {
+      if (bus.subShare !== undefined) fail(`${bus.label}: only an added speaker set chooses its subwoofer`);
+      return;
+    }
+    if (!SUB_SHARES.includes(bus.subShare)) fail(`${bus.label}: choose whether it shares the main subwoofer, has none, or its own`);
+    const own = subsOf(bus).length;
+    if (bus.subShare === 'own' && !own) fail(`${bus.label}: its own subwoofer needs a subwoofer output in the set`);
+    if (bus.subShare !== 'own' && own) fail(`${bus.label}: a set with subwoofer outputs of its own uses its own subwoofer`);
+    if (bus.subShare === 'main' && !subsOf(speakerSets[0]).length) fail(`${bus.label}: ${speakerSets[0].label} has no subwoofer to share`);
+  });
   c.outputs.forEach((output, i) => { if (output.busId !== null && !busIds.has(output.busId)) fail(`Output ${i + 1} references an unknown bus`); if (output.busId !== (memberships.get(i) ?? null)) fail(`Output ${i + 1} bus membership mismatch`); if (output.role !== 'unused' && output.busId === null) fail(`Active output ${i + 1} must belong to a bus`); });
   if (!Array.isArray(c.sends) || c.sends.length !== 16) fail('Expected 16 send rows');
   c.sends.forEach(row => {
@@ -112,11 +153,70 @@ export function validateConfig(c) {
   return c;
 }
 
-export function parsePreset(text) {
+/**
+ * A speakers set other than the first chooses where its bass goes (v3):
+ *   main  no subwoofer outputs of its own; its bass plays through the first
+ *         speakers set's subwoofers, with the sends its inputs have to them
+ *   none  no bass management: its speakers run full range
+ *   own   subwoofer outputs of its own, fed by the sends to them
+ */
+export const SUB_SHARES = ['main', 'none', 'own'];
+
+/** The preset as stored, at any model version, read into the current one.
+ *  Returns {config, notes}: `notes` says what the migration could not carry
+ *  over exactly, for the caller to show. The stored copy is not rewritten. */
+export function readPreset(text) {
   if (text.length > 200000) throw new Error('Preset is too large');
-  const parsed = JSON.parse(text);
-  if (parsed?.version === 1) return validateConfig(migrateV1Preset(parsed));
-  return validateConfig(parsed);
+  let parsed = JSON.parse(text);
+  const notes = [];
+  if (parsed?.version === 1) parsed = migrateV1Preset(parsed);
+  if (parsed?.version === 2) {
+    const migrated = migrateV2Preset(parsed);
+    parsed = migrated.config; notes.push(...migrated.notes);
+  }
+  return {config: validateConfig(parsed), notes};
+}
+
+export function parsePreset(text) {
+  return readPreset(text).config;
+}
+
+/**
+ * v2 to v3. A bus's saved level moves onto each of its outputs (clamped to
+ * the outputs' range, with a note when that changed anything) and a muted bus
+ * switches each of its outputs off; the Control Room owns level and mute now.
+ * An added speakers set gets a subwoofer choice: its own when it has sub
+ * outputs, else the main subwoofer when the first set has one, else none.
+ */
+export function migrateV2Preset(legacy) {
+  if (!legacy || legacy.version !== 2) throw new Error('Expected a version 2 UI preset');
+  const result = structuredClone(legacy); result.version = 3;
+  const notes = [];
+  if (!Array.isArray(result.buses) || !Array.isArray(result.outputs)) return {config: result, notes};
+  for (const bus of result.buses) {
+    if (!bus || !Array.isArray(bus.outputIds)) continue;
+    const gain = bus.gainDb, label = typeof bus.label === 'string' ? bus.label : bus.id;
+    if (typeof gain === 'number' && Number.isFinite(gain) && gain !== 0) {
+      const clamped = [];
+      for (const i of bus.outputIds) {
+        const output = result.outputs[i];
+        if (!output || typeof output.gainDb !== 'number') continue;
+        const wanted = output.gainDb + gain, kept = Math.min(12, Math.max(-60, wanted));
+        if (kept !== wanted) clamped.push(`${output.label ?? `Output ${i + 1}`} (${kept} dB, not ${Number(wanted.toFixed(2))} dB)`);
+        output.gainDb = Number(kept.toFixed(6));
+      }
+      if (clamped.length) notes.push(`${label}'s saved level of ${gain} dB moved onto its outputs, which stop at -60 and +12 dB: ${clamped.join(', ')}.`);
+    }
+    if (bus.mute === true) for (const i of bus.outputIds) if (result.outputs[i]) result.outputs[i].mute = true;
+    delete bus.gainDb; delete bus.mute;
+  }
+  const speakerSets = result.buses.filter(bus => bus?.kind === 'speakers');
+  const hasSub = bus => (bus.outputIds || []).some(i => result.outputs[i]?.role === 'sub');
+  speakerSets.forEach((bus, n) => {
+    if (n === 0) { delete bus.subShare; return; }
+    bus.subShare = hasSub(bus) ? 'own' : hasSub(speakerSets[0]) ? 'main' : 'none';
+  });
+  return {config: result, notes};
 }
 
 /** Upgrade legacy presets while retaining every existing output/input edit and ordering. */
@@ -156,13 +256,48 @@ export function eqResponse(output, frequency, bypassAll = false) {
   return output.eqEnabled && !bypassAll ? output.bands.reduce((sum, b) => sum + bandResponse(b, frequency), 0) : 0;
 }
 
-export function subSumBoundDb(config, destination) {
-  // Conservative coherent full-scale sum before crossover/EQ; not a true-peak prediction.
-  let sum = 0;
-  config.sends.forEach((row, i) => {
-    if (row[destination] !== null && (i === config.lfe.input || config.bassEnabled))
-      sum += 10 ** ((row[destination] + (i === config.lfe.input ? config.lfe.trimDb : 0)) / 20);
+/**
+ * Where each speakers set's bass goes, in bus order: {busId, set (the bus
+ * index), share ('first' for the first speakers set, else its subShare), subs
+ * (the sub outputs its bass branches feed), inputs (the inputs that may have a
+ * bass branch in it, null for any)}. The first set and a set with its own subs
+ * take every input with a send to their subs, as one set always has; a set
+ * sharing the main subs redirects what its own speakers play and the LFE, with
+ * the sends those inputs have to the main subs; a set with none has no bass.
+ * The compiler's channel plan and the page's worst-case figure read this.
+ */
+export function speakerSetBass(config) {
+  const subsOf = bus => bus.outputIds.filter(i => config.outputs[i]?.role === 'sub').sort((a, b) => a - b);
+  const sets = [];
+  config.buses.forEach((bus, set) => {
+    if (bus.kind !== 'speakers') return;
+    const share = sets.length ? bus.subShare : 'first';
+    const first = sets[0];
+    let subs = [], inputs = null;
+    if (share === 'first' || share === 'own') subs = subsOf(bus);
+    else if (share === 'main') {
+      subs = first.subs;
+      const played = new Set(bus.outputIds.filter(i => config.outputs[i].role === 'speaker').map(i => config.outputs[i].source));
+      played.add(config.lfe.input);
+      inputs = [...played].sort((a, b) => a - b);
+    } else inputs = [];
+    sets.push({busId: bus.id, set, share, subs, inputs});
   });
-  const bus = config.buses?.find(value => value.outputIds.includes(destination));
-  return sum ? 20 * Math.log10(sum) + config.headroomDb + config.outputs[destination].gainDb + (bus?.gainDb ?? 0) : -Infinity;
+  return sets;
+}
+
+export function subSumBoundDb(config, destination) {
+  // Conservative coherent full-scale sum before crossover/EQ; not a true-peak
+  // prediction. A sub that several speaker sets share sums each set's bass:
+  // under All sets they all play.
+  let sum = 0;
+  for (const feed of speakerSetBass(config)) {
+    if (!feed.subs.includes(destination)) continue;
+    config.sends.forEach((row, i) => {
+      if (feed.inputs && !feed.inputs.includes(i)) return;
+      if (row[destination] !== null && (i === config.lfe.input || config.bassEnabled))
+        sum += 10 ** ((row[destination] + (i === config.lfe.input ? config.lfe.trimDb : 0)) / 20);
+    });
+  }
+  return sum ? 20 * Math.log10(sum) + config.headroomDb + config.outputs[destination].gainDb : -Infinity;
 }

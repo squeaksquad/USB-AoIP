@@ -50,6 +50,15 @@ std::string straight() {
     return text + "end\n";
 }
 
+std::string replaced_fixture(std::string text, const std::string& from, const std::string& to) {
+    const std::size_t at = text.find(from);
+    if (at == std::string::npos) {
+        std::printf("FIXTURE: '%s' not found\n", from.c_str());
+        std::exit(2);
+    }
+    return text.replace(at, from.size(), to);
+}
+
 // mains (0, 1 and the sub 2, shared with nearfield), nearfield (3, 4), phones (14, 15); 5..13 in no set.
 std::string monitored() {
     std::string text = straight();
@@ -61,6 +70,12 @@ std::string monitored() {
             "expandsets 16\n0\n0\n-\n1\n1\n-\n-\n-\n-\n-\n-\n-\n-\n-\n2\n2\n"
             "folds 2\nfold 0 mono 2\n0 0 0.5\n0 1 0.5\nfold 1 stereo 1\n3 3 1\n";
     return text + "end\n";
+}
+
+// The same with the compiler's `off` fold on both speaker sets, last in each.
+std::string monitored_off() {
+    return replaced_fixture(monitored(), "folds 2\nfold 0 mono 2\n0 0 0.5\n0 1 0.5\nfold 1 stereo 1\n3 3 1\n",
+                            "folds 4\nfold 0 mono 2\n0 0 0.5\n0 1 0.5\nfold 0 off 1\n0 0 0\nfold 1 stereo 1\n3 3 1\nfold 1 off 1\n0 0 0\n");
 }
 
 const std::string kZeros = "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0";
@@ -866,6 +881,71 @@ void test_folds_reach_the_stage(const std::string& root) {
     check(rig.stage.fold(0) == 0 && rig.stage.fold(1) == 0, "a fold the set lacks is full");
 }
 
+// The reserved fold `off` (phase 3, step 6): engaged on a speakers set that is
+// not selected, never listed, never taken from the state file.
+void test_off_fold(const std::string& root) {
+    DspStage stage = DspStage::load(monitored_off());
+    const usb16x16::MonitorTopology& topology = stage.monitor();
+    const std::size_t mains_off = topology.fold_index(0, "off"), near_off = topology.fold_index(1, "off");
+    check(mains_off == 2 && near_off == 2, "the fixture's off folds load, last in each set");
+    std::string reason;
+    const auto limits = m::parse_limits(limits_text(), reason);
+    const std::vector<SetLine> three = {{"mains", "-18.0", "0.0", 0, 0, "mono"}, {"nearfield", "-18.0"}, {"phones", "-30.0"}};
+    auto r = m::resolve(topology, *m::parse_state(state_text(1, "mains", three), reason), *limits);
+    check(r.sets[0].fold == 1 && r.sets[0].engaged == 1 && r.sets[1].fold == 0 && r.sets[1].engaged == near_off &&
+              r.sets[2].engaged == 0,
+          "mains active: mains plays its fold, nearfield has off engaged, the headphones untouched");
+    r = m::resolve(topology, *m::parse_state(state_text(1, "all", three), reason), *limits);
+    check(r.sets[0].engaged == 1 && r.sets[1].engaged == 0, "all sets: nothing is off");
+    auto muted = three;
+    muted[0].mute = 1;
+    r = m::resolve(topology, *m::parse_state(state_text(1, "mains", muted), reason), *limits);
+    check(r.sets[0].engaged == 1 && r.sets[0].gain == 0.0 && r.sets[1].engaged == near_off,
+          "a muted set keeps its fold: the gains mute it");
+    auto asked = three;
+    asked[1].fold = "off";
+    r = m::resolve(topology, *m::parse_state(state_text(1, "nearfield", asked), reason), *limits);
+    check(r.sets[1].fold == 0 && r.sets[1].engaged == 0 && r.sets[0].engaged == mains_off,
+          "a state asking for off plays full; the set not playing has off");
+    // A preset without `off` (one speakers set, or an older compiler): nothing to engage.
+    DspStage plain = DspStage::load(monitored());
+    r = m::resolve(plain.monitor(), *m::parse_state(state_text(1, "mains", three), reason), *limits);
+    check(r.sets[1].engaged == 0, "without an off fold a set not playing keeps its fold");
+
+    Rig rig(root, "off", monitored_off());
+    put(rig.paths.state, state_text(1, "mains", three));
+    rig.control->poll(0);
+    rig.take();
+    std::vector<float> block(kChannels * 1000, 0.0F);
+    rig.stage.process(block.data(), 1000);
+    check(rig.stage.fold(0) == 1 && rig.stage.fold(1) == near_off, "the stage plays mains' fold and nearfield's off");
+    const m::Status status = rig.status();
+    check(status.sets[0].folds == std::vector<std::string>{"full", "mono"} &&
+              status.sets[1].folds == std::vector<std::string>{"full", "stereo"} && status.sets[1].fold == "full",
+          "the status never lists off, and says the fold a set would play");
+    const auto before = rig.control->published();
+    put(rig.paths.state, state_text(2, "nearfield", three));
+    rig.control->poll(10 * kMs);
+    const auto first = rig.control->published();
+    check(rig.control->switching() && rig.stage.fold_crossfading(0) == false, "the switch's first step is out");
+    rig.stage.process(block.data(), 1);
+    check(rig.stage.fold_crossfading(0) && rig.stage.fold_crossfading(1), "both folds move with the first step");
+    rig.stage.process(block.data(), 1000);
+    check(rig.stage.fold(0) == mains_off && rig.stage.fold(1) == 0, "mains to off, nearfield to its fold, within the first step");
+    check(near(before.gain[2], db_gain(-18.0)) && near(first.gain[2], db_gain(-18.0)),
+          "the shared sub holds its gain through the first step when both sets are at the same level");
+    rig.take();
+    rig.control->poll(20 * kMs);
+    rig.control->poll(31 * kMs);
+    check(!rig.control->switching() && near(rig.control->published().gain[2], db_gain(-18.0)) &&
+              near(rig.control->published().gain[3], db_gain(-18.0)) && rig.control->published().gain[0] == 0.0,
+          "the second step: nearfield up, mains down, the sub unchanged");
+    put(rig.paths.state, state_text(3, "all", three));
+    rig.control->poll(40 * kMs);
+    rig.stage.process(block.data(), 1000);
+    check(rig.stage.fold(0) == 1 && rig.stage.fold(1) == 0, "all sets: off released on both");
+}
+
 void test_idle(const std::string& root) {
     Rig rig(root, "idle", straight());
     put(rig.paths.state, state_text(1, "mains", {{"mains", "-6.0"}}));
@@ -931,6 +1011,7 @@ int main(int argc, char** argv) {
     test_start_rules(root);
     test_limits_follow(root);
     test_folds_reach_the_stage(root);
+    test_off_fold(root);
     test_idle(root);
     std::system(("rm -rf '" + std::string(root) + "'").c_str());
     if (failures != 0) {

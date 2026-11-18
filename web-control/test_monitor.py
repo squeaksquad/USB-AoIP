@@ -166,6 +166,10 @@ class FormatTests(unittest.TestCase):
         shared = self.web.parse_monitor_status(status_text(outs=['out n=3 set=mains role=sub label="Sub"',
                                                                  'out n=3 set=phones role=sub label="Sub"']))
         self.assertEqual(len(shared["outputs"]), 2, "a shared sub repeats with another set")
+        listed = self.web.parse_monitor_status(good.replace("folds=full,mono", "folds=full,mono,off"))
+        self.assertEqual(listed["sets"][1]["folds"], ["full", "mono"], "off is the compiler's, never offered")
+        with self.assertRaises(ValueError, msg="a set reported in off"):
+            self.web.parse_monitor_status(good.replace("fold=full folds=full,mono", "fold=off folds=full,mono,off"))
 
     def test_hostile_limits_files_are_refused(self):
         good = self.limits_example
@@ -485,6 +489,16 @@ class MonitorRouteTests(MonitorServerCase):
         self.assertEqual(len(self.get()["topology"]["sets"]), 2)
         self.write_status(status_text(sets=(("mains", "speakers", "full"),)))
         self.assertEqual(len(self.get()["topology"]["sets"]), 1)
+
+    def test_the_reserved_off_fold_is_never_offered_or_taken(self):
+        # Two speaker sets: the owner engages `off` on the set not playing and
+        # may list it; the page never sees it and cannot ask for it.
+        self.write_status(status_text(sets=(("mains", "speakers", "full,stereo,off"), ("near", "speakers", "full,off"))))
+        topology = self.get()["topology"]["sets"]
+        self.assertEqual([s["folds"] for s in topology], [["full", "stereo"], ["full"]])
+        for body in ({"set": "near", "fold": "off"}, {"sets": ["mains", "near"], "fold": "off"}):
+            self.assertEqual(self.post(body)[0], 409, body)
+        self.assertEqual(self.post({"active": "near"})[0], 200)
 
     def test_a_level_post_writes_the_run_file_at_once(self):
         status, answer = self.post({"set": "mains", "levelDb": -21.37})

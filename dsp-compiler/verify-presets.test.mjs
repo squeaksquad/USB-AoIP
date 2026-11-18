@@ -120,12 +120,15 @@ test('the phones preset carries both source modes, full range', () => {
 
 test('the phones preset lands the gains the impulse table expects', () => {
   const result = build(phonesPreset());
-  // Total for one ear = headroom + matrix entry (expand) + bus gain (assign).
+  // Total for one ear = headroom + matrix entry (expand) + assign (unity) +
+  // the output's own gain (the downmix pair's -3 dB, a bus level before v3).
   const total = (output, input) => {
     const assign = sourcesOf(result, 'assign', output)[0];
     const source = sourcesOf(result, 'expand', assign.channel)
       .find(entry => entry.channel === input);
-    return source === undefined ? null : Number((source.gain + assign.gain).toFixed(3));
+    const gain = outputFilters(result, output).map(name => result.config.filters[name])
+      .find(filter => filter.type === 'Gain')?.parameters.gain ?? 0;
+    return source === undefined ? null : Number((source.gain + assign.gain + gain).toFixed(3));
   };
   assert.equal(total(0, 0), -9);                      // pair, ear 1 <- input 1
   assert.equal(total(1, 1), -9);                      // pair, ear 2 <- input 2
@@ -217,4 +220,26 @@ test('the fold presets are 7.2.4 with the paths verify-fold.py models', async ()
     assert.deepEqual(sourcesOf(flat, 'expand', assign.channel).map(s => [s.channel, s.gain]), [[output, 0]]);
   }
   assert.deepEqual(parseMonitorSection(bridgeArtifact(flat)).sets[0].folds, ['full', '5.1', 'stereo', 'mono']);
+});
+
+test('the sets presets put the outputs where verify-sets.py reads them', async () => {
+  const { setsPreset } = await import('./verify-presets.mjs');
+  const roles = preset => preset.outputs.map((o, i) => [i, o.role, o.busId]).filter(([, role]) => role !== 'unused');
+  const mains = [[0, 'speaker', 'speakers'], [1, 'speaker', 'speakers'], [2, 'speaker', 'speakers'], [3, 'sub', 'speakers'],
+    [4, 'speaker', 'speakers'], [5, 'speaker', 'speakers']];
+  const phones = [[14, 'speaker', 'phones'], [15, 'speaker', 'phones']];
+  const near = [[6, 'speaker', 'speakers-2'], [7, 'speaker', 'speakers-2']];
+  assert.deepEqual(roles(setsPreset('single')), [...mains, ...phones]);
+  for (const share of ['main', 'none']) {
+    const preset = setsPreset(share);
+    assert.deepEqual(roles(preset), [...mains, ...near, ...phones]);
+    assert.equal(preset.buses[1].subShare, share);
+    assert.deepEqual([6, 7].map(i => preset.outputs[i].source), [0, 1]);
+  }
+  assert.deepEqual(roles(setsPreset('own')), [...mains, ...near, [8, 'sub', 'speakers-2'], ...phones]);
+  // The mains are the single preset's, output for output, so (b) can compare them byte for byte.
+  const single = setsPreset('single'), two = setsPreset('main');
+  for (const i of [0, 1, 2, 3, 4, 5, 14, 15]) assert.deepEqual(two.outputs[i], single.outputs[i]);
+  assert.deepEqual(two.sends.map(row => row[3]), single.sends.map(row => row[3]));
+  assert.equal(single.headroomDb, -18);
 });

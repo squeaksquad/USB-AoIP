@@ -1705,6 +1705,7 @@ MONITOR_DIM = (-40.0, 0.0)
 MONITOR_MAX = (-30.0, 0.0)
 MONITOR_START_RULES = ("last", "reference", "fixed")
 MONITOR_REF_DEFAULT = -10.0
+MONITOR_FOLD_RESERVED = "off"
 MONITOR_SET_FIELDS = ("levelDb", "trimDb", "dim", "mute", "fold")
 MONITOR_PATCH_KEYS = frozenset(("set", "sets", *MONITOR_SET_FIELDS, "active", "dimDb", "subs", "solo", "outMute", "clearSolo"))
 
@@ -1939,7 +1940,9 @@ def parse_monitor_status(text: str) -> dict:
     ids = set()
     while at < len(lines) and lines[at].startswith("set "):
         match = line(set_line, "set")
-        ident, folds = match.group(1), match.group(8).split(",")
+        # `off` is the compiler's reserved fold (MONITOR-FILES.md): never one to
+        # listen in, so never offered, even from an owner that listed it.
+        ident, folds = match.group(1), [f for f in match.group(8).split(",") if f != MONITOR_FOLD_RESERVED]
         if ident in ids:
             raise ValueError(f"set {ident} is listed twice")
         if len(ids) >= MONITOR_SETS_MAX:

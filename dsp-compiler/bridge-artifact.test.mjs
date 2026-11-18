@@ -9,7 +9,7 @@ import { compile, fileDevices } from './compile.mjs';
 import { bridgeArtifact, delayLatency, MAX_DELAY_SAMPLES, parseMonitorSection } from './bridge-artifact.mjs';
 import { bandBiquad, crossoverBiquads, cascadeResponseDb } from './coefficients.mjs';
 import { crossoverPreset, clipPreset, phonesPreset, loadedPreset } from './verify-presets.mjs';
-import { bandResponse, createConfig, FREQUENCIES } from '../web-ui/model.mjs';
+import { bandResponse, createConfig, parsePreset, FREQUENCIES } from '../web-ui/model.mjs';
 
 const build = preset => compile(preset, fileDevices('in.raw', 'out.raw'));
 
@@ -101,12 +101,12 @@ test('a dB gain and a polarity flag become one signed linear gain', () => {
   assert.equal(second.gain, 0, 'mute shows up as a gain of zero');
 });
 
-test('a muted bus contributes no assign rows at all', () => {
-  const preset = createConfig();
-  preset.buses.find(bus => bus.kind === 'speakers').mute = true;
-  const artifact = parse(bridgeArtifact(build(preset)));
-  assert.equal(artifact.assign.length, 0,
-               'a muted bus is absent rather than present at zero');
+test('a v2 muted bus is its outputs at gain zero, its assign rows kept (model v3)', () => {
+  const legacy = createConfig(); legacy.version = 2;
+  legacy.buses.forEach(bus => { bus.gainDb = 0; bus.mute = true; });
+  const artifact = parse(bridgeArtifact(build(parsePreset(JSON.stringify(legacy)))));
+  assert.equal(artifact.assign.length, parse(bridgeArtifact(build(createConfig()))).assign.length);
+  assert.ok(artifact.outputs.filter(entry => entry.index < 13).every(entry => entry.gain === 0));
 });
 
 test('the emitted band coefficients reproduce the curve the UI draws', () => {
@@ -249,7 +249,7 @@ test('value edits leave the fixed shape unchanged', () => {
     'existing send gain': p => { p.sends[0][3] = -12; },
     'send muted (null) on a branch that stays': p => { p.sends[2][12] = null; },
     'send added on a branch that exists': p => { p.sends[1][3] = -6; },
-    'bus gain and mute': p => { p.buses[0].gainDb = -4; p.buses[0].mute = true; },
+    'speaker set renamed': p => { p.buses[0].label = 'Mains'; },
     'output gain, polarity, mute': p => { p.outputs[1].gainDb = -2; p.outputs[1].invert = true; p.outputs[6].mute = true; },
     'alignment delay': p => { p.outputs[7].delayMs = 3.5; },
     'headroom': p => { p.headroomDb = -12; },
@@ -305,12 +305,13 @@ test('the fixed shape of the acceptance layouts stays within the soak count', ()
   assert.ok(sections(fixed(createConfig())) <= 308, 'the shipped 7.2.4 layout fits');
 });
 
-test('the muted bus keeps its rows at zero in the fixed shape', () => {
+test('outputs switched off keep their rows and the fixed shape', () => {
   const preset = createConfig();
-  preset.buses.find(bus => bus.kind === 'speakers').mute = true;
+  preset.outputs.forEach(output => { output.mute = true; });
   const artifact = parse(fixed(preset));
   assert.ok(artifact.assign.length > 0, 'rows are present');
-  assert.ok(artifact.assign.every(row => row.gain === 0), 'and all at zero');
+  assert.ok(artifact.outputs.every(entry => entry.gain === 0), 'every output at zero');
+  assert.equal(artifactShape(fixed(preset)), artifactShape(fixed(createConfig())));
 });
 
 test('the shape key is pinned: the applier and the bridge must reproduce it', async () => {

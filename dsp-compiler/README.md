@@ -34,11 +34,11 @@ existing bridge.
 ```
 16 capture channels
   -> expand mixer   headroom trim; one internal channel per branch actually used
-                      main   = an input, later high-passed
-                      bass   = an input, later low-passed (LFE uses its own LP + trim)
+                      main   = an input for one speaker set, later high-passed
+                      bass   = an input for one speaker set, later low-passed (LFE uses its own LP + trim)
                       phones = an input pair member, or a downmix sum, full range
   -> branch filters the crossover (BiquadCombo Linkwitz-Riley)
-  -> assign mixer   internal channels -> the 16 outputs, with sub sends and bus level/mute
+  -> assign mixer   internal channels -> the 16 outputs, with sub sends
   -> output filters 16 PEQ bands (Biquad), alignment delay, gain/polarity/mute
   -> 16 playback channels
 ```
@@ -71,7 +71,8 @@ What the fixed shape pads, and how:
 |---|---|
 | a disabled or 0 dB band, a band under output EQ off or global bypass | a `Free` biquad at unity (`b0=1`, the rest 0), in the band's own slot, so every output always carries 16 sections in band order |
 | a switched-off high-pass (bass redirection on) | a chain of unity `Free` biquads as long as the slope would take |
-| a muted bus (the whole assign destination) | the same rows with every source `mute: true`, which the artifact writes as gain 0 |
+| a muted output (the whole assign destination) | the same rows with every source `mute: true`, which the artifact writes as gain 0 |
+| no high-pass on a speaker set with no sub (`subShare: 'none'`, full range) | the unity chain a switched-off high-pass is |
 | a send that is `null` from a bass branch that exists | the row, muted |
 | an empty headphone downmix cell | the row, muted |
 
@@ -141,10 +142,9 @@ DEST SRC GAIN          view[DEST] += GAIN * in[SRC]; a DEST with no row is silen
 The bridge applies a fold at the stage's **input**: each expand row tagged with
 a set reads that set's view of the 16 inputs, so folded content goes through
 bass management and the EQ of the speaker that plays it. Headphone rows (`-`)
-read the inputs unfolded. Main and bass rows are tagged with the set of the
-outputs they feed when that is one set, else the first speakers set; per-set
-main and bass channels, and subs shared between sets, come with preset model
-v3 (the format already carries both). Labels are sanitised by `monitorLabel`
+read the inputs unfolded. Since preset model v3 every main and bass branch
+belongs to one speaker set and its expand row carries that set's tag (see
+"Several speaker sets" below). Labels are sanitised by `monitorLabel`
 (other characters become `?`, runs of spaces collapse, trimmed, cut at 32;
 empty means no line).
 
@@ -178,11 +178,66 @@ bass management on and checks the table, linearity through the whole stage
 under every fold, the crossfade bit for bit, the no-click bound and byte
 identity on full (its docstring has the tolerances).
 
+### Several speaker sets (2026-11-18, phase 3 step 6, preset model v3)
+
+A preset can hold more than one speaker set (`web-ui/buses.mjs`,
+`addSpeakerSet`); one plays at a time, or all together, chosen in the Control
+Room. The first speakers bus is the **main** set. Each other one carries
+`subShare`:
+
+| `subShare` | Its bass branches | Its high-passes |
+|---|---|---|
+| `main` | the inputs its speakers play and the LFE input, sent to the main set's subs with the sends those inputs already have | the inputs' crossovers |
+| `own` | any input with a send to its own subs (one of its outputs given the job Subwoofer) | the inputs' crossovers |
+| `none` | none | none: full range (unity slots in the fixed shape) |
+
+`model.mjs`'s `speakerSetBass` is the one place this is decided; the compiler,
+the bound (`subSumBoundDb`) and the page read it. Branches are per (speaker
+set, input): mains in output order, then each set's bass in set order, inputs
+ascending. With one set that is exactly the old plan, and the first set's
+filter names are unchanged (`hp_in1`, `lp_in1`, `hp_in1_off1`); another set's
+are prefixed `set<N>_` (`hp_set2_in1`). **Pinned:** `sets.test.mjs` compiles
+29 presets (the default, every layout, headphones, the `verify-presets.mjs`
+ones) at 48 and 96 kHz, both shapes, with and without the section, and
+compares the artifact, its shape key and the CamillaDSP configuration with
+`fixtures/single-set-pins.json`, taken from 563f64f before v3: 232 entries, all
+identical (the configuration's `description`, which names the model version,
+is left out). A value edit on a two-set preset (a send, a band, a crossover, a
+name, bass redirection) is live; adding a set, or changing its sub choice, is a
+restart.
+
+In the monitor section a shared sub is one `out` line with both sets
+(`out 3 sub 0 1`), and when there is more than one speakers set each one gets
+the reserved fold **`off`** last, one row `0 0 0`: its view of every input is
+silent, so its speakers and its bass are silent together. The owner engages
+`off` on every speakers set that is not selected (`active` neither `all` nor
+that set) and never reports or accepts it as a fold
+(`docs/web/MONITOR-FILES.md`, "The reserved fold `off`"). A switch changes both
+sets' folds in the same publish, one 10 ms fold crossfade, so a shared sub,
+which both sets' bass reach, carries one set's bass fading out under the
+other's fading in. `off` counts against the four folds a set may have: a 7.2.4
+main set with a second set offers `5.1`, `stereo`, `mono` and `off`.
+
+**CHECKED 2026-11-18 (Mac, offline):** `verify-sets.py --runner
+usb16x16-dsp-offline [--rate R] [--bench N]` checks, at 48 and 96 kHz: the
+topology the compiler wrote; the mains alone and the nearfield alone bit for
+bit against the one-set preset's outputs on the same inputs, with the other
+set's outputs and bass exactly silent; All sets as the sum of the two within
+half an ulp of the output plus half an ulp of each term; an owner-style switch,
+steady before and after, with no step bigger than the two sets' own; `none`
+against the EQ alone modelled from the artifact, and 30 Hz reaching the
+nearfield at 0 dB against −34.25 dB when it shares the sub; one set
+byte-identical with and without the section. Its bench on the Mac (block 32,
+200 000 calls): one set 2.62 µs median, two sets with the nearfield off
+4.00 µs (an engaged `off` runs the fold path), both playing 3.62 µs. Not
+measured on the Pi.
+
 ## Headroom policy
 
 `headroomDb` is applied **exactly once**, in the expand mixer, to every branch of
 every input. Nothing downstream re-applies it. The LFE trim is applied once too,
-on the LFE bass branch only. Sub sends, bus gain and output gain all come after,
+on the LFE bass branch only. Sub sends and output gain come after (a bus has no
+gain since model v3),
 so a preset can still be driven into clipping.
 
 `worstCaseDbfs` in the report is the coherent full-scale sum at each output: a
@@ -190,7 +245,10 @@ sum of magnitudes that ignores filter response, phase, and the fact that real
 content is not coherent. It is a **ceiling**, so an output it calls safe cannot
 clip from summing alone; it is not a measured or true-peak figure. Any output
 over 0 dBFS is named in the warnings and sets exit status 1. The default preset's
-subs reach −2.43 dBFS, which is the −18 dB trim doing its job.
+subs reach −2.43 dBFS, which is the −18 dB trim doing its job. A sub shared by
+several speaker sets is counted with every one of them playing (All sets), so
+adding a set that shares the main sub raises its ceiling: `verify-presets.mjs
+sets` reaches +1.08 dBFS on the sub.
 
 ## What the compiler will not decide for you
 

@@ -31,6 +31,17 @@
 // that set (a soloed main silences its subs too). An output in no set is
 // untouched (gain 1, its flags ignored).
 //
+// Folds: a set plays the fold its state line asks for (full when it names
+// none the preset offers). The fold `off` is reserved: a preset with several
+// speaker sets gives each one (the compiler's one row at gain zero), the
+// status never lists it and a state asking for it plays full. A speakers set
+// that is not selected (another set is active) has `off` engaged, so its view
+// is silent and it feeds no sub it shares; a muted set keeps its fold. The
+// fold changes go to the stage with the first publish of a set switch, and
+// the stage crossfades each over 10 ms: a sub two sets share then carries a
+// 10 ms crossfade from the old set's bass to the new one's, at the gain
+// min(old, new) of the first step.
+//
 // Publishing to MonitorGains: per output, a 40 ms ramp when only levels and
 // trims moved since the last published state, 10 ms when any flag did (dim,
 // mute, active, subs, solo, output mute, dim_db, the limits, a fold). A set
@@ -93,6 +104,11 @@ constexpr std::size_t kNoteMax = 64;
 constexpr std::size_t kLabelMax = 64;
 constexpr std::size_t kReasonMax = 128;
 constexpr std::size_t npos = static_cast<std::size_t>(-1);
+// The fold the compiler gives every speakers set of a preset with several
+// (one row, gain zero: the set's view silent). Reserved: never in the
+// status's folds, never taken from the state file; resolve() engages it on a
+// speakers set that is not selected.
+constexpr std::string_view kOffFold{"off"};
 
 // dB in tenths. Every number in the files has exactly one decimal, so the sums
 // resolve() makes are exact and print back as they were read.
@@ -838,7 +854,8 @@ struct ResolvedSet {
     Tenths trim{};
     bool dim{false};
     bool mute{false};
-    std::size_t fold{0};
+    std::size_t fold{0};       // the fold the set asks for: never `off`
+    std::size_t engaged{0};    // the fold the stage plays: `off` when the set is not selected
     bool playing{false};
     Tenths total{};        // after dim
     double gain{0.0};      // 0 when not playing
@@ -887,7 +904,8 @@ struct Resolved {
             r.trim = line->trim;
             r.dim = line->dim;
             r.mute = line->mute;
-            const std::size_t fold = topology.fold_index(s, line->fold);
+            // `off` is reserved (kOffFold): asked for, it plays full.
+            const std::size_t fold = line->fold == kOffFold ? MonitorTopology::npos : topology.fold_index(s, line->fold);
             r.fold = fold == MonitorTopology::npos ? 0 : fold;
         } else {
             r.level = limits.reference(set.id);
@@ -896,6 +914,11 @@ struct Resolved {
         if (r.dim) r.total += state.dim_db;
         const bool selected = set.kind == MonitorTopology::Kind::headphones || out.active == npos || out.active == s;
         r.playing = !r.mute && selected;
+        // A speakers set that is not selected reads silence where the preset
+        // offers it, so it feeds no subwoofer it shares; a muted set keeps
+        // its fold (its gains do the muting, and its meters keep reading).
+        const std::size_t off = selected ? MonitorTopology::npos : topology.fold_index(s, kOffFold);
+        r.engaged = off == MonitorTopology::npos ? r.fold : off;
         r.gain = r.playing ? std::pow(10.0, static_cast<double>(r.total) / 200.0) : 0.0;
     }
     for (const MonitorTopology::Out& o : topology.outs) {
@@ -947,7 +970,7 @@ struct Resolved {
         if (!fast && s != npos) {
             const ResolvedSet& a = before.sets[s];
             const ResolvedSet& b = after.sets[s];
-            fast = a.dim != b.dim || a.mute != b.mute || a.fold != b.fold || a.playing != b.playing || a.solo != b.solo;
+            fast = a.dim != b.dim || a.mute != b.mute || a.fold != b.fold || a.engaged != b.engaged || a.playing != b.playing || a.solo != b.solo;
         }
         ramps[n] = fast ? monitor_ramp_frames_fast(rate) : monitor_ramp_frames_level(rate);
     }
@@ -1123,7 +1146,8 @@ private:
 
     // A new resolution: the folds at once, and what to publish next.
     void plan(Resolved next, bool limits_changed) {
-        for (std::size_t s = 0; s < next.sets.size(); ++s) stage_.set_fold(s, next.sets[s].fold);
+        // With the first step of a switch: the old set to `off`, the new one to its fold.
+        for (std::size_t s = 0; s < next.sets.size(); ++s) stage_.set_fold(s, next.sets[s].engaged);
         const bool switched = have_final_ && next.active != final_resolved_.active;
         const bool switching = switched || waiting_ || want_inter_;
         MonitorGains::Targets target;
@@ -1221,7 +1245,9 @@ private:
             line.trim = rs.trim;
             line.dim = rs.dim;
             line.mute = rs.mute;
-            line.folds = set.folds;
+            for (const std::string& name : set.folds) {
+                if (name != kOffFold) line.folds.push_back(name);
+            }
             line.fold = set.folds[rs.fold];
             if (rs.playing) line.gain = rs.total;
             status.sets.push_back(std::move(line));

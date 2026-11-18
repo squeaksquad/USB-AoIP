@@ -504,6 +504,17 @@ class CrossSiteTests(ServerCase):
             self.assertEqual(status, 403, origin)
             self.assertIn("Origin", json.loads(data)["error"])
 
+    def test_a_preset_store_round_trip_keeps_a_two_set_v3_preset_as_sent(self):
+        # The store is opaque: model v3 (more than one speaker set, subShare,
+        # no bus level) goes in and comes back unchanged; reading a v2 one is
+        # the page's (readPreset), not the store's.
+        document = json.loads((Path(__file__).resolve().parent / "fixtures/preset-sets-v3.json").read_text())
+        self.assertEqual([b.get("subShare") for b in document["buses"]], [None, "main", None])
+        status, _, data = self.put_preset(CHANGE, json.dumps(document).encode())
+        self.assertEqual(status, 200, data)
+        status, _, data = self.call("GET", "/api/presets/Room")
+        self.assertEqual((status, json.loads(data)["preset"]), (200, {**document, "name": "Room"}), "named by its path")
+
     def test_every_changing_method_is_gated(self):
         for method, path in (("POST", "/api/apply/profile"), ("POST", "/api/apply/shutdown"),
                              ("POST", "/api/apply/reboot"), ("POST", "/api/apply/restart-audio"),

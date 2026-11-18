@@ -3,10 +3,10 @@
 // This file owns the state, the events and everything that talks to the
 // device. The tabs are drawn by the view-*.mjs modules, which are pure
 // (state in, HTML out); the testable logic is in the modules beside them.
-import { CHANNELS, createConfig, validateConfig, parsePreset, setOutputRole, bandResponse, eqResponse } from './model.mjs';
+import { CHANNELS, createConfig, validateConfig, readPreset, setOutputRole, bandResponse, eqResponse } from './model.mjs';
 import { LAYOUTS, applyLayout, swapOutputs, applyCrossover, dragEqBand, EQ_RANGE_DB, blankConfig } from './workflows.mjs';
 import { resetBand } from './reset-band.mjs';
-import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, removeBus, setBusEqLink, setBusOutputs, speakerGroupSourceIds } from './buses.mjs';
+import { getBus, applyBusLayout, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, removeBus, setBusEqLink, setBusOutputs, speakerGroupSourceIds, addSpeakerSet, speakerSetSize, subShareChoices } from './buses.mjs';
 import { resetEq, setEqBypass, mirrorLinkedEq, exportEq, importEq } from './eq-tools.mjs';
 import { polarityNote } from './crossover-notes.mjs';
 import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, formatRate, deviceName, fetchLogs, systemFacts, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, monitorEngine, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, requestReboot, requestRestartAudio, requestRestartClock, requestBundle, requestPassword, fetchSupportBundle, stackTerms, statusCards, meterRows, preFaderBank, fetchMonitor, postMonitor, requestMonitorLimits, requestMonitorReference } from './backend.mjs';
@@ -54,6 +54,8 @@ let tab = 'status', ptab = 'outputs';
 let eqOpen = null, band = 0, eqDrag = null, eqObserver = null, eqClipboard = null, eqImport = null, nudgeKey = null;
 let align = {open: false, unit: 'm', text: [], preview: null, error: '', note: ''};
 let confirmResetAll = false, setDetail = null, chooser = null, exportState = null;
+// Processor > Speakers & headphones: the Add speaker set form while open.
+let addSet = null;
 let route = {row: null, col: null};
 let prefs = readPrefs();
 let logService = 'all', logQuery = '', logBusy = false;
@@ -106,6 +108,15 @@ const sender = new MonitorSender({
   onSent: (body, result) => overlay.sent(body, result.seq, Date.now()),
   onError: (body, error) => { overlay.failed(body); toast(`The change did not reach the device: ${error.message}`); renderControl(); },
 });
+
+/** A stored or imported preset read into the current model (v1 and v2 are
+ *  migrated; the stored copy is rewritten only when the user saves). What the
+ *  migration could not carry over exactly is said once. */
+function parsePreset(text) {
+  const {config: document, notes} = readPreset(text);
+  if (notes.length) setTimeout(() => toast(notes.join(' ')), 0);
+  return document;
+}
 
 const storageKey = 'usb16x16-design-presets-v1';
 let presetStore = browserStore(storageKey);
@@ -202,7 +213,7 @@ function adopt(document, {asBaseline = true, isFresh = false, from = null} = {})
   draftStoreName = from;
   if (asBaseline) baseline = clone(config);
   fresh = isFresh; history.clear(); draftShapeKey = null; draftPlainShapeKey = null; liveQueue.cancel();
-  eqOpen = null; band = 0; eqImport = null; chooser = null; setDetail = null; route = {row: null, col: null};
+  eqOpen = null; band = 0; eqImport = null; chooser = null; setDetail = null; addSet = null; route = {row: null, col: null};
   align = {...align, open: false, text: [], preview: null, error: '', note: ''};
 }
 
@@ -211,6 +222,7 @@ function jump(state) {
   config = state;
   if (eqOpen !== null && config.outputs[eqOpen].busId === null) eqOpen = null;
   if (setDetail && !config.buses.some(bus => bus.id === setDetail)) setDetail = null;
+  if (addSet) addSet = freshAddSet(addSet);
   nudgeKey = null; markDraft(); render();
 }
 const undo = () => jump(history.undo(clone(config)));
@@ -640,6 +652,39 @@ async function loadLogs() {
 
 const busyNow = () => { const status = applyStatus || health?.apply || null; return applyBusy || Boolean(status && (status.inFlight || status.pending)); };
 const headphoneIds = () => config.buses.filter(bus => bus.kind === 'headphones').flatMap(bus => bus.outputIds);
+/** The spare outputs, in order. */
+const spareIds = () => config.outputs.map((o, n) => o.busId === null ? n : null).filter(n => n !== null);
+
+/** The layouts a new speaker set can take, with what each needs and allows. */
+function addSetLayouts() {
+  const free = spareIds().length;
+  return LAYOUTS.map(l => {
+    const choices = subShareChoices(config, l.id);
+    const size = Math.min(...choices.map(share => speakerSetSize(l.id, share)));
+    return {id: l.id, label: l.label, subs: l.subs, choices, size: addSet?.layoutId === l.id && addSet.subShare ? speakerSetSize(l.id, addSet.subShare) : size, fits: size <= free};
+  });
+}
+
+/** The Add speaker set form made consistent: a subwoofer choice the layout
+ *  allows (shares the main sub when it can), and the first spare outputs
+ *  when none are chosen yet, at most as many as the set takes. */
+function freshAddSet(next) {
+  const choices = subShareChoices(config, next.layoutId);
+  const subShare = choices.includes(next.subShare) ? next.subShare : choices[0];
+  const size = speakerSetSize(next.layoutId, subShare), spare = spareIds();
+  const kept = next.outputIds.filter(i => spare.includes(i)).slice(0, size);
+  const filled = [...kept, ...spare.filter(i => !kept.includes(i))].slice(0, size).sort((a, b) => a - b);
+  return {...next, subShare, outputIds: filled};
+}
+
+/** What changing the main speakers' layout does to the added speaker sets, in words. */
+function chooserNotes(layoutId) {
+  const layout = LAYOUTS.find(l => l.id === layoutId);
+  if (!layout || layout.subs) return [];
+  return config.buses.filter(bus => bus.kind === 'speakers' && bus.subShare === 'main')
+    .map(bus => `${bus.label} shares the main subwoofer; with no subwoofer in ${layout.label} it plays full range.`);
+}
+
 function rowsNow() {
   const choices = profileChoices(health);
   const profiles = (health?.profile?.profiles || []).filter(row => !row.user && (row.accepted || row.name === health.profile.selected))
@@ -653,7 +698,10 @@ function viewState() {
   const choices = profileChoices(health), status = applyStatus || health?.apply || null, current = status?.current;
   const lines = (logLive[logService] || '').split(/\r?\n/).filter(Boolean), shown = lines.filter(line => line.toLowerCase().includes(logQuery.toLowerCase()));
   const main = config.buses.find(bus => bus.kind === 'speakers'), free = config.outputs.filter(o => o.busId === null).length;
+  const mainSubs = main ? main.outputIds.filter(i => config.outputs[i].role === 'sub').length : 0;
   return {
+    addSet, addSetLayouts: addSet ? addSetLayouts() : [], mainSubs, setsSwitchable: !health || monitorFlag(),
+    chooserNotes: chooser?.mode === 'layout' ? chooserNotes(chooser.layoutId) : [],
     config, health, connected: Boolean(health), dante: health?.stack === 'dante', changes: changes(),
     cards: statusCards(health), rows: meterRows(meterBody), meterNote: meterNote(),
     meterCaption: 'Peak level over the last 50 ms, with a peak hold. A clip light stays on until it is cleared.',
@@ -1268,6 +1316,7 @@ function setField(f, i, text) {
       case 'send': { const [from, to] = i.split(',').map(Number); c.sends[from][to] = level(text, 'Send'); return null; }
       case 'mix': { const [id, input, ear] = i.split(','); const matrix = clone(getBus(c, id).downmixMatrix); matrix[Number(input)][Number(ear)] = level(text, 'Send'); return setHeadphoneMatrix(c, id, matrix); }
       case 'set.label': getBus(c, i).label = text.trim(); return null;
+      case 'set.subShare': getBus(c, i).subShare = text; return null;
       case 'set.out': { const [id, ear] = i.split(','); const ids = [...getBus(c, id).outputIds]; ids[Number(ear)] = Number(text); return setBusOutputs(c, id, ids); }
       case 'set.pair': { const [id, ear] = i.split(','); const pair = [...getBus(c, id).inputPair]; pair[Number(ear)] = Number(text); return setHeadphonePair(c, id, pair); }
       case 'band.frequency': case 'band.gainDb': case 'band.q': c.outputs[eqOpen].bands[Number(i)][f.slice(5)] = number(text, 'Band'); return mirrorLinkedEq(c, eqOpen);
@@ -1371,7 +1420,19 @@ function act(name, v, i) {
     case 'set-add-phones': { const freeIds = c.outputs.map((o, n) => o.busId === null ? n : null).filter(n => n !== null); let n = 1, id = 'headphones'; while (c.buses.some(bus => bus.id === id)) { n += 1; id = `headphones-${n}`; } if (edit(d => createHeadphoneBus(d, id, freeIds.slice(-2)))) setDetail = id; return; }
     case 'set-remove': edit(d => removeBus(d, v)); return;
     case 'set-link': edit(d => setBusEqLink(d, v, !getBus(d, v).linkEq)); return;
-    case 'set-clear-level': edit(d => setBusGainMute(d, v, 0, false)); return;
+    case 'addset-open': addSet = freshAddSet({label: '', layoutId: 'stereo', subShare: null, outputIds: [], error: ''}); render(); refocus({id: 'addset-label'}); return;
+    case 'addset-close': addSet = null; render(); return;
+    case 'addset-layout': addSet = freshAddSet({...addSet, layoutId: v, subShare: null, outputIds: [], error: ''}); render(); return;
+    case 'addset-sub': addSet = freshAddSet({...addSet, subShare: v, outputIds: addSet.outputIds, error: ''}); render(); return;
+    case 'addset-out': { const n = Number(v), ids = addSet.outputIds.includes(n) ? addSet.outputIds.filter(i => i !== n) : [...addSet.outputIds, n].sort((a, b) => a - b); addSet = {...addSet, outputIds: ids, error: ''}; render(); return; }
+    case 'addset-go': {
+      const wanted = addSet;
+      let made = null;
+      if (edit(d => { made = addSpeakerSet(d, {layoutId: wanted.layoutId, outputIds: wanted.outputIds, subShare: wanted.subShare, label: wanted.label.trim() || null}); return made; })) {
+        addSet = null; toast(`${made.buses.at(-1).label} added. Switch to it in the Control Room once the preset is applied.`); render();
+      } else if (addSet) { addSet.error = 'The speaker set was not added.'; render(); }
+      return;
+    }
     // Bass management
     case 'bass-toggle': edit(d => { d.bassEnabled = !d.bassEnabled; }); return;
     case 'bass-hp': edit(d => { d.inputs[Number(v)].crossover = !d.inputs[Number(v)].crossover; }); return;
@@ -1388,7 +1449,8 @@ function act(name, v, i) {
         const main = c.buses.find(bus => bus.kind === 'speakers'), layout = LAYOUTS.find(l => l.id === chooser.layoutId);
         const freeIds = c.outputs.map((o, n) => o.busId === null ? n : null).filter(n => n !== null);
         const ids = [...main.outputIds, ...freeIds].slice(0, Math.max(main.outputIds.length, layout.routing.length));
-        if (edit(d => { const next = applyBusLayout(d, main.id, layout.id, ids); next.bassEnabled = layout.subs > 0 && next.bassEnabled; return next; })) { chooser = null; eqOpen = null; }
+        const said = chooserNotes(layout.id);
+        if (edit(d => { const next = applyBusLayout(d, main.id, layout.id, ids); next.bassEnabled = next.bassEnabled && next.outputs.some(o => o.role === 'sub'); return next; })) { chooser = null; eqOpen = null; if (said.length) toast(said.join(' ')); }
         return;
       }
       const taken = Object.keys(presetStore.cache || {}), title = chooser.name.trim();
@@ -1463,6 +1525,7 @@ document.addEventListener('input', event => {
   const el = event.target;
   if (el.id === 'log-filter') { logQuery = el.value; requestRender(); return; }
   if (el.id === 'chooser-name' && chooser) { chooser.name = el.value; return; }
+  if (el.id === 'addset-label' && addSet) { addSet.label = el.value; return; }
   if (el.dataset.m === 'group-name' && crGroupEdit) { crGroupEdit.name = el.value; return; }
   if (el.id === 'export-name' && exportState) { exportState.name = el.value.trim(); const pos = el.selectionStart; renderExport(); const again = $('#export-name'); again.focus(); again.setSelectionRange(pos, pos); return; }
   if (el.id === 'eq-import-text' && eqImport) {

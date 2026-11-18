@@ -32,6 +32,11 @@ GOOD = VECTOR[VECTOR.index("monitor 1\n"):-len("end\n")]       # the section, wi
 # PRESET.json being model.mjs's createConfig()); its key is bridge-artifact.mjs's.
 COMPILED = HERE / "fixtures/monitor-default.dsp"
 COMPILED_KEY = "7bb5f3d0c57eb1fc18abffbaf42954299d35820644d293d6110f5e561c1a0263"
+# Two speaker sets (phase 3 step 6): dsp-compiler/verify-presets.mjs's
+# setsPreset('main') compiled the same way: 5.1 mains, a stereo nearfield
+# sharing their sub (`out 3 sub 0 1`), headphones, the reserved fold `off`.
+SETS = HERE / "fixtures/monitor-sets.dsp"
+SETS_KEY = "51be877686523f118391565ccbb0110e2e93e3fdb2930bae31beba5df045233d"
 MARK = b"\x7fELF...dsp artifact: monitor: unexpected end..."
 
 apply_module = apply_tests.apply_module
@@ -145,6 +150,14 @@ class ReaderMatrixTests(unittest.TestCase):
         self.assertEqual(apply_module.parse_artifact(VECTOR)["monitorSets"], 2)
         self.assertEqual(apply_module.parse_artifact(BASE)["monitorSets"], 0)
 
+    def test_a_compiled_two_set_artifact_loads_with_its_shared_sub_and_off_folds(self):
+        text = SETS.read_text()
+        self.assertTrue(self.accepted(text))
+        self.assertEqual(apply_module.parse_artifact(text)["monitorSets"], 3)
+        self.assertIn("out 3 sub 0 1\n", text)
+        self.assertEqual(text.count("off 1\n0 0 0\n"), 2, "one off fold per speaker set")
+        self.assertFalse(self.accepted(text.replace("out 3 sub 0 1\n", "out 3 sub 0 2\n")), "a sub in the headphones set")
+
     def test_every_mutation_is_refused(self):
         for before, after in MUTATIONS:
             self.assertIn(before, GOOD, before)
@@ -206,6 +219,11 @@ class ShapeTests(unittest.TestCase):
         self.assertEqual(self.keys(VECTOR.replace("out 3 sub 0", "out   3  sub 0")), MONITOR_KEY)
         self.assertEqual(self.keys(VECTOR.replace("outs 3\n", "\n   \nouts 3\n\n")), MONITOR_KEY, "blank lines are ignored")
         self.assertNotEqual(self.keys(VECTOR.replace("0 2 0.7071067811865476", "0 2 0.5")), MONITOR_KEY)
+
+    def test_the_two_set_artifact_has_the_compilers_key(self):
+        self.assertEqual(self.keys(SETS.read_text()), SETS_KEY)
+        relabelled = SETS.read_text().replace("label 6 L 2", "label 6 Desk L")
+        self.assertEqual(self.keys(relabelled), SETS_KEY, "a set's labels are not shape")
 
     def test_the_compiled_artifact_has_the_compilers_key(self):
         self.assertEqual(self.keys(COMPILED.read_text()), COMPILED_KEY)

@@ -15,7 +15,7 @@ browser storage. Nothing can be run.
 `docs/web/REDESIGN-2026-11.md` is the design and the build order. Phase 1 is
 this: the new page on today's audio engine, as a change to `web-ui/` only.
 The web service, the applier, the compiler and the preset model (version 2)
-are as they were. A feature the engine lacks is left out, not shown disabled.
+were as they were (the model is version 3 since phase 3 step 6, below). A feature the engine lacks is left out, not shown disabled.
 
 Three tabs.
 
@@ -128,9 +128,26 @@ Things that work differently from the page before:
 - **Gone:** the A/B slots, the Direct/DSP and USB/AoIP switches, the
   copyable service commands, the pasted log snapshot, demonstration meters,
   copy and paste of a whole channel (EQ copy and paste remains).
-- **A set's own level** (`bus.gainDb`, `bus.mute`) has no control: level
-  lives on each output. A preset that carries one says so on Speakers &
-  headphones and offers to clear it.
+- **Preset model v3** (phase 3 step 6, 2026-11-18): a bus has no level or
+  mute (`validateConfig` refuses them); level lives on each output and in
+  the Control Room. `readPreset` reads a version 1 or 2 preset and says what
+  it moved: a bus level is added to its outputs' levels (clamped to −60 and
+  +12 dB, the clamped ones named), a muted bus mutes its outputs. The page
+  shows those sentences as a toast when the preset is opened.
+- **More than one speaker set** (Speakers & headphones, *Add speaker set*):
+  a name, a layout that fits the spare outputs, the spares it takes, and its
+  subwoofer: *Shares the main subs* (its bass goes to the main set's subs,
+  with the sends its channels already have), *None, full range*, or *Own sub*
+  when the layout has one and there is a spare for it. Its outputs are
+  labelled by number (`L 2`, `Sub 2`) and start on the matching computer
+  channels. Giving one of its outputs the job Subwoofer makes it *Own sub*;
+  removing its last one, or the main set losing its subs, moves it back
+  (`settleSubShares`). Adding, removing or changing the sub choice is a
+  restart; everything else on it is live. Drawn only when the device's
+  engine knows the monitor section (`control.monitor.engine`) or there is
+  no device; otherwise a preset with two sets says it cannot switch them.
+  The Control Room switches between them (Which speakers are playing, All
+  sets); `docs/web/MONITOR-FILES.md` has what the owner does.
 - The sample rate is never set from the page.
 - A preset has one spelling of its name, the preset store's: a name is
   rewritten to it when a preset is loaded (`·` becomes `-`).
@@ -244,6 +261,19 @@ both sets; on System the limit (the level clamped to it), the power-up
 rule, and a reference with its note stored from the Control Room; a 375 px
 screen with no sideways scroll; no console errors. Not checked: the owner
 itself, a real lock round trip from the page, touch.
+
+Checked on 2026-11-18 for phase 3 step 6, with no device: the same stand-in
+with `monitor_sim` (the owner's `MonitorControl` without ALSA) on a really
+compiled two-set artifact (`verify-presets.mjs sets`: 5.1, a stereo nearfield
+sharing the sub, headphones). In the Control Room Main volume moved both
+speaker sets, the nearfield's trim moved its gain, the switch went to
+Speakers 2, All sets and back; `/api/meters` read the shared sub following
+the set playing (−111.4 dB mains, −117.2 nearfield, −108.2 both, −123.2 with
+the nearfield trimmed −6 dB, `monitor_sim`'s −20 dBFS broadband signal) and
+the set not playing at −144 dB. On Processor a 2.1 set with its own sub was
+added on the three spares, named, and the change bar asked for a restart; a
+layout that needs more spares than there are is disabled. No console errors. The pane was
+hidden, so this was driven through the DOM, not by pointer.
 
 ## The record below
 

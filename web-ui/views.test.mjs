@@ -5,8 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createConfig } from './model.mjs';
-import { createHeadphoneBus } from './buses.mjs';
-import { LAYOUTS, blankConfig } from './workflows.mjs';
+import { createHeadphoneBus, addSpeakerSet } from './buses.mjs';
+import { LAYOUTS, blankConfig, applyLayout } from './workflows.mjs';
 import { statusCards, meterRows, systemFacts } from './backend.mjs';
 import { presetRows } from './presets.mjs';
 import { statusView } from './view-status.mjs';
@@ -36,6 +36,10 @@ function state(config = createConfig(), extra = {}) {
   };
 }
 const phones = () => createHeadphoneBus(createConfig());
+// The mains in 5.1 sharing their sub with a nearfield pair, and headphones.
+const twoSets = (subShare = 'main') => createHeadphoneBus(addSpeakerSet(applyLayout(createConfig(), '5.1'), {layoutId: subShare === 'own' ? '2.1' : 'stereo', outputIds: subShare === 'own' ? [6, 7, 8] : [6, 7], subShare, label: 'Nearfield'}), 'phones', [14, 15]);
+const addForm = config => ({label: '', layoutId: 'stereo', subShare: 'main', outputIds: [6, 7], error: ''});
+const addLayouts = LAYOUTS.map(l => ({id: l.id, label: l.label, subs: l.subs, choices: l.subs ? ['main', 'none', 'own'] : ['main', 'none'], size: l.routing.filter(x => x !== null).length, fits: true}));
 const everyView = () => {
   const withPhones = phones();
   return [
@@ -44,6 +48,10 @@ const everyView = () => {
     eqView(state(withPhones, {eqOpen: 14, eqImport: {text: '', error: '', note: '', ready: false}})), eqView(state(createConfig(), {eqOpen: 0, band: 3})),
     routingView(state()), routingView(state(withPhones, {route: {row: 3, col: 0}})), routingView(state(withPhones, {route: {row: 14, col: null}})), routingView(state(createConfig(), {route: {row: null, col: 2}})),
     setsView(state()), setsView(state(withPhones, {setDetail: 'headphones'})),
+    setsView(state(twoSets(), {mainSubs: 1})), setsView(state(twoSets('own'), {mainSubs: 1})),
+    setsView(state(applyLayout(createConfig(), '5.1'), {mainSubs: 1, addSet: addForm(), addSetLayouts: addLayouts})),
+    bassView(state(twoSets())), routingView(state(twoSets(), {route: {row: 3, col: 0}})), outputsView(state(twoSets())),
+    chooserView(state(twoSets(), {chooser: {mode: 'layout', layoutId: 'stereo', name: '', error: ''}, chooserNotes: ['Nearfield shares the main subwoofer; with no subwoofer in Stereo (2.0) it plays full range.']})),
     bassView(state()), bassView(state(blankConfig())),
     chooserView(state(createConfig(), {chooser: {mode: 'new', layoutId: '5.1', name: 'New', error: ''}, changes: 2})),
     chooserView(state(createConfig(), {chooser: {mode: 'layout', layoutId: null, name: '', error: ''}})),
@@ -64,7 +72,7 @@ test('no view writes an inline style or an inline handler', () => {
 
 test('what the engine lacks is left out, not shown disabled', () => {
   const all = everyView().join('\n');
-  for (const absent of [/solo/i, /\bdim\b/i, /talkback/i, /calibration noise/i, /\bgate\b/i, /control room/i, /add speaker set/i, /restart (audio|clock)\b(?! on)/i, /support bundle/i, /change password/i, /reboot/i, /sample rate.*<select/i]) {
+  for (const absent of [/solo/i, /\bdim\b/i, /talkback/i, /calibration noise/i, /\bgate\b/i, /control room/i, /restart (audio|clock)\b(?! on)/i, /support bundle/i, /change password/i, /reboot/i, /sample rate.*<select/i]) {
     assert.doesNotMatch(all, absent);
   }
   assert.doesNotMatch(all, /data-act="(solo|dim|mute)"/);
@@ -243,4 +251,36 @@ test('Level safety panel: drawn only with its limits, no inline styles, the star
   assert.equal(safetyPanel({connected: true, safety: null}), '', 'not drawn without the kind');
   assert.equal(safetyPanel({...S, connected: false}), '');
   assert.match(safetyPanel({...S, safety: {...S.safety, limits: {...limits, start: 'fixed'}}}), /data-m="sf-start-db"/);
+});
+
+test('Speakers & headphones: an added speaker set, its subwoofer choice, Remove, and the Add form', () => {
+  const html = setsView(state(twoSets(), {mainSubs: 1}));
+  assert.match(html, /Main speakers/); assert.match(html, /<span>Speaker set<\/span>/);
+  assert.match(html, /data-f="set.subShare" data-i="speakers-2"/);
+  assert.match(html, /<option value="main" selected>Shares the main sub<\/option><option value="none">None, full range<\/option>/);
+  assert.match(html, /data-act="set-remove" data-v="speakers-2"/);
+  assert.doesNotMatch(html, /data-act="set-remove" data-v="speakers"/, 'the main speakers are not removed here');
+  assert.doesNotMatch(html, /saved level/, 'no saved set level any more');
+  assert.match(html, /data-act="addset-open"/);
+  assert.match(setsView(state(twoSets('own'), {mainSubs: 1})), /<span>Own sub<\/span>/);
+  // An engine with no speaker-set switch: no Add, and a word on what a preset with two does.
+  const old = setsView(state(twoSets(), {mainSubs: 1, setsSwitchable: false}));
+  assert.doesNotMatch(old, /addset-open/); assert.match(old, /every speaker set plays at once/);
+  assert.doesNotMatch(setsView(state(createConfig(), {setsSwitchable: false})), /plays at once/);
+  const form = setsView(state(applyLayout(createConfig(), '5.1'), {mainSubs: 1, addSet: addForm(), addSetLayouts: addLayouts}));
+  assert.match(form, /data-act="addset-layout" data-v="stereo" aria-pressed="true"/);
+  assert.match(form, /data-act="addset-sub" data-v="main" aria-pressed="true"[^>]*>Shares the main sub</);
+  assert.match(form, /data-act="addset-sub" data-v="none"[^>]*>None, full range</);
+  assert.doesNotMatch(form, /data-act="addset-sub" data-v="own"/, 'stereo has no sub of its own to offer');
+  assert.match(form, /Choose 2 of the spare outputs: 2 chosen/);
+  assert.equal((form.match(/data-act="addset-out"/g) || []).length, 10, 'one toggle per spare output');
+  assert.match(form, /data-act="addset-go" >Add speaker set/);
+});
+
+test('Bass management and Outputs say where an added set\'s bass goes', () => {
+  assert.match(bassView(state(twoSets())), /Nearfield shares the main subwoofer/);
+  assert.match(bassView(state(twoSets('none'))), /Nearfield has no subwoofer/);
+  assert.match(bassView(state(twoSets('own'))), /Nearfield has its own: Sub 2/);
+  assert.match(outputsView(state(twoSets())), /2 speakers, shares the main sub/);
+  assert.match(chooserView(state(twoSets(), {chooser: {mode: 'layout', layoutId: 'stereo', name: '', error: ''}, chooserNotes: ['Nearfield shares the main subwoofer; with no subwoofer in Stereo (2.0) it plays full range.']})), /Nearfield shares the main subwoofer; with no subwoofer/);
 });

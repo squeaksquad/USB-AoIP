@@ -71,14 +71,15 @@ export function reduceMonitor(body) {
   const eff = isObject(body.effective) ? body.effective : {};
   const sets = (Array.isArray(body.topology?.sets) ? body.topology.sets : []).filter(s => isObject(s) && typeof s.id === 'string')
     .map(s => ({id: s.id, kind: s.kind === 'headphones' ? 'headphones' : 'speakers',
-      folds: Array.isArray(s.folds) && s.folds.length ? s.folds.map(String) : ['full'],
+      // `off` is the compiler's reserved fold (MONITOR-FILES.md): not one to listen in.
+      folds: (() => { const listed = Array.isArray(s.folds) ? s.folds.map(String).filter(f => f !== 'off') : []; return listed.length ? listed : ['full']; })(),
       outputs: (Array.isArray(s.outputs) ? s.outputs : []).filter(o => Number.isInteger(o?.n) && o.n >= 0 && o.n < 16)
         .map(o => ({n: o.n, role: o.role === 'sub' ? 'sub' : 'speaker', label: String(o.label || `Out ${o.n + 1}`)})).sort((a, b) => a.n - b.n)}));
   const effSets = {};
   for (const s of sets) {
     const row = isObject(eff.sets?.[s.id]) ? eff.sets[s.id] : {};
     effSets[s.id] = {levelDb: finite(row.levelDb, -30), trimDb: finite(row.trimDb, 0), dim: row.dim === true, mute: row.mute === true,
-      fold: typeof row.fold === 'string' ? row.fold : 'full'};
+      fold: typeof row.fold === 'string' && row.fold !== 'off' ? row.fold : 'full'};
   }
   const ids = sets.map(s => s.id);
   return {available: true, reason: '', limits, sets,

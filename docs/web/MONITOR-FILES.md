@@ -81,7 +81,7 @@ end
 | `level_db` | -60.0 to 0.0 | The set's volume. The owner clamps it to `max_db` of the limits. |
 | `trim_db` | -12.0 to 12.0 | The set's trim. |
 | `dim`, `mute` | 0, 1 | The set's dim and mute. |
-| `fold` | a fold name | The set's fold-down. The owner ignores a fold the running set does not offer (it plays `full`). |
+| `fold` | a fold name | The set's fold-down. The owner ignores a fold the running set does not offer (it plays `full`), and `off` (reserved, below) likewise. |
 | `solo` | 16 flags | Output solo. |
 | `mute` (line) | 16 flags | Output mute. Not the same field as a set's `mute=`: this one is a line of its own. |
 
@@ -212,7 +212,7 @@ end
 | `set` lines | 0 to 16, distinct ids | One per set of the running preset, in the preset's order. |
 | `kind` | `speakers`, `headphones` | |
 | `level_db` ... `fold` | as in the state file | In force (after clamping). |
-| `folds` | 1 to 8 distinct fold names, comma separated | What the set offers; always includes `full`, and includes `fold`. |
+| `folds` | 1 to 8 distinct fold names, comma separated | What the set offers; always includes `full`, and includes `fold`. Never `off`. |
 | `gain_db` | a number (-999.9 to 999.9), or `-inf` | The set's effective total gain; `-inf` when muted. The web service passes `-inf` to the page as `null`. |
 | `out` lines | 0 to 64 | One per output that belongs to a set, after every `set` line. `set` must be a set listed above; an output shared by sets (a sub) has one line per set; no two lines have the same `n` and `set`. |
 | `role` | `speaker`, `sub` | |
@@ -260,3 +260,30 @@ out n=15 set=phones role=speaker label="Phones R"
 solo=0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 mute=0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1
 end
 ```
+
+## The reserved fold `off`
+
+Added 2026-11-18 (phase 3, step 6: several speaker sets). The compiler gives
+every speakers set of a preset with more than one an extra fold named `off`,
+last among the set's folds: one row `0 0 0`, so the set's whole view of the
+inputs is silent. The owner engages it on every speakers set that is not
+selected (`active` names another set; never under `all`, never on
+headphones), so a set that is not playing stops feeding the bass of a
+subwoofer it shares with the set that is. Muting a set does not engage it:
+mute is the output gains' job, and the meters before the gains keep reading.
+
+`off` is not a fold anyone listens in. The status never lists it in `folds=`
+and its `fold=` is the fold the set plays when selected; a state file asking
+for `off` plays `full`; the web service refuses it in `POST /api/monitor`
+and the page draws no "Listen as" button for it even if a status listed it.
+
+At a set switch the fold changes (the old set to `off`, the new one to its
+fold) go to the stage with the switch's first publish, and the stage
+crossfades each over 10 ms. A sub the two sets share is in both sets: its
+first-step gain is min(old set's, new set's), so with the two sets at the same
+level it holds its gain while its content crossfades over 10 ms from the old
+set's bass to the new one's; the second step then brings it to the new set's
+gain (unchanged when equal). A preset with one speakers set has no `off`, and
+an artifact compiled before it behaves as before: a set that is not selected
+keeps its fold.
+

@@ -287,50 +287,49 @@ export function monitorLabel(text) {
   return ascii.replace(/ +/g, ' ').trim().slice(0, MONITOR_LIMITS.label).trim();
 }
 
+/** The fold that silences a speakers set's whole view: the one row 0 0 0.
+ *  Emitted, last, for every speakers set when a preset has more than one; the
+ *  owner engages it on a set that is not playing so the set stops feeding a
+ *  subwoofer it shares, and never offers it as a fold to listen in. */
+export const OFF_FOLD = Object.freeze({name: 'off', rows: Object.freeze([Object.freeze([0, 0, 0])])});
+
 /**
  * The monitor topology of a validated preset and its channel plan: what
  * `compile()` keeps as `result.monitor` and bridgeArtifact writes.
  *
  * One set per bus, in bus order. Every output in a bus and not unused is
- * listed, with its role. Each plan channel is tagged with the set whose view
- * it reads: `phones` channels read the inputs (null); a `main` channel the set
- * of the speaker outputs that play its input, a `bass` channel the set of the
- * subs it feeds, each when that is one set, else the first speakers set. Per-set
- * main and bass channels, and subs shared between sets, come with preset model
- * v3; the format already carries both.
+ * listed, with its role; a sub of the first speakers set is also listed for
+ * every set that shares it (subShare main). Each plan channel is tagged with
+ * the set whose view it reads: `phones` channels read the inputs (null), a
+ * `main` or `bass` channel its own set (planChannels gives every main and
+ * bass branch one). Folds per speakers set from what its speakers play, and
+ * with more than one speakers set, each set's `off` last.
  */
 export function monitorTopology(model, plan) {
   const sets = model.buses.map(bus => ({id: bus.id, kind: bus.kind}));
   const busOfOutput = output => model.buses.findIndex(bus => bus.outputIds.includes(output));
+  const feeds = plan.sets ?? [];
   const outs = [];
   const labels = Array(16).fill(null);
   model.outputs.forEach((spec, index) => {
     const set = busOfOutput(index);
     if (set < 0 || spec.role === 'unused') return;
-    outs.push({index, role: spec.role, sets: [set]});
+    const shared = spec.role === 'sub'
+      ? feeds.filter(feed => feed.set !== set && feed.share === 'main' && feed.subs.includes(index)).map(feed => feed.set)
+      : [];
+    outs.push({index, role: spec.role, sets: [set, ...shared].sort((a, b) => a - b)});
     const label = monitorLabel(spec.label);
     labels[index] = label || null;
   });
-  const firstSpeakers = model.buses.findIndex(bus => bus.kind === 'speakers');
-  const only = candidates => {
-    const distinct = [...new Set(candidates)];
-    return distinct.length === 1 ? distinct[0] : firstSpeakers;
-  };
-  const channelSet = plan.channels.map(channel => {
-    if (channel.kind === 'phones') return null;
-    if (channel.kind === 'main') {
-      return only(outs.filter(out => out.role === 'speaker' && model.outputs[out.index].source === channel.input
-        && sets[out.sets[0]].kind === 'speakers').map(out => out.sets[0]));
-    }
-    return only(outs.filter(out => out.role === 'sub' && model.sends[channel.input][out.index] !== null)
-      .map(out => out.sets[0]));
-  });
+  const channelSet = plan.channels.map(channel => (channel.kind === 'phones' ? null : channel.set));
   const folds = [];
+  const speakerSets = model.buses.filter(bus => bus.kind === 'speakers').length;
   model.buses.forEach((bus, set) => {
     if (bus.kind !== 'speakers') return;
     const used = outs.filter(out => out.role === 'speaker' && out.sets.includes(set))
       .map(out => model.outputs[out.index].source);
     for (const fold of monitorFolds(used, {lfe: model.lfe.input})) folds.push({set, ...fold});
+    if (speakerSets > 1) folds.push({set, name: OFF_FOLD.name, rows: OFF_FOLD.rows.map(row => [...row])});
   });
   // A set ID is the bus ID, which model.mjs validates against the same rule.
   return {sets, outs, labels, channelSet, folds};

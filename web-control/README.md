@@ -208,6 +208,7 @@ POST /api/monitor        a patch, any subset of:
                            {"solo": [16 b]}  {"outMute": [16 b]}  {"clearSolo": true}
                          -> 200 {ok, seq, state}; 400 bad form or unknown key (4 KiB body at most);
                             409 a set, fold or active set the running preset lacks; 503 no monitor
+                            (the reserved fold `off` is never one it has: the status's folds leave it out)
 POST /api/apply/monitor-limits     {"maxDb": -30..0, "start": "last"|"reference"|"fixed", "startDb": -60..0,
                                     "lock": b}, at least one     -> 202 {id, kind, note}
 POST /api/apply/monitor-reference  {"set": id, "levelDb": -60..0, "note": "<= 64 ASCII, no \" or \\"}

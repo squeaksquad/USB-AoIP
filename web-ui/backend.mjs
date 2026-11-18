@@ -885,7 +885,7 @@ export function liveState(health, draftShapeKey, draftPlainShapeKey = null) {
   if (draftShapeKey !== live.dspShape && draftPlainShapeKey && draftPlainShapeKey !== draftShapeKey && draftPlainShapeKey === live.dspShape) {
     return {...base, state: 'needs-apply', reason: `${live.name} was installed without the monitor block. Compile & apply it to add the monitor; edits then go live again.`};
   }
-  if (draftShapeKey !== live.dspShape) return {...base, state: 'needs-apply', reason: 'This edit changes the pipeline\'s shape (routing, a bus format, a 48 dB/oct slope, or an input\'s first send). Compile & apply to run it.'};
+  if (draftShapeKey !== live.dspShape) return {...base, state: 'needs-apply', reason: 'This edit changes the pipeline\'s shape (routing, a speaker layout, a speaker set or headphones added or removed, a subwoofer choice, a 48 dB/oct slope, or an input\'s first send). Compile & apply to run it.'};
   return {...base, state: 'live', reason: `Edits go to the running ${terms.engine} as you make them; not kept across a restart until committed.`};
 }
 
