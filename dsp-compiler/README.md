@@ -119,7 +119,10 @@ set's fold-downs. `compile(preset, devices, {monitor})` keeps it as
 byte what it was before the section existed (`bridge-artifact.test.mjs`
 compiles `loaded` that way and compares it with the installed
 `dante/config/dsp-loaded@48000.dsp`). The CamillaDSP configuration does not
-change either way: CamillaDSP has no fold-downs.
+change either way: CamillaDSP has no fold-downs. The page (`compileDraft` in
+`web-ui/backend.mjs`) turns the section off unless the device reports an
+engine that knows it (`control.monitor.engine`), since an older owner refuses
+the whole file.
 
 ```
 monitor 1

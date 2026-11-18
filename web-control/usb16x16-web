@@ -1111,7 +1111,10 @@ def monitor_control(dante: bool, services: dict, apply_available: bool) -> dict:
     """control.monitor: whether the knobs work now (the Dante service active
     and the owner's status readable), and which of the two limits kinds the
     applier can take now (none when Apply is unavailable, as for
-    control.apply.actions). The limits do not need the owner running."""
+    control.apply.actions). The limits do not need the owner running.
+    `engine`: whether this unit's engine knows the artifact's monitor section
+    (monitor_engine); the page compiles the section only when it is true."""
+    engine = monitor_engine(dante)
     if not dante:
         available, reason = False, "The monitor is the Dante endpoint's; this unit runs the AES67 stack."
     elif (services.get("dante") or {}).get("state") != "active":
@@ -1120,7 +1123,39 @@ def monitor_control(dante: bool, services: dict, apply_available: bool) -> dict:
         status, reason = read_monitor_status()
         available = status is not None
     return {"available": available, "reason": "" if available else reason, "endpoint": "/api/monitor",
-            "kinds": list(MONITOR_KINDS) if apply_available and dante else []}
+            "kinds": list(MONITOR_KINDS) if apply_available and dante else [], "engine": engine}
+
+
+def monitor_engine(dante: bool | None = None) -> bool:
+    """Whether this unit's engine knows the artifact's monitor section. The
+    owner of phase 3 writes its monitor status at every start, even with no
+    preset (state=idle, no sets), and an older owner never writes it; the
+    file is in the unit's RuntimeDirectory, so it goes when the unit stops.
+    So: the file exists and reads whole. False on the AES67 stack, and
+    whenever the endpoint is not running (the page then leaves the section
+    out, which every engine loads)."""
+    if dante is None:
+        dante = stack() == "dante"
+    if not dante:
+        return False
+    status, _ = read_monitor_status()
+    return status is not None
+
+
+MONITOR_SECTION_LINE = re.compile(r"(?m)^[ \t]*monitor(?:[ \t\r]|$)")
+
+
+def monitor_section_refusal(texts: list[str]) -> str | None:
+    """Why the artifacts a request carries cannot go to this unit, or None:
+    one with a monitor section while the engine does not know it (an owner
+    older than phase 3 refuses the whole file at load). Early and readable,
+    instead of an endpoint that does not start; the applier holds the same
+    line on its own (usb16x16-apply, check_monitor_engine)."""
+    if not any(MONITOR_SECTION_LINE.search(text) for text in texts) or monitor_engine():
+        return None
+    return ("This artifact has a monitor section and this unit's engine does not report one "
+            "(no monitor status from the Dante endpoint): reload the page so it compiles without it, "
+            "or update the endpoint first")
 
 
 def read_support_bundle(ident: str) -> bytes | None:
@@ -1184,6 +1219,204 @@ def apply_state() -> dict:
     return state
 
 
+# The optional monitor section (phase 3, dsp-compiler/README.md, "The monitor
+# section"): read line by line as read_monitor_section in bridge_core.cpp
+# reads it, check for check, with the same limits. The same reader as
+# usb16x16-apply's (each program is one file); ValueError here.
+MONITOR_SECTION_SETS = 8
+MONITOR_SECTION_FOLDS_PER_SET = 4
+MONITOR_SECTION_FOLD_ROWS = 256
+MONITOR_SECTION_LABEL = 32
+MONITOR_SECTION_EXPAND_LIMIT = 16 * 48 + 1                    # kChannels * DspStage::kMaxInternalChannels + 1
+_C_SPACE = re.compile(r"[ \t\n\v\f\r]+")                     # what istringstream >> splits on
+_WHOLE = re.compile(r"[0-9]{1,9}")
+_SECTION_SET_ID = re.compile(r"[a-z][a-z0-9-]{0,31}")
+_SECTION_FOLD_NAME = re.compile(r"[a-z0-9.]{1,16}")
+_FOLD_GAIN = re.compile(r"[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?")   # what std::stod takes whole
+_DBL_MIN = 2.2250738585072014e-308
+
+
+def c_words(text: str) -> list[str]:
+    return [word for word in _C_SPACE.split(text) if word]
+
+
+def read_monitor_section(version: str, lines: list[str], expand_rows: int) -> dict:
+    """The section from just after the word `monitor` through its `end`:
+    `version` is the rest of the monitor line, `lines` every line after it.
+    Refused on anything DspStage::load refuses. Returns the shape lines (every
+    line but the labels, as words joined by one space), the counts, and the
+    largest fold gain."""
+    found = {"shape": [], "sets": 0, "outs": 0, "folds": 0, "maxGain": 0.0}
+    text = "monitor " + version
+    words = c_words(text)
+    rest = iter(lines)
+
+    def refuse(why: str) -> ValueError:
+        return ValueError(f"artifact: monitor: {why} in '{text[:80]}'")
+
+    def next_line(what: str) -> None:
+        nonlocal text, words
+        for raw in rest:
+            stripped = raw.strip(" \t\r")
+            if stripped:
+                text, words = stripped, c_words(stripped)
+                return
+        raise ValueError(f"artifact: monitor: unexpected end, expected {what}")
+
+    def shape() -> None:
+        found["shape"].append(" ".join(words))
+
+    def number(at: int, limit: int, what: str) -> int:
+        if at >= len(words) or not _WHOLE.fullmatch(words[at]) or int(words[at]) > limit:
+            raise refuse(f"{what} must be a whole number no larger than {limit}")
+        return int(words[at])
+
+    def header(keyword: str, limit: int) -> int:
+        next_line(keyword)
+        if len(words) != 2 or words[0] != keyword:
+            raise refuse(f"expected '{keyword} N'")
+        value = number(1, limit, keyword)
+        shape()
+        return value
+
+    if len(words) != 2 or words[1] != "1":
+        raise refuse("unsupported monitor version")
+    shape()
+
+    sets = header("sets", MONITOR_SECTION_SETS)
+    if sets == 0:
+        raise refuse("a monitor section needs at least one set")
+    ids: list[str] = []
+    kinds: list[str] = []
+    folds: list[list[str]] = []
+    for _ in range(sets):
+        next_line("set")
+        if len(words) != 3 or words[0] != "set":
+            raise refuse("expected 'set ID KIND'")
+        if not _SECTION_SET_ID.fullmatch(words[1]):
+            raise refuse("set ID must match [a-z][a-z0-9-]{0,31}")
+        if words[1] in ids:
+            raise refuse("duplicate set ID")
+        if words[2] not in ("speakers", "headphones"):
+            raise refuse("set kind must be speakers or headphones")
+        ids.append(words[1])
+        kinds.append(words[2])
+        folds.append(["full"])
+        shape()
+
+    outs = header("outs", 16)
+    indices: list[int] = []
+    for _ in range(outs):
+        next_line("out")
+        if len(words) < 4 or words[0] != "out":
+            raise refuse("expected 'out INDEX ROLE SET...'")
+        index = number(1, 16 - 1, "output index")
+        if indices and index <= indices[-1]:
+            raise refuse("output indices must ascend")
+        if words[2] not in ("speaker", "sub"):
+            raise refuse("output role must be speaker or sub")
+        member: list[int] = []
+        for at in range(3, len(words)):
+            chosen = number(at, sets - 1, "set index")
+            if member and chosen <= member[-1]:
+                raise refuse("an output's sets must ascend")
+            member.append(chosen)
+        if words[2] == "sub" and not all(kinds[chosen] == "speakers" for chosen in member):
+            raise refuse("a sub belongs to speaker sets only")
+        if len(member) > 1 and words[2] != "sub":
+            raise refuse("only a sub may belong to more than one set")
+        indices.append(index)
+        shape()
+
+    # Labels: zero or more, then expandsets. Not shape.
+    next_line("label or expandsets")
+    last_label = -1
+    while words and words[0] == "label":
+        if len(words) < 3:
+            raise refuse("expected 'label INDEX TEXT'")
+        index = number(1, 16 - 1, "label index")
+        if index <= last_label:
+            raise refuse("label indices must ascend")
+        if index not in indices:
+            raise refuse("a label for an output in no set")
+        # The text is the rest of the line after the index, as written: found
+        # the way the loader finds it (spaces and tabs only).
+        label = None
+        at = next((i for i in range(5, len(text)) if text[i] not in " \t"), None)
+        at = next((i for i in range(at, len(text)) if text[i] in " \t"), None) if at is not None else None
+        at = next((i for i in range(at, len(text)) if text[i] not in " \t"), None) if at is not None else None
+        if at is not None:
+            label = text[at:]
+        if not label or len(label) > MONITOR_SECTION_LABEL or not all(" " <= c <= "~" for c in label):
+            raise refuse("a label is 1 to 32 printable ASCII characters")
+        last_label = index
+        next_line("label or expandsets")
+
+    if len(words) != 2 or words[0] != "expandsets":
+        raise refuse("expected 'expandsets N'")
+    tagged = number(1, MONITOR_SECTION_EXPAND_LIMIT, "expandsets")
+    if tagged != expand_rows:
+        raise refuse(f"expandsets must give one set per expand row ({expand_rows})")
+    shape()
+    for _ in range(tagged):
+        next_line("an expandsets row")
+        if len(words) != 1:
+            raise refuse("expected a set index or '-'")
+        if words[0] != "-":
+            number(0, sets - 1, "set index")
+        shape()
+
+    fold_count = header("folds", MONITOR_SECTION_FOLDS_PER_SET * sets)
+    for _ in range(fold_count):
+        next_line("fold")
+        if len(words) != 4 or words[0] != "fold":
+            raise refuse("expected 'fold SET NAME ROWS'")
+        owner = number(1, sets - 1, "set index")
+        if kinds[owner] != "speakers":
+            raise refuse("only a speakers set has fold-downs")
+        name = words[2]
+        if name == "full" or not _SECTION_FOLD_NAME.fullmatch(name):
+            raise refuse("fold name must match [a-z0-9.]{1,16} and not be 'full'")
+        if name in folds[owner]:
+            raise refuse("duplicate fold name in a set")
+        if len(folds[owner]) > MONITOR_SECTION_FOLDS_PER_SET:
+            raise refuse("more than 4 fold-downs in one set")
+        folds[owner].append(name)
+        rows = number(3, MONITOR_SECTION_FOLD_ROWS, "fold rows")
+        if rows == 0:
+            raise refuse("a fold-down has at least one row")
+        shape()
+        seen: set[tuple[int, int]] = set()
+        for _ in range(rows):
+            next_line("a fold row")
+            if len(words) != 3:
+                raise refuse("expected 'DEST SRC GAIN'")
+            dest = number(0, 16 - 1, "fold destination")
+            source = number(1, 16 - 1, "fold source")
+            if (dest, source) in seen:
+                raise refuse("a (DEST, SRC) pair twice in one fold")
+            seen.add((dest, source))
+            # Decimal only (no hex, inf or nan), and what std::stod would
+            # refuse as out of range (overflow, or underflow past DBL_MIN) too.
+            gain = float(words[2]) if _FOLD_GAIN.fullmatch(words[2]) else None
+            if gain is None or gain != gain or gain in (float("inf"), float("-inf")) \
+                    or (abs(gain) < _DBL_MIN and any(c in "123456789" for c in words[2].lower().split("e")[0])):
+                raise refuse("fold gain must be a finite number")
+            found["maxGain"] = max(found["maxGain"], abs(gain))
+            shape()
+        found["folds"] += 1
+    next_line("end")
+    if words != ["end"]:
+        raise refuse("expected 'end'")
+    # Nothing after it: the section is new, so this costs no old artifact.
+    for raw in rest:
+        if raw.strip(" \t\r"):
+            text = raw.strip(" \t\r")
+            raise refuse("content after 'end'")
+    found["sets"], found["outs"] = sets, outs
+    return found
+
+
 def artifact_shape(text: str) -> str | None:
     """The canonical shape text of a bridge artifact (every count and index,
     gains, delays and coefficients blanked; all 16 outputs in index order),
@@ -1211,7 +1444,7 @@ def artifact_shape(text: str) -> str | None:
             return None
         for keyword in ("rate", "channels", "internal", "maxdelay"):
             out.append(f"{keyword} {header(keyword)}")
-        def mix(keyword: str) -> None:
+        def mix(keyword: str) -> int:
             rows = int(header(keyword))
             out.append(f"{keyword} {rows}")
             for _ in range(rows):
@@ -1219,7 +1452,8 @@ def artifact_shape(text: str) -> str | None:
                 if len(parts) != 3:
                     raise ValueError(keyword)
                 out.append(f"{parts[0]} {parts[1]}")
-        mix("expand")
+            return rows
+        expand_rows = mix("expand")
         branches = int(header("branch"))
         out.append(f"branch {branches}")
         for _ in range(branches):
@@ -1238,7 +1472,13 @@ def artifact_shape(text: str) -> str | None:
             at += int(parts[3])
         out.append("output 16")
         out.extend(f"{index} {sections}" for index, sections in enumerate(per_output))
-        if next_line() != "end" or at != len(lines):
+        closing = next_line()
+        words = c_words(closing)
+        if words and words[0] == "monitor":
+            # The monitor section, all of it but the labels, before the
+            # shape's end (read_monitor_section refuses what the loader does).
+            out.extend(read_monitor_section(" ".join(words[1:]), lines[at:], expand_rows)["shape"])
+        elif closing != "end" or at != len(lines):
             return None
     except (ValueError, IndexError):
         return None
@@ -2688,6 +2928,10 @@ class Handler(BaseHTTPRequestHandler):
         if expected is not None and not isinstance(expected, str):
             self.send_error_json(HTTPStatus.BAD_REQUEST, "expectedProfile must be a string or null")
             return
+        refusal = monitor_section_refusal([artifact, *(data.decode("utf-8") for data in rate_artifacts.values())])
+        if refusal:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, refusal)
+            return
         slug = preset_slug(name)
         if not slug:
             self.send_error_json(HTTPStatus.BAD_REQUEST, "the name leaves no letters or digits for a slug")
@@ -2791,6 +3035,10 @@ class Handler(BaseHTTPRequestHandler):
         if digest is not None and digest != computed:
             self.send_error_json(HTTPStatus.BAD_REQUEST, "artifactSha256 does not match the artifact")
             return
+        refusal = monitor_section_refusal([artifact])
+        if refusal:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, refusal)
+            return
         gate = self.live_gate(body.get("expectedProfile"), body.get("expectedLiveSha256"))
         if gate is None:
             return
@@ -2820,6 +3068,10 @@ class Handler(BaseHTTPRequestHandler):
         rate_artifacts = rate_artifacts_from(body, DANTE_RATE_KEYS)
         if isinstance(rate_artifacts, str):
             self.send_error_json(HTTPStatus.BAD_REQUEST, rate_artifacts)
+            return
+        refusal = monitor_section_refusal([data.decode("utf-8") for data in rate_artifacts.values()])
+        if refusal:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, refusal)
             return
         gate = self.live_gate(body.get("expectedProfile"), body.get("expectedLiveSha256"))
         if gate is None:

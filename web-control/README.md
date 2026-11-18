@@ -243,9 +243,32 @@ POST /api/apply/monitor-reference  {"set": id, "levelDb": -60..0, "note": "<= 64
   base class, so either stack takes them; the receipt carries the limits as
   written and `limitsReplaced` when a file that did not parse was replaced
   by the defaults.
-- `/api/health` has `control.monitor = {available, reason, endpoint, kinds}`;
+- `/api/health` has `control.monitor = {available, reason, endpoint, kinds, engine}`;
   `kinds` lists the two limits kinds when Apply is available on the Dante
   stack, and is empty otherwise. `control.apply.actions` is unchanged.
+  `engine` says whether this unit's engine knows the bridge artifact's
+  `monitor` section: the owner of phase 3 writes its monitor status at every
+  start, even with no preset (`state=idle`, no sets), and an older owner never
+  does, so `engine` is true when `/run/usb16x16-dante/monitor.status` exists
+  and reads whole, whatever the unit's state (the file is in the unit's
+  RuntimeDirectory and goes when it stops), and false on the AES67 stack.
+  `available` is unchanged. The page compiles the section only when `engine`
+  is true.
+- **The monitor section and an older engine.** `POST /api/apply/preset`,
+  `/api/apply/live` and `/api/apply/commit` answer 400 when an artifact they
+  carry (the 48 kHz one or any `rateArtifacts`) has a `monitor` section and
+  `engine` is false, so a page compiled for another unit fails at once
+  instead of an endpoint that does not start. The applier holds the same line
+  on its own (`check_monitor_engine`): on a preset, a profile switch, a rate
+  change and a live edit it refuses an artifact with the section unless the
+  binary that will load it (the owner, or the AES67 bridge) carries the
+  section's loader (the literal `dsp artifact: monitor: `). That covers the
+  one case the offline runner's load check cannot: a new runner beside an
+  owner rolled back alone. The applier's `parse_artifact` and both programs'
+  `artifact_shape` read the section as `DspStage::load` does, check for check;
+  fold gains take part in the applier's +40 dB gain bound; the shape key is
+  pinned with and without the section (`dsp-compiler/fixtures/pinned-monitor-vector.dsp`,
+  `test_monitor_section.py`).
 
 In passing (applier 1.11.0): the support bundle's `usb_f_uac2` hash calls
 `modinfo` as `/usr/sbin/modinfo`, then `/sbin/modinfo`, then from `PATH`;

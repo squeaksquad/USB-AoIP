@@ -225,6 +225,16 @@ fails. The file being old is not a sign that it is stale (the owner writes
 it only on a change): the monitor is available when the file exists and is
 valid and the Dante service is active.
 
+**The engine flag.** The owner writes this file at every start, also when
+its preset has no monitor section (`state=idle`, no `set` lines, `active=all`),
+and an owner older than phase 3 never writes it. The web service therefore
+reports `control.monitor.engine` (`/api/health`) as: this file exists and is
+valid, whatever the unit's state. It means "this unit's engine loads an
+artifact with a monitor section", and the page compiles the section only
+when it is true. The file is in the endpoint unit's RuntimeDirectory, so it
+goes when the unit stops; `engine` is then false and the page leaves the
+section out, which every engine loads.
+
 ### Example
 
 ```

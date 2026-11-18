@@ -589,6 +589,11 @@ test('the monitor shape key is pinned: the applier and the bridge must reproduce
   ];
   const artifact = [...base, ...section, 'end'].join('\n') + '\n';
   const plain = [...base, 'end'].join('\n') + '\n';
+  // The same bytes the applier's and the web service's tests read (and the
+  // bridge's may): one file, so the implementations cannot pin different texts.
+  const {readFileSync} = await import('node:fs');
+  assert.equal(readFileSync(new URL('./fixtures/pinned-monitor-vector.dsp', import.meta.url), 'utf8'), artifact,
+               'fixtures/pinned-monitor-vector.dsp is this vector');
   const shape = artifactShape(artifact);
   assert.equal(shape, artifactShape(plain).replace(/end\n$/, '')
     + section.filter(line => !line.startsWith('label ')).join('\n') + '\nend\n');

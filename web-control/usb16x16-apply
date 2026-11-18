@@ -748,6 +748,203 @@ class ArtifactReader:
         return rest
 
 
+# The optional monitor section (phase 3, dsp-compiler/README.md, "The monitor
+# section"): read line by line as read_monitor_section in bridge_core.cpp
+# reads it, check for check, with the same limits.
+MONITOR_SECTION_SETS = 8
+MONITOR_SECTION_FOLDS_PER_SET = 4
+MONITOR_SECTION_FOLD_ROWS = 256
+MONITOR_SECTION_LABEL = 32
+MONITOR_SECTION_EXPAND_LIMIT = ARTIFACT_CHANNELS * 48 + 1     # kChannels * DspStage::kMaxInternalChannels + 1
+_C_SPACE = re.compile(r"[ \t\n\v\f\r]+")                     # what istringstream >> splits on
+_WHOLE = re.compile(r"[0-9]{1,9}")
+_SECTION_SET_ID = re.compile(r"[a-z][a-z0-9-]{0,31}")
+_SECTION_FOLD_NAME = re.compile(r"[a-z0-9.]{1,16}")
+_FOLD_GAIN = re.compile(r"[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?")   # what std::stod takes whole
+_DBL_MIN = 2.2250738585072014e-308
+
+
+def c_words(text: str) -> list[str]:
+    return [word for word in _C_SPACE.split(text) if word]
+
+
+def read_monitor_section(version: str, lines: list[str], expand_rows: int) -> dict:
+    """The section from just after the word `monitor` through its `end`:
+    `version` is the rest of the monitor line, `lines` every line after it.
+    Refused on anything DspStage::load refuses. Returns the shape lines (every
+    line but the labels, as words joined by one space), the counts, and the
+    largest fold gain."""
+    found = {"shape": [], "sets": 0, "outs": 0, "folds": 0, "maxGain": 0.0}
+    text = "monitor " + version
+    words = c_words(text)
+    rest = iter(lines)
+
+    def refuse(why: str) -> Refused:
+        return Refused(f"artifact: monitor: {why} in '{text[:80]}'")
+
+    def next_line(what: str) -> None:
+        nonlocal text, words
+        for raw in rest:
+            stripped = raw.strip(" \t\r")
+            if stripped:
+                text, words = stripped, c_words(stripped)
+                return
+        raise Refused(f"artifact: monitor: unexpected end, expected {what}")
+
+    def shape() -> None:
+        found["shape"].append(" ".join(words))
+
+    def number(at: int, limit: int, what: str) -> int:
+        if at >= len(words) or not _WHOLE.fullmatch(words[at]) or int(words[at]) > limit:
+            raise refuse(f"{what} must be a whole number no larger than {limit}")
+        return int(words[at])
+
+    def header(keyword: str, limit: int) -> int:
+        next_line(keyword)
+        if len(words) != 2 or words[0] != keyword:
+            raise refuse(f"expected '{keyword} N'")
+        value = number(1, limit, keyword)
+        shape()
+        return value
+
+    if len(words) != 2 or words[1] != "1":
+        raise refuse("unsupported monitor version")
+    shape()
+
+    sets = header("sets", MONITOR_SECTION_SETS)
+    if sets == 0:
+        raise refuse("a monitor section needs at least one set")
+    ids: list[str] = []
+    kinds: list[str] = []
+    folds: list[list[str]] = []
+    for _ in range(sets):
+        next_line("set")
+        if len(words) != 3 or words[0] != "set":
+            raise refuse("expected 'set ID KIND'")
+        if not _SECTION_SET_ID.fullmatch(words[1]):
+            raise refuse("set ID must match [a-z][a-z0-9-]{0,31}")
+        if words[1] in ids:
+            raise refuse("duplicate set ID")
+        if words[2] not in ("speakers", "headphones"):
+            raise refuse("set kind must be speakers or headphones")
+        ids.append(words[1])
+        kinds.append(words[2])
+        folds.append(["full"])
+        shape()
+
+    outs = header("outs", ARTIFACT_CHANNELS)
+    indices: list[int] = []
+    for _ in range(outs):
+        next_line("out")
+        if len(words) < 4 or words[0] != "out":
+            raise refuse("expected 'out INDEX ROLE SET...'")
+        index = number(1, ARTIFACT_CHANNELS - 1, "output index")
+        if indices and index <= indices[-1]:
+            raise refuse("output indices must ascend")
+        if words[2] not in ("speaker", "sub"):
+            raise refuse("output role must be speaker or sub")
+        member: list[int] = []
+        for at in range(3, len(words)):
+            chosen = number(at, sets - 1, "set index")
+            if member and chosen <= member[-1]:
+                raise refuse("an output's sets must ascend")
+            member.append(chosen)
+        if words[2] == "sub" and not all(kinds[chosen] == "speakers" for chosen in member):
+            raise refuse("a sub belongs to speaker sets only")
+        if len(member) > 1 and words[2] != "sub":
+            raise refuse("only a sub may belong to more than one set")
+        indices.append(index)
+        shape()
+
+    # Labels: zero or more, then expandsets. Not shape.
+    next_line("label or expandsets")
+    last_label = -1
+    while words and words[0] == "label":
+        if len(words) < 3:
+            raise refuse("expected 'label INDEX TEXT'")
+        index = number(1, ARTIFACT_CHANNELS - 1, "label index")
+        if index <= last_label:
+            raise refuse("label indices must ascend")
+        if index not in indices:
+            raise refuse("a label for an output in no set")
+        # The text is the rest of the line after the index, as written: found
+        # the way the loader finds it (spaces and tabs only).
+        label = None
+        at = next((i for i in range(5, len(text)) if text[i] not in " \t"), None)
+        at = next((i for i in range(at, len(text)) if text[i] in " \t"), None) if at is not None else None
+        at = next((i for i in range(at, len(text)) if text[i] not in " \t"), None) if at is not None else None
+        if at is not None:
+            label = text[at:]
+        if not label or len(label) > MONITOR_SECTION_LABEL or not all(" " <= c <= "~" for c in label):
+            raise refuse("a label is 1 to 32 printable ASCII characters")
+        last_label = index
+        next_line("label or expandsets")
+
+    if len(words) != 2 or words[0] != "expandsets":
+        raise refuse("expected 'expandsets N'")
+    tagged = number(1, MONITOR_SECTION_EXPAND_LIMIT, "expandsets")
+    if tagged != expand_rows:
+        raise refuse(f"expandsets must give one set per expand row ({expand_rows})")
+    shape()
+    for _ in range(tagged):
+        next_line("an expandsets row")
+        if len(words) != 1:
+            raise refuse("expected a set index or '-'")
+        if words[0] != "-":
+            number(0, sets - 1, "set index")
+        shape()
+
+    fold_count = header("folds", MONITOR_SECTION_FOLDS_PER_SET * sets)
+    for _ in range(fold_count):
+        next_line("fold")
+        if len(words) != 4 or words[0] != "fold":
+            raise refuse("expected 'fold SET NAME ROWS'")
+        owner = number(1, sets - 1, "set index")
+        if kinds[owner] != "speakers":
+            raise refuse("only a speakers set has fold-downs")
+        name = words[2]
+        if name == "full" or not _SECTION_FOLD_NAME.fullmatch(name):
+            raise refuse("fold name must match [a-z0-9.]{1,16} and not be 'full'")
+        if name in folds[owner]:
+            raise refuse("duplicate fold name in a set")
+        if len(folds[owner]) > MONITOR_SECTION_FOLDS_PER_SET:
+            raise refuse("more than 4 fold-downs in one set")
+        folds[owner].append(name)
+        rows = number(3, MONITOR_SECTION_FOLD_ROWS, "fold rows")
+        if rows == 0:
+            raise refuse("a fold-down has at least one row")
+        shape()
+        seen: set[tuple[int, int]] = set()
+        for _ in range(rows):
+            next_line("a fold row")
+            if len(words) != 3:
+                raise refuse("expected 'DEST SRC GAIN'")
+            dest = number(0, ARTIFACT_CHANNELS - 1, "fold destination")
+            source = number(1, ARTIFACT_CHANNELS - 1, "fold source")
+            if (dest, source) in seen:
+                raise refuse("a (DEST, SRC) pair twice in one fold")
+            seen.add((dest, source))
+            # Decimal only (no hex, inf or nan), and what std::stod would
+            # refuse as out of range (overflow, or underflow past DBL_MIN) too.
+            gain = float(words[2]) if _FOLD_GAIN.fullmatch(words[2]) else None
+            if gain is None or gain != gain or gain in (float("inf"), float("-inf")) \
+                    or (abs(gain) < _DBL_MIN and any(c in "123456789" for c in words[2].lower().split("e")[0])):
+                raise refuse("fold gain must be a finite number")
+            found["maxGain"] = max(found["maxGain"], abs(gain))
+            shape()
+        found["folds"] += 1
+    next_line("end")
+    if words != ["end"]:
+        raise refuse("expected 'end'")
+    # Nothing after it: the section is new, so this costs no old artifact.
+    for raw in rest:
+        if raw.strip(" \t\r"):
+            text = raw.strip(" \t\r")
+            raise refuse("content after 'end'")
+    found["sets"], found["outs"] = sets, outs
+    return found
+
+
 def parse_artifact(text: str, rate: int = NOMINAL_RATE) -> dict:
     """Walk the artifact exactly as DspStage::load does at `rate`, with its bounds, and
     additionally require every biquad section to be stable (poles inside the
@@ -798,7 +995,7 @@ def parse_artifact(text: str, rate: int = NOMINAL_RATE) -> dict:
                 raise Refused(f"artifact: biquad section {sections + 1} has an absurd numerator")
             sections += 1
 
-    read_mix("expand", internal, ARTIFACT_CHANNELS)
+    expand_rows = read_mix("expand", internal, ARTIFACT_CHANNELS)
     reader.expect("branch")
     for _ in range(reader.count("branch", ARTIFACT_MAX_INTERNAL)):
         reader.count("branch channel", internal - 1)
@@ -811,12 +1008,21 @@ def parse_artifact(text: str, rate: int = NOMINAL_RATE) -> dict:
         max_delay = max(max_delay, reader.count("output delay", declared_delay))
         max_gain = max(max_gain, abs(reader.real("output gain")))
         read_sections(reader.count("output sections", ARTIFACT_MAX_SECTIONS))
-    reader.expect("end")
+    closing = reader.word("'end'")
+    monitor_sets = 0
+    if closing == "monitor":
+        section = read_monitor_section(reader.rest_of_line(), reader.lines[reader.line:], expand_rows)
+        monitor_sets = section["sets"]
+        # A fold gain is a mix gain at the stage's input: the same bound.
+        max_gain = max(max_gain, section["maxGain"])
+    elif closing != "end":
+        raise Refused(f"artifact: expected 'end', found '{closing[:32]}'")
     if max_gain > 100.0:
         raise Refused(f"artifact: a gain of {max_gain:g} (over +40 dB) is refused")
     if sections > MAX_BIQUADS:
         raise Refused(f"artifact: {sections} biquads, over the {MAX_BIQUADS} the loaded soak passed")
-    return {"preset": preset, "internal": internal, "biquads": sections, "maxDelay": max_delay, "rate": rate}
+    return {"preset": preset, "internal": internal, "biquads": sections, "maxDelay": max_delay, "rate": rate,
+            "monitorSets": monitor_sets}
 
 
 def artifact_shape(text: str) -> str:
@@ -855,7 +1061,7 @@ def artifact_shape(text: str) -> str:
     for keyword in ("rate", "channels", "internal", "maxdelay"):
         out.append(f"{keyword} {header(keyword)[0]}")
 
-    def mix(keyword: str) -> None:
+    def mix(keyword: str) -> int:
         rows = counted(keyword)
         out.append(f"{keyword} {rows}")
         for row in range(rows):
@@ -863,12 +1069,13 @@ def artifact_shape(text: str) -> str:
             if len(parts) != 3:
                 raise Refused(f"artifact shape: {keyword} row {row + 1}")
             out.append(f"{parts[0]} {parts[1]}")
+        return rows
 
     def skip(count: int) -> None:
         for _ in range(count):
             next_line()
 
-    mix("expand")
+    expand_rows = mix("expand")
     branches = counted("branch")
     out.append(f"branch {branches}")
     for row in range(branches):
@@ -888,7 +1095,13 @@ def artifact_shape(text: str) -> str:
         skip(int(parts[3]))
     out.append("output 16")
     out.extend(f"{index} {sections}" for index, sections in enumerate(per_output))
-    if next_line() != "end" or at != len(lines):
+    closing = next_line()
+    words = c_words(closing)
+    if words and words[0] == "monitor":
+        # The monitor section, all of it but the labels (fold gains included:
+        # they are shape), before the shape's end. Absent, nothing.
+        out.extend(read_monitor_section(" ".join(words[1:]), lines[at:], expand_rows)["shape"])
+    elif closing != "end" or at != len(lines):
         raise Refused("artifact shape: expected 'end'")
     out.append("end")
     return "\n".join(out) + "\n"
@@ -992,10 +1205,55 @@ def with_user_block(conf_text: str, slug: str, block: str | None) -> str:
 # ------------------------------------------------------------------ applier
 
 
+# Whether an engine binary knows the artifact's monitor section: the loader's
+# own refusals for it, a literal that every build linking bridge_core.cpp
+# since phase 3 carries and no earlier one does. Read from the binary that
+# will load the file, not from what it last wrote, so it holds while the unit
+# is stopped and after the binary alone is rolled back.
+MONITOR_LOADER_MARK = b"dsp artifact: monitor: "
+ENGINE_BINARY_MAX = 1 << 27
+
+
+def binary_knows_monitor(path: Path) -> bool:
+    """True when `path` is a regular file holding MONITOR_LOADER_MARK; False
+    when it does not, or cannot be read (the safe side: a section is refused)."""
+    try:
+        with open(path, "rb") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                return False
+            tail, total = b"", 0
+            while total <= ENGINE_BINARY_MAX:
+                chunk = handle.read(1 << 20)
+                if not chunk:
+                    return False
+                if MONITOR_LOADER_MARK in tail + chunk:
+                    return True
+                tail, total = chunk[-len(MONITOR_LOADER_MARK):], total + len(chunk)
+    except OSError:
+        return False
+    return False
+
+
 class Applier:
     ENGINE = "bridge"   # what follows the live file, for messages
     STACK = "aes67"
     AUDIO_UNIT = UNIT
+
+    def engine_binary(self) -> Path:
+        """The binary that loads an installed preset on this stack."""
+        return self.bridge_binary
+
+    def check_monitor_engine(self, stats: dict, what: str = "the artifact") -> None:
+        """Refuse an artifact with a monitor section when the engine that
+        would load it does not know the section: an older loader refuses
+        the whole file at start ("expected 'end', found 'monitor'"), so the
+        audio would restart onto nothing and roll back. The offline runner's
+        load check cannot see this when the runner is new and the engine is
+        not (the engine rolled back alone)."""
+        if stats.get("monitorSets") and not binary_knows_monitor(self.engine_binary()):
+            raise Refused(f"{what} has a monitor section and the installed {self.ENGINE} "
+                          f"({self.engine_binary()}) predates it; compile without it (reload the page) "
+                          f"or update the {self.ENGINE}")
 
     def __init__(self, inbox: Path = INBOX_DIR, state_dir: Path = STATE_DIR, conf_path: Path = CONF_PATH,
                  run_dir: Path = RUN_DIR, runner: Runner | None = None, supervisor: str = SUPERVISOR,
@@ -1294,6 +1552,7 @@ class Applier:
         if hashlib.sha256(data).hexdigest() != digest:
             raise Refused("artifact hash does not match artifactSha256")
         stats = parse_artifact(data.decode("utf-8", errors="replace"))
+        self.check_monitor_engine(stats)
         existing = user_profiles(conf)
         clash = slug_conflicts(slug, list(n[len("user-"):] for n in existing))
         if clash:
@@ -1425,6 +1684,7 @@ class Applier:
             raise Refused("artifact hash does not match artifactSha256")
         text = data.decode("utf-8", errors="replace")
         stats = parse_artifact(text)
+        self.check_monitor_engine(stats)
         installed = read_text(Path(row["dspPreset"]), MAX_ARTIFACT_BYTES + 1)
         if installed is None:
             raise Refused(f"{row['dspPreset']} cannot be read")
@@ -2289,6 +2549,9 @@ class DanteApplier(Applier):
     STACK = "dante"
     AUDIO_UNIT = DANTE_UNIT
 
+    def engine_binary(self) -> Path:
+        return DANTE_OWNER
+
     def __init__(self, inbox: Path = INBOX_DIR, state_dir: Path = STATE_DIR, conf_path: Path = DANTE_CONF_PATH,
                  run_dir: Path = DANTE_RUN_DIR, runner: Runner | None = None, start_timeout: float = DANTE_START_TIMEOUT_S,
                  settle: float = DANTE_SETTLE_S, poll: float = POLL_S, web_auth: Path = WEB_AUTH) -> None:
@@ -2391,6 +2654,7 @@ class DanteApplier(Applier):
             if hashlib.sha256(data).hexdigest() != digest:
                 raise Refused(f"rateArtifacts {rate}: the artifact does not hash to its sha256")
             stats = parse_artifact(data.decode("utf-8", errors="replace"), rate)
+            self.check_monitor_engine(stats, f"rateArtifacts {rate}")
             found[rate] = {"data": data, "digest": digest, "stats": stats}
         return found
 
@@ -2415,7 +2679,8 @@ class DanteApplier(Applier):
             text = read_text(Path(row["dspPreset"]), MAX_ARTIFACT_BYTES + 1)
             if text is None:
                 raise Refused(f"{row['dspPreset']} cannot be read")
-            parse_artifact(text, rate)   # an installed file is still held to the guards
+            # An installed file is still held to the guards, and to the engine.
+            self.check_monitor_engine(parse_artifact(text, rate), row["dspPreset"])
         live = dante_profile_of(conf)
         self.check_expected(request, live)
         if name == live and not reapply:
@@ -2442,6 +2707,7 @@ class DanteApplier(Applier):
         if hashlib.sha256(data).hexdigest() != digest:
             raise Refused("artifact hash does not match artifactSha256")
         stats = parse_artifact(data.decode("utf-8", errors="replace"))
+        self.check_monitor_engine(stats)
         rates = self.read_rate_artifacts(request, NOMINAL_RATE)
         running = running_rate(conf)
         if running != NOMINAL_RATE and running not in rates:
@@ -2708,7 +2974,8 @@ class DanteApplier(Applier):
             raise Refused(f"{live} is not installed")
         target = {**self.at_rate(row, rate), "rate": rate}
         if target["dspPreset"]:
-            parse_artifact(read_text(Path(target["dspPreset"]), MAX_ARTIFACT_BYTES + 1) or "", rate)
+            self.check_monitor_engine(parse_artifact(read_text(Path(target["dspPreset"]), MAX_ARTIFACT_BYTES + 1) or "", rate),
+                                      target["dspPreset"])
         unit = self.unit_state()
         if unit not in ("active", "inactive", "failed"):
             raise Refused(f"{DANTE_UNIT} is {unit}; retry when it has settled")

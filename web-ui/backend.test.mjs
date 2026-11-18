@@ -951,3 +951,55 @@ test('meterRows: three banks by name, null where a tap is missing', () => {
   assert.equal(meterRows({taps: {'ravenna-capture': tap(-5)}})[2].bank[3].peak, -5);
   assert.ok(meterRows(null).every(r => r.bank === null));
 });
+
+// Phase 3: the artifact's monitor section goes only to an engine that knows it.
+import { monitorEngine } from './backend.mjs';
+
+test('monitorEngine is the service\'s control.monitor.engine, false when unknown or standalone', () => {
+  assert.equal(monitorEngine({control: {monitor: {available: false, engine: true}}}), true);
+  for (const health of [null, undefined, {}, {control: {}}, {control: {monitor: {available: true}}},
+                        {control: {monitor: {engine: false}}}, {control: {monitor: {engine: 'true'}}}]) {
+    assert.equal(monitorEngine(health), false, JSON.stringify(health));
+  }
+});
+
+test('compileDraft leaves the monitor section out unless asked, and the section is all that differs', async () => {
+  const preset = createConfig();
+  const off = await compileDraft(preset);
+  assert.doesNotMatch(off.artifact, /\nmonitor 1\n/, 'off by default: an older owner refuses the section');
+  assert.equal(off.plainShapeKey, off.shapeKey);
+  const on = await compileDraft(preset, undefined, {monitor: true});
+  assert.match(on.artifact, /\nmonitor 1\nsets 1\nset speakers speakers\n/);
+  assert.equal(on.artifact.slice(0, on.artifact.indexOf('monitor 1\n')), off.artifact.slice(0, -'end\n'.length));
+  assert.notEqual(on.shapeKey, off.shapeKey, 'the section is shape');
+  assert.equal(on.plainShapeKey, off.shapeKey, 'without it, the key of the artifact compiled off');
+  assert.equal(on.sections, off.sections, 'fold rows are not counted as biquad sections');
+  const rates = await compileDraftRates(preset, undefined, {rates: [48000, 96000], monitor: true});
+  assert.ok(Object.values(rates).every(compiled => /\nmonitor 1\n/.test(compiled.artifact)));
+  const others = await compileOtherRates(preset, undefined, {monitor: true});
+  assert.ok(Object.values(others).every(text => /\nmonitor 1\n/.test(text)));
+  assert.ok(Object.values(await compileOtherRates(preset)).every(text => !/\nmonitor /.test(text)));
+});
+
+test('a running preset installed without the section is the needs-apply path, said truly', async () => {
+  const preset = createConfig();
+  const off = await compileDraft(preset);
+  const on = await compileDraft(preset, undefined, {monitor: true});
+  // The unit was updated (the engine knows the section) while the preset
+  // applied before the update still runs without one.
+  const health = liveHealth({control: {apply: {available: true}, monitor: {available: true, engine: true}},
+                             profile: {selected: 'user-room', profiles: [
+                               {name: 'user-room', user: true, dspLive: true, dspShape: off.shapeKey, dspSha256: 'file-1'}]}});
+  const state = liveState(health, on.shapeKey, on.plainShapeKey);
+  assert.equal(state.state, 'needs-apply');
+  assert.match(state.reason, /installed without the monitor block\. Compile & apply/);
+  assert.equal(liveState(health, off.shapeKey, off.plainShapeKey).state, 'live', 'compiled without it, edits go live');
+  const reshaped = liveState(health, 'b'.repeat(64), 'c'.repeat(64));
+  assert.equal(reshaped.state, 'needs-apply');
+  assert.match(reshaped.reason, /changes the pipeline's shape/, 'any other shape change keeps its own words');
+  assert.match(liveState(health, on.shapeKey).reason, /changes the pipeline's shape/, 'no plain key: as before');
+  // Once applied with the section, the same draft is live again.
+  const applied = liveHealth({profile: {selected: 'user-room', profiles: [
+    {name: 'user-room', user: true, dspLive: true, dspShape: on.shapeKey, dspSha256: 'file-1'}]}});
+  assert.equal(liveState(applied, on.shapeKey, on.plainShapeKey).state, 'live');
+});

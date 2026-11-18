@@ -191,7 +191,9 @@ class Env:
         return lines
 
 
-class DanteApplyTest(unittest.TestCase):
+class DanteFixture(unittest.TestCase):
+    """The Dante environment and its helpers; it holds no tests."""
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.env = Env(self.directory.name)
@@ -246,6 +248,8 @@ class DanteApplyTest(unittest.TestCase):
     def commands(self):
         return [" ".join(c[:2]) for c in self.runner.calls if c[0] == "systemctl" and c[1] in ("stop", "start", "poweroff")]
 
+
+class DanteApplyTest(DanteFixture):
     # ---- parsing and rendering
 
     def test_owner_conf_round_trip_is_what_the_wrapper_accepts(self):

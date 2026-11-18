@@ -747,19 +747,33 @@ function loadCompiler(importImpl = path => import(path)) {
  *  The fixed shape (LIVE_COEFFICIENTS_DESIGN.md) since 2026-09-13: a user
  *  preset is the base of live coefficient updates, so every band and row is
  *  present and a value edit changes only numbers. `shapeKey` is the key the
- *  Pi compares against the installed preset's. */
-export async function compileDraft(config, importImpl, {shape = 'fixed', rate = 48000} = {}) {
+ *  Pi compares against the installed preset's.
+ *  `monitor` writes the artifact's monitor section (phase 3); off by default,
+ *  and the page turns it on only for an engine that knows it
+ *  (monitorEngine(health)): an older owner refuses the whole file. Off, the
+ *  artifact is byte for byte what it was before the section existed.
+ *  `plainShapeKey` is the key of the same artifact without the section (the
+ *  same as `shapeKey` when it has none), so liveState can tell an edit that
+ *  changes the pipeline from a running preset installed before the section. */
+export async function compileDraft(config, importImpl, {shape = 'fixed', rate = 48000, monitor = false} = {}) {
   const compiler = await loadCompiler(importImpl);
-  const result = compiler.compile(config, compiler.fileDevices('in.raw', 'out.raw', 'S32_LE', 1024, rate), {shape});
+  const result = compiler.compile(config, compiler.fileDevices('in.raw', 'out.raw', 'S32_LE', 1024, rate), {shape, monitor});
   const artifact = compiler.bridgeArtifact(result, {presetName: config.name});
   const delay = compiler.delayLatency(config, rate);
   // Coefficient rows only: five numbers, of which the first is not an index.
   const sections = (artifact.match(/^-?\d*\.?\d+(e[-+]?\d+)? -?\S+ -?\S+ -?\S+ -?\S+$/gm) || [])
     .filter(line => !/^preset /.test(line)).length;
   const shapeKey = await compiler.artifactShapeKey(artifact);
+  const at = artifact.indexOf('\nmonitor ');
+  const plainShapeKey = at < 0 ? shapeKey : await compiler.artifactShapeKey(`${artifact.slice(0, at + 1)}end\n`);
   const sha256 = await compiler.sha256Hex(artifact);
-  return {artifact, report: result.report, delay, sections, shapeKey, sha256};
+  return {artifact, report: result.report, delay, sections, shapeKey, plainShapeKey, sha256};
 }
+
+/** Whether the device's engine knows the artifact's monitor section: the
+ *  service's control.monitor.engine (the owner's monitor status reads whole).
+ *  False when unknown, on an older service and standalone. */
+export const monitorEngine = health => health?.control?.monitor?.engine === true;
 
 /** One compiled draft per rate (SAMPLE_RATE_DESIGN.md, step 3): the Pi has
  *  no compiler, so a preset is compiled here at every rate the endpoint
@@ -768,12 +782,12 @@ export async function compileDraft(config, importImpl, {shape = 'fixed', rate = 
  *  OFFERED_RATES (44.1 and 48 kHz since 2026-10-28, 96 since 2026-10-31). A rate the preset cannot
  *  compile at fails the whole call: a preset is never stored with a rate
  *  missing. The page itself sends every Dante rate (compileOtherRates). */
-export async function compileDraftRates(config, importImpl, {shape = 'fixed', rates} = {}) {
+export async function compileDraftRates(config, importImpl, {shape = 'fixed', rates, monitor = false} = {}) {
   const compiler = await loadCompiler(importImpl);
   const wanted = rates ?? compiler.OFFERED_RATES;
   if (!Array.isArray(wanted) || !wanted.length) throw new Error('No rate to compile at');
   const byRate = {};
-  for (const rate of wanted) byRate[rate] = await compileDraft(config, importImpl, {shape, rate});
+  for (const rate of wanted) byRate[rate] = await compileDraft(config, importImpl, {shape, rate, monitor});
   return byRate;
 }
 
@@ -789,9 +803,9 @@ export function runningRate(health) {
  *  the Dante applier stores one artifact per rate and the endpoint runs the one
  *  for its rate (SAMPLE_RATE_DESIGN.md, step 4d). All six, not only the
  *  offered ones, so a rate offered later finds every saved preset ready. */
-export async function compileOtherRates(config, importImpl, {shape = 'fixed', except = 48000} = {}) {
+export async function compileOtherRates(config, importImpl, {shape = 'fixed', except = 48000, monitor = false} = {}) {
   const compiler = await loadCompiler(importImpl);
-  const byRate = await compileDraftRates(config, importImpl, {shape, rates: compiler.DANTE_RATES.filter(rate => rate !== except)});
+  const byRate = await compileDraftRates(config, importImpl, {shape, monitor, rates: compiler.DANTE_RATES.filter(rate => rate !== except)});
   return Object.fromEntries(Object.entries(byRate).map(([rate, compiled]) => [rate, compiled.artifact]));
 }
 
@@ -852,7 +866,7 @@ export function userPresets(health) {
  *   not-previewable no Pi, Apply not installed, an accepted profile live, or
  *                   a user preset installed before live updates existed
  */
-export function liveState(health, draftShapeKey) {
+export function liveState(health, draftShapeKey, draftPlainShapeKey = null) {
   if (!health) return {state: 'not-previewable', reason: 'Not connected to the Pi.', profile: null};
   const choices = profileChoices(health);
   if (!choices.available) return {state: 'not-previewable', reason: choices.reason || 'Apply is not installed.', profile: null};
@@ -865,6 +879,11 @@ export function liveState(health, draftShapeKey) {
   const base = {profile: live.name, liveSha256: dspLive.sha256 || null, installedSha256: live.dspSha256 || null,
                 previewing: Boolean(dspLive.sha256) && dspLive.sha256 !== live.dspSha256, liveShape: live.dspShape};
   if (!draftShapeKey) return {...base, state: 'live', reason: `Edits go to the running ${terms.engine} as you make them.`};
+  // The draft has the monitor section and the running preset was installed
+  // before it (or by an engine without it): the same needs-apply, said truly.
+  if (draftShapeKey !== live.dspShape && draftPlainShapeKey && draftPlainShapeKey !== draftShapeKey && draftPlainShapeKey === live.dspShape) {
+    return {...base, state: 'needs-apply', reason: `${live.name} was installed without the monitor block. Compile & apply it to add the monitor; edits then go live again.`};
+  }
   if (draftShapeKey !== live.dspShape) return {...base, state: 'needs-apply', reason: 'This edit changes the pipeline\'s shape (routing, a bus format, a 48 dB/oct slope, or an input\'s first send). Compile & apply to run it.'};
   return {...base, state: 'live', reason: `Edits go to the running ${terms.engine} as you make them; not kept across a restart until committed.`};
 }

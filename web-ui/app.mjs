@@ -9,7 +9,7 @@ import { resetBand } from './reset-band.mjs';
 import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, removeBus, setBusEqLink, setBusOutputs, speakerGroupSourceIds } from './buses.mjs';
 import { resetEq, setEqBypass, mirrorLinkedEq, exportEq, importEq } from './eq-tools.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, formatRate, deviceName, fetchLogs, systemFacts, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, requestReboot, requestRestartAudio, requestRestartClock, requestBundle, requestPassword, fetchSupportBundle, stackTerms, statusCards, meterRows, fetchMonitor, postMonitor, requestMonitorLimits, requestMonitorReference } from './backend.mjs';
+import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, formatRate, deviceName, fetchLogs, systemFacts, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, monitorEngine, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, requestReboot, requestRestartAudio, requestRestartClock, requestBundle, requestPassword, fetchSupportBundle, stackTerms, statusCards, meterRows, fetchMonitor, postMonitor, requestMonitorLimits, requestMonitorReference } from './backend.mjs';
 import { confirmDialog, passwordProblem, actionNote, bundlePath, BUNDLE_FILE } from './actions.mjs';
 import { reduceMonitor, Overlay, patchKeys, monitorValues, MonitorSender, setPatch, patchKey, soloPress, mutePress, setLabels, controlRoom, safetyNotes, clampLevel, clampTrim, clampMax,
   monitorOffered, monitorKind, readGroups, saveGroups, addGroup, removeGroup, peakText, dbWords, MONITOR_POLL_MS, DRAG_DB_PER_PX, KEY_STEP_DB, BUTTON_STEP_DB, TRIM_STEP_DB } from './monitor.mjs';
@@ -76,7 +76,7 @@ let actionLocal = null;
 let applyWaiters = [];
 // Live edits: the draft's shape key from its last compile, what the engine
 // last took from this page, and the debounced one-in-flight queue.
-let draftShapeKey = null, liveLastSent = null, liveLine = '';
+let draftShapeKey = null, draftPlainShapeKey = null, liveLastSent = null, liveLine = '';
 // Foreign numbers the page has already answered once: another author (a
 // second tab) may keep the engine on something else, and the page re-sends
 // its draft once per such state, never in a loop.
@@ -152,7 +152,10 @@ function gate(state) {
   if (presetSlug(config.name) === state.profile.replace(/^(user|dante)-/, '')) return state;
   return {...state, state: 'not-previewable', previewing: false, reason: `The device runs ${state.profile}; this preset is ${config.name}.`};
 }
-const effectiveLive = () => health ? gate(liveState(health, draftShapeKey)) : null;
+const effectiveLive = () => health ? gate(liveState(health, draftShapeKey, draftPlainShapeKey)) : null;
+// The monitor section goes only to an engine that knows it; the same flag for
+// Apply, a live edit and Keep, read from the last health.
+const monitorFlag = () => monitorEngine(health);
 
 /** Every edit: compile in the fixed shape and, when the running preset has
  *  the same shape, hand the numbers to the engine through the queue. */
@@ -161,9 +164,9 @@ async function scheduleLive() {
   if (gate(liveState(health, null)).state !== 'live') { liveQueue.cancel(); return; }
   let compiled;
   // At the rate the engine runs: an artifact for another rate is refused by it.
-  try { validateConfig(config); compiled = await compileDraft(config, undefined, {rate: runningRate(health)}); }
+  try { validateConfig(config); compiled = await compileDraft(config, undefined, {rate: runningRate(health), monitor: monitorFlag()}); }
   catch (e) { liveLine = `Not sent to the device: ${e.message}`; renderBar(); return; }
-  draftShapeKey = compiled.shapeKey;
+  draftShapeKey = compiled.shapeKey; draftPlainShapeKey = compiled.plainShapeKey;
   const state = effectiveLive();
   renderBar();
   if (state.state !== 'live') { liveQueue.cancel(); return; }
@@ -194,7 +197,7 @@ function adopt(document, {asBaseline = true, isFresh = false, from = null} = {})
   config = normalise(document);
   draftStoreName = from;
   if (asBaseline) baseline = clone(config);
-  fresh = isFresh; history.clear(); draftShapeKey = null; liveQueue.cancel();
+  fresh = isFresh; history.clear(); draftShapeKey = null; draftPlainShapeKey = null; liveQueue.cancel();
   eqOpen = null; band = 0; eqImport = null; chooser = null; setDetail = null; route = {row: null, col: null};
   align = {...align, open: false, text: [], preview: null, error: '', note: ''};
 }
@@ -326,13 +329,13 @@ async function applyDraft({saveAs = false} = {}) {
   const previous = config.name;
   config.name = name;
   let compiled;
-  try { validateConfig(config); compiled = await compileDraft(config); }
+  try { validateConfig(config); compiled = await compileDraft(config, undefined, {monitor: monitorFlag()}); }
   catch (e) { config.name = previous; toast(`This preset cannot be built: ${e.message}`); return; }
   if (!await ask({title: 'Ready to apply', text: presetSummary(compiled, name, health), ok: 'Apply and restart audio'})) { config.name = previous; render(); return; }
   applyBusy = true; renderLive();
   try {
     // The Dante engine keeps one file per sample rate; the AES67 bridge runs 48 kHz only.
-    const others = health?.stack === 'dante' ? await compileOtherRates(config) : null;
+    const others = health?.stack === 'dante' ? await compileOtherRates(config, undefined, {monitor: monitorFlag()}) : null;
     const result = await requestPreset(config.name, compiled.artifact, liveProfile(), undefined, others);
     toast(`${result.replacing ? 'Replacing' : 'Installing'} ${name}. ${result.note || ''}`);
     await saveDraft();
@@ -357,8 +360,8 @@ async function keepLive() {
     try {
       validateConfig(config);
       const rate = runningRate(health);
-      if ((await compileDraft(config, undefined, {rate})).sha256 !== state.liveSha256) { toast('The last change is still on its way to the device. Try again in a moment.'); return; }
-      others = await compileOtherRates(config, undefined, {except: rate});
+      if ((await compileDraft(config, undefined, {rate, monitor: monitorFlag()})).sha256 !== state.liveSha256) { toast('The last change is still on its way to the device. Try again in a moment.'); return; }
+      others = await compileOtherRates(config, undefined, {except: rate, monitor: monitorFlag()});
     } catch (e) { toast(`This preset cannot be built at the other sample rates: ${e.message}`); return; }
   }
   applyBusy = true; renderLive();
@@ -380,7 +383,7 @@ async function discardChanges() {
   const before = clone(config);
   config = clone(baseline);
   if (JSON.stringify(before) !== JSON.stringify(config)) history.record(before);
-  draftShapeKey = null; liveQueue.cancel();
+  draftShapeKey = null; draftPlainShapeKey = null; liveQueue.cancel();
   if (state?.previewing) {
     applyBusy = true; render();
     try { await requestLive(null, state.profile, state.liveSha256); liveLastSent = state.installedSha256; began(); }
@@ -409,7 +412,7 @@ async function runPreset(kind, name) {
   const title = kind === 'profile' && name === 'direct' ? 'Run without processing?' : `Run ${name}`;
   let compiled = null, document = null;
   if (row && !row.installed) {
-    try { document = normalise(parsePreset(JSON.stringify(presetStore.cache[name]))); compiled = await compileDraft(document); }
+    try { document = normalise(parsePreset(JSON.stringify(presetStore.cache[name]))); compiled = await compileDraft(document, undefined, {monitor: monitorFlag()}); }
     catch (e) { toast(`${name} cannot be built: ${e.message}`); return; }
   }
   const text = compiled ? presetSummary(compiled, name, health)
@@ -418,7 +421,7 @@ async function runPreset(kind, name) {
   applyBusy = true; renderLive();
   try {
     if (compiled) {
-      const others = health?.stack === 'dante' ? await compileOtherRates(document) : null;
+      const others = health?.stack === 'dante' ? await compileOtherRates(document, undefined, {monitor: monitorFlag()}) : null;
       await requestPreset(name, compiled.artifact, liveProfile(), undefined, others);
     } else await requestProfile(target, liveProfile());
     // With nothing unsaved in the editor, show what is about to run.
