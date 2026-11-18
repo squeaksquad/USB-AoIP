@@ -8,25 +8,31 @@
 # `rollback` puts all of it back.
 #
 # What it replaces (docs/web/ACCESS.md says why):
-#   /usr/local/bin/usb16x16-web             1.6.0 6b98e7cf -> the bundle's, 1.8.0 (or from an
+#   /usr/local/bin/usb16x16-web             1.6.0 6b98e7cf -> the bundle's, 1.9.0 (or from an
 #                                           earlier bundle's: 1.7.0 e7f6ba5a, 1.7.1 d6f6d1ab,
-#                                           1.7.2 5b374f74)
-#   /usr/local/bin/usb16x16-apply           1.8.0 347a7062 -> the bundle's, 1.10.0 (or from an
-#                                           earlier bundle's: 1.9.0 32b13a72)
+#                                           1.7.2 5b374f74, 1.8.0 956c8569)
+#   /usr/local/bin/usb16x16-apply           1.8.0 347a7062 -> the bundle's, 1.11.0 (or from an
+#                                           earlier bundle's: 1.9.0 32b13a72, 1.10.0 d8a97b2c)
 #                                           A unit already on the bundle's own files needs no
 #                                           entry here: files that are the bundle's count as
 #                                           installed, and a bundle with a newer page then
 #                                           replaces the page alone. When a bundle's web
 #                                           service or applier changes, add the hash it
 #                                           replaces to the list in `files` below (done for
-#                                           1.8.0 / 1.10.0, the System actions, 2026-11-17).
-#   /etc/systemd/system/usb16x16-web.service, usb16x16-apply.path, usb16x16-apply.service
+#                                           1.8.0 / 1.10.0, the System actions, 2026-11-17;
+#                                           1.9.0 / 1.11.0, the monitor block, 2026-11-18).
+#   /etc/systemd/system/usb16x16-web.service f7c7d48c -> the bundle's (or from an earlier
+#                                           bundle's: c908894d, the unit of 1.7.0 to 1.8.0;
+#                                           since 1.9.0 it makes the monitor's two directories)
+#   /etc/systemd/system/usb16x16-apply.path, usb16x16-apply.service
 #   the page: <work dir>/web-ui (index.html, style.css, the modules, compiler/)
 # What it adds:
 #   /var/spool/usb-aoip/inbox        root:<web user's group> 1730   requests from the page
 #   /var/lib/usb16x16-apply          root 0755                      the applier's status and receipts
 #   /etc/usb-aoip/web-auth           root:<web user's group> 0640   the page's logins, copied from
 #                                    the file the old unit names; the old file is left where it is
+#   /run/usb-aoip-monitor, /var/lib/usb-aoip-monitor   <web user> 0755   the monitor's state, which
+#                                    the web unit (1.9.0) has systemd make; `rollback` leaves them
 #
 # What it does not touch: the audio service, the clock service, the gadget,
 # their configuration, the kernel modules, the rate arbiter's units. The page
@@ -64,9 +70,9 @@ manifest_sha256=@MANIFEST@
 # bundle file | installed path | mode | the hash the old chain left | hashes of earlier bundles
 # A unit already on an earlier bundle is updated in place: its kept copies (the old
 # chain's files) stay as they are, so `rollback` still goes all the way back.
-files="bin/usb16x16-web|$root/usr/local/bin/usb16x16-web|755|6b98e7cfc171fb9c41d113dcdd1ad015f19b649b9289626a8e25cf4d4db71f8c|e7f6ba5a19922f75aef1669fa0afc5ec6217a44e7f1b4b62d10e54c3b71d4bec d6f6d1ab9ea7626adb052749d8a6e79950a014310a865d864483af5eee0375db 5b374f746f2e2a22e2a96203be9fb9a77bd8ebef9f275daee47bd20c1725c6b4
-bin/usb16x16-apply|$root/usr/local/bin/usb16x16-apply|755|347a70621f3c6bb9c10092f42ac52a0d280a756b14ba9c9f71175e7a3b28f3eb|32b13a72de79ff687891c312c69d987e055a6a0f6d79eb44b3fdb9893f681bb5
-units/usb16x16-web.service|$units/usb16x16-web.service|644|f7c7d48cab8b12b9b7ed9f5a920efc497e9874760cc9434c979c25ee68b59761
+files="bin/usb16x16-web|$root/usr/local/bin/usb16x16-web|755|6b98e7cfc171fb9c41d113dcdd1ad015f19b649b9289626a8e25cf4d4db71f8c|e7f6ba5a19922f75aef1669fa0afc5ec6217a44e7f1b4b62d10e54c3b71d4bec d6f6d1ab9ea7626adb052749d8a6e79950a014310a865d864483af5eee0375db 5b374f746f2e2a22e2a96203be9fb9a77bd8ebef9f275daee47bd20c1725c6b4 956c8569ceafebe89acdbac857b46f278ea1792da8c49e17c22b071d866c9ee3
+bin/usb16x16-apply|$root/usr/local/bin/usb16x16-apply|755|347a70621f3c6bb9c10092f42ac52a0d280a756b14ba9c9f71175e7a3b28f3eb|32b13a72de79ff687891c312c69d987e055a6a0f6d79eb44b3fdb9893f681bb5 d8a97b2c90a0f76e0a1491e433d7d9844759c9a5f24823b4194fdbdad4547c85
+units/usb16x16-web.service|$units/usb16x16-web.service|644|f7c7d48cab8b12b9b7ed9f5a920efc497e9874760cc9434c979c25ee68b59761|c908894d3bf1a00b7201eec60ed372f004b0b02fdf1e015c6350584e7c875ca2
 units/usb16x16-apply.path|$units/usb16x16-apply.path|644|6d53b053014a3cb7203de36f9e7472d370ccced6aee2c1d9a6d309b2d35bec61
 units/usb16x16-apply.service|$units/usb16x16-apply.service|644|23cb5b2e371fa47af288f4f4867bd4c4b55b9f0d2133ea08ed864a97697f9dd2"
 
@@ -264,6 +270,9 @@ install-access: the audio service was not restarted. To accept this:
   4. One rate move from the Mac and one from Dante Controller (the arbiter runs through the new applier).
      On the System tab, each action once: the support bundle, the page password, restart audio,
      restart clock service, reboot (they stop audio: not during a session).
+     The monitor (once the endpoint writes its status): ls -l /run/usb-aoip-monitor
+     /var/lib/usb-aoip-monitor (both 0755, the files 0644, the web user's), and
+     curl .../api/monitor reads available.
   5. From the Mac: the noise probe at 32, then: dante/measure-candidate.sh soak 120 32
   Anything wrong: sudo ./install-access.sh rollback
 EOF

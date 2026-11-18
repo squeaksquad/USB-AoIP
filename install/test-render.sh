@@ -111,6 +111,8 @@ has $u/usb16x16-web.service                       '--port 9090'
 has $u/usb16x16-apply.path                        'PathChanged=/var/spool/usb-aoip/inbox'
 has $u/usb16x16-web.service                       '--auth-file /etc/usb-aoip/web-auth'
 has $u/usb16x16-web.service                       'ReadWritePaths=/var/lib/usb-aoip/web-presets /var/spool/usb-aoip/inbox'
+has $u/usb16x16-web.service                       'RuntimeDirectory=usb-aoip-monitor'
+has $u/usb16x16-web.service                       'StateDirectory=usb-aoip-monitor'
 has /etc/sudoers.d/usb16x16-dante                 'pi ALL=(root) NOPASSWD:'
 [ ! -e "$new$u/usb16x16-wlan-keepalive.service" ] || bad "fresh unit: a keepalive unit was rendered with no targets"
 # The audio path is the same on every unit: only names and addresses differ.

@@ -140,6 +140,16 @@ stack, never run on a Pi.
     soak. The rate arbiter's decisions were not changed, but it runs through
     the same file: a rate move from the Mac and one from Dante Controller.
 
+22. The monitor path (web 1.9.0, applier 1.11.0, 2026-11-18): systemd makes
+    `/run/usb-aoip-monitor` and `/var/lib/usb-aoip-monitor` for the web unit
+    (0755, the web account's) under its sandbox, the service writes `state`
+    there 0644 despite `UMask=0027`, and the owner's account can read both and
+    `/var/lib/usb16x16-apply/monitor-limits`. The run directory survives a
+    restart of the web service (`RuntimeDirectoryPreserve=yes`) and is empty
+    after a reboot. `uninstall --purge` removes both. Also: whether the
+    applier's unit (`ProtectKernelModules=yes`) can run `modinfo` at all: a
+    support bundle's `hashes.usb_f_uac2_error` says what it got.
+
 ## Acceptance
 
 A fresh install builds its own owner, plugin and modules, so by the

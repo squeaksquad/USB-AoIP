@@ -18,6 +18,13 @@ bundles/ there. The inbox cannot be listed by this process: a request is
 known to be pending by stat-ing the name it wrote. A password change is sent
 as the hash only; the password itself is never written, logged or echoed.
 
+One exception, the monitor block (1.9.0): a knob move must not cost a root
+process, so this process writes the monitor's state file itself
+(--monitor-run-dir, and a remembered copy under --monitor-state-dir), which
+the Dante owner polls, validates and clamps to the limits only the applier
+writes (monitor-limits in its state directory). docs/web/MONITOR-FILES.md has
+the three files; docs/web/ACCESS.md, "The monitor path", the reasons.
+
 Design constraints this file honours:
 
   * One collector thread owns every Pi read. HTTP handlers copy a cached
@@ -54,9 +61,11 @@ import hashlib
 import hmac
 import html
 import json
+import math
 import os
 import re
 import secrets
+import signal
 import socket
 import ssl
 import stat
@@ -71,7 +80,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -855,7 +864,8 @@ class Collector:
                          if dante else
                          "accepted profiles only; a switch restarts the AES67 service and draws a new latency level",
                 "actions": apply_actions(reason is None, dante, self.auth),
-            }
+            },
+            "monitor": monitor_control(dante, state["services"], reason is None),
         }
 
         system: dict = {}
@@ -1097,6 +1107,22 @@ def apply_actions(available: bool, dante: bool, auth: bool) -> list[str]:
             if not (action == "restart-clock" and not dante) and not (action == "password" and not auth)]
 
 
+def monitor_control(dante: bool, services: dict, apply_available: bool) -> dict:
+    """control.monitor: whether the knobs work now (the Dante service active
+    and the owner's status readable), and which of the two limits kinds the
+    applier can take now (none when Apply is unavailable, as for
+    control.apply.actions). The limits do not need the owner running."""
+    if not dante:
+        available, reason = False, "The monitor is the Dante endpoint's; this unit runs the AES67 stack."
+    elif (services.get("dante") or {}).get("state") != "active":
+        available, reason = False, f"The Dante service is {(services.get('dante') or {}).get('state') or 'unknown'}."
+    else:
+        status, reason = read_monitor_status()
+        available = status is not None
+    return {"available": available, "reason": "" if available else reason, "endpoint": "/api/monitor",
+            "kinds": list(MONITOR_KINDS) if apply_available and dante else []}
+
+
 def read_support_bundle(ident: str) -> bytes | None:
     """The support bundle the applier wrote for request <ident>, or None when
     it is not there or cannot be read. Only an id of the form SUPPORT_ID
@@ -1321,8 +1347,8 @@ def write_inbox_file(name: str, data: bytes) -> None:
 
 def write_apply_request(profile: str, expected: str | None, user: str | None, extra: dict | None = None,
                         artifact: bytes | None = None, rate_artifacts: dict[str, bytes] | None = None) -> str:
-    """The only write this process makes outside its preset store: the
-    artifacts a request refers to (<id>.dsp, <id>-<rate>.dsp), then the
+    """The only write this process makes outside its preset store and the
+    monitor's state (MonitorStore): the artifacts a request refers to (<id>.dsp, <id>-<rate>.dsp), then the
     request itself (<id>.request), each atomically, into the applier's
     inbox, which the installer creates. The request comes last, so the
     applier never finds one whose artifacts are not all there."""
@@ -1346,6 +1372,573 @@ def write_apply_request(profile: str, expected: str | None, user: str | None, ex
     with _last_request_lock:
         _last_request["id"] = ident
     return ident
+
+
+# ------------------------------------------------------------------ monitor
+#
+# The monitor block (phase 3 of docs/web/REDESIGN-2026-11.md). Three files,
+# whose formats docs/web/MONITOR-FILES.md fixes for this process, the applier
+# and the owner alike:
+#
+#   state    MONITOR_RUN_DIR/state, written here on every change the page
+#            posts, polled by the owner (which validates and clamps it); and
+#            a remembered copy in MONITOR_STATE_DIR, written 2 s after the
+#            last change. The third place this process writes, beside its
+#            preset store and the inbox (ACCESS.md, "The monitor path").
+#   limits   APPLY_STATE/monitor-limits, root's: the applier writes it on the
+#            kinds monitor-limits and monitor-reference; read here.
+#   status   DANTE_RUN_DIR/monitor.status, the owner's: what is in force and
+#            the running preset's sets and outputs; read here.
+#
+# A knob move is a POST /api/monitor that rewrites the state file at once:
+# no applier, no receipt.
+
+MONITOR_RUN_DIR = Path("/run/usb-aoip-monitor")
+MONITOR_STATE_DIR = Path("/var/lib/usb-aoip-monitor")
+MONITOR_FILE = "state"
+MONITOR_STATUS = DANTE_RUN_DIR / "monitor.status"
+MONITOR_LIMITS = "monitor-limits"          # under APPLY_STATE
+MONITOR_KINDS = ("monitor-limits", "monitor-reference")
+MONITOR_FILE_MAX = 8192
+MONITOR_STATUS_MAX = 16384
+MONITOR_BODY_MAX = 4096
+MONITOR_SETS_MAX = 16
+MONITOR_PERSIST_S = 2.0                    # the remembered copy: this long after the last change
+MONITOR_SET_ID = re.compile(r"[a-z][a-z0-9-]{0,31}")
+MONITOR_FOLD = re.compile(r"[a-z0-9.]{1,16}")
+_DB = r"-?[0-9]{1,3}\.[0-9]"
+_ID = r"[a-z][a-z0-9-]{0,31}"
+_FOLD = r"[a-z0-9.]{1,16}"
+_TEXT = r'[ !#-\[\]-~]'                    # printable ASCII without " and \
+_FLAGS = r"[01](?:,[01]){15}"
+MONITOR_NOTE = re.compile(_TEXT + r"{0,64}")
+MONITOR_LEVEL = (-60.0, 0.0)
+MONITOR_TRIM = (-12.0, 12.0)
+MONITOR_DIM = (-40.0, 0.0)
+MONITOR_MAX = (-30.0, 0.0)
+MONITOR_START_RULES = ("last", "reference", "fixed")
+MONITOR_REF_DEFAULT = -10.0
+MONITOR_SET_FIELDS = ("levelDb", "trimDb", "dim", "mute", "fold")
+MONITOR_PATCH_KEYS = frozenset(("set", *MONITOR_SET_FIELDS, "active", "dimDb", "subs", "solo", "outMute", "clearSolo"))
+
+
+class MonitorRefusal(Exception):
+    """A request the monitor routes refuse: the HTTP status and why."""
+
+    def __init__(self, status: int, message: str) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def monitor_db(text: str, low: float, high: float) -> float:
+    if not re.fullmatch(_DB, text):
+        raise ValueError(f"{text[:16]!r} is not a number with one decimal")
+    value = float(text) + 0.0
+    if not low <= value <= high:
+        raise ValueError(f"{text} is outside {low:.1f}..{high:.1f}")
+    return value
+
+
+def monitor_fmt(value: float) -> str:
+    value = round(float(value), 1) + 0.0
+    return f"{0.0 if value == 0 else value:.1f}"
+
+
+def monitor_flags(text: str) -> list[bool]:
+    return [flag == "1" for flag in text.split(",")]
+
+
+def monitor_flag_text(flags: list[bool]) -> str:
+    return ",".join("1" if flag else "0" for flag in flags)
+
+
+def read_monitor_file(path: Path, cap: int) -> str:
+    """A monitor file whole, by MONITOR-FILES.md's reading rules: no link
+    followed, never blocking on a FIFO, a regular file of at most `cap`
+    bytes, ASCII. Raises FileNotFoundError when nothing is there and
+    ValueError (or OSError) for anything else that is wrong."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
+    fd = os.open(path, flags)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("not a regular file")
+        chunks, total = [], 0
+        while total <= cap:
+            chunk = os.read(fd, cap + 1 - total)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        if total > cap:
+            raise ValueError(f"larger than {cap} bytes")
+        return b"".join(chunks).decode("ascii")
+    except UnicodeDecodeError:
+        raise ValueError("not ASCII")
+    finally:
+        os.close(fd)
+
+
+def write_monitor_file(path: Path, data: bytes) -> None:
+    """MONITOR-FILES.md's writing rule: a temporary file beside `path`
+    (O_EXCL, never through a link), mode 0644 whatever the umask (the
+    service's UMask is 0027 and the owner's account must read it), fsync,
+    rename."""
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    fd = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+                 | getattr(os, "O_CLOEXEC", 0), 0o644)
+    try:
+        os.fchmod(fd, 0o644)
+        with os.fdopen(fd, "wb") as handle:
+            fd = -1
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.rename(temporary, path)
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
+
+def monitor_lines(text: str) -> list[str]:
+    """The lines of a monitor file, which must end with end\\n and nothing after."""
+    if not text.endswith("\nend\n"):
+        raise ValueError("does not end with an end line")
+    lines = text[:-1].split("\n")
+    if any("\r" in line or "\t" in line for line in lines):
+        raise ValueError("a line holds a carriage return or a tab")
+    return lines
+
+
+def empty_monitor_state() -> dict:
+    return {"active": "all", "dimDb": -20.0, "subs": True, "sets": {},
+            "solo": [False] * 16, "outMute": [False] * 16}
+
+
+def parse_monitor_state(text: str) -> tuple[int, dict]:
+    """(seq, state) from a state file's text; ValueError when it breaks any
+    rule of MONITOR-FILES.md (a)."""
+    lines = monitor_lines(text)
+    at = 0
+
+    def line(pattern: str, what: str):
+        nonlocal at
+        if at >= len(lines):
+            raise ValueError(f"missing the {what} line")
+        match = re.fullmatch(pattern, lines[at])
+        if match is None:
+            raise ValueError(f"line {at + 1} is not the {what} line")
+        at += 1
+        return match
+
+    seq = int(line(r"MONITOR-STATE v=1 seq=([0-9]{1,18})", "header").group(1))
+    active = line(rf"active=(all|{_ID})", "active").group(1)
+    state = empty_monitor_state()
+    state["dimDb"] = monitor_db(line(rf"dim_db=({_DB})", "dim_db").group(1), *MONITOR_DIM)
+    state["subs"] = line(r"subs=(on|off)", "subs").group(1) == "on"
+    set_line = rf"set id=({_ID}) level_db=({_DB}) trim_db=({_DB}) dim=([01]) mute=([01]) fold=({_FOLD})"
+    while at < len(lines) and lines[at].startswith("set "):
+        match = line(set_line, "set")
+        ident = match.group(1)
+        if ident in state["sets"]:
+            raise ValueError(f"set {ident} is listed twice")
+        if len(state["sets"]) >= MONITOR_SETS_MAX:
+            raise ValueError(f"more than {MONITOR_SETS_MAX} sets")
+        state["sets"][ident] = {"levelDb": monitor_db(match.group(2), *MONITOR_LEVEL),
+                                "trimDb": monitor_db(match.group(3), *MONITOR_TRIM),
+                                "dim": match.group(4) == "1", "mute": match.group(5) == "1",
+                                "fold": match.group(6)}
+    if active != "all" and active not in state["sets"]:
+        raise ValueError(f"the active set {active} is not listed")
+    state["active"] = active
+    state["solo"] = monitor_flags(line(rf"solo=({_FLAGS})", "solo").group(1))
+    state["outMute"] = monitor_flags(line(rf"mute=({_FLAGS})", "mute").group(1))
+    line("end", "end")
+    if at != len(lines):
+        raise ValueError("lines after end")
+    return seq, state
+
+
+def render_monitor_state(seq: int, state: dict) -> str:
+    lines = [f"MONITOR-STATE v=1 seq={seq}", f"active={state['active']}", f"dim_db={monitor_fmt(state['dimDb'])}",
+             f"subs={'on' if state['subs'] else 'off'}"]
+    for ident, values in state["sets"].items():
+        lines.append(f"set id={ident} level_db={monitor_fmt(values['levelDb'])} trim_db={monitor_fmt(values['trimDb'])} "
+                     f"dim={int(values['dim'])} mute={int(values['mute'])} fold={values['fold']}")
+    lines += [f"solo={monitor_flag_text(state['solo'])}", f"mute={monitor_flag_text(state['outMute'])}", "end"]
+    return "\n".join(lines) + "\n"
+
+
+def default_monitor_limits() -> dict:
+    return {"maxDb": 0.0, "start": "last", "startDb": -30.0, "lock": False, "refs": {}}
+
+
+def parse_monitor_limits(text: str) -> dict:
+    """The limits file (MONITOR-FILES.md (b)); ValueError when it breaks a
+    rule. start_db and the references come back clamped to max_db."""
+    lines = monitor_lines(text)
+    if len(lines) < 6:
+        raise ValueError("too few lines")
+    patterns = (r"MONITOR-LIMITS v=1", rf"max_db=({_DB})", r"start=(last|reference|fixed)", rf"start_db=({_DB})",
+                r"lock=([01])")
+    found = []
+    for index, pattern in enumerate(patterns):
+        match = re.fullmatch(pattern, lines[index])
+        if match is None:
+            raise ValueError(f"line {index + 1} is not what MONITOR-LIMITS has there")
+        found.append(match)
+    limits = {"maxDb": monitor_db(found[1].group(1), *MONITOR_MAX), "start": found[2].group(1),
+              "startDb": monitor_db(found[3].group(1), *MONITOR_LEVEL), "lock": found[4].group(1) == "1", "refs": {}}
+    for index, text_line in enumerate(lines[5:-1], start=6):
+        match = re.fullmatch(rf'ref id=({_ID}) level_db=({_DB}) note="({_TEXT}{{0,64}})"', text_line)
+        if match is None:
+            raise ValueError(f"line {index} is not a ref line")
+        if match.group(1) in limits["refs"]:
+            raise ValueError(f"ref {match.group(1)} is listed twice")
+        if len(limits["refs"]) >= MONITOR_SETS_MAX:
+            raise ValueError(f"more than {MONITOR_SETS_MAX} refs")
+        limits["refs"][match.group(1)] = {"levelDb": min(monitor_db(match.group(2), *MONITOR_LEVEL), limits["maxDb"]),
+                                          "note": match.group(3)}
+    if lines[-1] != "end":
+        raise ValueError("does not end with an end line")
+    limits["startDb"] = min(limits["startDb"], limits["maxDb"])
+    return limits
+
+
+def read_monitor_limits() -> dict:
+    """root's limits, with `file`: absent, present or invalid (an invalid
+    file reads as the defaults, as it does for the owner)."""
+    try:
+        limits = parse_monitor_limits(read_monitor_file(APPLY_STATE / MONITOR_LIMITS, MONITOR_FILE_MAX))
+        limits["file"] = "present"
+    except FileNotFoundError:
+        limits = {**default_monitor_limits(), "file": "absent"}
+    except (OSError, ValueError):
+        limits = {**default_monitor_limits(), "file": "invalid"}
+    return limits
+
+
+def parse_monitor_status(text: str) -> dict:
+    """The owner's status file (MONITOR-FILES.md (c)); ValueError when any
+    of it breaks a rule. gain_db -inf comes back as None."""
+    lines = monitor_lines(text)
+    at = 0
+
+    def line(pattern: str, what: str):
+        nonlocal at
+        if at >= len(lines):
+            raise ValueError(f"missing the {what} line")
+        match = re.fullmatch(pattern, lines[at])
+        if match is None:
+            raise ValueError(f"line {at + 1} is not the {what} line")
+        at += 1
+        return match
+
+    head = line(r"MONITOR v=1 gen=([0-9]{1,18}) seq=([0-9]{1,18}|none) state=(idle|start|applied|refused) "
+                rf'reason="({_TEXT}{{0,128}})" t_us=([0-9]{{1,20}})', "header")
+    active = line(rf"active=(all|{_ID})", "active").group(1)
+    dims = line(rf"dim_db=({_DB}) subs=(on|off)", "dim_db")
+    status = {"gen": int(head.group(1)), "seq": None if head.group(2) == "none" else int(head.group(2)),
+              "state": head.group(3), "reason": head.group(4), "tUs": int(head.group(5)), "active": active,
+              "dimDb": monitor_db(dims.group(1), *MONITOR_DIM), "subs": dims.group(2) == "on",
+              "sets": [], "outputs": []}
+    set_line = (rf"set id=({_ID}) kind=(speakers|headphones) level_db=({_DB}) trim_db=({_DB}) dim=([01]) mute=([01]) "
+                rf"fold=({_FOLD}) folds=({_FOLD}(?:,{_FOLD}){{0,7}}) gain_db=({_DB}|-inf)")
+    ids = set()
+    while at < len(lines) and lines[at].startswith("set "):
+        match = line(set_line, "set")
+        ident, folds = match.group(1), match.group(8).split(",")
+        if ident in ids:
+            raise ValueError(f"set {ident} is listed twice")
+        if len(ids) >= MONITOR_SETS_MAX:
+            raise ValueError(f"more than {MONITOR_SETS_MAX} sets")
+        if len(set(folds)) != len(folds) or "full" not in folds or match.group(7) not in folds:
+            raise ValueError(f"set {ident}: folds must be distinct, include full and the set's fold")
+        gain = match.group(9)
+        ids.add(ident)
+        status["sets"].append({"id": ident, "kind": match.group(2),
+                               "levelDb": monitor_db(match.group(3), *MONITOR_LEVEL),
+                               "trimDb": monitor_db(match.group(4), *MONITOR_TRIM),
+                               "dim": match.group(5) == "1", "mute": match.group(6) == "1",
+                               "fold": match.group(7), "folds": folds,
+                               "gainDb": None if gain == "-inf" else float(gain) + 0.0})
+    if active != "all" and active not in ids:
+        raise ValueError(f"the active set {active} is not listed")
+    pairs = set()
+    while at < len(lines) and lines[at].startswith("out "):
+        match = line(rf'out n=([0-9]{{1,2}}) set=({_ID}) role=(speaker|sub) label="({_TEXT}{{0,64}})"', "out")
+        number, owner_set = int(match.group(1)), match.group(2)
+        if number > 15 or owner_set not in ids or (number, owner_set) in pairs or len(pairs) >= 64:
+            raise ValueError(f"line {at}: output {number} of {owner_set} is out of range, unknown or repeated")
+        pairs.add((number, owner_set))
+        status["outputs"].append({"n": number, "set": owner_set, "role": match.group(3), "label": match.group(4)})
+    arrays = line(rf"solo=({_FLAGS}) mute=({_FLAGS})", "solo")
+    status["solo"], status["outMute"] = monitor_flags(arrays.group(1)), monitor_flags(arrays.group(2))
+    line("end", "end")
+    if at != len(lines):
+        raise ValueError("lines after end")
+    return status
+
+
+_monitor_status_cache: dict = {"identity": None, "status": None, "reason": ""}
+_monitor_status_lock = threading.Lock()
+
+
+def read_monitor_status() -> tuple[dict | None, str]:
+    """The owner's status, parsed once per file version (stat, then a read
+    only when it changed, as read_meters does), and why it is None."""
+    try:
+        info = os.stat(MONITOR_STATUS)
+    except OSError:
+        return None, "The Dante endpoint has written no monitor status: its preset has no monitor block, or it is not running."
+    identity = (info.st_mtime_ns, info.st_size, info.st_ino)
+    with _monitor_status_lock:
+        if _monitor_status_cache["identity"] != identity:
+            try:
+                status, reason = parse_monitor_status(read_monitor_file(MONITOR_STATUS, MONITOR_STATUS_MAX)), ""
+            except (OSError, ValueError) as error:
+                status, reason = None, f"The monitor status could not be read: {error}"
+            _monitor_status_cache.update(identity=identity, status=status, reason=reason)
+        return _monitor_status_cache["status"], _monitor_status_cache["reason"]
+
+
+def monitor_available(snapshot: dict) -> tuple[dict | None, str]:
+    """The owner's status when the monitor can be driven, and why not: the
+    Dante stack, its service active (the collector's last look) and a status
+    file that reads whole. An old status is not a stale one: the owner
+    writes it only on a change."""
+    if stack() != "dante":
+        return None, "The monitor is the Dante endpoint's; this unit runs the AES67 stack."
+    unit = (((snapshot.get("services") or {}).get("dante")) or {}).get("state")
+    if unit != "active":
+        return None, f"The Dante service is {unit or 'unknown'}."
+    return read_monitor_status()
+
+
+def monitor_effective(status: dict) -> dict:
+    return {"gen": status["gen"], "seq": status["seq"], "state": status["state"], "reason": status["reason"],
+            "tUs": status["tUs"], "active": status["active"], "dimDb": status["dimDb"], "subs": status["subs"],
+            "sets": {s["id"]: {k: s[k] for k in ("kind", "levelDb", "trimDb", "dim", "mute", "fold", "gainDb")}
+                     for s in status["sets"]},
+            "solo": status["solo"], "outMute": status["outMute"]}
+
+
+def monitor_topology(status: dict) -> dict:
+    return {"sets": [{"id": s["id"], "kind": s["kind"], "folds": s["folds"],
+                      "outputs": [{"n": o["n"], "role": o["role"], "label": o["label"]}
+                                  for o in status["outputs"] if o["set"] == s["id"]]}
+                     for s in status["sets"]]}
+
+
+def monitor_number(body: dict, key: str, low: float, high: float) -> float:
+    value = body[key]
+    try:
+        ok = not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(float(value))
+    except OverflowError:
+        ok = False
+    if not ok or not low <= float(value) <= high:
+        raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"{key} must be a number from {low:g} to {high:g}")
+    return round(float(value), 1) + 0.0
+
+
+def monitor_bool(body: dict, key: str) -> bool:
+    if not isinstance(body[key], bool):
+        raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"{key} must be true or false")
+    return body[key]
+
+
+def monitor_patch(body, status: dict) -> dict:
+    """A POST /api/monitor body checked and normalised, against the running
+    preset's sets: 400 for a body of the wrong form, 409 for a set, fold or
+    active set the running preset does not have."""
+    if not isinstance(body, dict) or not body:
+        raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "Send a JSON object naming at least one change")
+    unknown = sorted(str(key)[:24] for key in body if key not in MONITOR_PATCH_KEYS)
+    if unknown:
+        raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"unknown key {unknown[0]!r}")
+    patch: dict = {}
+    fields = [key for key in MONITOR_SET_FIELDS if key in body]
+    sets = {s["id"]: s for s in status["sets"]}
+    if "set" in body:
+        ident = body["set"]
+        if not isinstance(ident, str) or not MONITOR_SET_ID.fullmatch(ident):
+            raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "set must be a set id")
+        if not fields:
+            raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"set needs one of {', '.join(MONITOR_SET_FIELDS)}")
+        patch["set"] = ident
+        if "levelDb" in body:
+            patch["levelDb"] = monitor_number(body, "levelDb", *MONITOR_LEVEL)
+        if "trimDb" in body:
+            patch["trimDb"] = monitor_number(body, "trimDb", *MONITOR_TRIM)
+        for key in ("dim", "mute"):
+            if key in body:
+                patch[key] = monitor_bool(body, key)
+        if "fold" in body:
+            if not isinstance(body["fold"], str) or not MONITOR_FOLD.fullmatch(body["fold"]):
+                raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "fold must be a fold name")
+            patch["fold"] = body["fold"]
+    elif fields:
+        raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"{fields[0]} needs set")
+    if "active" in body:
+        active = body["active"]
+        if not isinstance(active, str) or not (active == "all" or MONITOR_SET_ID.fullmatch(active)):
+            raise MonitorRefusal(HTTPStatus.BAD_REQUEST, 'active must be a set id or "all"')
+        patch["active"] = active
+    if "dimDb" in body:
+        patch["dimDb"] = monitor_number(body, "dimDb", *MONITOR_DIM)
+    if "subs" in body:
+        patch["subs"] = monitor_bool(body, "subs")
+    for key in ("solo", "outMute"):
+        if key in body:
+            value = body[key]
+            if not isinstance(value, list) or len(value) != 16 or not all(isinstance(v, bool) for v in value):
+                raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"{key} must be 16 true or false values")
+            patch[key] = list(value)
+    if "clearSolo" in body:
+        if body["clearSolo"] is not True:
+            raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "clearSolo must be true")
+        if "solo" in body:
+            raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "clearSolo and solo together: send one")
+        patch["solo"] = [False] * 16
+    # Against the running preset.
+    if "set" in patch:
+        if patch["set"] not in sets:
+            raise MonitorRefusal(HTTPStatus.CONFLICT, f"The running preset has no monitor set {patch['set']}; reload")
+        if "fold" in patch and patch["fold"] not in sets[patch["set"]]["folds"]:
+            raise MonitorRefusal(HTTPStatus.CONFLICT, f"Set {patch['set']} offers no fold {patch['fold']}")
+    if patch.get("active") not in (None, "all") and patch["active"] not in sets:
+        raise MonitorRefusal(HTTPStatus.CONFLICT, f"The running preset has no monitor set {patch['active']}; reload")
+    return patch
+
+
+class MonitorStore:
+    """The state the page asks for, in memory and in the state file.
+
+    Starts from the run file (it survives a restart of this service), else
+    from the remembered copy, which is NOT then written to the run file: after
+    a boot the owner's start rule decides, and while no run file exists a
+    status of state=start is taken as the state (adopt). The run file is
+    written on a POST only. The remembered copy follows MONITOR_PERSIST_S
+    after the last change (tick), with solo cleared, and on a clean stop
+    (flush). `clock` is injectable for the tests."""
+
+    def __init__(self, run_dir: Path, state_dir: Path, clock=time.monotonic) -> None:
+        self.run_path = run_dir / MONITOR_FILE
+        self.keep_path = state_dir / MONITOR_FILE
+        self.clock = clock
+        self._lock = threading.Lock()
+        self.state = empty_monitor_state()
+        self.seq = 0
+        self.run_written = False    # a valid run file is ours: never adopt the owner's start again
+        self.dirty = False          # a change the remembered copy lacks
+        self.last_change = 0.0      # clock() of the last change
+        self.load()
+
+    def load(self) -> None:
+        for path, is_run in ((self.run_path, True), (self.keep_path, False)):
+            try:
+                seq, state = parse_monitor_state(read_monitor_file(path, MONITOR_FILE_MAX))
+            except FileNotFoundError:
+                continue
+            except (OSError, ValueError) as error:
+                print(f"monitor: {path} discarded: {error}", file=sys.stderr, flush=True)
+                continue
+            if not is_run:
+                state["solo"] = [False] * 16
+            self.seq, self.state, self.run_written = seq, state, is_run
+            return
+
+    def adopt(self, status: dict | None) -> None:
+        """While no run file of ours exists, an owner that computed its own
+        start (state=start) is followed: its active set and each set's level,
+        trim, dim, mute and fold become the state. Caller holds the lock."""
+        if self.run_written or not status or status["state"] != "start":
+            return
+        for row in status["sets"]:
+            self.state["sets"][row["id"]] = {key: row[key] for key in MONITOR_SET_FIELDS}
+        self.state["active"] = status["active"]
+
+    def view(self, status: dict | None) -> tuple[dict, int]:
+        with self._lock:
+            self.adopt(status)
+            return json.loads(json.dumps(self.state)), self.seq
+
+    @staticmethod
+    def seeded(state: dict, status: dict) -> dict:
+        """A copy of `state` holding every set of the running preset (a new
+        one at the owner's values), and at most MONITOR_SETS_MAX sets: the
+        remembered ones of other presets go first, oldest first."""
+        state = json.loads(json.dumps(state))
+        running = [row["id"] for row in status["sets"]]
+        for row in status["sets"]:
+            if row["id"] not in state["sets"]:
+                state["sets"][row["id"]] = {key: row[key] for key in MONITOR_SET_FIELDS}
+        for ident in [i for i in state["sets"] if i not in running]:
+            if len(state["sets"]) <= MONITOR_SETS_MAX:
+                break
+            del state["sets"][ident]
+        if state["active"] != "all" and state["active"] not in state["sets"]:
+            state["active"] = "all"
+        return state
+
+    def change(self, patch: dict, status: dict, max_db: float) -> tuple[dict, int]:
+        """Merge a checked patch, write the run file, and return the state.
+        A level above max_db is lowered to it (the owner enforces the limit;
+        this is so the page shows what will play). OSError when the run file
+        cannot be written: nothing is changed then."""
+        with self._lock:
+            self.adopt(status)
+            state = self.seeded(self.state, status)
+            if "set" in patch:
+                row = state["sets"][patch["set"]]
+                for key in MONITOR_SET_FIELDS:
+                    if key in patch:
+                        row[key] = patch[key]
+                if "levelDb" in patch:
+                    row["levelDb"] = min(row["levelDb"], max_db)
+            for key in ("active", "dimDb", "subs", "solo", "outMute"):
+                if key in patch:
+                    state[key] = patch[key]
+            seq = self.seq + 1
+            write_monitor_file(self.run_path, render_monitor_state(seq, state).encode("ascii"))
+            self.state, self.seq, self.run_written = state, seq, True
+            self.dirty, self.last_change = True, self.clock()
+            return json.loads(json.dumps(state)), seq
+
+    def remembered_text(self) -> bytes:
+        return render_monitor_state(self.seq, {**self.state, "solo": [False] * 16}).encode("ascii")
+
+    def tick(self) -> bool:
+        """Write the remembered copy once MONITOR_PERSIST_S has passed since
+        the last change. True when it wrote."""
+        with self._lock:
+            if not self.dirty or self.clock() - self.last_change < MONITOR_PERSIST_S:
+                return False
+            return self._persist()
+
+    def flush(self) -> bool:
+        """On a clean stop: the remembered copy now, if a change is unwritten."""
+        with self._lock:
+            return self.dirty and self._persist()
+
+    def _persist(self) -> bool:
+        try:
+            write_monitor_file(self.keep_path, self.remembered_text())
+        except OSError as error:
+            print(f"monitor: could not write {self.keep_path}: {error}", file=sys.stderr, flush=True)
+            self.last_change = self.clock()    # try again a period later, not on every tick
+            return False
+        self.dirty = False
+        return True
+
+    def run(self, stop: threading.Event, period: float = 0.5) -> None:
+        while not stop.wait(period):
+            self.tick()
 
 
 # ------------------------------------------------------------------ presets
@@ -1676,6 +2269,8 @@ class Handler(BaseHTTPRequestHandler):
     auth_file: str = "/etc/usb-aoip/web-auth"
     auth: Authenticator | None = None
     tls: bool = False
+    # The monitor's state (MonitorStore); None until main() makes it.
+    monitor: "MonitorStore | None" = None
 
     # ---- plumbing
 
@@ -1885,6 +2480,10 @@ class Handler(BaseHTTPRequestHandler):
             # Fresh on every request, parsed once per file version: the page
             # polls this at up to 10 Hz and the file is two kilobytes on tmpfs.
             self.send_json(read_meters())
+        elif route == "/api/monitor":
+            # Fresh on every request, as /api/meters: a stat of the owner's
+            # status file, parsed again only when it changed.
+            self.api_monitor_get()
         elif route == "/api/apply/status":
             # Read fresh rather than from the 1 Hz snapshot: the page polls
             # this while an operation runs and it is one small file.
@@ -1963,7 +2562,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.gate_change():
             return
         route = unquote(urlparse(self.path).path)
-        if route == "/api/apply/profile":
+        if route == "/api/monitor":
+            self.api_monitor_post()
+        elif route == "/api/apply/profile":
             self.api_apply_profile()
         elif route == "/api/apply/preset":
             self.api_apply_preset()
@@ -1979,6 +2580,10 @@ class Handler(BaseHTTPRequestHandler):
             self.api_apply_bundle()
         elif route == "/api/apply/password":
             self.api_apply_password()
+        elif route == "/api/apply/monitor-limits":
+            self.api_apply_monitor_limits()
+        elif route == "/api/apply/monitor-reference":
+            self.api_apply_monitor_reference()
         else:
             self.unsupported(route)
 
@@ -2421,6 +3026,114 @@ class Handler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
+    # ---- the monitor (phase 3)
+
+    def api_monitor_get(self) -> None:
+        """The state the page asked for, what the owner has in force, the
+        running preset's sets and outputs, and root's limits."""
+        limits = read_monitor_limits()
+        status, reason = monitor_available(self.collector.snapshot())
+        if status is None or self.monitor is None:
+            self.send_json({"ok": True, "available": False,
+                            "reason": reason or "This service was started without a monitor state.",
+                            "limits": limits})
+            return
+        state, seq = self.monitor.view(status)
+        self.send_json({"ok": True, "available": True, "state": state, "effective": monitor_effective(status),
+                        "topology": monitor_topology(status), "limits": limits, "seq": seq})
+
+    def api_monitor_post(self) -> None:
+        """A knob move: a patch merged into the state and the state file
+        rewritten at once. Not behind apply_gate: a knob must work while an
+        Apply runs, and no applier is involved. 503 while the owner shows no
+        monitor; 409 for a set the running preset does not have."""
+        body = self.read_body(limit=MONITOR_BODY_MAX)
+        if not isinstance(body, dict):
+            self.close_connection = True
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object (4 KiB at most)")
+            return
+        status, reason = monitor_available(self.collector.snapshot())
+        if status is None or self.monitor is None:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE,
+                                 reason or "This service was started without a monitor state.")
+            return
+        try:
+            patch = monitor_patch(body, status)
+        except MonitorRefusal as refusal:
+            self.send_error_json(refusal.status, str(refusal))
+            return
+        try:
+            state, seq = self.monitor.change(patch, status, read_monitor_limits()["maxDb"])
+        except OSError as error:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not write the monitor state: {error}")
+            return
+        self.send_json({"ok": True, "seq": seq, "state": state})
+
+    def api_apply_monitor_limits(self) -> None:
+        """The knob's maximum, the start rule and level, the reference lock:
+        root's, so a request for the applier. Every field optional, at least one."""
+        body = self.small_body()
+        if body is None:
+            return
+        extra: dict = {}
+        try:
+            if stack() != "dante":
+                raise MonitorRefusal(HTTPStatus.CONFLICT, "This stack has no monitor block")
+            unknown = sorted(str(key)[:24] for key in body if key not in ("maxDb", "start", "startDb", "lock"))
+            if unknown:
+                raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"unknown key {unknown[0]!r}")
+            if not body:
+                raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "Send at least one of maxDb, start, startDb, lock")
+            if "maxDb" in body:
+                extra["maxDb"] = monitor_number(body, "maxDb", *MONITOR_MAX)
+            if "start" in body:
+                if body["start"] not in MONITOR_START_RULES:
+                    raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"start must be one of {', '.join(MONITOR_START_RULES)}")
+                extra["start"] = body["start"]
+            if "startDb" in body:
+                extra["startDb"] = monitor_number(body, "startDb", *MONITOR_LEVEL)
+            if "lock" in body:
+                extra["lock"] = monitor_bool(body, "lock")
+        except MonitorRefusal as refusal:
+            self.send_error_json(refusal.status, str(refusal))
+            return
+        self.queue_action("monitor-limits", "Queued. The applier writes the monitor's limits; no restart. "
+                                            "The endpoint follows them within a moment.", extra)
+
+    def api_apply_monitor_reference(self) -> None:
+        """One set's reference level and note. Refused here when the limits
+        say lock=1 (the applier refuses it too) and, while the owner shows its
+        sets, for a set the running preset does not have."""
+        body = self.small_body()
+        if body is None:
+            return
+        try:
+            if stack() != "dante":
+                raise MonitorRefusal(HTTPStatus.CONFLICT, "This stack has no monitor block")
+            unknown = sorted(str(key)[:24] for key in body if key not in ("set", "levelDb", "note"))
+            if unknown:
+                raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"unknown key {unknown[0]!r}")
+            ident = body.get("set")
+            if not isinstance(ident, str) or not MONITOR_SET_ID.fullmatch(ident):
+                raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "set must be a set id")
+            if "levelDb" not in body:
+                raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "levelDb is required")
+            level = monitor_number(body, "levelDb", *MONITOR_LEVEL)
+            note = body.get("note", "")
+            if not isinstance(note, str) or not MONITOR_NOTE.fullmatch(note):
+                raise MonitorRefusal(HTTPStatus.BAD_REQUEST,
+                                     'note must be at most 64 printable ASCII characters, without " or \\')
+            if read_monitor_limits()["lock"]:
+                raise MonitorRefusal(HTTPStatus.CONFLICT, "The reference levels are locked; unlock them first")
+            status, _ = monitor_available(self.collector.snapshot())
+            if status is not None and ident not in {row["id"] for row in status["sets"]}:
+                raise MonitorRefusal(HTTPStatus.CONFLICT, f"The running preset has no monitor set {ident}; reload")
+        except MonitorRefusal as refusal:
+            self.send_error_json(refusal.status, str(refusal))
+            return
+        self.queue_action("monitor-reference", f"Queued. The applier writes the reference level of {ident}; "
+                                               "no restart.", {"set": ident, "levelDb": level, "note": note})
+
     def current_user(self) -> str | None:
         header = self.headers.get("Authorization") or ""
         if not header.startswith("Basic "):
@@ -2448,7 +3161,8 @@ class Handler(BaseHTTPRequestHandler):
                 HTTPStatus.NOT_IMPLEMENTED,
                 "This service is read-only apart from the POST /api/apply/* requests "
                 "(profile, preset, live, commit, shutdown, reboot, restart-audio, restart-clock, "
-                "bundle, password). Nothing else is implemented; run other commands on the Pi instead.",
+                "bundle, password, monitor-limits, monitor-reference) and POST /api/monitor. "
+                "Nothing else is implemented; run other commands on the Pi instead.",
             )
         else:
             self.send_error_json(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed")
@@ -2564,6 +3278,10 @@ def main() -> int:
                         help="prompt for a password, add or replace this user, then exit")
     parser.add_argument("--remove-user", metavar="NAME",
                         help="remove this user, then exit")
+    parser.add_argument("--monitor-run-dir", default=str(MONITOR_RUN_DIR),
+                        help="where the monitor state file the Dante endpoint polls is written")
+    parser.add_argument("--monitor-state-dir", default=str(MONITOR_STATE_DIR),
+                        help="where the remembered copy of the monitor state is kept")
     arguments = parser.parse_args()
 
     password_file = PasswordFile(Path(arguments.auth_file))
@@ -2642,9 +3360,19 @@ def main() -> int:
     Handler.auth = authenticator
     Handler.tls = context is not None
     Handler.auth_file = str(arguments.auth_file)
+    monitor = MonitorStore(Path(arguments.monitor_run_dir), Path(arguments.monitor_state_dir))
+    Handler.monitor = monitor
+    monitor_stop = threading.Event()
 
     thread = threading.Thread(target=collector.loop, name="collector", daemon=True)
     thread.start()
+    threading.Thread(target=monitor.run, args=(monitor_stop,), name="monitor", daemon=True).start()
+
+    # systemd stops the service with SIGTERM: leave through the finally below,
+    # so an unwritten monitor change reaches the remembered copy.
+    def terminate(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, terminate)
 
     server = make_server(bind, arguments.port, context)
     guard = f"{len(password_file.load())} user(s)" if authenticator else "NO AUTHENTICATION"
@@ -2659,6 +3387,8 @@ def main() -> int:
         pass
     finally:
         collector.stop()
+        monitor_stop.set()
+        monitor.flush()
         server.server_close()
     return 0
 

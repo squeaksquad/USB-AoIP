@@ -31,9 +31,17 @@ RestartSec=5
 
 # The audio stack owns this machine. This service is background work: it must
 # never win a CPU or IO contest against the bridge, and it must not be able to
-# change anything outside its own preset directory and the request inbox, a
-# root-owned directory it can drop files into and cannot list; a request there
-# is what usb16x16-apply.path acts on as root.
+# change anything outside three places: its own preset directory; the request
+# inbox, a root-owned directory it can drop files into and cannot list (a
+# request there is what usb16x16-apply.path acts on as root); and the monitor's
+# state, /run/usb-aoip-monitor and its remembered copy in
+# /var/lib/usb-aoip-monitor, which systemd makes for this service (and, under
+# ProtectSystem=strict, writable by it alone). The Dante endpoint polls that
+# file as untrusted input and clamps it to limits only the applier writes
+# (docs/web/ACCESS.md, "The monitor path"). Both directories are 0755 and the
+# service writes its files 0644 despite the UMask below, so the endpoint's
+# account can read them; the run directory is kept across a restart of this
+# service, so the state is read back rather than lost.
 Nice=15
 IOSchedulingClass=idle
 CPUWeight=20
@@ -45,6 +53,11 @@ PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/home/bdimaio/usb-16x16-work/web-presets /var/spool/usb-aoip/inbox
+RuntimeDirectory=usb-aoip-monitor
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+StateDirectory=usb-aoip-monitor
+StateDirectoryMode=0755
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes

@@ -33,7 +33,9 @@ Two directories (1.9.0), neither owned by the web user:
           time), rate-history.json (the arbiter's last change), check/
           (0700, the loader check's temporary copy) and, since 1.10.0,
           bundles/ (0750, group the inbox's: support bundles the web service
-          serves). Every write here goes
+          serves) and, since 1.11.0, monitor-limits (0644: the monitor's
+          limits, which the Dante owner and the web service read). Every
+          write here goes
           through a temporary file created with O_EXCL | O_NOFOLLOW, then
           fsync and rename.
 
@@ -138,6 +140,21 @@ refused (a request never adds a login). The receipt names the user; the hash
 appears in no receipt, step, error or output. Bundles and passwords restart
 nothing, so a drain takes the next request after them in the same run.
 
+Two more (2026-11-18, 1.11.0; the monitor block, REDESIGN-2026-11.md phase
+3) write the monitor's limits, docs/web/MONITOR-FILES.md (b), to
+monitor-limits in the state directory: the knob's maximum, the start rule
+and level, and the reference lock ("monitor-limits", which is also how the
+lock is undone), and one set's reference level and note ("monitor-reference",
+refused while the lock is on). The file is read strictly; one that does not
+parse is replaced by the defaults merged with the request and the receipt
+says so (limitsReplaced). start_db and the references are clamped to max_db;
+the receipt carries the limits as written. Nothing is restarted or
+signalled (the owner polls the file), so a drain goes on after them. The
+web service writes the monitor's own state file itself, without this
+program: a knob must not cost a root process. Both stacks take the two
+kinds (the code is the base class's); the web service offers them on the
+Dante stack only, the one whose engine reads the file.
+
 Exit status is 0 when a receipt was written (even for a refused or failed
 request: the outcome is the receipt) or when nothing was pending, 2 for a
 broken environment (including a state directory that fails its checks, or the
@@ -149,6 +166,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -158,7 +176,7 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.10.0"
+VERSION = "1.11.0"
 
 INBOX_DIR = Path(os.environ.get("USB16X16_APPLY_INBOX", "/var/spool/usb-aoip/inbox"))
 STATE_DIR = Path(os.environ.get("USB16X16_APPLY_STATE", "/var/lib/usb16x16-apply"))
@@ -214,10 +232,27 @@ BRIDGE_LINE_GRACE_S = 15.0  # STAGE running to the first BRIDGE line is about 1 
 POLL_S = 1.0
 TERMINAL = {"done", "rolled-back", "failed", "refused"}
 
-# The page's System actions (1.10.0): envelope checks only, like "shutdown".
-SYSTEM_KINDS = ("reboot", "restart-audio", "restart-clock", "bundle", "password")
+# The monitor's limits (1.11.0, docs/web/MONITOR-FILES.md (b)): root's file in
+# the state directory, which the Dante owner polls and enforces.
+MONITOR_KINDS = ("monitor-limits", "monitor-reference")
+# The page's System actions (1.10.0): envelope checks only, like "shutdown";
+# and the monitor's two kinds (1.11.0), which take their own few fields.
+SYSTEM_KINDS = ("reboot", "restart-audio", "restart-clock", "bundle", "password", *MONITOR_KINDS)
 # What a drain may take more of in the same run: nothing here restarts or stops audio.
-NO_RESTART_KINDS = ("live", "commit", "bundle", "password")
+NO_RESTART_KINDS = ("live", "commit", "bundle", "password", *MONITOR_KINDS)
+MONITOR_LIMITS_NAME = "monitor-limits"
+MONITOR_LIMITS_MAX = 8192
+MONITOR_REFS_MAX = 16
+_DB = r"-?[0-9]{1,3}\.[0-9]"
+_ID = r"[a-z][a-z0-9-]{0,31}"
+_TEXT = r'[ !#-\[\]-~]'                    # printable ASCII without " and \
+MONITOR_SET_ID = re.compile(_ID)
+MONITOR_NOTE = re.compile(_TEXT + r"{0,64}")
+MONITOR_MAX = (-30.0, 0.0)
+MONITOR_LEVEL = (-60.0, 0.0)
+MONITOR_START_RULES = ("last", "reference", "fixed")
+# modinfo for the support bundle: the unit's PATH may not hold sbin.
+MODINFO = ("/usr/sbin/modinfo", "/sbin/modinfo", "modinfo")
 # The web service's logins (ACCESS.md): root's, readable by the web account's
 # group. "password" replaces one user's line in it; nothing else here reads it.
 WEB_AUTH = Path(os.environ.get("USB16X16_WEB_AUTH", "/etc/usb-aoip/web-auth"))
@@ -306,7 +341,8 @@ def clamp_text(value):
 
 def request_record(request: dict, keys: tuple) -> dict:
     """The request as a receipt records it; the free-text fields clamped."""
-    return {k: clamp_text(request.get(k)) if k in ("kind", "requestedBy", "from", "user") else request.get(k) for k in keys}
+    return {k: clamp_text(request.get(k)) if k in ("kind", "requestedBy", "from", "user", "set", "start", "note")
+            else request.get(k) for k in keys}
 
 
 def utc(stamp: float | None = None) -> str:
@@ -329,6 +365,82 @@ class Runner:
 
     def now(self) -> float:
         return time.time()
+
+
+# ------------------------------------------------------------------ the monitor's limits
+
+def default_monitor_limits() -> dict:
+    """The limits when the file is absent or does not parse (MONITOR-FILES.md (b))."""
+    return {"maxDb": 0.0, "start": "last", "startDb": -30.0, "lock": False, "refs": {}}
+
+
+def monitor_db(text: str, low: float, high: float) -> float:
+    if not re.fullmatch(_DB, text):
+        raise ValueError(f"{text[:16]!r} is not a number with one decimal")
+    value = float(text) + 0.0
+    if not low <= value <= high:
+        raise ValueError(f"{text} is outside {low:.1f}..{high:.1f}")
+    return value
+
+
+def monitor_fmt(value: float) -> str:
+    value = round(float(value), 1) + 0.0
+    return f"{0.0 if value == 0 else value:.1f}"
+
+
+def monitor_number(request: dict, key: str, bounds: tuple) -> float:
+    """A request's number: finite, within bounds, kept to one decimal."""
+    value = request.get(key)
+    try:
+        ok = not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(float(value))
+    except OverflowError:
+        ok = False
+    if not ok or not bounds[0] <= float(value) <= bounds[1]:
+        raise Refused(f"{key} must be a number from {bounds[0]:g} to {bounds[1]:g}")
+    return round(float(value), 1) + 0.0
+
+
+def clamp_monitor_limits(limits: dict) -> None:
+    limits["startDb"] = min(limits["startDb"], limits["maxDb"])
+    for ref in limits["refs"].values():
+        ref["levelDb"] = min(ref["levelDb"], limits["maxDb"])
+
+
+def parse_monitor_limits(text: str) -> dict:
+    """The limits file by MONITOR-FILES.md's rules, every line in its place;
+    ValueError for anything else. The same reading as usb16x16-web's."""
+    if not text.endswith("\nend\n"):
+        raise ValueError("does not end with an end line")
+    lines = text[:-1].split("\n")
+    if len(lines) < 6 or any("\r" in line or "\t" in line for line in lines):
+        raise ValueError("too few lines, or a carriage return or tab")
+    patterns = (r"MONITOR-LIMITS v=1", rf"max_db=({_DB})", r"start=(last|reference|fixed)", rf"start_db=({_DB})",
+                r"lock=([01])")
+    found = []
+    for index, pattern in enumerate(patterns):
+        match = re.fullmatch(pattern, lines[index])
+        if match is None:
+            raise ValueError(f"line {index + 1} is not what MONITOR-LIMITS has there")
+        found.append(match)
+    limits = {"maxDb": monitor_db(found[1].group(1), *MONITOR_MAX), "start": found[2].group(1),
+              "startDb": monitor_db(found[3].group(1), *MONITOR_LEVEL), "lock": found[4].group(1) == "1", "refs": {}}
+    for index, line in enumerate(lines[5:-1], start=6):
+        match = re.fullmatch(rf'ref id=({_ID}) level_db=({_DB}) note="({_TEXT}{{0,64}})"', line)
+        if match is None:
+            raise ValueError(f"line {index} is not a ref line")
+        if match.group(1) in limits["refs"] or len(limits["refs"]) >= MONITOR_REFS_MAX:
+            raise ValueError(f"ref {match.group(1)} is repeated or one too many")
+        limits["refs"][match.group(1)] = {"levelDb": monitor_db(match.group(2), *MONITOR_LEVEL), "note": match.group(3)}
+    clamp_monitor_limits(limits)
+    return limits
+
+
+def render_monitor_limits(limits: dict) -> str:
+    lines = ["MONITOR-LIMITS v=1", f"max_db={monitor_fmt(limits['maxDb'])}", f"start={limits['start']}",
+             f"start_db={monitor_fmt(limits['startDb'])}", f"lock={int(limits['lock'])}"]
+    lines += [f'ref id={ident} level_db={monitor_fmt(ref["levelDb"])} note="{ref["note"]}"'
+              for ident, ref in limits["refs"].items()]
+    return "\n".join(lines + ["end"]) + "\n"
 
 
 # ------------------------------------------------------------------ conf
@@ -1508,7 +1620,7 @@ class Applier:
             "kind": kind,
             "request": request_record(request, ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
                                                 "name", "slug", "artifactSha256", "expectedLiveSha256", "revert",
-                                                "user")),
+                                                "user", "maxDb", "start", "startDb", "lock", "set", "levelDb", "note")),
             "startedAt": utc(self.runner.now()),
             "steps": [],
             "previousProfile": None,
@@ -1622,7 +1734,8 @@ class Applier:
 
     def system(self, kind: str, request: dict) -> dict:
         """reboot, restart-audio, restart-clock, bundle, password: after the
-        envelope, nothing else in the request but a password's user and hash."""
+        envelope, nothing else in the request but a password's user and hash;
+        monitor-limits and monitor-reference: their own few fields."""
         if kind == "reboot":
             return self.power(self.live_profile(), "reboot")
         if kind == "restart-audio":
@@ -1631,6 +1744,8 @@ class Applier:
             return self.restart_clock()
         if kind == "bundle":
             return self.bundle()
+        if kind in MONITOR_KINDS:
+            return self.monitor_limits(kind, request)
         return self.password(request)
 
     def failed_at(self, name: str, reason: str) -> dict:
@@ -1774,12 +1889,14 @@ class Applier:
         web_text = text_of(WEB_BINARY, 1 << 16) or ""
         web_version = re.search(r'(?m)^VERSION = "([^"\n]{1,32})"', web_text)
         hashes = {str(path): hash_of(path) for path in self.bundle_hash_paths()}
-        code, out = self.runner.run(["modinfo", "-F", "filename", "usb_f_uac2"], timeout=10)
-        module = out.strip().splitlines()[0] if code == 0 and out.strip() else ""
-        if module.startswith("/"):
+        module, why = self.module_file("usb_f_uac2")
+        if module:
             hashes[module] = hash_of(Path(module))
+            if hashes[module] is None:
+                hashes["usb_f_uac2_error"] = f"{module} could not be read"
         else:
             hashes["usb_f_uac2"] = None
+            hashes["usb_f_uac2_error"] = why
         units = {}
         logs = {}
         for unit in self.bundle_units():
@@ -1809,6 +1926,24 @@ class Applier:
             "withheld": withheld,
             "truncated": None,
         }
+
+    def module_file(self, name: str) -> tuple[str | None, str]:
+        """The file of a kernel module by modinfo, which is tried at each of
+        MODINFO in turn (the unit's PATH may not hold sbin); the path, or None
+        and what each attempt said, for the bundle to record instead of a bare
+        null. ProtectKernelModules= may hide /lib/modules from this unit, which
+        an answer here would show."""
+        attempts = []
+        for program in MODINFO:
+            if program.startswith("/") and not os.access(program, os.X_OK):
+                attempts.append(f"{program}: not there")
+                continue
+            code, out = self.runner.run([program, "-F", "filename", name], timeout=10)
+            first = (out.strip().splitlines() or [""])[0]
+            if code == 0 and first.startswith("/"):
+                return first, ""
+            attempts.append(f"{program} exited {code}: {first[:160] or 'no output'}")
+        return None, "; ".join(attempts)
 
     @staticmethod
     def encode_bundle(document: dict) -> bytes:
@@ -1876,6 +2011,68 @@ class Applier:
         self.state["bundle"] = {"file": name, "bytes": len(data)}
         return self.finish("done")
 
+    # -- the monitor's limits (1.11.0)
+
+    def monitor_limits(self, kind: str, request: dict) -> dict:
+        """monitor-limits merges max_db, the start rule and level and the lock
+        into the limits file; monitor-reference one set's reference level and
+        note, refused while lock=1. The file is read strictly (absent is the
+        defaults; one that does not parse is replaced by the defaults merged
+        with the request, and the receipt says so), start_db and every
+        reference clamped to max_db, and written by the atomic writer 0644.
+        Nothing is signalled or restarted: the owner polls the file."""
+        path = self.state_dir / MONITOR_LIMITS_NAME
+        replaced = None
+        try:
+            data, _ = read_plain(path, MONITOR_LIMITS_MAX)
+            limits = parse_monitor_limits(data.decode("ascii"))
+        except Missing:
+            limits = default_monitor_limits()
+        except (Refused, ValueError) as error:
+            limits, replaced = default_monitor_limits(), str(error)[:200]
+        if kind == "monitor-limits":
+            fields = [key for key in ("maxDb", "start", "startDb", "lock") if key in request]
+            if not fields:
+                raise Refused("monitor-limits needs at least one of maxDb, start, startDb, lock")
+            if "maxDb" in request:
+                limits["maxDb"] = monitor_number(request, "maxDb", MONITOR_MAX)
+            if "start" in request:
+                if request["start"] not in MONITOR_START_RULES:
+                    raise Refused(f"start must be one of {', '.join(MONITOR_START_RULES)}")
+                limits["start"] = request["start"]
+            if "startDb" in request:
+                limits["startDb"] = monitor_number(request, "startDb", MONITOR_LEVEL)
+            if "lock" in request:
+                if not isinstance(request["lock"], bool):
+                    raise Refused("lock must be true or false")
+                limits["lock"] = request["lock"]
+            what = ", ".join(fields)
+        else:
+            ident, note = request.get("set"), request.get("note", "")
+            if not isinstance(ident, str) or not MONITOR_SET_ID.fullmatch(ident):
+                raise Refused("set must be a monitor set id")
+            level = monitor_number(request, "levelDb", MONITOR_LEVEL)
+            if not isinstance(note, str) or not MONITOR_NOTE.fullmatch(note):
+                raise Refused('note must be at most 64 printable ASCII characters, without " or \\')
+            if limits["lock"]:
+                raise Refused("the reference levels are locked (lock=1); a monitor-limits request with lock false unlocks them")
+            if ident not in limits["refs"] and len(limits["refs"]) >= MONITOR_REFS_MAX:
+                raise Refused(f"{MONITOR_REFS_MAX} reference levels are kept at most")
+            limits["refs"][ident] = {"levelDb": level, "note": note}
+            what = f"the reference of {ident}"
+        clamp_monitor_limits(limits)
+        self.step("validating", f"{kind}: {what}" + (f"; the file did not parse ({replaced}) and is replaced"
+                                                       if replaced else ""))
+        self.step("writing", f"{path}, 0644; no restart: the endpoint polls it")
+        try:
+            write_bytes_atomic(path, render_monitor_limits(limits).encode("ascii"), mode=0o644)
+        except OSError as error:
+            return self.failed_at("writing", f"{path} could not be written ({error.strerror or error})")
+        self.state["limits"] = limits
+        if replaced:
+            self.state["limitsReplaced"] = replaced
+        return self.finish("done")
+
     def check_system(self, request: dict) -> str:
         """--check for the System kinds: what can be judged without acting."""
         self.validate_envelope(request)
@@ -1891,6 +2088,8 @@ class Applier:
             return f"would replace the login line for {user}"
         if kind in ("restart-audio", "restart-clock"):
             return f"would {kind} on {self.live_profile() or 'an unreadable configuration'}"
+        if kind in MONITOR_KINDS:
+            return f"would update {self.state_dir / MONITOR_LIMITS_NAME} ({kind})"
         return f"would {kind}"
 
     def consume(self) -> dict | None:
@@ -2698,7 +2897,8 @@ class DanteApplier(Applier):
             "kind": kind,
             "request": request_record(request, ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
                                                 "name", "slug", "artifactSha256", "expectedLiveSha256", "revert", "rate",
-                                                "source", "from", "user")),
+                                                "source", "from", "user", "maxDb", "start", "startDb", "lock", "set",
+                                                "levelDb", "note")),
             "startedAt": utc(self.runner.now()),
             "steps": [],
             "previousProfile": None,

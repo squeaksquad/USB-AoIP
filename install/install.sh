@@ -795,13 +795,15 @@ cmd_uninstall() {
   systemctl daemon-reload
   systemctl reload NetworkManager 2>/dev/null || true
   if [ "$purge" = 1 ]; then
-    rm -rf /etc/usb16x16 /var/lib/usb16x16-dante "$WORK_DIR" "$state" /etc/usb-aoip /var/cache/usb-aoip-uac2 /var/spool/usb-aoip "$apply_state"
+    rm -rf /etc/usb16x16 /var/lib/usb16x16-dante "$WORK_DIR" "$state" /etc/usb-aoip /var/cache/usb-aoip-uac2 /var/spool/usb-aoip "$apply_state" \
+      /var/lib/usb-aoip-monitor /run/usb-aoip-monitor
     userdel "$WEB_USER" 2>/dev/null || true; userdel "$OWNER_USER" 2>/dev/null || true
     say "removed, with its settings, presets, Dante identity and config"
   else
     rm -f "$manifest"
     say "removed. Kept: /etc/usb-aoip, /etc/usb16x16 (settings), /var/lib/usb16x16-dante (Dante identity"
-    say "and subscriptions), $WORK_DIR (presets), the logins and certificate in /etc/usb-aoip. --purge removes those too."
+    say "and subscriptions), $WORK_DIR (presets), /var/lib/usb-aoip-monitor (the monitor's remembered levels),"
+    say "the logins and certificate in /etc/usb-aoip. --purge removes those too."
   fi
   say "left alone: the packages, the held kernel (now unheld), /boot/firmware/config.txt, and any aoip-$AUDIO_IF connection"
 }
