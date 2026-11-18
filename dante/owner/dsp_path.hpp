@@ -18,7 +18,9 @@
 // default (every gain 1, nothing ramping) it does not touch the block, so an
 // owner that never publishes to it is bit-identical to one without it. It
 // runs only when a preset is loaded, since without one the owner never
-// converts the block to float.
+// converts the block to float. Its targets come from monitor_ctl.hpp, and a
+// prime starts it from silence (prime_monitor) when the preset has a monitor
+// section.
 #pragma once
 
 #include "usb16x16/bridge_core.hpp"
@@ -49,6 +51,19 @@ public:
     // Filter state and delay lines to silence: at each prime, so a start never
     // carries the tail of whatever was playing before the gap.
     void reset() noexcept { stage_.reset(); }
+
+    // At a prime, with a preset that has a monitor section (and only then):
+    // take the monitor's published targets, then start every output from
+    // silence ramping to them over `frames`, so a start or re-prime rises
+    // from zero to the monitor's current gains and never plays a block at
+    // MonitorGains' default unity first. Without the section it does
+    // nothing at all: such an artifact keeps today's behaviour exactly, with
+    // no fade-in. Loop thread (or before the loop); no allocation.
+    void prime_monitor(std::uint32_t frames) noexcept {
+        if (!stage_.has_monitor()) return;
+        monitor_.process(float_.data(), 0);
+        monitor_.start_from_silence(frames);
+    }
 
     // Take a published coefficient set, and the monitor's published targets,
     // without filtering anything: for the wakes on which no block goes out, so
@@ -92,7 +107,7 @@ public:
         }
     }
     // The block between the steps: the input after to_float, the output after
-    // filter and then after monitor_gains.
+    // filter (the monitor-in tap, pre-fader) and then after monitor_gains.
     [[nodiscard]] const float* floats() const noexcept { return float_.data(); }
 
 private:

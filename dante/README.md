@@ -6,7 +6,7 @@ follower. Not an Audinate product.
 
 | Path | What it is |
 |---|---|
-| `owner/` | `usb16x16-dante-owner`, the one long-lived process that moves audio between the USB gadget and the Inferno ALSA plugin. `main.cpp` has the build line in its header; it links `../dsp-core/src/bridge_core.cpp`. The `*_test.cpp` files test the headers and build anywhere. |
+| `owner/` | `usb16x16-dante-owner`, the one long-lived process that moves audio between the USB gadget and the Inferno ALSA plugin. `main.cpp` has the build line in its header; it links `../dsp-core/src/bridge_core.cpp`. The `*_test.cpp` files test the headers and build anywhere. `monitor_ctl.hpp` is the monitor block's control (the three files of `docs/web/MONITOR-FILES.md`; options `--monitor-state`, `--monitor-saved`, `--monitor-limits`, `--monitor-status` with compiled-in defaults, `--no-monitor`); `monitor_sim.cpp` runs it and the stage without ALSA for end-to-end checks on the Mac, and is not installed. |
 | `patches/` | The five patches applied to Inferno, in order. |
 | `SOURCES.lock` | The pinned Inferno and Statime revisions and the hashes of what was built from them. |
 | `build-candidate.sh`, `build-patched.sh` | Build Statime and the patched plugin on the Pi. |

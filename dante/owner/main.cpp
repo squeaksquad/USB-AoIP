@@ -29,7 +29,29 @@
 // same-shape artifact written to it into the running stage (dsp_live.hpp).
 // With --meter-file, three level meters (what the host sent, what goes to
 // Dante, what Dante returned) are published to that file by another such
-// thread (meter_tap.hpp); with or without a preset.
+// thread (meter_tap.hpp); with or without a preset. With a preset that has a
+// monitor section a fourth tap, monitor-in, reads the stage's output before
+// the monitor gains (pre-fader).
+//
+// The monitor block (phase 3; docs/web/MONITOR-FILES.md, monitor_ctl.hpp): a
+// thread made before the device is opened (rule 3), never real-time, polls
+// every 10 ms the state file the web service writes (--monitor-state, default
+// /run/usb-aoip-monitor/state) and the limits root's applier writes
+// (--monitor-limits, default /var/lib/usb16x16-apply/monitor-limits), and at
+// its first poll, when there is no valid state file, applies the start rule
+// with the remembered copy (--monitor-saved, default
+// /var/lib/usb-aoip-monitor/state). It publishes per-output gains to the
+// MonitorGains after the stage, asks the stage for each set's fold-down, and
+// writes what is in force to --monitor-status (default
+// /run/usb16x16-dante/monitor.status) whenever that changes. The defaults are
+// compiled in so the start wrapper need not change. It runs with or without a
+// preset: without a monitor section it writes one idle status and nothing
+// else. With --no-monitor there is no thread and no status file, and the
+// gains are never published (a monitor-section preset then plays at unity).
+// No block with a monitor-section preset goes out before its targets: the
+// first poll is made, and published, before the loop starts, and every prime
+// takes the published targets and starts the gains from silence
+// (OutDsp::prime_monitor), 10 ms up to them.
 //
 // --rate (default 48000) is the one rate the owner runs at, both PCMs and the
 // DSP preset alike (SAMPLE_RATE_DESIGN.md, step 3): a preset compiled for
@@ -116,7 +138,8 @@
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
 // (one line)
 // (the headers beside it; servo_test.cpp, dsp_path_test.cpp, dsp_live_test.cpp,
-// meter_tap_test.cpp, rate_check_test.cpp and chan_holes_test.cpp are their tests and build anywhere)
+// meter_tap_test.cpp, monitor_ctl_test.cpp, rate_check_test.cpp and chan_holes_test.cpp are their
+// tests and build anywhere; monitor_sim.cpp runs the monitor control and the stage without ALSA)
 
 #include <alsa/asoundlib.h>
 
@@ -124,6 +147,7 @@
 #include "dsp_live.hpp"
 #include "dsp_path.hpp"
 #include "meter_tap.hpp"
+#include "monitor_ctl.hpp"
 #include "chan_holes.hpp"
 #include "rate_check.hpp"
 #include "seq_check.hpp"
@@ -153,6 +177,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 
 namespace {
 
@@ -213,6 +238,13 @@ struct Options {
     std::string dsp_live_status;
     // Level meter snapshot file. Empty means no tap: nothing is converted or measured for it.
     std::string meter_file;
+    // The monitor block's files (docs/web/MONITOR-FILES.md). Compiled-in defaults, so the
+    // installed start wrapper does not change; --no-monitor turns the whole block off.
+    std::string monitor_state{"/run/usb-aoip-monitor/state"};
+    std::string monitor_saved{"/var/lib/usb-aoip-monitor/state"};
+    std::string monitor_limits{"/var/lib/usb16x16-apply/monitor-limits"};
+    std::string monitor_status{"/run/usb16x16-dante/monitor.status"};
+    bool no_monitor{false};
     // Where a host at another rate is turned into a request for the arbiter
     // (usb16x16-apply --rate-request). Empty: the refusal is only logged.
     std::string rate_request_file;
@@ -254,6 +286,8 @@ struct Options {
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
+               "                     [--monitor-state PATH] [--monitor-saved PATH] [--monitor-limits PATH]\n"
+               "                     [--monitor-status PATH] [--no-monitor]\n"
                "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--chan-holes N] [--open-phase] [--impulse-trace] [--prime-drop D]\n"
                "                     [--capture-drain]\n"
                "                     [--stack-prefault KILOBYTES]\n"
@@ -276,6 +310,13 @@ struct Options {
                "                     one line to PATH (by rename); without it the refusal is only logged\n"
                "  --meter-file       publish per-channel levels (usb-capture, dante-playback, dante-capture)\n"
                "                     to PATH, about twenty times a second while audio moves\n"
+               "  --monitor-state    the monitor state the web service writes (default /run/usb-aoip-monitor/state)\n"
+               "  --monitor-saved    its remembered copy, read for the start rule at the first poll\n"
+               "                     (default /var/lib/usb-aoip-monitor/state)\n"
+               "  --monitor-limits   root's monitor limits (default /var/lib/usb16x16-apply/monitor-limits)\n"
+               "  --monitor-status   where what the monitor has in force is written\n"
+               "                     (default /run/usb16x16-dante/monitor.status)\n"
+               "  --no-monitor       no monitor thread, no status file, monitor gains never published\n"
                "  --guard     frames behind the clock that are not cleared yet\n"
                "  --seconds   stop after this long; 0 runs until a signal\n"
                "  --stall-at, --stall-ms   test only: stall the loop once, MS long, SECONDS after it starts\n"
@@ -314,6 +355,7 @@ Options parse_options(int argc, char** argv) {
         if (a == "--open-phase") { o.open_phase = true; continue; }
         if (a == "--impulse-trace") { o.impulse_trace = true; continue; }
         if (a == "--capture-drain") { o.capture_drain = true; continue; }
+        if (a == "--no-monitor") { o.no_monitor = true; continue; }
         if (a == "--help" || i + 1 >= argc) { usage(); }
         const char* v = argv[++i];
         if (a == "--pcm") o.pcm = v;
@@ -331,6 +373,10 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--dsp-live-file") o.dsp_live_file = v;
         else if (a == "--dsp-live-status") o.dsp_live_status = v;
         else if (a == "--meter-file") o.meter_file = v;
+        else if (a == "--monitor-state") o.monitor_state = v;
+        else if (a == "--monitor-saved") o.monitor_saved = v;
+        else if (a == "--monitor-limits") o.monitor_limits = v;
+        else if (a == "--monitor-status") o.monitor_status = v;
         else if (a == "--rate-request-file") o.rate_request_file = v;
         else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
         else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
@@ -930,6 +976,44 @@ void* meter_entry(void* argument) {
     }
     std::printf("METERS stopped writes=%" PRIu64 " failures=%" PRIu64 "\n", context.publisher->writes(),
                 context.publisher->failures());
+    return nullptr;
+}
+
+// ---- the monitor block -----------------------------------------------------------------
+
+struct MonitorContext {
+    usb16x16::owner::monitor::MonitorControl* control;
+};
+
+// One MONITOR line, from a thread that is never the loop.
+void print_monitor(const char* what, const usb16x16::owner::monitor::MonitorControl& control) {
+    const auto seq = control.seq();
+    std::printf("MONITOR %s state=%s seq=%s gen=%" PRIu64 " applied=%" PRIu64 " refused=%" PRIu64 " publishes=%" PRIu64
+                " status_failures=%" PRIu64 " limits=%s reason=\"%s\"\n",
+                what, usb16x16::owner::monitor::mode_name(control.idle() ? usb16x16::owner::monitor::Mode::idle : control.mode()),
+                seq ? std::to_string(*seq).c_str() : "none", control.status_gen(), control.applied(), control.refused(),
+                control.publishes(), control.status_failures(), control.limits_valid() ? "file" : "defaults",
+                control.reason().c_str());
+    std::fflush(stdout);
+}
+
+// Never the loop thread and never real-time: it reads files, allocates and writes the status.
+// Its first poll was made by main before the loop started.
+void* monitor_entry(void* argument) {
+    const MonitorContext context = *static_cast<MonitorContext*>(argument);
+    usb16x16::owner::monitor::MonitorControl& control = *context.control;
+    auto last = std::make_tuple(control.mode(), control.seq(), control.applied(), control.refused(), control.status_gen());
+    while (!stop_requested.load(std::memory_order_relaxed)) {
+        timespec nap{0, 10000000};
+        nanosleep(&nap, nullptr);
+        control.poll(now_ns());
+        const auto now = std::make_tuple(control.mode(), control.seq(), control.applied(), control.refused(), control.status_gen());
+        if (now != last) {
+            last = now;
+            print_monitor("changed", control);
+        }
+    }
+    print_monitor("stopped", control);
     return nullptr;
 }
 
@@ -1560,6 +1644,10 @@ struct UsbHalf {
     usb16x16::owner::OutDsp* dsp{nullptr};
     // The level meters; null without --meter-file.
     usb16x16::owner::OwnerMeters* meters{nullptr};
+    // The monitor-in tap: meters and a preset with a monitor section.
+    bool monitor_tap{false};
+    // The fade from silence at each prime (10 ms at --rate); used only with a monitor section.
+    std::uint32_t monitor_prime_frames{480};
     // --open-phase: frames the host sent since the outgoing direction left idle,
     // frames queued to the gadget since the last prime, and the sampling window.
     bool open_phase{false};
@@ -1796,6 +1884,15 @@ void run_dsp(UsbHalf& usb, std::int32_t* block, std::int64_t frames, Telemetry& 
     if (usb.meters != nullptr) usb.meters->usb_capture.observe(usb.dsp->floats(), count);
     const std::int64_t t2 = now_ns();
     usb.dsp->filter(count);
+    // The monitor-in tap (pre-fader) between the stage and the monitor gains,
+    // timed on its own so it counts as meter cost, not DSP cost; two clock
+    // reads more a block, and only with a monitor section and meters.
+    std::int64_t tap = 0;
+    if (usb.monitor_tap) {
+        const std::int64_t before = now_ns();
+        usb.meters->monitor_in.observe(usb.dsp->floats(), count);
+        tap = now_ns() - before;
+    }
     // The monitor block after the stage, inside the timed span, so its cost
     // is part of dsp_us_max.
     usb.dsp->monitor_gains(count);
@@ -1803,11 +1900,12 @@ void run_dsp(UsbHalf& usb, std::int32_t* block, std::int64_t frames, Telemetry& 
     if (usb.meters != nullptr) usb.meters->dante_playback.observe(usb.dsp->floats(), count);
     const std::int64_t t4 = now_ns();
     usb.dsp->from_float(block, count);
-    const std::int64_t spent = (t1 - t0) + (t3 - t2) + (now_ns() - t4);
+    // dsp_us = to_float + filter + monitor_gains + from_float; the taps are meter cost.
+    const std::int64_t spent = (t1 - t0) + (t3 - t2 - tap) + (now_ns() - t4);
     store_max(t.dsp_ns_max, spent);
     t.dsp_ns_total.fetch_add(static_cast<std::uint64_t>(spent), std::memory_order_relaxed);
     t.dsp_calls.fetch_add(1, std::memory_order_relaxed);
-    if (usb.meters != nullptr) add_meter_cost(t, (t2 - t1) + (t4 - t3));
+    if (usb.meters != nullptr) add_meter_cost(t, (t2 - t1) + tap + (t4 - t3));
 }
 
 constexpr std::uint32_t kHoleMinFrames = 8;
@@ -1960,6 +2058,9 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         if (usb.dsp != nullptr) {
             // A prime follows a gap: the filters start from silence, not from the tail of what played before it.
             usb.dsp->reset();
+            // And, with a monitor section, the monitor gains: they take the published targets and
+            // rise to them from silence, so this block never goes out at MonitorGains' default unity.
+            usb.dsp->prime_monitor(usb.monitor_prime_frames);
             t.dsp_resets.fetch_add(1, std::memory_order_relaxed);
         }
         if (usb.impulse_trace) {
@@ -2338,6 +2439,25 @@ int main(int argc, char** argv) {
         std::printf("METERS publishing file=%s window_frames=%zu\n", options.meter_file.c_str(),
                     meters.usb_capture.window_frames());
     }
+    usb.monitor_tap = meters_enabled && dsp.enabled() && dsp.stage().has_monitor();
+    usb.monitor_prime_frames = usb16x16::monitor_ramp_frames_fast(options.rate);
+    // The monitor: its first poll here, on this thread, after the preset is loaded and before
+    // the loop exists, so a monitor-section preset's targets are published before any block
+    // can go out; the thread then owns every later poll. As the meters, not with --no-usb.
+    static usb16x16::owner::monitor::MonitorControl monitor_control(
+        dsp.stage(), dsp.monitor(),
+        {options.monitor_state, options.monitor_saved, options.monitor_limits, options.monitor_status}, options.rate);
+    MonitorContext monitor_context{&monitor_control};
+    pthread_t monitor_thread{};
+    const bool monitor_enabled = !options.no_monitor && !options.no_usb;
+    if (monitor_enabled) {
+        monitor_control.poll(now_ns());
+        std::printf("MONITOR following state=%s saved=%s limits=%s status=%s sets=%zu\n", options.monitor_state.c_str(),
+                    options.monitor_saved.c_str(), options.monitor_limits.c_str(), options.monitor_status.c_str(),
+                    dsp.stage().has_monitor() ? dsp.stage().monitor().sets.size() : std::size_t{0});
+        print_monitor("first", monitor_control);
+        monitor_thread = start_thread(monitor_entry, &monitor_context, "monitor");
+    }
     thread_inventory("before-open", true);
 
     // 3. The Inferno device, at normal priority: its control threads inherit the opener's policy.
@@ -2468,6 +2588,7 @@ int main(int argc, char** argv) {
     write_ppm_file(options.ppm_file, telemetry);
     if (live_enabled) pthread_join(dsp_live_thread, nullptr);
     if (meters_enabled) pthread_join(meter_thread, nullptr);
+    if (monitor_enabled) pthread_join(monitor_thread, nullptr);
     pthread_join(telemetry_thread, nullptr);
 
     const double elapsed = static_cast<double>(now_ns() - started) / 1e9;

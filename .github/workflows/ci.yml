@@ -59,10 +59,25 @@ jobs:
             c++ $CXXFLAGS_STRICT -o "$RUNNER_TEMP/owner/${t}_test" "${t}_test.cpp"
             "$RUNNER_TEMP/owner/${t}_test"
           done
-          for t in dsp_path dsp_live meter_tap; do
+          for t in dsp_path dsp_live meter_tap monitor_ctl; do
             c++ $CXXFLAGS_STRICT -I ../../dsp-core/include \
               -o "$RUNNER_TEMP/owner/${t}_test" "${t}_test.cpp" ../../dsp-core/src/bridge_core.cpp
             "$RUNNER_TEMP/owner/${t}_test"
+          done
+          # The monitor simulator (not installed): compile only.
+          c++ $CXXFLAGS_STRICT -I . -I ../../dsp-core/include -o "$RUNNER_TEMP/owner/monitor_sim" \
+            monitor_sim.cpp ../../dsp-core/src/bridge_core.cpp -lpthread
+      # The owners themselves need ALSA, so they are compiled here (not run) with
+      # the installer's flags: the development owner, and the point of record
+      # against the headers beside it as they are now.
+      - name: Owner sources compile (development and point of record)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q libasound2-dev
+          mkdir -p "$RUNNER_TEMP/owner-build"
+          for src in dante/owner/main.cpp dante/owner/point-of-record/main.cpp; do
+            g++ $CXXFLAGS_STRICT -I dante/owner -I dsp-core/include -o "$RUNNER_TEMP/owner-build/usb16x16-dante-owner" \
+              "$src" dsp-core/src/bridge_core.cpp -lasound -lpthread
+            "$RUNNER_TEMP/owner-build/usb16x16-dante-owner" --help 2>&1 | head -3 || true
           done
 
   shell:

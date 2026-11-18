@@ -5,6 +5,7 @@
 #include "dsp_path.hpp"
 #include "meter_tap.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -82,6 +83,8 @@ void test_levels_and_file(const std::string& directory) {
     check(has(text, "TAP stage=dante-playback seq=1 frames=2400"), "dante-playback closed the same window");
     check(has(text, "TAP stage=dante-capture seq=0 frames=0"), "a tap with nothing yet is listed with nothing");
     check(!publisher.poll(), "an unchanged set of windows is not written again");
+    check(!has(text, "monitor-in") && std::count(text.begin(), text.end(), '\n') == 4,
+          "with no monitor-in observed the file is the header and the three taps it always was");
 
     for (int n = 0; n < 50; ++n) meters->observe(block.data(), 48, meters->dante_capture);
     check(publisher.poll() && has(slurp(path), "TAP stage=dante-capture seq=1 frames=2400"), "the return tap publishes on its own");
@@ -120,6 +123,39 @@ void test_through_the_stage(const std::string& directory) {
           "and the input tap counts none");
 }
 
+// The fourth tap, monitor-in: after the stage, before the monitor gains (pre-fader).
+void test_monitor_in_tap(const std::string& directory) {
+    const std::string path = directory + "/monitor.txt";
+    auto meters = std::make_unique<OwnerMeters>();
+    auto dsp = std::make_unique<OutDsp>();
+    dsp->load(straight(1.0));
+    usb16x16::MonitorGains::Targets targets;
+    targets.gain.fill(0.5);
+    targets.ramp_frames.fill(1);
+    std::string reason;
+    check(dsp->monitor().publish(targets, reason), "the monitor gains published");
+    MeterPublisher publisher(*meters, path);
+    for (int n = 0; n < 50; ++n) {
+        auto block = block_of(48);
+        dsp->to_float(block.data(), 48);
+        meters->usb_capture.observe(dsp->floats(), 48);
+        dsp->filter(48);
+        meters->monitor_in.observe(dsp->floats(), 48);
+        dsp->monitor_gains(48);
+        meters->dante_playback.observe(dsp->floats(), 48);
+        dsp->from_float(block.data(), 48);
+    }
+    check(publisher.poll(), "the taps closed a window");
+    const std::string text = slurp(path);
+    check(has(text, "TAP stage=monitor-in seq=1 frames=2400 position=2400 peak_dbfs=-6.0,-12.0"),
+          "monitor-in reads the stage's output before the monitor gains");
+    check(has(text, "TAP stage=dante-playback seq=1 frames=2400 position=2400 peak_dbfs=-12.0,-18.1"),
+          "dante-playback reads it after them");
+    check(text.find("TAP stage=monitor-in") > text.find("TAP stage=dante-capture") &&
+              std::count(text.begin(), text.end(), '\n') == 5,
+          "monitor-in is the fourth and last TAP line");
+}
+
 // SAMPLE_RATE_DESIGN.md, step 3: windows are 50 ms at the owner's rate.
 void test_window_follows_the_rate(const std::string& directory) {
     check(OwnerMeters().usb_capture.window_frames() == 2400, "the default is 50 ms at 48 kHz, the bridge's 2400");
@@ -154,6 +190,7 @@ int main() {
     }
     test_levels_and_file(directory);
     test_through_the_stage(directory);
+    test_monitor_in_tap(directory);
     test_window_follows_the_rate(directory);
     test_unwritable();
     std::printf(failures == 0 ? "meter_tap_test: all passed\n" : "meter_tap_test: %d FAILED\n", failures);

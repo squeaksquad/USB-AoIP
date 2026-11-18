@@ -242,6 +242,63 @@ void test_monitor_gain_scales() {
     check(low_byte_zero, "the low byte is zero after a monitor gain");
 }
 
+// prime_monitor: with a monitor section a prime takes the published targets
+// and rises from silence to them; without one it does nothing, no fade-in.
+std::string with_monitor_section(const std::string& artifact) {
+    return artifact.substr(0, artifact.size() - 4) +
+           "monitor 1\nsets 2\nset mains speakers\nset phones headphones\nouts 3\nout 0 speaker 0\nout 1 speaker 0\n"
+           "out 14 speaker 1\nexpandsets 16\n0\n0\n-\n-\n-\n-\n-\n-\n-\n-\n-\n-\n-\n-\n1\n-\nfolds 0\nend\n";
+}
+
+void test_prime_monitor() {
+    usb16x16::MonitorGains::Targets targets;
+    targets.gain.fill(1.0);
+    targets.ramp_frames.fill(1);
+    targets.gain[0] = 0.5;
+    targets.gain[1] = 0.0;
+    std::string reason;
+
+    auto plain = std::make_unique<OutDsp>();
+    plain->load(straight(1.0));
+    plain->prime_monitor(480);
+    auto sent = noise(480, 21);
+    const auto kept = sent;
+    plain->process(sent.data(), 480);
+    check(sent == kept, "without a monitor section prime_monitor does nothing: no fade-in, bit-exact");
+    check(plain->monitor().publish(targets, reason), "a publish to a plain adapter is accepted");
+    plain->prime_monitor(480);
+    check(plain->monitor().generation() == 0, "without a section prime_monitor does not even take a publish");
+
+    auto dsp = std::make_unique<OutDsp>();
+    dsp->load(with_monitor_section(straight(1.0)));
+    check(dsp->stage().has_monitor(), "the fixture has a monitor section");
+    check(dsp->monitor().publish(targets, reason), "targets published before the prime");
+    dsp->prime_monitor(480);
+    check(dsp->monitor().generation() == 1, "the prime takes the published targets");
+    std::vector<std::int32_t> block(480 * kChannels, top24(4800));
+    dsp->process(block.data(), 480);
+    const auto at = [&](std::size_t frame, std::size_t channel) { return block[frame * kChannels + channel] >> 8; };
+    check(at(0, 0) == 5 && at(0, 2) == 10 && at(0, 15) == 10, "the first frame after a prime is one step above silence");
+    check(at(479, 0) == 2400 && at(479, 2) == 4800, "the last frame of the ramp is at the target");
+    bool silent = true;
+    bool rising = true;
+    for (std::size_t frame = 0; frame < 480; ++frame) {
+        silent = silent && at(frame, 1) == 0;
+        if (frame > 0) rising = rising && at(frame, 2) >= at(frame - 1, 2);
+        rising = rising && at(frame, 2) <= 4800 && at(frame, 0) <= 2400;
+    }
+    check(silent, "an output whose target is zero stays silent from the first frame");
+    check(rising, "nothing plays above its target on the way up");
+
+    auto fresh = std::make_unique<OutDsp>();
+    fresh->load(with_monitor_section(straight(1.0)));
+    fresh->prime_monitor(48);
+    std::vector<std::int32_t> unity(48 * kChannels, top24(4800));
+    fresh->process(unity.data(), 48);
+    check((unity[0] >> 8) == 100 && (unity[47 * kChannels] >> 8) == 4800 && fresh->monitor().at_rest_unity(),
+          "with nothing published a prime rises to unity and comes to rest there");
+}
+
 int main(int argc, char** argv) {
     test_unloaded_is_inert();
     test_unity_is_bit_exact();
@@ -251,6 +308,7 @@ int main(int argc, char** argv) {
     test_rate_must_match();
     test_monitor_default_is_bit_exact();
     test_monitor_gain_scales();
+    test_prime_monitor();
     for (int i = 1; i < argc; ++i) run_artifact(argv[i]);
     std::printf(failures == 0 ? "dsp_path_test: all passed\n" : "dsp_path_test: %d FAILED\n", failures);
     return failures == 0 ? 0 : 1;
