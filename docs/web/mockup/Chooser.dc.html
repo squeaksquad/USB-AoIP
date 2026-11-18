@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB-AoIP · New preset and layout</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="display: flex; flex-direction: column; gap: 24px; color: #E6EDEF; font-family: Inter, system-ui, sans-serif; font-size: 15px">
+<section aria-label="Start a new preset" style="padding: 20px; background: #172024; border: 1px solid #7EDAC4; border-radius: 10px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<strong style="font-size: 20px">{{chooserTitle}}</strong>
+<span style="color: #A3B3B9">{{chooserSub}}</span>
+</div>
+<button onClick="{{closeChooser}}" style="min-height: 44px; padding: 0 16px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">Cancel</button>
+</div>
+<sc-if value="{{pendingEdits}}" hint-placeholder-val="{{false}}">
+<div role="status" style="padding: 10px 12px; border: 1px solid #F2B366; border-radius: 8px; color: #F2B366; font-weight: 600">{{chooserWarn}}</div>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px">
+<sc-if value="{{chooserNew}}" hint-placeholder-val="{{true}}">
+<div style="flex: 1 1 240px; min-width: 0; box-sizing: border-box; padding: 16px; background: #0F1416; border: 1px solid #36474E; border-radius: 10px; display: flex; flex-direction: column; gap: 10px">
+<strong style="font-size: 18px">Blank</strong>
+<span style="font-size: 14px; color: #A3B3B9">Sixteen outputs passed straight through, named Out 1 to Out 16. Add the processing yourself.</span>
+<button onClick="{{startBlank}}" style="align-self: flex-start; min-height: 44px; padding: 0 18px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 15px; font-weight: 600">Start blank</button>
+</div>
+</sc-if>
+<div style="flex: 999 1 480px; min-width: 0; box-sizing: border-box; padding: 16px; background: #0F1416; border: 1px solid #36474E; border-radius: 10px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<strong style="font-size: 18px">Speaker layout</strong>
+<span style="font-size: 14px; color: #A3B3B9">Say what is in the room. The outputs are named and ordered for you.</span>
+</div>
+<div role="group" aria-label="Quick fill" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+<span style="font-size: 13px; color: #A3B3B9">Quick fill</span>
+<sc-for list="{{quicks}}" as="qf" hint-placeholder-count="4">
+<button onClick="{{qf.pick}}" style="min-height: 44px; padding: 0 14px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 600">{{qf.label}}</button>
+</sc-for>
+</div>
+<sc-for list="{{steppers}}" as="sp" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid #2A373D">
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column">
+<strong>{{sp.label}}</strong>
+<span style="font-size: 13px; color: #A3B3B9">{{sp.detail}}</span>
+</div>
+<button onClick="{{sp.down}}" aria-label="{{sp.downLabel}}" style="min-width: 44px; min-height: 44px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 18px; font-weight: 600">−</button>
+<span style="flex: 0 0 36px; text-align: center; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums">{{sp.value}}</span>
+<button onClick="{{sp.up}}" aria-label="{{sp.upLabel}}" style="min-width: 44px; min-height: 44px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 18px; font-weight: 600">+</button>
+</div>
+</sc-for>
+<sc-if value="{{showSubMode}}" hint-placeholder-val="{{true}}">
+<div role="group" aria-label="How the subwoofers are fed" style="display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid #2A373D">
+<strong>How should the subwoofers be fed?</strong>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{subModes}}" as="sm" hint-placeholder-count="2">
+<button onClick="{{sm.pick}}" aria-pressed="{{sm.on}}" style="flex: 1 1 220px; min-height: 44px; padding: 12px 14px; background: {{sm.bg}}; color: #E6EDEF; border: 2px solid {{sm.border}}; border-radius: 8px; text-align: left; display: flex; flex-direction: column; gap: 4px">
+<strong style="font-size: 15px">{{sm.label}} <span style="color: #7EDAC4">{{sm.mark}}</span></strong>
+<span style="font-size: 13px; color: #A3B3B9">{{sm.text}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{showHpMode}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="What the headphones are fed from" style="display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid #2A373D">
+<strong>What should the headphones be fed from?</strong>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{hpModes}}" as="hm" hint-placeholder-count="2">
+<button onClick="{{hm.pick}}" aria-pressed="{{hm.on}}" style="flex: 1 1 220px; min-height: 44px; padding: 12px 14px; background: {{hm.bg}}; color: #E6EDEF; border: 2px solid {{hm.border}}; border-radius: 8px; text-align: left; display: flex; flex-direction: column; gap: 4px">
+<strong style="font-size: 15px">{{hm.label}} <span style="color: #7EDAC4">{{hm.mark}}</span></strong>
+<span style="font-size: 13px; color: #A3B3B9">{{hm.text}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<div style="display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid #2A373D">
+<div role="status" style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px">
+<strong style="font-size: 18px">{{cfgName}}</strong>
+<span style="color: #A3B3B9">{{cfgUsed}}</span>
+</div>
+<span style="font-size: 13px; color: #A3B3B9">Output patch. Each row is an output, each column is a channel on the device. Click the crosspoint where an output should go. If that channel is taken, the two trade places.</span>
+<div style="overflow-x: auto">
+<div role="group" aria-label="Output patch" style="display: flex; flex-direction: column; gap: 3px; min-width: min-content">
+<div aria-hidden="true" style="display: flex; align-items: flex-end; gap: 3px">
+<span style="flex: 0 0 72px; font-size: 12px; color: #A3B3B9">Channel</span>
+<sc-for list="{{cfgCols}}" as="cn" hint-placeholder-count="16">
+<span style="flex: 0 0 36px; text-align: center; font-size: 12px; font-weight: 600; color: {{cn.color}}">{{cn.n}}</span>
+</sc-for>
+</div>
+<sc-for list="{{cfgRows}}" as="cr" hint-placeholder-count="8">
+<div style="display: flex; align-items: center; gap: 3px">
+<strong style="flex: 0 0 72px; font-size: 13px; color: {{cr.color}}">{{cr.label}}</strong>
+<sc-for list="{{cr.cells}}" as="cx" hint-placeholder-count="16">
+<button onClick="{{cx.pick}}" aria-label="{{cx.label}}" aria-pressed="{{cx.on}}" style="flex: 0 0 36px; height: 32px; padding: 0; background: {{cx.bg}}; border: 1px solid {{cx.border}}; border-radius: 6px"></button>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+<sc-if value="{{cfgMoved}}" hint-placeholder-val="{{false}}">
+<button onClick="{{cfgResetMap}}" style="align-self: flex-start; min-height: 44px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600">Put back in standard order</button>
+</sc-if>
+<button onClick="{{createLayout}}" style="align-self: flex-start; min-height: 44px; padding: 0 18px; background: #7EDAC4; color: #0F1416; border: 1px solid #7EDAC4; border-radius: 8px; font-size: 15px; font-weight: 700">{{createLabel}}</button>
+</div>
+</div>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"v":{"editor":null,"default":null},"$preview":{"width":1232,"height":1100}}'>
+class Component extends DCLogic {
+renderVals() {
+return this.props.v || {};
+}
+}
+</script>
+</body>
+</html>

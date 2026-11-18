@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB-AoIP · Processor · Routing</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="display: flex; flex-direction: column; gap: 24px; color: #E6EDEF; font-family: Inter, system-ui, sans-serif; font-size: 15px">
+<section class="dense" aria-label="Routing" style="padding: 10px 14px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<strong style="font-size: 17px">Routing</strong>
+<span style="font-size: 13px; color: #A3B3B9">Columns are the channels from the computer, rows are the device's outputs. A number is that send's level in dB. <span style="color: #7EDAC4; font-weight: 600">Speaker feed</span>, <span style="color: #8CC4FF; font-weight: 600">bass to a subwoofer</span>, <span style="color: #D9B8FF; font-weight: 600">headphone mix</span>. Levels are <span style="color: {{hintColor}}; font-weight: 600">{{liveTag}}</span>; connecting or disconnecting <span style="color: #8CC4FF; font-weight: 600">needs a restart</span>. Double-click a headphone or bass crosspoint to type its level. Click an output's name to move it to another channel.</span>
+</div>
+<div style="min-height: 44px; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 10px; background: #0F1416; border: 1px solid {{rtBorder}}; border-radius: 8px">
+<span style="flex: 1 1 260px"><strong>{{rtTitle}}</strong> <span style="color: #A3B3B9">{{rtText}}</span></span>
+<sc-if value="{{rtCanToggle}}" hint-placeholder-val="{{false}}">
+<button onClick="{{rtToggle}}" aria-pressed="{{rtOn}}" style="min-width: 64px; min-height: 32px; padding: 0 14px; background: {{rtOnBg}}; color: {{rtOnColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 700">{{rtOnLabel}}</button>
+<input type="text" inputmode="decimal" value="{{rf.field}}" onFocus="{{rf.focus}}" onChange="{{rf.type}}" onBlur="{{rf.blur}}" onKeyDown="{{rf.key}}" aria-label="Send level in dB" style="width: 96px; min-height: 32px; box-sizing: border-box; padding: 0 4px; background: #172024; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 14px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums">
+</sc-if>
+<sc-if value="{{rtCanMove}}" hint-placeholder-val="{{false}}">
+<select value="{{mvVal}}" onChange="{{mvPick}}" aria-label="Move this output to channel" style="min-height: 32px; padding: 0 10px; background: #172024; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 14px">
+<sc-for list="{{mvOpts}}" as="mo" hint-placeholder-count="16">
+<option value="{{mo.v}}">{{mo.t}}</option>
+</sc-for>
+</select>
+<span style="font-size: 13px; color: #8CC4FF; font-weight: 600">Needs a restart</span>
+</sc-if>
+<sc-if value="{{rtCanFeed}}" hint-placeholder-val="{{false}}">
+<button onClick="{{rtFeed}}" style="min-height: 32px; padding: 0 14px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 600">{{rtFeedLabel}}</button>
+</sc-if>
+</div>
+<div style="overflow-x: auto">
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: min-content">
+<div aria-hidden="true" style="display: flex; align-items: flex-end; gap: 3px">
+<span style="flex: 0 0 96px; font-size: 12px; color: #A3B3B9">Output ↓ Computer →</span>
+<sc-for list="{{routeCols}}" as="rcol" hint-placeholder-count="16">
+<span style="flex: 0 0 44px; display: flex; flex-direction: column; align-items: center; font-size: 12px; color: #A3B3B9"><span>{{rcol.n}}</span><strong style="color: #E6EDEF">{{rcol.t}}</strong></span>
+</sc-for>
+</div>
+<sc-for list="{{routeRows}}" as="rr" hint-placeholder-count="16">
+<div style="display: flex; align-items: center; gap: 3px">
+<button onClick="{{rr.pickRow}}" aria-pressed="{{rr.rowSel}}" aria-label="{{rr.rowLabel}}" style="flex: 0 0 96px; height: 26px; padding: 0 6px; text-align: left; background: {{rr.rowBg}}; color: {{rr.color}}; border: 1px solid {{rr.rowBorder}}; border-radius: 6px; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden">{{rr.label}}</button>
+<sc-for list="{{rr.cells}}" as="rx" hint-placeholder-count="16">
+<sc-if value="{{rx.idle}}" hint-placeholder-val="{{true}}">
+<button onClick="{{rx.pick}}" onDoubleClick="{{rx.dbl}}" aria-label="{{rx.label}}" aria-pressed="{{rx.sel}}" style="flex: 0 0 44px; height: 26px; padding: 0; background: {{rx.bg}}; color: {{rx.color}}; border: 2px {{rx.bs}} {{rx.border}}; border-radius: 6px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums">{{rx.t}}</button>
+</sc-if>
+<sc-if value="{{rx.editing}}" hint-placeholder-val="{{false}}">
+<input type="text" inputmode="decimal" ref="{{rx.ref}}" value="{{rx.field}}" onChange="{{rx.type}}" onBlur="{{rx.blur}}" onKeyDown="{{rx.key}}" aria-label="{{rx.label}}" style="flex: 0 0 44px; width: 44px; height: 26px; box-sizing: border-box; padding: 0; text-align: center; background: #0F1416; color: #E6EDEF; border: 2px solid #FFFFFF; border-radius: 6px; font-family: inherit; font-size: 12px; font-weight: 600">
+</sc-if>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+<sc-for list="{{ioGrids}}" as="gd" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid #2A373D">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<button onClick="{{gd.toggle}}" aria-expanded="{{gd.openAttr}}" style="align-self: flex-start; height: 32px; padding: 0 12px 0 8px; display: flex; align-items: center; gap: 8px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 14px; font-weight: 700">
+<svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" style="transform: rotate({{gd.chev}}deg)"><path d="M3 1l4 4-4 4" fill="none" stroke="#E6EDEF" stroke-width="1.6"></path></svg>
+<span>{{gd.title}}</span>
+<span style="font-size: 13px; font-weight: 600; color: #A3B3B9">{{gd.summary}}</span>
+</button>
+<sc-if value="{{gd.open}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 13px; color: #A3B3B9">{{gd.note}} <span style="color: #8CC4FF; font-weight: 600">Needs a restart.</span></span>
+</sc-if>
+</div>
+<sc-if value="{{gd.open}}" hint-placeholder-val="{{false}}">
+<div style="overflow-x: auto">
+<div style="display: flex; flex-direction: column; gap: 1px; min-width: min-content">
+<div aria-hidden="true" style="display: flex; gap: 1px; font-size: 12px; color: #A3B3B9">
+<span style="flex: 0 0 93px">{{gd.colTitle}}</span>
+<sc-for list="{{gd.heads}}" as="gh" hint-placeholder-count="8">
+<span style="flex: 0 0 127px; margin-left: 5px; text-align: left">{{gh.t}}</span>
+</sc-for>
+</div>
+<sc-for list="{{gd.rows}}" as="gr" hint-placeholder-count="16">
+<div style="display: flex; align-items: center; gap: 1px">
+<span style="flex: 0 0 93px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{gr.label}} <span style="color: {{gd.accent}}">{{gr.at}}</span></span>
+<sc-for list="{{gr.cells}}" as="gc" hint-placeholder-count="64">
+<button onClick="{{gc.pick}}" aria-label="{{gc.label}}" aria-pressed="{{gc.on}}" style="flex: 0 0 15px; height: 20px; padding: 0; margin-left: {{gc.ml}}; background: {{gc.bg}}; border: 1px solid {{gc.border}}; border-radius: 3px"></button>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"v":{"editor":null,"default":null},"$preview":{"width":1232,"height":1300}}'>
+class Component extends DCLogic {
+renderVals() {
+return this.props.v || {};
+}
+}
+</script>
+</body>
+</html>

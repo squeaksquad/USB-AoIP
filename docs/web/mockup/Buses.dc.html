@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB-AoIP · Processor · Buses</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="display: flex; flex-direction: column; gap: 24px; color: #E6EDEF; font-family: Inter, system-ui, sans-serif; font-size: 15px">
+<section aria-label="Output buses" style="padding: 10px 14px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<strong style="font-size: 17px">Speaker sets and headphones</strong>
+<span style="font-size: 13px; color: #A3B3B9">{{busFooter}} Names are <span style="color: {{hintColor}}; font-weight: 600">{{liveTag}}</span>; adding, removing or resizing one <span style="color: #8CC4FF; font-weight: 600">needs a restart</span>.</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px">
+<button onClick="{{addSpeakers}}" style="height: 32px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600; white-space: nowrap">Add speaker set</button>
+<button onClick="{{addPhones}}" style="height: 32px; padding: 0 14px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 8px; font-size: 14px; font-weight: 600; white-space: nowrap">Add headphones</button>
+</div>
+</div>
+<sc-if value="{{noBuses}}" hint-placeholder-val="{{false}}">
+<span style="color: #A3B3B9">No buses yet. Every output passes straight through.</span>
+</sc-if>
+<sc-if value="{{hasBuses}}" hint-placeholder-val="{{true}}">
+<div style="overflow-x: auto">
+<div style="display: grid; grid-template-columns: minmax(150px, 1fr) 170px 104px 168px 196px; column-gap: 10px; row-gap: 3px; min-width: min-content">
+<div aria-hidden="true" style="display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: end; padding: 0 9px 3px 12px; border-bottom: 1px solid #2A373D; font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: #A3B3B9">
+<span>Name</span><span>Kind and outputs</span><span style="text-align: center">Speakers</span><span style="text-align: center">Subwoofers</span><span></span>
+</div>
+<sc-for list="{{busCards}}" as="bc" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; padding: 3px 8px; background: #0F1416; border: 1px solid {{bc.border}}; border-left: 4px solid {{bc.accent}}; border-radius: 8px">
+<input type="text" value="{{bc.title}}" onChange="{{bc.rename}}" onBlur="{{bc.renameDone}}" maxlength="24" aria-label="{{bc.renameLabel}}" title="Rename" style="width: 100%; min-width: 0; height: 32px; box-sizing: border-box; padding: 0 8px; background: #172024; color: {{bc.color}}; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 14px; font-weight: 700">
+<div style="min-width: 0; display: flex; flex-direction: column; justify-content: center">
+<span style="font-size: 13px; line-height: 16px; font-weight: 600; color: {{bc.accent}}">{{bc.kindText}}</span>
+<span style="font-size: 12px; line-height: 16px; color: #A3B3B9; white-space: nowrap">{{bc.outsText}}</span>
+</div>
+<sc-if value="{{bc.isExtra}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="Speakers in this bus" style="display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; gap: 2px">
+<button onClick="{{bc.fewer}}" aria-label="One speaker fewer" style="height: 32px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 16px; font-weight: 600">−</button>
+<strong style="text-align: center; font-variant-numeric: tabular-nums">{{bc.count}}</strong>
+<button onClick="{{bc.more}}" aria-label="One speaker more" style="height: 32px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 16px; font-weight: 600">+</button>
+</div>
+<select value="{{bc.subVal}}" onChange="{{bc.pickSub}}" aria-label="{{bc.subAria}}" style="width: 100%; height: 32px; box-sizing: border-box; padding: 0 4px; background: #172024; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 13px">
+<sc-for list="{{bc.subOpts}}" as="so" hint-placeholder-count="6">
+<option value="{{so.v}}">{{so.t}}</option>
+</sc-for>
+</select>
+</sc-if>
+<sc-if value="{{bc.isFixed}}" hint-placeholder-val="{{true}}">
+<span style="text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; color: {{bc.fixedColor}}">{{bc.spkText}}</span>
+<span style="text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; color: {{bc.fixedColor}}">{{bc.subText}}</span>
+</sc-if>
+<div style="display: flex; justify-content: flex-end; align-items: center; gap: 4px">
+<sc-if value="{{bc.isPhones}}" hint-placeholder-val="{{false}}">
+<button onClick="{{bc.toggleDetail}}" aria-expanded="{{bc.detailAttr}}" style="height: 32px; padding: 0 10px; background: {{bc.detailBg}}; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap">{{bc.detailLabel}}</button>
+</sc-if>
+<sc-if value="{{bc.isMainSpk}}" hint-placeholder-val="{{false}}">
+<button onClick="{{openLayoutEdit}}" style="height: 32px; padding: 0 10px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap">Change layout</button>
+</sc-if>
+<sc-if value="{{bc.canRemove}}" hint-placeholder-val="{{true}}">
+<button onClick="{{bc.remove}}" aria-label="{{bc.removeAria}}" style="height: 32px; padding: 0 10px; background: transparent; color: #FFB3A6; border: 1px solid #4A5D65; border-radius: 8px; font-size: 13px; font-weight: 600">Remove</button>
+</sc-if>
+</div>
+</div>
+<sc-if value="{{bc.detailOpen}}" hint-placeholder-val="{{false}}">
+<div style="grid-column: 1 / -1; margin: 0 0 4px 16px; padding: 10px 12px; background: #1B1826; border: 1px solid #6B5A80; border-radius: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+<button onClick="{{bc.toggleLink}}" aria-pressed="{{bc.linkOn}}" style="align-self: flex-start; min-height: 32px; padding: 0 14px; background: {{bc.linkBg}}; color: {{bc.linkColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 600">{{bc.linkLabel}}</button>
+<span style="font-size: 13px; color: #A3B3B9">Start the routing from <span style="color: #8CC4FF; font-weight: 600">· needs a restart</span></span>
+<div role="group" aria-label="Headphone source" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{bc.modes}}" as="bm" hint-placeholder-count="2">
+<button onClick="{{bm.pick}}" aria-pressed="{{bm.on}}" style="min-height: 32px; padding: 0 14px; background: {{bm.bg}}; color: {{bm.color}}; border: 1px solid {{bm.border}}; border-radius: 8px; font-size: 14px; font-weight: 600">{{bm.label}}</button>
+</sc-for>
+</div>
+<span style="font-size: 13px; color: #A3B3B9">{{bc.modeText}}</span>
+<button onClick="{{bc.toggleMix}}" aria-expanded="{{bc.mixOpenAttr}}" style="align-self: flex-start; min-height: 32px; padding: 0 14px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 600">{{bc.mixLabel}}</button>
+<sc-if value="{{bc.mixOpen}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 13px; color: #A3B3B9">Each computer channel can go to the left ear, the right ear, or both. Type a level straight into a send, or type off. Its level is <span style="color: {{hintColor}}; font-weight: 600">{{liveTag}}</span>; switching it on or off <span style="color: #8CC4FF; font-weight: 600">needs a restart</span>.</span>
+<sc-if value="{{bc.mixCellOpen}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: #172024; border: 1px solid #7EDAC4; border-radius: 8px">
+<strong style="flex: 1 1 140px">{{bc.mixCellName}}</strong>
+<button onClick="{{bc.toggleMixCell}}" aria-pressed="{{bc.mixCellOn}}" style="min-width: 64px; min-height: 32px; padding: 0 14px; background: {{bc.mixCellBg}}; color: {{bc.mixCellColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 14px; font-weight: 700">{{bc.mixCellLabel}}</button>
+<button onClick="{{bc.mixDown}}" aria-label="Lower this send by 0.5 dB" style="min-width: 44px; min-height: 32px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 18px; font-weight: 600">−</button>
+<input type="text" inputmode="decimal" value="{{bc.mf.field}}" onFocus="{{bc.mf.focus}}" onChange="{{bc.mf.type}}" onBlur="{{bc.mf.blur}}" onKeyDown="{{bc.mf.key}}" aria-label="Send level in dB" style="width: 92px; min-height: 32px; box-sizing: border-box; padding: 0 4px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 14px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums">
+<button onClick="{{bc.mixUp}}" aria-label="Raise this send by 0.5 dB" style="min-width: 44px; min-height: 32px; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 18px; font-weight: 600">+</button>
+</div>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 16px">
+<sc-for list="{{bc.mixRows}}" as="xr" hint-placeholder-count="16">
+<div style="flex: 1 1 250px; display: flex; align-items: center; gap: 6px">
+<strong style="flex: 1 1 70px; font-size: 14px">{{xr.label}}</strong>
+<sc-for list="{{xr.cells}}" as="xc" hint-placeholder-count="2">
+<input type="text" inputmode="decimal" value="{{xc.field}}" onFocus="{{xc.focus}}" onChange="{{xc.type}}" onBlur="{{xc.blur}}" onKeyDown="{{xc.key}}" aria-label="{{xc.label}}" style="flex: 0 0 84px; width: 84px; box-sizing: border-box; min-height: 32px; padding: 0 2px; text-align: center; font-family: inherit; background: {{xc.bg}}; color: {{xc.color}}; border: 2px solid {{xc.border}}; border-radius: 8px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums">
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<span style="font-size: 13px; color: #A3B3B9">{{busHelp}}</span>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"v":{"editor":null,"default":null},"$preview":{"width":1232,"height":500}}'>
+class Component extends DCLogic {
+renderVals() {
+return this.props.v || {};
+}
+}
+</script>
+</body>
+</html>

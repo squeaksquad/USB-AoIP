@@ -15899,3 +15899,25 @@ as they were.
 audio playing.** This closes what the INSTALLED entry above left unchecked
 on the Pi: the readings come back when audio starts. Reported by the
 operator from the page; no figures were taken.
+
+**DECIDED 2026-11-16 (operator): the page is to be redesigned, in phases,
+to the design in `docs/web/REDESIGN-2026-11.md`.** Nothing is built and
+nothing on the Pi has changed; web 1.7.2 and applier 1.9.0 are still what
+is installed. The design was worked out with the operator as a clickable
+mockup, kept in `docs/web/mockup/` as the specification (it is not code to
+ship). Four tabs: Status, Control Room (level knobs, source switching,
+speaker overview with solo and mute), Processor (outputs, sources, routing,
+speaker sets and headphones, bass management) and System.
+
+Three read-only surveys of the repository at 94b3d79 set what can ship
+when. The owner processes the computer-to-Dante direction only, is fixed
+at 16 USB and 16 Dante channels, changes live values with no ramp, and has
+no volume, dim, solo, source switch, gate or test signal; the applier has
+no reboot, service restart, password or support bundle request. So the
+build order is: phase 0, this record; phase 1, the new page on today's
+engine (no Control Room and no Sources tab yet), accepted under the light
+rule; phase 2, new applier request kinds for the System actions; phases 3
+to 6, engine work (a ramped monitor block, Dante inputs into the mix, more
+than 16 Dante channels, gate and calibration noise), each under the full
+battery. Stopping after phase 1 is a complete result. The sample rate stays
+off the page.

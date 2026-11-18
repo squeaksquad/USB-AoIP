@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>USB-AoIP · Control Room</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="display: flex; flex-direction: column; gap: 24px; color: #E6EDEF; font-family: Inter, system-ui, sans-serif; font-size: 15px">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px">
+<strong style="font-size: 17px">Control Room</strong>
+<button onClick="{{keysToggle}}" aria-expanded="{{keysOpenAttr}}" style="height: 28px; padding: 0 10px; background: transparent; color: #A3B3B9; border: 1px solid #36474E; border-radius: 6px; font-size: 12px; font-weight: 600">Keyboard shortcuts</button>
+</div>
+<span style="font-size: 13px; color: #A3B3B9">Everything here is <span style="color: #7EDAC4; font-weight: 600">instant</span>, is not part of a preset, and is kept on the device across restarts.</span>
+</div>
+<sc-if value="{{keysOpen}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="Keyboard shortcuts" style="padding: 8px 12px; background: #172024; border: 1px solid #36474E; border-radius: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 16px; font-size: 13px">
+<sc-for list="{{keyList}}" as="kk" hint-placeholder-count="8">
+<span style="display: flex; align-items: center; gap: 8px"><kbd style="min-width: 30px; padding: 2px 6px; text-align: center; background: #0F1416; border: 1px solid #4A5D65; border-radius: 4px; font-family: inherit; font-size: 12px; font-weight: 700">{{kk.k}}</kbd><span style="color: #A3B3B9">{{kk.t}}</span></span>
+</sc-for>
+<span style="grid-column: 1 / -1; font-size: 12px; color: #93A3A9">They work while the Control Room has the keyboard focus (click anywhere on it first) and not while you are typing in a field.</span>
+</div>
+</sc-if>
+<sc-if value="{{crEmpty}}" hint-placeholder-val="{{false}}">
+<span style="color: #A3B3B9">This preset has no speaker sets or headphones, so there is nothing to control. Add one on Processor.</span>
+</sc-if>
+<div style="{{crCardsStyle}}">
+<sc-for list="{{crMon}}" as="mn" hint-placeholder-count="2">
+<section aria-label="{{mn.levelAria}}" title="{{mn.hears}}" style="flex: {{mn.cardFlex}}; grid-column: {{mn.gridCol}}; min-width: 0; box-sizing: border-box; padding: 8px 10px; background: {{mn.bg}}; border: 1px solid {{mn.border}}; border-top: 3px solid {{mn.accent}}; border-radius: 10px; display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 8px 10px; opacity: {{mn.op}}">
+<sc-if value="{{mn.hasSets}}" hint-placeholder-val="{{false}}">
+<button onClick="{{mn.pickSet}}" aria-pressed="{{mn.playing}}" aria-label="{{mn.setBtnAria}}" style="flex: 1 1 100%; height: 26px; padding: 0; background: {{mn.setBg}}; color: {{mn.setColor}}; border: 1px solid {{mn.setBorder}}; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.3px">{{mn.setLabel}}</button>
+</sc-if>
+<div style="flex: 0 0 {{mn.kBox}}px; position: relative; width: {{mn.kBox}}px; height: {{mn.kBox}}px">
+<sc-for list="{{mn.leds}}" as="ld" hint-placeholder-count="31">
+<div aria-hidden="true" style="position: absolute; left: 50%; top: 50%; width: {{mn.ledW}}px; height: {{mn.ledH}}px; margin: -{{mn.ledHy}}px 0 0 -{{mn.ledHx}}px; border-radius: 2px; background: {{ld.bg}}; transform: rotate({{ld.rot}}deg) translateY(-{{mn.ringR}}px)"></div>
+</sc-for>
+<button role="slider" aria-label="{{mn.knobAria}}" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="{{mn.val}}" aria-valuetext="{{mn.valText}}" onPointerDown="{{mn.kDown}}" onKeyDown="{{mn.kKey}}" style="position: absolute; left: 50%; top: 50%; width: {{mn.kSize}}px; height: {{mn.kSize}}px; margin: -{{mn.kHalf}}px 0 0 -{{mn.kHalf}}px; padding: 0; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3A4C54, #182226); border: 1px solid #4A5D65; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5); touch-action: none; cursor: ns-resize">
+<span aria-hidden="true" style="position: absolute; left: 50%; top: 5px; width: 4px; height: {{mn.ptrH}}px; margin-left: -2px; background: {{mn.ptr}}; border-radius: 2px; transform-origin: 50% {{mn.ptrO}}px; transform: rotate({{mn.rot}}deg)"></span>
+</button>
+</div>
+<div style="flex: {{mn.ctlFlex}}; max-width: 132px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<div class="dense" style="display: flex; flex-direction: column">
+<strong style="line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{mn.title}}</strong>
+<button onClick="{{mn.refToggle}}" aria-expanded="{{mn.refOpenAttr}}" aria-label="{{mn.refToggleAria}}" title="Reference settings" style="height: 14px; padding: 0; background: transparent; border: 0; text-align: left; font-family: inherit; font-size: 12px; line-height: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: {{mn.stateColor}}; text-decoration: underline dotted; text-underline-offset: 2px">{{mn.state}}</button>
+</div>
+<input type="text" inputmode="decimal" value="{{mn.fld.field}}" onFocus="{{mn.fld.focus}}" onChange="{{mn.fld.type}}" onBlur="{{mn.fld.blur}}" onKeyDown="{{mn.fld.key}}" aria-label="{{mn.fldLabel}}" style="width: 100%; min-width: 0; height: 32px; box-sizing: border-box; padding: 0 4px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: {{mn.fldFont}}px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px">
+<button onClick="{{mn.down}}" aria-label="{{mn.downLabel}}" style="height: 30px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 16px; font-weight: 600">−</button>
+<button onClick="{{mn.up}}" aria-label="{{mn.upLabel}}" style="height: 30px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 16px; font-weight: 600">+</button>
+<button onClick="{{mn.toggleDim}}" aria-pressed="{{mn.dimOn}}" style="height: 30px; padding: 0; background: {{mn.dimBg}}; color: {{mn.dimColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 12px; font-weight: 700">Dim</button>
+<button onClick="{{mn.toggleMute}}" aria-pressed="{{mn.muteOn}}" style="height: 30px; padding: 0; background: {{mn.muteBg}}; color: {{mn.muteColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 12px; font-weight: 700">Mute</button>
+<button onClick="{{mn.toRef}}" aria-label="{{mn.refAria}}" title="{{mn.refAria}}" style="height: 30px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 12px; font-weight: 700">Ref</button>
+<button onClick="{{mn.setRef}}" aria-label="{{mn.setAria}}" title="{{mn.setAria}}" style="height: 30px; padding: 0; background: transparent; color: #F2B366; border: 1px solid #6B5A33; border-radius: 8px; font-size: 12px; font-weight: 700; opacity: {{mn.setOp}}">Set</button>
+</div>
+</div>
+<div style="flex: {{mn.sideFlex}}; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: {{mn.sideJust}}; gap: 6px">
+<sc-if value="{{mn.showHears}}" hint-placeholder-val="{{true}}">
+<span role="status" style="display: flex; justify-content: space-between; gap: 8px; font-size: 12px; line-height: 14px; color: #A3B3B9; white-space: nowrap"><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis">{{mn.hears}}</span><span style="flex: 0 0 auto; font-variant-numeric: tabular-nums">{{mn.peakText}}</span></span>
+</sc-if>
+<sc-if value="{{mn.vBank}}" hint-placeholder-val="{{true}}">
+<div aria-hidden="true" style="display: flex; justify-content: center; gap: 2px">
+<sc-for list="{{mn.bank}}" as="bk" hint-placeholder-count="13">
+<div style="flex: 1 1 0; min-width: 0; max-width: {{mn.barMax}}px; display: flex; flex-direction: column; align-items: center; gap: 2px">
+<div style="width: 6px; height: 4px; background: {{bk.over}}"></div>
+<div style="position: relative; overflow: hidden; width: 8px; height: {{mn.bankH}}px; background: #26343A">
+<div style="position: absolute; inset: 0; background: linear-gradient(to top, #00B418 0%, #00D600 47%, #8CE000 54%, #FFF000 62.3%, #FF9800 80%, #FF2A00 90%, #E00000 100%); clip-path: inset({{bk.clip}}% 0 0 0)"></div>
+<div style="position: absolute; inset: 0; background: repeating-linear-gradient(to top, transparent 0 3px, #172024 3px 4px)"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: {{bk.hold}}%; height: 2px; background: #E6EDEF"></div>
+</div>
+<span style="margin-top: {{bk.lt}}px; font-size: 12px; line-height: 14px; color: {{bk.color}}; white-space: nowrap">{{bk.t}}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{mn.hBank}}" hint-placeholder-val="{{false}}">
+<div aria-hidden="true" style="display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{mn.bank}}" as="bk" hint-placeholder-count="2">
+<div style="display: grid; grid-template-columns: 12px minmax(0, 1fr) 6px; align-items: center; gap: 5px">
+<span style="font-size: 12px; line-height: 14px; font-weight: 600; color: {{bk.color}}">{{bk.t}}</span>
+<div style="position: relative; height: 14px; background: #26343A">
+<div style="position: absolute; inset: 0; background: linear-gradient(to right, #00B418 0%, #00D600 47%, #8CE000 54%, #FFF000 62.3%, #FF9800 80%, #FF2A00 90%, #E00000 100%); clip-path: inset(0 {{bk.clip}}% 0 0)"></div>
+<div style="position: absolute; inset: 0; background: repeating-linear-gradient(to right, transparent 0 3px, #172024 3px 4px)"></div>
+</div>
+<div style="width: 6px; height: 14px; background: {{bk.over}}"></div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<sc-if value="{{mn.isMain}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="Speaker sets and their trims" style="flex: 1 1 100%; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 6px; padding-top: 8px; border-top: 1px solid #2A373D">
+<sc-for list="{{mn.sets}}" as="st" hint-placeholder-count="2">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) auto 30px 76px 30px; align-items: center; gap: 4px; padding: 3px; background: #0F1416; border: 1px solid {{st.border}}; border-radius: 8px">
+<div style="min-width: 0; height: 30px; padding: 0 8px; display: flex; align-items: center; gap: 8px">
+<span aria-hidden="true" style="flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: {{st.dot}}"></span>
+<strong style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{st.label}}</strong>
+<span style="margin-left: auto; font-size: 12px; color: #A3B3B9; white-space: nowrap">{{st.eff}}</span>
+</div>
+<span style="padding: 0 2px 0 4px; font-size: 12px; color: #A3B3B9">Trim</span>
+<button onClick="{{st.down}}" aria-label="{{st.downLabel}}" style="height: 30px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 16px; font-weight: 600">−</button>
+<input type="text" inputmode="decimal" value="{{st.f.field}}" onFocus="{{st.f.focus}}" onChange="{{st.f.type}}" onBlur="{{st.f.blur}}" onKeyDown="{{st.f.key}}" aria-label="{{st.trimLabel}}" style="width: 100%; height: 30px; box-sizing: border-box; padding: 0 2px; background: #172024; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 13px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums">
+<button onClick="{{st.up}}" aria-label="{{st.upLabel}}" style="height: 30px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 16px; font-weight: 600">+</button>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{mn.hasCue}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="Cue mix" style="flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid #2A373D">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: #A3B3B9">Cue mix: how loud each source is in these headphones</span>
+<sc-for list="{{mn.cue}}" as="cq" hint-placeholder-count="2">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 30px 76px 30px; align-items: center; gap: 4px">
+<strong style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{cq.name}}</strong>
+<button onClick="{{cq.down}}" aria-label="{{cq.downLabel}}" style="height: 30px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 16px; font-weight: 600">−</button>
+<input type="text" inputmode="decimal" value="{{cq.f.field}}" onFocus="{{cq.f.focus}}" onChange="{{cq.f.type}}" onBlur="{{cq.f.blur}}" onKeyDown="{{cq.f.key}}" aria-label="{{cq.label}}" style="width: 100%; height: 30px; box-sizing: border-box; padding: 0 2px; background: #172024; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 13px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums">
+<button onClick="{{cq.up}}" aria-label="{{cq.upLabel}}" style="height: 30px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-size: 16px; font-weight: 600">+</button>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{mn.showFolds}}" hint-placeholder-val="{{true}}">
+<div role="group" aria-label="Listen as" style="flex: 1 1 100%; min-width: 0; display: grid; grid-template-columns: auto repeat({{mn.foldCols}}, minmax(0, 1fr)); align-items: center; gap: 4px">
+<span style="padding-right: 4px; font-size: 12px; color: #A3B3B9; white-space: nowrap">Listen as</span>
+<sc-for list="{{mn.folds}}" as="fo" hint-placeholder-count="4">
+<button onClick="{{fo.pick}}" aria-pressed="{{fo.on}}" aria-label="{{fo.aria}}" style="height: 26px; padding: 0; background: {{fo.bg}}; color: {{fo.color}}; border: 1px solid #36474E; border-radius: 6px; font-size: 12px; font-weight: 600">{{fo.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{mn.showRefRow}}" hint-placeholder-val="{{true}}">
+<div style="flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 6px; border-top: 1px solid #2A373D">
+<sc-for list="{{mn.extras}}" as="xt" hint-placeholder-count="1">
+<button onClick="{{xt.toggle}}" aria-pressed="{{xt.on}}" style="flex: 0 0 auto; height: 26px; padding: 0 10px; background: {{xt.bg}}; color: {{xt.color}}; border: 1px solid #36474E; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap">{{xt.label}}</button>
+</sc-for>
+<sc-if value="{{mn.refOpen}}" hint-placeholder-val="{{false}}">
+<span style="flex: 0 0 auto; font-size: 12px; color: #A3B3B9">Reference</span>
+<input type="text" inputmode="decimal" value="{{mn.rf.field}}" onFocus="{{mn.rf.focus}}" onChange="{{mn.rf.type}}" onBlur="{{mn.rf.blur}}" onKeyDown="{{mn.rf.key}}" aria-label="{{mn.rfLabel}}" style="flex: 0 0 80px; width: 80px; height: 26px; box-sizing: border-box; padding: 0 2px; background: #0F1416; color: #F2B366; border: 1px solid #36474E; border-radius: 6px; font-family: inherit; font-size: 12px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums">
+<input type="text" value="{{mn.note}}" onChange="{{mn.typeNote}}" placeholder="What it measures, e.g. 79 dB SPL" aria-label="{{mn.noteLabel}}" style="flex: 1 1 110px; min-width: 0; height: 26px; box-sizing: border-box; padding: 0 6px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 6px; font-family: inherit; font-size: 12px">
+</sc-if>
+</div>
+</sc-if>
+</section>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px">
+<section class="cr-side" aria-label="Sources" style="flex: 0 0 {{crSrcW}}px; max-width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; background: #172024; border: 1px solid #2A373D; border-radius: 10px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+<strong>Sources</strong>
+<button onClick="{{goSources}}" style="height: 26px; padding: 0 10px; background: transparent; color: #A3B3B9; border: 1px solid #36474E; border-radius: 6px; font-size: 12px; font-weight: 600">Edit sources</button>
+</div>
+<div style="display: grid; grid-template-columns: {{crGridCols}}; column-gap: 6px; row-gap: 3px">
+<div style="display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: end; padding: 0 7px 3px; border-bottom: 1px solid #2A373D; font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: #A3B3B9">
+<span>Source</span><span>Signal</span>
+<sc-for list="{{crBusHeads}}" as="bh" hint-placeholder-count="2">
+<span title="{{bh.label}}" style="text-align: center; color: {{bh.color}}; white-space: nowrap">{{bh.short}}</span>
+</sc-for>
+</div>
+<sc-for list="{{crSrcRows}}" as="sr" hint-placeholder-count="2">
+<div style="display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; padding: 2px 6px; background: #0F1416; border: 1px solid #2A373D; border-radius: 8px">
+<div style="min-width: 0; height: 36px; display: flex; flex-direction: column; justify-content: center; gap: 1px">
+<strong style="font-size: 14px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{sr.name}}</strong>
+<span style="font-size: 12px; line-height: 16px; color: #A3B3B9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{sr.sub}}</span>
+</div>
+<div aria-hidden="true" style="position: relative; height: 12px; background: #26343A">
+<div style="position: absolute; inset: 0; background: linear-gradient(to right, #00B418 0%, #00D600 47%, #8CE000 54%, #FFF000 62.3%, #FF9800 80%, #FF2A00 90%, #E00000 100%); clip-path: inset(0 {{sr.clip}}% 0 0)"></div>
+<div style="position: absolute; inset: 0; background: repeating-linear-gradient(to right, transparent 0 3px, #0F1416 3px 4px)"></div>
+</div>
+<sc-for list="{{sr.cells}}" as="sc2" hint-placeholder-count="2">
+<button onClick="{{sc2.toggle}}" aria-pressed="{{sc2.on}}" aria-label="{{sc2.aria}}" style="height: 32px; padding: 0; background: {{sc2.bg}}; color: {{sc2.color}}; border: 1px solid {{sc2.border}}; border-radius: 8px; font-size: 13px; font-weight: 700; opacity: {{sc2.op}}">{{sc2.label}}</button>
+</sc-for>
+</div>
+</sc-for>
+<div style="display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: start; padding: 3px 7px 0">
+<span style="grid-column: 1 / 3; font-size: 13px; line-height: 32px; color: #A3B3B9">Hear several at once</span>
+<sc-for list="{{crBusHeads}}" as="bh" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 3px">
+<button onClick="{{bh.toggleSum}}" aria-pressed="{{bh.sumOn}}" aria-label="{{bh.sumAria}}" style="height: 32px; padding: 0; background: {{bh.sumBg}}; color: {{bh.sumColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 13px; font-weight: 600; opacity: {{bh.sumOp}}">Sum</button>
+<sc-if value="{{bh.canFollow}}" hint-placeholder-val="{{false}}">
+<button onClick="{{bh.toggleFollow}}" aria-pressed="{{bh.followOn}}" aria-label="{{bh.followAria}}" title="Headphones hear whatever the speakers are switched to" style="height: 32px; padding: 0; background: {{bh.followBg}}; color: {{bh.followColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 12px; font-weight: 600">Follow</button>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+<span style="font-size: 12px; color: #A3B3B9">{{crSrcNote}}</span>
+<sc-if value="{{crTalkShow}}" hint-placeholder-val="{{true}}">
+<div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 6px 8px; padding-top: 8px; border-top: 1px solid #2A373D">
+<button onClick="{{crTalkToggle}}" aria-pressed="{{crTalkOn}}" title="{{crTalkNote}}" style="height: 32px; padding: 0; background: {{crTalkBg}}; color: {{crTalkColor}}; border: 1px solid #36474E; border-radius: 8px; font-size: 13px; font-weight: 700">{{crTalkLabel}}</button>
+<select value="{{crTalkCh}}" onChange="{{crTalkPick}}" aria-label="Talkback microphone" style="width: 100%; height: 32px; box-sizing: border-box; padding: 0 6px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 8px; font-family: inherit; font-size: 13px">
+<sc-for list="{{crTalkOpts}}" as="co" hint-placeholder-count="64">
+<option value="{{co.v}}">{{co.t}}</option>
+</sc-for>
+</select>
+</div>
+</sc-if>
+</section>
+<div style="flex: 1 1 500px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<sc-if value="{{crHasSets}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="Which speakers are playing" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{crSets}}" as="cs" hint-placeholder-count="3">
+<button onClick="{{cs.pick}}" aria-pressed="{{cs.on}}" aria-label="{{cs.aria}}" style="flex: {{cs.flex}}; min-width: 0; height: 48px; padding: 0 12px; display: flex; align-items: center; gap: 10px; background: {{cs.bg}}; color: #E6EDEF; border: 1px solid {{cs.border}}; border-bottom: 3px solid {{cs.border}}; border-radius: 10px; text-align: left; font-family: inherit">
+<span aria-hidden="true" style="flex: 0 0 10px; width: 10px; height: 10px; border-radius: 50%; background: {{cs.dot}}"></span>
+<span style="flex: 0 1 auto; min-width: 0; display: flex; flex-direction: column">
+<strong style="font-size: 14px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{cs.label}}</strong>
+<span style="font-size: 12px; line-height: 14px; font-weight: 600; color: {{cs.subColor}}; white-space: nowrap">{{cs.sub}}</span>
+</span>
+<sc-if value="{{cs.hasMeter}}" hint-placeholder-val="{{true}}">
+<span aria-hidden="true" style="flex: 1 1 40px; min-width: 0; position: relative; display: block; height: 8px; background: #26343A">
+<span style="position: absolute; inset: 0; background: linear-gradient(to right, #00B418 0%, #00D600 47%, #8CE000 54%, #FFF000 62.3%, #FF9800 80%, #FF2A00 90%, #E00000 100%); clip-path: inset(0 {{cs.clip}}% 0 0)"></span>
+<span style="position: absolute; inset: 0; background: repeating-linear-gradient(to right, transparent 0 3px, #172024 3px 4px)"></span>
+</span>
+</sc-if>
+</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-for list="{{crRooms}}" as="pn" hint-placeholder-count="1">
+<section aria-label="{{pn.title}}" style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: #141C20; border: 1px solid #36474E; border-radius: 10px">
+<div style="display: flex; align-items: center; gap: 6px">
+<strong style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{pn.title}}</strong>
+<span style="font-size: 12px; color: #A3B3B9; white-space: nowrap">solo and mute</span>
+<div style="margin-left: auto; display: flex; align-items: center; gap: 4px">
+<sc-if value="{{anySolo}}" hint-placeholder-val="{{false}}">
+<button onClick="{{clearSolo}}" style="height: 28px; padding: 0 10px; background: #F5D547; color: #0F1416; border: 1px solid #F5D547; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap">Clear solo</button>
+</sc-if>
+<sc-if value="{{anyClip}}" hint-placeholder-val="{{false}}">
+<button onClick="{{clearClips}}" style="height: 28px; padding: 0 10px; background: #B3261E; color: #FFFFFF; border: 1px solid #B3261E; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap">Clear clips</button>
+</sc-if>
+<button onClick="{{calToggle}}" aria-expanded="{{calOpenAttr}}" style="height: 28px; padding: 0 10px; background: {{calBtnBg}}; color: {{calBtnColor}}; border: 1px solid #4A5D65; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap">Calibrate</button>
+<sc-if value="{{pn.grpIdle}}" hint-placeholder-val="{{true}}">
+<button onClick="{{pn.grpNew}}" style="height: 28px; padding: 0 10px; background: transparent; color: #E6EDEF; border: 1px dashed #4A5D65; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap">New group</button>
+</sc-if>
+<div role="group" aria-label="Where the overview meters are taken" style="display: flex; border: 1px solid #36474E; border-radius: 6px; overflow: hidden">
+<sc-for list="{{crTaps}}" as="tp" hint-placeholder-count="2">
+<button onClick="{{tp.pick}}" aria-pressed="{{tp.on}}" title="{{tp.title}}" style="height: 26px; padding: 0 8px; background: {{tp.bg}}; color: {{tp.color}}; border: 0; font-size: 12px; font-weight: 600">{{tp.label}}</button>
+</sc-for>
+</div>
+<button class="cr-narrow-only" onClick="{{crMapToggle}}" aria-expanded="{{crMapOpen}}" style="height: 28px; padding: 0 10px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap">{{crMapLabel}}</button>
+</div>
+</div>
+<div class="dense" role="group" aria-label="Solo and mute groups" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(max(116px, calc(25% - 4px)), 1fr)); grid-auto-rows: 28px; align-content: start; min-height: 60px; gap: 4px">
+<sc-for list="{{pn.chips}}" as="gp" hint-placeholder-count="8">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 26px 26px {{gp.xCol}}; align-items: center; height: 28px; box-sizing: border-box; background: #172024; border: 1px solid {{gp.border}}; border-radius: 6px; overflow: hidden">
+<span style="padding: 0 7px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{gp.name}}</span>
+<button onClick="{{gp.solo}}" aria-pressed="{{gp.soloOn}}" aria-label="{{gp.soloLabel}}" style="height: 100%; padding: 0; background: {{gp.soloBg}}; color: {{gp.soloColor}}; border: 0; border-left: 1px solid #36474E; font-size: 12px; font-weight: 700">S</button>
+<button onClick="{{gp.mute}}" aria-pressed="{{gp.muteOn}}" aria-label="{{gp.muteLabel}}" style="height: 100%; padding: 0; background: {{gp.muteBg}}; color: {{gp.muteColor}}; border: 0; border-left: 1px solid #36474E; font-size: 12px; font-weight: 700">M</button>
+<sc-if value="{{gp.custom}}" hint-placeholder-val="{{false}}">
+<button onClick="{{gp.remove}}" aria-label="{{gp.removeLabel}}" style="height: 100%; padding: 0; background: transparent; color: #A3B3B9; border: 0; border-left: 1px solid #36474E; font-size: 14px; font-weight: 600">×</button>
+</sc-if>
+</div>
+</sc-for>
+</div>
+<sc-if value="{{calOpen}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="Calibrate" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #F2B366; border-radius: 8px">
+<button onClick="{{calNoise}}" aria-pressed="{{calOn}}" style="height: 30px; padding: 0 12px; background: {{calNoiseBg}}; color: {{calNoiseColor}}; border: 1px solid #F2B366; border-radius: 6px; font-size: 13px; font-weight: 700">{{calNoiseLabel}}</button>
+<sc-for list="{{calBands}}" as="cb" hint-placeholder-count="2">
+<button onClick="{{cb.pick}}" aria-pressed="{{cb.on}}" style="height: 30px; padding: 0 10px; background: {{cb.bg}}; color: {{cb.color}}; border: 1px solid #36474E; border-radius: 6px; font-size: 12px; font-weight: 600">{{cb.label}}</button>
+</sc-for>
+<button onClick="{{calPrev}}" aria-label="Previous speaker" style="width: 30px; height: 30px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 6px; font-size: 14px; font-weight: 600">‹</button>
+<strong style="min-width: 110px; text-align: center; font-size: 13px">{{calTarget}}</strong>
+<button onClick="{{calNext}}" aria-label="Next speaker" style="width: 30px; height: 30px; padding: 0; background: #223036; color: #E6EDEF; border: 1px solid #36474E; border-radius: 6px; font-size: 14px; font-weight: 600">›</button>
+<span style="flex: 1 1 220px; font-size: 12px; color: #A3B3B9">{{calHelp}}</span>
+</div>
+</sc-if>
+<sc-if value="{{pn.grpEditing}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="New group" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid #7EDAC4; border-radius: 8px">
+<input type="text" value="{{pn.grpName}}" onChange="{{pn.grpType}}" placeholder="Group name" aria-label="Group name" style="width: 150px; height: 28px; box-sizing: border-box; padding: 0 8px; background: #0F1416; color: #E6EDEF; border: 1px solid #36474E; border-radius: 6px; font-family: inherit; font-size: 13px">
+<span style="font-size: 13px; color: #A3B3B9">{{pn.grpHint}}</span>
+<button onClick="{{pn.grpSave}}" style="height: 28px; padding: 0 10px; background: #7EDAC4; color: #0F1416; border: 1px solid #7EDAC4; border-radius: 6px; font-size: 13px; font-weight: 700">Save group</button>
+<button onClick="{{pn.grpCancel}}" style="height: 28px; padding: 0 10px; background: transparent; color: #E6EDEF; border: 1px solid #4A5D65; border-radius: 6px; font-size: 13px; font-weight: 600">Cancel</button>
+</div>
+</sc-if>
+<sc-if value="{{pn.hasRoom}}" hint-placeholder-val="{{true}}">
+<div class="cr-map {{crMapCls}}" style="flex: 1 1 auto; display: flex; flex-direction: column">
+<div role="group" aria-label="{{pn.roomAria}}" style="flex: 1 1 auto; position: relative; container-type: inline-size; width: 100%; aspect-ratio: 760 / 270; background: #0F1416; border: 1px solid #2A373D; border-radius: 8px">
+<span aria-hidden="true" style="position: absolute; left: 1cqw; top: 0.5cqw; font-size: clamp(8px, 1.6cqw, 12px); color: #93A3A9; letter-spacing: 0.6px">FRONT</span>
+<div aria-hidden="true" style="position: absolute; left: 50%; top: 60.5%; width: 2.9cqw; height: 2.9cqw; transform: translate(-50%, -50%); box-sizing: border-box; border: 2px solid #4A5D65; border-radius: 50%"></div>
+<sc-for list="{{pn.tiles}}" as="ch" hint-placeholder-count="11">
+<div style="position: absolute; left: {{ch.x}}%; top: {{ch.y}}%; transform: translate(-50%, -50%); width: 13cqw; padding: 0.4cqw; box-sizing: border-box; background: {{ch.tileBg}}; border: 1px solid {{ch.tileBorder}}; border-radius: 6px; display: grid; grid-template-columns: minmax(0, 1fr) 3cqw 3cqw; align-items: center; gap: 0.3cqw">
+<button onClick="{{ch.tileClick}}" aria-label="{{ch.tileLabel}}" aria-pressed="{{ch.tileOn}}" style="min-width: 0; height: 3.4cqw; padding: 0 0.3cqw 0 0.2cqw; background: transparent; color: #E6EDEF; border: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: space-between; font-family: inherit">
+<strong style="font-size: clamp(8px, 1.6cqw, 12px); line-height: 2cqw; text-align: left; white-space: nowrap; overflow: hidden">{{ch.name}}</strong>
+<span aria-hidden="true" style="position: relative; display: block; height: 0.9cqw; background: #26343A">
+<span style="position: absolute; inset: 0; background: linear-gradient(to right, #00B418 0%, #00D600 47%, #8CE000 54%, #FFF000 62.3%, #FF9800 80%, #FF2A00 90%, #E00000 100%); clip-path: inset(0 {{ch.clip}}% 0 0)"></span>
+<span style="position: absolute; inset: 0; background: repeating-linear-gradient(to right, transparent 0 2px, #172024 2px 3px)"></span>
+</span>
+</button>
+<button onClick="{{ch.toggleSolo}}" aria-pressed="{{ch.soloed}}" aria-label="{{ch.soloLabel}}" style="height: 3.4cqw; padding: 0; background: {{ch.soloBg}}; color: {{ch.soloColor}}; border: 1px solid {{ch.soloBorder}}; border-radius: 5px; font-size: clamp(8px, 1.5cqw, 12px); line-height: 1; font-weight: 700">S</button>
+<button onClick="{{ch.toggle}}" aria-pressed="{{ch.muted}}" aria-label="{{ch.muteAria}}" style="height: 3.4cqw; padding: 0; background: {{ch.muteBg}}; color: {{ch.muteColor}}; border: 1px solid {{ch.muteBorder}}; border-radius: 5px; font-size: clamp(8px, 1.5cqw, 12px); line-height: 1; font-weight: 700">M</button>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{pn.crHasNote}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 12px; color: #A3B3B9">{{pn.crNote}}</span>
+</sc-if>
+</section>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"v":{"editor":null,"default":null},"$preview":{"width":1232,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return this.props.v || {};
+}
+}
+</script>
+</body>
+</html>
