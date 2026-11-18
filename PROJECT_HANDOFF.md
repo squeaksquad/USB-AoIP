@@ -16647,3 +16647,21 @@ last minutes). No soak was run. Owed next, each on the operator's word:
 the access bundle (`stage-access.sh`, `install-access.sh install`), a
 preset applied from the new page, the Control Room's behavioural checks,
 and the full battery of the IMPLEMENTED entry's step 4.
+
+**DONE 2026-11-18 (session, on the operator's word "Copy and status"): the
+phase 3 access bundle is on the Pi and its `status` is clean; the install
+is the operator's.** Staged from 94fc74a (archive 791e61fe, 36 files, list
+0da82c06: web 1.9.0 51877ce9, applier 1.11.0 e8468870, web unit 0997426f,
+the Control Room page). On the Pi the phase 2 bundle was first renamed
+`~/usb-aoip-access-phase2` (phase 1's is `~/usb-aoip-access-phase1`), then
+this one unpacked as `~/usb-aoip-access`. `./install-access.sh status`,
+which changes nothing, read: web, applier and web unit each an "earlier
+bundle" (956c8569, d8a97b2c, c908894d), which is what the installer
+upgrades from; `usb16x16-apply.path` and `usb16x16-apply.service` already
+the bundle's; the old chain's files still kept (6b98e7cf, 347a7062,
+f7c7d48c, 6d53b053, 23cb5b2e); inbox, state and logins present;
+`usb16x16-web.service`, `usb16x16-apply.path`, `usb16x16-dante-rate.path`
+and `usb16x16-dante.service` active. Not installed. The install restarts
+the web service and the apply watcher, not the endpoint. After it: a
+preset applied from the new page (it will carry the monitor section, the
+owner being bc486911), then the Control Room checks and the battery.
