@@ -16610,3 +16610,40 @@ way of `sudo ./install-owner-monitor.sh install` from that directory.
 Not installed. Next after it, from the IMPLEMENTED entry: a noise probe at
 32 and a control run on a preset without a monitor section, then the
 access bundle.
+
+**INSTALLED 2026-11-18 17:59:15 UTC (operator, read back by the session)
+and MEASURED 18:00-18:04 UTC: the phase 3 owner bc486911 and offline
+runner 46f36659 are on the Pi; direct at 48 kHz it measures as c84e6a36
+did. Not ACCEPTED: the monitor block itself has not run yet.** The
+operator ran `sudo ./install-owner-monitor.sh install` and said
+"installed"; the session did not see its output. Read back over SSH:
+`status` shows owner and runner `new` with c84e6a36 and 4492a19c kept as
+`*.pre-monitor`, start wrapper df6a1b0b, running preset none (direct);
+`usb16x16-dante.service` active since 17:59:15 UTC with `NRestarts=0`;
+start check `state=ok restarts=0` (18:00:20 UTC); the owner's START line
+is the old one's (`prime_drop=28`, `rx_queue=96`, 48 kHz). The owner
+printed `MONITOR following ... sets=0` and `MONITOR first state=idle`, and
+`/run/usb16x16-dante/monitor.status` (644, the audio user's) reads
+`state=idle reason="no DSP preset"`. `/run/usb-aoip-monitor` does not
+exist yet (the web service is still 1.8.0), which the owner took without
+complaint. Web 1.8.0, applier 1.10.0 and the phase 2 page are unchanged.
+
+From the Mac, `dante/measure-candidate.sh`, 48 kHz, 32 frames, direct:
+- noise probe (`owner-monitor`, `20261118T180040Z`): return from sample
+  529, no zero run of 4 or more, zeros inside the span 0.0%, endpoint
+  xrun/lag/error lines +0.
+- loaded impulse run, 800 impulses, `USB16X16_OTHER_LOAD=0.1`
+  (`owner-monitor-control`, `20261118T180127Z`): 376 on all 800, spread 0,
+  discontinuities in 0 out 0, `daw_timeline` 528 = 376 + 152 (steady),
+  endpoint lines +0.
+
+So with no preset the new owner, which differs from c84e6a36 by the
+dormant `--chan-holes` code, the idle monitor thread (a 10 ms wake beside
+the loop) and the unused gain step, gives the point of record's figure on
+one start. This is one run and one probe, not a battery, and it says
+nothing about the block in use: direct never converts the samples.
+`gap_us_max` in the first minute was 1026 (1011 to 1021 on the old owner's
+last minutes). No soak was run. Owed next, each on the operator's word:
+the access bundle (`stage-access.sh`, `install-access.sh install`), a
+preset applied from the new page, the Control Room's behavioural checks,
+and the full battery of the IMPLEMENTED entry's step 4.
