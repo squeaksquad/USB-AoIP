@@ -182,3 +182,39 @@ test('the live pair shares one fixed shape and differs only on outputs 3-16', ()
   for (const index of [0, 1]) assert.equal(rowsFor(base, index), rowsFor(toggle, index));
   assert.notEqual(rowsFor(base, 2), rowsFor(toggle, 2));
 });
+
+test('the fold presets are 7.2.4 with the paths verify-fold.py models', async () => {
+  const { foldPreset, foldFlatPreset } = await import('./verify-presets.mjs');
+  const { parseMonitorSection } = await import('./bridge-artifact.mjs');
+  const fold = build(foldPreset());
+  // Bass management on: 11 main branches, high-passed, and 12 bass branches.
+  const kinds = fold.plan.channels.map(channel => channel.kind);
+  assert.deepEqual([kinds.filter(k => k === 'main').length, kinds.filter(k => k === 'bass').length,
+                    kinds.filter(k => k === 'phones').length], [11, 12, 2]);
+  assert.equal(fold.report.crossoverCount, 23);
+  assert.equal(fold.report.biquadCount, 22, 'two shaped bands on each of the 11 speakers');
+  assert.deepEqual(outputFilters(fold, 2).filter(name => name.startsWith('delay')), ['delay_out3']);
+  const monitor = parseMonitorSection(bridgeArtifact(fold));
+  assert.deepEqual(monitor.sets.map(set => [set.id, set.kind, set.folds]),
+    [['speakers', 'speakers', ['full', '5.1', 'stereo', 'mono']], ['phones', 'headphones', ['full']]]);
+  const tagOf = new Map();
+  fold.config.mixers.expand.mapping.flatMap(entry => entry.sources.map(() => entry.dest))
+    .forEach((dest, row) => tagOf.set(dest, monitor.expandSets[row]));
+  fold.plan.channels.forEach((channel, index) =>
+    assert.equal(tagOf.get(index), channel.kind === 'phones' ? null : 0, `channel ${index} ${channel.kind}`));
+  assert.deepEqual(sourcesOf(fold, 'assign', 13).length, 1);
+  assert.equal(fold.report.warnings.filter(text => text.includes('dBFS')).length, 0);
+
+  const flat = build(foldFlatPreset());
+  assert.equal(flat.report.headroomDb, 0);
+  assert.equal(flat.report.biquadCount, 0);
+  // Only the LFE's own low-pass: every speaker is its input view times one.
+  assert.equal(flat.report.crossoverCount, 1);
+  for (const output of [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11]) {
+    assert.deepEqual(outputFilters(flat, output), []);
+    const [assign] = sourcesOf(flat, 'assign', output);
+    assert.deepEqual(branchFilters(flat, assign.channel), []);
+    assert.deepEqual(sourcesOf(flat, 'expand', assign.channel).map(s => [s.channel, s.gain]), [[output, 0]]);
+  }
+  assert.deepEqual(parseMonitorSection(bridgeArtifact(flat)).sets[0].folds, ['full', '5.1', 'stereo', 'mono']);
+});

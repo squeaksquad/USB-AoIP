@@ -43,6 +43,7 @@
 
 import { CHANNELS, validateConfig } from '../web-ui/model.mjs';
 import { polarityWarningText } from '../web-ui/crossover-notes.mjs';
+import { monitorTopology } from './bridge-artifact.mjs';
 
 export const SAMPLE_RATE = 48000;
 // Every rate a Dante device can run at (SAMPLE_RATE_DESIGN.md). A preset
@@ -384,8 +385,15 @@ export function alsaDevices(captureDevice, playbackDevice, format = 'S24_3_LE', 
  * choosing capture and playback devices is an integration decision this
  * compiler has no basis to make. Its `samplerate` is the rate everything is
  * compiled for, and must be a Dante rate.
+ *
+ * `monitor` (default on) keeps the preset's monitor topology as
+ * `result.monitor` (monitorTopology in bridge-artifact.mjs): its sets, their
+ * outputs and labels, which set each internal channel reads, and the
+ * fold-downs. bridgeArtifact writes it as the artifact's `monitor` section.
+ * Off, `result.monitor` is null and the artifact is what it was before the
+ * section existed; the CamillaDSP configuration is the same either way.
  */
-export function compile(preset, devices, {shape = 'minimal'} = {}) {
+export function compile(preset, devices, {shape = 'minimal', monitor = true} = {}) {
   if (!SHAPES.includes(shape)) throw new Error(`Unknown shape ${shape}; use ${SHAPES.join(' or ')}`);
   const fixed = shape === 'fixed';
   const config = validateConfig(structuredClone(preset));
@@ -427,6 +435,7 @@ export function compile(preset, devices, {shape = 'minimal'} = {}) {
   return {
     config: camilla,
     plan,
+    monitor: monitor ? monitorTopology(config, plan) : null,
     report: {
       preset: config.name,
       shape,

@@ -274,6 +274,56 @@ export function loopMeasurePreset() {
   return validateConfig(preset);
 }
 
+/**
+ * Fold-downs through bass management (phase 3, step 2; verify-fold.py).
+ *
+ * The shipped 7.2.4 layout -- crossovers at 80 Hz, bass redirected to the two
+ * subs, the LFE on its own low-pass -- with a different PEQ on every speaker
+ * and an alignment delay on the centre, so a fold that reached a speaker by
+ * the wrong path (unfiltered, or another speaker's EQ) would show. Outputs 14
+ * and 15 are a headphones pair on inputs 1-2: their rows read the inputs
+ * unfolded whatever the speakers' fold.
+ */
+export function foldPreset() {
+  const preset = createConfig();
+  preset.name = 'verify-fold';
+  const types = ['bell', 'lowShelf', 'highShelf'];
+  preset.outputs.forEach((output, index) => {
+    if (output.role !== 'speaker') return;
+    output.bands[(index * 5) % FREQUENCIES.length].gainDb = 4 + index % 3;
+    output.bands[(index * 5) % FREQUENCIES.length].type = types[index % 3];
+    output.bands[(index * 7 + 3) % FREQUENCIES.length].gainDb = -3 - index % 4;
+  });
+  preset.outputs[2].delayMs = 1.5;
+  for (const index of [13, 14]) {
+    preset.outputs[index].role = 'speaker';
+    preset.outputs[index].source = index - 13;
+    preset.outputs[index].label = index === 13 ? 'Phones L' : 'Phones R';
+    preset.outputs[index].busId = 'phones';
+  }
+  preset.buses.push({
+    id: 'phones', kind: 'headphones', label: 'Phones', outputIds: [13, 14], layoutId: 'custom',
+    gainDb: 0, mute: false, inputMode: 'pair', inputPair: [0, 1],
+    downmixMatrix: Array.from({length: CHANNELS}, () => [null, null]), sourcePreCrossover: true,
+  });
+  return validateConfig(preset);
+}
+
+/**
+ * The same 7.2.4 speakers with nothing in the way: bass redirection off,
+ * crossovers off, every band flat, 0 dB headroom. Each speaker output is then
+ * its input view times one, so verify-fold.py can check a crossfade bit for
+ * bit against the documented arithmetic and bound every step on DC.
+ */
+export function foldFlatPreset() {
+  const preset = createConfig();
+  preset.name = 'verify-fold-flat';
+  preset.headroomDb = 0;
+  preset.bassEnabled = false;
+  preset.inputs.forEach(input => { input.crossover = false; });
+  return validateConfig(preset);
+}
+
 export const PRESETS = {
   crossover: crossoverPreset,
   clip: clipPreset,
@@ -282,6 +332,8 @@ export const PRESETS = {
   loaded: loadedPreset,
   transparent: transparentPreset,
   'loop-measure': loopMeasurePreset,
+  fold: foldPreset,
+  'fold-flat': foldFlatPreset,
 };
 
 function main(argv) {

@@ -1422,6 +1422,437 @@ void test_monitor_ramp_constants() {
           "the monitor ramps are 10 ms and 40 ms at every rate");
 }
 
+// ------------------------------------------------------- monitor section
+//
+// Phase 3, step 2: the artifact's optional `monitor` section (sets, outputs,
+// labels, fold-downs) and the fold-downs at the stage's input.
+
+// The monitor vector bridge-artifact.test.mjs pins: the pinned shape vector
+// with a section added. The Python applier pins the same key.
+std::string dsp_pinned_monitor_section() {
+    return "monitor 1\nsets 2\nset front speakers\nset cans headphones\n"
+           "outs 3\nout 0 speaker 0\nout 3 sub 0\nout 5 speaker 1\n"
+           "label 0 Left  main\nlabel 3 Sub\n"
+           "expandsets 2\n0\n-\n"
+           "folds 2\nfold 0 stereo 2\n0 0 1\n0 2 0.7071067811865476\n"
+           "fold 0 mono 3\n0 0 0.5\n0 1 0.5\n3 3 1\n";
+}
+
+std::string with_section(const std::string& artifact, const std::string& section) {
+    const std::size_t end = artifact.rfind("end\n");
+    return artifact.substr(0, end) + section + "end\n";
+}
+
+bool load_refused(const std::string& text) {
+    try {
+        usb16x16::DspStage::load(text);
+    } catch (const std::runtime_error&) {
+        return true;
+    }
+    return false;
+}
+
+void test_monitor_section_shape_matches_the_pinned_vector() {
+    const std::string artifact = with_section(dsp_pinned_vector(), dsp_pinned_monitor_section());
+    auto stage = usb16x16::DspStage::load(artifact);
+    auto plain = usb16x16::DspStage::load(dsp_pinned_vector());
+    check(stage.has_monitor() && !plain.has_monitor(), "the section is seen when present and only then");
+    std::string expected = plain.shape();
+    expected.erase(expected.size() - 4);   // "end\n"
+    expected +=
+        "monitor 1\nsets 2\nset front speakers\nset cans headphones\n"
+        "outs 3\nout 0 speaker 0\nout 3 sub 0\nout 5 speaker 1\n"
+        "expandsets 2\n0\n-\n"
+        "folds 2\nfold 0 stereo 2\n0 0 1\n0 2 0.7071067811865476\n"
+        "fold 0 mono 3\n0 0 0.5\n0 1 0.5\n3 3 1\nend\n";
+    check(stage.shape() == expected, "the monitor shape is every section line but the labels, before end");
+    check(stage.shape_key() == "e119252efe5c29dceede375386fe80d48bb1596b6f206894408520f6c2e29694",
+          "the monitor shape key matches the vector pinned in bridge-artifact.test.mjs");
+    check(plain.shape_key() == "7d17e4176422b77db999ae52bb02599d7c92da8a7cb95c369583980ecb4e57d0",
+          "without the section the key is the old pinned one");
+    // Labels are not shape; fold gains and the words' spacing as tokens are.
+    std::string relabelled = artifact;
+    relabelled.replace(relabelled.find("label 3 Sub"), 11, "label 3 Subwoofer");
+    check(usb16x16::DspStage::load(relabelled).shape_key() == stage.shape_key(), "a label is not shape");
+    std::string spaced = artifact;
+    spaced.replace(spaced.find("out 3 sub 0"), 11, "out   3  sub 0");
+    check(usb16x16::DspStage::load(spaced).shape_key() == stage.shape_key(), "words, not spacing, are shape");
+    std::string regained = artifact;
+    regained.replace(regained.find("0 2 0.7071067811865476"), 22, "0 2 0.5");
+    check(usb16x16::DspStage::load(regained).shape_key() != stage.shape_key(), "a fold gain is shape");
+    std::string reason;
+    auto other = usb16x16::DspStage::load(regained);
+    check(!stage.publish(other, reason) && reason == "shape differs",
+          "so a live publish can never change a fold");
+    check(!stage.publish(plain, reason) && reason == "shape differs",
+          "and the section's presence is shape");
+}
+
+void test_monitor_topology_accessors() {
+    auto stage = usb16x16::DspStage::load(with_section(dsp_pinned_vector(), dsp_pinned_monitor_section()));
+    const usb16x16::MonitorTopology& topology = stage.monitor();
+    using Kind = usb16x16::MonitorTopology::Kind;
+    using Role = usb16x16::MonitorTopology::Role;
+    check(topology.sets.size() == 2, "two sets");
+    check(topology.sets[0].id == "front" && topology.sets[0].kind == Kind::speakers, "set 0 is front, speakers");
+    check(topology.sets[1].id == "cans" && topology.sets[1].kind == Kind::headphones, "set 1 is cans, headphones");
+    check((topology.sets[0].folds == std::vector<std::string>{"full", "stereo", "mono"}),
+          "a speakers set lists full first, then its folds in artifact order");
+    check((topology.sets[1].folds == std::vector<std::string>{"full"}), "headphones have full only");
+    check(topology.outs.size() == 3 && topology.outs[1].index == 3 && topology.outs[1].role == Role::sub &&
+              (topology.outs[1].sets == std::vector<std::size_t>{0}),
+          "outputs carry index, role and sets");
+    check(topology.outs[2].index == 5 && topology.outs[2].sets[0] == 1, "output 6 belongs to the headphones");
+    check(topology.labels[0] == "Left  main", "a label is the rest of its line, inner spacing kept");
+    check(topology.labels[3] == "Sub" && topology.labels[5].empty(), "an output without a label line has none");
+    check(topology.set_index("cans") == 1 && topology.set_index("rear") == usb16x16::MonitorTopology::npos,
+          "sets are found by ID");
+    check(topology.fold_index(0, "mono") == 2 && topology.fold_index(0, "full") == 0 &&
+              topology.fold_index(1, "mono") == usb16x16::MonitorTopology::npos &&
+              topology.fold_index(5, "full") == usb16x16::MonitorTopology::npos,
+          "folds are found by name within their set");
+    auto plain = usb16x16::DspStage::load(dsp_pinned_vector());
+    check(!plain.has_monitor() && plain.monitor().sets.empty(), "no section, no topology");
+}
+
+void test_monitor_section_loader_refuses() {
+    const std::string base = dsp_pinned_vector();
+    const std::string good = dsp_pinned_monitor_section();
+    check(!load_refused(with_section(base, good)), "the pinned section loads");
+    // Each replacement of one piece of the section must be refused.
+    const std::vector<std::pair<std::string, std::string>> mutations{
+        {"monitor 1\n", "monitor 2\n"},
+        {"sets 2\n", "sets 0\n"},
+        {"sets 2\n", "sets 3\n"},
+        {"sets 2\nset front speakers\nset cans headphones\n",
+         "sets 9\nset a speakers\nset b speakers\nset c speakers\nset d speakers\nset e speakers\n"
+         "set f speakers\nset g speakers\nset h speakers\nset i speakers\n"},
+        {"set front speakers", "set Front speakers"},
+        {"set front speakers", "set 1front speakers"},
+        {"set front speakers", "set abcdefghijabcdefghijabcdefghijabc speakers"},
+        {"set cans headphones", "set front headphones"},
+        {"set cans headphones", "set cans monitors"},
+        {"set cans headphones", "set cans headphones extra"},
+        {"outs 3\n", "outs 4\n"},
+        {"outs 3\n", "outs 17\n"},
+        {"out 3 sub 0", "out 0 sub 0"},
+        {"out 3 sub 0", "out 16 sub 0"},
+        {"out 3 sub 0", "out 3 woofer 0"},
+        {"out 3 sub 0", "out 3 sub"},
+        {"out 3 sub 0", "out 3 sub 2"},
+        {"out 3 sub 0", "out 3 sub 1"},
+        {"out 0 speaker 0", "out 0 speaker 0 1"},
+        {"out 3 sub 0", "out 3 sub 0 0"},
+        {"label 3 Sub", "label 4 Sub"},
+        {"label 3 Sub", "label 0 Sub"},
+        {"label 3 Sub", "label 3 Sub\tWoofer"},
+        {"label 3 Sub", "label 3 abcdefghijabcdefghijabcdefghijabc"},
+        {"label 3 Sub", "label 3"},
+        {"expandsets 2\n0\n-\n", "expandsets 1\n0\n"},
+        {"expandsets 2\n0\n-\n", "expandsets 3\n0\n-\n0\n"},
+        {"expandsets 2\n0\n-\n", "expandsets 2\n0\n2\n"},
+        {"expandsets 2\n0\n-\n", "expandsets 2\n0\n- 1\n"},
+        {"folds 2\n", "folds 3\n"},
+        {"folds 2\n", "folds 9\n"},
+        {"fold 0 stereo 2", "fold 1 stereo 2"},
+        {"fold 0 stereo 2", "fold 2 stereo 2"},
+        {"fold 0 stereo 2", "fold 0 full 2"},
+        {"fold 0 stereo 2", "fold 0 Stereo 2"},
+        {"fold 0 stereo 2", "fold 0 abcdefghijabcdefg 2"},
+        {"fold 0 mono 3", "fold 0 stereo 3"},
+        {"fold 0 stereo 2", "fold 0 stereo 0"},
+        {"fold 0 stereo 2", "fold 0 stereo 3"},
+        {"0 2 0.7071067811865476", "0 0 0.7071067811865476"},
+        {"0 2 0.7071067811865476", "0 16 0.7071067811865476"},
+        {"0 2 0.7071067811865476", "0 2 nan"},
+        {"0 2 0.7071067811865476", "0 2 inf"},
+        {"0 2 0.7071067811865476", "0 2 0x1p-1"},
+        {"0 2 0.7071067811865476", "0 2 1e999"},
+        {"0 2 0.7071067811865476", "0 2 0.5 1"},
+        {"3 3 1\n", "3 3 1\nend\n"},
+    };
+    for (const auto& [from, to] : mutations) {
+        std::string section = good;
+        const std::size_t at = section.find(from);
+        if (at == std::string::npos) {
+            check(false, "mutation target present: " + from);
+            continue;
+        }
+        section.replace(at, from.size(), to);
+        check(load_refused(with_section(base, section)), "a malformed monitor section is refused: " + to);
+    }
+    check(load_refused(base.substr(0, base.rfind("end\n")) + good), "a section with no end is refused");
+    // Five folds in one set is one too many; four is the limit.
+    std::string four = "monitor 1\nsets 1\nset s speakers\nouts 0\nexpandsets 2\n0\n0\nfolds 4\n";
+    for (const char* name : {"a", "b", "c", "d"}) four += std::string("fold 0 ") + name + " 1\n0 0 1\n";
+    check(!load_refused(with_section(base, four)), "four folds in a set load");
+    std::string five = four;
+    five.replace(five.find("folds 4"), 7, "folds 5");
+    five += "fold 0 e 1\n0 0 1\n";
+    check(load_refused(with_section(base, five)), "a fifth fold in a set is refused");
+    std::string shared = "monitor 1\nsets 2\nset a speakers\nset b speakers\nouts 1\nout 3 sub 0 1\n"
+                         "expandsets 2\n0\n1\nfolds 0\n";
+    check(!load_refused(with_section(base, shared)), "a sub shared by two speaker sets loads");
+    std::string phones_sub = "monitor 1\nsets 2\nset a speakers\nset b headphones\nouts 1\nout 3 sub 1\n"
+                             "expandsets 2\n0\n1\nfolds 0\n";
+    check(load_refused(with_section(base, phones_sub)), "a sub in a headphones set is refused");
+    std::string blank_lines = good;
+    blank_lines.replace(blank_lines.find("outs 3\n"), 7, "\n   \nouts 3\n\n");
+    check(usb16x16::DspStage::load(with_section(base, blank_lines)).shape_key() ==
+              usb16x16::DspStage::load(with_section(base, good)).shape_key(),
+          "blank lines inside the section are ignored, as artifactShape ignores them");
+}
+
+// Sixteen inputs straight to sixteen outputs, one internal channel each, plus
+// a seventeenth row: internal 15 reads input 2 raw (a headphones row) and goes
+// to output 16. Input 16 drives nothing.
+std::string fold_identity_body() {
+    std::string text = "expand 16\n";
+    for (std::size_t channel = 0; channel < 15; ++channel) {
+        text += std::to_string(channel) + " " + std::to_string(channel) + " 1\n";
+    }
+    text += "15 2 1\nbranch 0\nassign 16\n";
+    for (std::size_t channel = 0; channel < 16; ++channel) {
+        text += std::to_string(channel) + " " + std::to_string(channel) + " 1\n";
+    }
+    text += "output 0\n";
+    return text;
+}
+
+// One speakers set (rows 0-14) and headphones (row 15); fold 1 "test" is the
+// matrix fold_test_gain below; fold 2 "pass" keeps input 1 alone at 0.5.
+std::string fold_identity_section() {
+    std::string text = "monitor 1\nsets 2\nset spk speakers\nset hp headphones\nouts 16\n";
+    for (std::size_t channel = 0; channel < 15; ++channel) text += "out " + std::to_string(channel) + " speaker 0\n";
+    text += "out 15 speaker 1\nexpandsets 16\n";
+    for (std::size_t row = 0; row < 15; ++row) text += "0\n";
+    text += "-\nfolds 2\nfold 0 test 6\n0 0 1\n0 2 0.5\n1 1 1\n1 2 0.25\n4 6 -0.75\n3 3 1\n"
+            "fold 0 pass 1\n0 0 0.5\n";
+    return text;
+}
+
+double fold_test_gain(const std::size_t dest, const std::size_t source) {
+    const std::array<std::array<double, 3>, 6> rows{{{0, 0, 1}, {0, 2, 0.5}, {1, 1, 1},
+                                                      {1, 2, 0.25}, {4, 6, -0.75}, {3, 3, 1}}};
+    for (const auto& row : rows) {
+        if (static_cast<std::size_t>(row[0]) == dest && static_cast<std::size_t>(row[1]) == source) return row[2];
+    }
+    return 0.0;
+}
+
+usb16x16::DspStage fold_stage() {
+    return usb16x16::DspStage::load(dsp_artifact(fold_identity_body() + fold_identity_section(), 16));
+}
+
+// Frames of a constant (DC) value per input channel.
+std::vector<float> fold_dc(const std::size_t frames) {
+    std::vector<float> block(frames * usb16x16::kChannels);
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        for (std::size_t channel = 0; channel < usb16x16::kChannels; ++channel) {
+            block[frame * usb16x16::kChannels + channel] = 0.5F - 0.0625F * static_cast<float>(channel);
+        }
+    }
+    return block;
+}
+
+void test_monitor_full_is_bit_identical_to_no_section() {
+    // With every set on full, the section changes nothing: the same samples,
+    // through a real filter chain, as the artifact without it.
+    std::string body = "expand 3\n0 0 0.5\n0 2 0.25\n1 1 -1\nbranch 1\n0 1\n";
+    body += std::string(kBellUp) + "\nassign 3\n0 0 1\n5 1 0.75\n6 0 0.5\noutput 1\n5 17 0.5 1\n";
+    body += std::string(kBellDown) + "\n";
+    const std::string section = "monitor 1\nsets 1\nset s speakers\nouts 1\nout 0 speaker 0\n"
+                                "expandsets 3\n0\n0\n-\nfolds 1\nfold 0 mono 2\n0 0 0.5\n0 1 0.5\n";
+    auto plain = usb16x16::DspStage::load(dsp_artifact(body, 2));
+    auto folded = usb16x16::DspStage::load(with_section(dsp_artifact(body, 2), section));
+    const std::vector<float> input = monitor_signal(2000);
+    std::vector<float> a = input;
+    std::vector<float> b = input;
+    for (std::size_t frame = 0; frame < 2000; frame += 100) {
+        plain.process(a.data() + frame * usb16x16::kChannels, 100);
+        folded.process(b.data() + frame * usb16x16::kChannels, 100);
+    }
+    check(same_bytes(a, b), "a section with every set on full is bit-identical to no section");
+    check(folded.set_fold(0, 0), "asking for full while on full is accepted");
+    folded.process(b.data(), 100);
+    check(!folded.fold_crossfading(0), "and starts nothing");
+}
+
+void test_monitor_fold_applies_its_matrix() {
+    auto stage = fold_stage();
+    check(stage.set_fold(0, 1), "the test fold is requested");
+    std::vector<float> settle(480 * usb16x16::kChannels, 0.0F);
+    stage.process(settle.data(), 480);
+    check(stage.fold(0) == 1 && !stage.fold_crossfading(0), "480 samples (10 ms at 48 kHz) finish the crossfade");
+    bool exact = true;
+    for (std::size_t input = 0; input < usb16x16::kChannels; ++input) {
+        std::vector<float> block(usb16x16::kChannels, 0.0F);
+        block[input] = 0.8F;
+        stage.process(block.data(), 1);
+        for (std::size_t output = 0; output < usb16x16::kChannels; ++output) {
+            // Output 16 is the headphones row: input 3, unfolded. Output o < 15
+            // is the speakers set's view at o.
+            const double gain = output == 15 ? (input == 2 ? 1.0 : 0.0) : fold_test_gain(output, input);
+            const float want = static_cast<float>(gain * static_cast<double>(0.8F));
+            if (block[output] != want) {
+                exact = false;
+                std::cerr << "  fold: input " << input << " output " << output << " gave " << block[output]
+                          << ", want " << want << '\n';
+            }
+        }
+    }
+    check(exact, "each input reaches the outputs its fold rows name, at their gains, and nothing else");
+    check(stage.set_fold(0, 0), "back to full");
+    stage.process(settle.data(), 480);
+    std::vector<float> block = fold_dc(4);
+    std::vector<float> want = block;
+    // Output 16 carries input 3 (row 15 reads input 2); input 16 drives nothing.
+    for (std::size_t frame = 0; frame < 4; ++frame) want[frame * 16 + 15] = want[frame * 16 + 2];
+    stage.process(block.data(), 4);
+    check(same_bytes(block, want), "full again is the identity");
+}
+
+// The documented crossfade arithmetic, from fold A's and fold B's outputs.
+std::vector<double> crossfade_reference(const std::vector<double>& from, const std::vector<double>& to,
+                                        const std::size_t ramp, const std::size_t frames) {
+    std::vector<double> out(frames * usb16x16::kChannels);
+    double a = 0.0;
+    std::size_t remaining = ramp;
+    const double step = 1.0 / static_cast<double>(ramp);
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        if (remaining > 0) {
+            a += step;
+            if (--remaining == 0) a = 1.0;
+        }
+        for (std::size_t channel = 0; channel < usb16x16::kChannels; ++channel) {
+            // Once it is over the set is simply on B.
+            out[frame * usb16x16::kChannels + channel] =
+                frame >= ramp ? to[channel] : (1.0 - a) * from[channel] + a * to[channel];
+        }
+    }
+    return out;
+}
+
+void test_monitor_crossfade_is_bounded_and_exact() {
+    auto stage = fold_stage();
+    const std::size_t n = usb16x16::monitor_ramp_frames_fast(48000);
+    // DC in: what each fold gives per output (row 15 never folds).
+    const std::vector<float> dc = fold_dc(1);
+    std::vector<double> full(usb16x16::kChannels);
+    std::vector<double> test(usb16x16::kChannels, 0.0);
+    for (std::size_t output = 0; output < usb16x16::kChannels; ++output) {
+        const double x = static_cast<double>(dc[output]);
+        full[output] = output == 15 ? static_cast<double>(dc[2]) : (output < 15 ? x : 0.0);
+        if (output == 15) {
+            test[output] = full[output];
+            continue;
+        }
+        for (std::size_t input = 0; input < usb16x16::kChannels; ++input) {
+            test[output] += fold_test_gain(output, input) * static_cast<double>(dc[input]);
+        }
+    }
+    check(stage.set_fold(0, 1), "full -> test");
+    const std::size_t frames = 2 * n;
+    std::vector<float> block = fold_dc(frames);
+    stage.process(block.data(), frames);
+    const std::vector<double> reference = crossfade_reference(full, test, n, frames);
+    bool exact = true;
+    bool bounded = true;
+    double worst = 0.0;
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        for (std::size_t channel = 0; channel < usb16x16::kChannels; ++channel) {
+            const std::size_t i = frame * usb16x16::kChannels + channel;
+            if (block[i] != static_cast<float>(reference[i])) exact = false;
+            if (frame == 0) continue;
+            // One step of the crossfade moves |B - A| / N, plus float rounding.
+            const double moved = std::abs(static_cast<double>(block[i]) - static_cast<double>(block[i - 16]));
+            const double allowed = std::abs(test[channel] - full[channel]) / static_cast<double>(n) + 1e-7;
+            worst = std::max(worst, moved / allowed);
+            if (moved > allowed) bounded = false;
+        }
+    }
+    check(exact, "the crossfade is the documented arithmetic, sample for sample");
+    check(bounded, "no per-sample step exceeds |B - A| / N (plus a float ulp)");
+    check(block[(n - 1) * 16 + 0] == static_cast<float>(test[0]) && block[(n - 2) * 16 + 0] != block[(n - 1) * 16 + 0],
+          "the Nth sample lands exactly on the new fold, the one before it does not");
+    check(worst > 0.5, "the bound has teeth: the crossfade does use it");
+}
+
+void test_monitor_fold_is_block_size_independent() {
+    const std::vector<float> input = monitor_signal(3000);
+    const auto run = [&](const std::size_t block) {
+        auto stage = fold_stage();
+        std::vector<float> out = input;
+        // Requests at frames 0, 700 and 1500, each after the last crossfade
+        // ended. (A request deferred by a crossfade starts at the next block
+        // top, which does depend on the block size, by design.)
+        for (std::size_t frame = 0; frame < 3000;) {
+            if (frame == 0) stage.set_fold(0, 1);
+            if (frame == 700) stage.set_fold(0, 2);
+            if (frame == 1500) stage.set_fold(0, 0);
+            std::size_t want = std::min<std::size_t>(block, 3000 - frame);
+            for (const std::size_t at : {std::size_t{700}, std::size_t{1500}}) {
+                if (frame < at) want = std::min(want, at - frame);
+            }
+            stage.process(out.data() + frame * usb16x16::kChannels, want);
+            frame += want;
+        }
+        return out;
+    };
+    const std::vector<float> whole = run(3000);
+    check(same_bytes(whole, run(7)) && same_bytes(whole, run(1)) && same_bytes(whole, run(480)),
+          "folds and crossfades give the same samples whatever the block size");
+}
+
+void test_monitor_request_during_crossfade_waits() {
+    auto stage = fold_stage();
+    const std::size_t n = usb16x16::monitor_ramp_frames_fast(48000);
+    std::vector<float> block = fold_dc(n);
+    check(stage.set_fold(0, 1), "full -> test");
+    stage.process(block.data(), 100);
+    check(stage.fold_crossfading(0) && stage.fold(0) == 0, "crossfading, still on full");
+    check(stage.set_fold(0, 2), "a new request mid-crossfade is stored");
+    stage.process(block.data(), n - 100);
+    check(stage.fold(0) == 1 && !stage.fold_crossfading(0), "the first crossfade finishes on its own target");
+    stage.process(block.data(), 0);
+    check(stage.fold_crossfading(0) && stage.fold(0) == 1, "the deferred request starts at the next block top");
+    stage.process(block.data(), n);
+    check(stage.fold(0) == 2 && !stage.fold_crossfading(0), "and finishes on it");
+    // A request that comes back to the current fold during a crossfade still
+    // lets the crossfade finish, then crossfades back.
+    stage.set_fold(0, 0);
+    stage.process(block.data(), 10);
+    stage.set_fold(0, 2);
+    stage.process(block.data(), n - 10);
+    check(stage.fold(0) == 0, "the crossfade to full completed");
+    stage.process(block.data(), 1);
+    check(stage.fold_crossfading(0), "and the return to 'pass' then begins");
+}
+
+void test_monitor_set_fold_range_and_state() {
+    auto stage = fold_stage();
+    check(stage.set_fold(0, 2) && stage.set_fold(0, 0), "speakers: full, test, pass");
+    check(!stage.set_fold(0, 3), "a fold past the set's list is refused");
+    check(stage.set_fold(1, 0) && !stage.set_fold(1, 1), "headphones: full only");
+    check(!stage.set_fold(2, 0), "a set past the list is refused");
+    auto plain = usb16x16::DspStage::load(dsp_pinned_vector());
+    check(!plain.set_fold(0, 0), "no section, no folds");
+    check(plain.fold(0) == 0 && !plain.fold_crossfading(0), "and the accessors say full");
+    // reset() leaves fold selection alone; a move carries it.
+    stage.set_fold(0, 1);
+    std::vector<float> block = fold_dc(480);
+    stage.process(block.data(), 480);
+    stage.reset();
+    check(stage.fold(0) == 1, "reset keeps the fold");
+    stage.set_fold(0, 2);
+    usb16x16::DspStage moved = std::move(stage);
+    check(moved.has_monitor() && !stage.has_monitor(), "a move transfers the section");
+    moved.process(block.data(), 1);
+    check(moved.fold_crossfading(0), "and the pending request with it");
+    moved.process(block.data(), 480);
+    check(moved.fold(0) == 2 && moved.monitor().sets[0].folds[2] == "pass", "the moved stage completes it");
+}
+
 } // namespace
 
 int main() {
@@ -1453,6 +1884,15 @@ int main() {
     test_dsp_publish_waits_for_the_audio_thread();
     test_dsp_publish_shrinking_delay_stays_in_bounds();
     test_dsp_moved_stage_keeps_working();
+    test_monitor_section_shape_matches_the_pinned_vector();
+    test_monitor_topology_accessors();
+    test_monitor_section_loader_refuses();
+    test_monitor_full_is_bit_identical_to_no_section();
+    test_monitor_fold_applies_its_matrix();
+    test_monitor_crossfade_is_bounded_and_exact();
+    test_monitor_fold_is_block_size_independent();
+    test_monitor_request_during_crossfade_waits();
+    test_monitor_set_fold_range_and_state();
 
     test_level_meter_measures_a_window();
     test_level_meter_closes_windows_on_block_boundaries();

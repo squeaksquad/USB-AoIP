@@ -8,6 +8,6 @@
 5c5eb32454dffaf62d78ca742a97c7a5ceb19df53d9d9358a6a042e56edbbef7  kernel/uac2-rate-report-6.18.34.patch
 45beecea2c6c67d2bf371bd3168a0b8b7af20cbbcc348729d88e6c51039c35ec  kernel/uac2-rate-request-6.18.34.patch
 ec8d60bc3e7427d90b1352c7226948c58b1369b81207a5df41c5c7ac8876c805  dante/owner/point-of-record/main.cpp
-e07006ddbea99b8d58b98a844995720c7fd2ee16edfc594174394fb362f7f401  dsp-core/src/bridge_core.cpp
-4f74d46bf1b0bd44b53df42435f20f6a2b63f61c89ec4f359145824aab332d49  dsp-core/include/usb16x16/bridge_core.hpp
+f67138084466d33f1448e5d2ce9fdfbc96afd0af5228e7509c1756c99a3330cb  dsp-core/src/bridge_core.cpp
+89fec72a10266f3e3287799648786cacba3a6bb47a45cd7aab96dcae6d2a0dab  dsp-core/include/usb16x16/bridge_core.hpp
 97576bc7481563bb6e3f8d5b91cb5fe2e70e160bd9d08e62ac301e3a4c89812b  dante/patches/statime/0001-publish-port-state.patch

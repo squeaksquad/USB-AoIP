@@ -107,6 +107,74 @@ drops stayed at 0 and the journal shows no RECOVER across the three runs.
 Not run: a file-to-file pass through the fixed shape; the artifact test is
 what proves it carries the minimal shape's audio.
 
+### The monitor section (2026-11-18, phase 3 step 2)
+
+`bridgeArtifact` writes an optional `monitor` section just before `end`,
+describing the preset's monitor topology: one set per bus (speakers or
+headphones), every output that is in a bus and not unused with its role and
+set, the outputs' labels, which set each expand row reads, and each speaker
+set's fold-downs. `compile(preset, devices, {monitor})` keeps it as
+`result.monitor` (`monitorTopology`), on by default; `monitor: false`, or
+`--no-monitor` on the CLI, leaves it out, and the artifact is then byte for
+byte what it was before the section existed (`bridge-artifact.test.mjs`
+compiles `loaded` that way and compares it with the installed
+`dante/config/dsp-loaded@48000.dsp`). The CamillaDSP configuration does not
+change either way: CamillaDSP has no fold-downs.
+
+```
+monitor 1
+sets S                 1..8
+set ID KIND            S lines; ID [a-z][a-z0-9-]{0,31}; KIND speakers|headphones; index = line order
+outs N                 0..16
+out INDEX ROLE SET...  INDEX ascending; ROLE speaker|sub; set indices ascending (several only for a sub shared by speaker sets)
+label INDEX TEXT       zero or more, INDEX ascending, outputs in outs only; TEXT printable ASCII, 1..32
+expandsets N           N = the expand row count
+SET|-                  N lines: the set whose view that expand row reads, '-' the raw inputs
+folds F                up to 4 per set
+fold SET NAME ROWS     SET a speakers set; NAME [a-z0-9.]{1,16}, not 'full'; ROWS 1..256
+DEST SRC GAIN          view[DEST] += GAIN * in[SRC]; a DEST with no row is silent; (DEST, SRC) unique
+```
+
+The bridge applies a fold at the stage's **input**: each expand row tagged with
+a set reads that set's view of the 16 inputs, so folded content goes through
+bass management and the EQ of the speaker that plays it. Headphone rows (`-`)
+read the inputs unfolded. Main and bass rows are tagged with the set of the
+outputs they feed when that is one set, else the first speakers set; per-set
+main and bass channels, and subs shared between sets, come with preset model
+v3 (the format already carries both). Labels are sanitised by `monitorLabel`
+(other characters become `?`, runs of spaces collapse, trimmed, cut at 32;
+empty means no line).
+
+Every line of the section except the labels is **shape** (`artifactShape`
+appends them before `end`, words joined by single spaces, as written), fold
+gains included: a live edit never changes the section. Without the section
+the shape is unchanged. `bridge-artifact.test.mjs` pins a second vector,
+`e119252e…`, with a section; `bridge_tests.cpp` pins the same one.
+`parseMonitorSection(text)` reads the section back for the page, as strictly
+as the bridge's loader.
+
+**The fold table** (`monitorFolds(usedInputs, {lfe})`, the only place it is
+written). Programme channel = input index: 0 L, 1 R, 2 C, 3 LFE, 4 Ls, 5 Rs,
+6 Lrs, 7 Rrs, 8 Ltf, 9 Rtf, 10 Ltr, 11 Rtr, 12 Lw, 13 Rw, 14 Ltm, 15 Rtm. The
+used inputs are the sources of the set's speaker outputs; only terms whose
+source is used appear, and the preset's LFE input always passes at 1.
+a = √½, h = ½:
+
+| Fold | Offered when the set uses | Rows |
+|---|---|---|
+| `5.1` | L, R, C, Ls, Rs and any input above Rs | L' = L + a Lw + a Ltf + h Ltm; R' = R + a Rw + a Rtf + h Rtm; C' = C; Ls' = Ls + a Lrs + a Ltr + h Ltm; Rs' = Rs + a Rrs + a Rtr + h Rtm; LFE' = LFE |
+| `stereo` | L, R and any other non-LFE input | L'' = L' + a C' + a Ls'; R'' = R' + a C' + a Rs'; LFE passes |
+| `mono` | L and R | L''' = R''' = ½ (L'' + R''); LFE passes |
+
+The composite rows are a matrix product summed in a fixed order, so each gain
+is one exact double (Ltm in stereo L is ½ + a·½ = 0.8535533905932737). Not
+normalised: a hot mix can exceed full scale and saturates at the converter,
+the engine's measured behaviour. **CHECKED 2026-11-18 (Mac, offline):**
+`verify-fold.py` drives `usb16x16-dsp-offline` through the 7.2.4 layout with
+bass management on and checks the table, linearity through the whole stage
+under every fold, the crossfade bit for bit, the no-click bound and byte
+identity on full (its docstring has the tolerances).
+
 ## Headroom policy
 
 `headroomDb` is applied **exactly once**, in the expand mixer, to every branch of

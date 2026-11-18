@@ -22,6 +22,11 @@
 // before the block existed. With a script, the run is split so that a block
 // boundary falls exactly on each event's frame, so the result does not
 // depend on --block.
+//
+// The same script also moves the stage's fold-downs (the artifact's monitor
+// section): `FRAME fold SET NAME` asks set SET for fold NAME at that frame,
+// which the stage takes at the top of the block that starts there. A fold
+// event for an artifact without a monitor section is a script error.
 
 #include "usb16x16/bridge_core.hpp"
 
@@ -96,11 +101,16 @@ int usage() {
         "  --monitor-script FILE  drive the monitor block from FILE, one event a line:\n"
         "                           FRAME ramp=N gains=G1,...,G16   publish these targets\n"
         "                           FRAME silence ramp=N            start_from_silence(N)\n"
+        "                           FRAME fold SET NAME             the stage's set SET (index or ID)\n"
+        "                                                           to fold NAME (full, or a fold the\n"
+        "                                                           artifact's monitor section names)\n"
         "                         FRAME is the 0-based input frame the event takes\n"
         "                         effect at, never decreasing; '#' starts a comment.\n"
         "                         The monitor runs after the stage, also with --bypass\n"
         "  --bench-monitor GAIN   with --bench: also run the monitor block with every\n"
-        "                         output at GAIN (at rest), inside the timed call\n";
+        "                         output at GAIN (at rest), inside the timed call\n"
+        "  --bench-fold SET NAME  with --bench: put set SET on fold NAME (settled,\n"
+        "                         not crossfading) before timing\n";
     return 2;
 }
 
@@ -108,6 +118,12 @@ struct MonitorEvent {
     std::uint64_t frame{};
     std::size_t line{};
     bool silence{};
+    // A fold event: the stage's set and fold, as written, then resolved.
+    bool fold{};
+    std::string fold_set;
+    std::string fold_name;
+    std::size_t set_index{};
+    std::size_t fold_index{};
     usb16x16::MonitorGains::Targets targets{};
     std::uint32_t ramp{};
 };
@@ -164,6 +180,14 @@ bool read_monitor_script(const std::string& path, std::vector<MonitorEvent>& eve
             return refuse("frame " + fields[0] + " is before the previous event's");
         }
         std::size_t next = 1;
+        if (next < fields.size() && fields[next] == "fold") {
+            if (fields.size() != 4) return refuse("expected FRAME fold SET NAME");
+            event.fold = true;
+            event.fold_set = fields[2];
+            event.fold_name = fields[3];
+            events.push_back(event);
+            continue;
+        }
         if (next < fields.size() && fields[next] == "silence") {
             event.silence = true;
             ++next;
@@ -202,6 +226,32 @@ bool read_monitor_script(const std::string& path, std::vector<MonitorEvent>& eve
     return true;
 }
 
+// A set by index or ID, and a fold by name, in the loaded stage's topology.
+bool resolve_fold(const usb16x16::DspStage& stage, const std::string& set_text, const std::string& name,
+                  std::size_t& set, std::size_t& fold, std::string& why) {
+    if (!stage.has_monitor()) {
+        why = "the artifact has no monitor section, so it has no folds";
+        return false;
+    }
+    const usb16x16::MonitorTopology& topology = stage.monitor();
+    std::uint64_t index = 0;
+    if (parse_unsigned(set_text, index)) {
+        set = index < topology.sets.size() ? static_cast<std::size_t>(index) : usb16x16::MonitorTopology::npos;
+    } else {
+        set = topology.set_index(set_text);
+    }
+    if (set == usb16x16::MonitorTopology::npos) {
+        why = "no set '" + set_text + "'";
+        return false;
+    }
+    fold = topology.fold_index(set, name);
+    if (fold == usb16x16::MonitorTopology::npos) {
+        why = "set '" + topology.sets[set].id + "' has no fold '" + name + "'";
+        return false;
+    }
+    return true;
+}
+
 // What one process() call costs, at the block size the caller asks for.
 //
 // No file, no device, no transport: just the arithmetic, on a buffer already
@@ -210,7 +260,8 @@ bool read_monitor_script(const std::string& path, std::vector<MonitorEvent>& eve
 // fit in a cycle at all. The maximum is the figure that decides that; a mean
 // hides exactly the cycle that would have missed.
 int benchmark(usb16x16::DspStage& stage, usb16x16::MonitorGains* const monitor,
-              const std::size_t block, const std::size_t runs, const unsigned rate) {
+              const std::size_t block, const std::size_t runs, const unsigned rate,
+              const std::string& fold_label) {
     std::vector<float> buffer(block * kChannels);
     // Real signal rather than silence: an IIR fed zeros settles into denormals,
     // and the cost measured would be the denormal handling.
@@ -235,6 +286,7 @@ int benchmark(usb16x16::DspStage& stage, usb16x16::MonitorGains* const monitor,
     const double audio_us = static_cast<double>(block) / static_cast<double>(rate) * 1.0e6;
     std::cout << "{\"rate\":" << rate << ",\"block\":" << block
               << ",\"monitor\":" << (monitor != nullptr ? "true" : "false")
+              << ",\"fold\":\"" << fold_label << "\""
               << ",\"runs\":" << runs
               << ",\"audio_us\":" << audio_us
               << ",\"min_us\":" << spent.front()
@@ -268,6 +320,8 @@ int main(const int argc, char** const argv) {
     std::string monitor_path;
     bool bench_monitor = false;
     double bench_gain = 1.0;
+    std::string bench_fold_set;
+    std::string bench_fold_name;
 
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -288,6 +342,7 @@ int main(const int argc, char** const argv) {
         else if (argument == "--swap-at") { swap = true; swap_frame = std::stoul(take()); swap_path = take(); }
         else if (argument == "--monitor-script") monitor_path = take();
         else if (argument == "--bench-monitor") { bench_monitor = true; bench_gain = std::stod(take()); }
+        else if (argument == "--bench-fold") { bench_fold_set = take(); bench_fold_name = take(); }
         else if (argument == "--format") {
             const std::string value = take();
             if (value == "s32le") format = Format::s32le;
@@ -322,6 +377,14 @@ int main(const int argc, char** const argv) {
         std::cout << "shape_key=" << stage.shape_key() << '\n' << stage.shape();
         return 0;
     }
+    for (MonitorEvent& event : events) {
+        if (!event.fold) continue;
+        std::string why;
+        if (!resolve_fold(stage, event.fold_set, event.fold_name, event.set_index, event.fold_index, why)) {
+            std::cerr << monitor_path << ':' << event.line << ": " << why << '\n';
+            return 6;
+        }
+    }
     usb16x16::DspStage update;
     if (swap) {
         std::ifstream update_file(swap_path, std::ios::binary);
@@ -349,7 +412,22 @@ int main(const int argc, char** const argv) {
 
     usb16x16::MonitorGains monitor;
     if (bench > 0) {
-        if (!bench_monitor) return benchmark(stage, nullptr, block, bench, rate);
+        std::string fold_label = "full";
+        if (!bench_fold_set.empty()) {
+            std::size_t set = 0;
+            std::size_t fold = 0;
+            std::string why;
+            if (!resolve_fold(stage, bench_fold_set, bench_fold_name, set, fold, why)) {
+                std::cerr << "--bench-fold: " << why << '\n';
+                return 2;
+            }
+            stage.set_fold(set, fold);
+            // Settle past the crossfade so the timed calls run on the fold itself.
+            std::vector<float> settle(static_cast<std::size_t>(rate / 100 + 1) * kChannels, 0.0F);
+            stage.process(settle.data(), rate / 100 + 1);
+            fold_label = stage.monitor().sets[set].id + ":" + bench_fold_name;
+        }
+        if (!bench_monitor) return benchmark(stage, nullptr, block, bench, rate, fold_label);
         usb16x16::MonitorGains::Targets targets;
         targets.gain.fill(bench_gain);
         targets.ramp_frames.fill(1);
@@ -359,7 +437,7 @@ int main(const int argc, char** const argv) {
             return 2;
         }
         monitor.process(nullptr, 0);
-        return benchmark(stage, &monitor, block, bench, rate);
+        return benchmark(stage, &monitor, block, bench, rate, fold_label);
     }
 
     std::ifstream input(input_path, std::ios::binary);
@@ -379,7 +457,12 @@ int main(const int argc, char** const argv) {
         // next block, so several events on one frame apply in turn.
         while (next_event < events.size() && events[next_event].frame == frames_done) {
             const MonitorEvent& event = events[next_event++];
-            if (event.silence) {
+            if (event.fold) {
+                // Taken by the stage at the top of the block that starts here.
+                stage.set_fold(event.set_index, event.fold_index);
+                std::cerr << "FOLD frame " << frames_done << " set " << event.set_index << " fold "
+                          << event.fold_index << " (" << event.fold_name << ")\n";
+            } else if (event.silence) {
                 monitor.start_from_silence(event.ramp);
             } else {
                 std::string reason;

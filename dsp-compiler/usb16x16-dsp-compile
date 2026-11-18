@@ -28,10 +28,12 @@ const usage = `usage: usb16x16-dsp-compile PRESET.json [options]
       --chunksize N       frames per chunk (default: 1024)
       --rate HZ           sample rate to compile for, a Dante rate (default: 48000);
                           the artifact names it and the Pi refuses it at any other
+      --no-monitor        leave the monitor section (sets, labels, fold-downs)
+                          out of the bridge artifact, as before it existed
 `;
 
 function parseArgs(argv) {
-  const options = {target: 'file', in: 'in.raw', raw: 'out.raw', chunksize: 1024, shape: 'minimal', rate: SAMPLE_RATE};
+  const options = {target: 'file', in: 'in.raw', raw: 'out.raw', chunksize: 1024, shape: 'minimal', rate: SAMPLE_RATE, monitor: true};
   const rest = [];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -54,6 +56,7 @@ function parseArgs(argv) {
     else if (arg === '--playback') options.playback = take();
     else if (arg === '--chunksize') options.chunksize = Number(take());
     else if (arg === '--rate') options.rate = Number(take());
+    else if (arg === '--no-monitor') options.monitor = false;
     else if (arg.startsWith('-')) throw new Error(`Unknown option ${arg}`);
     else rest.push(arg);
   }
@@ -86,7 +89,7 @@ function main() {
   }
 
   let result;
-  try { result = compile(preset, devices, {shape: options.shape}); }
+  try { result = compile(preset, devices, {shape: options.shape, monitor: options.monitor}); }
   catch (error) { process.stderr.write(`Could not compile: ${error.message}\n`); return 4; }
 
   const header = [

@@ -22,6 +22,49 @@ constexpr double kNominalRate = 48000.0;
 // path.
 std::string sha256_hex(std::string_view text);
 
+// What an artifact's optional `monitor` section says (phase 3, the monitor
+// block): the preset's speaker sets and headphones, which outputs belong to
+// which, the outputs' labels, and each speaker set's fold-downs. Read at load,
+// off the audio path; the audio thread never touches it.
+//
+// A fold-down is a 16 x 16 matrix applied to the inputs before anything else
+// in the stage, so folded content is bass-managed and gets the EQ of the
+// speaker that plays it. Every set has the fold "full" (index 0, the
+// identity); the artifact lists the others, in its own order, after it.
+struct MonitorTopology {
+    static constexpr std::size_t kMaxSets = 8;
+    // Fold-downs a set may carry besides "full".
+    static constexpr std::size_t kMaxFoldsPerSet = 4;
+    static constexpr std::size_t kMaxFoldRows = 256;
+    static constexpr std::size_t kMaxLabel = 32;
+    static constexpr std::size_t npos = static_cast<std::size_t>(-1);
+
+    enum class Kind : std::uint8_t { speakers, headphones };
+    enum class Role : std::uint8_t { speaker, sub };
+    struct Set {
+        std::string id;
+        Kind kind{};
+        // "full" first, then the artifact's fold names in its order.
+        std::vector<std::string> folds;
+    };
+    struct Out {
+        std::size_t index{};
+        Role role{};
+        // Ascending; more than one only for a sub shared by speaker sets.
+        std::vector<std::size_t> sets;
+    };
+
+    std::vector<Set> sets;
+    // Ascending by index; an output not listed is in no set.
+    std::vector<Out> outs;
+    // Per output; empty when the artifact gives none.
+    std::array<std::string, kChannels> labels{};
+
+    // npos when there is no such set or fold.
+    [[nodiscard]] std::size_t set_index(std::string_view id) const noexcept;
+    [[nodiscard]] std::size_t fold_index(std::size_t set, std::string_view name) const noexcept;
+};
+
 // The DSP stage: 16 capture channels through the compiled pipeline and back to
 // 16 playback channels, in place, on the audio thread.
 //
@@ -55,6 +98,43 @@ std::string sha256_hex(std::string_view text);
 // and no longer is gets that history from the nearest section before it that
 // was running, or from the chain's own input history, so a band switched on
 // live starts exactly where it would have had it run all along.
+//
+// Fold-downs (the artifact's optional `monitor` section, MonitorTopology).
+// Each expand row is tagged with a set, or with none; a tagged row reads that
+// set's view of the 16 inputs instead of the inputs. A set on "full" that is
+// not crossfading has no view of its own: its rows read the inputs directly,
+// with no copy and no arithmetic, so an artifact whose sets all sit on full
+// runs bit-identically to the same artifact without the section. The section
+// is shape (fold gains included), so a live publish never changes it; which
+// fold each set is on is not part of the coefficient sets at all.
+//
+// `set_fold()` (control thread) stores a per-set request. The audio thread
+// reads the requests at the top of each block. A set whose request differs
+// from its current fold, and that is not already crossfading, starts a
+// crossfade of N = max(monitor_ramp_frames_fast(rate), 1) samples from fold A
+// (its current one) to fold B (the request). The arithmetic, exactly:
+//
+//   A fold applied to a frame's inputs x (doubles):
+//       full:   F[d] = x[d]
+//       a fold: F[d] = 0.0 for every d, then for each of its rows in artifact
+//               order: F[dest] = F[dest] + gain * x[src]
+//   At the start: a = 0.0; step = 1.0 / double(N); remaining = N
+//   Per sample of the crossfade, in stream order:
+//       a = a + step; remaining = remaining - 1
+//       if remaining == 0: a = 1.0                  (exact on the Nth sample)
+//       view[d] = (1.0 - a) * A[d] + a * B[d]
+//   When remaining reaches 0 the set's fold is B, from the next sample on.
+//
+// So sample k (0-based) of a crossfade uses a = (k+1)/N accumulated by
+// repeated addition, never computed as a multiple of the step, and the last
+// one is (1 - 1) * A + 1 * B, which is B. A request that changes during a
+// crossfade waits: the crossfade finishes and the next one starts at the top
+// of the following block, so where a deferred crossfade starts depends on the
+// block split (a request made outside a crossfade does not). `reset()` leaves
+// fold selection (and a crossfade in progress) alone. The views are sized at
+// load, so none of this allocates; the cost is the fold's rows per frame for
+// a set on a fold, twice that during its crossfade, and nothing for a set on
+// full (dsp-compiler/verify-fold.py checks all of it file to file).
 class DspStage {
 public:
     // Generous: the worst case a preset can reach is one main branch per
@@ -117,6 +197,20 @@ public:
     [[nodiscard]] std::size_t delay_samples() const noexcept { return delay_samples_; }
     [[nodiscard]] std::size_t biquad_count() const noexcept { return sets_[0].sections.size(); }
 
+    // The monitor section, when the artifact had one. Labels are what the
+    // loaded artifact said; a live publish does not change them.
+    [[nodiscard]] bool has_monitor() const noexcept { return has_monitor_; }
+    [[nodiscard]] const MonitorTopology& monitor() const noexcept { return monitor_; }
+    // Ask for `set` to move to `fold` (0 = full). Control thread; no
+    // allocation, no lock. False, and nothing stored, when there is no
+    // monitor section or either index is out of range.
+    bool set_fold(std::size_t set, std::size_t fold) noexcept;
+    // Audio-thread state, for tests and the offline runner: the fold a set is
+    // on (during a crossfade, the one it is leaving), and whether it is
+    // crossfading. 0 for an out-of-range set.
+    [[nodiscard]] std::size_t fold(std::size_t set) const noexcept;
+    [[nodiscard]] bool fold_crossfading(std::size_t set) const noexcept;
+
     void reset() noexcept;
 
     // 16 interleaved channels in, the same buffer out. Frames must not exceed
@@ -170,6 +264,30 @@ private:
     void flush_denormals() noexcept;
     static std::string shape_text(const DspStage& stage);
 
+    // Fold-downs, flat: set s's fold f (f >= 1) is folds_[fold_first_[s] + f - 1],
+    // and its rows fold_rows_[first .. first + count].
+    struct FoldRow {
+        std::uint16_t dest{};
+        std::uint16_t source{};
+        double gain{};
+    };
+    struct FoldSpan {
+        std::uint32_t first{};
+        std::uint32_t count{};
+    };
+    // Audio thread only.
+    struct FoldState {
+        std::uint32_t current{};
+        std::uint32_t to{};
+        std::uint32_t remaining{};
+        double a{};
+    };
+    // The fold's matrix applied to `in`, into `into` (see the class comment).
+    void apply_fold(std::size_t set, std::uint32_t fold, const double* in, double* into) const noexcept;
+    // Set s's view of this frame's inputs: `in` itself when on full and not
+    // crossfading, else its row of views_. Advances a crossfade by one sample.
+    const double* fold_view(std::size_t set, const double* in) noexcept;
+
     std::string preset_;
     std::string shape_;
     std::size_t internal_channels_{};
@@ -197,6 +315,28 @@ private:
     // allocates and the whole stage is one cache-friendly region.
     std::vector<double> delay_lines_;
     std::array<std::uint32_t, kChannels> delay_write_{};
+
+    // The monitor section. Shape, fixed at load.
+    bool has_monitor_{};
+    MonitorTopology monitor_;
+    // Its canonical shape lines (every line but the labels, words joined by
+    // single spaces), which shape_text() puts before `end`.
+    std::vector<std::string> monitor_shape_;
+    // Parallel to expand_: 0 reads the inputs, s + 1 reads set s's view.
+    std::vector<std::uint8_t> expand_view_;
+    std::vector<FoldRow> fold_rows_;
+    std::vector<FoldSpan> folds_;
+    std::array<std::uint32_t, MonitorTopology::kMaxSets> fold_first_{};
+    // Folds per set, "full" included.
+    std::array<std::uint32_t, MonitorTopology::kMaxSets> fold_count_{};
+    std::size_t monitor_sets_{};
+    std::uint32_t fold_ramp_{1};
+    double fold_step_{1.0};
+    // Requests from the control thread: one value each, so relaxed suffices.
+    std::array<std::atomic<std::uint32_t>, MonitorTopology::kMaxSets> fold_request_{};
+    std::array<FoldState, MonitorTopology::kMaxSets> fold_state_{};
+    // kChannels per set, sized at load.
+    std::vector<double> views_;
 };
 
 // Ramp lengths for the monitor block, in one place so every caller moves at
