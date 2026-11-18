@@ -16769,3 +16769,57 @@ a measurement taken now is the at-unity arm of the battery. Owed, on the
 operator's word: the full battery of the IMPLEMENTED entry's step 4, at
 unity and again off unity, with the Mac's gain for the preset's zero-run
 check (`USB16X16_HOST_GAIN`) taken first.
+
+**MEASURED 2026-11-18 19:19-19:45 UTC (session, on the operator's word):
+the battery's at-unity arm at 48 kHz passes on a monitor preset: four
+loaded 800-impulse runs at `daw_timeline` 528, 528, 528, 529 and the
+ten-minute soak on the eight looped channels, with `dsp_us_max` at most
+63 us. Not the whole battery: the off-unity arm and 96 kHz are owed, and
+nothing is ACCEPTED.** The operator said the outputs were safe to drive
+and left the choice of preset to the session. It ran on the preset the
+operator had applied, since applying another needs the page's login:
+`Immersive - one sub` (`dante-immersive-one-sub.dsp` 6a2c8012, 302
+sections, one speaker set of twelve outputs with the LFE as its sub),
+monitor level 0.0 dB, no dim, no mute, fold full, owner bc486911 on the
+start of 19:04:27 UTC, `prime_drop=28`, `rx_queue=96`. At 0.0 dB with
+nothing ramping the gain step is skipped by design, so this arm exercises
+the stage with the section, the control thread beside the loop and the
+fourth meter tap, not the multiply.
+
+From the Mac, `dante/measure-candidate.sh`, 32 frames,
+`USB16X16_OTHER_LOAD=0.1` on the impulse runs:
+
+| Run | Level, all 800 | `daw_timeline` | Spread | Discontinuities | Endpoint lines |
+|---|---|---|---|---|---|
+| `mon-unity-1` `20261118T191955Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-unity-2` `20261118T192331Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-unity-3` `20261118T192706Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-unity-4` `20261118T193041Z` | 377 | 529 | 0 | 0 / 0 | +0 |
+
+- Soak 600 s (`mon-unity-loop8`, `20261118T193428Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, so the preset's
+  zero-run reference was not needed; peak 0.0180 to 0.1000 across the
+  eight (the preset's own levels); discontinuities in 0 out 0; endpoint
+  xrun/lag/error lines +0. Channels 9 to 16 loaded, not judged.
+- The impulse on output 1 goes through the left speaker's high-pass and EQ
+  and still reads the point of record's 376 / 528; run 4 read one sample
+  more on its own open, as the phase 2 probe did (529 against 528).
+- Cost, from the owner's one-minute lines over the runs and the soak
+  (t=1080 to 2400 s): `dsp_us_max` 28.6 to 62.8, `dsp_us_mean` 23.5 to
+  23.6; `meter_us_max` 9.7 to 30.3, `meter_us_mean` 5.4 to 5.6 with four
+  taps (`monitor-in` is in the meter file). The budget is about 300 us of
+  each 1 ms wake. The mean is far under the 308-section `loaded` preset's
+  figures because most of this preset's sections are the fixed shape's
+  unity slots, which are skipped; it is this preset's cost, not a
+  worst case.
+- Owner counters at t=2400: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 out_holes=0/0 back_holes=0/0`,
+  `gap_us_max=1045`, `tx_depth=79..82`; `NRestarts=0`; start check
+  unchanged.
+
+Owed before ACCEPTED, each on the operator's word: the same four runs and
+soak with the monitor off unity (the knob moved from the page, which makes
+the gain step run on every block), a fold engaged for at least a probe,
+and the battery at 96 kHz with the eight-channel loop. The operator's own
+checks of the Control Room and Level safety have not been reported one by
+one.
