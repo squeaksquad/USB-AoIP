@@ -16695,3 +16695,27 @@ dante/measure-candidate.sh soak 120 32` in direct; then a preset applied
 from the page (the first artifact with a monitor section on this unit),
 the Control Room and Level safety checks, a reboot for the start rule,
 and the full battery of the IMPLEMENTED entry's step 4.
+
+**MEASURED 2026-11-18 18:30-18:33 UTC (session, on the operator's word):
+with all of phase 3 installed and the unit in direct, the noise probe at
+32 and the two-minute soak pass on the eight looped channels.** From the
+Mac, `dante/measure-candidate.sh`, 48 kHz, 32 frames, owner bc486911, web
+1.9.0, applier 1.11.0, no preset:
+- noise probe (`page3`, `20261118T183008Z`): return from sample 528, no
+  zero run of 4 or more, zeros inside the span 0.0%, endpoint
+  xrun/lag/error lines +0.
+- soak 120 s judged on the loop (`page3-loop8`, `20261118T183053Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peak 0.1000 on
+  all eight, discontinuities in 0 out 0, endpoint lines +0.
+
+As on the phase 1 and 2 runs this is not the sixteen-channel soak the
+light rule names: channels 9 to 16 are loaded but not judged while the
+far loop is eight wide. It is the light rule's measurement for the page
+and its backend, taken in direct, where the samples are never converted:
+it says the new web service and applier beside the new owner leave the
+direct path as it was, and nothing about the monitor block, which has
+still not run on this unit. Still owed, each on the operator's word: a
+preset applied from the page, the Control Room and Level safety checks, a
+reboot for the start rule, and the full battery on a monitor preset (four
+loaded 800-impulse runs and the ten-minute soak, at unity and off unity,
+48 and 96 kHz, `dsp_us_max` and `meter_us_max` recorded).
