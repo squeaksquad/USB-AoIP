@@ -16594,3 +16594,19 @@ operator's word: the restaged bundle (installer with the pins) to the Pi,
 `./install-owner-monitor.sh status`, then the operator's
 `sudo ./install-owner-monitor.sh install`, and the list in the
 IMPLEMENTED entry from its step 2.
+
+**DONE 2026-11-18 (session, on the operator's word "Copy and status"): the
+restaged owner bundle is on the Pi and its `status` is clean; the install
+is the operator's.** The bundle staged from 7886d44 (archive 92711ca3,
+list a884de21, both binary pins in) was unpacked over
+`~/usb-aoip-owner-monitor`; `out/` from the build was kept.
+`./install-owner-monitor.sh status`, which changes nothing, read: pins
+owner bc486911 and runner 46f36659, the bundle's `out/` the same two; the
+installed owner and runner `old` (c84e6a36, 4492a19c) with nothing kept
+yet; start wrapper df6a1b0b as expected; running preset none (direct);
+`usb16x16-dante.service` active; the candidate launcher, the rate service
+and the applier inactive. So nothing the installer checks stands in the
+way of `sudo ./install-owner-monitor.sh install` from that directory.
+Not installed. Next after it, from the IMPLEMENTED entry: a noise probe at
+32 and a control run on a preset without a monitor section, then the
+access bundle.
