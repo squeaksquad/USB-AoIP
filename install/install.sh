@@ -456,10 +456,12 @@ cmd_build() {
   as_builder git -C "$build_dir/inferno" reset --quiet --hard "$(pin inferno_rev)"
   as_builder git -C "$build_dir/statime" reset --quiet --hard "$(pin statime_rev)"
 
+  # Its headers and the bridge core are the copies kept beside it: the
+  # development line (dante/owner, dsp-core) has moved on since it was accepted.
   say "building the owner (the point-of-record source)"
   as_builder g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
-    -I "$repo/dante/owner" -I "$repo/dsp-core/include" -o "$out/usb16x16-dante-owner" \
-    "$repo/dante/owner/point-of-record/main.cpp" "$repo/dsp-core/src/bridge_core.cpp" -lasound -lpthread
+    -I "$repo/dante/owner/point-of-record" -o "$out/usb16x16-dante-owner" \
+    "$repo/dante/owner/point-of-record/main.cpp" "$repo/dante/owner/point-of-record/bridge_core.cpp" -lasound -lpthread
 
   say "building the DSP runner"
   as_builder cmake -S "$repo/dsp-core" -B "$build_dir/dsp-core" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF >/dev/null

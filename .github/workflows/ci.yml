@@ -74,11 +74,12 @@ jobs:
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q libasound2-dev
           mkdir -p "$RUNNER_TEMP/owner-build"
-          for src in dante/owner/main.cpp dante/owner/point-of-record/main.cpp; do
-            g++ $CXXFLAGS_STRICT -I dante/owner -I dsp-core/include -o "$RUNNER_TEMP/owner-build/usb16x16-dante-owner" \
-              "$src" dsp-core/src/bridge_core.cpp -lasound -lpthread
-            "$RUNNER_TEMP/owner-build/usb16x16-dante-owner" --help 2>&1 | head -3 || true
-          done
+          g++ $CXXFLAGS_STRICT -I dante/owner -I dsp-core/include -o "$RUNNER_TEMP/owner-build/usb16x16-dante-owner" \
+            dante/owner/main.cpp dsp-core/src/bridge_core.cpp -lasound -lpthread
+          "$RUNNER_TEMP/owner-build/usb16x16-dante-owner" --help 2>&1 | head -3 || true
+          # The point of record builds from the headers and bridge core kept beside it, as install.sh does.
+          g++ $CXXFLAGS_STRICT -I dante/owner/point-of-record -o "$RUNNER_TEMP/owner-build/usb16x16-dante-owner-por" \
+            dante/owner/point-of-record/main.cpp dante/owner/point-of-record/bridge_core.cpp -lasound -lpthread
 
   shell:
     name: Start wrapper and start check (bash)
@@ -99,6 +100,8 @@ jobs:
       - run: bash install/test-render.sh
       - name: The development unit's access update, against a stand-in root
         run: git fetch --tags --quiet && bash install/dev-unit/test-access.sh
+      - name: The development unit's owner-monitor update, against a stand-in root
+        run: bash install/dev-unit/test-owner-monitor.sh
 
   # The installer's own build step on arm64, as on the Pi: Statime and the
   # patched Inferno plugin at the pinned revisions, the owner, the DSP runner.
