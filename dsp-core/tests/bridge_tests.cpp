@@ -6,9 +6,11 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <limits>
 #include <iostream>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -1488,6 +1490,33 @@ void test_monitor_section_shape_matches_the_pinned_vector() {
           "and the section's presence is shape");
 }
 
+// The JS and Python tests read the same vector from the shared fixture; this
+// copy is that file's bytes but its preset line (it names the vector it was
+// built on). USB16X16_MONITOR_FIXTURE comes from CMakeLists.txt; without it,
+// or without the file (a copy of dsp-core alone), the check is skipped.
+void test_monitor_vector_is_the_shared_fixture() {
+#ifdef USB16X16_MONITOR_FIXTURE
+    std::ifstream file(USB16X16_MONITOR_FIXTURE, std::ios::binary);
+    if (!file) {
+        std::cout << "note: " << USB16X16_MONITOR_FIXTURE << " not found; shared-fixture check skipped\n";
+        return;
+    }
+    std::ostringstream bytes;
+    bytes << file.rdbuf();
+    std::string fixture = bytes.str();
+    const std::string theirs = "preset pinned monitor vector\n";
+    const std::string ours = "preset pinned shape vector\n";
+    const std::size_t at = fixture.find(theirs);
+    check(at != std::string::npos, "the fixture names its preset 'pinned monitor vector'");
+    if (at == std::string::npos) return;
+    fixture.replace(at, theirs.size(), ours);
+    check(fixture == with_section(dsp_pinned_vector(), dsp_pinned_monitor_section()),
+          "the inline monitor vector is dsp-compiler/fixtures/pinned-monitor-vector.dsp but its preset line");
+#else
+    std::cout << "note: USB16X16_MONITOR_FIXTURE not defined; shared-fixture check skipped\n";
+#endif
+}
+
 void test_monitor_topology_accessors() {
     auto stage = usb16x16::DspStage::load(with_section(dsp_pinned_vector(), dsp_pinned_monitor_section()));
     const usb16x16::MonitorTopology& topology = stage.monitor();
@@ -1853,6 +1882,38 @@ void test_monitor_set_fold_range_and_state() {
     check(moved.fold(0) == 2 && moved.monitor().sets[0].folds[2] == "pass", "the moved stage completes it");
 }
 
+void test_monitor_snap_folds() {
+    // A request, then a snap: on the fold at once, no crossfade, and the very
+    // first frame is the fold's matrix exactly (the prime's case).
+    auto stage = fold_stage();
+    check(stage.set_fold(0, 1), "the test fold is requested");
+    stage.snap_folds();
+    check(stage.fold(0) == 1 && !stage.fold_crossfading(0), "a snap puts the set on its request, not crossfading");
+    std::vector<float> block(usb16x16::kChannels, 0.0F);
+    block[2] = 0.8F;
+    stage.process(block.data(), 1);
+    check(block[0] == static_cast<float>(0.5 * static_cast<double>(0.8F)) &&
+              block[1] == static_cast<float>(0.25 * static_cast<double>(0.8F)) && block[2] == 0.0F,
+          "the first frame after a snap is already the fold");
+    // Mid-crossfade: the snap ends it on the latest request.
+    stage.set_fold(0, 0);
+    std::vector<float> dc = fold_dc(100);
+    stage.process(dc.data(), 100);
+    check(stage.fold_crossfading(0), "crossfading back to full");
+    stage.set_fold(0, 2);
+    stage.snap_folds();
+    check(stage.fold(0) == 2 && !stage.fold_crossfading(0), "a snap mid-crossfade lands on the latest request");
+    stage.process(dc.data(), 1);
+    check(!stage.fold_crossfading(0), "and starts nothing after it");
+    // Nothing requested: a snap changes nothing; no section: harmless.
+    auto fresh = fold_stage();
+    fresh.snap_folds();
+    check(fresh.fold(0) == 0 && fresh.fold(1) == 0 && !fresh.fold_crossfading(0), "with no request a snap stays on full");
+    auto plain = usb16x16::DspStage::load(dsp_pinned_vector());
+    plain.snap_folds();
+    check(plain.fold(0) == 0, "no section, nothing to snap");
+}
+
 } // namespace
 
 int main() {
@@ -1885,6 +1946,7 @@ int main() {
     test_dsp_publish_shrinking_delay_stays_in_bounds();
     test_dsp_moved_stage_keeps_working();
     test_monitor_section_shape_matches_the_pinned_vector();
+    test_monitor_vector_is_the_shared_fixture();
     test_monitor_topology_accessors();
     test_monitor_section_loader_refuses();
     test_monitor_full_is_bit_identical_to_no_section();
@@ -1893,6 +1955,7 @@ int main() {
     test_monitor_fold_is_block_size_independent();
     test_monitor_request_during_crossfade_waits();
     test_monitor_set_fold_range_and_state();
+    test_monitor_snap_folds();
 
     test_level_meter_measures_a_window();
     test_level_meter_closes_windows_on_block_boundaries();

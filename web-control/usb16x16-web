@@ -152,6 +152,13 @@ DANTE_LOG_UNITS = {
 }
 # The owner writes its telemetry lines once a minute.
 OWNER_LINE_FRESH_S = 150.0
+# The installed owner binary (usb16x16-apply's DANTE_OWNER), read only for
+# whether it knows the artifact's monitor section (monitor_engine).
+DANTE_OWNER = Path(os.environ.get("USB16X16_DANTE_OWNER", "/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner"))
+# The owner's loader's error prefix for the section, the applier's
+# MONITOR_LOADER_MARK: a binary holding it loads a monitor section.
+MONITOR_LOADER_MARK = b"dsp artifact: monitor: "
+ENGINE_BINARY_MAX = 1 << 27
 # The Inferno ALSA config whose NAME "..." line is the Dante device name.
 INFERNO_CONF = Path(os.environ.get("USB16X16_INFERNO_CONF", "/etc/usb16x16/dante/asound-inferno-owner.conf"))
 DEFAULT_DEVICE_NAME = "USB-AoIP"
@@ -313,6 +320,8 @@ METER_STAGES = {
     # The Dante owner's three taps; what Dante returns goes to the host unchanged.
     "dante-playback": "Dante out, after the DSP stage: what the wire carries",
     "dante-capture": "Dante in from the wire, as it goes to the host",
+    # The owner's fourth tap, only with a preset that has a monitor section.
+    "monitor-in": "Dante out, after the DSP stage and before the monitor's level, dim and mute",
 }
 
 
@@ -1131,15 +1140,52 @@ def monitor_engine(dante: bool | None = None) -> bool:
     owner of phase 3 writes its monitor status at every start, even with no
     preset (state=idle, no sets), and an older owner never writes it; the
     file is in the unit's RuntimeDirectory, so it goes when the unit stops.
-    So: the file exists and reads whole. False on the AES67 stack, and
-    whenever the endpoint is not running (the page then leaves the section
-    out, which every engine loads)."""
+    So: the file exists and reads whole, or (the endpoint stopped) the
+    installed owner binary holds the section loader's error text, the
+    applier's own test. False on the AES67 stack, and when neither says so
+    (the page then leaves the section out, which every engine loads)."""
     if dante is None:
         dante = stack() == "dante"
     if not dante:
         return False
     status, _ = read_monitor_status()
-    return status is not None
+    return status is not None or owner_knows_monitor()
+
+
+_owner_mark: dict = {"key": None, "value": False}
+_owner_mark_lock = threading.Lock()
+
+
+def owner_knows_monitor(path: Path | None = None) -> bool:
+    """Whether the installed owner binary holds MONITOR_LOADER_MARK, the
+    applier's check_monitor_engine test (binary_knows_monitor), for when the
+    endpoint is stopped and has no status file. The answer is cached by the
+    binary's (inode, size, mtime), so the file is read once per install.
+    False when it is not a regular file or cannot be read."""
+    path = DANTE_OWNER if path is None else path
+    try:
+        with open(path, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                return False
+            key = (str(path), info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+            with _owner_mark_lock:
+                if _owner_mark["key"] == key:
+                    return _owner_mark["value"]
+            found, tail, total = False, b"", 0
+            while total <= ENGINE_BINARY_MAX:
+                chunk = handle.read(1 << 20)
+                if not chunk:
+                    break
+                if MONITOR_LOADER_MARK in tail + chunk:
+                    found = True
+                    break
+                tail, total = chunk[-len(MONITOR_LOADER_MARK):], total + len(chunk)
+    except OSError:
+        return False
+    with _owner_mark_lock:
+        _owner_mark["key"], _owner_mark["value"] = key, found
+    return found
 
 
 MONITOR_SECTION_LINE = re.compile(r"(?m)^[ \t]*monitor(?:[ \t\r]|$)")
@@ -1154,7 +1200,8 @@ def monitor_section_refusal(texts: list[str]) -> str | None:
     if not any(MONITOR_SECTION_LINE.search(text) for text in texts) or monitor_engine():
         return None
     return ("This artifact has a monitor section and this unit's engine does not report one "
-            "(no monitor status from the Dante endpoint): reload the page so it compiles without it, "
+            "(no monitor status from the Dante endpoint, and the installed owner does not know the section): "
+            "reload the page so it compiles without it, "
             "or update the endpoint first")
 
 

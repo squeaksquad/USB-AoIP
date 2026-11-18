@@ -297,6 +297,24 @@ void test_prime_monitor() {
     fresh->process(unity.data(), 48);
     check((unity[0] >> 8) == 100 && (unity[47 * kChannels] >> 8) == 4800 && fresh->monitor().at_rest_unity(),
           "with nothing published a prime rises to unity and comes to rest there");
+
+    // With a fold already requested, the prime snaps it: the rise is folded
+    // from its first frame, never a 10 ms crossfade from full. Set 0 folds
+    // outputs 0 and 1 to their mono sum (input 0 alone carries signal).
+    auto folded = std::make_unique<OutDsp>();
+    std::string text = with_monitor_section(straight(1.0));
+    text.replace(text.find("folds 0\n"), 8, "folds 1\nfold 0 mono 4\n0 0 0.5\n0 1 0.5\n1 0 0.5\n1 1 0.5\n");
+    folded->load(text);
+    check(folded->stage().set_fold(0, 1), "the mono fold is requested before the prime");
+    folded->prime_monitor(48);
+    check(folded->stage().fold(0) == 1 && !folded->stage().fold_crossfading(0), "the prime snaps the fold");
+    std::vector<std::int32_t> mono(480 * kChannels, 0);
+    for (std::size_t frame = 0; frame < 480; ++frame) mono[frame * kChannels] = top24(4800);
+    folded->process(mono.data(), 480);
+    bool same = true;
+    for (std::size_t frame = 0; frame < 480; ++frame) same = same && mono[frame * kChannels] == mono[frame * kChannels + 1];
+    check(same && (mono[0] >> 8) != 0 && (mono[479 * kChannels] >> 8) == 2400,
+          "every frame of the rise is folded: outputs 0 and 1 are equal from the first frame");
 }
 
 int main(int argc, char** argv) {

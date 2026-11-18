@@ -7,6 +7,7 @@ service reports control.monitor.engine and refuses a section early when it is
 false. Run from the repo root:
 python3 -m unittest web-control/test_monitor_section.py"""
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -366,6 +367,45 @@ class WebEngineTests(monitor_tests.MonitorServerCase):
         self.assertFalse(self.web.monitor_control(True, {"dante": {"state": "active"}}, True)["engine"], "no file")
         self.write_status(idle)
         self.assertFalse(self.web.monitor_control(False, {}, True)["engine"], "never on AES67")
+
+    def test_engine_from_the_owner_binary_when_the_endpoint_is_stopped(self):
+        """No status file (the unit stopped): the installed owner binary
+        decides, by the applier's own mark, cached by (inode, size, mtime)."""
+        self.status_path.unlink()
+        owner = Path(self.tmp.name) / "usb16x16-dante-owner"
+        self.web.DANTE_OWNER = owner
+        stopped = {"dante": {"state": "inactive"}}
+        self.assertFalse(self.web.monitor_control(True, stopped, True)["engine"], "no binary")
+        owner.write_bytes(b"\x7fELF... an owner older than phase 3 ...")
+        self.assertFalse(self.web.monitor_control(True, stopped, True)["engine"], "a binary without the mark")
+        owner.write_bytes(MARK)
+        self.assertTrue(self.web.monitor_control(True, stopped, True)["engine"], "a binary with the mark: a new owner")
+        self.assertFalse(self.web.monitor_control(False, {}, True)["engine"], "still never on AES67")
+        self.assertEqual(self.web.monitor_section_refusal([VECTOR]), None, "and a section goes through")
+        status, answer = self.post_route("/api/apply/preset", {"name": "Room", "artifact": VECTOR})
+        self.assertEqual(status, 202, answer)
+        # The cache: the same (inode, size, mtime) is not read again (bytes
+        # changed in place with the mtime put back keep the old answer); a
+        # new mtime is read again.
+        before = owner.stat()
+        with open(owner, "r+b") as handle:
+            handle.write(b"\0" * len(MARK))
+        os.utime(owner, ns=(before.st_atime_ns, before.st_mtime_ns))
+        self.assertTrue(self.web.owner_knows_monitor(), "unchanged (inode, size, mtime): the cached answer")
+        os.utime(owner, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000_000))
+        self.assertFalse(self.web.owner_knows_monitor(), "a new mtime is read again")
+        owner.write_bytes(MARK)
+        self.assertTrue(self.web.owner_knows_monitor())
+        owner.chmod(0)
+        try:
+            unreadable = not os.access(owner, os.R_OK)
+            if unreadable:
+                self.assertFalse(self.web.owner_knows_monitor(), "unreadable is no")
+        finally:
+            owner.chmod(0o644)
+        owner.unlink()
+        owner.mkdir()
+        self.assertFalse(self.web.owner_knows_monitor(), "a directory is no")
 
     def test_a_preset_with_a_section_is_refused_without_the_engine(self):
         self.status_path.unlink()

@@ -910,7 +910,7 @@ test('a state-changing request that meets 401, 403 or 429 reports it, and nothin
 });
 
 // ------------------------------------------- Status tab (redesign 2026-11, phase 1)
-import { statusCards, meterRows } from './backend.mjs';
+import { statusCards, meterRows, preFaderBank } from './backend.mjs';
 
 test('statusCards: five cards, none of them good when not connected', () => {
   const cards = statusCards(null);
@@ -950,6 +950,16 @@ test('meterRows: three banks by name, null where a tap is missing', () => {
   assert.equal(rows[2].bank, null);
   assert.equal(meterRows({taps: {'ravenna-capture': tap(-5)}})[2].bank[3].peak, -5);
   assert.ok(meterRows(null).every(r => r.bank === null));
+});
+
+test('preFaderBank: the monitor-in tap for the Control Room, never a Status row', () => {
+  const tap = v => ({peakDb: new Array(16).fill(v), rmsDb: new Array(16).fill(v - 10), clipped: new Array(16).fill(0)});
+  const meters = {taps: {'dante-playback': tap(-20), 'monitor-in': tap(-8)}};
+  assert.equal(preFaderBank(meters)[4].peak, -8);
+  assert.deepEqual(meterRows(meters).map(r => r.id), ['computer', 'to-network', 'from-network'], 'the Status rows are unchanged');
+  assert.equal(meterRows(meters)[1].bank[0].peak, -20);
+  assert.equal(preFaderBank({taps: {'dante-playback': tap(-20)}}), null);
+  assert.equal(preFaderBank(null), null);
 });
 
 // Phase 3: the artifact's monitor section goes only to an engine that knows it.

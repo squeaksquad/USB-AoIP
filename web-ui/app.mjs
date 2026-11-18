@@ -9,7 +9,7 @@ import { resetBand } from './reset-band.mjs';
 import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, removeBus, setBusEqLink, setBusOutputs, speakerGroupSourceIds } from './buses.mjs';
 import { resetEq, setEqBypass, mirrorLinkedEq, exportEq, importEq } from './eq-tools.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, formatRate, deviceName, fetchLogs, systemFacts, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, monitorEngine, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, requestReboot, requestRestartAudio, requestRestartClock, requestBundle, requestPassword, fetchSupportBundle, stackTerms, statusCards, meterRows, fetchMonitor, postMonitor, requestMonitorLimits, requestMonitorReference } from './backend.mjs';
+import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, formatRate, deviceName, fetchLogs, systemFacts, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, monitorEngine, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, requestReboot, requestRestartAudio, requestRestartClock, requestBundle, requestPassword, fetchSupportBundle, stackTerms, statusCards, meterRows, preFaderBank, fetchMonitor, postMonitor, requestMonitorLimits, requestMonitorReference } from './backend.mjs';
 import { confirmDialog, passwordProblem, actionNote, bundlePath, BUNDLE_FILE } from './actions.mjs';
 import { reduceMonitor, Overlay, patchKeys, monitorValues, MonitorSender, setPatch, patchKey, soloPress, mutePress, setLabels, controlRoom, safetyNotes, clampLevel, clampTrim, clampMax,
   monitorOffered, monitorKind, readGroups, saveGroups, addGroup, removeGroup, peakText, dbWords, MONITOR_POLL_MS, DRAG_DB_PER_PX, KEY_STEP_DB, BUTTON_STEP_DB, TRIM_STEP_DB } from './monitor.mjs';
@@ -65,6 +65,10 @@ let access = null;
 // The engine's meter taps: the last window, when it was read, and a hold per row.
 let meterBody = null, meterAt = 0, meterBusy = false, meterShown = null;
 const holds = {computer: new MeterHold(), 'to-network': new MeterHold(), 'from-network': new MeterHold()};
+// The owner's monitor-in tap (before the level knob), for the Control Room's
+// overview only: not a Status row, so not in `holds`.
+const preHold = new MeterHold();
+let preShown = null;
 // A change to the device in progress: the last status seen and the poll that follows it.
 let applyStatus = null, applyBusy = false, applyPoll = null, shutdownRequested = false;
 // A reboot asked for from here: the page says so until the device answers again.
@@ -868,7 +872,8 @@ setInterval(() => { if (tab === 'control' && health && !document.hidden) refresh
 function controlHtml() {
   if (!monitor?.available) { crModel = null; return '<p class="muted">Reading the Control Room from the device…</p>'; }
   crModel = controlRoom({model: monitor, values: monitorValues(monitor, overlay), labels: setLabels(monitor.sets, presetForLiveProfile(health)?.document),
-    meters: freshMeters()?.['to-network'] || null, keysOpen: crKeys, refOpen: crRefOpen, groups: crGroups, groupEdit: crGroupEdit, busy: busyNow()});
+    meters: freshMeters()?.['to-network'] || null, keysOpen: crKeys, refOpen: crRefOpen, groups: crGroups, groupEdit: crGroupEdit, busy: busyNow(),
+    preMeters: Boolean(freshPre()), overview: prefs.overview});
   return controlRoomView(crModel);
 }
 
@@ -907,7 +912,7 @@ function applyVars(root) {
   for (const el of root.querySelectorAll('[data-x]')) { el.style.setProperty('--x', `${el.dataset.x}%`); el.style.setProperty('--y', `${el.dataset.y}%`); }
 }
 
-function drawControlMeters(bank) {
+function drawControlMeters(bank, pre = null) {
   const paint = (el, ch) => {
     if (!el) return;
     el.style.setProperty('--level', `${ch ? levelPercent(ch.peak) : 0}%`);
@@ -926,7 +931,13 @@ function drawControlMeters(bank) {
     const line = document.getElementById(`crp-${c.key}`), text = peakText(bank ? peak : null);
     if (line && line.textContent !== text) line.textContent = text;
   }
-  for (const r of crModel.rooms) for (const t of [...r.tiles, ...r.loose]) paint(document.getElementById(`crt-${r.id}-${t.n}`), bank?.[t.n]);
+  // The overview's tiles: the tap the Pre / Post switch picked (post without one).
+  const tiles = crModel.overviewPre ? pre : bank;
+  for (const r of crModel.rooms) for (const t of [...r.tiles, ...r.loose]) {
+    const el = document.getElementById(`crt-${r.id}-${t.n}`);
+    paint(el, tiles?.[t.n]);
+    el?.classList.toggle('no-data', !tiles);
+  }
   for (const s of crModel.setSwitch) {
     if (!s.meter) continue;
     const outs = monitor.sets.find(set => set.id === s.id)?.outputs || [];
@@ -1008,6 +1019,7 @@ function controlClick(spec, event) {
       if (crGroupEdit?.outs.length) { crGroups = addGroup(crGroups, a, crGroupEdit.name, crGroupEdit.outs); if (!saveGroups(crGroups)) toast('This browser will not remember the group.'); crGroupEdit = null; }
       break;
     case 'group-remove': crGroups = removeGroup(crGroups, a, b); saveGroups(crGroups); break;
+    case 'overview': prefs = {...prefs, overview: a === 'post' ? 'post' : 'pre'}; if (!savePrefs(prefs)) toast('This browser will not remember the setting.'); break;
     default: return;
   }
   renderControl();
@@ -1085,6 +1097,7 @@ window.addEventListener('blur', () => endKnob());
 
 /** The last window if the taps answered within 1.5 s, else nothing. */
 function freshMeters() { return meterShown && performance.now() - meterAt < 1500 ? meterShown : null; }
+function freshPre() { return freshMeters() ? preShown : null; }
 
 function drawMeters(force = false) {
   if (document.hidden) return;
@@ -1108,7 +1121,7 @@ function drawMeters(force = false) {
     }
     const clear = $('#clear-clips'); if (clear) clear.hidden = !anyClip;
   } else if (tab === 'control' && crModel) {
-    drawControlMeters(live?.['to-network'] || null);
+    drawControlMeters(live?.['to-network'] || null, freshPre());
   } else if (tab === 'processor' && ptab === 'outputs' && !chooser) {
     const bank = live?.['to-network'];
     for (let i = 0; i < CHANNELS; i += 1) {
@@ -1136,6 +1149,11 @@ async function pollMeters() {
       const now = performance.now();
       meterBody = body; meterAt = now;
       meterShown = Object.fromEntries(meterRows(body).map(row => [row.id, row.bank ? holds[row.id].update(row.bank, now) : null]));
+      const pre = preFaderBank(body);
+      const hadPre = Boolean(preShown);
+      preShown = pre ? preHold.update(pre, now) : null;
+      // The switch is drawn only while the tap is there: redraw when it comes or goes.
+      if (hadPre !== Boolean(preShown) && tab === 'control') renderControl();
     }
   } finally { meterBusy = false; }
 }

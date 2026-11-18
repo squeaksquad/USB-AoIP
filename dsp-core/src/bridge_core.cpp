@@ -762,6 +762,17 @@ bool DspStage::fold_crossfading(const std::size_t set) const noexcept {
     return set < monitor_sets_ && fold_state_[set].remaining > 0;
 }
 
+void DspStage::snap_folds() noexcept {
+    for (std::size_t set = 0; set < monitor_sets_; ++set) {
+        FoldState& state = fold_state_[set];
+        const std::uint32_t wanted = fold_request_[set].load(std::memory_order_relaxed);
+        state.current = wanted;
+        state.to = wanted;
+        state.remaining = 0;
+        state.a = 0.0;
+    }
+}
+
 void DspStage::apply_fold(const std::size_t set, const std::uint32_t fold, const double* const in,
                           double* const into) const noexcept {
     if (fold == 0) {

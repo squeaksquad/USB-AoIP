@@ -329,6 +329,23 @@ test('controlRoom: the peak line and clip state come from the to-network bank', 
   assert.equal(C.anyClip, true);
 });
 
+test('controlRoom: the overview tap is Pre only when the meters carry monitor-in; the cards stay post', () => {
+  const model = reduceMonitor(body714()), values = monitorValues(model), labels = setLabels(model.sets);
+  const plain = controlRoom({model, values, labels});
+  assert.equal(plain.taps, null);
+  assert.equal(plain.overviewPre, false);
+  assert.equal(plain.overviewNote, 'meters after the level knob');
+  const pre = controlRoom({model, values, labels, preMeters: true});
+  assert.deepEqual(pre.taps.map(t => [t.id, t.label, t.on]), [['pre', 'Pre', true], ['post', 'Post', false]], 'Pre by default');
+  assert.equal(pre.overviewPre, true);
+  assert.equal(pre.overviewNote, 'meters before the level knob');
+  const post = controlRoom({model, values, labels, preMeters: true, overview: 'post'});
+  assert.deepEqual(post.taps.map(t => t.on), [false, true]);
+  assert.equal(post.overviewPre, false);
+  assert.equal(controlRoom({model, values, labels, overview: 'pre'}).overviewPre, false, 'no tap: post whatever was chosen');
+  assert.deepEqual(pre.cards.map(c => c.peakText), plain.cards.map(c => c.peakText), 'the cards do not change');
+});
+
 test('Level safety words: power-up only, a restart keeps the level', () => {
   assert.equal(safetyNotes({maxDb: 0}).maxNote, 'No limit: the knobs reach 0 dB.');
   assert.match(safetyNotes({maxDb: -6}).maxNote, /stop at −6\.0 dB/);

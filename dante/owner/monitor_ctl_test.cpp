@@ -421,7 +421,42 @@ void test_resolve() {
           "active nearfield: the shared sub follows nearfield");
     r = m::resolve(topology, state_of(state_text(1, "all", three)), open);
     check(near(r.gain[2], db_gain(-18.5)) && near(r.gain[0], db_gain(-18.5)) && near(r.gain[3], db_gain(-25.5)),
-          "active all: every set plays, the sub follows the first of its sets");
+          "active all: every set plays, the sub follows the loudest of its sets (mains)");
+    check(r.scope[2] == 0, "under all the sub's solo scope is the set whose gain it took");
+    // A muted mains under all: the sub plays at nearfield's gain, in nearfield's scope.
+    r = m::resolve(topology,
+                   state_of(state_text(1, "all", {{"mains", "-18.5", "0.0", 0, 1}, {"nearfield", "-24.0", "-1.5"}, {"phones", "-30.0"}})),
+                   open);
+    check(r.gain[0] == 0.0 && near(r.gain[2], db_gain(-25.5)) && near(r.gain[3], db_gain(-25.5)) && r.scope[2] == 1,
+          "under all a muted set does not silence a sub another playing set shares");
+    // Nearfield louder than mains: the sub takes nearfield's gain.
+    r = m::resolve(topology, state_of(state_text(1, "all", {{"mains", "-30.0"}, {"nearfield", "-12.0"}, {"phones", "-30.0"}})), open);
+    check(near(r.gain[2], db_gain(-12.0)) && near(r.gain[0], db_gain(-30.0)) && r.scope[2] == 1,
+          "under all the sub takes the largest gain among its sets");
+    // A tie goes to the first of its sets.
+    r = m::resolve(topology, state_of(state_text(1, "all", {{"mains", "-20.0"}, {"nearfield", "-20.0"}, {"phones", "-30.0"}})), open);
+    check(near(r.gain[2], db_gain(-20.0)) && r.scope[2] == 0, "a tie under all: the first of its sets");
+    // Both muted: silent, scope the first.
+    r = m::resolve(topology,
+                   state_of(state_text(1, "all", {{"mains", "-20.0", "0.0", 0, 1}, {"nearfield", "-20.0", "0.0", 0, 1}, {"phones", "-30.0"}})),
+                   open);
+    check(r.gain[2] == 0.0 && r.scope[2] == 0, "every set of the sub muted: the sub is silent");
+    // The solo scope follows: with mains muted a nearfield solo silences the
+    // sub (it is nearfield's now); with mains louder it does not.
+    r = m::resolve(topology,
+                   state_of(state_text(1, "all", {{"mains", "-18.5", "0.0", 0, 1}, {"nearfield", "-24.0", "-1.5"}, {"phones", "-30.0"}},
+                                       flags_with({3}))),
+                   open);
+    check(r.gain[2] == 0.0 && near(r.gain[3], db_gain(-25.5)) && r.gain[4] == 0.0,
+          "under all the sub is in the solo scope of the set it follows");
+    r = m::resolve(topology, state_of(state_text(1, "all", three, flags_with({3}))), open);
+    check(near(r.gain[2], db_gain(-18.5)) && near(r.gain[3], db_gain(-25.5)) && r.gain[4] == 0.0,
+          "a nearfield solo under all leaves the sub that follows mains alone");
+    // A single active set keeps the rule: that set's gain, or 0.
+    r = m::resolve(topology,
+                   state_of(state_text(1, "mains", {{"mains", "-18.5", "0.0", 0, 1}, {"nearfield", "-24.0", "-1.5"}, {"phones", "-30.0"}})),
+                   open);
+    check(r.gain[2] == 0.0 && r.scope[2] == 0, "a muted active set still silences its sub");
     r = m::resolve(topology, state_of(state_text(1, "phones", three)), open);
     check(r.active == 0 && near(r.gain[0], db_gain(-18.5)) && r.gain[3] == 0.0,
           "a headphones set named active is taken as the first speakers set");

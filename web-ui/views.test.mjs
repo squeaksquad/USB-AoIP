@@ -184,6 +184,7 @@ function noInline(html, what) {
   assert.doesNotMatch(html, /\sstyle=/, `${what}: no inline style`);
   assert.doesNotMatch(html, /\son[a-z]+=/, `${what}: no inline handler`);
 }
+// Pre / Post is left out unless the meters carry the monitor-in tap (its own test).
 const LEFT_OUT = [/Pre\b|Post\b/, /Calibrat/i, /talkback/i, /\bSum\b/, /Follow/, /Edit sources/i, /\bcue\b/i];
 
 test('Control Room, 7.1.4 and headphones: two cards, Listen as on the speakers only, Subwoofers, a room, nothing left out drawn', () => {
@@ -201,6 +202,21 @@ test('Control Room, 7.1.4 and headphones: two cards, Listen as on the speakers o
   assert.match(html, /data-cr="set-ref;/, 'Set is drawn when not locked');
   assert.doesNotMatch(html, /Main volume/);
   assert.doesNotMatch(html, /data-cr="active;/, 'no set switch with one speaker set');
+});
+
+test('Control Room overview: the Pre / Post switch only with the monitor-in tap, Pre by default', () => {
+  assert.doesNotMatch(crHtml(monitor714()), /data-cr="overview;/, 'no tap: no switch');
+  const html = crHtml(monitor714(), {preMeters: true});
+  noInline(html, 'with the switch');
+  assert.match(html, /role="group" aria-label="Where the overview meters are taken"/);
+  assert.match(html, /data-cr="overview;pre" aria-pressed="true" title="Meters before the level knob and Dim"/);
+  assert.match(html, /data-cr="overview;post" aria-pressed="false" title="Meters after the level knob"/);
+  assert.match(html, /solo and mute · meters before the level knob/);
+  assert.doesNotMatch(html, /talkback/i);
+  const post = crHtml(monitor714(), {preMeters: true, overview: 'post'});
+  assert.match(post, /data-cr="overview;post" aria-pressed="true"/);
+  assert.match(post, /solo and mute · meters after the level knob/);
+  assert.match(crHtml(monitor714(), {overview: 'pre'}), /solo and mute · meters after the level knob/, 'a stored Pre without the tap stays post');
 });
 
 test('Control Room, two speaker sets: Main volume with trims and the set switch; locked reference has no Set', () => {

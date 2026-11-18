@@ -56,11 +56,14 @@ public:
     // take the monitor's published targets, then start every output from
     // silence ramping to them over `frames`, so a start or re-prime rises
     // from zero to the monitor's current gains and never plays a block at
-    // MonitorGains' default unity first. Without the section it does
-    // nothing at all: such an artifact keeps today's behaviour exactly, with
-    // no fade-in. Loop thread (or before the loop); no allocation.
+    // MonitorGains' default unity first. The folds snap to their requests
+    // first, so the rise is already folded rather than crossfading from full
+    // for 10 ms. Without the section it does nothing at all: such an artifact
+    // keeps today's behaviour exactly, with no fade-in. Loop thread (or
+    // before the loop); no allocation.
     void prime_monitor(std::uint32_t frames) noexcept {
         if (!stage_.has_monitor()) return;
+        stage_.snap_folds();
         monitor_.process(float_.data(), 0);
         monitor_.start_from_silence(frames);
     }

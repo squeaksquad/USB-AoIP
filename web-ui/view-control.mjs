@@ -80,6 +80,12 @@ function tile(r, t, placed) {
     <button type="button" class="cr-m" ${cr('out-mute', r.id, t.n)} ${pressed(t.muted)} aria-label="${t.muted ? 'Unmute' : 'Mute'} ${esc(t.name)}">M</button></div>`;
 }
 
+// The overview's Pre / Post switch: only when the device meters before the level knob.
+function taps(C) {
+  if (!C.taps) return '';
+  return `<div class="cr-taps" role="group" aria-label="Where the overview meters are taken">${C.taps.map(t => `<button type="button" ${cr('overview', t.id)} ${pressed(t.on)} title="${esc(t.title)}" aria-label="${esc(t.title)}">${esc(t.label)}</button>`).join('')}</div>`;
+}
+
 function room(C, r) {
   const chips = r.chips.map(g => `<div class="cr-chip${g.soloOn ? ' solo' : g.muteOn ? ' mute' : ''}${g.custom ? ' custom' : ''}"><span>${esc(g.name)}</span>
       <button type="button" class="cr-s" ${cr('group-solo', r.id, g.outs.join(','))} ${pressed(g.soloOn)} aria-label="Solo ${esc(g.name)}. Hold Command or Control to add to the current solo.">S</button>
@@ -90,10 +96,10 @@ function room(C, r) {
       <span class="muted" id="cr-group-hint">${r.picked ? `${r.picked} picked.` : 'Pick speakers in the room below.'}</span>
       <button type="button" class="primary" ${cr('group-save', r.id)} ${disabledAttr(!r.picked)}>Save group</button><button type="button" ${cr('group-cancel')}>Cancel</button></div>`;
   return `<section class="cr-room-panel" id="cr-room-${esc(r.id)}" aria-label="${esc(r.title)}">
-    <div class="row-head"><div class="cr-room-title"><strong>${esc(r.title)}</strong><span class="muted">solo and mute · meters after the level knob</span></div>
+    <div class="row-head"><div class="cr-room-title"><strong>${esc(r.title)}</strong><span class="muted">solo and mute · ${esc(C.overviewNote)}</span></div>
       <div class="toolbar">${C.anySolo ? `<button type="button" class="cr-clear-solo" ${cr('clear-solo')}>Clear solo</button>` : ''}
         <button type="button" class="cr-clear-clips" ${cr('clear-clips')} data-clips ${C.anyClip ? '' : 'hidden'}>Clear clips</button>
-        ${r.idle ? `<button type="button" class="cr-new-group" ${cr('group-new', r.id)}>New group</button>` : ''}</div></div>
+        ${r.idle ? `<button type="button" class="cr-new-group" ${cr('group-new', r.id)}>New group</button>` : ''}${taps(C)}</div></div>
     ${chips ? `<div class="cr-chips dense" role="group" aria-label="Solo and mute groups">${chips}</div>` : ''}
     ${editor}
     ${r.tiles.length ? `<div class="cr-room" role="group" aria-label="${esc(r.title)}, seen from above. Click a speaker to solo it. Solo and mute here are not saved.">

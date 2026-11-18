@@ -23,7 +23,9 @@
 // speakers set is taken as the preset's first speakers set: never louder than
 // asked. Per output: its set's gain; a sub shared by speaker sets follows the
 // active set when that is one of its own, is silent when another set is
-// active, and follows the first of its sets under `all`. Then subs=off
+// active, and under `all` follows the loudest of its sets (the largest gain,
+// so a muted set does not silence it while another of its sets plays; ties
+// go to the first), whose solo scope it then takes. Then subs=off
 // silences role sub, an output mute silences the output, and a solo is scoped
 // to one set: any soloed output of a set silences every unsoloed output of
 // that set (a soloed main silences its subs too). An output in no set is
@@ -911,6 +913,15 @@ struct Resolved {
                 gain = out.sets[scope].gain;
             } else {
                 gain = 0.0;
+            }
+        } else if (o.sets.size() > 1) {
+            // `all`: the loudest of its sets that plays (ties: the first), so
+            // a muted set does not silence a sub another playing set shares.
+            for (const std::size_t s : o.sets) {
+                if (out.sets[s].gain > gain) {
+                    scope = s;
+                    gain = out.sets[s].gain;
+                }
             }
         }
         if (!state.subs && o.role == MonitorTopology::Role::sub) gain = 0.0;

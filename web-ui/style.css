@@ -364,6 +364,9 @@ body.big .pw-fields input { min-height: 44px; }
 .cr-folds .muted { padding-right: 4px; font-size: 12px; }
 .cr-folds button { flex: 1 1 60px; min-height: 26px; padding: 0 6px; font-size: 12px; font-weight: 600; }
 .cr-folds button[aria-pressed="true"] { background: var(--cr-accent); border-color: var(--cr-accent); color: var(--accent-ink); }
+.cr-taps { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; }
+.cr-taps button { min-height: 26px; padding: 0 8px; border: 0; border-radius: 0; background: var(--panel); font-size: 12px; font-weight: 600; }
+.cr-taps button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
 .cr-refrow { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
 .cr-refrow .muted { font-size: 12px; }
 .cr-subs { min-height: 26px; padding: 0 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -418,7 +421,7 @@ body.big .pw-fields input { min-height: 44px; }
 .safety-grid .stack { font-size: 14px; color: var(--text); }
 .safety-num { width: 120px; text-align: center; font-weight: 600; }
 .safety-lock { align-self: flex-start; }
-body.big .cr-buttons button, body.big .cr-folds button { min-height: 40px; }
+body.big .cr-buttons button, body.big .cr-folds button, body.big .cr-taps button { min-height: 40px; }
 
 /* Change bar, dialogs, toast */
 .change-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; padding: 12px 24px; background: var(--raised); border-top: 1px solid var(--edge); }

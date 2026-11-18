@@ -131,7 +131,8 @@ struct MonitorTopology {
 // crossfade waits: the crossfade finishes and the next one starts at the top
 // of the following block, so where a deferred crossfade starts depends on the
 // block split (a request made outside a crossfade does not). `reset()` leaves
-// fold selection (and a crossfade in progress) alone. The views are sized at
+// fold selection (and a crossfade in progress) alone; `snap_folds()`, at a
+// prime, puts every set on its request with no crossfade. The views are sized at
 // load, so none of this allocates; the cost is the fold's rows per frame for
 // a set on a fold, twice that during its crossfade, and nothing for a set on
 // full (dsp-compiler/verify-fold.py checks all of it file to file).
@@ -210,6 +211,11 @@ public:
     // crossfading. 0 for an out-of-range set.
     [[nodiscard]] std::size_t fold(std::size_t set) const noexcept;
     [[nodiscard]] bool fold_crossfading(std::size_t set) const noexcept;
+    // Every set's fold becomes its request at once, with no crossfade (one
+    // in progress ends on its request too): for a prime, when the output
+    // starts from silence and there is nothing to crossfade from. Audio
+    // thread, or before the loop; no allocation, no lock.
+    void snap_folds() noexcept;
 
     void reset() noexcept;
 

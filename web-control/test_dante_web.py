@@ -154,6 +154,18 @@ class DanteWebTests(unittest.TestCase):
         self.assertFalse(stale["available"])
         self.assertIn("no audio is moving", stale["reason"])
 
+    def test_the_monitor_in_tap_is_passed_through_with_its_place(self):
+        """The owner's fourth tap, written only with a monitor-section preset."""
+        peaks = ",".join(["-20.0"] * 16)
+        tap = lambda stage: f"TAP stage={stage} seq=3 frames=2400 position=7200 peak_dbfs={peaks} rms_dbfs={peaks} clip={','.join(['0'] * 16)}\n"
+        (self.root / "run" / "meters.txt").write_text(
+            "METERS v=1 t_us=1 window_frames=2400 writes=3\n" + tap("usb-capture") + tap("dante-playback")
+            + tap("dante-capture") + tap("monitor-in"))
+        meters = self.web.read_meters()
+        self.assertEqual(sorted(meters["taps"]), ["dante-capture", "dante-playback", "monitor-in", "usb-capture"])
+        self.assertIn("before the monitor", meters["taps"]["monitor-in"]["where"])
+        self.assertEqual(meters["taps"]["monitor-in"]["peakDb"], [-20.0] * 16)
+
     def test_a_tap_whose_sequence_stands_still_is_silent_not_its_last_window(self):
         """Found on the Pi 2026-11-15: the owner rewrites the file with the host idle, the USB
         taps keep the last window they saw, and the page showed it as live levels."""

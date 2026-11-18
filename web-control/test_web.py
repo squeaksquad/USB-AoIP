@@ -35,6 +35,8 @@ def load(spool, conf_path):
     spec = importlib.util.spec_from_loader("usb16x16_web", loader)
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
+    # Never this machine's installed owner (monitor_engine reads it).
+    module.DANTE_OWNER = Path(spool) / "no-owner-binary"
     return module
 
 

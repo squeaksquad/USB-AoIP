@@ -229,11 +229,15 @@ valid and the Dante service is active.
 its preset has no monitor section (`state=idle`, no `set` lines, `active=all`),
 and an owner older than phase 3 never writes it. The web service therefore
 reports `control.monitor.engine` (`/api/health`) as: this file exists and is
-valid, whatever the unit's state. It means "this unit's engine loads an
-artifact with a monitor section", and the page compiles the section only
-when it is true. The file is in the endpoint unit's RuntimeDirectory, so it
-goes when the unit stops; `engine` is then false and the page leaves the
-section out, which every engine loads.
+valid, whatever the unit's state, or the installed owner binary contains the
+section loader's literal `dsp artifact: monitor: ` (the applier's
+`check_monitor_engine` test; read once per binary, cached by inode, size and
+mtime; unreadable is no). It means "this unit's engine loads an artifact
+with a monitor section", and the page compiles the section only when it is
+true. The file is in the endpoint unit's RuntimeDirectory, so it goes when
+the unit stops; the binary then decides, so a preset applied while the
+endpoint is stopped keeps its section. (**Decided 2026-11-18**: before, the
+file alone decided and such a preset was compiled without it.)
 
 ### Example
 

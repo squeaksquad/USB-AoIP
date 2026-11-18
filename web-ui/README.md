@@ -78,6 +78,12 @@ Three tabs.
   - The speaker overview: groups (fronts, surrounds, ..., subs, and groups
     of your own kept in this browser) and a room map, each with S and M.
     Solo is exclusive in a set; Cmd or Ctrl adds. Clear solo, Clear clips.
+    Pre / Post (2026-11-18): where the overview tiles meter, before the
+    level knob, Dim, mute and solo (the owner's `monitor-in` tap) or after
+    them; Pre by default, the choice kept in this browser (`prefs.mjs`).
+    Drawn only while the meters carry `monitor-in` (a monitor-section
+    preset); without it the overview is after the knob. The cards' banks
+    are always after the knob, and the Status tab's rows are unchanged.
   - Keys: ↑ ↓ (1 dB), M, D, R, 1 to 9 and 0 (sets, with several), Esc
     (clear solo), ? (the list).
   - Sending (`monitor.mjs`, `MonitorSender`): one POST in flight, at most
@@ -86,7 +92,7 @@ Three tabs.
     and settles on what the endpoint reports (`effective`, polled every
     500 ms while the tab is open, matched by `seq`).
   - Left out, the engine has none of them: sources, sum, follow, cue,
-    talkback, Pre/Post (the meters are after the knob), calibration.
+    talkback, calibration.
 - **System, Level safety** (phase 3): the loudest the knobs can go, the
   level after power-up (where it was, the reference, or a fixed level; a
   restart of audio keeps the level it had), and the reference lock. Root's,

@@ -348,6 +348,10 @@ export function bankTag(output, kind, index) {
   return token(output.label);
 }
 
+// The overview's meter switch (the mockup's Pre / Post), drawn only when the
+// owner writes the monitor-in tap.
+export const OVERVIEW_TAPS = [['pre', 'Pre', 'Meters before the level knob and Dim'], ['post', 'Post', 'Meters after the level knob']];
+
 export function keyList({several, first}) {
   const what = first === 'headphones' ? 'the headphones' : 'the speakers';
   return [['↑ ↓', `${first === 'main' ? 'Main volume' : 'Volume'} up or down 1 dB`], ['M', `Mute ${what}`], ['D', `Dim ${what}`], ['R', 'Go to the reference level'],
@@ -358,8 +362,13 @@ export function keyList({several, first}) {
  * Everything the Control Room tab draws, from the reduced answer, the values
  * shown, the set labels, and the page's own view state. `meters` is a bank of
  * 16 {peak, hold, clip} (the to-network tap with its hold) or null.
+ * `preMeters` says whether the meters carry the monitor-in tap (before the
+ * level knob): only then is the overview's Pre / Post switch drawn, and
+ * `overview` ('pre' | 'post', the browser's choice) picks the overview
+ * tiles' tap. The cards' banks are always post.
  */
-export function controlRoom({model, values, labels, meters = null, keysOpen = false, refOpen = {}, groups = {}, groupEdit = null, busy = false}) {
+export function controlRoom({model, values, labels, meters = null, keysOpen = false, refOpen = {}, groups = {}, groupEdit = null, busy = false,
+  preMeters = false, overview = 'pre'}) {
   const limits = model.limits, maxDb = limits.maxDb, sets = model.sets;
   const speakers = sets.filter(s => s.kind === 'speakers'), phones = sets.filter(s => s.kind === 'headphones');
   const several = speakers.length > 1;
@@ -410,9 +419,12 @@ export function controlRoom({model, values, labels, meters = null, keysOpen = fa
       editing, groupName: editing ? groupEdit.name : '', picked: editing ? groupEdit.outs.length : 0, idle: !groupEdit};
   });
 
+  const overviewPre = preMeters && overview !== 'post';
+  const taps = !preMeters ? null : OVERVIEW_TAPS.map(([id, label, title]) => ({id, label, title, on: (id === 'pre') === overviewPre}));
   const first = cards[0];
   return {
-    empty: sets.length === 0, cards, several, setSwitch, rooms, keysOpen,
+    empty: sets.length === 0, cards, several, setSwitch, rooms, keysOpen, taps, overviewPre,
+    overviewNote: overviewPre ? 'meters before the level knob' : 'meters after the level knob',
     keys: keyList({several, first: !first ? 'speakers' : first.isMain ? 'main' : first.kind}),
     anySolo: solo.some(Boolean), anyClip: Boolean(meters?.some(m => m?.clip)),
     refused: model.effective.state === 'refused' ? (model.effective.reason || 'no reason given') : '',

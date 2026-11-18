@@ -79,7 +79,7 @@ still describes it; on the Dante stack the differences are these.
 | Verified by | `/run/usb16x16/stage`, the BRIDGE line, RECOVERs, the bridge log | the unit staying up on one start and that start's journal: `DSP loaded`, `DSPLIVE following`, `NETSTART`, nothing fatal, 15 s settle |
 | User presets | `user-<slug>`, a profile block each | `dante-<slug>`, the file alone; any installed preset can be switched to |
 | Live file and status | `/run/usb16x16/dsp-live.dsp`, `.status` | `/run/usb16x16-dante/dsp-live.dsp`, `dsp-live.status` |
-| Meters | `/run/usb16x16/meters`, four taps | `/run/usb16x16-dante/meters.txt`, three taps (`usb-capture`, `dante-playback`, `dante-capture`) |
+| Meters | `/run/usb16x16/meters`, four taps | `/run/usb16x16-dante/meters.txt`, three taps (`usb-capture`, `dante-playback`, `dante-capture`), and `monitor-in` with a monitor-section preset |
 | Telemetry in `/api/health` | `bridge`, `stage`, `recovers`, `ptp`, `streams` | `owner` (the endpoint's once-a-minute `OWNER` / `USB` / `DSP` / `METER` lines, read from the journal every 10 s); no clock or stream table: routing is Dante Controller's |
 | Logs | `usb16x16-aes67`, `usb-16x16` | `usb16x16-dante`, `usb16x16-statime`, `usb-16x16` (`service=stack` names the network service on either) |
 
@@ -250,8 +250,13 @@ POST /api/apply/monitor-reference  {"set": id, "levelDb": -60..0, "note": "<= 64
   `monitor` section: the owner of phase 3 writes its monitor status at every
   start, even with no preset (`state=idle`, no sets), and an older owner never
   does, so `engine` is true when `/run/usb16x16-dante/monitor.status` exists
-  and reads whole, whatever the unit's state (the file is in the unit's
-  RuntimeDirectory and goes when it stops), and false on the AES67 stack.
+  and reads whole, whatever the unit's state, or, since the file is in the
+  unit's RuntimeDirectory and goes when it stops, when the installed owner
+  binary (`/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner`,
+  `USB16X16_DANTE_OWNER`) carries the section loader's literal
+  `dsp artifact: monitor: `, the applier's own test, read once per binary
+  (cached by inode, size and mtime; unreadable is false). So a preset applied
+  while the endpoint is stopped keeps its section. False on the AES67 stack.
   `available` is unchanged. The page compiles the section only when `engine`
   is true.
 - **The monitor section and an older engine.** `POST /api/apply/preset`,
@@ -361,7 +366,12 @@ converters clamp, cumulative since the bridge started so a client polling
 slower than a window still sees every overload. The stages: `usb-capture`
 is what the host sends over USB, before the DSP stage; `ravenna-playback`
 what leaves on AES67, after it (the UI's output bank); `ravenna-capture` and
-`usb-playback` the return leg. The page reads this at up to 10 Hz while its
+`usb-playback` the return leg. The Dante owner writes three taps,
+`usb-capture`, `dante-playback` (after the stage and the monitor gains: what
+the wire carries) and `dante-capture`, and a fourth, `monitor-in` (after the
+stage, before the monitor's level, dim, mute and solo: pre-fader), only while
+a preset with a monitor section runs; the page's Control Room offers its
+Pre / Post meter switch only when that tap is there. The page reads this at up to 10 Hz while its
 Outputs tab is visible and stops otherwise. A file older than 1 s (the bridge
 stopped, or the profile runs `METERS=0`) reads `available: false` with the
 reason; the health snapshot's `meters` block carries the same flag, the

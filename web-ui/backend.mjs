@@ -771,7 +771,8 @@ export async function compileDraft(config, importImpl, {shape = 'fixed', rate = 
 }
 
 /** Whether the device's engine knows the artifact's monitor section: the
- *  service's control.monitor.engine (the owner's monitor status reads whole).
+ *  service's control.monitor.engine (the owner's monitor status reads whole,
+ *  or the installed owner binary knows the section).
  *  False when unknown, on an older service and standalone. */
 export const monitorEngine = health => health?.control?.monitor?.engine === true;
 
@@ -1067,11 +1068,18 @@ export function statusCards(health) {
  * missing: what the computer sends, what goes to the network (after the
  * processing), what comes from the network (on its way to the computer).
  */
+const tapBank = tap => Array.isArray(tap?.peakDb) && tap.peakDb.length === 16
+  ? tap.peakDb.map((peak, i) => ({peak, rms: tap.rmsDb?.[i] ?? null, clipped: tap.clipped?.[i] ?? 0}))
+  : null;
+
+/** The Dante owner's monitor-in tap (after the DSP stage, before the
+ *  monitor's level, dim, mute and solo) as a bank, or null: it is written
+ *  only while a preset with a monitor section runs. Not a Status row. */
+export const preFaderBank = meters => tapBank(meters?.taps?.['monitor-in']);
+
 export function meterRows(meters) {
   const taps = meters?.taps || {};
-  const bank = tap => Array.isArray(tap?.peakDb) && tap.peakDb.length === 16
-    ? tap.peakDb.map((peak, i) => ({peak, rms: tap.rmsDb?.[i] ?? null, clipped: tap.clipped?.[i] ?? 0}))
-    : null;
+  const bank = tapBank;
   return [
     {id: 'computer', title: 'From the computer', note: 'USB, before the processing', bank: bank(taps['usb-capture'])},
     {id: 'to-network', title: 'To the network', note: 'After the processing: what the outputs carry', bank: bank(taps['dante-playback'] ?? taps['ravenna-playback'])},
