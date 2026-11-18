@@ -16719,3 +16719,53 @@ preset applied from the page, the Control Room and Level safety checks, a
 reboot for the start rule, and the full battery on a monitor preset (four
 loaded 800-impulse runs and the ten-minute soak, at unity and off unity,
 48 and 96 kHz, `dsp_us_max` and `meter_us_max` recorded).
+
+**DONE 2026-11-18 19:02-19:05 UTC (operator, read back by the session at
+19:04-19:05 UTC): the first monitor preset runs on the Pi, the monitor
+block has taken 49 state changes from the page without a refusal, and the
+start rule held across a real reboot. No audio has been measured through
+it yet.** The operator's words: "a monitor preset is running and the
+monitor level is set to 0". The session watched none of it and read this
+back over SSH from root's receipts, the journal and the three files.
+
+- 19:02:53 UTC, receipt `preset` done, profile `dante-immersive-one-sub`:
+  `/etc/usb16x16/dsp/dante-immersive-one-sub.dsp` (6a2c8012), compiled by
+  the new page, the first artifact with a monitor section on this unit
+  (one set `speakers`, twelve outputs, the LFE as its sub, folds `5.1`,
+  `stereo`, `mono`). Applier 1.11.0 and runner 46f36659 passed it and
+  owner bc486911 loaded it: `DSP loaded ... internal=23 biquads=302
+  delay_frames=0`, `MONITOR following ... sets=1`, `MONITOR first
+  state=start`. `owner.conf` has `DSP_PRESET`, `DSP_SHA256`, `DSP_LIVE=1`.
+- Between then and the reboot the owner logged `MONITOR changed
+  state=applied` for seq 1 to 49, `applied=49 refused=0 publishes=49
+  status_failures=0 limits=defaults`: every state the web service wrote
+  was read whole, resolved and published, none late enough to be skipped.
+  What the operator moved (knob, dim, mute, a fold) was not reported and
+  the status keeps only the last state.
+- 19:03:45 UTC, receipt `reboot` done; the Pi booted at 19:04:00 and the
+  endpoint started at 19:04:27 UTC, `NRestarts=0`. With no run file after
+  the boot the owner applied the start rule itself (`MONITOR first
+  state=start`, limits the defaults, so `start=last` from the remembered
+  copy), the web service adopted that and wrote the run file at once
+  (`MONITOR changed state=applied seq=50`, the count carried on from the
+  remembered copy's 49). In force: `active=speakers`, `level_db=0.0`,
+  `trim_db=0.0`, no dim, no mute, `fold=full`, `gain_db=0.0`, which is
+  where the operator says the level was left. So "where it was" survives a
+  power cycle, on one reboot.
+- Start check `state=ok restarts=0` at 19:05:32 UTC. `usb16x16-statime`,
+  `usb16x16-web`, `usb-16x16` and `usb16x16-apply.path` active.
+  `/run/usb-aoip-monitor/state` and `/var/lib/usb-aoip-monitor/state` are
+  644, the web account's, 204 bytes each. There is still no
+  `monitor-limits` file: Level safety has not been changed, so the knob
+  maximum is 0 dB and the start rule the default.
+
+Not seen: any `DSP t=` cost line, because no host was sending when the
+session read (both outgoing taps idle), so `dsp_us_max` with the gains and
+the fourth tap is still unmeasured on the Pi; the `monitor-in` tap in the
+meter file, for the same reason; anything audible; which Control Room
+controls were tried; Level safety; the set switch (the preset has one
+set). At a level of 0.0 with nothing ramping the gain step is skipped, so
+a measurement taken now is the at-unity arm of the battery. Owed, on the
+operator's word: the full battery of the IMPLEMENTED entry's step 4, at
+unity and again off unity, with the Mac's gain for the preset's zero-run
+check (`USB16X16_HOST_GAIN`) taken first.
