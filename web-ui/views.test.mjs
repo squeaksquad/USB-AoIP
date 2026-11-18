@@ -15,8 +15,10 @@ import { routingView, crosspoint } from './view-routing.mjs';
 import { setsView } from './view-sets.mjs';
 import { bassView } from './view-bass.mjs';
 import { chooserView } from './view-chooser.mjs';
-import { systemView, actionsPanel } from './view-system.mjs';
+import { systemView, actionsPanel, safetyPanel } from './view-system.mjs';
 import { ACTION_KINDS } from './actions.mjs';
+import { reduceMonitor, monitorValues, controlRoom, setLabels, safetyNotes } from './monitor.mjs';
+import { controlRoomView } from './view-control.mjs';
 
 function state(config = createConfig(), extra = {}) {
   return {
@@ -151,4 +153,78 @@ test('EQ editor: sixteen handles and chips, three numbers for the band, and the 
   assert.doesNotMatch(html, /data-act="eq-link"/);
   assert.match(eqView(state(phones(), {eqOpen: 14})), /data-act="eq-link"/);
   assert.doesNotMatch(outputsView(state(createConfig(), {eqOpen: 0})), /data-eq-node=/, 'the editor is not drawn among the rows');
+});
+
+// ---- Phase 3: the Control Room and the Level safety panel
+
+const ZEROS16 = Array(16).fill(false);
+const mout = (n, label, role = 'speaker') => ({n, role, label});
+function monitor714() {
+  const labels = ['L', 'R', 'C', 'Sub', 'Ls', 'Rs', 'Lrs', 'Rrs', 'Ltf', 'Rtf', 'Ltr', 'Rtr'];
+  return {ok: true, available: true, seq: 4, state: {}, limits: {maxDb: 0, start: 'last', startDb: -30, lock: false, refs: {}, file: 'absent'},
+    topology: {sets: [{id: 'speakers', kind: 'speakers', folds: ['full', '5.1', 'stereo', 'mono'], outputs: labels.map((l, n) => mout(n, l, n === 3 ? 'sub' : 'speaker'))},
+      {id: 'headphones', kind: 'headphones', folds: ['full'], outputs: [mout(14, 'Phones L'), mout(15, 'Phones R')]}]},
+    effective: {seq: 4, state: 'applied', reason: '', active: 'speakers', dimDb: -20, subs: true,
+      sets: {speakers: {levelDb: -18.5, trimDb: 0, dim: false, mute: false, fold: 'full'}, headphones: {levelDb: -30, trimDb: 0, dim: false, mute: false, fold: 'full'}},
+      solo: ZEROS16, outMute: ZEROS16}};
+}
+function monitorTwoSets(lock = true) {
+  return {ok: true, available: true, seq: 1, limits: {maxDb: -6, start: 'reference', startDb: -30, lock, refs: {mains: {levelDb: -18, note: '79 dB SPL C'}}},
+    topology: {sets: [{id: 'mains', kind: 'speakers', folds: ['full', 'stereo', 'mono'], outputs: [mout(0, 'L'), mout(1, 'R'), mout(2, 'C'), mout(3, 'Sub', 'sub')]},
+      {id: 'nearfield', kind: 'speakers', folds: ['full', 'mono'], outputs: [mout(4, 'L 2'), mout(5, 'R 2'), mout(3, 'Sub', 'sub')]}]},
+    effective: {seq: 1, state: 'applied', reason: '', active: 'mains', dimDb: -20, subs: true,
+      sets: {mains: {levelDb: -18, trimDb: 0, dim: false, mute: false, fold: 'full'}, nearfield: {levelDb: -18, trimDb: -1.5, dim: false, mute: false, fold: 'full'}},
+      solo: ZEROS16, outMute: ZEROS16}};
+}
+function crHtml(body, extra = {}) {
+  const model = reduceMonitor(body);
+  return controlRoomView(controlRoom({model, values: monitorValues(model), labels: setLabels(model.sets), ...extra}));
+}
+function noInline(html, what) {
+  assert.doesNotMatch(html, /\sstyle=/, `${what}: no inline style`);
+  assert.doesNotMatch(html, /\son[a-z]+=/, `${what}: no inline handler`);
+}
+const LEFT_OUT = [/Pre\b|Post\b/, /Calibrat/i, /talkback/i, /\bSum\b/, /Follow/, /Edit sources/i, /\bcue\b/i];
+
+test('Control Room, 7.1.4 and headphones: two cards, Listen as on the speakers only, Subwoofers, a room, nothing left out drawn', () => {
+  const html = crHtml(monitor714());
+  noInline(html, 'control room');
+  for (const re of LEFT_OUT) assert.doesNotMatch(html, re, `left out: ${re}`);
+  assert.doesNotMatch(html, /<kbd>T<\/kbd>/, 'no T key');
+  assert.match(html.replace(/<[^>]+>/g, ''), /Everything here is instant, is not part of a preset, and is kept on the device across restarts\./);
+  assert.match(html, /role="slider"/);
+  assert.equal((html.match(/class="cr-card /g) || []).length, 2);
+  assert.match(html, /Listen as/);
+  assert.equal((html.match(/data-cr="fold;/g) || []).length, 4, 'Full, 5.1, Stereo, Mono on the speakers; none on one-fold headphones');
+  assert.match(html, /data-cr="subs"/);
+  assert.match(html, /after the level knob/);
+  assert.match(html, /data-cr="set-ref;/, 'Set is drawn when not locked');
+  assert.doesNotMatch(html, /Main volume/);
+  assert.doesNotMatch(html, /data-cr="active;/, 'no set switch with one speaker set');
+});
+
+test('Control Room, two speaker sets: Main volume with trims and the set switch; locked reference has no Set', () => {
+  const html = crHtml(monitorTwoSets(true));
+  noInline(html, 'two sets');
+  assert.match(html, /Main volume/);
+  assert.match(html, /data-cr="active;all"/);
+  assert.match(html, /data-m="trim"/);
+  assert.doesNotMatch(html, /data-cr="set-ref;/);
+  assert.match(crHtml(monitorTwoSets(true), {refOpen: {main: true}}), /The reference is locked on the System tab/);
+  assert.match(html, /bass is not/i, 'the Subwoofers switch says bass is not redirected');
+  const open = crHtml(monitorTwoSets(false));
+  assert.match(open, /data-cr="set-ref;/);
+});
+
+test('Level safety panel: drawn only with its limits, no inline styles, the start rule is after power-up', () => {
+  const limits = monitor714().limits;
+  const S = {connected: true, safety: {limits, notes: safetyNotes(limits), note: null, busy: false}};
+  const html = safetyPanel(S);
+  noInline(html, 'safety');
+  assert.match(html, /id="safety-panel"/);
+  assert.match(html, /power/i);
+  assert.match(html, /data-act="sf-lock"/);
+  assert.equal(safetyPanel({connected: true, safety: null}), '', 'not drawn without the kind');
+  assert.equal(safetyPanel({...S, connected: false}), '');
+  assert.match(safetyPanel({...S, safety: {...S.safety, limits: {...limits, start: 'fixed'}}}), /data-m="sf-start-db"/);
 });

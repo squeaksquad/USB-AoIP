@@ -54,6 +54,45 @@ Three tabs.
     is made on the device, then downloaded as `usb-aoip-support.json`.
     After a reboot request the page says so and reconnects by itself.
 
+- **Control Room** (phase 3, 2026-11-18; needs web 1.9.0 with the
+  monitor block, `docs/web/MONITOR-FILES.md`). Drawn only when the device
+  says `control.monitor.available` in `/api/health`; when that stops, a page
+  on it goes back to Status. The standalone page has no Control Room.
+  Everything on it is instant, not part of a preset and not in undo, and
+  never marks the draft changed; the device keeps it across restarts.
+  - A card per set (speakers, headphones); with two or more speaker sets,
+    one *Main volume* card that writes level, Dim and Mute to every speaker
+    set at once (`"sets": [...]`), a trim per set (−12 to +12 dB, with what
+    it plays at), and "Which speakers are playing" with "All sets".
+  - The knob: drag (0.25 dB a pixel), arrow keys (0.5 dB), − and + (1 dB),
+    or type; −60 dB to the limit in 0.5 dB steps. The ring of 31 lights
+    shows the level, the blocked part above the limit and the reference.
+    Dim (by the device's dim amount), Mute, Ref (go to the reference), Set
+    (store the level as the reference; left out when the reference is
+    locked). The state line (Muted, Dimmed to, At reference, from ref, Not
+    playing) opens the reference row: the reference level and what it
+    measures, stored through the applier (`monitor-reference`).
+  - Per output meters after the level knob (the to-network tap), a peak
+    line, "Listen as" when the set has two or more fold-downs, Subwoofers
+    on or off on a set with a sub (bass is not redirected to the mains).
+  - The speaker overview: groups (fronts, surrounds, ..., subs, and groups
+    of your own kept in this browser) and a room map, each with S and M.
+    Solo is exclusive in a set; Cmd or Ctrl adds. Clear solo, Clear clips.
+  - Keys: ↑ ↓ (1 dB), M, D, R, 1 to 9 and 0 (sets, with several), Esc
+    (clear solo), ? (the list).
+  - Sending (`monitor.mjs`, `MonitorSender`): one POST in flight, at most
+    one every 30 ms while dragging, the latest value per set and field
+    wins, the final value on release. The page shows what it sent at once
+    and settles on what the endpoint reports (`effective`, polled every
+    500 ms while the tab is open, matched by `seq`).
+  - Left out, the engine has none of them: sources, sum, follow, cue,
+    talkback, Pre/Post (the meters are after the knob), calibration.
+- **System, Level safety** (phase 3): the loudest the knobs can go, the
+  level after power-up (where it was, the reference, or a fixed level; a
+  restart of audio keeps the level it had), and the reference lock. Root's,
+  so each change is a `monitor-limits` request followed to its receipt.
+  Drawn only when the device lists that kind in `control.monitor.kinds`.
+
 The **change bar** at the bottom says what is pending and offers what can be
 done about it. Whether an edit is heard at once or needs a restart is not
 decided in the page: it is `liveState`'s answer, from the compiled draft's
@@ -124,6 +163,16 @@ and `fetchSupportBundle`. `renderLive` now compares a panel with the
 browser's own serialisation of the new HTML, so an unchanged panel is no
 longer replaced on every poll.
 
+`monitor.mjs` (phase 3) holds the Control Room's logic: reading
+`/api/monitor`, the optimistic overlay, the sender, solo and mute, the
+labels, the ring, the state line, the room map and groups, the safety
+panel's words; `view-control.mjs` draws the tab and `safetyPanel` in
+`view-system.mjs` the System panel. `backend.mjs` has `fetchMonitor`,
+`postMonitor`, `requestMonitorLimits` and `requestMonitorReference`. The
+Control Room is redrawn by a small DOM morph in `app.mjs`, so a dragged knob
+or a field being typed in survives the poll; the knob's angle and a tile's
+place are custom properties set from script (`--rot`, `--x`, `--y`).
+
 All modules stay flat in `web-ui/`: the installer and
 `install/dev-unit/stage-access.sh` copy `web-ui/*.mjs` and nothing below it.
 
@@ -177,6 +226,18 @@ Checked on 2026-11-17 for phase 2, with no device:
 
 Not checked: anything on the device itself; the browser's own sign-in prompt
 after a password change; a real file save of the bundle.
+
+Checked on 2026-11-18 for phase 3, with no device: the real web service
+(`--no-auth`) on the Mac, a script standing in for the owner (it follows the
+run file into `monitor.status`, clamped to root's limits, and writes a meter
+snapshot) and the real applier code with the tests' runner draining the
+inbox. Two layouts: 7.1.4 with headphones, and two speaker sets sharing a
+sub. Knob drag, keys, Dim, Mute, Listen as, solo by tile and by group (Cmd
+adding), Esc, the trims, the set switch with All sets, Main volume writing
+both sets; on System the limit (the level clamped to it), the power-up
+rule, and a reference with its note stored from the Control Room; a 375 px
+screen with no sideways scroll; no console errors. Not checked: the owner
+itself, a real lock round trip from the page, touch.
 
 ## The record below
 

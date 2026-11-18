@@ -202,6 +202,8 @@ GET  /api/monitor        {ok, available, state, effective, topology, limits, seq
                          /run/usb16x16-dante/monitor.status reads whole
 POST /api/monitor        a patch, any subset of:
                            {"set": id, "levelDb": -60..0, "trimDb": -12..12, "dim": b, "mute": b, "fold": name}
+                           {"sets": [id, ...], <the same fields>}  the same change to several sets, one write
+                                                                   (the page's Main volume); not with "set"
                            {"active": id | "all"}  {"dimDb": -40..0}  {"subs": b}
                            {"solo": [16 b]}  {"outMute": [16 b]}  {"clearSolo": true}
                          -> 200 {ok, seq, state}; 400 bad form or unknown key (4 KiB body at most);
@@ -226,7 +228,10 @@ POST /api/apply/monitor-reference  {"set": id, "levelDb": -60..0, "note": "<= 64
   run file. While no run file exists and the owner's status says
   `state=start`, the owner's active set and per-set level, trim, dim, mute
   and fold are taken as the state, so after a boot the owner's start rule
-  decides the first levels. The run file is written on the first POST.
+  decides the first levels, and the run file is written from them at once
+  (the monitor thread looks every 0.5 s, and every GET and POST does), so an
+  owner restart before any knob move does not apply its start rule again.
+  Otherwise the run file is written on a POST.
 - **The status** is read fresh on each GET and POST, parsed once per file
   version (stat, then a read on a change), as `/api/meters` is. Its age
   means nothing: the owner writes it only on a change.

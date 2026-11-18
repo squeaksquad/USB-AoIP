@@ -1419,7 +1419,7 @@ MONITOR_MAX = (-30.0, 0.0)
 MONITOR_START_RULES = ("last", "reference", "fixed")
 MONITOR_REF_DEFAULT = -10.0
 MONITOR_SET_FIELDS = ("levelDb", "trimDb", "dim", "mute", "fold")
-MONITOR_PATCH_KEYS = frozenset(("set", *MONITOR_SET_FIELDS, "active", "dimDb", "subs", "solo", "outMute", "clearSolo"))
+MONITOR_PATCH_KEYS = frozenset(("set", "sets", *MONITOR_SET_FIELDS, "active", "dimDb", "subs", "solo", "outMute", "clearSolo"))
 
 
 class MonitorRefusal(Exception):
@@ -1764,13 +1764,26 @@ def monitor_patch(body, status: dict) -> dict:
     patch: dict = {}
     fields = [key for key in MONITOR_SET_FIELDS if key in body]
     sets = {s["id"]: s for s in status["sets"]}
+    if "set" in body and "sets" in body:
+        raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "set and sets together: send one")
+    if "sets" in body:
+        # The same fields for several sets in one write (the page's Main volume).
+        idents = body["sets"]
+        if (not isinstance(idents, list) or not 1 <= len(idents) <= MONITOR_SETS_MAX
+                or not all(isinstance(i, str) and MONITOR_SET_ID.fullmatch(i) for i in idents)
+                or len(set(idents)) != len(idents)):
+            raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"sets must be 1 to {MONITOR_SETS_MAX} distinct set ids")
+        if not fields:
+            raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"sets needs one of {', '.join(MONITOR_SET_FIELDS)}")
+        patch["sets"] = list(idents)
     if "set" in body:
         ident = body["set"]
         if not isinstance(ident, str) or not MONITOR_SET_ID.fullmatch(ident):
             raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "set must be a set id")
         if not fields:
             raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"set needs one of {', '.join(MONITOR_SET_FIELDS)}")
-        patch["set"] = ident
+        patch["sets"] = [ident]
+    if "sets" in patch:
         if "levelDb" in body:
             patch["levelDb"] = monitor_number(body, "levelDb", *MONITOR_LEVEL)
         if "trimDb" in body:
@@ -1783,7 +1796,7 @@ def monitor_patch(body, status: dict) -> dict:
                 raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "fold must be a fold name")
             patch["fold"] = body["fold"]
     elif fields:
-        raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"{fields[0]} needs set")
+        raise MonitorRefusal(HTTPStatus.BAD_REQUEST, f"{fields[0]} needs set or sets")
     if "active" in body:
         active = body["active"]
         if not isinstance(active, str) or not (active == "all" or MONITOR_SET_ID.fullmatch(active)):
@@ -1806,11 +1819,11 @@ def monitor_patch(body, status: dict) -> dict:
             raise MonitorRefusal(HTTPStatus.BAD_REQUEST, "clearSolo and solo together: send one")
         patch["solo"] = [False] * 16
     # Against the running preset.
-    if "set" in patch:
-        if patch["set"] not in sets:
-            raise MonitorRefusal(HTTPStatus.CONFLICT, f"The running preset has no monitor set {patch['set']}; reload")
-        if "fold" in patch and patch["fold"] not in sets[patch["set"]]["folds"]:
-            raise MonitorRefusal(HTTPStatus.CONFLICT, f"Set {patch['set']} offers no fold {patch['fold']}")
+    for ident in patch.get("sets", []):
+        if ident not in sets:
+            raise MonitorRefusal(HTTPStatus.CONFLICT, f"The running preset has no monitor set {ident}; reload")
+        if "fold" in patch and patch["fold"] not in sets[ident]["folds"]:
+            raise MonitorRefusal(HTTPStatus.CONFLICT, f"Set {ident} offers no fold {patch['fold']}")
     if patch.get("active") not in (None, "all") and patch["active"] not in sets:
         raise MonitorRefusal(HTTPStatus.CONFLICT, f"The running preset has no monitor set {patch['active']}; reload")
     return patch
@@ -1822,10 +1835,13 @@ class MonitorStore:
     Starts from the run file (it survives a restart of this service), else
     from the remembered copy, which is NOT then written to the run file: after
     a boot the owner's start rule decides, and while no run file exists a
-    status of state=start is taken as the state (adopt). The run file is
-    written on a POST only. The remembered copy follows MONITOR_PERSIST_S
-    after the last change (tick), with solo cleared, and on a clean stop
-    (flush). `clock` is injectable for the tests."""
+    status of state=start is taken as the state and the run file is written
+    from it at once (adopt), so that "no run file" means "the first start
+    since boot" and an owner restart before any knob move does not apply the
+    start rule again. Otherwise the run file is written on a POST. The
+    remembered copy follows MONITOR_PERSIST_S after the last change (tick),
+    with solo cleared, and on a clean stop (flush). `clock` is injectable for
+    the tests."""
 
     def __init__(self, run_dir: Path, state_dir: Path, clock=time.monotonic) -> None:
         self.run_path = run_dir / MONITOR_FILE
@@ -1856,12 +1872,27 @@ class MonitorStore:
     def adopt(self, status: dict | None) -> None:
         """While no run file of ours exists, an owner that computed its own
         start (state=start) is followed: its active set and each set's level,
-        trim, dim, mute and fold become the state. Caller holds the lock."""
+        trim, dim, mute and fold become the state, and the run file is written
+        from it right away (seq one more). When that write fails the state is
+        still followed in memory and the write is tried again on the next
+        call. Caller holds the lock."""
         if self.run_written or not status or status["state"] != "start":
             return
+        state = json.loads(json.dumps(self.state))
         for row in status["sets"]:
-            self.state["sets"][row["id"]] = {key: row[key] for key in MONITOR_SET_FIELDS}
-        self.state["active"] = status["active"]
+            state["sets"][row["id"]] = {key: row[key] for key in MONITOR_SET_FIELDS}
+        state["active"] = status["active"]
+        state = self.seeded(state, status)
+        seq = self.seq + 1
+        try:
+            write_monitor_file(self.run_path, render_monitor_state(seq, state).encode("ascii"))
+        except OSError as error:
+            print(f"monitor: could not write {self.run_path} after adopting the owner's start: {error}",
+                  file=sys.stderr, flush=True)
+            self.state = state
+            return
+        self.state, self.seq, self.run_written = state, seq, True
+        self.dirty, self.last_change = True, self.clock()
 
     def view(self, status: dict | None) -> tuple[dict, int]:
         with self._lock:
@@ -1894,8 +1925,8 @@ class MonitorStore:
         with self._lock:
             self.adopt(status)
             state = self.seeded(self.state, status)
-            if "set" in patch:
-                row = state["sets"][patch["set"]]
+            for ident in patch.get("sets") or ([patch["set"]] if "set" in patch else []):
+                row = state["sets"][ident]
                 for key in MONITOR_SET_FIELDS:
                     if key in patch:
                         row[key] = patch[key]
@@ -1936,8 +1967,20 @@ class MonitorStore:
         self.dirty = False
         return True
 
-    def run(self, stop: threading.Event, period: float = 0.5) -> None:
+    def run(self, stop: threading.Event, period: float = 0.5, status=None) -> None:
+        """Every period: the remembered copy (tick) and, while no run file is
+        ours, the owner's start adopted from `status()` (the owner's status
+        when the monitor is available, else None), so the run file is written
+        after a boot even if no page asks."""
         while not stop.wait(period):
+            if status is not None and not self.run_written:
+                try:
+                    current = status()
+                except Exception as error:     # a look that fails is tried again next period
+                    print(f"monitor: could not read the owner's status: {error}", file=sys.stderr, flush=True)
+                    current = None
+                with self._lock:
+                    self.adopt(current)
             self.tick()
 
 
@@ -3366,7 +3409,8 @@ def main() -> int:
 
     thread = threading.Thread(target=collector.loop, name="collector", daemon=True)
     thread.start()
-    threading.Thread(target=monitor.run, args=(monitor_stop,), name="monitor", daemon=True).start()
+    threading.Thread(target=monitor.run, args=(monitor_stop, 0.5, lambda: monitor_available(collector.snapshot())[0]),
+                     name="monitor", daemon=True).start()
 
     # systemd stops the service with SIGTERM: leave through the finally below,
     # so an unwritten monitor change reaches the remembered copy.

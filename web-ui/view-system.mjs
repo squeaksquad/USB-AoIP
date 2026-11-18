@@ -3,6 +3,7 @@
 // on the device, the last change made to it, and its logs.
 import { esc, pressed, disabledAttr, options } from './ui.mjs';
 import { actionCards } from './actions.mjs';
+import { START_RULES, dbWords } from './monitor.mjs';
 
 /** The live facts. Rebuilt on each health poll; holds no input. */
 export function devicePanel(S) {
@@ -54,10 +55,38 @@ export function actionsPanel(S) {
       <button type="button" class="${card.tone === 'danger' ? 'danger' : card.tone === 'caution' ? 'caution' : ''}" data-act="sys-action" data-v="${esc(card.kind)}" ${disabledAttr(off)}>${esc(label(card))}</button></div>`).join('')}</div></section>`;
 }
 
+/**
+ * Level safety (phase 3): the knobs' maximum, the level after power-up and
+ * the reference lock, root's and asked of the applier. Drawn only when the
+ * device takes the monitor-limits kind (S.safety set) and its limits are
+ * known. S.safety = {limits, notes, note, busy}.
+ */
+export function safetyPanel(S) {
+  const sf = S.safety;
+  if (!S.connected || !sf?.limits) return '';
+  const l = sf.limits, off = sf.busy;
+  return `<section class="panel" id="safety-panel" aria-label="Level safety">
+    <div class="row-head"><div><strong class="title">Level safety</strong> <span class="muted">Limits on the Control Room knobs. They are kept on the device and are not part of a preset.</span></div>
+      <span role="status" class="action-note${sf.note ? ` tone-${esc(sf.note.tone)}` : ''}">${esc(sf.note?.text || '')}</span></div>
+    <div class="safety-grid">
+      <label class="stack">Loudest the knobs can go
+        <input type="text" inputmode="decimal" class="safety-num" data-m="sf-max" value="${esc(dbWords(l.maxDb))}" aria-label="Loudest the knobs can go, in dB, from −30 to 0" ${disabledAttr(off)}>
+        <span class="muted">${esc(sf.notes.maxNote)}</span></label>
+      <div class="stack" role="group" aria-label="Level after power-up">Level when the device powers up
+        <div class="toolbar">${START_RULES.map(([v, label]) => `<button type="button" data-act="sf-start" data-v="${v}" ${pressed(l.start === v)} ${disabledAttr(off)}>${esc(label)}</button>`).join('')}
+          ${l.start === 'fixed' ? `<input type="text" inputmode="decimal" class="safety-num" data-m="sf-start-db" value="${esc(dbWords(l.startDb))}" aria-label="Fixed level after power-up, in dB" ${disabledAttr(off)}>` : ''}</div>
+        <span class="muted">${esc(sf.notes.startNote)}</span></div>
+      <div class="stack">Reference level
+        <button type="button" class="toggle safety-lock" data-act="sf-lock" ${pressed(l.lock)} ${disabledAttr(off)}>${l.lock ? 'Locked' : 'Not locked'}</button>
+        <span class="muted">${esc(sf.notes.lockNote)}</span></div>
+    </div></section>`;
+}
+
 export function systemView(S) {
   return `${devicePanel(S)}
     <section class="panel" aria-label="Display"><div class="row-head split"><div><strong class="title">Display</strong> <span class="muted">Larger controls suit a tablet or touch screen; the page gets taller. This is remembered in this browser only.</span></div>
       <button type="button" class="toggle" data-act="big-toggle" ${pressed(S.big)}>${S.big ? 'Larger controls: on' : 'Larger controls: off'}</button></div></section>
+    ${safetyPanel(S)}
     ${actionsPanel(S)}
     ${presetsPanel(S)}
     ${S.connected ? lastChangePanel(S) : ''}

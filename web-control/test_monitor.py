@@ -313,21 +313,52 @@ class StoreTests(unittest.TestCase):
         self.assertFalse(self.run_file().exists(), "a view does not write the run file")
         self.assertEqual(store.change({"subs": False}, self.status, 0.0)[1], 42, "seq continues from the copy")
 
-    def test_the_owners_start_is_adopted_until_the_first_change(self):
+    def test_the_owners_start_is_adopted_and_written_to_the_run_file_at_once(self):
         state = self.web.empty_monitor_state()
         state["sets"]["mains"] = {"levelDb": -3.0, "trimDb": 0.0, "dim": False, "mute": False, "fold": "full"}
         state["dimDb"] = -10.0
         self.keep_file().write_text(self.web.render_monitor_state(5, state))
         start = self.web.parse_monitor_status(status_text(state="start", seq="none", active="phones"))
         store = self.store()
-        view, _ = store.view(start)
+        view, seq = store.view(start)
         self.assertEqual((view["sets"]["mains"]["levelDb"], view["active"]), (-30.0, "phones"),
                          "the owner's start rule wins over the remembered -3.0")
         self.assertEqual(view["dimDb"], -10.0, "dim_db is not among what is adopted")
+        self.assertEqual(seq, 6, "adopting is a write: seq one more than the remembered copy's")
+        self.assertTrue(store.run_written)
+        written_seq, written = self.web.parse_monitor_state(self.run_file().read_text())
+        self.assertEqual((written_seq, written), (6, view),
+                         "so an owner restart before any knob move finds a run file and does not apply its start rule again")
         state, seq = store.change({"set": "phones", "trimDb": 1.0}, start, 0.0)
-        self.assertEqual((state["sets"]["mains"]["levelDb"], state["sets"]["phones"]["trimDb"], seq), (-30.0, 1.0, 6))
+        self.assertEqual((state["sets"]["mains"]["levelDb"], state["sets"]["phones"]["trimDb"], seq), (-30.0, 1.0, 7))
         later = self.web.parse_monitor_status(status_text(state="start").replace("level_db=-30.0", "level_db=-40.0"))
         self.assertEqual(store.view(later)[0]["sets"]["mains"]["levelDb"], -30.0, "not once the run file is ours")
+
+    def test_a_failed_write_after_adopting_follows_in_memory_and_tries_again(self):
+        start = self.web.parse_monitor_status(status_text(state="start", seq="none"))
+        store = self.store()
+        self.run_dir.rmdir()
+        view, seq = store.view(start)
+        self.assertEqual((view["sets"]["mains"]["levelDb"], seq, store.run_written), (-30.0, 0, False))
+        self.assertIn("after adopting the owner's start", sys.stderr.getvalue())
+        self.run_dir.mkdir()
+        self.assertEqual(store.view(start)[1], 1)
+        self.assertTrue(self.run_file().exists())
+
+    def test_the_run_loop_adopts_without_a_page(self):
+        import threading
+        start = self.web.parse_monitor_status(status_text(state="start", seq="none"))
+        store = self.store()
+        stop = threading.Event()
+        looks = []
+
+        def status():
+            looks.append(1)
+            stop.set()
+            return start
+        store.run(stop, period=0.0, status=status)
+        self.assertEqual(len(looks), 1)
+        self.assertTrue(self.run_file().exists(), "the run file is written after a boot even with no GET")
 
     def test_a_status_other_than_start_is_not_adopted(self):
         store = self.store()
@@ -503,6 +534,20 @@ class MonitorRouteTests(MonitorServerCase):
         self.assertFalse((self.run_dir / "state").exists(), "nothing refused was written")
         for body in ({"set": "mains", "levelDb": -60}, {"set": "mains", "levelDb": 0}, {"dimDb": 0}, {"set": "mains", "trimDb": 12}):
             self.assertEqual(self.post(body)[0], 200, body)
+
+    def test_sets_applies_the_same_fields_to_several_sets_in_one_write(self):
+        status, answer = self.post({"sets": ["mains", "phones"], "levelDb": -14.0, "dim": True})
+        self.assertEqual((status, answer["seq"]), (200, 1), answer)
+        state = self.run_state()[1]
+        for ident in ("mains", "phones"):
+            self.assertEqual((state["sets"][ident]["levelDb"], state["sets"][ident]["dim"]), (-14.0, True), ident)
+        for body in ({"sets": []}, {"sets": "mains", "levelDb": -1.0}, {"sets": ["mains", "mains"], "levelDb": -1.0},
+                     {"sets": ["Mains"], "levelDb": -1.0}, {"sets": ["mains"]},
+                     {"set": "mains", "sets": ["phones"], "levelDb": -1.0}, {"sets": [f"s{i}" for i in range(17)], "mute": True}):
+            self.assertEqual(self.post(body)[0], 400, body)
+        self.assertEqual(self.post({"sets": ["mains", "nearfield"], "levelDb": -1.0})[0], 409, "one unknown set refuses all")
+        self.assertEqual(self.post({"sets": ["mains", "phones"], "fold": "stereo"})[0], 409, "phones offers no stereo")
+        self.assertEqual(self.run_state()[0], 1, "nothing refused was written")
 
     def test_409_for_what_the_running_preset_does_not_have(self):
         for body in ({"set": "nearfield", "levelDb": -10.0}, {"active": "nearfield"},

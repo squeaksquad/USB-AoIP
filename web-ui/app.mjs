@@ -1,4 +1,5 @@
-// The page: Status, Processor, System (docs/web/REDESIGN-2026-11.md, phase 1).
+// The page: Status, Control Room, Processor, System (docs/web/REDESIGN-2026-11.md,
+// phases 1 to 3).
 // This file owns the state, the events and everything that talks to the
 // device. The tabs are drawn by the view-*.mjs modules, which are pure
 // (state in, HTML out); the testable logic is in the modules beside them.
@@ -8,8 +9,11 @@ import { resetBand } from './reset-band.mjs';
 import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, removeBus, setBusEqLink, setBusOutputs, speakerGroupSourceIds } from './buses.mjs';
 import { resetEq, setEqBypass, mirrorLinkedEq, exportEq, importEq } from './eq-tools.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, formatRate, deviceName, fetchLogs, systemFacts, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, requestReboot, requestRestartAudio, requestRestartClock, requestBundle, requestPassword, fetchSupportBundle, stackTerms, statusCards, meterRows } from './backend.mjs';
+import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, formatRate, deviceName, fetchLogs, systemFacts, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, requestReboot, requestRestartAudio, requestRestartClock, requestBundle, requestPassword, fetchSupportBundle, stackTerms, statusCards, meterRows, fetchMonitor, postMonitor, requestMonitorLimits, requestMonitorReference } from './backend.mjs';
 import { confirmDialog, passwordProblem, actionNote, bundlePath, BUNDLE_FILE } from './actions.mjs';
+import { reduceMonitor, Overlay, patchKeys, monitorValues, MonitorSender, setPatch, patchKey, soloPress, mutePress, setLabels, controlRoom, safetyNotes, clampLevel, clampTrim, clampMax,
+  monitorOffered, monitorKind, readGroups, saveGroups, addGroup, removeGroup, peakText, dbWords, MONITOR_POLL_MS, DRAG_DB_PER_PX, KEY_STEP_DB, BUTTON_STEP_DB, TRIM_STEP_DB } from './monitor.mjs';
+import { controlRoomView } from './view-control.mjs';
 import { LiveQueue } from './live.mjs';
 import { History } from './history.mjs';
 import { delaysFromDistances, parseDistance } from './align.mjs';
@@ -24,7 +28,7 @@ import { routingView, crosspoint } from './view-routing.mjs';
 import { setsView } from './view-sets.mjs';
 import { bassView } from './view-bass.mjs';
 import { chooserView } from './view-chooser.mjs';
-import { systemView, devicePanel, actionsPanel, presetsPanel, lastChangePanel } from './view-system.mjs';
+import { systemView, devicePanel, actionsPanel, presetsPanel, lastChangePanel, safetyPanel } from './view-system.mjs';
 
 // ------------------------------------------------------------------ state
 
@@ -84,6 +88,20 @@ let liveForeignSeen = {sha: null, polls: 0}, liveLastReceiptAt = 0, liveRetryTim
 // Whether the user has touched the draft since the page loaded: an untouched
 // draft follows the running preset's saved settings.
 let editedSinceLoad = false;
+
+// The Control Room (phase 3): the device's monitor as last read, the page's
+// own values ahead of the owner's, the sender for knob moves, and what is
+// open on the tab. None of it is part of the draft, a preset or undo.
+let monitor = null, monitorReading = false, crModel = null;
+const overlay = new Overlay();
+let crKeys = false, crRefOpen = {}, crGroups = readGroups(), crGroupEdit = null, knobDrag = null;
+// What the Level safety panel says after its last request; null for nothing.
+let safetyNote = null;
+const sender = new MonitorSender({
+  post: postMonitor,
+  onSent: (body, result) => overlay.sent(body, result.seq, Date.now()),
+  onError: (body, error) => { overlay.failed(body); toast(`The change did not reach the device: ${error.message}`); renderControl(); },
+});
 
 const storageKey = 'usb16x16-design-presets-v1';
 let presetStore = browserStore(storageKey);
@@ -637,6 +655,7 @@ function viewState() {
     chooser, layouts: LAYOUTS.map(l => ({id: l.id, label: l.label, outputs: l.routing.length, fits: chooser?.mode === 'new' || l.routing.length <= (main?.outputIds.length || 0) + free})),
     facts: systemFacts(health), generated: health?.generated, big: prefs.big, busy: busyNow(), shutdownRequested, rebootRequested,
     actions: Array.isArray(health?.control?.apply?.actions) ? health.control.apply.actions : [], actionNote: actionLocal || actionNote(current),
+    safety: monitorKind(health, 'monitor-limits') && monitor ? {limits: monitor.limits, notes: safetyNotes(monitor.limits), note: safetyNote, busy: busyNow()} : null,
     canApply: Boolean(health) && choices.available, applyReason: health && !choices.available ? (choices.reason || 'This device cannot switch presets.') : '',
     outage: terms().outage, presetRows: rowsNow(), editing: draftStoreName,
     applyLine: applyLine(status), applySteps: (current?.steps || []).map(step => ({ok: step.ok, detail: step.detail, label: applyStepLabel(step.name, current.stack || terms().stack)})),
@@ -690,8 +709,8 @@ function render() {
   document.body.classList.toggle('big', prefs.big);
   for (const button of document.querySelectorAll('[data-tab]')) { if (button.dataset.tab === tab) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); }
   const view = $('#view');
-  view.dataset.tab = tab;
-  view.innerHTML = tab === 'status' ? statusView(S) : tab === 'system' ? systemView(S) : processorView(S);
+  if (tab === 'control') renderControl();
+  else { view.dataset.tab = tab; view.innerHTML = tab === 'status' ? statusView(S) : tab === 'system' ? systemView(S) : processorView(S); }
   // The EQ editor opens over the page, large, as a pop-up.
   const eqDialog = $('#eq-dialog');
   if (tab === 'processor' && !chooser && ptab === 'outputs' && eqOpen !== null) {
@@ -727,6 +746,8 @@ for (const type of ['pointerup', 'pointercancel']) document.addEventListener(typ
 /** Everything outside the tab's own view: header, notices, the change bar. */
 let lastNoticesHtml = null;
 function renderChrome() {
+  const crTab = document.querySelector('[data-tab="control"]');
+  if (crTab) crTab.hidden = !monitorOffered(health);
   const pill = $('#pill'), state = pillState(health, access);
   $('#pill-text').textContent = state.text;
   pill.dataset.state = state.state; pill.title = state.title;
@@ -781,14 +802,17 @@ function renderLive() {
   } else if (tab === 'processor') {
     const node = $('#running-name');
     if (node) node.textContent = health ? deviceModeLabel(health) : 'Not connected';
+  } else if (tab === 'control') {
+    // The Control Room follows its own poll (refreshMonitor); a receipt may change what Set can do.
+    renderControl();
   } else {
     const S = viewState(), view = $('#view');
     const selection = document.getSelection();
     if (selection && !selection.isCollapsed && view.contains(selection.anchorNode)) return;
-    const actions = actionsPanel(S);
-    // The Actions panel comes and goes with the device's list: a redraw puts it in or takes it out.
-    if (Boolean(actions) !== Boolean(view.querySelector('#actions-panel'))) { if (!view.contains(document.activeElement)) render(); return; }
-    const panels = [['#device-panel', devicePanel(S)], ...(actions ? [['#actions-panel', actions]] : []), ['#presets-panel', presetsPanel(S)], ...(health ? [['#change-panel', lastChangePanel(S)]] : [])];
+    const actions = actionsPanel(S), safety = safetyPanel(S);
+    // The Actions and Level safety panels come and go with the device's lists: a redraw puts them in or takes them out.
+    if (Boolean(actions) !== Boolean(view.querySelector('#actions-panel')) || Boolean(safety) !== Boolean(view.querySelector('#safety-panel'))) { if (!view.contains(document.activeElement)) render(); return; }
+    const panels = [['#device-panel', devicePanel(S)], ...(safety ? [['#safety-panel', safety]] : []), ...(actions ? [['#actions-panel', actions]] : []), ['#presets-panel', presetsPanel(S)], ...(health ? [['#change-panel', lastChangePanel(S)]] : [])];
     for (const [id, html] of panels) {
       const node = view.querySelector(id);
       if (!node) { if (!view.contains(document.activeElement)) render(); return; }
@@ -812,6 +836,247 @@ function patchActions(node, html) {
   if (buttons.map(b => b.dataset.v).join() !== nextButtons.map(b => b.dataset.v).join()) return;
   buttons.forEach((button, i) => { button.disabled = nextButtons[i].disabled; if (button.textContent !== nextButtons[i].textContent) button.textContent = nextButtons[i].textContent; });
 }
+
+// ----------------------------------------------------------- Control Room
+//
+// A knob move is POST /api/monitor through the sender (one in flight, at most
+// every 30 ms while dragging, the final value on release). The page shows its
+// own value at once (overlay) and the owner's once the owner reports the seq
+// it was written under. The tab is redrawn in place (morph), so a knob being
+// dragged or a field being typed in keeps its element and its focus.
+
+async function refreshMonitor() {
+  if (!health || monitorReading) return;
+  monitorReading = true;
+  try {
+    const next = reduceMonitor(await fetchMonitor());
+    if (next) {
+      monitor = next;
+      if (next.available) overlay.settle(next.effective.seq, Date.now());
+    }
+  } finally { monitorReading = false; }
+  if (tab === 'control') {
+    if (monitor && !monitor.available) { toast(`The Control Room is not available: ${monitor.reason || 'the device did not say why'}`); tab = 'status'; render(); }
+    else renderControl();
+  } else if (tab === 'system') renderLive();
+}
+setInterval(() => { if (tab === 'control' && health && !document.hidden) refreshMonitor(); }, MONITOR_POLL_MS);
+
+function controlHtml() {
+  if (!monitor?.available) { crModel = null; return '<p class="muted">Reading the Control Room from the device…</p>'; }
+  crModel = controlRoom({model: monitor, values: monitorValues(monitor, overlay), labels: setLabels(monitor.sets, presetForLiveProfile(health)?.document),
+    meters: freshMeters()?.['to-network'] || null, keysOpen: crKeys, refOpen: crRefOpen, groups: crGroups, groupEdit: crGroupEdit, busy: busyNow()});
+  return controlRoomView(crModel);
+}
+
+function renderControl() {
+  if (tab !== 'control') return;
+  const view = $('#view'), html = controlHtml();
+  if (view.dataset.tab !== 'control') { view.dataset.tab = 'control'; view.innerHTML = html; }
+  else { const t = document.createElement('template'); t.innerHTML = html; morphChildren(view, t.content); }
+  applyVars(view);
+  drawMeters(true);
+}
+
+/** Bring `node` to `next` without replacing it: attributes, text, an unfocused field's value, then the children. */
+function morph(node, next) {
+  if (node.nodeType !== 1) { if (node.nodeValue !== next.nodeValue) node.nodeValue = next.nodeValue; return; }
+  // The style attribute holds what script set (meter levels, angles, places): it is not the view's.
+  for (const {name} of [...node.attributes]) if (name !== 'style' && !next.hasAttribute(name)) node.removeAttribute(name);
+  for (const {name, value} of [...next.attributes]) if (node.getAttribute(name) !== value) node.setAttribute(name, value);
+  if (node.tagName === 'INPUT' && node !== document.activeElement) { const value = next.getAttribute('value') ?? ''; if (node.value !== value) node.value = value; }
+  morphChildren(node, next);
+}
+function morphChildren(parent, next) {
+  const have = [...parent.childNodes], want = [...next.childNodes];
+  want.forEach((w, i) => {
+    const h = have[i];
+    if (!h) parent.append(w.cloneNode(true));
+    else if (h.nodeType !== w.nodeType || h.nodeName !== w.nodeName || (h.id || '') !== (w.id || '')) parent.replaceChild(w.cloneNode(true), h);
+    else morph(h, w);
+  });
+  have.slice(want.length).forEach(h => h.remove());
+}
+
+/** The numbers the Control Room's view leaves to script: the knob's angle, a tile's place. */
+function applyVars(root) {
+  for (const el of root.querySelectorAll('[data-rot]')) el.style.setProperty('--rot', `${el.dataset.rot}deg`);
+  for (const el of root.querySelectorAll('[data-x]')) { el.style.setProperty('--x', `${el.dataset.x}%`); el.style.setProperty('--y', `${el.dataset.y}%`); }
+}
+
+function drawControlMeters(bank) {
+  const paint = (el, ch) => {
+    if (!el) return;
+    el.style.setProperty('--level', `${ch ? levelPercent(ch.peak) : 0}%`);
+    el.style.setProperty('--hold', `${ch ? levelPercent(ch.hold) : 0}%`);
+    el.classList.toggle('held', Boolean(ch) && ch.hold > FLOOR_DB);
+    el.classList.toggle('no-data', !bank);
+  };
+  for (const c of crModel.cards) {
+    let peak = -Infinity;
+    for (const o of c.outputs) {
+      const ch = bank?.[o.n];
+      paint(document.getElementById(`crm-${c.key}-${o.n}`), ch);
+      document.getElementById(`cro-${c.key}-${o.n}`)?.classList.toggle('on', Boolean(ch?.clip));
+      if (ch) peak = Math.max(peak, ch.peak);
+    }
+    const line = document.getElementById(`crp-${c.key}`), text = peakText(bank ? peak : null);
+    if (line && line.textContent !== text) line.textContent = text;
+  }
+  for (const r of crModel.rooms) for (const t of [...r.tiles, ...r.loose]) paint(document.getElementById(`crt-${r.id}-${t.n}`), bank?.[t.n]);
+  for (const s of crModel.setSwitch) {
+    if (!s.meter) continue;
+    const outs = monitor.sets.find(set => set.id === s.id)?.outputs || [];
+    const loud = bank ? Math.max(FLOOR_DB, ...outs.map(o => bank[o.n]?.peak ?? FLOOR_DB)) : null;
+    paint(document.getElementById(`crs-${s.id}`), loud === null ? null : {peak: loud, hold: FLOOR_DB});
+  }
+  const anyClip = holds['to-network'].anyClip;
+  for (const button of document.querySelectorAll('[data-clips]')) button.hidden = !anyClip;
+}
+
+const cardOf = key => crModel?.cards.find(c => c.key === key) || null;
+const roomOf = id => crModel?.rooms.find(r => r.id === id) || null;
+
+/** One change to the monitor: shown at once, sent by the sender. */
+function change(body, {immediate = true} = {}) {
+  if (!monitor?.available) return;
+  if (sender.submit(patchKey(body), body, {immediate})) for (const [key, value] of Object.entries(patchKeys(body))) overlay.set(key, value);
+  renderControl();
+}
+function setLevel(c, value, options) {
+  if (!c) return;
+  const level = clampLevel(value, c.maxDb);
+  if (level === c.level && options?.immediate === false) return;
+  change(setPatch(c.ids, {levelDb: level}), options);
+}
+
+/** A reference level and note, root's: a request to the applier, followed to its receipt. */
+async function storeReference(c, levelDb, note) {
+  if (!c || monitor?.limits.lock) return;
+  if (/[^\x20-\x7E]|["\\]/.test(note) || note.length > 64) { toast('A note is at most 64 plain characters, without quotes or backslashes.'); renderControl(); return; }
+  applyBusy = true; renderControl();
+  try {
+    const result = await requestMonitorReference(c.refSet, levelDb, note);
+    await followApply(result.id);
+    toast(`Reference for ${c.title} stored: ${dbWords(levelDb)}${note ? ` · ${note}` : ''}.`);
+  } catch (e) { toast(`The reference was not stored: ${e.message}`); }
+  applyBusy = false;
+  await refreshMonitor();
+}
+
+/** Level safety, root's: a request to the applier, followed to its receipt. */
+async function changeLimits(fields) {
+  applyBusy = true; safetyNote = {text: 'Asking the device…', tone: 'busy'}; render();
+  try {
+    const result = await requestMonitorLimits(fields);
+    await followApply(result.id);
+    safetyNote = {text: 'Level safety changed on the device.', tone: 'ok'};
+  } catch (e) { safetyNote = {text: `Not changed: ${e.message}`, tone: 'bad'}; }
+  applyBusy = false;
+  await refreshMonitor();
+  render();
+}
+
+function controlClick(spec, event) {
+  const [op, a, b] = spec.split(';');
+  if (!monitor?.available || !crModel) return;
+  const values = monitorValues(monitor, overlay), c = cardOf(a), additive = event.metaKey || event.ctrlKey;
+  const outs = text => String(text).split(',').map(Number).filter(Number.isInteger);
+  switch (op) {
+    case 'keys': crKeys = !crKeys; break;
+    case 'ref-toggle': crRefOpen = {...crRefOpen, [a]: !crRefOpen[a]}; break;
+    case 'step': setLevel(c, c.level + Number(b) * BUTTON_STEP_DB); return;
+    case 'to-ref': setLevel(c, c.ref); return;
+    case 'dim': change(setPatch(c.ids, {dim: !c.dim})); return;
+    case 'mute': change(setPatch(c.ids, {mute: !c.mute})); return;
+    case 'set-ref': storeReference(c, c.level, c.note); return;
+    case 'fold': change({set: c.refSet, fold: b}); return;
+    case 'subs': change({subs: !values.subs}); return;
+    case 'trim-step': change({set: a, trimDb: clampTrim(values.sets[a].trimDb + Number(b) * TRIM_STEP_DB)}); return;
+    case 'active': change({active: a}); return;
+    case 'solo': case 'group-solo': { const r = roomOf(a); if (r) change({solo: soloPress(values.solo, r.setOuts, outs(b), additive)}); return; }
+    case 'out-mute': case 'group-mute': change({outMute: mutePress(values.outMute, outs(b))}); return;
+    case 'clear-solo': change({clearSolo: true}); return;
+    case 'clear-clips': holds['to-network'].clearClips(); meterShown?.['to-network']?.forEach(channel => { channel.clip = false; }); break;
+    case 'group-new': crGroupEdit = {set: a, name: '', outs: []}; break;
+    case 'group-cancel': crGroupEdit = null; break;
+    case 'pick': if (crGroupEdit) { const n = Number(b); crGroupEdit.outs = crGroupEdit.outs.includes(n) ? crGroupEdit.outs.filter(x => x !== n) : [...crGroupEdit.outs, n]; } break;
+    case 'group-save':
+      if (crGroupEdit?.outs.length) { crGroups = addGroup(crGroups, a, crGroupEdit.name, crGroupEdit.outs); if (!saveGroups(crGroups)) toast('This browser will not remember the group.'); crGroupEdit = null; }
+      break;
+    case 'group-remove': crGroups = removeGroup(crGroups, a, b); saveGroups(crGroups); break;
+    default: return;
+  }
+  renderControl();
+}
+
+/** A typed value in the Control Room or the Level safety panel. */
+function controlField(m, v, text) {
+  if (m === 'group-name') return;
+  const value = m === 'note' ? null : parseNumber(text);
+  if (value !== null && Number.isNaN(value)) { toast('Type a level in dB, like -18.5.'); if (tab === 'control') renderControl(); else render(); return; }
+  const c = cardOf(v);
+  switch (m) {
+    case 'level': setLevel(c, value); return;
+    case 'trim': change({set: v, trimDb: clampTrim(value)}); return;
+    case 'ref': if (c) storeReference(c, clampLevel(value, c.maxDb), c.note); return;
+    case 'note': if (c) storeReference(c, c.ref, text.trim()); return;
+    case 'sf-max': if (monitor) changeLimits({maxDb: clampMax(value)}); return;
+    case 'sf-start-db': if (monitor) changeLimits({startDb: clampLevel(value, monitor.limits.maxDb)}); return;
+    default:
+  }
+}
+
+/** The Control Room's keys. True when the key was the Control Room's. */
+function controlKey(event, typing) {
+  if (!crModel || document.querySelector('dialog[open]')) return false;
+  const arrow = {ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1}[event.key];
+  const knob = event.target.closest?.('[data-knob]');
+  if (knob && arrow) { event.preventDefault(); const c = cardOf(knob.dataset.knob); setLevel(c, c.level + arrow * KEY_STEP_DB); return true; }
+  const focus = document.activeElement;
+  if (typing || event.metaKey || event.ctrlKey || event.altKey || !(focus === document.body || $('#view').contains(focus))) return false;
+  const first = crModel.cards[0], k = event.key;
+  let hit = true;
+  if (k === '?') { crKeys = !crKeys; renderControl(); }
+  else if (k === 'Escape') { if (crModel.anySolo) change({clearSolo: true}); else hit = false; }
+  else if (!first) hit = false;
+  else if (k === 'ArrowUp' || k === 'ArrowDown') setLevel(first, first.level + (k === 'ArrowUp' ? 1 : -1) * BUTTON_STEP_DB);
+  else if (k === 'm' || k === 'M') change(setPatch(first.ids, {mute: !first.mute}));
+  else if (k === 'd' || k === 'D') change(setPatch(first.ids, {dim: !first.dim}));
+  else if (k === 'r' || k === 'R') setLevel(first, first.ref);
+  else if (/^[0-9]$/.test(k) && crModel.several) {
+    const n = Number(k), sets = crModel.setSwitch;
+    if (n === 0) change({active: 'all'}); else if (n < sets.length) change({active: sets[n - 1].id}); else hit = false;
+  } else hit = false;
+  if (hit) event.preventDefault();
+  return hit;
+}
+
+// The knob: 0.25 dB a pixel while dragged, the last value sent on release.
+document.addEventListener('pointerdown', event => {
+  const node = event.target.closest?.('[data-knob]');
+  if (!node || event.button !== 0 || tab !== 'control') return;
+  const c = cardOf(node.dataset.knob);
+  if (!c) return;
+  event.preventDefault();
+  node.focus({preventScroll: true});
+  knobDrag = {key: c.key, y0: event.clientY, v0: c.level, pointerId: event.pointerId, node};
+  node.setPointerCapture(event.pointerId);
+});
+document.addEventListener('pointermove', event => {
+  if (!knobDrag || event.pointerId !== knobDrag.pointerId) return;
+  setLevel(cardOf(knobDrag.key), knobDrag.v0 + (knobDrag.y0 - event.clientY) * DRAG_DB_PER_PX, {immediate: false});
+});
+function endKnob(event) {
+  if (!knobDrag || (event && event.pointerId !== knobDrag.pointerId)) return;
+  const drag = knobDrag; knobDrag = null;
+  if (drag.node.hasPointerCapture?.(drag.pointerId)) drag.node.releasePointerCapture(drag.pointerId);
+  const c = cardOf(drag.key);
+  if (c) change(setPatch(c.ids, {levelDb: c.level}), {immediate: true});
+}
+document.addEventListener('pointerup', endKnob);
+document.addEventListener('pointercancel', endKnob);
+window.addEventListener('blur', () => endKnob());
 
 // ----------------------------------------------------------------- meters
 
@@ -839,6 +1104,8 @@ function drawMeters(force = false) {
       });
     }
     const clear = $('#clear-clips'); if (clear) clear.hidden = !anyClip;
+  } else if (tab === 'control' && crModel) {
+    drawControlMeters(live?.['to-network'] || null);
   } else if (tab === 'processor' && ptab === 'outputs' && !chooser) {
     const bank = live?.['to-network'];
     for (let i = 0; i < CHANNELS; i += 1) {
@@ -856,7 +1123,7 @@ function drawMeters(force = false) {
 // Read the taps at up to 10 Hz, only while meters are on screen and the
 // service says a tap exists; one request in flight at a time, so a slow
 // answer thins the rate rather than queueing.
-const metersOnScreen = () => tab === 'status' || (tab === 'processor' && ptab === 'outputs' && !chooser);
+const metersOnScreen = () => tab === 'status' || tab === 'control' || (tab === 'processor' && ptab === 'outputs' && !chooser);
 async function pollMeters() {
   if (meterBusy || document.hidden || !metersOnScreen() || !health?.meters?.available) return;
   meterBusy = true;
@@ -1115,6 +1382,8 @@ function act(name, v, i) {
     // System
     case 'big-toggle': prefs = {...prefs, big: !prefs.big}; if (!savePrefs(prefs)) toast('This browser will not remember the setting.'); render(); return;
     case 'sys-action': runAction(v); return;
+    case 'sf-start': if (monitor && monitor.limits.start !== v) changeLimits({start: v}); return;
+    case 'sf-lock': if (monitor) changeLimits({lock: !monitor.limits.lock}); return;
     case 'preset-run': { const [kind, target] = v.split(';'); runPreset(kind, target); return; }
     case 'preset-open': openPreset(v); return;
     case 'preset-rename': renamePreset(v); return;
@@ -1131,7 +1400,8 @@ document.addEventListener('click', event => {
   for (const menu of document.querySelectorAll('details.menu[open]')) if (!menu.contains(event.target) || event.target.closest('.menu-items button')) menu.open = false;
   const b = event.target.closest('button');
   if (!b || b.disabled) return;
-  if (b.dataset.tab) { tab = b.dataset.tab; render(); return; }
+  if (b.dataset.tab) { tab = b.dataset.tab; if (tab === 'control' || tab === 'system') refreshMonitor(); render(); return; }
+  if (b.dataset.cr) { controlClick(b.dataset.cr, event); return; }
   if (b.dataset.ptab) { ptab = b.dataset.ptab; render(); return; }
   if (b.dataset.bar) { ({discard: discardChanges, keep: keepLive, apply: () => applyDraft(), 'save-as': () => applyDraft({saveAs: true}), save: saveOnly})[b.dataset.bar](); return; }
   if (b.dataset.export) {
@@ -1159,6 +1429,7 @@ document.addEventListener('change', async event => {
     checkImport(); render(); return;
   }
   if (el.dataset.f) setField(el.dataset.f, el.dataset.i ?? '', el.value);
+  if (el.dataset.m) controlField(el.dataset.m, el.dataset.v ?? '', el.value);
 });
 
 function checkImport() {
@@ -1171,6 +1442,7 @@ document.addEventListener('input', event => {
   const el = event.target;
   if (el.id === 'log-filter') { logQuery = el.value; requestRender(); return; }
   if (el.id === 'chooser-name' && chooser) { chooser.name = el.value; return; }
+  if (el.dataset.m === 'group-name' && crGroupEdit) { crGroupEdit.name = el.value; return; }
   if (el.id === 'export-name' && exportState) { exportState.name = el.value.trim(); const pos = el.selectionStart; renderExport(); const again = $('#export-name'); again.focus(); again.setSelectionRange(pos, pos); return; }
   if (el.id === 'eq-import-text' && eqImport) {
     eqImport.text = el.value; checkImport();
@@ -1192,7 +1464,8 @@ document.addEventListener('keydown', event => {
     event.preventDefault(); if (event.shiftKey) redo(); else undo(); return;
   }
   // Enter in a field takes the value, as leaving the field does.
-  if (event.key === 'Enter' && event.target.matches?.('input[data-f]')) { event.target.blur(); return; }
+  if (event.key === 'Enter' && event.target.matches?.('input[data-f], input[data-m]')) { event.target.blur(); return; }
+  if (tab === 'control' && controlKey(event, typing)) return;
   const node = event.target.closest?.('[data-eq-node]');
   if (!node || node.disabled || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
   event.preventDefault();
@@ -1245,7 +1518,10 @@ async function pollHealth() {
     applyStatus = null; // the snapshot is the truth while nothing of ours is running
     if (next.apply.inFlight || next.apply.pending) startApplyPolling();
   }
-  if (!next) { liveQueue.cancel(); liveLastSent = null; }
+  if (!next) { liveQueue.cancel(); liveLastSent = null; sender.cancel(); overlay.clear(); monitor = null; }
+  // The Control Room is drawn only while the device offers it.
+  if (tab === 'control' && !monitorOffered(next)) { tab = 'status'; render(); }
+  if (tab === 'system' && monitorKind(next, 'monitor-limits')) refreshMonitor();
   // Self-heal: the engine runs something other than what this page last
   // sent, and nothing is pending or in flight: send the draft again.
   const foreign = next?.dspLive?.state === 'applied' && liveLastSent && next.dspLive.sha256 !== liveLastSent ? next.dspLive.sha256 : null;

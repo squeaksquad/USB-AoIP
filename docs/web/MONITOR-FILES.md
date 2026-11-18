@@ -97,18 +97,24 @@ it but the web service at its own start.
 ### When the run file does not exist
 
 After a boot `/run/usb-aoip-monitor` is empty. The web service then takes
-the remembered copy as what it remembers, and does **not** write the run
-file: the owner's start rule decides the first levels. While the run file
-does not exist and the owner's status says `state=start`, the web service
-takes from that status the active set and every set's `level_db`,
-`trim_db`, `dim`, `mute` and `fold` as its own, so its first write starts
-from the owner's levels and not from older ones. It writes the run file on
-the first change posted from the page and never before. (**Resolved**: it
-takes those five fields and the active set, as the design says, and not
+the remembered copy as what it remembers, and does **not** write it to the
+run file: the owner's start rule decides the first levels. While the run
+file does not exist and the owner's status says `state=start`, the web
+service takes from that status the active set and every set's `level_db`,
+`trim_db`, `dim`, `mute` and `fold` as its own and **writes the run file
+from it at once** (its `seq` one more than the remembered copy's), whether
+or not a page is open: it looks every 0.5 s, and on every GET and POST.
+So "no run file" means "the owner's first start since boot", and an owner
+restart before any knob move reads the run file (the levels it started
+with) instead of applying its start rule again. When that write fails the
+web service keeps the adopted state in memory and tries again. (**Resolved**:
+it takes those five fields and the active set, as the design says, and not
 `dim_db`, `subs` or the output arrays, which keep their remembered values.
 A run file that exists but fails to parse is discarded at the web service's
-start with a log line, and counts as not existing until the first change
-replaces it.)
+start with a log line, and counts as not existing until the next write
+replaces it. **Decided 2026-11-18**: the run file is written on adopting,
+not only on the first change; before, an owner restart before any knob move
+applied the start rule a second time.)
 
 ### Example
 

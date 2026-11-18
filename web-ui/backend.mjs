@@ -664,7 +664,8 @@ const danteStepWords = {
   removing: 'Removing the preset', pushing: 'Handing the coefficients to the endpoint', committing: 'Committing the preview',
   'host-follow': 'Asking the Mac to follow the rate',
 };
-const ACTION_LABELS = {'restart-audio': 'restart audio', 'restart-clock': 'restart clock service', bundle: 'support bundle', password: 'page password', reboot: 'reboot'};
+const ACTION_LABELS = {'restart-audio': 'restart audio', 'restart-clock': 'restart clock service', bundle: 'support bundle', password: 'page password', reboot: 'reboot',
+  'monitor-limits': 'level safety', 'monitor-reference': 'reference level'};
 /** A step of an Apply receipt in words. `stack` is the receipt's own (current.stack), or the Pi's. */
 export const applyStepLabel = (name, stack) => (stack === 'dante' ? danteStepWords : stepWords)[name] || name;
 
@@ -682,6 +683,16 @@ export function applyLine(status) {
       case 'failed': return `Shutdown failed: ${current.error || 'no detail'}. Check the Pi.`;
       case 'refused': return `Refused: ${current.error || 'no detail'}`;
       default: return `${applyStepLabel(current.state, current.stack)} (shutdown)…`;
+    }
+  }
+  if (current.kind === 'monitor-limits' || current.kind === 'monitor-reference') {
+    // The monitor's limits and references: no restart, nothing to roll back.
+    const what = current.kind === 'monitor-limits' ? 'Level safety changed' : `Reference level of ${current.request?.set || 'a set'} stored`;
+    switch (current.state) {
+      case 'done': return `${what}${who} at ${current.finishedAt || '?'}.`;
+      case 'refused': return `Refused: ${current.error || 'no detail'}`;
+      case 'failed': case 'rolled-back': return `${ACTION_LABELS[current.kind].replace(/^./, c => c.toUpperCase())} failed: ${current.error || 'no detail'}`;
+      default: return `${applyStepLabel(current.state, current.stack)} (${ACTION_LABELS[current.kind]})…`;
     }
   }
   if (isActionReceipt(current)) {
@@ -907,6 +918,38 @@ export const requestRestartClock = (fetchImpl = globalThis.fetch) => requestActi
 export const requestBundle = (fetchImpl = globalThis.fetch) => requestAction('/api/apply/bundle', {}, 'Support bundle', fetchImpl);
 /** The password goes to the service, which hashes it; it is never kept by the page. */
 export const requestPassword = (password, fetchImpl = globalThis.fetch) => requestAction('/api/apply/password', {password: String(password)}, 'Password', fetchImpl);
+
+// The monitor (phase 3). A knob move is not an Apply: POST /api/monitor
+// writes the owner's state file at once and answers with the new seq. The
+// limits and the references are root's: applier kinds with a receipt. The
+// standalone page has no monitor: these are called only while connected.
+export const MONITOR_PATH = '/api/monitor';
+
+/** GET /api/monitor's answer, or null when nothing (or no usable answer) comes back. */
+export async function fetchMonitor(fetchImpl = globalThis.fetch, signal) {
+  try {
+    const response = await fetchImpl(MONITOR_PATH, {signal, cache: 'no-store', headers: {accept: 'application/json'}});
+    if (!response.ok) return null;
+    const body = await response.json();
+    return isObject(body) && body.ok === true ? body : null;
+  } catch { return null; }
+}
+
+/** One change to the monitor ({set|sets, levelDb, ...}, {active}, {solo}, ...). Resolves with {seq, state}. */
+export async function postMonitor(patch, fetchImpl = globalThis.fetch) {
+  const response = await sendRequest(MONITOR_PATH, {body: patch}, fetchImpl);
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !isObject(result) || result.ok !== true || !Number.isInteger(result.seq)) {
+    throw new Error(isObject(result) && result.error ? result.error : `The monitor did not take the change (${response.status})`);
+  }
+  return result;
+}
+
+/** The knobs' maximum, the start rule and level, the reference lock: any of them. */
+export const requestMonitorLimits = (fields, fetchImpl = globalThis.fetch) => requestAction('/api/apply/monitor-limits', {...fields}, 'Level safety', fetchImpl);
+/** One set's reference level and note. */
+export const requestMonitorReference = (set, levelDb, note = '', fetchImpl = globalThis.fetch) =>
+  requestAction('/api/apply/monitor-reference', {set: String(set), levelDb, note: String(note)}, 'Reference level', fetchImpl);
 
 /** The support bundle the applier made, as a Blob, from its path (actions.mjs bundlePath). */
 export async function fetchSupportBundle(path, fetchImpl = globalThis.fetch) {
