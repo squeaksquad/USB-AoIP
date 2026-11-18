@@ -88,7 +88,8 @@ fresh_root() {   # the development unit as it is: owner c84e6a36 (stand-in), run
 snapshot() { ( cd "$root" && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha "$f")" "$f"; done ); }
 env_test() { env USB_AOIP_TEST_ROOT="$root" USB_AOIP_TEST_SYSTEMCTL="$tmp/systemctl" USB_AOIP_TEST_JOURNALCTL="$tmp/journalctl" \
   USB_AOIP_TEST_SETTLE=0 SYSTEMCTL_LOG="$tmp/systemctl.log" "$@"; }
-run_nopins() { env_test USB_AOIP_TEST_OWNER_OLD="$OWNER_OLD" USB_AOIP_TEST_RUNNER_OLD="$RUNNER_OLD" "${bundle:-$tmp/bundle}/install-owner-monitor.sh" "$@"; }
+run_nopins() { env_test USB_AOIP_TEST_OWNER_OLD="$OWNER_OLD" USB_AOIP_TEST_RUNNER_OLD="$RUNNER_OLD" \
+  USB_AOIP_TEST_OWNER_NEW=EMPTY USB_AOIP_TEST_RUNNER_NEW=EMPTY "${bundle:-$tmp/bundle}/install-owner-monitor.sh" "$@"; }
 run() { env_test USB_AOIP_TEST_OWNER_OLD="$OWNER_OLD" USB_AOIP_TEST_RUNNER_OLD="$RUNNER_OLD" \
   USB_AOIP_TEST_OWNER_NEW="$OWNER_NEW" USB_AOIP_TEST_RUNNER_NEW="$RUNNER_NEW" "${bundle:-$tmp/bundle}/install-owner-monitor.sh" "$@"; }
 owner=/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner runner=/usr/local/libexec/usb16x16-dsp-offline

@@ -16563,3 +16563,34 @@ Owed, in this order, each on the operator's word:
 5. Only then ACCEPTED, `dante/owner/point-of-record/` replaced by the new
    owner's sources and `install/pins.sha256` and the installer's build
    line with it.
+
+**DONE 2026-11-18 17:24 UTC (session, on the operator's word "Copy and
+build"): the phase 3 owner and offline runner built on the Pi; their hashes
+are pinned. Nothing installed, nothing stopped.** Read first over SSH: the
+Pi runs owner c84e6a36, runner 4492a19c and start wrapper df6a1b0b, the
+three the installer expects, with `usb16x16-dante`, `usb16x16-statime` and
+`usb-16x16` active. The bundle staged from 4e92e78 (list a884de21, archive
+7f4af729) was copied to `~/usb-aoip-owner-monitor` over eth0 and
+`build-owner-monitor.sh` run there, unprivileged, at nice 15:
+
+- `usb16x16-dante-owner` bc48691122f2357606e2cd2a849cde4aee8c0ad6cb7998cad41aaa0c2f320b3e
+- `usb16x16-dsp-offline` 46f36659410b612d3ad9da2ae849ec8cfcf40eda672c700c8338af0318cb316a
+- g++ Debian 14.2.0-19, cmake 3.31.6, Linux 6.18.34+rpt-rpi-2712; the
+  owner's `--help` lists the monitor options, both binaries carry the
+  loader's mark, and the runner loaded the pinned monitor vector.
+
+They are the hashes the Debian trixie arm64 container gave on the Mac
+(IMPLEMENTED entry above, which said not to pin the container's: the
+Pi's own build is what is pinned, and it happens to be the same bytes, so
+the build reproduces off the Pi with that compiler). `OWNER_NEW` and
+`RUNNER_NEW` in `install/dev-unit/install-owner-monitor.sh` carry them;
+its test keeps the empty-pin refusal by a stand-in value. After the build
+the endpoint was still active and the start check still read `state=ok
+restarts=0` for the start of 2026-11-17 23:22 UTC. No measurement was
+running or taken; whether the copy or the build disturbed the audio was
+not measured. `out/BUILD.txt` is saved as
+`outputs/owner-monitor-build-20261118/BUILD.txt`. Owed next, on the
+operator's word: the restaged bundle (installer with the pins) to the Pi,
+`./install-owner-monitor.sh status`, then the operator's
+`sudo ./install-owner-monitor.sh install`, and the list in the
+IMPLEMENTED entry from its step 2.

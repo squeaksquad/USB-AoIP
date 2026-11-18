@@ -59,10 +59,12 @@ owner_conf=$root/etc/usb16x16/dante/owner.conf
 # stage-owner-monitor.sh writes it in and checks the list against the repository's.
 manifest_sha256=@MANIFEST@
 
-# The new binaries, built on the unit by build-owner-monitor.sh from this list. EMPTY until the
-# operator has reported the hashes it printed; then pinned here, in the repository.
-OWNER_NEW=
-RUNNER_NEW=
+# The new binaries, built on the unit by build-owner-monitor.sh from this list. Empty, and
+# install refused, until a build on the unit had given the hashes. Pinned 2026-11-18 from the
+# build of 17:24:25 UTC on the author's Pi (list a884de21, g++ Debian 14.2.0-19, cmake 3.31.6);
+# a Debian trixie arm64 container with the same compiler gave the same two hashes.
+OWNER_NEW=bc48691122f2357606e2cd2a849cde4aee8c0ad6cb7998cad41aaa0c2f320b3e
+RUNNER_NEW=46f36659410b612d3ad9da2ae849ec8cfcf40eda672c700c8338af0318cb316a
 # What they replace (PROJECT_HANDOFF.md: c84e6a36 the 2026-11-01 point of record; the runner
 # 4492a19c, 2026-10-17; the start wrapper df6a1b0b, 2026-11-01).
 OWNER_OLD=c84e6a36f41fe439ba729fb2a15fa05e25f72b34c4415cc618e5b5d8048e95c3
@@ -80,7 +82,8 @@ for var in OWNER_NEW RUNNER_NEW OWNER_OLD RUNNER_OLD; do
   test_var=USB_AOIP_TEST_$var
   [ -n "${!test_var:-}" ] || continue
   [ -n "$root" ] || die 2 "$test_var is for the tests and is taken only with USB_AOIP_TEST_ROOT; unset it"
-  printf -v "$var" '%s' "${!test_var}"
+  # EMPTY stands for a pin not yet made, so the refusal for one stays tested once the pins are in.
+  if [ "${!test_var}" = EMPTY ]; then printf -v "$var" '%s' ''; else printf -v "$var" '%s' "${!test_var}"; fi
 done
 
 # name | installed path | the bundle's file | new | old
