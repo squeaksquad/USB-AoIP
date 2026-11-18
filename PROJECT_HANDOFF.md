@@ -16665,3 +16665,33 @@ and `usb16x16-dante.service` active. Not installed. The install restarts
 the web service and the apply watcher, not the endpoint. After it: a
 preset applied from the new page (it will carry the monitor section, the
 owner being bc486911), then the Control Room checks and the battery.
+
+**INSTALLED 2026-11-18 18:14:55 UTC (operator, read back by the session):
+the phase 3 access bundle (list 0da82c06, repository 94fc74a) is on the
+Pi: web 1.9.0 (51877ce9), applier 1.11.0 (e8468870), web unit 0997426f and
+the Control Room page. Not measured since, and not ACCEPTED.** The
+operator ran `sudo ./install-access.sh install` and said "installed"; the
+session did not see its output. Read back over SSH: `status` shows all
+five files `new` with the old chain's still kept; `usb16x16-web.service`
+active since 18:14:55 UTC with `NRestarts=0`; `usb16x16-apply.path`,
+`usb16x16-dante-rate.path` active; the endpoint not restarted by it
+(active since 17:59:15 UTC, start check still `state=ok restarts=0` of
+18:00:20 UTC); the page and `/api/monitor` answer 401 without a login; a
+browser at 192.168.1.58 was polling `/api/meters` at 18:15 UTC. Held on
+the unit, of what the IMPLEMENTED entry listed as not verified: systemd
+made `/run/usb-aoip-monitor` and `/var/lib/usb-aoip-monitor`, both 755
+and owned by the web service's account (`bdimaio` on this unit), under
+the unit's sandbox. Both are empty and there is no
+`/var/lib/usb16x16-apply/monitor-limits`, as expected before any knob
+move or limits request: the unit is still direct and the owner's status
+still reads `state=idle reason="no DSP preset"`. The session did not sign
+in to the page and ran nothing through it.
+
+The Pi now runs every part of phase 3 (owner bc486911, runner 46f36659,
+web 1.9.0, applier 1.11.0, the page), with no monitor preset applied.
+Owed, each on the operator's word: under the light rule for the page and
+its backend, a noise probe at 32 and `USB16X16_LOOP_CHANNELS=8
+dante/measure-candidate.sh soak 120 32` in direct; then a preset applied
+from the page (the first artifact with a monitor section on this unit),
+the Control Room and Level safety checks, a reboot for the start rule,
+and the full battery of the IMPLEMENTED entry's step 4.
