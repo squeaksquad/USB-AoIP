@@ -128,3 +128,24 @@ test('outputs in a headphones bus read as headphones, not speakers', async () =>
   assert.equal(outputRoleLabel(createConfig(), 15).short, 'SPARE');
   assert.throws(() => outputRoleLabel(config, 16), /1 to 16/);
 });
+
+test('EQ export and import round-trip one output, and REW text still imports', async () => {
+  const { exportEq, importEq, EQ_FILE_FORMAT } = await import('./eq-tools.mjs');
+  const { createConfig } = await import('./model.mjs');
+  const config = createConfig();
+  config.outputs[2].bands[4] = {enabled: true, type: 'lowShelf', frequency: 120, gainDb: -4, q: 0.7};
+  const file = exportEq(config, [2]);
+  assert.equal(file.format, EQ_FILE_FORMAT);
+  assert.deepEqual(file.outputs.map(o => o.output), [3]);
+  assert.equal(exportEq(config).outputs.length, 16);
+  const back = importEq(JSON.stringify(file));
+  assert.deepEqual(back.bands, config.outputs[2].bands);
+  assert.equal(back.count, 1);
+  assert.equal(importEq('Filter 1: ON PK Fc 80 Hz Gain -3 dB Q 2').source, 'REW');
+  assert.throws(() => importEq(''), /Nothing to import/);
+  assert.throws(() => importEq('{"bands": [1, 2]}'), /sixteen bands/);
+  assert.throws(() => importEq('{broken'), /JSON/);
+  const wild = structuredClone(file); wild.outputs[0].bands[0].gainDb = 99;
+  assert.throws(() => importEq(JSON.stringify(wild)), /EQ gain/);
+  assert.throws(() => exportEq(config, [16]), /1 to 16/);
+});

@@ -15921,3 +15921,269 @@ to 6, engine work (a ramped monitor block, Dante inputs into the mix, more
 than 16 Dante channels, gate and calibration noise), each under the full
 battery. Stopping after phase 1 is a complete result. The sample rate stays
 off the page.
+
+CORRECTION 2026-11-16 (same day, entry after this one): `install-access.sh`
+does not need web 1.7.2 added to its list to install this; the "Owed"
+paragraph below says it does.
+
+**IMPLEMENTED 2026-11-16 (Mac side, nothing on the Pi): phase 1 of the page
+redesign, the new page on today's engine, as a change to `web-ui/` only.**
+Branch `web/redesign-phase1`, pull request squeaksquad/USB-AoIP#13, head
+b62d9c4 before this entry. Not installed: the Pi still runs web 1.7.2 and
+applier 1.9.0 with the page as it was. The web service, the applier, the
+compiler, the owner and the preset model (version 2) are not changed.
+
+Three tabs. Status: five cards and three rows of sixteen meters with peak
+hold and a clip light that stays on until cleared. Processor: Outputs
+(name, level, delay, polarity, EQ, On/Off), Routing, Speakers & headphones,
+Bass management, undo and redo, align by distance, new preset and change of
+layout. System: device facts, larger controls, shut down, the presets, the
+last change, logs. A change bar says what is pending and whether it is
+playing already or needs a restart; that split is `liveState`'s shape-key
+answer, not the mockup's. A feature the engine lacks is left out: no
+Control Room, no Sources, no solo.
+
+What works differently from the page before:
+
+- Live edits go only to the running preset that the draft is, matched by
+  name. Before, any draft with the running preset's shape was sent to the
+  engine.
+- Mode and source are off the page: every preset is a processing preset on
+  what the computer sends (`mode: 'dsp'`, `source: 'usb'` written on load),
+  and running without processing is the Direct row in the presets list.
+- Removed: the A/B slots (`profiles.mjs`), the copyable service commands,
+  the pasted log snapshot, the demonstration meters, whole-channel copy and
+  paste (EQ copy and paste stays), "Add speaker bus", and the control for a
+  set's own level (a preset that carries one says so and offers to clear
+  it).
+- Change layout resets the speaker set's level, delay, EQ and bass sends
+  (the existing `applyBusLayout`); the page says so first and Undo restores
+  it.
+
+`install/dev-unit/access.sha256` is re-pinned for the page files only; the
+two binaries and the three units keep their hashes.
+
+Tested off the Pi: `node --test web-ui/*.test.mjs` (168),
+`node --test dsp-compiler/*.test.mjs` (66), the `web-control` Python tests
+(189), `install/test-render.sh` and `install/dev-unit/test-access.sh`, all
+passing. In a browser: standalone, every tab and control and a 375 px wide
+screen; against the real web service run on the Mac with a scripted meter
+file, the Status cards, live meters and System; with the device's answers
+replaced in the page by a stand-in, following the running preset on
+connect, a live edit, Keep changes, Discard, a change of shape, Apply and
+restart audio, Run Direct, running a saved preset, Duplicate, Rename and
+Remove. The applier itself was not exercised, and the AES67 stack's page
+was not viewed.
+
+Owed before ACCEPTED: installing it, which needs `install-access.sh` to
+list web 1.7.2 among the versions it upgrades from (it lists 1.7.0 and
+1.7.1); then the light rule's checks on the Pi: the page's behaviour
+against the real applier, a noise probe at 32, and
+`measure-candidate.sh soak 120 32`. `web-ui/README.md`'s top section
+describes the page and what was checked.
+
+**CORRECTION 2026-11-16: `install-access.sh` already installs phase 1's
+page on a unit running web 1.7.2; its list of earlier versions needs no
+change.** The entry above, pull request 13's first description and
+`docs/web/REDESIGN-2026-11.md` ("Install pinning") all say the list has to
+be extended. It does not: the bundle's web service is still 1.7.2
+(5b374f74, the hash `access.sha256` pins and the one installed on
+2026-11-15), and the installer counts a file that is already the bundle's
+as installed. With all five files the bundle's and the page an earlier
+one, it updates in place: the page is replaced, the five files and the
+kept `*.pre-access` copies are left as they are, and `rollback` still goes
+back to the old chain. `test-access.sh` now has that case (a unit on the
+bundle's five files with the page of 94b3d79) and passes. The list of
+earlier hashes matters the next time the web service itself changes: the
+hash it replaces, 5b374f74, has to be added then. The installer's header
+says so. Not changed by this: the installer's logic, the bundle, anything
+on the Pi. One thing it leaves behind: the installer adds and replaces
+page files and removes none, so `profiles.mjs`, which the new page no
+longer loads, stays in the Pi's page directory after an install.
+
+The "Install pinning" paragraph of `docs/web/REDESIGN-2026-11.md` was
+corrected the same day to say this.
+
+CORRECTION 2026-11-17 (entry at the tail): this install also put 30 macOS
+"._" companion files into the page directory; the read-back below did not
+see them.
+
+**INSTALLED 2026-11-17 03:40 UTC (operator): the phase 1 page on the Pi, by
+`install-access.sh install` from bundle 0991131e (repository ea2315f).**
+The page only. Read back the same minute, read-only: every one of the
+bundle's page files is the file in `/home/bdimaio/usb-16x16-work/web-ui`;
+the web service is still 1.7.2 (5b374f74) and the applier 1.9.0
+(32b13a72), and the installer's status calls all five files new with the
+old chain's copies kept (web 6b98e7cf, applier 347a7062);
+`web-ui.pre-access` is in place and no `.access-undo` copy is left.
+`usb16x16-web`, `usb16x16-apply.path` and `usb16x16-dante-rate.path`
+restarted at 03:40:15 UTC and nothing else did: `usb16x16-dante` up since
+2026-11-13 16:10 UTC, Statime since 2026-10-14, the gadget since
+2026-10-30. A browser at 192.168.1.58 was reading `/api/meters` from the
+new service within seconds, answered 200.
+
+Before the install the session checked the same services and versions and
+that no applier, rate or candidate operation was running, set the 1.7.2
+bundle in the home directory aside as `usb-aoip-access.web-1.7.2` (and its
+`.tgz`) so its page files could not mix into the new one, and verified the
+copied archive and all 33 files against the list. The copy went over eth0.
+
+Left behind, as the CORRECTION above expected: `profiles.mjs` is still in
+the page directory, unused, with the test files and README of an older
+copy that were already there.
+
+Not ACCEPTED. Owed on the Pi: the page's behaviour against the real
+applier (a live edit with Keep and Discard, Apply and restart audio to a
+preset and back to Direct, the presets list), one rate move from the Mac
+and one from Dante Controller, a noise probe at 32, and
+`measure-candidate.sh soak 120 32`. `install-access.sh rollback` returns
+to web 1.6.0, applier 1.8.0 and the old chain's page, not to the page of
+2026-11-15; that page is the bundle set aside as
+`~/usb-aoip-access.web-1.7.2` on the Pi.
+
+**IMPLEMENTED 2026-11-17 (Mac side): design fixes to the phase 1 page, from
+the operator's screenshots of it on the Pi; `web-ui/` only.** Not
+installed: the Pi still has the page of bundle 0991131e. The header lines
+up with the content column. Status: six scale marks that do not collide,
+an unlit bar plain. Outputs: a column of at most 960 px in which the name
+has a fixed width and the meter takes the rest of the row. The EQ editor opens over the page as a large pop-up (the
+operator's request), not beside the rows; handles no longer overlap at the
+default frequencies. System: device facts as label and value on one line
+in two columns; Display and Power keep their button beside the text; file
+pickers styled as buttons; each preset row is Run it, Open and a "More"
+menu. A preset's name has one spelling, the preset store's, written on
+load; "Open in Processor" marks the saved preset the draft came from, not
+any preset with the same name. Two more from the operator while this was
+being made: the number boxes in a column of steppers line up (the Q row
+had no unit and sat further right), and the polarity button stays inside
+its column (it ran into the EQ button). `access.sha256` is re-pinned for
+the page files. Checked off the Pi: the page tests and the other four test
+commands, and in a browser against the web service run on the Mac (Status,
+Outputs, the EQ pop-up with a drag, a step, export over it, next output
+and close, System with the menu open, and a scan of every tab for controls that
+overlap, at normal size and with larger controls: none). The checks owed on the Pi are
+unchanged and are for the page once this is installed.
+
+**CORRECTION 2026-11-17 03:55 UTC: the install of 03:40 UTC left 30 macOS
+"._" companion files in the Pi's page directory, and the bundle archive
+was the cause.** Found while copying the next bundle, before installing
+it. The archive `stage-access.sh` made on the Mac held a "._" entry beside
+every file (39 in the second archive, counted with Python's tarfile;
+macOS's own tar does not list them). GNU tar on the Pi unpacks them as
+163-byte files, and `install-access.sh` copies every file under the
+bundle's `web-ui` into the page. On the Pi now: 27 in
+`/home/bdimaio/usb-16x16-work/web-ui` and 3 in its `compiler/`, all dated
+22:40:14 local (03:40:14 UTC), owned by bdimaio. They hold only macOS file
+attributes; the page does not load them. The INSTALLED entry's read-back
+missed them twice over: the bundle was checked with `sha256sum -c`, which
+looks only at listed files, and the page directory was listed without
+hidden files. Every listed page file is still the bundle's, as that entry
+says. The two earlier bundles set aside in the home directory hold the
+same companions.
+
+Fixed in the repository (e07763e): `stage-access.sh` makes the archive
+with no extended attributes and fails if a "._" entry is in it. The bundle
+now on the Pi as `~/usb-aoip-access` is from that script (repository
+e07763e, list 1a022f7d, archive a59ca41f): 33 files unpacked, 33 listed,
+all verifying, no "._" file. It is copied, not installed; the bundle of
+the page installed now is set aside as `~/usb-aoip-access.page-0991131e`.
+Not done: the 30 files are still in the page directory. The installer
+removes nothing, so installing the clean bundle leaves them there; they
+need removing by hand.
+
+**DONE 2026-11-17, between 03:54:55 and 03:55:58 UTC (session, on the
+operator's word): the 30 "._" files are removed from the Pi's page
+directory.** (This heading first said 03:58; the read-back times bound it
+as now written, before the install recorded below.) Looked at first: all 30
+were 163 bytes, began with the AppleDouble mark (00 05 16 07) and held
+only `com.apple.provenance`, each sat beside a real file of the same name,
+and all were owned by bdimaio. Deleted with `find ... -name "._*" -size
+163c -delete` in `/home/bdimaio/usb-16x16-work/web-ui` only. Read back:
+none left there, 39 files where there were 69, all 28 files of the
+installed page (bundle 0991131e) still byte for byte the bundle's, the web
+service not restarted (up since 03:40:15 UTC) and answering, Dante active.
+
+One of the 30, `._profiles.mjs`, was dated 2026-11-15 14:44 local: the
+install of web 1.7.2 on 2026-11-15 put companions there too, and the
+03:40 install replaced all but that one. So the archive has carried them
+since at least that bundle, not only since this session's. Left alone:
+other "._" files elsewhere under `/home/bdimaio/usb-16x16-work` (18 within
+three levels, outside the page directory) and those inside the two bundles
+set aside in the home directory.
+
+**INSTALLED 2026-11-17 03:55:58 UTC (operator): the phase 1 page with the
+design fixes, by `install-access.sh install` from bundle 1a022f7d
+(repository e07763e, archive a59ca41f).** The page only, as before. Read
+back at 03:57 UTC, read-only: all 28 page files of the bundle are the
+files in `/home/bdimaio/usb-16x16-work/web-ui`; the directory holds 39
+files with hidden ones counted and no "._" file. The 11 that are not the
+bundle's were there before: `profiles.mjs`, nine `*.test.mjs` and a
+README, none of which the page loads. Web 1.7.2 (5b374f74) and applier
+1.9.0 (32b13a72) are unchanged, the installer's status calls all five
+files new with the old chain's copies kept (web 6b98e7cf),
+`web-ui.pre-access` is in place and no `.access-undo` copy is left.
+`usb16x16-web`, `usb16x16-apply.path` and `usb16x16-dante-rate.path`
+restarted at 03:55:58 UTC and nothing else did: `usb16x16-dante` up since
+2026-11-13 16:10 UTC, Statime since 2026-10-14, the gadget since
+2026-10-30. A browser at 192.168.1.58 loaded the new modules at 03:56:08
+UTC and has had 343 requests answered 200 since.
+
+Looked at and not new: the web service's journal shows "Request timed
+out" lines from that browser, 5 since this install, about 30 s after the
+page load. There were 5 in the fifteen minutes on the previous page and 57
+between 2026-11-15 14:44 and this evening on the page before the
+redesign, so they are not this page's.
+
+Still not ACCEPTED. Owed on the Pi, unchanged: the page against the real
+applier (a live edit with Keep and Discard, Apply and restart audio to a
+preset and back to Direct, the presets list and its More menu), one rate
+move from the Mac and one from Dante Controller, a noise probe at 32, and
+`measure-candidate.sh soak 120 32`. The bundle of the page before this one
+is `~/usb-aoip-access.page-0991131e` on the Pi.
+
+**MEASURED 2026-11-17 03:58-04:04 UTC (session, on the operator's word):
+with the phase 1 page installed (bundle 1a022f7d), the noise probe at 32
+and the two-minute soak pass on the eight looped channels. Not yet
+ACCEPTED: the page's own checks and the two rate moves are still owed.**
+Web 1.7.2 and applier 1.9.0 as before; the Dante service has not been
+restarted since 2026-11-13 16:10 UTC; the endpoint was running direct at
+48 kHz (`prime_drop=28`, `rx_queue=96`), the start check `ok`. Pro Tools
+and RTL Utility were not running. The operator was told beforehand that
+the probe plays noise on all sixteen outputs.
+
+From the Mac, `dante/measure-candidate.sh`, 48 kHz, 32 frames:
+- noise probe (`page1`, `20261117T035840Z`): return from sample 528, no
+  zero run of 4 or more, zeros inside the span 0.0%, endpoint
+  xrun/lag/error lines +0.
+- soak 120 s judged on all sixteen (`page1`, `20261117T035929Z`): FAIL,
+  and located before anything else was done: channels 1 to 8 each had a
+  longest zero run of 1 and peak 0.1000; channels 9 to 16 were silent for
+  the whole run (zero run 5664000, peak 0), which is a loop eight channels
+  wide, as on 2026-11-13, not holes. Discontinuities in 0 out 0, endpoint
+  lines +0.
+- soak 120 s judged on the loop (`page1-loop8`, `20261117T040154Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peak 0.1000 on
+  all eight, discontinuities in 0 out 0, endpoint lines +0.
+
+This is the same measure the access update was accepted on (2026-11-13,
+eight looped channels). It is not the sixteen-channel soak the light rule
+names: channels 9 to 16 are loaded but not judged while the far loop is
+eight wide. The evidence is in the evidence repository's working tree
+(`outputs/latency/page1-*`), not committed there.
+
+The evidence of the MEASURED entry above was committed and pushed in the
+evidence repository the same hour (`squeaksquad/USB-AoIP-evidence`,
+a3c6f69, `outputs/latency/page1-*`).
+
+**ACCEPTED 2026-11-17 (operator): the phase 1 page on the Pi, bundle
+1a022f7d (repository e07763e), with web 1.7.2 and applier 1.9.0 as they
+were.** The operator's words: "accepted, it all looks good". The session
+did not see the operator's checks on the page and was given no figures;
+which of the owed steps were made (the live edit with Keep and Discard,
+Apply and back to Direct, the presets list, the two rate moves) was not
+reported one by one. Behind the acceptance on the record: the INSTALLED
+entry's read-back of 03:57 UTC and the MEASURED entry of 03:58-04:04 UTC
+(noise probe at 32 and the two-minute soak passing on the eight looped
+channels; channels 9 to 16 not judged). The page of the redesign's phase 1
+is the page of record. Phase 2 (the System actions, as applier request
+kinds) is next, in its own branch and pull request.

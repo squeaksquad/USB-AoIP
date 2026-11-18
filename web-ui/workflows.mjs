@@ -169,3 +169,15 @@ export function parseRew(text) {
   try {validateConfig(check);} catch(error) {throw new Error(`REW import: ${error.message}. No values were clamped.`);}
   return {bands,count,skipped};
 }
+
+/** A new preset with nothing in it: sixteen outputs passed straight through,
+ *  each fed by the computer channel of the same number, no bass management. */
+export function blankConfig(name='New preset') {
+  const result=createConfig();
+  result.name=name; result.headroomDb=0; result.bassEnabled=false;
+  result.inputs.forEach((input,i)=>{input.label=`In ${i+1}`;input.crossover=false;});
+  result.outputs.forEach((output,i)=>Object.assign(output,{label:`Out ${i+1}`,role:'speaker',source:i,busId:'speakers'}));
+  result.sends=Array.from({length:16},()=>Array(16).fill(null));
+  result.buses=[{id:'speakers',kind:'speakers',label:'Speakers',outputIds:Array.from({length:16},(_,i)=>i),layoutId:'custom',gainDb:0,mute:false}];
+  return validateConfig(result);
+}

@@ -171,8 +171,13 @@ everything it can do today.
 - **Install pinning.** Any change to the page, the web service, the applier
   or their units fails `stage-access.sh` and `test-access.sh` until
   `install/dev-unit/access.sha256` is re-pinned. `install-access.sh` lists
-  the web binaries it will upgrade from (1.7.0 and 1.7.1 at the time of the
-  survey); a Pi on 1.7.2 needs that list extended.
+  the web binaries it will upgrade from (1.7.0 and 1.7.1). A Pi on 1.7.2
+  needs no entry there while the bundle's web service is still 1.7.2: a
+  file that is already the bundle's counts as installed, and a bundle with
+  a newer page replaces the page alone (`test-access.sh` has the case).
+  When the web service itself changes (phase 2), add the hash it replaces,
+  5b374f74, to that list. Corrected 2026-11-16: this paragraph first said
+  the list had to be extended for 1.7.2.
 - **Model version.** Phase 1 stays on preset model v2. Speaker sets, trims
   and sources are a v3 with a migration, when the engine can carry them.
 - **Budget.** Phases 4 to 6 spend the DSP budget. They may not all fit at

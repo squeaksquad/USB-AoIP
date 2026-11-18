@@ -900,3 +900,80 @@ export async function awaitReceipt(id, fetchImpl = globalThis.fetch, {pollMs = 2
     await sleep(pollMs);
   }
 }
+
+// ------------------------------------------------------------- Status tab
+
+/**
+ * The five cards at the top of Status: clock, sample rate, computer, network
+ * audio, running preset. Each is {id, label, value, detail, state, stateText}
+ * with state 'ok' | 'warn' | 'bad' | ''. A fact the device did not report is
+ * said to be unknown; it is never shown as good.
+ */
+export function statusCards(health) {
+  const none = (id, label) => ({id, label, value: 'Not connected', detail: 'No device is answering this page', state: '', stateText: ''});
+  const labels = [['clock', 'Clock'], ['rate', 'Sample rate'], ['computer', 'Computer'], ['network', 'Network audio'], ['preset', 'Running']];
+  if (!health) return labels.map(([id, label]) => none(id, label));
+  const dante = health.stack === 'dante';
+  const cards = [];
+  const card = (id, label, value, detail, state = '', stateText = '') => cards.push({id, label, value, detail, state, stateText});
+  const words = {ok: 'OK', warn: 'Check', bad: 'Problem'};
+
+  if (dante) {
+    const clock = clockFact(health.clock, unitState(health, 'statime'));
+    const short = clock.state === 'ok' ? 'Locked' : clock.state === 'bad' ? 'No clock' : clock.state === 'warn' ? 'Starting' : 'Unknown';
+    card('clock', 'Clock', short, clock.state === 'ok' ? (clock.title || 'Following the network clock leader') : clock.value, clock.state, words[clock.state] || '');
+  } else {
+    const ptp = health.ptp?.status;
+    card('clock', 'Clock', ptp === 'locked' ? 'Locked' : ptp ? (ptp === 'unavailable' ? 'Unknown' : ptp) : 'Unknown',
+      ptp === 'locked' ? `Grandmaster ${health.ptp.gmid || 'unknown'}` : 'The clock state was not reported', ptp === 'locked' ? 'ok' : ptp && ptp !== 'unavailable' ? 'bad' : '', ptp === 'locked' ? 'OK' : '');
+  }
+
+  const rate = formatRate(health.audio?.sampleRate);
+  card('rate', 'Sample rate', rate ?? 'Unknown', dante ? 'Set from the computer or Dante Controller' : 'Fixed by the running profile', '', '');
+
+  const usb = health.usb, owner = health.owner;
+  if (usb && !usb.present) card('computer', 'Computer', 'No USB port', 'The device has no USB connection to offer', 'bad', 'Problem');
+  else if (usb?.state === 'configured') {
+    const flow = dante && owner?.present
+      ? `Sending audio: ${owner.usbOut === 'flow' ? 'yes' : 'no'} · receiving: ${owner.usbBack === 'flow' ? 'yes' : 'no'}`
+      : 'Connected over USB';
+    card('computer', 'Computer', 'Connected', flow, 'ok', 'OK');
+  } else card('computer', 'Computer', usb ? 'Not connected' : 'Unknown', usb ? 'No computer is using the USB port' : 'The USB state was not reported', usb ? 'warn' : '', usb ? 'Check' : '');
+
+  const net = health.network, engine = unitState(health, dante ? 'dante' : 'aes67');
+  if (engine && engine !== 'active' && engine !== 'unknown') {
+    card('network', 'Network audio', engine === 'activating' ? 'Starting' : 'Stopped', `The ${stackTerms(health).service} is ${serviceLabel(engine)}`, engine === 'activating' ? 'warn' : 'bad', engine === 'activating' ? 'Check' : 'Problem');
+  } else if (net && !net.carrier) card('network', 'Network audio', 'Cable unplugged', `${net.interface} has no link`, 'bad', 'Problem');
+  else {
+    const check = dante ? startCheckFact(health.startCheck) : null;
+    const speed = Number.isFinite(net?.speedMbit) ? `${net.speedMbit} Mbit/s` : null;
+    const slow = Boolean(net?.carrier) && Number.isFinite(net.speedMbit) && net.speedMbit !== 1000;
+    const state = check?.state === 'bad' ? 'bad' : slow || check?.state === 'warn' ? 'warn' : engine === 'active' ? 'ok' : '';
+    card('network', 'Network audio', `${dante ? 'Dante' : 'AES67'}${speed ? ` · ${speed}` : ''}`,
+      slow ? 'Expected 1000 Mbit/s on this link' : check && check.state ? check.value : `16 in, 16 out${dante ? ' · routed in Dante Controller' : ''}`, state, words[state] || '');
+  }
+
+  const running = deviceModeLabel(health);
+  const stopped = health.mode?.running === false;
+  card('preset', 'Running', (running || 'Unknown').replace(/^DSP preset (user|dante)-/, '').replace(/ · not running$/, ''),
+    stopped ? 'Audio is not running' : health.profile?.selected === 'direct' ? 'Audio passes through unchanged' : health.profile?.selected ? `On the device as ${health.profile.selected}` : 'The device did not say what it runs',
+    stopped ? 'bad' : '', stopped ? 'Problem' : '');
+  return cards;
+}
+
+/**
+ * The three meter rows of Status, each a bank of 16 or null when the tap is
+ * missing: what the computer sends, what goes to the network (after the
+ * processing), what comes from the network (on its way to the computer).
+ */
+export function meterRows(meters) {
+  const taps = meters?.taps || {};
+  const bank = tap => Array.isArray(tap?.peakDb) && tap.peakDb.length === 16
+    ? tap.peakDb.map((peak, i) => ({peak, rms: tap.rmsDb?.[i] ?? null, clipped: tap.clipped?.[i] ?? 0}))
+    : null;
+  return [
+    {id: 'computer', title: 'From the computer', note: 'USB, before the processing', bank: bank(taps['usb-capture'])},
+    {id: 'to-network', title: 'To the network', note: 'After the processing: what the outputs carry', bank: bank(taps['dante-playback'] ?? taps['ravenna-playback'])},
+    {id: 'from-network', title: 'From the network', note: 'On its way to the computer, unchanged', bank: bank(taps['dante-capture'] ?? taps['ravenna-capture'])},
+  ];
+}
