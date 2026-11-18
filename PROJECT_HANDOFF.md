@@ -16358,3 +16358,208 @@ Next is phase 3 of `docs/web/REDESIGN-2026-11.md`, in a new session, its
 own branch and pull request. Pull requests 12, 13 and 14 are open and
 stack in that order; merging them in order leaves phase 3 to branch from
 `main`.
+
+**IMPLEMENTED 2026-11-18 (Mac side, nothing on the Pi): phase 3 of the page
+redesign, the monitor block in the engine, with its control path, the
+Control Room tab, preset model v3 and the owner's installer.** Branch
+`web/redesign-phase3`, cut from `origin/main` (d05d402, pull requests 12,
+13 and 14 merged); not pushed, no pull request. Not installed and not
+built on the Pi: it still runs owner c84e6a36, runner 4492a19c, start
+wrapper df6a1b0b, web 1.8.0 (956c8569), applier 1.10.0 (d8a97b2c) and the
+phase 2 page (bundle list d006b0a2), direct at 48 kHz. This phase changes
+the audio path: nothing in it is ACCEPTED until the full battery has run.
+The operator approved the design and its six choices on 2026-11-18 before
+anything was written.
+
+What the block is, in the engine (`dsp-core/src/bridge_core.cpp` 8a095aaa,
+header a1b6a05c):
+
+- `MonitorGains`: one gain per output, applied after `DspStage::process`
+  and before the samples go back to 24 bits. Every move is a linear ramp
+  per sample from the gain it has to its target: 10 ms (rate/100) for
+  mute, dim, solo, subwoofers off, a fold and the set switch, 40 ms
+  (rate/25) for level and trim. At rest on unity the block does not touch
+  the buffer. A start or re-prime rises from zero over 10 ms.
+- The artifact has an optional `monitor` section (sets, their outputs,
+  labels, which expand rows read which set's view, fold-down matrices).
+  Fold-downs act at the stage's input, before bass management and each
+  speaker's EQ: a set's expand rows read that set's view of the sixteen
+  inputs, crossfaded over 10 ms on a change and put in place without a
+  crossfade at a prime. Folds are `5.1`, `stereo` and `mono` by the table
+  in `dsp-compiler/README.md` (folded-in channels at -3 dB, top middle at
+  -6 dB to front and surround, mono as half of left plus right to both
+  front speakers, the LFE passed, not normalised). An artifact without the
+  section loads, runs and has the shape key it had (7d17e417 for the
+  pinned vector); with one the key covers the section (pinned vector
+  e119252e, `dsp-compiler/fixtures/pinned-monitor-vector.dsp`, read by the
+  JS, Python and C++ tests).
+- Only with a preset. Direct has no engine and no monitor, and the page
+  draws no Control Room tab then (the operator's choice).
+
+The control path (`docs/web/MONITOR-FILES.md` is the contract,
+`docs/web/ACCESS.md`, "The monitor path", the reasoning):
+
+- The web service writes `/run/usb-aoip-monitor/state` itself on
+  `POST /api/monitor`, with a remembered copy in
+  `/var/lib/usb-aoip-monitor/state` two seconds after the last change. No
+  applier and no receipt on this route. It is a third writable place for
+  the web unit (`RuntimeDirectory=` and `StateDirectory=`
+  `usb-aoip-monitor`, unit 0997426f).
+- The limits are root's: `/var/lib/usb16x16-apply/monitor-limits`, written
+  only by the applier on the new kinds `monitor-limits` (knob maximum
+  -30 to 0 dB, start rule, reference lock) and `monitor-reference`.
+- The owner (`dante/owner/monitor_ctl.hpp`, on a 10 ms control thread that
+  is never the loop thread) reads both as untrusted input, clamps level and
+  level plus trim to the maximum and never above 0 dB, and writes
+  `/run/usb16x16-dante/monitor.status`, which the web service reads back.
+  A set switch is two publishes: what goes down goes down, then what comes
+  up comes up. On the first start since boot (no state file) the owner
+  applies the start rule itself: where it was, each set's reference, or a
+  fixed level; with nothing remembered, the fixed level, -30 dB by default.
+  The web service adopts those levels and writes the run file at once, so
+  a later owner restart keeps the levels it had. Solo is never remembered.
+- The paths are compiled into the owner (`--monitor-state`,
+  `--monitor-saved`, `--monitor-limits`, `--monitor-status`,
+  `--no-monitor` override them), so the start wrapper df6a1b0b is not
+  changed.
+- A fourth meter tap, `monitor-in`, is taken before the gains and is in
+  the meter file only while a monitor preset runs.
+
+The rest:
+
+- Web 1.9.0 (51877ce9) and applier 1.11.0 (e8468870): the routes above,
+  `control.monitor` in health (`available`: a monitor preset is running;
+  `engine`: this unit's owner knows the section, read from the status file
+  or from the owner binary), the artifact readers' monitor section. The
+  page compiles the section only when `engine` is true, the web service
+  refuses one early otherwise, and the applier refuses to install one for
+  an owner binary that would not load it. The support bundle's `modinfo`
+  call (FOUND in the phase 2 ACCEPTED entry) now tries `/usr/sbin/modinfo`,
+  `/sbin/modinfo`, then the PATH, and records why it failed in
+  `hashes.usb_f_uac2_error`; the applier unit also has
+  `ProtectKernelModules=yes`, which may be the real cause. Not looked at
+  on the Pi.
+- The page: a Control Room tab (`web-ui/monitor.mjs`, `view-control.mjs`)
+  drawn only when the device offers the monitor: a card per speaker set
+  and headphones (knob with ring, typed level, Dim, Mute, Ref, Set, the
+  reference note, Listen as, subwoofers on and off, meters), main volume,
+  trims and the set switch with several sets, the speaker overview with
+  solo and mute per speaker and group and Pre/Post meters, keyboard
+  shortcuts, and Level safety on System. A knob move is sent at most every
+  30 ms, one in flight, the latest wins. Left out, as the engine cannot do
+  them: the Sources grid, Sum, Follow, cue mix, talkback, the T key
+  (phase 4), Calibrate (phase 6). "Subwoofers off" mutes the subwoofers;
+  bass is not returned to the main speakers, and the page says so.
+- Preset model v3 (`web-ui/model.mjs`): a speaker set beyond the first has
+  `subShare` (the main set's subwoofer, none, its own); a bus has no saved
+  level or mute, and migration folds a v2 bus level into its outputs'
+  levels (clamped, with a note) and a bus mute into their on/off. The
+  compiler gives each set its own branches; a sub shared by two sets is
+  listed under both, and every speaker set of a several-set preset has a
+  reserved fold `off` that the owner engages on a set that is not playing,
+  so its bass leaves a shared sub. A preset with one speaker set compiles
+  to the bytes it did before (232 pinned cases,
+  `dsp-compiler/fixtures/single-set-pins.json`).
+- The owner is built from `dante/owner/main.cpp` (8c9bf80e: the development
+  line, so it also carries the `--chan-holes` diagnostic, off by default).
+  `install/dev-unit/stage-owner-monitor.sh`, `build-owner-monitor.sh` and
+  `install-owner-monitor.sh install|rollback|status` (source list
+  a884de21) build the owner and the offline runner on the Pi and swap them
+  for c84e6a36 and 4492a19c, kept as `*.pre-monitor`. The runner goes with
+  the owner because the applier's load check runs the installed one, which
+  would refuse a monitor artifact. `OWNER_NEW` and `RUNNER_NEW` in the
+  installer are empty and `install` refuses until a build on the Pi has
+  given the two hashes and they are pinned here. Its rollback refuses
+  while the running preset has a monitor section.
+- `install/install.sh` now builds the accepted owner from copies of its
+  own headers and bridge core kept in `dante/owner/point-of-record/`
+  (bridge core bbaec39e and c8558c99, the hashes `pins.sha256` held before
+  this phase), so a from-scratch install is still c84e6a36's source. The
+  runner it builds is the live one.
+- `install/dev-unit/access.sha256` is re-pinned (list 0da82c06) and
+  `install-access.sh` lists web 956c8569, applier d8a97b2c and web unit
+  c908894d as earlier bundles' files, with the `test-access.sh` case of a
+  unit on those.
+
+Tested off the Pi, all passing, run by the session on the finished tree:
+`node --test web-ui/*.test.mjs` (221), `node --test dsp-compiler/*.test.mjs`
+(84), the `web-control` Python tests (335), the soak reference and
+`tools/diag` tests, dsp-core's ctest, the eight owner header tests of the
+CI loop, `install/test-render.sh`, `install/dev-unit/test-access.sh`,
+`install/dev-unit/test-owner-monitor.sh`, the start wrapper and start check
+tests. File to file through `usb16x16-dsp-offline`:
+`dsp-compiler/verify-monitor.py` (the ramps equal an independent reference
+sample for sample at two block sizes; with full-scale DC no step exceeds
+1/N of the ramp plus a float; a unity script is byte-identical to none),
+`verify-fold.py` (the fold table; the folded output equals the weighted sum
+of the unfolded responses through bass management, EQ and delay within
+float rounding; the crossfade; the subs byte-identical under every fold),
+`verify-sets.py` (each set alone is bit for bit the one-set preset with the
+other silent; all sets is their sum; the switch on a shared sub), at 48 kHz,
+the last also at 96. Both owner sources compile under g++ 14.2 with the
+installer's flags in a Debian trixie arm64 container, and the staged bundle
+builds there as a non-root user (owner bc486911, runner 46f36659: that
+container's, not the Pi's, and not to be pinned). End to end on the Mac
+with `dante/owner/monitor_sim.cpp` (the owner's monitor code and meter taps
+without ALSA) behind the real web service and applier code, driven from a
+browser by the subagents that built it: a level move of 10 dB moved the
+post meter 10.0 dB and left the pre meter; mute, dim (-20.0 dB), Listen as,
+solo, Pre/Post, a knob maximum of -26 clamping page and engine, the set
+switch and All sets on a compiled two-set preset with a shared sub; no
+console or content-security-policy errors.
+
+Cost, on the Mac only and relative: the gains add about 0.13 us to a
+32-frame block; a stereo fold of the 308-section loaded shape about 9 per
+cent and mono about 15; a second speaker set about 1 to 1.4 us on a small
+preset, more while it is not playing (an engaged `off` forces the fold
+path). None of this is a Pi figure.
+
+FOUND while building, not fixed:
+- `DspStage::publish` stores its count before its index and `process`
+  reads the index before the count, so a publish that lands between the
+  two reads lets the next publish write the set the loop is reading for
+  one block. It needs two publishes within one block; the live file is
+  polled every 50 ms, so it cannot happen as installed. `MonitorGains`
+  uses the other order. The stage's own code is the installed owner's and
+  was left alone.
+- The applier's `ARTIFACT_MAX_INTERNAL` is 64 and the engine's
+  `kMaxInternalChannels` is 48. Older than this phase.
+- A set that shares the main sub raises that sub's worst-case sum, which
+  assumes every set plays at once: the `sets` verification preset reaches
+  +1.08 dBFS on it and the compile CLI warns.
+- `restart-audio` restarts whatever is installed without the applier's
+  engine guard; it matters only if an owner is rolled back under a running
+  monitor preset, which the owner installer's rollback refuses.
+- `off` takes one of a set's four fold slots.
+
+Not verified anywhere: the owner on the Pi at all (its build, the 10 ms
+control thread beside the loop, `dsp_us_max` with the gains, a fold and the
+fourth tap, the start rule after a real boot, the status and state
+directories' owners and modes under systemd, the web unit's new
+directories, `RuntimeDirectoryPreserve` across a web restart, the owner
+reading root's limits file), the audible result of any ramp, the Control
+Room by pointer or touch, the dev-unit install of either bundle, and 44.1
+or 88.2 kHz for anything (the harnesses ran at 48 and 96).
+
+Owed, in this order, each on the operator's word:
+1. `install/dev-unit/stage-owner-monitor.sh`, the bundle to the Pi,
+   `./build-owner-monitor.sh` there (unprivileged, stops nothing), the two
+   hashes pinned in `install-owner-monitor.sh`, the bundle staged again.
+2. `sudo ./install-owner-monitor.sh install` (operator). The old page
+   never emits a monitor section, so the unit should behave as before:
+   a noise probe at 32 and a control run on a preset without the section
+   (the new owner also differs from c84e6a36 by the dormant `--chan-holes`
+   code), against `daw_timeline` 528.
+3. `install/dev-unit/stage-access.sh` and `install-access.sh install`
+   (operator), then a preset applied from the new page (it gets the
+   section), and the behavioural checks: each Control Room control, Level
+   safety, a reboot for the start rule, the two rollbacks' refusals.
+4. The full battery on a monitor preset, at unity and again off unity:
+   four loaded 800-impulse runs and a ten-minute soak with
+   `USB16X16_LOOP_CHANNELS=8` (channels 9 to 16 loaded, not judged, while
+   the far loop is eight wide), `dsp_us_max` and `meter_us_max` recorded,
+   at 48 kHz and at 96, where the loaded preset was already over budget in
+   22 of 365 windows before this block.
+5. Only then ACCEPTED, `dante/owner/point-of-record/` replaced by the new
+   owner's sources and `install/pins.sha256` and the installer's build
+   line with it.
