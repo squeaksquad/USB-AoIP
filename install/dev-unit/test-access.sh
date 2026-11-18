@@ -123,6 +123,42 @@ run rollback >/dev/null 2>&1 || bad "page: rollback failed"
 diff "$tmp/before.p" "$tmp/after.p" >/dev/null || bad "page: rollback did not return to the old chain's files"
 [ $fail = $before ] && ok "a unit already on the bundle's five files takes a newer page alone; its kept copies stay the old chain's and rollback goes all the way back"
 
+# --- the development unit as it is since 2026-11-17: web 1.7.2 (5b374f74), applier 1.9.0
+#     (32b13a72) and the phase 1 page, all from ae67492. The bundle's web service and applier
+#     are newer (the System actions): both are replaced, with the page, in place.
+before=$fail
+fresh_root s
+run install >/dev/null 2>&1 || bad "actions: the first install failed"
+prev=ae67492
+git -C "$repo" show $prev:web-control/usb16x16-web   > "$root/usr/local/bin/usb16x16-web"
+git -C "$repo" show $prev:web-control/usb16x16-apply > "$root/usr/local/bin/usb16x16-apply"
+[ "$(sha "$root/usr/local/bin/usb16x16-web" | cut -c1-8)" = 5b374f74 ] || bad "actions: $prev's web service is not 5b374f74"
+[ "$(sha "$root/usr/local/bin/usb16x16-apply" | cut -c1-8)" = 32b13a72 ] || bad "actions: $prev's applier is not 32b13a72"
+rm -rf "$root$work/web-ui"; mkdir -p "$root$work/web-ui/compiler"
+git -C "$repo" archive $prev web-ui | tar -x -C "$root$work" --exclude='*.test.mjs' --exclude=README.md --exclude=stage-page.sh
+for f in compile bridge-artifact coefficients; do rm -f "$root$work/web-ui/compiler/$f.mjs"; git -C "$repo" show "$prev:dsp-compiler/$f.mjs" > "$root$work/web-ui/compiler/$f.mjs"; done
+[ -e "$root$work/web-ui/actions.mjs" ] && bad "actions: the earlier page already has actions.mjs; the case tests nothing"
+run status > "$tmp/status.s" 2>&1
+grep -q 'usb16x16-web  *earlier bundle (5b374f74)' "$tmp/status.s" || bad "actions: status does not call web 1.7.2 an earlier bundle: $(grep 'bin/usb16x16-web' "$tmp/status.s" | head -1)"
+grep -q 'usb16x16-apply  *earlier bundle (32b13a72)' "$tmp/status.s" || bad "actions: status does not call applier 1.9.0 an earlier bundle: $(grep 'bin/usb16x16-apply' "$tmp/status.s" | head -1)"
+: > "$tmp/systemctl.log"
+run install > "$tmp/actions.out" 2>&1 || bad "actions: install over web 1.7.2 and applier 1.9.0 failed: $(tail -2 "$tmp/actions.out")"
+[ "$(sha "$root/usr/local/bin/usb16x16-web")" = "$(new_of bin/usb16x16-web)" ] || bad "actions: the web service is not the new one"
+[ "$(sha "$root/usr/local/bin/usb16x16-apply")" = "$(new_of bin/usb16x16-apply)" ] || bad "actions: the applier is not the new one"
+grep -q '^VERSION = "1.8.0"' "$root/usr/local/bin/usb16x16-web" || bad "actions: the installed web service is not 1.8.0"
+grep -q '^VERSION = "1.10.0"' "$root/usr/local/bin/usb16x16-apply" || bad "actions: the installed applier is not 1.10.0"
+cmp -s "$root$work/web-ui/actions.mjs" "$repo/web-ui/actions.mjs" || bad "actions: actions.mjs is not in the page"
+( cd "$tmp/bundle/web-ui" && find . -type f ) | while read -r f; do cmp -s "$tmp/bundle/web-ui/$f" "$root$work/web-ui/$f" || exit 1; done || bad "actions: not every page file is the bundle's"
+[ "$(sha "$root/usr/local/bin/usb16x16-web.pre-access" | cut -c1-8)" = 6b98e7cf ] || bad "actions: the kept web service is not the old chain's 6b98e7cf"
+[ "$(sha "$root/usr/local/bin/usb16x16-apply.pre-access" | cut -c1-8)" = 347a7062 ] || bad "actions: the kept applier is not the old chain's 347a7062"
+find "$root" -name '*.access-undo' | grep -q . && bad "actions: undo copies were left behind"
+grep -Eq 'usb16x16-dante\.service|usb16x16-statime|usb-16x16\.service' <(grep -Ev '^is-active' "$tmp/systemctl.log") && bad "actions: it acted on an audio unit"
+run install > "$tmp/actions2.out" 2>&1; grep -q 'already installed' "$tmp/actions2.out" || bad "actions: a second install did not say it was already installed"
+run rollback >/dev/null 2>&1 || bad "actions: rollback failed"
+( cd "$root" && find . -type f | LC_ALL=C sort | grep -Ev '^\./(etc/usb-aoip|var/)' | while read -r f; do printf '%s  %s\n' "$(sha "$f")" "$f"; done ) > "$tmp/after.s"
+diff "$tmp/before.s" "$tmp/after.s" >/dev/null || bad "actions: rollback did not return to the old chain's files"
+[ $fail = $before ] && ok "a unit on web 1.7.2, applier 1.9.0 and the phase 1 page takes web 1.8.0, applier 1.10.0 and the page; kept copies stay the old chain's; rollback goes all the way back"
+
 # --- refusals
 before=$fail
 fresh_root b; echo "# edited" >> "$root/usr/local/bin/usb16x16-apply"

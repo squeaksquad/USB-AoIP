@@ -5,7 +5,7 @@
 :root {
   --bg: #0F1416; --panel: #172024; --raised: #223036; --line: #2A373D; --line-strong: #36474E; --edge: #4A5D65;
   --text: #E6EDEF; --muted: #A3B3B9; --accent: #7EDAC4; --accent-ink: #10191A;
-  --warn: #F2B366; --bad: #FF9A8A; --bad-bg: #2A1917; --warn-bg: #2A2316; --note-bg: #1B2A2E;
+  --warn: #F2B366; --bad: #FF9A8A; --info: #8CC4FF; --bad-bg: #2A1917; --warn-bg: #2A2316; --note-bg: #1B2A2E;
   --feed: #7EDAC4; --bass: #F2B366; --mix: #D9B8FF;
   --meter: linear-gradient(to top, #00B418 0%, #00D600 47%, #8CE000 54%, #FFF000 62.3%, #FF9800 80%, #FF2A00 90%, #E00000 100%);
   --meter-across: linear-gradient(to right, #00B418 0%, #00D600 47%, #8CE000 54%, #FFF000 62.3%, #FF9800 80%, #FF2A00 90%, #E00000 100%);
@@ -34,6 +34,7 @@ button:disabled { opacity: .45; cursor: default; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .log-view:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 button.danger { background: var(--bad-bg); border-color: var(--bad); color: #FFB3A6; font-weight: 600; }
+button.caution { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); font-weight: 600; }
 button.quiet { background: transparent; }
 button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 button.toggle { min-width: 52px; }
@@ -251,6 +252,14 @@ main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 32px; display: flex
 .menu-items button { text-align: left; border-color: transparent; background: transparent; }
 .menu-items button:hover:not(:disabled) { background: var(--panel); border-color: transparent; }
 body.big .menu summary { min-height: 44px; }
+.action-note { min-height: 22px; font-weight: 600; color: var(--accent); }
+.action-note.tone-busy { color: var(--info); } .action-note.tone-bad { color: var(--bad); }
+.action-cards { display: flex; flex-wrap: wrap; gap: 12px; }
+.action-card { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line-strong); border-radius: 10px; }
+.action-card button { align-self: flex-start; margin-top: auto; font-weight: 600; }
+.pw-fields { display: flex; flex-direction: column; gap: 10px; }
+.pw-fields input { width: 100%; padding: 5px 8px; min-height: 32px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--bg); }
+body.big .pw-fields input { min-height: 44px; }
 .steps { margin: 0; padding-left: 20px; font-size: 13px; }
 .log-view { max-height: 360px; overflow: auto; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
 .log-view pre { margin: 0; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }

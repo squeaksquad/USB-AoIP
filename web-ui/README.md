@@ -43,8 +43,16 @@ Three tabs.
     LFE low-pass and level, slopes, and per source: high-pass on or off and
     frequency, bass low-pass, and a send to each subwoofer.
 - **System.** Device facts (including the processing cost the engine
-  reports), larger controls, shut down, the presets, the last change made to
-  the device, and its logs.
+  reports), larger controls, the actions, the presets, the last change made
+  to the device, and its logs.
+  - *Actions* (phase 2, 2026-11-17; needs web 1.8.0 and applier 1.10.0):
+    restart audio, restart clock service, download support bundle, change
+    page password, reboot, shut down. The device says which it can do
+    (`control.apply.actions` in `/api/health`); one it does not list is not
+    drawn. Each asks first, except the bundle. The password is typed twice
+    in its own dialog and sent to the service, which hashes it. The bundle
+    is made on the device, then downloaded as `usb-aoip-support.json`.
+    After a reboot request the page says so and reconnects by itself.
 
 The **change bar** at the bottom says what is pending and offers what can be
 done about it. Whether an edit is heard at once or needs a restart is not
@@ -109,6 +117,13 @@ latch), `changes.mjs` (counting changes, the change bar), `presets.mjs`
 browser). `backend.mjs` gained `statusCards` and `meterRows`; `eq-tools.mjs`
 `exportEq` and `importEq`; `workflows.mjs` `blankConfig`.
 
+`actions.mjs` (phase 2) holds the Actions' words and logic: the cards, each
+question, the password check, what a receipt means, where a bundle is
+downloaded from. `backend.mjs` has the five requests beside `requestShutdown`
+and `fetchSupportBundle`. `renderLive` now compares a panel with the
+browser's own serialisation of the new HTML, so an unchanged panel is no
+longer replaced on every poll.
+
 All modules stay flat in `web-ui/`: the installer and
 `install/dev-unit/stage-access.sh` copy `web-ui/*.mjs` and nothing below it.
 
@@ -144,7 +159,24 @@ Checked in a browser on 2026-11-16, with no device:
   sample rates' files sent with it), Run Direct, Duplicate, running a saved preset that was not
   installed, Rename, Remove.
 
-Not checked: anything on the device itself. Nothing is installed.
+Checked on 2026-11-17 for phase 2, with no device:
+
+- By the page's author against a stand-in for the device written into the
+  page's `fetch`: every card and question, restart audio, a failed clock
+  restart, the bundle (the save intercepted), the password dialog's two
+  errors, cancel, a good entry with the receipt answered and with it
+  refused by a 401, reboot with the device gone and back, shut down.
+- Against the real web service and the real applier code on the Mac, with
+  systemd, the journal and the owner replaced by the applier tests'
+  stand-in: all five actions through the API with sign-in (the password
+  change included: the old password refused on the next request, the new
+  one taken, the other login's line unchanged, no hash in any state file
+  or log; the bundle downloaded and read: the login file withheld), and in
+  the browser on a `--no-auth` service: five cards with no password card,
+  restart audio asked, confirmed and followed to its receipt.
+
+Not checked: anything on the device itself; the browser's own sign-in prompt
+after a password change; a real file save of the bundle.
 
 ## The record below
 

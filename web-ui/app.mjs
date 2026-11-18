@@ -8,7 +8,8 @@ import { resetBand } from './reset-band.mjs';
 import { getBus, applyBusLayout, setBusGainMute, setHeadphoneMode, setHeadphonePair, setHeadphoneMatrix, createHeadphoneBus, removeBus, setBusEqLink, setBusOutputs, speakerGroupSourceIds } from './buses.mjs';
 import { resetEq, setEqBypass, mirrorLinkedEq, exportEq, importEq } from './eq-tools.mjs';
 import { polarityNote } from './crossover-notes.mjs';
-import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, formatRate, deviceName, fetchLogs, systemFacts, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, stackTerms, statusCards, meterRows } from './backend.mjs';
+import { readHealth, onAccessProblem, pageNotices, pillState, meterAbsence, deviceModeLabel, formatRate, deviceName, fetchLogs, systemFacts, browserStore, piStore, POLL_MS, requestProfile, fetchApplyStatus, applyFinished, applyLine, applyStepLabel, profileChoices, APPLY_POLL_MS, compileDraft, compileOtherRates, runningRate, presetSummary, requestPreset, removePreset, userPresets, fetchMeters, METER_POLL_MS, liveState, requestLive, requestCommit, awaitReceipt, requestShutdown, requestReboot, requestRestartAudio, requestRestartClock, requestBundle, requestPassword, fetchSupportBundle, stackTerms, statusCards, meterRows } from './backend.mjs';
+import { confirmDialog, passwordProblem, actionNote, bundlePath, BUNDLE_FILE } from './actions.mjs';
 import { LiveQueue } from './live.mjs';
 import { History } from './history.mjs';
 import { delaysFromDistances, parseDistance } from './align.mjs';
@@ -23,7 +24,7 @@ import { routingView, crosspoint } from './view-routing.mjs';
 import { setsView } from './view-sets.mjs';
 import { bassView } from './view-bass.mjs';
 import { chooserView } from './view-chooser.mjs';
-import { systemView, devicePanel, presetsPanel, lastChangePanel } from './view-system.mjs';
+import { systemView, devicePanel, actionsPanel, presetsPanel, lastChangePanel } from './view-system.mjs';
 
 // ------------------------------------------------------------------ state
 
@@ -62,6 +63,13 @@ let meterBody = null, meterAt = 0, meterBusy = false, meterShown = null;
 const holds = {computer: new MeterHold(), 'to-network': new MeterHold(), 'from-network': new MeterHold()};
 // A change to the device in progress: the last status seen and the poll that follows it.
 let applyStatus = null, applyBusy = false, applyPoll = null, shutdownRequested = false;
+// A reboot asked for from here: the page says so until the device answers again.
+let rebootRequested = false;
+// What the Actions panel says when the page knows more than the receipt (the
+// bundle downloaded, the password taken); null to read the receipt.
+let actionLocal = null;
+// Callers waiting for the receipt the apply polling is following.
+let applyWaiters = [];
 // Live edits: the draft's shape key from its last compile, what the engine
 // last took from this page, and the debounced one-in-flight queue.
 let draftShapeKey = null, liveLastSent = null, liveLine = '';
@@ -240,11 +248,47 @@ function ask({title, text = '', input = null, ok = 'OK', danger = false, validat
   });
 }
 
-function download(name, text, type = 'application/json') {
-  const url = URL.createObjectURL(new Blob([text], {type}));
-  const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+/** The new page password, typed twice. Resolves to it, or null on cancel.
+ *  The fields are emptied whatever the answer, and the dialog with them. */
+function askPassword({title, text, ok}) {
+  return new Promise(resolve => {
+    const dialog = $('#ask');
+    dialog.innerHTML = `<form method="dialog" class="ask"><strong class="title">${esc(title)}</strong><p class="ask-text">${esc(text)}</p>
+      <div class="pw-fields"><label class="stack">New password, at least 8 characters<input type="password" id="pw-1" autocomplete="new-password" maxlength="256"></label>
+      <label class="stack">New password again<input type="password" id="pw-2" autocomplete="new-password" maxlength="256"></label></div>
+      <span class="warn-text" role="alert" id="ask-error"></span>
+      <div class="toolbar"><button type="submit" value="ok" class="primary">${esc(ok)}</button><button type="submit" value="cancel" formnovalidate>Cancel</button></div></form>`;
+    const first = dialog.querySelector('#pw-1'), second = dialog.querySelector('#pw-2'), error = dialog.querySelector('#ask-error');
+    // Answered in the submit itself, never on the dialog's close event (see ask).
+    let answered = false;
+    const answer = value => {
+      if (answered) return; answered = true;
+      first.value = ''; second.value = '';
+      if (dialog.open) dialog.close();
+      dialog.innerHTML = '';
+      resolve(value);
+    };
+    dialog.querySelector('form').addEventListener('submit', event => {
+      event.preventDefault();
+      if (event.submitter?.value !== 'ok') { answer(null); return; }
+      const problem = passwordProblem(first.value, second.value);
+      if (problem) { error.textContent = problem; (problem.includes('match') ? second : first).focus(); return; }
+      answer(first.value);
+    });
+    dialog.addEventListener('cancel', () => answer(null), {once: true});
+    dialog.showModal();
+    first.focus();
+  });
+}
+
+/** Hand the browser a file to save: an object URL on a temporary link, revoked after. */
+function saveBlob(name, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name; a.hidden = true;
+  document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+const download = (name, text, type = 'application/json') => saveBlob(name, new Blob([text], {type}));
 
 // ------------------------------------------------------- changes to the device
 
@@ -436,27 +480,127 @@ async function importPresetFile(file) {
   render();
 }
 
+// ---------------------------------------------------------------- actions
+
+/** The question for an action, in the words actions.mjs gives it. */
+function askAction(kind) {
+  const d = confirmDialog(kind, {outage: terms().outage, unkept: Boolean(effectiveLive()?.previewing)});
+  return ask({title: d.title, text: d.text, ok: d.ok, danger: d.tone === 'danger'});
+}
+
 async function shutdown() {
-  if (!await ask({title: 'Shut down the device?', text: 'Audio stops and the device powers off; this page loses its connection. It stays off until it is powered again. Stop playback first.\n\nWhen its lights stop, unplug the USB cable, then the network cable.', ok: 'Shut down', danger: true})) return;
-  applyBusy = true; renderLive();
+  if (!await askAction('shutdown')) return;
+  applyBusy = true; actionLocal = null; renderLive();
   try { const result = await requestShutdown(liveProfile()); shutdownRequested = true; toast(result.note || 'Shutting down.'); began(); }
   catch (e) { toast(`The device refused to shut down: ${e.message}`); }
   applyBusy = false;
   renderLive();
 }
 
+async function reboot() {
+  if (!await askAction('reboot')) return;
+  applyBusy = true; actionLocal = null; renderLive();
+  try { const result = await requestReboot(); rebootRequested = true; toast(result.note || 'Rebooting.'); began(); }
+  catch (e) { toast(`The device refused to reboot: ${e.message}`); }
+  applyBusy = false;
+  renderLive();
+}
+
+/** Restart audio, or the clock service (the endpoint restarts with it). */
+async function restart(kind) {
+  if (!await askAction(kind)) return;
+  applyBusy = true; actionLocal = null; renderLive();
+  try { const result = await (kind === 'restart-clock' ? requestRestartClock() : requestRestartAudio()); if (result.note) toast(result.note); began(); }
+  catch (e) { toast(`The device refused: ${e.message}`); }
+  applyBusy = false;
+  renderLive();
+}
+
+/** Follow one request with the apply polling; resolves with its receipt, throws on a bad one. */
+function followApply(id) {
+  return new Promise((resolve, reject) => {
+    applyWaiters.push(({current, error}) => {
+      if (error) reject(error);
+      else if (current?.id !== id) reject(new Error('another change to the device finished first'));
+      else if (current.state !== 'done') reject(new Error(current.error || current.state));
+      else resolve(current);
+    });
+    began();
+  });
+}
+
+/** The support bundle: made on the device, then saved by the browser. */
+async function supportBundle() {
+  applyBusy = true; actionLocal = {text: 'Making the support bundle…', tone: 'busy'}; renderLive();
+  try {
+    const result = await requestBundle();
+    const current = await followApply(result.id);
+    const path = bundlePath(current);
+    if (!path) throw new Error('the device did not say where the bundle is');
+    saveBlob(BUNDLE_FILE, await fetchSupportBundle(path));
+    actionLocal = {text: `Support bundle downloaded as ${BUNDLE_FILE}.`, tone: 'ok'};
+  } catch (e) { actionLocal = {text: `The support bundle was not downloaded: ${e.message}`, tone: 'bad'}; }
+  applyBusy = false;
+  render();
+}
+
+async function changePassword() {
+  const d = confirmDialog('password');
+  const password = await askPassword({title: d.title, text: d.text, ok: d.ok});
+  if (password === null) return;
+  applyBusy = true; actionLocal = {text: 'Changing the page password…', tone: 'busy'}; renderLive();
+  try {
+    const result = await requestPassword(password);
+    try {
+      await followApply(result.id);
+      actionLocal = {text: 'Page password changed. The browser asks for the new one on its next request.', tone: 'ok'};
+    } catch (e) {
+      // The service stops taking the old password once the file changes, so
+      // following the receipt with it can meet a sign-in refusal: the change
+      // was made.
+      if (!/401|authenticat|sign.?in/i.test(e.message)) throw e;
+      actionLocal = {text: 'Page password changed: the device no longer takes the old one. Sign in with the new password when the browser asks.', tone: 'ok'};
+    }
+    toast(actionLocal.text);
+  } catch (e) { actionLocal = {text: `The password was not changed: ${e.message}`, tone: 'bad'}; toast(actionLocal.text); }
+  applyBusy = false;
+  render();
+}
+
+function runAction(kind) {
+  if (kind === 'shutdown') shutdown();
+  else if (kind === 'reboot') reboot();
+  else if (kind === 'restart-audio' || kind === 'restart-clock') restart(kind);
+  else if (kind === 'bundle') supportBundle();
+  else if (kind === 'password') changePassword();
+}
+
 function startApplyPolling() {
   if (applyPoll) return;
   const tick = async () => {
     try { applyStatus = await fetchApplyStatus(); }
-    catch (e) { toast(shutdownRequested ? 'The device is powering off; this page has lost its connection.' : `Lost track of the change in progress: ${e.message}`); stopApplyPolling(); return; }
+    catch (e) {
+      stopApplyPolling();
+      if (settleWaiters({error: e})) return;
+      toast(shutdownRequested ? 'The device is powering off; this page has lost its connection.' : rebootRequested ? 'The Pi is rebooting; this page reconnects by itself when it is back.' : `Lost track of the change in progress: ${e.message}`);
+      return;
+    }
     renderLive();
-    if (applyFinished(applyStatus)) { stopApplyPolling(); if (applyStatus.current?.kind !== 'live') toast(applyLine(applyStatus)); pollHealth(); }
+    if (applyFinished(applyStatus)) {
+      stopApplyPolling();
+      const current = applyStatus.current;
+      if (current?.kind === 'reboot' && current.state !== 'done') rebootRequested = false;
+      if (current?.kind === 'shutdown' && current.state !== 'done') shutdownRequested = false;
+      if (!settleWaiters({current}) && current?.kind !== 'live') toast(applyLine(applyStatus));
+      pollHealth();
+    }
   };
   applyPoll = setInterval(tick, APPLY_POLL_MS);
   tick();
 }
 function stopApplyPolling() { clearInterval(applyPoll); applyPoll = null; }
+/** Hand the outcome to whoever waits on it; whether anyone did. */
+function settleWaiters(outcome) { const waiting = applyWaiters; applyWaiters = []; waiting.forEach(done => done(outcome)); return waiting.length > 0; }
 
 async function loadLogs() {
   if (!health || logBusy) return;
@@ -491,7 +635,8 @@ function viewState() {
     eqOpen, band, eqClipboard, eqImport, align, confirmResetAll, headphoneIds: headphoneIds(),
     route, setDetail, polarity: polarityNote(config),
     chooser, layouts: LAYOUTS.map(l => ({id: l.id, label: l.label, outputs: l.routing.length, fits: chooser?.mode === 'new' || l.routing.length <= (main?.outputIds.length || 0) + free})),
-    facts: systemFacts(health), generated: health?.generated, big: prefs.big, busy: busyNow(), shutdownRequested,
+    facts: systemFacts(health), generated: health?.generated, big: prefs.big, busy: busyNow(), shutdownRequested, rebootRequested,
+    actions: Array.isArray(health?.control?.apply?.actions) ? health.control.apply.actions : [], actionNote: actionLocal || actionNote(current),
     canApply: Boolean(health) && choices.available, applyReason: health && !choices.available ? (choices.reason || 'This device cannot switch presets.') : '',
     outage: terms().outage, presetRows: rowsNow(), editing: draftStoreName,
     applyLine: applyLine(status), applySteps: (current?.steps || []).map(step => ({ok: step.ok, detail: step.detail, label: applyStepLabel(step.name, current.stack || terms().stack)})),
@@ -591,8 +736,10 @@ function renderChrome() {
   document.title = name || 'USB-AoIP';
   const brand = $('#brand-device');
   brand.textContent = name && name !== 'USB-AoIP' ? name : ''; brand.hidden = !brand.textContent;
-  const notices = pageNotices(health, access);
-  const html = notices.map(n => `<p class="banner ${n.severity === 'bad' ? 'bad' : 'warn'}" data-notice="${esc(n.id)}"><strong>${n.severity === 'bad' ? 'Problem' : 'Warning'}:</strong> ${esc(n.text.replace('System & presets', 'System'))}</p>`).join('');
+  // A reboot asked for from here is said until the device answers again.
+  const notices = [...pageNotices(health, access), ...(rebootRequested && !health ? [{id: 'reboot', severity: 'info', text: 'The Pi is rebooting. This page reconnects by itself when it answers again.'}] : [])];
+  const html = notices.map(n => n.severity === 'info' ? `<p class="banner note" data-notice="${esc(n.id)}">${esc(n.text)}</p>`
+    : `<p class="banner ${n.severity === 'bad' ? 'bad' : 'warn'}" data-notice="${esc(n.id)}"><strong>${n.severity === 'bad' ? 'Problem' : 'Warning'}:</strong> ${esc(n.text.replace('System & presets', 'System'))}</p>`).join('');
   if (html !== lastNoticesHtml) { lastNoticesHtml = html; const box = $('#page-notices'); box.innerHTML = html; box.hidden = !html; }
   renderBar();
 }
@@ -638,14 +785,32 @@ function renderLive() {
     const S = viewState(), view = $('#view');
     const selection = document.getSelection();
     if (selection && !selection.isCollapsed && view.contains(selection.anchorNode)) return;
-    const panels = [['#device-panel', devicePanel(S)], ['#presets-panel', presetsPanel(S)], ...(health ? [['#change-panel', lastChangePanel(S)]] : [])];
+    const actions = actionsPanel(S);
+    // The Actions panel comes and goes with the device's list: a redraw puts it in or takes it out.
+    if (Boolean(actions) !== Boolean(view.querySelector('#actions-panel'))) { if (!view.contains(document.activeElement)) render(); return; }
+    const panels = [['#device-panel', devicePanel(S)], ...(actions ? [['#actions-panel', actions]] : []), ['#presets-panel', presetsPanel(S)], ...(health ? [['#change-panel', lastChangePanel(S)]] : [])];
     for (const [id, html] of panels) {
       const node = view.querySelector(id);
       if (!node) { if (!view.contains(document.activeElement)) render(); return; }
-      if (node.contains(document.activeElement) || node.outerHTML === html) continue;
-      node.outerHTML = html;
+      // Compared as the browser writes it back, so an unchanged panel is not replaced on every poll.
+      if (node.outerHTML === serialised(html)) continue;
+      if (!node.contains(document.activeElement)) { node.outerHTML = html; continue; }
+      // The button just pressed keeps the keyboard; its note and its buttons' states still follow the device.
+      if (id === '#actions-panel') patchActions(node, html);
     }
   }
+}
+
+function serialised(html) { const t = document.createElement('template'); t.innerHTML = html; return t.innerHTML; }
+
+/** The Actions panel brought up to date without replacing its controls. */
+function patchActions(node, html) {
+  const fresh = document.createElement('template'); fresh.innerHTML = html;
+  const next = fresh.content.firstElementChild, note = node.querySelector('.action-note'), nextNote = next.querySelector('.action-note');
+  note.className = nextNote.className; if (note.textContent !== nextNote.textContent) note.textContent = nextNote.textContent;
+  const buttons = [...node.querySelectorAll('button[data-v]')], nextButtons = [...next.querySelectorAll('button[data-v]')];
+  if (buttons.map(b => b.dataset.v).join() !== nextButtons.map(b => b.dataset.v).join()) return;
+  buttons.forEach((button, i) => { button.disabled = nextButtons[i].disabled; if (button.textContent !== nextButtons[i].textContent) button.textContent = nextButtons[i].textContent; });
 }
 
 // ----------------------------------------------------------------- meters
@@ -949,7 +1114,7 @@ function act(name, v, i) {
     }
     // System
     case 'big-toggle': prefs = {...prefs, big: !prefs.big}; if (!savePrefs(prefs)) toast('This browser will not remember the setting.'); render(); return;
-    case 'shutdown': shutdown(); return;
+    case 'sys-action': runAction(v); return;
     case 'preset-run': { const [kind, target] = v.split(';'); runPreset(kind, target); return; }
     case 'preset-open': openPreset(v); return;
     case 'preset-rename': renamePreset(v); return;
@@ -1062,10 +1227,13 @@ async function pollHealth() {
   const next = read.health, wasConnected = Boolean(health), before = JSON.stringify(health?.profile);
   health = next;
   if (!wasConnected && next) {
+    if (rebootRequested) { rebootRequested = false; actionLocal = null; toast('The Pi is back.'); }
     await adoptStore(piStore());
     followLivePreset(next);
   } else if (wasConnected && !next) {
-    toast(shutdownRequested ? 'The device has powered off. When its lights stop, unplug the USB cable, then the network cable.' : 'Lost the device. Your draft is still here; presets are back in this browser.');
+    toast(shutdownRequested ? 'The device has powered off. When its lights stop, unplug the USB cable, then the network cable.'
+      : rebootRequested ? 'The Pi is rebooting. This page reconnects by itself when it answers again; your draft is still here.'
+      : 'Lost the device. Your draft is still here; presets are back in this browser.');
     shutdownRequested = false; meterShown = null;
     await adoptStore(browserStore(storageKey));
   } else if (next && before !== JSON.stringify(next.profile)) {

@@ -504,6 +504,9 @@ class CrossSiteTests(ServerCase):
 
     def test_every_changing_method_is_gated(self):
         for method, path in (("POST", "/api/apply/profile"), ("POST", "/api/apply/shutdown"),
+                             ("POST", "/api/apply/reboot"), ("POST", "/api/apply/restart-audio"),
+                             ("POST", "/api/apply/restart-clock"), ("POST", "/api/apply/bundle"),
+                             ("POST", "/api/apply/password"),
                              ("DELETE", "/api/presets/Room"), ("DELETE", "/api/apply/preset/room"),
                              ("PUT", "/api/presets/Room")):
             status, _, _ = self.call(method, path, headers={"Content-Type": "application/json"}, body=b"{}")

@@ -153,6 +153,39 @@ conf, and the USB gadget service is left to systemd's own shutdown order.
 The page then loses its connection and says so; the operator unplugs the USB
 data cable, then PoE (the handoff's clean shutdown), and PoE brings it back.
 
+### The System actions (2026-11-17, web 1.8.0, applier 1.10.0)
+
+Phase 2 of `docs/web/REDESIGN-2026-11.md`. Five more request kinds, each
+taking the envelope checks only, as `shutdown` does. The web service stays
+unprivileged: it drops a request in the inbox and reads root's state
+directory. `docs/web/ACCESS.md` ("What the page can ask for") has the
+reasons.
+
+```
+POST /api/apply/reboot         {"confirm": "reboot"}         -> 202 {id, kind, note}
+POST /api/apply/restart-audio  {"confirm": "restart-audio"}
+POST /api/apply/restart-clock  {"confirm": "restart-clock"}   409 on the AES67 stack
+POST /api/apply/bundle         {}
+POST /api/apply/password       {"password": "8 to 256 characters"}   409 under --no-auth
+GET  /api/support/<id>         the bundle of request <id>, as usb-aoip-support.json; 404 otherwise
+```
+
+| Kind | Steps | What the applier does |
+|---|---|---|
+| `reboot` | validating, stopping, rebooting | `shutdown` with `systemctl reboot --no-block`; the receipt is written first. |
+| `restart-audio` | validating, stopping, starting, verifying, settling | Stops and starts the audio unit on the configuration as it is. No file is written; on the Dante stack `owner.conf` must first pass the start wrapper's parser, so a configuration that cannot start is refused with audio untouched. Then the switch's verify and settle. A bad start is `failed`: there is nothing to roll back to. |
+| `restart-clock` | validating, restarting-clock, verifying, settling | Dante only. `systemctl restart usb16x16-statime.service`, waits for it and for the endpoint (the installed endpoint unit is `PartOf=` the clock's, so systemd restarts it too), then verifies the endpoint as `restart-audio` does. The receipt's `endpointRestarted` says whether the endpoint got a new start; it is read, not assumed. |
+| `bundle` | validating, collecting, writing | Writes `bundles/<id>.json` in the state directory (directory 0750, file 0640, group the inbox's; the newest two kept) and names it in the receipt (`bundle: {file, bytes}`). One JSON document, `format: "usb-aoip-support/1"`: versions, hashes of the installed programs, the running profile and rate, the start check's line, unit states, the stack's configuration files, `current.json` and the last ten receipts, uname, uptime and temperature, and 400 journal lines a unit; over 4 MiB the oldest journal lines go and `truncated` says so. It never reads the login file, anything under `/etc/usb-aoip` or a `.key` / `.pem` (`withheld` lists what was skipped). |
+| `password` | validating, writing | Replaces one existing user's line in the login file (`USB16X16_WEB_AUTH`, `/etc/usb-aoip/web-auth`) with the hash in the request. The web service makes the hash (`PasswordFile.hash_password`) for the signed-in user; the applier checks its form and iteration count, refuses a user with no line, and rewrites the file through an exclusive temporary and a rename, keeping owner, group, mode and every other line. The hash is in no receipt, step, error or log; the receipt names the user. |
+
+A drain goes on to the next request after `bundle` and `password`, which
+restart nothing, and ends after the other three. `/api/health` lists what the
+unit can do now in `control.apply.actions` (none when Apply is unavailable,
+no `restart-clock` on AES67, no `password` under `--no-auth`); the page draws
+those and no others. The web service drops its cache of verified logins when
+the login file changes (one `stat` per request), so the old password stops
+working on the next request.
+
 ### Live coefficient updates (2026-09-13, step 4 of LIVE_COEFFICIENTS_DESIGN.md)
 
 `live` is a same-shape update of the running user preset with **no restart**.
@@ -342,6 +375,8 @@ GET    /api/logs?service=&lines= journalctl for a fixed unit allowlist, 1..2000 
 GET    /api/apply/status        the applier's state (see above)
 POST   /api/apply/profile       queue a switch between accepted profiles (see above)
 POST   /api/apply/shutdown      queue a power-off of the Pi (see "Shut down the Pi")
+POST   /api/apply/reboot, restart-audio, restart-clock, bundle, password   (see "The System actions")
+GET    /api/support/<id>        a support bundle the applier wrote
 GET    /api/presets             names and mtimes
 GET    /api/presets/<name>      one preset document
 PUT    /api/presets/<name>      atomic write (tmp + fsync + rename), 1 MB / 200 presets

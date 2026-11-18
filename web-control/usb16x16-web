@@ -7,13 +7,16 @@ preset store, and requests to change state.
 
 It changes no device state itself. Every change (a profile or preset switch,
 a preset install or removal, a live coefficient update, a commit, a
-power-off) is a request file it creates in the applier's inbox
+power-off or reboot, a restart of the audio or the clock service, a support
+bundle, a password change) is a request file it creates in the applier's inbox
 (USB16X16_APPLY_INBOX): uploaded artifacts first, then <id>.request. A root
 path unit runs usb16x16-apply on the inbox, which checks each request again
 against the live configuration, acts, verifies, rolls back on failure and
 writes current.json in its state directory (USB16X16_APPLY_STATE), which this
-process only reads. The inbox cannot be listed by this process: a request is
-known to be pending by stat-ing the name it wrote.
+process only reads, as it reads the support bundles the applier writes under
+bundles/ there. The inbox cannot be listed by this process: a request is
+known to be pending by stat-ing the name it wrote. A password change is sent
+as the hash only; the password itself is never written, logged or echoed.
 
 Design constraints this file honours:
 
@@ -56,6 +59,7 @@ import re
 import secrets
 import socket
 import ssl
+import stat
 import subprocess
 import sys
 import threading
@@ -67,7 +71,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
 
-VERSION = "1.7.2"
+VERSION = "1.8.0"
 
 RUN_DIR = Path(os.environ.get("USB16X16_RUN_DIR", "/run/usb16x16"))
 DAEMON_API = os.environ.get("USB16X16_DAEMON_API", "http://127.0.0.1:8080")
@@ -87,6 +91,13 @@ APPLY_STATE = Path(os.environ.get("USB16X16_APPLY_STATE", "/var/lib/usb16x16-app
 APPLY_UNIT = "usb16x16-apply.path"
 AES67_CONF = Path(os.environ.get("USB16X16_AES67_CONF", "/etc/usb16x16/aes67.conf"))
 APPLY_TERMINAL = {"done", "rolled-back", "failed", "refused"}
+# The System actions the applier takes (applier 1.10.0), in the page's order.
+# control.apply.actions is the subset this unit can do now (apply_actions).
+APPLY_ACTIONS = ("restart-audio", "restart-clock", "bundle", "password", "reboot", "shutdown")
+# A support bundle the applier wrote: STATE/bundles/<id>.json, served read-only.
+SUPPORT_ID = re.compile(r"[a-f0-9]{8,32}")
+SUPPORT_BUNDLE_MAX = 8 << 20
+PASSWORD_MIN, PASSWORD_MAX = 8, 256
 # An operation older than this with no terminal state is treated as abandoned
 # (the applier's own unit timeout is 480 s), so a new request is not blocked
 # for ever by a receipt that never came.
@@ -688,9 +699,11 @@ class Collector:
     same as one.
     """
 
-    def __init__(self, static_dir: Path, preset_dir: Path) -> None:
+    def __init__(self, static_dir: Path, preset_dir: Path, auth: bool = True) -> None:
         self.static_dir = static_dir
         self.preset_dir = preset_dir
+        # False under --no-auth: there is no login whose password could change.
+        self.auth = auth
         self._lock = threading.Lock()
         self._snapshot: dict = {"ok": False, "reason": "starting"}
         self._stop = threading.Event()
@@ -841,6 +854,7 @@ class Collector:
                 "scope": "direct and your installed presets; a switch restarts the Dante service and draws a new latency level"
                          if dante else
                          "accepted profiles only; a switch restarts the AES67 service and draws a new latency level",
+                "actions": apply_actions(reason is None, dante, self.auth),
             }
         }
 
@@ -1072,8 +1086,55 @@ def inbox_unwritable() -> str | None:
     return None
 
 
+def apply_actions(available: bool, dante: bool, auth: bool) -> list[str]:
+    """The System actions this unit can take now: none when Apply is not
+    available (what apply_gate refuses on), no clock restart on the AES67
+    stack (it has no separate clock service), no password change without
+    sign-in (--no-auth)."""
+    if not available:
+        return []
+    return [action for action in APPLY_ACTIONS
+            if not (action == "restart-clock" and not dante) and not (action == "password" and not auth)]
+
+
+def read_support_bundle(ident: str) -> bytes | None:
+    """The support bundle the applier wrote for request <ident>, or None when
+    it is not there or cannot be read. Only an id of the form SUPPORT_ID
+    reaches the file name; the file is opened without following a link (and
+    without blocking on anything that is not a regular file) and read to a
+    bound."""
+    if not isinstance(ident, str) or not SUPPORT_ID.fullmatch(ident):
+        return None
+    path = APPLY_STATE / "bundles" / f"{ident}.json"
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > SUPPORT_BUNDLE_MAX:
+            return None
+        chunks, total = [], 0
+        while total <= SUPPORT_BUNDLE_MAX:
+            chunk = os.read(fd, min(1 << 16, SUPPORT_BUNDLE_MAX + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        if total > SUPPORT_BUNDLE_MAX:
+            return None   # grew while being read
+        return b"".join(chunks)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
 def apply_state() -> dict:
-    """What the privileged applier last wrote, plus whether a request waits."""
+    """What the privileged applier last wrote, plus whether a request waits.
+    current.json is passed through whole, so a receipt's kind, its bundle
+    ({"file", "bytes"}) and the user of a password change reach the page."""
     state: dict = {"current": None, "pending": False, "inFlight": False}
     text = read_text(APPLY_STATE / "current.json", 1 << 18)
     if text:
@@ -1471,6 +1532,12 @@ class Authenticator:
     remembered for AUTH_CACHE_SECONDS by the SHA-256 of its header. The cache
     only ever skips work for a credential that already passed; a wrong password
     is never cached and always pays full price.
+
+    The cache is also dropped whenever the login file changes (its mtime,
+    size or inode differ from the last seen; a missing file is a change), so
+    a password changed from the page or on the device stops working on the
+    next request rather than when its cache entry expires. That costs one
+    os.stat per request and no KDF.
     """
 
     def __init__(self, password_file: PasswordFile) -> None:
@@ -1478,6 +1545,21 @@ class Authenticator:
         self._lock = threading.Lock()
         self._verified: dict[bytes, float] = {}
         self._failures: dict[str, list[float]] = {}
+        self._seen = self._file_identity()
+
+    def _file_identity(self) -> tuple[int, int, int] | None:
+        try:
+            info = os.stat(self.password_file.path)
+        except OSError:
+            return None
+        return (info.st_mtime_ns, info.st_size, info.st_ino)
+
+    def _drop_if_changed(self) -> None:
+        identity = self._file_identity()
+        with self._lock:
+            if identity != self._seen or identity is None:
+                self._verified.clear()
+                self._seen = identity
 
     def reload(self) -> dict[str, str]:
         users = self.password_file.load()
@@ -1521,6 +1603,7 @@ class Authenticator:
         """
         if not header or not header.startswith("Basic "):
             return False
+        self._drop_if_changed()
         token = self._token(header)
         now = time.monotonic()
         with self._lock:
@@ -1541,6 +1624,9 @@ class Authenticator:
             name, _, password = decoded.partition(":")
         except (ValueError, UnicodeDecodeError):
             return False
+        # The file as it was when read: a success checked against a file that
+        # has since changed is answered but not cached.
+        identity = self._file_identity()
         stored = self.password_file.load().get(name)
         # Hash even an unknown user, so a wrong name and a wrong password take
         # the same time and the reply does not say which was wrong.
@@ -1550,6 +1636,8 @@ class Authenticator:
         if not PasswordFile.verify_password(password, stored):
             return False
         with self._lock:
+            if identity is None or identity != self._seen:
+                return True
             if len(self._verified) >= AUTH_CACHE_MAX:
                 self._verified = {k: v for k, v in self._verified.items() if v > now}
                 if len(self._verified) >= AUTH_CACHE_MAX:
@@ -1803,6 +1891,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, **apply_state()})
         elif route == "/api/logs":
             self.api_logs(query)
+        elif route.startswith("/api/support/"):
+            self.api_support(route[len("/api/support/"):])
         elif route == "/api/presets":
             self.send_json({"ok": True, "store": "pi", "presets": self.presets.list()})
         elif route.startswith("/api/presets/"):
@@ -1883,6 +1973,12 @@ class Handler(BaseHTTPRequestHandler):
             self.api_apply_commit()
         elif route == "/api/apply/shutdown":
             self.api_apply_shutdown()
+        elif route in ("/api/apply/reboot", "/api/apply/restart-audio", "/api/apply/restart-clock"):
+            self.api_apply_confirmed(route[len("/api/apply/"):])
+        elif route == "/api/apply/bundle":
+            self.api_apply_bundle()
+        elif route == "/api/apply/password":
+            self.api_apply_password()
         else:
             self.unsupported(route)
 
@@ -2204,10 +2300,126 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as error:
             self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
             return
-        self.send_json({"ok": True, "id": ident, "profile": live,
+        self.send_json({"ok": True, "id": ident, "kind": "shutdown", "profile": live,
                         "note": f"Queued. The {words()['service']} stops, then the Pi powers off; this page loses its "
                                 "connection. Once activity stops, unplug the USB data cable, then PoE."},
                        HTTPStatus.ACCEPTED)
+
+    def small_body(self):
+        """The JSON object a System action sends (4 KiB at most), or None
+        after answering 400. An unread or unparsable body leaves the
+        connection unusable, so it is closed."""
+        body = self.read_body(limit=4096)
+        if not isinstance(body, dict):
+            self.close_connection = True
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "Expected a JSON object")
+            return None
+        return body
+
+    def queue_action(self, kind: str, note: str, extra: dict | None = None) -> None:
+        """apply_gate, then one <id>.request of this kind; 202 with its id.
+        These kinds carry no expectedProfile: the applier acts on the stack
+        as it finds it."""
+        gate = self.apply_gate(None)
+        if gate is None:
+            return
+        _, live = gate
+        try:
+            ident = write_apply_request(live or "none", None, self.current_user(),
+                                        extra={"kind": kind, **(extra or {})})
+        except OSError as error:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
+            return
+        self.send_json({"ok": True, "id": ident, "kind": kind, "note": note}, HTTPStatus.ACCEPTED)
+
+    def api_apply_confirmed(self, kind: str) -> None:
+        """Reboot, restart the audio service, restart the clock service. The
+        body must name the action ({"confirm": kind}) so a stray POST cannot
+        do it; the page asks the operator first."""
+        body = self.small_body()
+        if body is None:
+            return
+        if body.get("confirm") != kind:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, f'confirm must be "{kind}"')
+            return
+        if kind == "restart-clock" and stack() != "dante":
+            self.send_error_json(HTTPStatus.CONFLICT, "This stack has no separate clock service")
+            return
+        w = words()
+        notes = {
+            "reboot": f"Queued. The {w['service']} stops, then the Pi restarts; this page loses its connection "
+                      "until the Pi is back.",
+            "restart-audio": f"Queued. The {w['service']} restarts on its configuration as it is; {w['outage']}.",
+            "restart-clock": f"Queued. The clock service restarts and the {w['engine']} restarts with it; {w['outage']}.",
+        }
+        self.queue_action(kind, notes[kind])
+
+    def api_apply_bundle(self) -> None:
+        """Ask the applier for a support bundle. It writes STATE/bundles/<id>.json
+        and names it in the receipt; GET /api/support/<id> serves it."""
+        if self.small_body() is None:
+            return
+        self.queue_action("bundle", "Queued. The applier writes one file with the logs, versions, start check result "
+                                    "and the running preset; no restart.")
+
+    def api_apply_password(self) -> None:
+        """Change the signed-in user's password. The password is hashed here
+        (PasswordFile.hash_password, the same KDF the login file uses) once
+        every cheap check has passed, and only the hash goes to the applier,
+        which replaces that user's line in the login file. Neither the
+        password nor the hash is logged or put in a response."""
+        body = self.small_body()
+        if body is None:
+            return
+        user = self.current_user()
+        if self.auth is None:
+            self.send_error_json(HTTPStatus.CONFLICT, "This service runs without sign-in (--no-auth); "
+                                                      "there is no password to change")
+            return
+        if user is None or not USER_NAME.match(user):
+            self.send_error_json(HTTPStatus.CONFLICT, "This request carries no user name whose password could change")
+            return
+        password = body.get("password")
+        if not isinstance(password, str):
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "password must be a string")
+            return
+        if len(password) < PASSWORD_MIN:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, "Use at least 8 characters.")
+            return
+        if len(password) > PASSWORD_MAX:
+            self.send_error_json(HTTPStatus.BAD_REQUEST, f"Use at most {PASSWORD_MAX} characters.")
+            return
+        gate = self.apply_gate(None)
+        if gate is None:
+            return
+        _, live = gate
+        hashed = PasswordFile.hash_password(password)
+        del password, body
+        try:
+            ident = write_apply_request(live or "none", None, user,
+                                        extra={"kind": "password", "user": user, "hash": hashed})
+        except OSError as error:
+            self.send_error_json(HTTPStatus.SERVICE_UNAVAILABLE, f"Could not queue the request: {error}")
+            return
+        self.send_json({"ok": True, "id": ident, "kind": "password",
+                        "note": f"Queued. The applier changes the password for {user}; no restart. "
+                                "The old password stops working once it is done."}, HTTPStatus.ACCEPTED)
+
+    def api_support(self, ident: str) -> None:
+        """A support bundle the applier wrote, as a download. 404 for an id
+        of the wrong form and for anything missing or unreadable alike."""
+        body = read_support_bundle(ident)
+        if body is None:
+            self.send_error_json(HTTPStatus.NOT_FOUND, "No such support bundle")
+            return
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Disposition", 'attachment; filename="usb-aoip-support.json"')
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def current_user(self) -> str | None:
         header = self.headers.get("Authorization") or ""
@@ -2226,16 +2438,17 @@ class Handler(BaseHTTPRequestHandler):
         Restarting a service or installing DSP means owning a PCM device and
         interrupting audio. That belongs to the privileged applier, which
         takes only the request kinds under POST /api/apply/* (a profile
-        switch, a user preset, a live update, a commit, a power-off);
-        nothing else here changes device state.
+        switch, a user preset, a live update, a commit, a power-off, a
+        reboot, a restart of the audio or the clock service, a support
+        bundle, a password change); nothing else here changes device state.
         """
         if route.startswith("/api/service") or route.startswith("/api/apply") \
                 or route.startswith("/api/dsp"):
             self.send_error_json(
                 HTTPStatus.NOT_IMPLEMENTED,
                 "This service is read-only apart from the POST /api/apply/* requests "
-                "(a profile switch, a user preset, a live update, a commit, a power-off). "
-                "Service restarts are not implemented; run the commands on the Pi instead.",
+                "(profile, preset, live, commit, shutdown, reboot, restart-audio, restart-clock, "
+                "bundle, password). Nothing else is implemented; run other commands on the Pi instead.",
             )
         else:
             self.send_error_json(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed")
@@ -2423,7 +2636,7 @@ def main() -> int:
               file=sys.stderr, flush=True)
         return EXIT_NO_ADDRESS
 
-    collector = Collector(static_dir, Path(arguments.presets))
+    collector = Collector(static_dir, Path(arguments.presets), auth=authenticator is not None)
     Handler.collector = collector
     Handler.presets = PresetStore(Path(arguments.presets))
     Handler.auth = authenticator

@@ -151,6 +151,8 @@ the operator's go-ahead.
    Control Room tab and no Sources tab yet.
 2. **System actions.** Reboot, restart audio, restart clock, support bundle,
    password change as applier request kinds, with tests and `ACCESS.md`.
+   Built 2026-11-17 (applier 1.10.0, web 1.8.0, `web-ui/actions.mjs`); the
+   handoff says whether it is installed.
 3. **Monitor block in the engine.** Ramped volume, dim, mute, solo, set
    switch, fold-downs, level safety, on a direct control path. Unlocks the
    Control Room for the computer source.

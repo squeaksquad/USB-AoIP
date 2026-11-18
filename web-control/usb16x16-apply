@@ -30,8 +30,10 @@ Two directories (1.9.0), neither owned by the web user:
           writable by group or others. It holds current.json (the operation
           in progress), receipts/<id>.json (one per request; an existing
           receipt makes a request a replay), apply.lock (one operation at a
-          time), rate-history.json (the arbiter's last change) and check/
-          (0700, the loader check's temporary copy). Every write here goes
+          time), rate-history.json (the arbiter's last change), check/
+          (0700, the loader check's temporary copy) and, since 1.10.0,
+          bundles/ (0750, group the inbox's: support bundles the web service
+          serves). Every write here goes
           through a temporary file created with O_EXCL | O_NOFOLLOW, then
           fsync and rename.
 
@@ -107,6 +109,35 @@ USB gadget service is not touched; systemd stops it with everything else.
 The operator then unplugs the USB data cable, then PoE, as the handoff's
 clean shutdown says.
 
+Five more kinds (2026-11-17, 1.10.0; the page's System actions,
+docs/web/REDESIGN-2026-11.md phase 2) take the envelope checks only, as
+"shutdown" does, and nothing else from the request but a password's user and
+hash. "reboot" is "shutdown" with `systemctl reboot --no-block` (step
+rebooting), its receipt written first for the same reason. "restart-audio"
+stops and starts the audio unit on the configuration as it is: no file is
+written (on the Dante stack owner.conf must first pass the wrapper's parser,
+so a configuration that cannot start is refused with audio untouched), then
+the switch's verify and settle; a bad start is failed, there being nothing to
+roll back to. "restart-clock" (the Dante stack only) restarts
+usb16x16-statime.service, waits for it, waits for the endpoint, which the
+installed unit's PartOf= restarts with the clock, and verifies it as
+restart-audio does; whether the endpoint got a new start is read afterwards,
+not assumed. "bundle" writes one JSON document for support under the state
+directory as bundles/<id>.json (0750 / 0640, group the inbox's, the newest
+two kept): versions, hashes of the installed programs, the running profile
+and rate, the start check's line, unit states, the stack's configuration,
+current.json and the last ten receipts, and 400 journal lines a unit, capped
+at 4 MiB by trimming journal lines oldest first. It never reads the login
+file, anything under /etc/usb-aoip or key material (is_secret, checked before
+every read). "password" replaces one existing user's line in the web
+service's login file (USB16X16_WEB_AUTH, /etc/usb-aoip/web-auth) with a
+pbkdf2_sha256 hash the web service made, read without following links and
+written by exclusive temporary and rename with the file's owner, group and
+mode kept and every other line kept byte for byte; a user with no line is
+refused (a request never adds a login). The receipt names the user; the hash
+appears in no receipt, step, error or output. Bundles and passwords restart
+nothing, so a drain takes the next request after them in the same run.
+
 Exit status is 0 when a receipt was written (even for a refused or failed
 request: the outcome is the receipt) or when nothing was pending, 2 for a
 broken environment (including a state directory that fails its checks, or the
@@ -127,7 +158,7 @@ import sys
 import time
 from pathlib import Path
 
-VERSION = "1.9.0"
+VERSION = "1.10.0"
 
 INBOX_DIR = Path(os.environ.get("USB16X16_APPLY_INBOX", "/var/spool/usb-aoip/inbox"))
 STATE_DIR = Path(os.environ.get("USB16X16_APPLY_STATE", "/var/lib/usb16x16-apply"))
@@ -183,6 +214,34 @@ BRIDGE_LINE_GRACE_S = 15.0  # STAGE running to the first BRIDGE line is about 1 
 POLL_S = 1.0
 TERMINAL = {"done", "rolled-back", "failed", "refused"}
 
+# The page's System actions (1.10.0): envelope checks only, like "shutdown".
+SYSTEM_KINDS = ("reboot", "restart-audio", "restart-clock", "bundle", "password")
+# What a drain may take more of in the same run: nothing here restarts or stops audio.
+NO_RESTART_KINDS = ("live", "commit", "bundle", "password")
+# The web service's logins (ACCESS.md): root's, readable by the web account's
+# group. "password" replaces one user's line in it; nothing else here reads it.
+WEB_AUTH = Path(os.environ.get("USB16X16_WEB_AUTH", "/etc/usb-aoip/web-auth"))
+SECRET_DIR = Path("/etc/usb-aoip")      # web.env, the TLS key, the logins: never in a bundle
+LOGIN_USER = re.compile(r"[A-Za-z0-9._-]{1,64}")
+# PasswordFile.hash_password's form: a 16-byte salt, a 32-byte digest.
+LOGIN_HASH = re.compile(r"pbkdf2_sha256\$([0-9]{6,8})\$[A-Za-z0-9+/]{22}==\$[A-Za-z0-9+/]{43}=")
+LOGIN_ITERATIONS = (210_000, 10_000_000)
+LOGIN_FILE_MAX = 1 << 16
+# Support bundles, under the state directory, readable by the web account's group.
+BUNDLE_DIR = "bundles"
+BUNDLE_FORMAT = "usb-aoip-support/1"
+BUNDLE_KEEP = 2
+BUNDLE_MAX_BYTES = 4 << 20
+BUNDLE_LOG_LINES = 400
+BUNDLE_LINE_MAX = 4096
+BUNDLE_RECEIPTS = 10
+BUNDLE_TEXT_MAX = 1 << 18
+BUNDLE_HASH_MAX = 1 << 28
+APPLY_BINARY = Path(os.environ.get("USB16X16_APPLY_BINARY", "/usr/local/bin/usb16x16-apply"))
+WEB_BINARY = Path(os.environ.get("USB16X16_WEB_BINARY", "/usr/local/bin/usb16x16-web"))
+UPTIME_PATH = Path("/proc/uptime")
+THERMAL_PATH = Path("/sys/class/thermal/thermal_zone0/temp")
+
 
 # ------------------------------------------------------------------ helpers
 
@@ -204,9 +263,10 @@ def read_text(path: Path, limit: int = 1 << 20) -> str | None:
 CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
 
 
-def write_bytes_atomic(path: Path, data: bytes, mode: int = 0o644) -> None:
+def write_bytes_atomic(path: Path, data: bytes, mode: int = 0o644, group: int | None = None) -> None:
     """A new file under an unpredictable name that must not exist (no symlink
-    is followed), fsync, then rename over `path`."""
+    is followed), fsync, then rename over `path`. `group`, when given, is the
+    file's group (not root, as under a test: left as it is)."""
     temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     fd = os.open(temporary, CREATE_FLAGS, 0o600)
     try:
@@ -214,6 +274,11 @@ def write_bytes_atomic(path: Path, data: bytes, mode: int = 0o644) -> None:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
+            if group is not None:
+                try:
+                    os.fchown(handle.fileno(), -1, group)
+                except PermissionError:
+                    pass
             os.fchmod(handle.fileno(), mode)
         os.replace(temporary, path)
     except BaseException:
@@ -241,7 +306,7 @@ def clamp_text(value):
 
 def request_record(request: dict, keys: tuple) -> dict:
     """The request as a receipt records it; the free-text fields clamped."""
-    return {k: clamp_text(request.get(k)) if k in ("kind", "requestedBy", "from") else request.get(k) for k in keys}
+    return {k: clamp_text(request.get(k)) if k in ("kind", "requestedBy", "from", "user") else request.get(k) for k in keys}
 
 
 def utc(stamp: float | None = None) -> str:
@@ -345,42 +410,145 @@ def remove_entry(path: Path) -> None:
             pass
 
 
-def read_untrusted(path: Path, cap: int, remove: bool = True) -> bytes:
-    """A file another user can write: no symlink followed, never blocks on a
-    FIFO, a regular file with one link only, at most `cap` bytes. The name is
-    removed afterwards (whether or not it passed) unless `remove` is False.
+def read_fd(fd: int, cap: int) -> bytes:
+    """At most cap + 1 bytes, so a caller can tell a file over the cap."""
+    chunks = []
+    left = cap + 1
+    while left > 0:
+        chunk = os.read(fd, min(left, 1 << 16))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        left -= len(chunk)
+    return b"".join(chunks)
+
+
+def read_plain(path: Path, cap: int) -> tuple[bytes, os.stat_result]:
+    """No symlink followed, never blocks on a FIFO, a regular file with one
+    link only, at most `cap` bytes; the bytes and the stat of what was read.
     Raises Missing when nothing is there, Refused when it fails a check."""
     name = path.name
     try:
-        try:
-            fd = os.open(path, UNTRUSTED_FLAGS)
-        except FileNotFoundError:
-            raise Missing(name)
-        except OSError as error:
-            raise Refused(f"{name} cannot be opened as a plain file ({error.strerror or error})")
-        try:
-            info = os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode):
-                raise Refused(f"{name} is not a regular file")
-            if info.st_nlink != 1:
-                raise Refused(f"{name} has {info.st_nlink} links; one is required")
-            chunks = []
-            left = cap + 1
-            while left > 0:
-                chunk = os.read(fd, min(left, 1 << 16))
-                if not chunk:
-                    break
-                chunks.append(chunk)
-                left -= len(chunk)
-            data = b"".join(chunks)
-            if len(data) > cap:
-                raise Refused(f"{name} is larger than {cap} bytes")
-            return data
-        finally:
-            os.close(fd)
+        fd = os.open(path, UNTRUSTED_FLAGS)
+    except FileNotFoundError:
+        raise Missing(name)
+    except OSError as error:
+        raise Refused(f"{name} cannot be opened as a plain file ({error.strerror or error})")
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise Refused(f"{name} is not a regular file")
+        if info.st_nlink != 1:
+            raise Refused(f"{name} has {info.st_nlink} links; one is required")
+        data = read_fd(fd, cap)
+        if len(data) > cap:
+            raise Refused(f"{name} is larger than {cap} bytes")
+        return data, info
+    finally:
+        os.close(fd)
+
+
+def read_untrusted(path: Path, cap: int, remove: bool = True) -> bytes:
+    """A file another user can write, read by read_plain's rules. The name is
+    removed afterwards (whether or not it passed) unless `remove` is False."""
+    try:
+        return read_plain(path, cap)[0]
     finally:
         if remove:
             remove_entry(path)
+
+
+def read_bounded(path: Path, cap: int) -> str | None:
+    """A root-owned file for a support bundle: a regular file (never a FIFO or
+    a device), its first `cap` bytes; None when it cannot be read."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        return read_fd(fd, cap)[:cap].decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
+def hash_bounded(path: Path, cap: int) -> str | None:
+    """SHA-256 of a regular file of at most `cap` bytes; None otherwise."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        digest = hashlib.sha256()
+        total = 0
+        while True:
+            chunk = os.read(fd, 1 << 20)
+            if not chunk:
+                return digest.hexdigest()
+            total += len(chunk)
+            if total > cap:
+                return None
+            digest.update(chunk)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
+def is_secret(path: Path, login: Path) -> bool:
+    """What a support bundle never reads: the login file, anything under
+    /etc/usb-aoip (web.env, the TLS key) and key material, by its name or by
+    where a link leads."""
+    logins = {str(login), os.path.realpath(login)}
+    roots = {str(SECRET_DIR), os.path.realpath(SECRET_DIR)}
+    for name in (str(path), os.path.realpath(path)):
+        if name in logins or name.endswith((".key", ".pem")):
+            return True
+        if any(name == root or name.startswith(root.rstrip("/") + "/") for root in roots):
+            return True
+    return False
+
+
+def login_name(line: bytes) -> bytes | None:
+    """The user a login-file line is for, by PasswordFile.load's reading."""
+    text = line.strip()
+    if not text or text.startswith(b"#") or b":" not in text:
+        return None
+    return text.partition(b":")[0]
+
+
+def replace_login_file(path: Path, data: bytes, info: os.stat_result) -> None:
+    """The login file rewritten in place of the one read (`info`): a new
+    file created exclusively, never through a link, 0600 until it carries
+    the old file's owner, group and mode (owner and group bits only), fsync,
+    rename. Refused if the name no longer holds the file that was read."""
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    fd = os.open(temporary, CREATE_FLAGS, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            try:
+                os.fchown(handle.fileno(), info.st_uid, info.st_gid)
+            except PermissionError:
+                pass    # not root (a test): the file stays this user's
+            os.fchmod(handle.fileno(), stat.S_IMODE(info.st_mode) & 0o660)
+            os.fsync(handle.fileno())
+        now = os.lstat(path)
+        if (now.st_dev, now.st_ino) != (info.st_dev, info.st_ino):
+            raise Refused(f"{path.name} changed while it was being rewritten; nothing was replaced")
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
 
 
 def prepare_state_dir(path: Path) -> None:
@@ -714,11 +882,14 @@ def with_user_block(conf_text: str, slug: str, block: str | None) -> str:
 
 class Applier:
     ENGINE = "bridge"   # what follows the live file, for messages
+    STACK = "aes67"
+    AUDIO_UNIT = UNIT
 
     def __init__(self, inbox: Path = INBOX_DIR, state_dir: Path = STATE_DIR, conf_path: Path = CONF_PATH,
                  run_dir: Path = RUN_DIR, runner: Runner | None = None, supervisor: str = SUPERVISOR,
                  bridge_binary: Path = BRIDGE_BINARY, start_timeout: float = START_TIMEOUT_S,
-                 settle: float = SETTLE_S, poll: float = POLL_S) -> None:
+                 settle: float = SETTLE_S, poll: float = POLL_S, web_auth: Path = WEB_AUTH) -> None:
+        self.web_auth = web_auth
         self.inbox = inbox
         self.state_dir = state_dir
         self.conf_path = conf_path
@@ -1246,11 +1417,14 @@ class Applier:
         if self.live_profile() != name:
             return f"PROFILE= did not become {name}"
         self.step("starting", f"systemctl start {UNIT}")
-        code, out = self.runner.run(["systemctl", "start", UNIT], timeout=60)
+        code, out = self.start_audio()
         if code != 0:
             return f"start failed: {out}"
         self.step("verifying", f"waiting up to {self.start_timeout:.0f} s for STAGE running")
         return self.verify(target)
+
+    def start_audio(self) -> tuple[int, str]:
+        return self.runner.run(["systemctl", "start", UNIT], timeout=60)
 
     def verify(self, target: dict) -> str | None:
         deadline = self.runner.now() + self.start_timeout
@@ -1333,7 +1507,8 @@ class Applier:
             "id": ident,
             "kind": kind,
             "request": request_record(request, ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
-                                                "name", "slug", "artifactSha256", "expectedLiveSha256", "revert")),
+                                                "name", "slug", "artifactSha256", "expectedLiveSha256", "revert",
+                                                "user")),
             "startedAt": utc(self.runner.now()),
             "steps": [],
             "previousProfile": None,
@@ -1344,6 +1519,8 @@ class Applier:
         try:
             self.validate_envelope(request)
             self.check_kind(kind, rate_trigger)
+            if kind in SYSTEM_KINDS:
+                return self.system(kind, request)
             conf = self.conf()
             if kind == "preset":
                 spec = self.validate_preset(request, conf)
@@ -1415,21 +1592,306 @@ class Applier:
         operator asked for it off, and systemd stops it again on the way
         down. The receipt goes to disk before poweroff is requested because
         nothing after that is guaranteed to run."""
-        self.state["profile"] = conf.get("PROFILE") or None
-        self.step("validating", f"shutdown requested; live profile {self.state['profile'] or 'unknown'}")
-        self.step("stopping", f"systemctl stop {UNIT}")
-        code, out = self.runner.run(["systemctl", "stop", UNIT], timeout=90)
+        return self.power(self.profile_of(conf), "poweroff")
+
+    def profile_of(self, conf: dict[str, str]) -> str | None:
+        return conf.get("PROFILE") or None
+
+    def power(self, profile: str | None, action: str) -> dict:
+        """shutdown and reboot: the audio unit stopped in order (best effort),
+        the receipt on disk, then `systemctl poweroff|reboot --no-block`."""
+        name, doing, asked = {"poweroff": ("powering-off", "powering off", "shutdown"),
+                              "reboot": ("rebooting", "rebooting", "reboot")}[action]
+        self.state["profile"] = profile
+        self.step("validating", f"{asked} requested; live profile {profile or 'unknown'}")
+        self.step("stopping", f"systemctl stop {self.AUDIO_UNIT}")
+        code, out = self.runner.run(["systemctl", "stop", self.AUDIO_UNIT], timeout=90)
         if code != 0:
             self.state["steps"].append({"name": "stopping", "at": utc(self.runner.now()), "ok": False,
-                                        "detail": f"stop exited {code}: {out.strip()[:200]}; powering off regardless"})
-        self.step("powering-off", "systemctl poweroff --no-block")
+                                        "detail": f"stop exited {code}: {out.strip()[:200]}; {doing} regardless"})
+        self.step(name, f"systemctl {action} --no-block")
         self.finish("done")
-        code, out = self.runner.run(["systemctl", "poweroff", "--no-block"], timeout=30)
+        code, out = self.runner.run(["systemctl", action, "--no-block"], timeout=30)
         if code != 0:
-            self.state["steps"].append({"name": "powering-off", "at": utc(self.runner.now()), "ok": False,
-                                        "detail": f"poweroff exited {code}: {out.strip()[:200]}"})
-            return self.finish("failed", f"systemctl poweroff exited {code}: {out.strip()[:200]}")
+            self.state["steps"].append({"name": name, "at": utc(self.runner.now()), "ok": False,
+                                        "detail": f"{action} exited {code}: {out.strip()[:200]}"})
+            return self.finish("failed", f"systemctl {action} exited {code}: {out.strip()[:200]}")
         return self.state
+
+    # ---- the System actions (1.10.0)
+
+    def system(self, kind: str, request: dict) -> dict:
+        """reboot, restart-audio, restart-clock, bundle, password: after the
+        envelope, nothing else in the request but a password's user and hash."""
+        if kind == "reboot":
+            return self.power(self.live_profile(), "reboot")
+        if kind == "restart-audio":
+            return self.restart_audio()
+        if kind == "restart-clock":
+            return self.restart_clock()
+        if kind == "bundle":
+            return self.bundle()
+        return self.password(request)
+
+    def failed_at(self, name: str, reason: str) -> dict:
+        self.step(name, reason, ok=False)
+        return self.finish("failed", reason)
+
+    def check_settled(self) -> None:
+        unit = self.unit_state()
+        if unit not in ("active", "inactive", "failed"):
+            raise Refused(f"{self.AUDIO_UNIT} is {unit}; retry when it has settled")
+
+    def restart_target(self, conf: dict[str, str]) -> dict:
+        """What the live configuration says should come up, unchanged."""
+        live = conf.get("PROFILE") or ""
+        table = profiles(conf)
+        if live not in table:
+            raise Refused(f"the live profile {live or 'none'} has no block in {self.conf_path}")
+        return table[live]
+
+    def restart_audio(self) -> dict:
+        """Stop and start the audio unit on the configuration as it is (no file
+        is written), then the same verify and settle as a switch. There is
+        nothing to roll back to: a bad start is failed."""
+        target = self.restart_target(self.conf())
+        self.check_settled()
+        self.state["previousProfile"] = self.state["profile"] = target["name"]
+        self.step("validating", f"restart {self.AUDIO_UNIT} on {target['name']} as configured; no file is written")
+        self.step("stopping", f"systemctl stop {self.AUDIO_UNIT}")
+        code, out = self.runner.run(["systemctl", "stop", self.AUDIO_UNIT], timeout=60)
+        if code != 0:
+            return self.failed_at("stopping", f"stop failed: {out.strip()[:200]}")
+        self.step("starting", f"systemctl start {self.AUDIO_UNIT}")
+        code, out = self.start_audio()
+        if code != 0:
+            return self.failed_at("starting", f"start failed: {out.strip()[:200]}")
+        self.step("verifying", f"waiting up to {self.start_timeout:.0f} s for {target['name']} to come up")
+        return self.verified(target)
+
+    def verified(self, target: dict) -> dict:
+        reason = self.verify(target)
+        self.record_start_lines(target["name"])
+        if reason is not None:
+            return self.failed_at("verifying", reason)
+        return self.finish("done")
+
+    def restart_clock(self) -> dict:
+        raise Refused("this stack has no separate clock service")
+
+    # -- password
+
+    def password(self, request: dict) -> dict:
+        """One user's line in the login file replaced by the hash the web
+        service made. The hash is never recorded: not in the request record,
+        a step, an error or the output; only the user is."""
+        user = request.get("user")
+        self.state["user"] = clamp_text(user) if isinstance(user, str) else None
+        if not isinstance(user, str) or not LOGIN_USER.fullmatch(user):
+            raise Refused("user must be 1-64 letters, digits, dots, dashes or underscores")
+        stored = request.get("hash")
+        match = LOGIN_HASH.fullmatch(stored) if isinstance(stored, str) else None
+        if match is None:
+            raise Refused("hash is not a pbkdf2_sha256 hash in the web service's form")
+        if not LOGIN_ITERATIONS[0] <= int(match.group(1)) <= LOGIN_ITERATIONS[1]:
+            raise Refused(f"the hash's iteration count is outside {LOGIN_ITERATIONS[0]}-{LOGIN_ITERATIONS[1]}")
+        try:
+            data, info = read_plain(self.web_auth, LOGIN_FILE_MAX)
+        except Missing:
+            raise Refused(f"{self.web_auth} does not exist; a request never adds a login")
+        lines = data.split(b"\n")
+        hits = [index for index, line in enumerate(lines) if login_name(line) == user.encode()]
+        if not hits:
+            raise Refused(f"{user} has no login in {self.web_auth}; a request never adds one")
+        self.step("validating", f"a new password for {user}")
+        self.step("writing", f"{self.web_auth}: the line for {user} replaced; every other line, the owner, "
+                             "group and mode kept")
+        for index in hits:
+            lines[index] = user.encode() + b":" + stored.encode()
+        try:
+            replace_login_file(self.web_auth, b"\n".join(lines), info)
+        except OSError as error:
+            return self.failed_at("writing", f"{self.web_auth} could not be replaced ({error.strerror or 'error'})")
+        return self.finish("done")
+
+    # -- support bundle
+
+    def bundle_units(self) -> tuple:
+        return ("usb16x16-aes67", "usb16x16-apply", "usb16x16-web", "usb-16x16")
+
+    def bundle_hash_paths(self) -> list[Path]:
+        return [APPLY_BINARY, WEB_BINARY, self.bridge_binary, Path(self.supervisor)]
+
+    def bundle_configs(self) -> dict[str, Path]:
+        return {self.conf_path.name: self.conf_path}
+
+    def bundle_running(self) -> dict:
+        return {"profile": self.live_profile(), "rate": NOMINAL_RATE}   # the bridge runs at 48 kHz only
+
+    def bundle_startcheck(self) -> str | None:
+        return None
+
+    def bundle_receipts(self) -> list:
+        """The newest BUNDLE_RECEIPTS receipts, newest first."""
+        found = []
+        try:
+            with os.scandir(self.receipt_dir) as entries:
+                for entry in entries:
+                    if entry.name.endswith(".json") and entry.is_file(follow_symlinks=False):
+                        found.append((entry.stat(follow_symlinks=False).st_mtime, entry.name, Path(entry.path)))
+        except OSError:
+            return []
+        receipts = []
+        for _, _, path in sorted(found, reverse=True)[:BUNDLE_RECEIPTS]:
+            receipts.append(self.read_json(path))
+        return receipts
+
+    @staticmethod
+    def read_json(path: Path):
+        text = read_bounded(path, BUNDLE_TEXT_MAX)
+        try:
+            return json.loads(text) if text else None
+        except ValueError:
+            return None
+
+    def collect_bundle(self, previous) -> dict:
+        """Everything a support bundle holds. Every read goes through the
+        Runner, read_bounded or hash_bounded, and is_secret first."""
+        withheld: list[str] = []
+
+        def text_of(path: Path, cap: int = BUNDLE_TEXT_MAX) -> str | None:
+            if is_secret(path, self.web_auth):
+                withheld.append(str(path))
+                return None
+            return read_bounded(path, cap)
+
+        def hash_of(path: Path) -> str | None:
+            if is_secret(path, self.web_auth):
+                withheld.append(str(path))
+                return None
+            return hash_bounded(path, BUNDLE_HASH_MAX)
+
+        web_text = text_of(WEB_BINARY, 1 << 16) or ""
+        web_version = re.search(r'(?m)^VERSION = "([^"\n]{1,32})"', web_text)
+        hashes = {str(path): hash_of(path) for path in self.bundle_hash_paths()}
+        code, out = self.runner.run(["modinfo", "-F", "filename", "usb_f_uac2"], timeout=10)
+        module = out.strip().splitlines()[0] if code == 0 and out.strip() else ""
+        if module.startswith("/"):
+            hashes[module] = hash_of(Path(module))
+        else:
+            hashes["usb_f_uac2"] = None
+        units = {}
+        logs = {}
+        for unit in self.bundle_units():
+            code, out = self.runner.run(["systemctl", "is-active", unit], timeout=10)
+            units[unit] = (out.strip().splitlines() or ["unknown"])[0][:32]
+            code, out = self.runner.run(["journalctl", "-u", unit, "-n", str(BUNDLE_LOG_LINES), "--no-pager",
+                                         "-o", "short-iso"], timeout=30)
+            logs[unit] = [line[:BUNDLE_LINE_MAX] for line in out.splitlines()[-BUNDLE_LOG_LINES:]]
+        config = {name: text_of(path) for name, path in self.bundle_configs().items()}
+        uptime = (text_of(UPTIME_PATH, 256) or "").split()
+        temperature = (text_of(THERMAL_PATH, 64) or "").strip()
+        return {
+            "format": BUNDLE_FORMAT,
+            "generated": utc(self.runner.now()),
+            "stack": self.STACK,
+            "versions": {"applier": VERSION, "web": web_version.group(1) if web_version else None},
+            "hashes": hashes,
+            "running": self.bundle_running(),
+            "startCheck": self.bundle_startcheck(),
+            "units": units,
+            "config": config,
+            "apply": {"current": previous, "receipts": self.bundle_receipts()},
+            "system": {"uname": " ".join(os.uname()),
+                       "uptime": float(uptime[0]) if uptime and re.fullmatch(r"[0-9.]+", uptime[0]) else None,
+                       "temperature": int(temperature) / 1000 if re.fullmatch(r"-?[0-9]{1,7}", temperature) else None},
+            "logs": logs,
+            "withheld": withheld,
+            "truncated": None,
+        }
+
+    @staticmethod
+    def encode_bundle(document: dict) -> bytes:
+        """indent 1, at most BUNDLE_MAX_BYTES: over it, journal lines go,
+        oldest first in every unit, and `truncated` says how many."""
+        data = json.dumps(document, indent=1).encode("utf-8")
+        dropped = 0
+        while len(data) > BUNDLE_MAX_BYTES and any(document["logs"].values()):
+            for unit, lines in document["logs"].items():
+                cut = max(1, len(lines) // 4) if lines else 0
+                document["logs"][unit] = lines[cut:]
+                dropped += cut
+            document["truncated"] = {"reason": f"over {BUNDLE_MAX_BYTES} bytes; journal lines removed oldest first",
+                                     "droppedLines": dropped}
+            data = json.dumps(document, indent=1).encode("utf-8")
+        return data
+
+    @property
+    def bundle_dir(self) -> Path:
+        return self.state_dir / BUNDLE_DIR
+
+    def write_bundle(self, name: str, data: bytes) -> None:
+        """bundles/ 0750 and its files 0640, group the inbox's (the web
+        account's), newest BUNDLE_KEEP kept. Raises OSError or BrokenEnvironment."""
+        try:
+            group = os.stat(self.inbox).st_gid
+        except OSError:
+            group = None
+        directory = self.bundle_dir
+        if not directory.exists() and not directory.is_symlink():
+            os.mkdir(directory, 0o750)
+        info = os.lstat(directory)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
+            raise BrokenEnvironment(f"{directory} is not a directory of this user's")
+        os.chmod(directory, 0o750)
+        if group is not None:
+            try:
+                os.chown(directory, -1, group, follow_symlinks=False)
+            except PermissionError:
+                pass
+        write_bytes_atomic(directory / name, data, mode=0o640, group=group)
+        kept = []
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if entry.name.endswith(".json"):
+                    kept.append((entry.stat(follow_symlinks=False).st_mtime, entry.name))
+        for _, old in sorted(kept, reverse=True)[BUNDLE_KEEP:]:
+            remove_entry(directory / old)
+
+    def bundle(self) -> dict:
+        """One JSON document of what support needs, under bundles/<id>.json for
+        the web service to serve; restarts nothing. Never the login file, never
+        anything under /etc/usb-aoip, never key material (is_secret)."""
+        previous = self.read_json(self.state_path)    # before this request writes current.json
+        self.step("validating", "support bundle requested; nothing is restarted")
+        self.step("collecting", f"versions, hashes, units, configuration, {BUNDLE_RECEIPTS} receipts, "
+                                f"{BUNDLE_LOG_LINES} journal lines a unit")
+        data = self.encode_bundle(self.collect_bundle(previous))
+        name = f"{self.state['id']}.json"
+        self.step("writing", f"{self.bundle_dir / name}, {len(data)} bytes; the newest {BUNDLE_KEEP} kept")
+        try:
+            self.write_bundle(name, data)
+        except (OSError, BrokenEnvironment) as error:
+            return self.failed_at("writing", f"the bundle could not be written: {error}")
+        self.state["bundle"] = {"file": name, "bytes": len(data)}
+        return self.finish("done")
+
+    def check_system(self, request: dict) -> str:
+        """--check for the System kinds: what can be judged without acting."""
+        self.validate_envelope(request)
+        kind = request.get("kind")
+        if kind == "restart-clock" and self.STACK != "dante":
+            raise Refused("this stack has no separate clock service")
+        if kind == "password":
+            user = request.get("user")
+            if not isinstance(user, str) or not LOGIN_USER.fullmatch(user):
+                raise Refused("user must be 1-64 letters, digits, dots, dashes or underscores")
+            if not isinstance(request.get("hash"), str) or not LOGIN_HASH.fullmatch(request["hash"]):
+                raise Refused("hash is not a pbkdf2_sha256 hash in the web service's form")
+            return f"would replace the login line for {user}"
+        if kind in ("restart-audio", "restart-clock"):
+            return f"would {kind} on {self.live_profile() or 'an unreadable configuration'}"
+        return f"would {kind}"
 
     def consume(self) -> dict | None:
         """Take the oldest <id>.request from the inbox, act, leave receipts.
@@ -1467,8 +1929,10 @@ class Applier:
     def drain(self, limit: int = DRAIN_LIMIT) -> list[dict]:
         """One path-unit trigger: pending requests, oldest first, scanning the
         inbox again after each, so a live update that lands during a run is
-        taken in the same run. An operation that restarts or stops the audio
-        service ends the run, one per invocation as it has always been: taking
+        taken in the same run (and a bundle or a password, which restart
+        nothing). An operation that restarts or stops the audio service, or
+        the clock or the whole unit, ends the run, one per invocation as it
+        has always been: taking
         the request out of the inbox fires the path unit again, and the next
         run takes the next. Strays are swept before and after."""
         self.ensure_state()
@@ -1479,7 +1943,7 @@ class Applier:
             if result is None:
                 break
             handled.append(result)
-            if result.get("kind") not in ("live", "commit"):
+            if result.get("kind") not in NO_RESTART_KINDS:
                 break
         self.sweep_inbox()
         return handled
@@ -1530,6 +1994,14 @@ GADGET_RATE_REQUEST = "Device Rate Request"
 RATE_HOST_WAIT_S = 5.0
 RATE_REVERSAL_S = 30.0
 RATE_SOURCES = ("dante", "usb", "page")
+# The clock (restart-clock) and what a support bundle reads on this stack.
+STATIME_UNIT = "usb16x16-statime.service"
+DANTE_STATIME = Path(os.environ.get("USB16X16_DANTE_STATIME", "/usr/local/libexec/usb16x16-dante/statime"))
+DANTE_PLUGIN = Path(os.environ.get("USB16X16_DANTE_PLUGIN",
+                                   "/usr/local/lib/usb16x16-dante/alsa-plugins/libasound_module_pcm_inferno.so"))
+DANTE_TRANSPORT_CONF = Path(os.environ.get("USB16X16_DANTE_TRANSPORT", "/etc/usb16x16/dante/transport.conf"))
+DANTE_STARTCHECK_CONF = Path(os.environ.get("USB16X16_DANTE_STARTCHECK_CONF", "/etc/usb16x16/dante/startcheck.conf"))
+DANTE_STARTCHECK_STATUS = Path(os.environ.get("USB16X16_DANTE_STARTCHECK_STATUS", "/run/usb16x16-dante-startcheck/status"))
 
 
 def parse_owner_conf(text: str) -> dict[str, str]:
@@ -1615,12 +2087,14 @@ def dante_profile_of(conf: dict[str, str]) -> str:
 
 class DanteApplier(Applier):
     ENGINE = "owner"
+    STACK = "dante"
+    AUDIO_UNIT = DANTE_UNIT
 
     def __init__(self, inbox: Path = INBOX_DIR, state_dir: Path = STATE_DIR, conf_path: Path = DANTE_CONF_PATH,
                  run_dir: Path = DANTE_RUN_DIR, runner: Runner | None = None, start_timeout: float = DANTE_START_TIMEOUT_S,
-                 settle: float = DANTE_SETTLE_S, poll: float = POLL_S) -> None:
+                 settle: float = DANTE_SETTLE_S, poll: float = POLL_S, web_auth: Path = WEB_AUTH) -> None:
         super().__init__(inbox=inbox, state_dir=state_dir, conf_path=conf_path, run_dir=run_dir, runner=runner,
-                         start_timeout=start_timeout, settle=settle, poll=poll)
+                         start_timeout=start_timeout, settle=settle, poll=poll, web_auth=web_auth)
 
     # ---- reads
 
@@ -2149,8 +2623,7 @@ class DanteApplier(Applier):
             self.write_root_file(DANTE_INFERNO_CONF, inferno_text.encode("utf-8"), "rate")
         self.replace_conf(text)
         self.step("starting", f"systemctl start {DANTE_UNIT}")
-        self.runner.run(["systemctl", "reset-failed", DANTE_UNIT], timeout=10)
-        code, out = self.runner.run(["systemctl", "start", DANTE_UNIT], timeout=90)
+        code, out = self.start_audio()
         if code != 0:
             return f"start failed: {out}"
         self.step("verifying", f"waiting up to {self.start_timeout:.0f} s for the owner to start both streams")
@@ -2225,7 +2698,7 @@ class DanteApplier(Applier):
             "kind": kind,
             "request": request_record(request, ("kind", "profile", "expectedProfile", "requestedAt", "requestedBy",
                                                 "name", "slug", "artifactSha256", "expectedLiveSha256", "revert", "rate",
-                                                "source", "from")),
+                                                "source", "from", "user")),
             "startedAt": utc(self.runner.now()),
             "steps": [],
             "previousProfile": None,
@@ -2238,6 +2711,8 @@ class DanteApplier(Applier):
         try:
             self.validate_envelope(request)
             self.check_kind(kind, rate_trigger)
+            if kind in SYSTEM_KINDS:
+                return self.system(kind, request)
             conf = self.conf()
             previous_text = read_text(self.conf_path) or ""
             if kind == "preset":
@@ -2303,23 +2778,87 @@ class DanteApplier(Applier):
             return self.finish("rolled-back", reason)
         return self.finish("failed", f"{reason}; rollback to {previous} also failed: {rollback_reason}")
 
-    def shutdown(self, conf: dict[str, str]) -> dict:
-        """As the AES67 one: stop the endpoint in order, leave the receipt, power off."""
-        self.state["profile"] = dante_profile_of(conf)
-        self.step("validating", f"shutdown requested; live profile {self.state['profile']}")
-        self.step("stopping", f"systemctl stop {DANTE_UNIT}")
-        code, out = self.runner.run(["systemctl", "stop", DANTE_UNIT], timeout=90)
+    # ---- shutdown, reboot and the System actions (power(), system() and the rest are the base class's)
+
+    def profile_of(self, conf: dict[str, str]) -> str | None:
+        return dante_profile_of(conf)
+
+    def start_audio(self) -> tuple[int, str]:
+        # The unit's start limit would refuse a start after a run of failures.
+        self.runner.run(["systemctl", "reset-failed", DANTE_UNIT], timeout=10)
+        return self.runner.run(["systemctl", "start", DANTE_UNIT], timeout=90)
+
+    def record_start_lines(self, label: str) -> None:
+        pass    # verify() records this start's owner lines itself
+
+    def restart_target(self, conf: dict[str, str]) -> dict:
+        """owner.conf as it is: the wrapper's parser passes it before anything
+        stops (a configuration that cannot start is refused, audio untouched),
+        and the owner must come up on its preset and at its rate."""
+        self.check_conf_text(read_text(self.conf_path) or "")
+        return {"name": dante_profile_of(conf), "dspPreset": conf.get("DSP_PRESET") or None,
+                "dspSha256": conf.get("DSP_SHA256") or None, "rate": running_rate(conf)}
+
+    def clock_state(self) -> str:
+        code, out = self.runner.run(["systemctl", "show", "-p", "ActiveState", "--value", STATIME_UNIT], timeout=10)
+        return out.strip() if code == 0 else "unknown"
+
+    def restart_clock(self) -> dict:
+        """Restart Statime, wait for it, then verify the endpoint as restart-audio
+        does. The installed endpoint unit is PartOf= the clock's, so systemd
+        restarts it too; an older unit without that keeps running. Which one
+        happened is read after the restart (the endpoint's InvocationID), not
+        assumed: verify() follows whichever start is running."""
+        target = self.restart_target(self.conf())
+        self.check_settled()
+        clock = self.clock_state()
+        if clock not in ("active", "inactive", "failed"):
+            raise Refused(f"{STATIME_UNIT} is {clock}; retry when it has settled")
+        self.state["previousProfile"] = self.state["profile"] = target["name"]
+        before = self.invocation()
+        self.step("validating", f"restart {STATIME_UNIT} ({clock}); {DANTE_UNIT} on {target['name']} restarts with it")
+        self.step("restarting-clock", f"systemctl restart {STATIME_UNIT}")
+        code, out = self.runner.run(["systemctl", "restart", STATIME_UNIT], timeout=90)
         if code != 0:
-            self.state["steps"].append({"name": "stopping", "at": utc(self.runner.now()), "ok": False,
-                                        "detail": f"stop exited {code}: {out.strip()[:200]}; powering off regardless"})
-        self.step("powering-off", "systemctl poweroff --no-block")
-        self.finish("done")
-        code, out = self.runner.run(["systemctl", "poweroff", "--no-block"], timeout=30)
-        if code != 0:
-            self.state["steps"].append({"name": "powering-off", "at": utc(self.runner.now()), "ok": False,
-                                        "detail": f"poweroff exited {code}: {out.strip()[:200]}"})
-            return self.finish("failed", f"systemctl poweroff exited {code}: {out.strip()[:200]}")
-        return self.state
+            return self.failed_at("restarting-clock", f"clock restart failed: {out.strip()[:200]}")
+        deadline = self.runner.now() + self.start_timeout
+        while (clock := self.clock_state()) != "active":
+            if clock == "failed" or self.runner.now() >= deadline:
+                return self.failed_at("restarting-clock", f"{STATIME_UNIT} is {clock} after the restart")
+            self.runner.sleep(self.poll)
+        # The endpoint's restart is queued behind the clock's (After=), so it may
+        # still be inactive or activating here; verify() reads 'inactive' as a
+        # failure, so wait for it to be running first, within the same deadline.
+        while (unit := self.unit_state()) != "active":
+            if unit == "failed" or self.runner.now() >= deadline:
+                return self.failed_at("verifying", f"{DANTE_UNIT} is {unit} after the clock restart")
+            self.runner.sleep(self.poll)
+        after = self.invocation()
+        self.state["endpointRestarted"] = bool(after) and after != before
+        self.step("verifying", f"{DANTE_UNIT} {'restarted with the clock' if self.state['endpointRestarted'] else 'kept its start'}; "
+                               f"waiting up to {self.start_timeout:.0f} s for the owner to run both streams")
+        return self.verified(target)
+
+    def bundle_units(self) -> tuple:
+        return ("usb16x16-dante", "usb16x16-statime", "usb16x16-dante-startcheck", "usb16x16-dante-rate",
+                "usb16x16-apply", "usb16x16-web", "usb-16x16")
+
+    def bundle_hash_paths(self) -> list[Path]:
+        return [APPLY_BINARY, WEB_BINARY, DANTE_OWNER, Path(DANTE_START), DANTE_PLUGIN, DANTE_STATIME]
+
+    def bundle_configs(self) -> dict[str, Path]:
+        return {path.name: path for path in (self.conf_path, DANTE_TRANSPORT_CONF, DANTE_INFERNO_CONF, DANTE_STARTCHECK_CONF)}
+
+    def bundle_running(self) -> dict:
+        try:
+            rate = running_rate(self.conf())
+        except Refused:
+            rate = None
+        return {"profile": self.live_profile(), "rate": rate}
+
+    def bundle_startcheck(self) -> str | None:
+        line = (read_bounded(DANTE_STARTCHECK_STATUS, 4096) or "").strip().splitlines()
+        return line[0] if line else None
 
 
 def detect_stack(runner: Runner | None = None) -> str:
@@ -2359,6 +2898,9 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.check:
         try:
             request = applier.load_request(remove=False)
+            if request.get("kind") in SYSTEM_KINDS:
+                print(f"ok ({stack}): {applier.check_system(request)}")
+                return 0
             target = applier.validate(request, applier.conf())
         except Missing:
             print("refused: no request file")

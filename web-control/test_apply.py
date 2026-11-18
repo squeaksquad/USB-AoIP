@@ -635,6 +635,94 @@ class ShutdownTests(unittest.TestCase):
         self.assertEqual(receipt["state"], "failed", "the done receipt written before poweroff is overwritten")
 
 
+class SystemRunner(ShutdownRunner):
+    """Plus reboot and what a bundle asks of systemd, the journal and modinfo."""
+
+    def run(self, argv, timeout=60.0):
+        if argv[:2] == ["systemctl", "reboot"]:
+            self.calls.append(argv)
+            self.receipts_at_reboot = [p.name for p in (self.env.state / "receipts").glob("*.json")]
+            return 0, ""
+        if argv[:2] == ["systemctl", "is-active"]:
+            self.calls.append(argv)
+            return 3, "inactive"
+        if argv[0] in ("journalctl", "modinfo"):
+            self.calls.append(argv)
+            return (0, f"{argv[2]}: a line\n{argv[2]}: another") if argv[0] == "journalctl" else (1, "not found")
+        return super().run(argv, timeout)
+
+
+class SystemTests(unittest.TestCase):
+    """The System actions (1.10.0) on the AES67 stack, the rollback stack."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = Env(self.tmp.name)
+        self.login = self.env.root / "web-auth"
+        self.text = b"# logins\nbryan:pbkdf2_sha256$210000$" + b"A" * 22 + b"==$" + b"B" * 43 + b"=\n"
+        self.login.write_bytes(self.text)
+        self.runner = SystemRunner(self.env)
+        self.applier = apply_module.Applier(inbox=self.env.inbox, state_dir=self.env.state, conf_path=self.env.conf,
+                                            run_dir=self.env.run_dir, runner=self.runner, supervisor="/fake/supervisor",
+                                            bridge_binary=self.env.root / "missing", start_timeout=20.0, settle=5.0,
+                                            poll=1.0, web_auth=self.login)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def acted(self):
+        return [c for c in self.runner.calls if c[0] != "systemctl" or c[1] in ("stop", "start", "reboot", "restart")]
+
+    def test_reboot(self):
+        self.env.request(kind="reboot", expectedProfile=None)
+        result = self.applier.consume()
+        self.assertEqual((result["kind"], result["state"]), ("reboot", "done"))
+        self.assertEqual(self.acted(), [["systemctl", "stop", "usb16x16-aes67.service"], ["systemctl", "reboot", "--no-block"]])
+        self.assertEqual([s["name"] for s in result["steps"]], ["validating", "stopping", "rebooting"])
+        self.assertEqual(self.runner.receipts_at_reboot, ["abcdef0123.json"])
+
+    def test_restart_audio_on_the_live_profile(self):
+        before = self.env.conf.read_text()
+        result = self.applier.apply(self.env.request(kind="restart-audio", profile="dsp-loaded"))
+        self.assertEqual((result["state"], result["error"]), ("done", None))
+        self.assertEqual(result["profile"], "dsp-direct", "the live profile, not the request's")
+        self.assertEqual(self.acted(), [["systemctl", "stop", "usb16x16-aes67.service"], ["systemctl", "start", "usb16x16-aes67.service"]])
+        self.assertEqual([s["name"] for s in result["steps"]], ["validating", "stopping", "starting", "verifying", "settling"])
+        self.assertEqual(self.env.conf.read_text(), before)
+
+    def test_restart_audio_with_a_bad_start_is_failed(self):
+        self.runner.fail_start_for = "dsp-direct"
+        result = self.applier.apply(self.env.request(kind="restart-audio"))
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("daemon API never answered", result["error"])
+        self.assertEqual(len([c for c in self.acted() if c[1] == "start"]), 1, "nothing is rolled back")
+
+    def test_restart_clock_is_refused(self):
+        result = self.applier.apply(self.env.request(kind="restart-clock"))
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("no separate clock service", result["error"])
+        self.assertEqual(self.acted(), [])
+        with self.assertRaises(apply_module.Refused):
+            self.applier.check_system(self.env.request(kind="restart-clock"))
+
+    def test_password(self):
+        stored = "pbkdf2_sha256$600000$" + "C" * 22 + "==$" + "D" * 43 + "="
+        result = self.applier.apply(self.env.request(kind="password", user="bryan", hash=stored))
+        self.assertEqual((result["state"], result["user"]), ("done", "bryan"))
+        self.assertEqual(self.login.read_bytes(), b"# logins\nbryan:" + stored.encode() + b"\n")
+        self.assertNotIn(stored, json.dumps(result))
+
+    def test_bundle(self):
+        result = self.applier.apply(self.env.request(kind="bundle"))
+        self.assertEqual(result["state"], "done", result["error"])
+        document = json.loads((self.env.state / "bundles" / result["bundle"]["file"]).read_text())
+        self.assertEqual((document["stack"], document["running"]), ("aes67", {"profile": "dsp-direct", "rate": 48000}))
+        self.assertEqual(list(document["config"]), ["aes67.conf"])
+        self.assertEqual(document["units"]["usb16x16-aes67"], "inactive")
+        self.assertIsNone(document["startCheck"])
+        self.assertEqual([c for c in self.acted() if c[0] == "systemctl"], [])
+
+
 # LIVE_COEFFICIENTS_DESIGN.md step 4: the "live" and "commit" kinds.
 
 PINNED_VECTOR = (

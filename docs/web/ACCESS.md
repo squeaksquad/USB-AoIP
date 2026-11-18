@@ -2,8 +2,11 @@
 
 What stands between a browser and the audio service, and why each piece is
 there. Built 2026-11-10 (packaging workstream 3) from the proposal in
-`AUDIT-2026-11-10.md`; nothing here has been run on a Pi yet
-(`docs/install/TO-VERIFY.md`).
+`AUDIT-2026-11-10.md`. On the author's Pi since 2026-11-13 (handoff); the
+from-scratch installer's form of it has not been run on a Pi
+(`docs/install/TO-VERIFY.md`). "What the page can ask for" was added with the
+System actions (2026-11-17, web 1.8.0 and applier 1.10.0), which are not
+installed anywhere yet.
 
 ```
 browser ──HTTPS, Basic auth──▶ usb16x16-web  (account usb-aoip-web, sandboxed)
@@ -94,12 +97,50 @@ state to a file the page's service reads. Without it the page says the clock
 state is unknown, because the pinned Statime reports nothing that shows it.
 Off by default: it changes the clock service's binary and has not been run.
 
+## What the page can ask for
+
+Every change is a request kind the applier knows; nothing in a request is
+executed. Since applier 1.10.0 the kinds are: a profile or preset switch, a
+preset removal, a live update, a commit, shut down, and the System tab's
+five actions.
+
+**Reboot, restart audio, restart clock service.** Each is one fixed
+`systemctl` sequence the applier chooses; the request says only which. The
+web service asks for a body that names the action, so a stray POST does
+nothing. Restarting the clock service restarts the audio service with it
+(the endpoint's unit is part of the clock's), and the applier verifies the
+endpoint afterwards as it does after any restart.
+
+**The support bundle is written by root and read by the web account only.**
+Root can read the journals and the audio configuration; the web account
+cannot, and should not be able to. The applier writes one JSON file into
+`bundles/` in its state directory, a directory only root and the web
+account's group can enter, and the web service serves it by the request's
+id, to a signed-in browser. The applier never reads the login file,
+anything under `/etc/usb-aoip` or key material into it, whatever a path
+leads to. The two newest bundles are kept.
+
+**A password change sends root a hash, not a password.** The page sends the
+new password to the web service over the same connection the login uses.
+The service hashes it (the login file's own PBKDF2) and queues the hash for
+the signed-in user; the plain password is never written anywhere. The
+applier accepts only a hash in that exact form with a sane iteration count,
+only for a user who already has a line (a request cannot add a login), and
+replaces that line alone, keeping the file's owner, group and mode. The
+hash is in no receipt or log. The web service notices the file change on
+the next request and stops accepting the old password at once. There is no
+"current password" field: the request already carries the login. With
+`WEB_TLS=off` the new password crosses the network in the clear, as the
+login does on every request.
+
 ## What it does not do
 
 - It does not make the page safe to expose to the internet. It is a control
   surface for a device on a local network.
 - It has no accounts with different rights: anyone with a login can do
-  everything the page can, including shutting the unit down.
+  everything the page can, including shutting the unit down, rebooting it
+  and changing their own password. Anyone who can sign in as a user can
+  change that user's password.
 - A self-signed certificate does not prove the unit is yours the first time;
   the fingerprint does, if you compare it.
 - The applier is still root, because restarting the audio service and
