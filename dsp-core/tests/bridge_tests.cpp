@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <limits>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -1179,9 +1181,259 @@ void test_zero_run_detector() {
     }
 }
 
+// ------------------------------------------------------------ monitor block
+
+using Targets = usb16x16::MonitorGains::Targets;
+
+Targets monitor_targets(const double gain, const std::uint32_t ramp) {
+    Targets targets;
+    targets.gain.fill(gain);
+    targets.ramp_frames.fill(ramp);
+    return targets;
+}
+
+// A different, non-trivial value on every channel and frame, exact in float.
+std::vector<float> monitor_signal(const std::size_t frames) {
+    std::vector<float> block(frames * usb16x16::kChannels);
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        for (std::size_t channel = 0; channel < usb16x16::kChannels; ++channel) {
+            block[frame * usb16x16::kChannels + channel] = static_cast<float>(
+                0.9 * std::sin(0.013 * static_cast<double>(frame + 1) * static_cast<double>(channel + 1)));
+        }
+    }
+    return block;
+}
+
+bool same_bytes(const std::vector<float>& a, const std::vector<float>& b) {
+    return a.size() == b.size() && std::memcmp(a.data(), b.data(), a.size() * sizeof(float)) == 0;
+}
+
+void test_monitor_default_is_untouched() {
+    usb16x16::MonitorGains monitor;
+    check(monitor.at_rest_unity(), "a new monitor block is at rest at unity");
+    std::vector<float> block = monitor_signal(256);
+    // A negative zero and the smallest denormal as well: a multiply by 1.0
+    // keeps both, but a flush-to-zero or a sign slip on the way would not.
+    block[0] = -0.0F;
+    block[1] = std::numeric_limits<float>::denorm_min();
+    const std::vector<float> before = block;
+    monitor.process(block.data(), 256);
+    check(same_bytes(block, before), "the default monitor block leaves the buffer bit-identical");
+    std::string reason;
+    check(monitor.publish(monitor_targets(1.0, 480), reason), "publishing unity is accepted");
+    monitor.process(block.data(), 256);
+    check(same_bytes(block, before) && monitor.at_rest_unity(),
+          "publishing unity onto unity starts no ramp and touches nothing");
+}
+
+void test_monitor_ramp_reaches_its_target_exactly() {
+    constexpr std::size_t n = 480;
+    usb16x16::MonitorGains monitor;
+    std::string reason;
+    Targets targets = monitor_targets(1.0, n);
+    targets.gain[0] = 0.0;
+    check(monitor.publish(targets, reason), "a ramp to zero on output 1 is accepted");
+    std::vector<float> block(2 * n * usb16x16::kChannels, 1.0F);
+    monitor.process(block.data(), 2 * n);
+    const auto at = [&](const std::size_t frame, const std::size_t channel) {
+        return block[frame * usb16x16::kChannels + channel];
+    };
+    check(at(n - 1, 0) == 0.0F && at(n - 2, 0) > 0.0F, "a ramp of N reaches zero exactly on its Nth sample");
+    check(at(0, 0) == static_cast<float>(1.0 - 1.0 / static_cast<double>(n)),
+          "the first sample of a ramp is one step from where it started");
+    double worst = 1.0 - static_cast<double>(at(0, 0));
+    for (std::size_t frame = 1; frame < 2 * n; ++frame) {
+        worst = std::max(worst, std::abs(static_cast<double>(at(frame, 0)) - static_cast<double>(at(frame - 1, 0))));
+    }
+    check(worst <= 1.0 / static_cast<double>(n) + 1.2e-7, "no step of a ramp of N is larger than 1/N");
+    bool rest_silent = true;
+    for (std::size_t frame = n - 1; frame < 2 * n; ++frame) rest_silent = rest_silent && at(frame, 0) == 0.0F;
+    check(rest_silent && monitor.gain(0) == 0.0, "after the ramp the output stays at exactly zero");
+    bool others = true;
+    for (std::size_t frame = 0; frame < 2 * n; ++frame) {
+        for (std::size_t channel = 1; channel < usb16x16::kChannels; ++channel) others = others && at(frame, channel) == 1.0F;
+    }
+    check(others, "channels whose target did not move are untouched");
+    check(!monitor.at_rest_unity(), "a channel at zero is not at rest at unity");
+}
+
+void test_monitor_retarget_mid_ramp_is_continuous() {
+    usb16x16::MonitorGains monitor;
+    std::string reason;
+    check(monitor.publish(monitor_targets(0.0, 480), reason), "the ramp down is accepted");
+    std::vector<float> first(200 * usb16x16::kChannels, 1.0F);
+    monitor.process(first.data(), 200);
+    const double reached = monitor.gain(3);
+    check(reached > 0.5 && reached < 0.6, "200 of 480 frames down is part way");
+    check(monitor.publish(monitor_targets(1.0, 1920), reason), "the retarget is accepted");
+    std::vector<float> second(2000 * usb16x16::kChannels, 1.0F);
+    monitor.process(second.data(), 2000);
+    const double up_step = (1.0 - reached) / 1920.0;
+    const double bound = std::max(1.0 / 480.0, up_step) + 1.2e-7;
+    const double across = std::abs(static_cast<double>(second[3]) - static_cast<double>(first[199 * usb16x16::kChannels + 3]));
+    check(across <= bound && second[3] > first[199 * usb16x16::kChannels + 3],
+          "a retarget mid-ramp turns at the gain it had reached, with no jump");
+    double worst = 0.0;
+    for (std::size_t frame = 1; frame < 2000; ++frame) {
+        worst = std::max(worst, std::abs(static_cast<double>(second[frame * usb16x16::kChannels + 3]) -
+                                         static_cast<double>(second[(frame - 1) * usb16x16::kChannels + 3])));
+    }
+    check(worst <= up_step + 1.2e-7, "the new ramp moves at its own step from the gain it started at");
+    check(second[1919 * usb16x16::kChannels + 3] == 1.0F && monitor.at_rest_unity(),
+          "the retargeted ramp lands on unity exactly and the block is at rest again");
+}
+
+void test_monitor_publish_keeps_other_ramps() {
+    // Output 2 ramps down over 480; at frame 100 a publish moves output 1 only.
+    // Output 2 must carry on along the ramp it was on, not start a new one.
+    Targets down = monitor_targets(1.0, 480);
+    down.gain[1] = 0.0;
+    Targets other = down;
+    other.gain[0] = 0.5;
+    other.ramp_frames.fill(48);
+    const auto run = [&](const bool publish_other) {
+        usb16x16::MonitorGains monitor;
+        std::string reason;
+        monitor.publish(down, reason);
+        std::vector<float> block(480 * usb16x16::kChannels, 1.0F);
+        monitor.process(block.data(), 100);
+        if (publish_other) monitor.publish(other, reason);
+        monitor.process(block.data() + 100 * usb16x16::kChannels, 380);
+        std::vector<float> second(480);
+        for (std::size_t frame = 0; frame < 480; ++frame) second[frame] = block[frame * usb16x16::kChannels + 1];
+        return second;
+    };
+    check(same_bytes(run(true), run(false)), "a publish that moves other outputs leaves a ramp in progress alone");
+}
+
+void test_monitor_is_block_size_independent() {
+    constexpr std::size_t frames = 4032;  // 336 * 12; 336 is 7 * 48
+    constexpr std::size_t middle = 1008;
+    Targets first;
+    Targets second;
+    for (std::size_t channel = 0; channel < usb16x16::kChannels; ++channel) {
+        first.gain[channel] = static_cast<double>(channel) / 15.0;
+        first.ramp_frames[channel] = static_cast<std::uint32_t>(97 * (channel + 1));
+        second.gain[channel] = 1.0 - static_cast<double>(channel) / 31.0;
+        second.ramp_frames[channel] = static_cast<std::uint32_t>(1501 - 61 * channel);
+    }
+    const std::vector<float> input = monitor_signal(frames);
+    const auto run = [&](const std::size_t block, const bool retarget) {
+        usb16x16::MonitorGains monitor;
+        std::string reason;
+        monitor.publish(first, reason);
+        std::vector<float> out = input;
+        std::size_t done = 0;
+        while (done < frames) {
+            if (retarget && done == middle) {
+                monitor.publish(second, reason);
+            }
+            std::size_t count = std::min(block, frames - done);
+            if (retarget && done < middle) count = std::min(count, middle - done);
+            monitor.process(out.data() + done * usb16x16::kChannels, count);
+            done += count;
+        }
+        return out;
+    };
+    for (const bool retarget : {false, true}) {
+        const std::vector<float> whole = run(frames, retarget);
+        bool same = true;
+        for (const std::size_t block : {std::size_t{1}, std::size_t{7}, std::size_t{48}}) {
+            same = same && same_bytes(run(block, retarget), whole);
+        }
+        check(same, retarget ? "with a publish mid-run, blocks of 1, 7, 48 and the whole agree bit for bit"
+                             : "blocks of 1, 7, 48 and the whole agree bit for bit");
+    }
+}
+
+void test_monitor_publish_refuses() {
+    usb16x16::MonitorGains monitor;
+    std::string reason;
+    for (const double bad : {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+                             -std::numeric_limits<double>::infinity(), -0.5, 1.5, 1.0000001}) {
+        Targets targets = monitor_targets(0.5, 10);
+        targets.gain[7] = bad;
+        reason.clear();
+        check(!monitor.publish(targets, reason) && !reason.empty(),
+              "a gain that is not finite or not in [0, 1] is refused with a reason");
+    }
+    check(monitor.generation() == 0, "a refused publish publishes nothing");
+    std::vector<float> block = monitor_signal(16);
+    const std::vector<float> before = block;
+    monitor.process(block.data(), 16);
+    check(same_bytes(block, before), "after refusals the block is still untouched");
+    check(monitor.publish(monitor_targets(0.5, 10), reason), "a valid publish is accepted");
+    check(!monitor.publish(monitor_targets(0.25, 10), reason) && reason == "previous update not yet taken",
+          "a second publish before the audio thread took the first is refused");
+    monitor.process(nullptr, 0);
+    check(monitor.generation() == 1, "process with no frames takes the published set");
+    check(monitor.gain(0) == 1.0, "taking a set moves no gain until there are samples");
+    check(monitor.publish(monitor_targets(0.25, 10), reason), "after the take the next publish is accepted");
+}
+
+void test_monitor_zero_ramp_is_a_step() {
+    usb16x16::MonitorGains monitor;
+    std::string reason;
+    monitor.publish(monitor_targets(0.5, 0), reason);
+    std::vector<float> block = monitor_signal(4);
+    const std::vector<float> before = block;
+    monitor.process(block.data(), 4);
+    bool halved = true;
+    for (std::size_t i = 0; i < block.size(); ++i) {
+        halved = halved && block[i] == static_cast<float>(static_cast<double>(before[i]) * 0.5);
+    }
+    check(halved, "a ramp of 0 is taken as 1: the first sample is at the target");
+}
+
+void test_monitor_start_from_silence() {
+    usb16x16::MonitorGains monitor;
+    std::string reason;
+    Targets targets = monitor_targets(1.0, 1);
+    targets.gain[5] = 0.0;
+    targets.gain[6] = 0.5;
+    monitor.publish(targets, reason);
+    monitor.process(nullptr, 0);
+    monitor.start_from_silence(100);
+    check(!monitor.at_rest_unity() && monitor.gain(0) == 0.0, "start_from_silence drops every gain to zero");
+    std::vector<float> block(200 * usb16x16::kChannels, 1.0F);
+    monitor.process(block.data(), 200);
+    const auto at = [&](const std::size_t frame, const std::size_t channel) {
+        return block[frame * usb16x16::kChannels + channel];
+    };
+    check(at(0, 0) == static_cast<float>(0.01) && at(99, 0) == 1.0F && at(199, 0) == 1.0F,
+          "a start ramp rises from one step above zero to the target on its last sample");
+    check(at(99, 6) == 0.5F && at(0, 6) == static_cast<float>(0.005), "a start ramp rises to each channel's own target");
+    bool silent = true;
+    for (std::size_t frame = 0; frame < 200; ++frame) silent = silent && at(frame, 5) == 0.0F;
+    check(silent, "a channel whose target is zero stays silent through a start");
+    usb16x16::MonitorGains unity;
+    unity.start_from_silence(10);
+    std::vector<float> rising(20 * usb16x16::kChannels, 1.0F);
+    unity.process(rising.data(), 20);
+    check(rising[0] == 0.1F && rising[9 * usb16x16::kChannels] == 1.0F && unity.at_rest_unity(),
+          "a default block started from silence rises to unity and comes to rest there");
+}
+
+void test_monitor_ramp_constants() {
+    static_assert(usb16x16::monitor_ramp_frames_fast(48000) == 480);
+    static_assert(usb16x16::monitor_ramp_frames_level(48000) == 1920);
+    check(usb16x16::monitor_ramp_frames_fast(44100) == 441 && usb16x16::monitor_ramp_frames_level(44100) == 1764 &&
+              usb16x16::monitor_ramp_frames_fast(96000) == 960 && usb16x16::monitor_ramp_frames_level(96000) == 3840,
+          "the monitor ramps are 10 ms and 40 ms at every rate");
+}
+
 } // namespace
 
 int main() {
+    test_monitor_default_is_untouched();
+    test_monitor_ramp_reaches_its_target_exactly();
+    test_monitor_retarget_mid_ramp_is_continuous();
+    test_monitor_publish_keeps_other_ramps();
+    test_monitor_is_block_size_independent();
+    test_monitor_publish_refuses();
+    test_monitor_zero_ramp_is_a_step();
+    test_monitor_start_from_silence();
+    test_monitor_ramp_constants();
     test_dsp_stage_is_inert_until_loaded();
     test_dsp_routing_gain_and_polarity();
     test_dsp_delay_moves_the_impulse();

@@ -198,6 +198,50 @@ void test_rate_must_match() {
     check(at96->stage().rate() == 96000 && block == before, "a 96 kHz artifact at 96 kHz runs, and unity stays bit-exact");
 }
 
+// The monitor block after the stage. At its default it is not there at all:
+// a transparent preset stays bit-exact, through process() and through the
+// three steps the point-of-record owner calls without monitor_gains.
+void test_monitor_default_is_bit_exact() {
+    auto dsp = std::make_unique<OutDsp>();
+    dsp->load(straight(1.0));
+    check(dsp->monitor().at_rest_unity(), "the adapter's monitor block starts at rest at unity");
+    for (const std::size_t frames : {std::size_t{1}, std::size_t{48}, OutDsp::kMaxFrames}) {
+        auto sent = noise(frames, 40 + static_cast<unsigned>(frames));
+        const auto kept = sent;
+        dsp->process(sent.data(), frames);
+        check(sent == kept, "a transparent preset with the default monitor block is bit-exact");
+        dsp->take();
+        dsp->to_float(sent.data(), frames);
+        dsp->filter(frames);
+        dsp->from_float(sent.data(), frames);
+        check(sent == kept, "the three steps without monitor_gains are bit-exact as before");
+    }
+}
+
+void test_monitor_gain_scales() {
+    auto dsp = std::make_unique<OutDsp>();
+    dsp->load(straight(1.0));
+    usb16x16::MonitorGains::Targets targets;
+    targets.gain.fill(1.0);
+    targets.ramp_frames.fill(1);
+    targets.gain[0] = 0.5;
+    targets.gain[2] = 0.0;
+    std::string reason;
+    check(dsp->monitor().publish(targets, reason), "a monitor publish through the adapter is accepted");
+    dsp->take();
+    check(dsp->monitor().generation() == 1, "take() takes the monitor's published set too");
+    std::vector<std::int32_t> block(2 * kChannels, top24(4000));
+    dsp->process(block.data(), 2);
+    check(block[0] == top24(2000) && block[kChannels] == top24(2000), "output 1 at gain 0.5 is halved");
+    check(block[2] == 0 && block[kChannels + 2] == 0, "output 3 at gain 0 is silent");
+    check(block[1] == top24(4000) && block[kChannels + 15] == top24(4000), "outputs at unity are unchanged");
+    bool low_byte_zero = true;
+    auto sent = noise(480, 11);
+    dsp->process(sent.data(), 480);
+    for (const auto sample : sent) low_byte_zero = low_byte_zero && (sample & 0xFF) == 0;
+    check(low_byte_zero, "the low byte is zero after a monitor gain");
+}
+
 int main(int argc, char** argv) {
     test_unloaded_is_inert();
     test_unity_is_bit_exact();
@@ -205,6 +249,8 @@ int main(int argc, char** argv) {
     test_reset_clears_state();
     test_oversized_block_is_refused();
     test_rate_must_match();
+    test_monitor_default_is_bit_exact();
+    test_monitor_gain_scales();
     for (int i = 1; i < argc; ++i) run_artifact(argv[i]);
     std::printf(failures == 0 ? "dsp_path_test: all passed\n" : "dsp_path_test: %d FAILED\n", failures);
     return failures == 0 ? 0 : 1;

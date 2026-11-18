@@ -199,6 +199,113 @@ private:
     std::array<std::uint32_t, kChannels> delay_write_{};
 };
 
+// Ramp lengths for the monitor block, in one place so every caller moves at
+// the same speed: a mute, dim or solo is 10 ms, a level move 40 ms. Every
+// Dante rate is a whole number of hundreds, so both are exact.
+[[nodiscard]] constexpr std::uint32_t monitor_ramp_frames_fast(const unsigned rate) noexcept {
+    return rate / 100;
+}
+[[nodiscard]] constexpr std::uint32_t monitor_ramp_frames_level(const unsigned rate) noexcept {
+    return rate / 25;
+}
+
+// The monitor block (phase 3): one ramped linear gain per output channel,
+// applied to the stage's output after DspStage::process. Later it carries
+// monitor volume, dim, mute, solo and set switching; here it takes raw
+// per-channel targets.
+//
+// Real-time contract, as DspStage's. `publish()` runs on a control thread;
+// `process()` and `start_from_silence()` on the audio thread (or before the
+// loop) and allocate nothing, lock nothing, throw nothing.
+//
+// Targets reach the audio thread through two sets, as DspStage's numbers do:
+// `publish()` fills the inactive set and switches the index; `process()` takes
+// the active set at the top of each block, so a block runs on one set
+// throughout and a publish waits until the previous one has been taken. The
+// publish count is stored after the index (both release) and loaded before it
+// (both acquire), so the count the audio thread records as seen is never
+// newer than the set it read.
+//
+// The arithmetic, exactly, so an independent implementation can reproduce it
+// bit for bit (dsp-compiler/verify-monitor.py does). Per channel the audio
+// thread holds `gain`, `target`, `step` (double) and `remaining` (frames).
+//
+//   On the block that takes a set, for each channel whose new target t
+//   differs from `target` (compared as doubles):
+//       target = t; N = max(ramp_frames, 1)
+//       if gain == t:  remaining = 0                 (already there)
+//       else:          step = (t - gain) / N; remaining = N
+//   A channel whose target is unchanged keeps its ramp, so a publish that
+//   moves other channels never restarts it, and a retarget mid-ramp starts
+//   from wherever the gain has got to: there is never a jump.
+//
+//   Per sample x (float), in stream order:
+//       if remaining > 0:  gain = gain + step; remaining = remaining - 1
+//                          if remaining == 0: gain = target
+//       y = float(double(x) * gain)              (round to nearest)
+//   So a ramp of N reaches its target exactly on its Nth sample (index N-1
+//   from the block that took it), and the gain is accumulated by repeated
+//   addition, not computed as a multiple of the step.
+//
+//   A channel not ramping and at exactly 1.0 is not multiplied at all, and
+//   when every channel is, `process()` returns without touching the buffer:
+//   at rest and unity the block is bit-identical to not having it. The
+//   default object is in that state (targets 1, gains 1), so an owner that
+//   never publishes behaves as it did before the block existed.
+//
+//   start_from_silence(N): gain = 0 on every channel, then for each channel
+//   whose target is not 0, step = target / N' and remaining = N' with
+//   N' = max(N, 1). A start or re-prime then rises from silence.
+class MonitorGains {
+public:
+    struct Targets {
+        // Linear gain per output: 0 silent, 1 unity. Finite and in [0, 1].
+        std::array<double, kChannels> gain{};
+        // Frames over which to move to this target; 0 is taken as 1.
+        std::array<std::uint32_t, kChannels> ramp_frames{};
+    };
+
+    MonitorGains() noexcept;
+    MonitorGains(const MonitorGains&) = delete;
+    MonitorGains& operator=(const MonitorGains&) = delete;
+
+    // Control thread only. False with `reason` set, and nothing the audio
+    // thread reads touched, when a gain is not finite or not in [0, 1], or
+    // when the audio thread has not yet taken the previous publish (retry on
+    // the next poll with the newest state).
+    bool publish(const Targets& targets, std::string& reason) noexcept;
+    // How many publishes the audio thread has taken so far.
+    [[nodiscard]] std::uint64_t generation() const noexcept {
+        return seen_.load(std::memory_order_acquire);
+    }
+
+    // 16 interleaved channels, in place. With frames 0 it only takes the
+    // published set (a wake with no audio), and `interleaved` may be null.
+    void process(float* interleaved, std::size_t frames) noexcept;
+    // Every gain to 0, ramping to the current targets over `frames`.
+    void start_from_silence(std::uint32_t frames) noexcept;
+
+    // Audio-thread state, for tests and the offline runner.
+    [[nodiscard]] bool at_rest_unity() const noexcept { return rest_unity_; }
+    [[nodiscard]] double gain(const std::size_t channel) const noexcept { return gain_[channel]; }
+
+private:
+    void take() noexcept;
+    void update_rest() noexcept;
+
+    std::array<Targets, 2> sets_{};
+    std::atomic<unsigned> active_{0};
+    std::atomic<std::uint64_t> published_{0};
+    std::atomic<std::uint64_t> seen_{0};
+    // Audio thread only.
+    unsigned taken_{0};
+    std::array<double, kChannels> gain_{};
+    std::array<double, kChannels> target_{};
+    std::array<double, kChannels> step_{};
+    std::array<std::uint32_t, kChannels> remaining_{};
+    bool rest_unity_{true};
+};
+
 class AudioRing {
 public:
     explicit AudioRing(std::size_t capacity_frames);

@@ -15,6 +15,13 @@
 // are double. Against an F64 reference the agreement is therefore bounded by
 // float32, about 1e-7 relative -- roughly 48 dB below the least significant
 // bit of the 24-bit wire, which is where it stops mattering.
+//
+// The monitor block (MonitorGains) runs after the stage, as it does in the
+// owner. Without --monitor-script it stays at its default, every gain 1 and
+// nothing ramping, and does not touch the samples: the output is what it was
+// before the block existed. With a script, the run is split so that a block
+// boundary falls exactly on each event's frame, so the result does not
+// depend on --block.
 
 #include "usb16x16/bridge_core.hpp"
 
@@ -24,6 +31,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <numeric>
 #include <iostream>
 #include <sstream>
@@ -84,8 +92,114 @@ int usage() {
         "  --bench N              time N process() calls in memory and exit\n"
         "  --shape                print the shape key and canonical shape, then exit\n"
         "  --swap-at FRAME FILE   publish FILE's coefficients at the first block\n"
-        "                         boundary at or after FRAME (same shape required)\n";
+        "                         boundary at or after FRAME (same shape required)\n"
+        "  --monitor-script FILE  drive the monitor block from FILE, one event a line:\n"
+        "                           FRAME ramp=N gains=G1,...,G16   publish these targets\n"
+        "                           FRAME silence ramp=N            start_from_silence(N)\n"
+        "                         FRAME is the 0-based input frame the event takes\n"
+        "                         effect at, never decreasing; '#' starts a comment.\n"
+        "                         The monitor runs after the stage, also with --bypass\n"
+        "  --bench-monitor GAIN   with --bench: also run the monitor block with every\n"
+        "                         output at GAIN (at rest), inside the timed call\n";
     return 2;
+}
+
+struct MonitorEvent {
+    std::uint64_t frame{};
+    std::size_t line{};
+    bool silence{};
+    usb16x16::MonitorGains::Targets targets{};
+    std::uint32_t ramp{};
+};
+
+// The whole of `text` as an unsigned integer, or false.
+bool parse_unsigned(const std::string& text, std::uint64_t& value) {
+    if (text.empty() || text.find_first_not_of("0123456789") != std::string::npos) return false;
+    try {
+        value = std::stoull(text);
+    } catch (const std::exception&) {
+        return false;
+    }
+    return true;
+}
+
+bool parse_double(const std::string& text, double& value) {
+    if (text.empty()) return false;
+    std::size_t used = 0;
+    try {
+        value = std::stod(text, &used);
+    } catch (const std::exception&) {
+        return false;
+    }
+    return used == text.size();
+}
+
+// Reads the script, or prints what is wrong with it (file and line) and
+// returns false. Gains are checked here by the same rule publish() applies,
+// so a script the runner accepts never has an event refused mid-run.
+bool read_monitor_script(const std::string& path, std::vector<MonitorEvent>& events) {
+    std::ifstream file(path);
+    if (!file) {
+        std::cerr << "cannot read " << path << '\n';
+        return false;
+    }
+    std::string line;
+    std::size_t number = 0;
+    const auto refuse = [&](const std::string& why) {
+        std::cerr << path << ':' << number << ": " << why << '\n';
+        return false;
+    };
+    while (std::getline(file, line)) {
+        ++number;
+        const std::size_t hash = line.find('#');
+        if (hash != std::string::npos) line.erase(hash);
+        std::istringstream words(line);
+        std::vector<std::string> fields;
+        for (std::string word; words >> word;) fields.push_back(word);
+        if (fields.empty()) continue;
+        MonitorEvent event;
+        event.line = number;
+        if (!parse_unsigned(fields[0], event.frame)) return refuse("the first field must be a frame number");
+        if (!events.empty() && event.frame < events.back().frame) {
+            return refuse("frame " + fields[0] + " is before the previous event's");
+        }
+        std::size_t next = 1;
+        if (next < fields.size() && fields[next] == "silence") {
+            event.silence = true;
+            ++next;
+        }
+        if (next >= fields.size() || fields[next].rfind("ramp=", 0) != 0) return refuse("expected ramp=N");
+        std::uint64_t ramp = 0;
+        if (!parse_unsigned(fields[next].substr(5), ramp) || ramp > std::numeric_limits<std::uint32_t>::max()) {
+            return refuse("ramp must be a whole number of frames that fits 32 bits");
+        }
+        event.ramp = static_cast<std::uint32_t>(ramp);
+        event.targets.ramp_frames.fill(event.ramp);
+        ++next;
+        if (!event.silence) {
+            if (next >= fields.size() || fields[next].rfind("gains=", 0) != 0) return refuse("expected gains=G1,...,G16");
+            const std::string list = fields[next].substr(6) + ",";
+            std::size_t channel = 0;
+            std::size_t start = 0;
+            for (std::size_t comma = list.find(','); comma != std::string::npos; comma = list.find(',', start)) {
+                double gain = 0.0;
+                if (channel >= kChannels) return refuse("more than 16 gains");
+                if (!parse_double(list.substr(start, comma - start), gain)) {
+                    return refuse("gain " + std::to_string(channel + 1) + " is not a number");
+                }
+                if (!(std::isfinite(gain) && gain >= 0.0 && gain <= 1.0)) {
+                    return refuse("gain " + std::to_string(channel + 1) + " is not a finite value in [0, 1]");
+                }
+                event.targets.gain[channel++] = gain;
+                start = comma + 1;
+            }
+            if (channel != kChannels) return refuse("expected 16 gains, found " + std::to_string(channel));
+            ++next;
+        }
+        if (next != fields.size()) return refuse("unexpected '" + fields[next] + "'");
+        events.push_back(event);
+    }
+    return true;
 }
 
 // What one process() call costs, at the block size the caller asks for.
@@ -95,7 +209,8 @@ int usage() {
 // the right number for the question it answers, which is whether the stage can
 // fit in a cycle at all. The maximum is the figure that decides that; a mean
 // hides exactly the cycle that would have missed.
-int benchmark(usb16x16::DspStage& stage, const std::size_t block, const std::size_t runs, const unsigned rate) {
+int benchmark(usb16x16::DspStage& stage, usb16x16::MonitorGains* const monitor,
+              const std::size_t block, const std::size_t runs, const unsigned rate) {
     std::vector<float> buffer(block * kChannels);
     // Real signal rather than silence: an IIR fed zeros settles into denormals,
     // and the cost measured would be the denormal handling.
@@ -111,6 +226,7 @@ int benchmark(usb16x16::DspStage& stage, const std::size_t block, const std::siz
     for (std::size_t run = 0; run < runs; ++run) {
         const auto started = std::chrono::steady_clock::now();
         stage.process(buffer.data(), block);
+        if (monitor != nullptr) monitor->process(buffer.data(), block);
         const auto finished = std::chrono::steady_clock::now();
         spent.push_back(std::chrono::duration<double, std::micro>(finished - started).count());
     }
@@ -118,6 +234,7 @@ int benchmark(usb16x16::DspStage& stage, const std::size_t block, const std::siz
     const double total = std::accumulate(spent.begin(), spent.end(), 0.0);
     const double audio_us = static_cast<double>(block) / static_cast<double>(rate) * 1.0e6;
     std::cout << "{\"rate\":" << rate << ",\"block\":" << block
+              << ",\"monitor\":" << (monitor != nullptr ? "true" : "false")
               << ",\"runs\":" << runs
               << ",\"audio_us\":" << audio_us
               << ",\"min_us\":" << spent.front()
@@ -148,6 +265,9 @@ int main(const int argc, char** const argv) {
     bool swap = false;
     std::size_t swap_frame = 0;
     std::string swap_path;
+    std::string monitor_path;
+    bool bench_monitor = false;
+    double bench_gain = 1.0;
 
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -166,6 +286,8 @@ int main(const int argc, char** const argv) {
         else if (argument == "--bench") bench = std::stoul(take());
         else if (argument == "--shape") shape_only = true;
         else if (argument == "--swap-at") { swap = true; swap_frame = std::stoul(take()); swap_path = take(); }
+        else if (argument == "--monitor-script") monitor_path = take();
+        else if (argument == "--bench-monitor") { bench_monitor = true; bench_gain = std::stod(take()); }
         else if (argument == "--format") {
             const std::string value = take();
             if (value == "s32le") format = Format::s32le;
@@ -178,6 +300,8 @@ int main(const int argc, char** const argv) {
     if (artifact_path.empty()) return usage();
     if (bench == 0 && !shape_only && (input_path.empty() || output_path.empty())) return usage();
     if (block == 0) { std::cerr << "--block must be positive\n"; return 2; }
+    std::vector<MonitorEvent> events;
+    if (!monitor_path.empty() && !read_monitor_script(monitor_path, events)) return 6;
 
     std::ifstream artifact_file(artifact_path, std::ios::binary);
     if (!artifact_file) {
@@ -223,8 +347,19 @@ int main(const int argc, char** const argv) {
               << " block=" << block
               << (bypass ? " BYPASSED" : "") << '\n';
 
+    usb16x16::MonitorGains monitor;
     if (bench > 0) {
-        return benchmark(stage, block, bench, rate);
+        if (!bench_monitor) return benchmark(stage, nullptr, block, bench, rate);
+        usb16x16::MonitorGains::Targets targets;
+        targets.gain.fill(bench_gain);
+        targets.ramp_frames.fill(1);
+        std::string reason;
+        if (!monitor.publish(targets, reason)) {
+            std::cerr << "--bench-monitor: " << reason << '\n';
+            return 2;
+        }
+        monitor.process(nullptr, 0);
+        return benchmark(stage, &monitor, block, bench, rate);
     }
 
     std::ifstream input(input_path, std::ios::binary);
@@ -236,9 +371,32 @@ int main(const int argc, char** const argv) {
     std::vector<unsigned char> raw(block * kChannels * width);
     std::vector<float> samples(block * kChannels);
     std::uint64_t frames_done = 0;
+    std::size_t next_event = 0;
 
     while (input) {
-        input.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(raw.size()));
+        // Every event due at this frame, in file order. Each publish is taken
+        // at once (a zero-frame process), as it would be at the top of the
+        // next block, so several events on one frame apply in turn.
+        while (next_event < events.size() && events[next_event].frame == frames_done) {
+            const MonitorEvent& event = events[next_event++];
+            if (event.silence) {
+                monitor.start_from_silence(event.ramp);
+            } else {
+                std::string reason;
+                if (!monitor.publish(event.targets, reason)) {
+                    std::cerr << monitor_path << ':' << event.line << ": refused: " << reason << '\n';
+                    return 6;
+                }
+                monitor.process(nullptr, 0);
+            }
+        }
+        // A block boundary on the next event's frame.
+        std::size_t want = block;
+        if (next_event < events.size()) {
+            want = static_cast<std::size_t>(std::min<std::uint64_t>(want, events[next_event].frame - frames_done));
+        }
+        input.read(reinterpret_cast<char*>(raw.data()),
+                   static_cast<std::streamsize>(want * kChannels * width));
         const std::size_t read_bytes = static_cast<std::size_t>(input.gcount());
         const std::size_t frames = read_bytes / (kChannels * width);
         if (frames == 0) break;
@@ -260,6 +418,7 @@ int main(const int argc, char** const argv) {
         if (!bypass) {
             stage.process(samples.data(), frames);
         }
+        monitor.process(samples.data(), frames);
         for (std::size_t index = 0; index < frames * kChannels; ++index) {
             encode(raw.data() + index * width, samples[index], format);
         }
@@ -269,5 +428,11 @@ int main(const int argc, char** const argv) {
     }
     output.flush();
     std::cerr << "frames=" << frames_done << '\n';
+    if (next_event < events.size()) {
+        std::cerr << monitor_path << ':' << events[next_event].line << ": event at frame "
+                  << events[next_event].frame << " is past the end of the input\n";
+        return 6;
+    }
+    if (!events.empty()) std::cerr << "MONITOR events=" << events.size() << '\n';
     return 0;
 }

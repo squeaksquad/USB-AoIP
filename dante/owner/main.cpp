@@ -1796,6 +1796,9 @@ void run_dsp(UsbHalf& usb, std::int32_t* block, std::int64_t frames, Telemetry& 
     if (usb.meters != nullptr) usb.meters->usb_capture.observe(usb.dsp->floats(), count);
     const std::int64_t t2 = now_ns();
     usb.dsp->filter(count);
+    // The monitor block after the stage, inside the timed span, so its cost
+    // is part of dsp_us_max.
+    usb.dsp->monitor_gains(count);
     const std::int64_t t3 = now_ns();
     if (usb.meters != nullptr) usb.meters->dante_playback.observe(usb.dsp->floats(), count);
     const std::int64_t t4 = now_ns();

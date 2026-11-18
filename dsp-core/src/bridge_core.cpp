@@ -484,6 +484,120 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
     flush_denormals();
 }
 
+// ----------------------------------------------------------- monitor block
+
+MonitorGains::MonitorGains() noexcept {
+    for (Targets& set : sets_) {
+        set.gain.fill(1.0);
+        set.ramp_frames.fill(1);
+    }
+    gain_.fill(1.0);
+    target_.fill(1.0);
+}
+
+bool MonitorGains::publish(const Targets& targets, std::string& reason) noexcept {
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        const double g = targets.gain[channel];
+        // Written so that NaN fails too: every comparison with it is false.
+        if (!(std::isfinite(g) && g >= 0.0 && g <= 1.0)) {
+            reason = "gain on output " + std::to_string(channel + 1) + " is not a finite value in [0, 1]";
+            return false;
+        }
+    }
+    const std::uint64_t published = published_.load(std::memory_order_relaxed);
+    if (seen_.load(std::memory_order_acquire) != published) {
+        reason = "previous update not yet taken";
+        return false;
+    }
+    const unsigned active = active_.load(std::memory_order_relaxed);
+    sets_[1 - active] = targets;
+    // Index first, count second: an audio thread that sees the new count has
+    // also seen the new index, so it can never record as seen a publish whose
+    // set it has not yet switched to (which would let the next publish write
+    // into the set it is still reading).
+    active_.store(1 - active, std::memory_order_release);
+    published_.store(published + 1, std::memory_order_release);
+    reason.clear();
+    return true;
+}
+
+void MonitorGains::take() noexcept {
+    const std::uint64_t published = published_.load(std::memory_order_acquire);
+    const unsigned active = active_.load(std::memory_order_acquire);
+    if (active != taken_) {
+        const Targets& set = sets_[active];
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            const double t = set.gain[channel];
+            if (t == target_[channel]) continue;
+            target_[channel] = t;
+            if (gain_[channel] == t) {
+                remaining_[channel] = 0;
+                continue;
+            }
+            const std::uint32_t frames = std::max<std::uint32_t>(set.ramp_frames[channel], 1);
+            step_[channel] = (t - gain_[channel]) / static_cast<double>(frames);
+            remaining_[channel] = frames;
+        }
+        taken_ = active;
+        update_rest();
+    }
+    // Releases the other set back to the control thread.
+    seen_.store(published, std::memory_order_release);
+}
+
+void MonitorGains::update_rest() noexcept {
+    bool rest = true;
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        rest = rest && remaining_[channel] == 0 && gain_[channel] == 1.0;
+    }
+    rest_unity_ = rest;
+}
+
+void MonitorGains::start_from_silence(const std::uint32_t frames) noexcept {
+    const std::uint32_t length = std::max<std::uint32_t>(frames, 1);
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        gain_[channel] = 0.0;
+        if (target_[channel] == 0.0) {
+            remaining_[channel] = 0;
+            continue;
+        }
+        step_[channel] = target_[channel] / static_cast<double>(length);
+        remaining_[channel] = length;
+    }
+    update_rest();
+}
+
+void MonitorGains::process(float* const interleaved, const std::size_t frames) noexcept {
+    take();
+    if (rest_unity_ || frames == 0) return;
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        double g = gain_[channel];
+        std::uint32_t remaining = remaining_[channel];
+        if (remaining == 0 && g == 1.0) continue;
+        float* sample = interleaved + channel;
+        std::size_t frame = 0;
+        if (remaining > 0) {
+            const double step = step_[channel];
+            const double target = target_[channel];
+            for (; frame < frames && remaining > 0; ++frame, sample += kChannels) {
+                g += step;
+                if (--remaining == 0) g = target;
+                *sample = static_cast<float>(static_cast<double>(*sample) * g);
+            }
+            gain_[channel] = g;
+            remaining_[channel] = remaining;
+        }
+        // At rest on a gain other than unity (a ramp that just ended on 1.0
+        // leaves the rest of the block alone, as unity always does).
+        if (g != 1.0) {
+            for (; frame < frames; ++frame, sample += kChannels) {
+                *sample = static_cast<float>(static_cast<double>(*sample) * g);
+            }
+        }
+    }
+    update_rest();
+}
+
 // ---------------------------------------------------------------- SHA-256
 //
 // FIPS 180-4, straight from the standard. Used only for the DSP shape key and

@@ -12,6 +12,13 @@
 //
 // Real-time contract, as DspStage's: load() off the audio path, before the
 // loop; process() and reset() allocate nothing, lock nothing, throw nothing.
+//
+// The monitor block (MonitorGains, phase 3) runs after the stage, on the same
+// floats: per-output ramped gains for volume, dim, mute and solo. At its
+// default (every gain 1, nothing ramping) it does not touch the block, so an
+// owner that never publishes to it is bit-identical to one without it. It
+// runs only when a preset is loaded, since without one the owner never
+// converts the block to float.
 #pragma once
 
 #include "usb16x16/bridge_core.hpp"
@@ -36,27 +43,35 @@ public:
     [[nodiscard]] bool enabled() const noexcept { return stage_.loaded(); }
     [[nodiscard]] DspStage& stage() noexcept { return stage_; }
     [[nodiscard]] const DspStage& stage() const noexcept { return stage_; }
+    [[nodiscard]] MonitorGains& monitor() noexcept { return monitor_; }
+    [[nodiscard]] const MonitorGains& monitor() const noexcept { return monitor_; }
 
     // Filter state and delay lines to silence: at each prime, so a start never
     // carries the tail of whatever was playing before the gap.
     void reset() noexcept { stage_.reset(); }
 
-    // Take a published coefficient set without filtering anything: for the
-    // wakes on which no block goes out, so a live update is not left waiting
-    // for audio (dsp_live.hpp). As cheap as the two atomic loads it is.
-    void take() noexcept { stage_.process(float_.data(), 0); }
+    // Take a published coefficient set, and the monitor's published targets,
+    // without filtering anything: for the wakes on which no block goes out, so
+    // a live update is not left waiting for audio (dsp_live.hpp). As cheap as
+    // the atomic loads it is.
+    void take() noexcept {
+        stage_.process(float_.data(), 0);
+        monitor_.process(float_.data(), 0);
+    }
 
     // `frames` of 16 interleaved channels, in place. Does nothing unloaded.
     void process(std::int32_t* interleaved, std::size_t frames) noexcept {
         if (!ready(frames)) return;
         to_float(interleaved, frames);
         filter(frames);
+        monitor_gains(frames);
         from_float(interleaved, frames);
     }
 
-    // process() in its three steps, for a caller that meters the floats
-    // between them (meter_tap.hpp) and times the steps apart. Only when
-    // ready(frames) is true.
+    // process() in its steps, for a caller that meters the floats between
+    // them (meter_tap.hpp) and times the steps apart. Only when ready(frames)
+    // is true. A caller that leaves out monitor_gains has no monitor block,
+    // which is what the point-of-record owner is.
     [[nodiscard]] bool ready(std::size_t frames) const noexcept {
         return stage_.loaded() && frames != 0 && frames <= kMaxFrames;
     }
@@ -65,6 +80,7 @@ public:
         for (std::size_t i = 0; i < samples; ++i) float_[i] = s32_to_float(interleaved[i]);
     }
     void filter(std::size_t frames) noexcept { stage_.process(float_.data(), frames); }
+    void monitor_gains(std::size_t frames) noexcept { monitor_.process(float_.data(), frames); }
     void from_float(std::int32_t* interleaved, std::size_t frames) noexcept {
         const std::size_t samples = frames * kChannels;
         for (std::size_t i = 0; i < samples; ++i) {
@@ -75,11 +91,13 @@ public:
                                                        (static_cast<std::uint32_t>(packed[2]) << 24));
         }
     }
-    // The block between the steps: the input after to_float, the output after filter.
+    // The block between the steps: the input after to_float, the output after
+    // filter and then after monitor_gains.
     [[nodiscard]] const float* floats() const noexcept { return float_.data(); }
 
 private:
     DspStage stage_;
+    MonitorGains monitor_;
     std::array<float, kMaxFrames * kChannels> float_{};
 };
 
