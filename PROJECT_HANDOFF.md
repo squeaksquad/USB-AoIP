@@ -16823,3 +16823,49 @@ the gain step run on every block), a fold engaged for at least a probe,
 and the battery at 96 kHz with the eight-channel loop. The operator's own
 checks of the Control Room and Level safety have not been reported one by
 one.
+
+**MEASURED 2026-11-19 11:21-11:47 UTC (session, on the operator's word "I
+just set it to -12dB"): the battery's off-unity arm at 48 kHz passes on the
+same monitor preset: four loaded 800-impulse runs all at `daw_timeline`
+528 and the ten-minute soak on the eight looped channels, the gain step
+running on every block, `dsp_us_max` at most 77 us. With the at-unity arm
+of 2026-11-18 that is the battery at 48 kHz with the fold on full. A fold
+and 96 kHz are owed; nothing is ACCEPTED.** Read first over SSH: the
+owner's status `level_db=-12.0 gain_db=-12.0`, state 51 applied, 2
+applied and 0 refused since the start; the endpoint still on the start of
+2026-11-18 19:04:27 UTC (`NRestarts=0`, start check unchanged), preset
+`dante-immersive-one-sub.dsp` 6a2c8012, owner bc486911, fold full, no dim,
+no mute, no limits file.
+
+From the Mac, `dante/measure-candidate.sh`, 32 frames,
+`USB16X16_OTHER_LOAD=0.1` on the impulse runs:
+
+| Run | Level, all 800 | `daw_timeline` | Spread | Discontinuities | Endpoint lines |
+|---|---|---|---|---|---|
+| `mon-minus12-1` `20261119T112144Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-minus12-2` `20261119T112520Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-minus12-3` `20261119T112855Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-minus12-4` `20261119T113230Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+
+- Soak 600 s (`mon-minus12-loop8`, `20261119T113613Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 2, discontinuities in
+  0 out 0, endpoint xrun/lag/error lines +0. Channels 9 to 16 loaded, not
+  judged.
+- The level is what was asked for: the eight channels' peaks are 0.0045 to
+  0.0251 against 0.0180 to 0.1000 at unity, a factor of 0.251 on both
+  ends, which is -12.0 dB; the owner's own peaks say the same
+  (`out_peak` 838861 into the stage, `back_peak` 210712 returned, 0.2512).
+- Cost, from the owner's one-minute lines from 11:21 UTC (25 lines):
+  `dsp_us_max` 29.5 to 77.0, `dsp_us_mean` 24.1 to 24.3, against 23.5 to
+  23.6 at unity: the gains on twelve outputs cost about 0.7 us of each
+  1 ms block on the Pi. `meter_us_max` 4.9 to 50.7, `meter_us_mean` 3.8 to
+  5.6, four taps (`monitor-in` advancing with the others).
+- Owner counters at t=60120: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 out_holes=0/0 back_holes=0/0`,
+  `gap_us_max=1053`.
+
+Not measured: a ramp in progress (the level was set before the runs and
+not moved during them), a fold engaged, dim, mute or solo under load, a
+second speaker set, and anything at 96 kHz. Owed before ACCEPTED, each on
+the operator's word: a noise probe with a fold engaged, and the battery at
+96 kHz on the eight-channel loop.
