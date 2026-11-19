@@ -16905,3 +16905,61 @@ the 5.1 and Mono folds on the Pi, a fold under the ten-minute soak, a
 ramp in progress, dim, mute or solo under load, a second speaker set, and
 anything at 96 kHz. Owed before ACCEPTED, on the operator's word: the
 battery at 96 kHz on the eight-channel loop.
+
+**MEASURED 2026-11-19 13:03-13:28 UTC (session, on the operator's word
+"it's at 96 now, Full at 0 dB"): the at-unity battery at 96 kHz on the
+eight-channel loop, same monitor preset: four loaded 800-impulse runs all
+at a median of `daw_timeline` 912 and the ten-minute soak PASS,
+`dsp_us_max` at most 89.8 us. FOUND in the same runs and not explained: 5
+to 7 impulses of each 800 read 668, one every 103 impulses. The point of
+record at 96 is 911 with spread 0, so this is not a clean match; a direct
+control at 96 is owed before it is judged. Nothing is ACCEPTED.** The rate
+was moved by the operator; the applier wrote owner.conf at 13:02:24 UTC
+(`RATE=96000`, `dante-immersive-one-sub@96000.dsp` 5792bc52, 302 biquads,
+shape 743b05e4) and the endpoint started at 13:02:25 (`prime_drop=96
+capture_drain=1 rx_queue=192`, owner bc486911), start check `state=ok
+rate=12018 restarts=0` at 13:03:30. Monitor: state 56 applied, level 0.0,
+fold full, no dim, no mute, no limits file; unchanged after the runs,
+`NRestarts=0`. The first run began 90 s after the start.
+
+From the Mac, `dante/measure-candidate.sh`, 32 frames,
+`USB16X16_OTHER_LOAD=0.1` on the impulse runs:
+
+| Run | Levels | Median `daw_timeline` | Spread | Discontinuities | Endpoint lines |
+|---|---|---|---|---|---|
+| `mon96-unity-1` `20261119T130355Z` | 676 x793, 668 x7 | 912 | 8 | 0 / 0 | +0 |
+| `mon96-unity-2` `20261119T130731Z` | 676 x795, 668 x5 | 912 | 8 | 0 / 0 | +0 |
+| `mon96-unity-3` `20261119T131106Z` | 676 x794, 668 x6 | 912 | 8 | 0 / 0 | +0 |
+| `mon96-unity-4` `20261119T131442Z` | 676 x793, 668 x7 | 912 | 8 | 0 / 0 | +0 |
+
+- Soak 600 s (`mon96-unity-loop8`, `20261119T131817Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peaks 0.0119 to
+  0.1000, discontinuities in 0 out 0, endpoint xrun/lag/error lines +0.
+  Channels 9 to 16 loaded, not judged.
+- The level: 676 + io_offset 236 = 912 on every run, one sample over the
+  911 (675 + 236) of the D=96 battery of 2026-11-01. The service read 912
+  to 913 in the first minutes after a move to 96 on that day; these runs
+  span 1.5 to 15 minutes after the move and all read 912.
+- The 668s: impulses 7, 110, 213, 316, 419, 677, 780 in run 1 and the
+  same spacing of 103 (or a multiple) in the others, which is 25.75 s
+  (impulses are 250 ms apart). 668 is 676 less the harness's peak search
+  radius of 8, so it says the peak was not found at 676 on that impulse,
+  not that the return moved by 8 samples; the soak and the runs show no
+  discontinuity and no zero run. Not seen at 48 on this preset (376 on
+  every impulse, both arms), and the D=96 battery of 2026-11-01 (direct,
+  owner c84e6a36 as a candidate) had spread 0. Not located: whether it
+  belongs to the preset's filters on output 1 at 96, to the monitor
+  owner, or to the day. The control that separates them is the same four
+  runs at 96 in direct.
+- Cost, the owner's 25 one-minute lines of this start: `dsp_us_max` 51.5
+  to 89.8, `dsp_us_mean` 45.7 to 46.1 (23.5 at 48: twice the frames in
+  each 1 ms block); `meter_us_max` at most 45.4, `meter_us_mean` 10.9 on
+  the last line.
+- Owner counters at t=1560: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 servo_rejected=0 out_holes=0/0
+  back_holes=0/0`, `gap_us_max=1084`, `tx_resyncs=0 rx_resyncs=0
+  net_errors=0`.
+
+Not measured at 96: the off-unity arm, a fold, a ramp in progress, dim,
+mute or solo under load. Owed before ACCEPTED, on the operator's word: the
+direct control at 96 (four loaded runs), then the off-unity arm at 96.
