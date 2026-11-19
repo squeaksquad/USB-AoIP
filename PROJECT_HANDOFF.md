@@ -17170,3 +17170,33 @@ So a restart of the Pulse's Dante side alone does not clear it. Not yet
 tried: the Metric Halo (the operator can restart it from MIOConsole3d,
 remotely), the Ferrofish itself and its MADI clocking (need the operator
 at the unit).
+
+**MEASURED 2026-11-19 20:13-20:17 UTC (session, on the operator's word:
+the Metric Halo rebooted from MIOConsole3d, remotely): the far loop's
+8-sample event at 96 kHz is still there after it, 6 impulses of 800.
+Nothing is ACCEPTED.** Endpoint unchanged: the start of 19:34:01 UTC,
+direct at 96, owner bc486911, `NRestarts=0`; Inferno logged nothing
+after 20:00 (the Metric Halo is behind the Pulse's MADI, not on Dante's
+return to the Pi).
+
+- Noise probe (`direct96-mhreboot`, `20261119T201300Z`): signal ready
+  after 3 probes, return from sample 912, no zero run, endpoint lines
+  +0.
+- `direct96-mhreboot-1` (`20261119T201341Z`, 32 frames, 800 loaded
+  impulses): 676 x794, 668 x6, median `daw_timeline` 912,
+  discontinuities 0 / 0, endpoint lines +0. Odd impulses 119, 222, 325,
+  428, 531, 789: the chain 103 apart and nothing else, as before the
+  rate change.
+- One owner counter moved: `playback_faults` 0 to 1 (`last_fault=-32`)
+  between the USBLINK lines of 20:13:46.4 (idle) and 20:13:48.4 (flow),
+  which is one of the harness's 8-impulse signal probes opening the
+  device before the main run, not inside the 800 impulses. No re-prime,
+  detach or capture fault with it. The first playback fault of the day
+  on this owner; one event, not explained, to be watched for at opens.
+
+Tried on the far loop without clearing it at 96: a rate change to 48 and
+back, the Pulse's Dante reboot, the Metric Halo's reboot. Left, and they
+need the operator at the units: the Ferrofish itself (power cycle), and
+the clock source and lock of the Ferrofish and the Metric Halo at 96
+over MADI. Not excluded by anything today: that the event is new in the
+far loop's settings since 2026-11-01 rather than a fault state.
