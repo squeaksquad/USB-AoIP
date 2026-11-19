@@ -17144,3 +17144,29 @@ carried over from the capture of 19:09, where the same 8-sample shape
 was in the far device's return and not in the Pi's send. Still owed: the
 far loop clean at 96 (a restart of its devices, or their clock and lock
 state, the operator's), then the two arms at 96 on the monitor preset.
+
+**MEASURED 2026-11-19 19:55-20:00 UTC (session, on the operator's word:
+the Ferrofish's Dante chip rebooted from Dante Controller, remotely): the
+far loop's 8-sample event at 96 kHz is still there after it, 10 impulses
+of 800. Nothing is ACCEPTED.** The Pi saw the reboot: at 19:54:39 UTC
+Inferno logged both return flows timed out and the sixteen subscriptions
+to `FF-PULSE-16-DX` orphaned; the endpoint was not restarted
+(`NRestarts=0`, the start of 19:34:01, direct at 96) and the flows came
+back by themselves.
+
+- Noise probe (`direct96-pulsereboot`, `20261119T195542Z`): signal ready
+  after 3 probes, return from sample 912, no zero run, endpoint lines
+  +0. So the remade flows are whole.
+- `direct96-pulsereboot-1` (`20261119T195623Z`, 32 frames, 800 loaded
+  impulses): 676 x790, 668 x10, median `daw_timeline` 912,
+  discontinuities 0 / 0, endpoint lines +0. Odd impulses 73, 175, 176,
+  279, 382, 485, 489, 640, 743, 784: the chain 103 apart (176 to 485,
+  640 to 743) and others.
+- Owner at t=1500: no faults, re-primes or detaches; `tx_i=-22.56
+  rx_i=21.67`, up from -18.66 / 18.45 at t=1140, the same climb as the
+  earlier start's.
+
+So a restart of the Pulse's Dante side alone does not clear it. Not yet
+tried: the Metric Halo (the operator can restart it from MIOConsole3d,
+remotely), the Ferrofish itself and its MADI clocking (need the operator
+at the unit).
