@@ -16963,3 +16963,57 @@ From the Mac, `dante/measure-candidate.sh`, 32 frames,
 Not measured at 96: the off-unity arm, a fold, a ramp in progress, dim,
 mute or solo under load. Owed before ACCEPTED, on the operator's word: the
 direct control at 96 (four loaded runs), then the off-unity arm at 96.
+
+**MEASURED 2026-11-19 18:24-18:40 UTC (session, on the operator's word
+"It's in direct"): the control at 96 kHz in direct reads the same as the
+monitor preset did: a median of `daw_timeline` 912 on all four loaded
+runs and 4 to 6 impulses of each 800 at 668, 103 impulses apart. So
+neither is the engine's or the monitor block's. FOUND with a capture
+dump: on those impulses the return really is 8 samples early, and back
+on the next. Not located. Nothing is ACCEPTED.** Direct was applied by
+the operator: owner.conf `RATE=96000` and no preset, endpoint start
+18:22:59 UTC (owner bc486911, `prime_drop=96 capture_drain=1
+rx_queue=192`), monitor `state=idle reason="no DSP preset"`, start check
+`state=ok rate=12019 restarts=0` at 18:24:04. `NRestarts=0` after.
+
+| Run | Levels | Median `daw_timeline` | Odd impulses (index) | Discontinuities |
+|---|---|---|---|---|
+| `direct96-control-1` `20261119T182407Z` | 676 x796, 668 x4 | 912 | 54, 312, 518, 621 | 0 / 0 |
+| `direct96-control-2` `20261119T182743Z` | 676 x795, 668 x5 | 912 | 67, 428, 531, 634, 737 | 0 / 0 |
+| `direct96-control-3` `20261119T183119Z` | 676 x794, 668 x6 | 912 | 29, 132, 390, 493, 596, 699 | 0 / 0 |
+| `direct96-control-4` `20261119T183455Z` | 676 x795, 668 x5 | 912 | 94, 197, 455, 558, 661 | 1 / 1 |
+
+- Endpoint xrun/lag/error lines +0 on every run. Run 4 has one input and
+  one output discontinuity on the Mac; the owner's `out_holes=2/72
+  back_holes=2/72` at t=900 are of this start (all sixteen channels zero
+  for 8+ frames arriving from the host, returned as sent). Other counters:
+  `capture_faults=0 playback_faults=0 tx_reprimes=0 detaches=0
+  servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1038`; every prime anchored (`tx_prime_dropped=96
+  tx_unanchored=0`, found 160-164, 182 or 235-246).
+- What a 668 is (`direct96-dump`, `20261119T183907Z`, 250 loaded
+  impulses with `USB16X16_DUMP`; 676 x248, 668 x2;
+  `direct96-dump-roundtrip-32f-20261119T183907Z.slip.txt`): the harness's
+  markers are 24000 apart without exception; the returned impulses are
+  24000 apart except 23992 then 24008 around impulses 13 and 219 (206
+  apart). The impulse is whole (0.250, zeros around it), 8 samples early,
+  and the next is back in place. On a silent channel that is what 8
+  frames gone before the impulse and 8 added after it look like, or a
+  block of 8 frames arriving ahead of the one before it; the harness
+  cannot tell which, and a soak's zero-run test sees neither.
+- Against the record: every earlier loaded 800-impulse run at 96 in the
+  evidence has no odd impulse (`d96r2loaded1..4` 2026-11-01 at 675,
+  `loop8-96-loaded1..4` 2026-10-29, `svc96loaded2` 2026-10-31), with the
+  same harness binary (built 2026-10-29). Those ran owner c84e6a36 or
+  earlier; today's ran bc486911 in direct. So it is the new owner, the
+  far loop, or the day, and this control does not separate them. At 48
+  on the same day: 376 on every impulse of eight runs.
+- The one sample (912 against 911) is in direct too.
+
+Owed before anything at 96 is judged: locate the 8-frame event, by an
+eth0 capture of both Dante flows over one occurrence
+(`usb16x16-dante-catch`, then the impulse read per flow), which says
+whether the Pi sends the impulse in place and whether the far loop
+returns it early; if the capture puts it on the Pi, the old owner
+c84e6a36 at 96 in direct is the next control. Then the off-unity arm at
+96.
