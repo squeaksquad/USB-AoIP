@@ -17017,3 +17017,62 @@ whether the Pi sends the impulse in place and whether the far loop
 returns it early; if the capture puts it on the Pi, the old owner
 c84e6a36 at 96 in direct is the next control. Then the off-unity arm at
 96.
+
+**FOUND 2026-11-19 19:08-19:12 UTC (session, on the operator's word "Yes,
+capture it"): the 8-sample event at 96 kHz is in what the far device
+returns, not in what the Pi sends. A second thing appeared during the
+capture and is not located: the round trip stepped 12 samples shorter
+(676 to 664) and was still there on the next open. Nothing is ACCEPTED;
+the unit is left in direct at 96 reading 900, not 912.** Capture:
+`sudo -n usb16x16-dante-catch start 169.254.248.189 both 10` at 19:08:36
+(the Audinate address on eth0), stopped at 19:09:44 (1625554 packets, 0
+dropped by the kernel), ring read on the Pi at nice 19 and then cleared.
+Across it `direct96-catch` (`20261119T190838Z`, 200 loaded impulses with
+`USB16X16_DUMP`). Reader `outputs/latency/direct96-catch-pcap_impulses.py`
+(every sample of 0.19 to 0.31 of full scale per flow and channel, as a
+Dante stamp), its output
+`direct96-catch-roundtrip-32f-20261119T190838Z.pcap-impulses.txt`.
+
+- The ring's last 23.4 s: four flows from the Pi (4 channels, 32 frames a
+  packet), two to it (8 channels, 16 frames), no stamp step off the
+  packet size on any. The Pi's flow to :14338, channel 1: 88 impulses,
+  every one 24000 after the last (stamp mod 24000 = 20420 on all 88).
+  The return flow to :53078, channel 1: 88 impulses, 20564 on 87 and
+  20556 on one, at 19:09:29.275 UTC, 23992 after the one before and the
+  next 24008 after it. That is impulse 144 of the run, which the Mac's
+  dump has at 668. So the far loop (Pulse, MADI, Ferrofish, Metric Halo)
+  hands that impulse back 8 samples early in its own stamps, and the
+  owner, Inferno's two directions and the gadget carry what they are
+  given. The loop is 144 samples in stamps on every other impulse.
+- The dump of the same run: impulses 41 and 144 at 668 (103 apart, the
+  periodic event), and from impulse 175 (about 19:09:37) to the end at
+  664, a step of 12. On the wire nothing moves at 175 in either
+  direction (20420 out and 20564 back before and after), and the Pi's
+  outgoing stamps are continuous, so the step is after the wire on the
+  return: Inferno's receive, the owner's return queue, the gadget's IN
+  or the Mac. The owner logged no fault, re-prime, resync or detach
+  (`tx_resyncs=0 rx_resyncs=0 net_errors=0`, `gap_us_max` 1035 to 1069).
+  It began with the capture running (tcpdump at nice 19, 1.6 million
+  packets into tmpfs); whether the capture caused it is not shown.
+- After the ring was cleared, `direct96-after-catch`
+  (`20261119T190952Z` to 19:11:29, 200 loaded impulses, a new open):
+  median 664, `daw_timeline` 900; the first 13 impulses at the search
+  floor of 656 (their true place not known), then 664 with impulses 83
+  and 186 at 656 (103 apart again). So the return path is 12 samples
+  shorter than at 18:24 and moved again inside this run.
+- The owner's servo integrators have moved through the afternoon in
+  direct at 96: `tx_i` / `rx_i` -14.85 / 14.88 at 13:28 UTC's start,
+  -18.73 / 18.36 at 18:38, -24.82 / 23.33 at 19:08, -28.00 / 25.65 at
+  19:10 (seed -14.85 ppm). Not read against earlier days; noted because
+  a clock that is moving on the far side would show here.
+
+Not located: the cause inside the far loop (which device, and why 25.75
+s), and the 12-sample step. Not tried: an endpoint restart, after which
+912 would be expected again; a restart of the far loop's devices, which
+is what cleared the far loop's zeros on 2026-10-29; the clock and lock
+state of the Pulse, the Ferrofish and the Metric Halo at 96. Everything
+measured at 96 today (the monitor preset's arm and the direct control)
+carries the far loop's event and is not a judgement of the owner either
+way; the 48 kHz arms are unaffected. Owed before ACCEPTED: the far loop
+clean at 96 (four loaded runs with no odd impulse, in direct), then the
+at-unity and off-unity arms at 96 on the monitor preset.
