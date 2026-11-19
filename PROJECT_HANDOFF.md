@@ -16869,3 +16869,39 @@ not moved during them), a fold engaged, dim, mute or solo under load, a
 second speaker set, and anything at 96 kHz. Owed before ACCEPTED, each on
 the operator's word: a noise probe with a fold engaged, and the battery at
 96 kHz on the eight-channel loop.
+
+**MEASURED 2026-11-19 13:00 UTC (session, on the operator's word "I just
+set it to Stereo, it's still at -12"): the noise probe at 32 passes with
+the Stereo fold engaged at -12 dB on the same monitor preset: return from
+sample 528, no zero run, `dsp_us_max` 63.9 us. The battery at 96 kHz is
+owed; nothing is ACCEPTED.** Read first over SSH: the owner's status
+`fold=stereo level_db=-12.0 gain_db=-12.0`, state 52 applied (3 applied,
+0 refused, 2 publishes since the start); the endpoint still on the start
+of 2026-11-18 19:04:27 UTC (`NRestarts=0`), preset
+`dante-immersive-one-sub.dsp` 6a2c8012, owner bc486911, no dim, no mute,
+no limits file. Read again after the run: unchanged.
+
+- Noise probe (`mon-stereo-minus12`, `20261119T130020Z`,
+  `dante/measure-candidate.sh noise 32`): signal ready after 3 probes,
+  nonzero span 528..1245599, zeros inside the span 0.0%, zero runs of 4 or
+  more 0, discontinuities in 0 out 0, IOProc offset 152 (so 376 + 152),
+  endpoint xrun/lag/error lines +0.
+- The fold is in the returned signal: the captured peak on input 2 is
+  0.0972. The largest peak into the stage is 0.25 of full scale (the
+  owner's `out_peak` 2097152), so the gain alone returns at most 0.0628
+  on any output; 0.0972 is a sum of inputs. (The direct probes of
+  2026-11-18 read 0.1000.) What each folded output should carry was not
+  compared sample for sample on the Pi; that proof is the Mac's
+  `verify-fold.py`.
+- Cost, the owner's line at t=64560.1 inside the run: `dsp_us_max=63.9
+  dsp_us_mean=27.4`, against a mean of 24.1 to 24.3 at -12 dB on full: the
+  Stereo view costs about 3 us of each 1 ms block. `meter_us_max=21.6
+  meter_us_mean=4.0`. One line only: the probe is about 40 s.
+- Owner counters on the same line: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 out_holes=0/0 back_holes=0/0`.
+
+Not measured: the switch itself (the fold was selected before the run),
+the 5.1 and Mono folds on the Pi, a fold under the ten-minute soak, a
+ramp in progress, dim, mute or solo under load, a second speaker set, and
+anything at 96 kHz. Owed before ACCEPTED, on the operator's word: the
+battery at 96 kHz on the eight-channel loop.
