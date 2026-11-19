@@ -17076,3 +17076,37 @@ carries the far loop's event and is not a judgement of the owner either
 way; the 48 kHz arms are unaffected. Owed before ACCEPTED: the far loop
 clean at 96 (four loaded runs with no odd impulse, in direct), then the
 at-unity and off-unity arms at 96 on the monitor preset.
+
+**MEASURED 2026-11-19 19:15-19:20 UTC (session, on the operator's word
+"Yes, restart it"): an endpoint restart brings the round trip at 96 back
+from 900 to 912; the far loop's 8-sample event is still there. Nothing
+is ACCEPTED.** `sudo -n systemctl restart usb16x16-dante` at 19:15:09
+(the owner's last line before it: idle, `tx_i=-27.86 rx_i=25.60`); new
+start direct at 96, owner bc486911, `prime_drop=96 capture_drain=1
+rx_queue=192 seed_ppm=-14.85`, start check `state=ok rate=12019
+restarts=0` at 19:16:14, `NRestarts=0` (a commanded restart is not
+counted).
+
+- `direct96-restart-1` (`20261119T191616Z`, 32 frames, 800 loaded
+  impulses): 676 x795, 668 x5, median `daw_timeline` 912, discontinuities
+  0 / 0, endpoint lines +0. The five odd impulses are 166, 269, 372, 475,
+  578: 103 apart, the far loop's event of the entry above.
+- So the 12-sample step of 19:09 was state held by the running endpoint
+  (not reset by a USB open, reset by a restart), which points at
+  Inferno's receive side or the owner's network half and away from the
+  gadget and the Mac. What set it is still not shown; it is the one time
+  the capture ring has been run in `both` mode beside a harness run at
+  96 with this owner.
+- Owner at t=240 of the new start: `tx_i=-18.38 rx_i=18.05`,
+  `rx_depth=88..106`, no faults, re-primes or holes. The integrators
+  start again from the seed at each endpoint start, so their climb
+  through the earlier start (to -28 / 26 after 52 minutes) is a thing to
+  read on the next long run at 96, not yet a finding.
+
+State left: direct at 96, 912, the capture ring cleared. Still owed, in
+order: the far loop clean at 96 (the operator's devices: clock and lock
+on the Pulse, the Ferrofish and the Metric Halo, or a restart of them),
+shown by four loaded runs in direct with no odd impulse; then the
+at-unity and off-unity arms at 96 on the monitor preset. Separately: the
+12-sample step, by repeating the capture beside a run to see whether it
+comes with the capture.
