@@ -17110,3 +17110,37 @@ shown by four loaded runs in direct with no odd impulse; then the
 at-unity and off-unity arms at 96 on the monitor preset. Separately: the
 12-sample step, by repeating the capture beside a run to see whether it
 comes with the capture.
+
+**MEASURED 2026-11-19 19:35-19:49 UTC (session, on the operator's word
+"it's back at 96 now"): a rate change to 48 and back to 96 did not clear
+the far loop's 8-sample event; it is more frequent after it, 9 to 13
+impulses of each 800 against 4 to 7 before. Nothing is ACCEPTED.** The
+operator moved the rate from the Mac; the arbiter ran at 19:29:43 (to
+48) and 19:34:01 (to 96), endpoint start 19:34:01 UTC in direct, owner
+bc486911, start check `state=ok rate=12020 restarts=0` at 19:35:06,
+`NRestarts=0`.
+
+| Run | Levels | Median `daw_timeline` | Discontinuities |
+|---|---|---|---|
+| `direct96-relock-1` `20261119T193507Z` | 675 x788, 667 x12 | 911 | 2 / 2 |
+| `direct96-relock-2` `20261119T193843Z` | 676 x787, 668 x13 | 912 | 0 / 0 |
+| `direct96-relock-3` `20261119T194218Z` | 676 x791, 668 x9 | 912 | 0 / 0 |
+| `direct96-relock-4` `20261119T194554Z` | 676 x787, 668 x13 | 912 | 0 / 0 |
+
+- Endpoint xrun/lag/error lines +0 on every run. The odd impulses still
+  include the chain 103 apart (run 4: 14, 117, 220, ..., 478, 581; run
+  1: 128, 231, 334) and now others between (run 2: 90, 128, 193, 259,
+  298, 348, 397, 451, 515, 554, 642, 657, 760), so there is more than
+  one period or the one is no longer regular.
+- Run 1 read 675 / 911, the point of record's figure, with two
+  discontinuities each way on the Mac; the owner counts `out_holes=2/106
+  back_holes=2/106` on this start (zeros arriving from the host,
+  returned as sent). Runs 2 to 4 read 676 / 912 on their own opens.
+- Owner at t=900: no faults, re-primes, detaches or resyncs,
+  `gap_us_max=1034`, `tx_i=-19.37 rx_i=19.01`.
+
+Not captured on the wire this time: that these are the far loop's is
+carried over from the capture of 19:09, where the same 8-sample shape
+was in the far device's return and not in the Pi's send. Still owed: the
+far loop clean at 96 (a restart of its devices, or their clock and lock
+state, the operator's), then the two arms at 96 on the monitor preset.
