@@ -17778,3 +17778,65 @@ bb3cd6ca, 203c6fa5, 6818176f; the endpoint active, the candidate
 launcher, the rate unit and the applier inactive. Next is the
 operator's: `sudo ./install-owner-idlephase.sh install` there, then the
 battery.
+
+**INSTALLED 2026-11-20 13:46 UTC (the operator: `sudo
+./install-owner-idlephase.sh install`; read back by the session) and
+MEASURED 13:47-14:17 UTC: owner bb3cd6ca with `--idle-phase 60`, start
+wrapper 203c6fa5, transport.conf 6818176f. The at-unity arm at 96 kHz on
+the monitor preset passes with it: four loaded 800-impulse runs at
+`daw_timeline` 912, 912, 913, 912, no open a block late in 64 opens, the
+ten-minute soak PASS. Not ACCEPTED: the off-unity arm at 96 and both
+arms at 48 are owed.** Read back: `status` shows the three `new`, kept
+bc486911, df6a1b0b, add1bc21 as `*.idlephase-previous`; the owner's
+command line ends `--prime-drop 96 --capture-drain --idle-phase 60 ...`,
+START `idle_phase_us=60`, `dante-immersive-one-sub@96000.dsp` loaded,
+endpoint start 13:46:08, start check `state=ok rate=12019 restarts=0`,
+monitor state 57 applied, 0.0 dB, fold full; `NRestarts=0` after.
+
+- Noise probe (`ip96-unity`, `20261120T134728Z`): clean from sample 912.
+- 60 loaded opens (`idlephase-20261120/svc96-unity/`,
+  `opens-svc96-unity.txt`): 59 at 675 to 677; one at 737 (below). No
+  open at 772. The 88 primes of this start found 163 to 165 or 247 to
+  249 (a few 175 to 235), every one anchored, where the same preset on
+  bc486911 found up to 252.
+- Four loaded 800-impulse runs, `USB16X16_OTHER_LOAD=0.1`:
+
+| Run | Levels | `daw_timeline` | Discontinuities | Endpoint lines |
+|---|---|---|---|---|
+| `ip96-unity-1` `20261120T135245Z` | 676 x798, 668 x2 | 912 | 0 / 0 | +0 |
+| `ip96-unity-2` `20261120T135620Z` | 676 x800 | 912 | 0 / 0 | +0 |
+| `ip96-unity-3` `20261120T135956Z` | 677 x799, 669 x1 | 913 | 0 / 0 | +0 |
+| `ip96-unity-4` `20261120T140331Z` | 676 x800 | 912 | 0 / 0 | +0 |
+
+  The three impulses 8 early are the far loop's (the Ferrofish's event,
+  3 in 3200 here). Run 3 is one sample over on its own open, as 96 has
+  read on some opens since 2026-11-01.
+- Soak 600 s (`ip96-unity-loop8`, `20261120T140707Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peaks 0.0119 to
+  0.1000, discontinuities 0 / 0, endpoint lines +0. Channels 9 to 16
+  loaded, not judged.
+- Cost, 30 one-minute lines: `dsp_us_max` 51.7 to 129.3, `dsp_us_mean`
+  45.6 to 52.9; `meter_us_max` 9.2 to 55.9.
+- Owner at t=1860: `capture_faults=0 playback_faults=0 tx_reprimes=0
+  detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1093`, `tx_i=-15.29 rx_i=15.56`. `out_holes=60/1804
+  back_holes=1/385`: all counted during the 60 opens (t=120 to 420) and
+  none during the four runs and the soak. The outgoing ones are one a
+  loaded open, the harness's own silent start (the morning's candidate
+  arms count the same, 51 to 78 in 60 to 80 opens, the control
+  included).
+- The open at 737 (open 49, 13:51:53 UTC): two impulses at 729, six at
+  737, no discontinuity on the Mac; on the Pi `tx_links` goes up by two
+  across that open and the one after, and the return's one hole of 385
+  frames is in that minute. So the host's stream paused inside the
+  session and the owner primed again, at another level. The same
+  signature once this morning (`--idle-phase 0`, open 42: 729 then 737).
+  Two in about 500 one-second opens, none in any 800-impulse run or
+  soak; what pauses the stream is not known, and a mid-session prime
+  landing 61 frames off is a separate matter from the open's prime, not
+  touched by this fix.
+
+Owed before ACCEPTED: at 96 the off-unity arm (-12 dB, set by the
+operator); at 48, on the operator's rate change, both arms on the
+monitor preset (the point of record there is 528) and direct once. Then
+the 44.1 and 88.2 checks the rate rules ask for after an owner change.
