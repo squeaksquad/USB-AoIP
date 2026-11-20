@@ -17840,3 +17840,60 @@ Owed before ACCEPTED: at 96 the off-unity arm (-12 dB, set by the
 operator); at 48, on the operator's rate change, both arms on the
 monitor preset (the point of record there is 528) and direct once. Then
 the 44.1 and 88.2 checks the rate rules ask for after an owner change.
+
+**MEASURED 2026-11-20 14:20-14:45 UTC (session, on the operator's word
+"It's at -12"): the off-unity arm at 96 kHz on owner bb3cd6ca with
+`IDLE_PHASE=60`. The four loaded runs pass (912, 912, 913, 912). The
+soak's verdict is the tool's FAIL-as-inconclusive, not a pass: the sub's
+output has runs of 4 to 6 zeros and `soak_reference.py` cannot check
+them, because it does not model the monitor's gain. The kept windows
+show what the runs are. Not ACCEPTED.** Read first: `level_db=-12.0
+gain_db=-12.0`, fold full, state 77 applied; the endpoint still on the
+start of 13:46:08 UTC, `NRestarts=0` before and after.
+
+| Run | Levels | `daw_timeline` | Discontinuities | Endpoint lines |
+|---|---|---|---|---|
+| `ip96-minus12-1` `20261120T142018Z` | 676 x799, 668 x1 | 912 | 0 / 0 | +0 |
+| `ip96-minus12-2` `20261120T142353Z` | 676 x800 | 912 | 0 / 0 | +0 |
+| `ip96-minus12-3` `20261120T142728Z` | 677 x799, 669 x1 | 913 | 0 / 0 | +0 |
+| `ip96-minus12-4` `20261120T143104Z` | 676 x799, 668 x1 | 912 | 0 / 0 | +0 |
+
+- The 20 primes of the arm found 160 to 165 or 244 to 251, one 174 and
+  one 254; no open read a block late. The 254 is noted: this arm's
+  opens were minutes apart, where the grid has had time to move against
+  the host's frames, which `IDLE_PHASE` does not hold (the long-idle
+  case, still open).
+- Soak 600 s (`ip96-minus12-loop8`, `20261120T143439Z`,
+  `USB16X16_LOOP_CHANNELS=8`): discontinuities 0 / 0, endpoint lines +0,
+  peaks 0.0030 to 0.0251 (0.2512 of the unity arm's on every channel:
+  -12.0 dB), longest zero run 1 on channels 1 to 3 and 5 to 8, and 6 on
+  channel 4, the sub. The wrapper then needs the reference check, which
+  wants `USB16X16_HOST_GAIN` and, given it, would compare against the
+  artifact at unity: there is no monitor gain in `reference_export.cpp`
+  or `soak_reference.py`. Verdict as printed: `FAIL, the zero runs could
+  not be checked against the preset (inconclusive is not a pass)`.
+- What the seven runs are
+  (`ip96-minus12-loop8-soak-600s-32f-20261120T143439Z.zero-runs.txt`,
+  from the report's kept windows): each is the sub's low-passed output
+  coming down to zero and leaving it again in steps of one code (`... 5
+  4 3 2 1 0 0 0 0 0 0 1 2 3 4 6 ...`), frames consecutive, and in every
+  window the other seven looped channels have no zero sample and their
+  usual level. A transport hole is zeros on every channel at once with a
+  step either side; these are neither. At unity the same output is four
+  times larger and its longest run is 1 (the at-unity arm), at 48 kHz
+  and -12 dB it was 2 (2026-11-19). So the soak shows no hole; it is not
+  a PASS by the criterion as written.
+- Cost, 24 one-minute lines: `dsp_us_max` 53.3 to 88.4, `dsp_us_mean`
+  46.8 to 46.9; `meter_us_max` 15.4 to 48.9.
+- Owner at t=3480: no fault, re-prime, detach, resync or new hole
+  (`out_holes` and `back_holes` unchanged from the opens of 13:48),
+  `gap_us_max=1083`, `back_peak` 210712 against `out_peak` 838861
+  (0.2512).
+
+To make this arm decidable by the tool: the reference to take the
+monitor's gain (the exporter applying the owner's `MonitorGains` at a
+given level, `soak_reference.py --monitor-gain-db`, and the wrapper
+reading the level from the owner's status), with its test; then this
+capture can be judged again without a new run, since the report keeps
+the windows. Owed besides: both arms at 48 and one direct run there,
+then the 44.1 and 88.2 checks.
