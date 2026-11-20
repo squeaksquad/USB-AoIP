@@ -2,7 +2,9 @@
 synthetic captures with a reference made here, and the exporter's stimulus
 against an independent implementation.
 Run: python3 -m unittest dante/test_soak_reference.py"""
+import contextlib
 import copy
+import io
 import json
 import random
 import struct
@@ -313,6 +315,222 @@ class ExporterTests(unittest.TestCase):
             result = sr.analyze(rep, bad, Path(scratch), gain_file(scratch))
         self.assertEqual(result['status'], 'inconclusive')
         self.assertIn('reference export failed', result['reason'])
+
+
+MONITOR_SECTION = """monitor 1
+sets 1
+set main speakers
+outs 4
+out 0 speaker 0
+out 1 speaker 0
+out 2 speaker 0
+out 3 sub 0
+label 0 L
+label 1 R
+expandsets 16
+0
+0
+0
+0
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+folds 1
+fold 0 swap 4
+0 1 1
+1 0 1
+2 2 1
+3 3 1
+end
+"""
+QUIET = 0.0000035     # output 3's gain: about 3 codes at unity, under one at -12 dB, so it sits at zero in runs
+
+
+def monitor_artifact(directory, section=True):
+    """dsp-unity.dsp with output 3 made quiet and, with `section`, a monitor section: one speakers
+    set on outputs 1-4 (4 the sub), whose fold `swap` exchanges inputs 1 and 2."""
+    text = (HERE / 'config' / 'dsp-unity.dsp').read_text()
+    assert text.endswith('\n15 0 1 0\nend\n') and '\n2 0 1 0\n' in text
+    text = text.replace('\n2 0 1 0\n', f'\n2 0 {QUIET} 0\n')
+    if section:
+        text = text[:-len('end\n')] + MONITOR_SECTION
+    path = Path(directory) / ('monitor.dsp' if section else 'plain.dsp')
+    path.write_text(text)
+    return path
+
+
+def monitor_state(directory, level='-12.0', fold='full', name='state', mute=None):
+    lines = ['MONITOR-STATE v=1 seq=7', 'active=main', 'dim_db=-20.0', 'subs=on',
+             f'set id=main level_db={level} trim_db=0.0 dim=0 mute=0 fold={fold}',
+             'solo=' + ','.join('0' * 16), 'mute=' + ','.join(mute or '0' * 16), 'end']
+    path = Path(directory) / f'{name}.txt'
+    path.write_text('\n'.join(lines) + '\n')
+    return path
+
+
+def monitor_limits(directory, max_db):
+    path = Path(directory) / 'limits.txt'
+    path.write_text(f'MONITOR-LIMITS v=1\nmax_db={max_db}\nstart=last\nstart_db=-30.0\nlock=0\nend\n')
+    return path
+
+
+SPAN = (100000, 130000)   # stimulus frames exported, after the harness's warm-up; runs are taken from
+FIRST_RUN = 110016        # here on, so the checker's search (up to 9,600 frames back) stays inside SPAN
+
+
+def exported_rows(artifact, scratch, state=None, limits=None):
+    data, provenance = sr.export_reference(artifact, [SPAN], Path(scratch), 48000, 1.0, state, limits)
+    rows = {SPAN[0] + i: list(struct.unpack_from('<16i', data, i * 64)) for i in range(SPAN[1] - SPAN[0])}
+    return rows, provenance
+
+
+def real_events(rows, channel=2, count=2):
+    """Synthetic captures of the first `count` zero runs (4 to 64 long) the reference has on `channel`:
+    what the Mac records when the wire carries exactly `rows`, LAG frames late."""
+    events, frame = [], FIRST_RUN
+    while len(events) < count and frame < SPAN[1] - 100:
+        if rows[frame][channel] == 0 and rows[frame - 1][channel] != 0:
+            run = 0
+            while rows[frame + run][channel] == 0:
+                run += 1
+            if 4 <= run <= 64:
+                first = frame - 16
+                frames = [capture_frame(first + i + LAG, rows[first + i]) for i in range(32 + run)]
+                events.append({'channel': channel + 1, 'startInputFrame': frame + LAG, 'zeroFrames': run,
+                               'termination': 'nonzero', 'windowComplete': True, 'windowCapacityReached': False,
+                               'frames': frames})
+                frame += 200
+            frame += run
+        frame += 1
+    assert len(events) == count, 'the test preset gave too few zero runs'
+    return events
+
+
+def judge(rows_for_capture, reference_rows):
+    """check_windows on captures of `rows_for_capture` against `reference_rows` (no exporter run)."""
+    class Rows:
+        def row(self, frame):
+            if frame not in reference_rows:
+                raise sr.EvidenceError('reference does not cover requested source frame')
+            return reference_rows[frame]
+    rep = report(real_events(rows_for_capture))
+    return sr.check_windows(rep, sr.validate_evidence(rep), Rows(), GAIN)
+
+
+class MonitorTests(unittest.TestCase):
+    """2026-11-20: the monitor block in the reference, resolved by the owner's monitor_ctl."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scratch = tempfile.TemporaryDirectory()
+        d = cls.scratch.name
+        cls.artifact = monitor_artifact(d)
+        cls.unity, _ = exported_rows(cls.artifact, d)
+        cls.minus12, cls.minus12_provenance = exported_rows(cls.artifact, d, monitor_state(d))
+        cls.swapped, _ = exported_rows(cls.artifact, d, monitor_state(d, fold='swap', name='swap'))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.scratch.cleanup()
+
+    def test_without_a_state_the_reference_is_as_before(self):
+        d = self.scratch.name
+        # No section and a section with no state: the same bytes (the stage on full, the gains at unity).
+        plain, _ = exported_rows(monitor_artifact(d, section=False), d)
+        self.assertEqual(plain, self.unity)
+        # A state at 0 dB on full plays exactly that too: the at-rest gain of 1 is exact.
+        at_unity, provenance = exported_rows(self.artifact, d, monitor_state(d, level='0.0', name='unity'))
+        self.assertEqual(at_unity, self.unity)
+        self.assertIn('MONITOR applied seq=7 active=main', provenance['monitorResolved'])
+        # A state with an artifact that has no section is not used, as the owner ignores it.
+        ignored, provenance = exported_rows(monitor_artifact(d, section=False), d, monitor_state(d))
+        self.assertEqual(ignored, self.unity)
+        self.assertIn('no monitor section', provenance['monitorResolved'])
+        # And through analyze, a case of the tests above: unchanged, with the monitor recorded as unused.
+        rep = Path(d) / 'empty-report.json'
+        rep.write_text(json.dumps(report([])))
+        result = sr.analyze(rep, HERE / 'config' / 'dsp-unity.dsp', Path(d), gain_file(d, 1.0, 1.0))
+        self.assertEqual(result['status'], 'no-events')
+        self.assertEqual(result['monitor']['state'], None)
+        self.assertIn('no monitor section', result['monitor']['model'])
+        self.assertEqual(judge(self.unity, self.unity)['status'], 'matched-events')
+
+    def test_a_capture_at_minus_12_db_matches_only_with_the_state(self):
+        self.assertIn('gain_db=-12.0', self.minus12_provenance['monitorResolved'])
+        self.assertIn('gains=0.251188643,0.251188643,0.251188643,0.251188643,1,', self.minus12_provenance['monitorResolved'])
+        for frame in (SPAN[0], SPAN[0] + 999):     # outputs 1-4 at -12 dB, the rest untouched
+            self.assertEqual(self.minus12[frame][4:], self.unity[frame][4:])
+            self.assertAlmostEqual(self.minus12[frame][0], self.unity[frame][0] * 10 ** (-12 / 20), delta=1)
+        self.assertEqual(judge(self.minus12, self.minus12)['status'], 'matched-events')
+        without = judge(self.minus12, self.unity)
+        self.assertEqual(without['status'], 'mismatch')
+        self.assertIn('not the stimulus', without['reason'])
+        # End to end, with the exporter: matched with the state, a mismatch without it.
+        d = self.scratch.name
+        rep = Path(d) / 'minus12.json'
+        rep.write_text(json.dumps(report(real_events(self.minus12))))
+        gain = gain_file(d, 1.0, GAIN)
+        state = monitor_state(d)
+        result = sr.analyze(rep, self.artifact, Path(d), gain, monitor_state=state)
+        self.assertEqual(result['status'], 'matched-events', result.get('reason'))
+        self.assertEqual(result['monitor']['state'], {'path': str(state), 'sha256': sr.sha(state)})
+        self.assertIn('gain_db=-12.0', result['monitor']['resolved'])
+        result = sr.analyze(rep, self.artifact, Path(d), gain)
+        self.assertEqual(result['status'], 'mismatch')
+        self.assertIn('no state was given', result['monitor']['model'])
+
+    def test_the_limits_are_applied(self):
+        d = self.scratch.name
+        capped, provenance = exported_rows(self.artifact, d, monitor_state(d), monitor_limits(d, '-14.0'))
+        self.assertIn('limits=file max_db=-14.0', provenance['monitorResolved'])
+        self.assertIn('gain_db=-14.0', provenance['monitorResolved'])
+        self.assertEqual(judge(capped, capped)['status'], 'matched-events')
+        self.assertEqual(judge(capped, self.minus12)['status'], 'mismatch')
+        with self.assertRaises(sr.EvidenceError):
+            sr.export_reference(self.artifact, [SPAN], Path(d), 48000, 1.0, None, monitor_limits(d, '-20.0'))
+
+    def test_a_fold_other_than_full(self):
+        # `swap` puts input 2 on output 1 and input 1 on output 2, at the state's -12 dB.
+        for frame in (SPAN[0], SPAN[0] + 999):
+            self.assertEqual(self.swapped[frame][0], self.minus12[frame][1])
+            self.assertEqual(self.swapped[frame][1], self.minus12[frame][0])
+            self.assertEqual(self.swapped[frame][2:], self.minus12[frame][2:])
+        self.assertEqual(judge(self.swapped, self.swapped)['status'], 'matched-events')
+        self.assertEqual(judge(self.swapped, self.minus12)['status'], 'mismatch')
+
+    def test_a_state_or_limits_the_owner_would_refuse_cannot_decide(self):
+        d = self.scratch.name
+        rep = Path(d) / 'refused.json'
+        rep.write_text(json.dumps(report(real_events(self.minus12))))
+        gain = gain_file(d, 1.0, GAIN)
+        good = monitor_state(d)
+        malformed = Path(d) / 'malformed.txt'
+        malformed.write_text(good.read_text().replace('level_db=-12.0', 'level_db=-12'))
+        out_of_range = Path(d) / 'range.txt'
+        out_of_range.write_text(good.read_text().replace('level_db=-12.0', 'level_db=-90.0'))
+        bad_limits = Path(d) / 'bad-limits.txt'
+        bad_limits.write_text('MONITOR-LIMITS v=1\nmax_db=-50.0\nend\n')
+        for name, state, limits, why in (('malformed', malformed, None, 'monitor state refused'),
+                                         ('out of range', out_of_range, None, 'monitor state refused'),
+                                         ('absent', Path(d) / 'none.txt', None, 'No such file'),
+                                         ('bad limits', good, bad_limits, 'monitor limits refused'),
+                                         ('limits alone', None, monitor_limits(d, '-20.0'), 'without a monitor state')):
+            result = sr.analyze(rep, self.artifact, Path(d), gain, monitor_state=state, monitor_limits=limits)
+            self.assertEqual(result['status'], 'inconclusive', name)
+            self.assertIn(why, result['reason'], name)
+        args = [str(rep), str(self.artifact), '--host-gain', str(gain), '--monitor-state', str(malformed)]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(sr.main(args), 2)
+            self.assertEqual(sr.main(args[:-1] + [str(good)]), 0)
 
 
 if __name__ == '__main__':

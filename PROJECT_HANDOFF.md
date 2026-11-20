@@ -17897,3 +17897,61 @@ reading the level from the owner's status), with its test; then this
 capture can be judged again without a new run, since the report keeps
 the windows. Owed besides: both arms at 48 and one direct run there,
 then the 44.1 and 88.2 checks.
+
+**IMPLEMENTED 2026-11-20 (session, on the operator's word "Yes, build
+that"; written by an Opus 5.5 subagent, the diff read and the tests and
+the judgement run again by the session): the soak's reference check
+models the monitor block, and with it the off-unity soak at 96 kHz of
+14:34 UTC is `matched-events`. Tools on the Mac only; nothing on the Pi
+changed.**
+- `dante/owner/reference_export.cpp` takes the monitor's state file and,
+  optionally, root's limits file (`ARTIFACT RANGES [RATE [OUTPUT_GAIN
+  [MONITOR_STATE [MONITOR_LIMITS]]]]`). With a state and an artifact
+  that has a monitor section it uses the owner's own code:
+  `monitor_ctl.hpp`'s `read_file`, `parse_state`, `parse_limits` and
+  `resolve`, then `set_fold` for each set, `MonitorGains::publish` and
+  `prime_monitor`, at rest from the first frame. A file the owner would
+  refuse is refused (the owner would play its start rule or the
+  defaults, and the reference does not guess). Without the arguments
+  its output is byte for byte what it was (old and new exporters over
+  three artifacts, two gains and the defaults).
+- `dante/soak_reference.py --monitor-state FILE [--monitor-limits
+  FILE]`; the result records the files, their hashes and what was
+  resolved, and the policy gains `monitorModel`. The criterion's
+  assumption is written in: the monitor did not change during the
+  capture. `dante/measure-candidate.sh`'s soak fetches
+  `/run/usb-aoip-monitor/state`, the limits file if there is one and the
+  owner's status into the `-api` directory and passes the first two; a
+  file that exists and cannot be fetched makes the check inconclusive,
+  never the defaults. The fetches themselves have not run against the
+  Pi yet.
+- Tests, `dante/test_soak_reference.py`, 22 passing (17 before): no
+  state gives the reference as before; a capture at -12 dB matches with
+  the state and is a mismatch without it; a limit of -14 dB caps it; a
+  fold that swaps two inputs matches only with its state; a malformed,
+  out-of-range or absent state, invalid limits, and limits alone are
+  `inconclusive` (exit 2). None of the pinned owner files changed
+  (`test-owner-monitor.sh`, `test-owner-idlephase.sh`, `test-access.sh`
+  pass). Not compiled under g++ here (clang on the Mac; CI's job uses
+  the system compiler).
+- The capture judged again, no new run
+  (`ip96-minus12-loop8-soak-600s-32f-20261120T143439Z`, its `-api/`
+  holding `preset.dsp` 5792bc52, `monitor-state.txt` and
+  `monitor-status.txt` as read from the Pi at 15:15 UTC, state 77,
+  -12.0 dB, fold full, no limits file; `reference/result.json`):
+  `matched-events`: the seven runs on channel 4, one alignment of 912
+  frames for all seven, worst error 1.00 code, the zeros exactly where
+  the reference has them. Without the state the same capture is a
+  mismatch at the first run. Two things it rests on: the Mac's gain at
+  96 is the latest measured, `svc96-bitexact-360s` of 2026-10-31 (unity
+  both ways), not today's; and the state file was read half an hour
+  after the capture, the owner's status agreeing (state 77 applied
+  before the arm began).
+
+So the off-unity arm at 96 kHz on owner bb3cd6ca with `IDLE_PHASE=60`
+stands as: four loaded runs 912, 912, 913, 912; soak with no
+discontinuity and every zero run the preset's own at -12 dB by the
+reference criterion. With the at-unity arm that is the battery at 96 on
+the monitor preset. Owed before ACCEPTED: both arms at 48 and one direct
+run there; the 44.1 and 88.2 checks; a host-gain report at 96 from a
+direct run, to put today's date under the reference.

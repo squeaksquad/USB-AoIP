@@ -196,9 +196,29 @@ grep -m1 "^DSP loaded file=" "$f" 2>/dev/null | cut -d" " -f3 | cut -d= -f2-')
         else
           print -r -- "host gain not given: set USB16X16_HOST_GAIN to a hostgain or bitexact report at this rate, from a direct run"
         fi
+        # The monitor block (phase 3): the state and limits the owner applies after the stage, which the
+        # reference models at rest, and the owner's status beside them as evidence. Absent (no monitor, an
+        # older owner): nothing is passed and the reference is as before. One that exists but cannot be
+        # fetched is still named, so the check reads it as missing evidence, never as the defaults.
+        monitor_fetched=()
+        for name src in state /run/usb-aoip-monitor/state limits /var/lib/usb16x16-apply/monitor-limits \
+                        status /run/usb16x16-dante/monitor.status; do
+          pi "[ -e '$src' ] || exit 3; cat '$src'" > "$api_dir/monitor-$name.txt" 2>/dev/null
+          case $? in
+            0) monitor_fetched+=($name) ;;
+            3) rm -f "$api_dir/monitor-$name.txt" ;;
+            *) rm -f "$api_dir/monitor-$name.txt"; monitor_fetched+=($name)
+               print -r -- "monitor $name $src exists but could not be fetched" ;;
+          esac
+        done
+        monitor_args=()
+        if (( ${monitor_fetched[(Ie)state]} )); then
+          monitor_args+=(--monitor-state "$api_dir/monitor-state.txt")
+          (( ${monitor_fetched[(Ie)limits]} )) && monitor_args+=(--monitor-limits "$api_dir/monitor-limits.txt")
+        fi
         /usr/bin/python3 "$script_dir/soak_reference.py" "$result_path" "$api_dir/preset.dsp" \
           --host-gain "$api_dir/host-gain.json" --output "$api_dir/reference" \
-          --loop-channels "${USB16X16_LOOP_CHANNELS:-16}"
+          --loop-channels "${USB16X16_LOOP_CHANNELS:-16}" "${monitor_args[@]}"
         case $? in
           0) print -r -- "soak: PASS, every zero run is the preset's own (reference in ${api_dir:t}/reference)" ;;
           1) print -r -- "soak: FAIL, a zero run the preset does not produce"; measure_exit=7 ;;
