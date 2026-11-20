@@ -17200,3 +17200,49 @@ need the operator at the units: the Ferrofish itself (power cycle), and
 the clock source and lock of the Ferrofish and the Metric Halo at 96
 over MADI. Not excluded by anything today: that the event is new in the
 far loop's settings since 2026-11-01 rather than a fault state.
+
+**MEASURED 2026-11-20 00:38-00:46 UTC (session, on the operator's word:
+the Ferrofish power cycled, receiving MADI clock at 96, the Dante
+network at 96): the far loop's 8-sample event at 96 kHz is gone after
+the Ferrofish's power cycle: two loaded 800-impulse runs in direct at
+675 on every impulse, `daw_timeline` 911, spread 0. Two runs, not the
+four owed: the third was cut off when the operator's Reaper session
+moved the rate to 48. Nothing is ACCEPTED.** The Pi saw the Ferrofish go
+at 00:37:11 UTC (both return flows timed out) and come back without an
+endpoint restart (the start of 2026-11-19 19:34:01 UTC, direct at 96,
+owner bc486911, `NRestarts=0`).
+
+- Noise probe (`direct96-ffpower`, `20261120T003823Z`): signal ready
+  after 3 probes, return from sample 910, no zero run, endpoint lines
+  +0.
+- `direct96-ffpower-1` (`20261120T003904Z`): 675 x800, 911, spread 0,
+  score 1.000, discontinuities 0 / 0, endpoint lines +0.
+- `direct96-ffpower-2` (`20261120T004248Z`): 675 x800, 911, spread 0,
+  score 1.000, discontinuities 0 / 0.
+- `direct96-ffpower-3` began 00:46:24; the arbiter moved the unit to 48
+  at 00:46:55 (Reaper opened a 48 kHz session on the Mac, as the rate
+  rules intend). The session killed the harness and the remaining runs
+  at once so no test signal played under the operator's work; run 3 has
+  an `-api` directory and no result, run 4 was not started.
+- Owner at t=18480 (after run 1): no capture fault, re-prime or detach,
+  `playback_faults=1` (the one of 20:13:47 UTC), `tx_i=-22.03
+  rx_i=21.06` six hours into the start, so the integrators settle near
+  there and the afternoon's climb was not a runaway.
+
+So, of the far loop's devices, the Ferrofish held the state: the rate
+change, its Dante chip's reboot and the Metric Halo's reboot left the
+event, its own power cycle removed it, and with it gone the level is the
+point of record's 911, not 912. Which is the 2026-10-29 pattern (zeros
+until the Ferrofish was restarted) in another form. What put the
+Ferrofish in that state is not known; today's first move to 96 came
+after a day at 48. A check worth making on any day's first run at 96:
+one loaded 800-impulse run in direct, and a Ferrofish power cycle if any
+impulse is 8 early.
+
+State left: direct at 48 (endpoint start 00:46:55 UTC), the operator
+working in Reaper; nothing is being measured. Still owed at 96, when the
+operator is done and moves the rate: two more clean loaded runs in
+direct to make four, then the at-unity and off-unity arms on the monitor
+preset (the at-unity arm of 13:03 UTC carried the far loop's event and
+is to be taken again). Separately: the 12-sample step seen during the
+capture of 19:09 UTC.
