@@ -17571,3 +17571,26 @@ either end's log noticing. Not fixed.**
   GHz, or its BSSID pinned to [the 2.4 GHz radio], in the netplan file the
   connection is generated from), and, if sessions are to recover it
   themselves, a rule that lets them bring that one connection up.
+
+**DONE 2026-11-20 11:31-11:34 UTC (session, on the operator's word "Yes,
+reboot it"): the Pi rebooted; wlan0 passes traffic again and everything
+came back as it was.** `sudo -n reboot` at 11:31:50, up at 11:32:04,
+system `running`, no failed unit; the gadget, Statime, the endpoint, the
+web service and the keepalive active.
+- Wi-Fi: associated at 11:32:19, again with [the 5 GHz radio] on 5500
+  MHz; the Pi pings the router, the Mac pings 192.168.1.201, the page
+  answers there (401) and SSH over wlan0 works. It is on the same 5 GHz
+  radio that went dead yesterday, so the cause is not removed: the
+  operator's change to keep wlan0 off it is still open.
+- Audio: owner.conf unchanged (`RATE=96000`,
+  `dante-immersive-one-sub@96000.dsp` 5792bc52), owner bc486911,
+  `DSP loaded ... biquads=302`, start check `state=ok rate=12020
+  restarts=0` at 11:33:34; the Mac at 96000.
+- The monitor's start rule across this boot: `MONITOR first
+  state=start`, then state 57 applied by the web service, level 0.0 dB,
+  fold full, no dim or mute (rule `last`, no limits file; the level
+  before the reboot was 0.0, so `last` and the default are not told
+  apart by this one).
+- The candidate `usb16x16-dante-owner-idlephase` is still in
+  `~/usb-16x16-work/owner-idlephase/out/`. The Mac's forward of the page
+  was closed before the reboot and is not needed now.
