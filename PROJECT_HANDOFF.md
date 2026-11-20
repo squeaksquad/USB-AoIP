@@ -17385,3 +17385,88 @@ wait window per rate or the idle loop's phase with a stage loaded, and
 check the old owner with a preset at 96 so the new owner is charged only
 with what it changed. State left: the monitor preset at 96, Full, 0 dB;
 the page forwarded to the Mac's localhost:8088 again; wlan0 down.
+
+**FOUND 2026-11-20 (session, analysis on the Mac from the day's logs and
+`dante/owner/main.cpp`; the Pi only read): why a preset at 96 kHz puts
+some opens one block later. Two parts. Part 1 is shown by the numbers:
+the idle grid's phase inherits the last flowing wake's service time, so
+the stage's ~50 us moves every prime 5 to 6 frames toward the lead.
+Part 2 is the session's reading of the code and fits every open of the
+day, but is not yet shown by a trace: the round trip is the same at
+every open only while one tick sets both the outgoing pointer and the
+return queue the host first pulls from; when a USB frame boundary falls
+inside that tick's own work the two come from ticks 1 ms apart and the
+round trip is 96 frames longer. Nothing built, nothing changed.**
+Table: `outputs/latency/prime-phase-20261120-join.txt` (made by
+`prime-phase-20261120-join.py`): each open of 2026-11-18 to 11-20 (125
+at 96 kHz), the owner's `tx_prime_found` joined by time with the lag the
+Mac measured on that open (the main runs and their 8-impulse readiness
+probes).
+
+- The data. At 96 in direct: found 160 to 165 or 243 to 248 (a few
+  between), lag 675 to 677 on every one, and one open at 252, lag 676.
+  At 96 with the preset: 166 to 171 or 249 to 251, lag 676 / 677 on
+  every one (23 opens, six of them at 251), and two opens at 252, lag
+  771 and 772 (a third 252 was the soak's, not measured). At 48 with the
+  preset: 80 to 103 against a lead of 128, lag 376 / 377.
+- Part 1. While a host sends, the loop wakes on the gadget's capture
+  (ppoll); when the host stops, the next wakes are ppoll timeouts of
+  `kTickNs` counted from the call, which is made after the wake's work,
+  and the idle grid (`next += kTickNs`) carries on from there. So the
+  grid sits later against the host's frame boundaries by the last
+  flowing wake's work, and with a preset that includes one pass of the
+  stage: 46 us in the morning, 53 in the evening (`dsp_us_mean`), which
+  is 4.4 and 5.1 frames at 96 kHz, and the primes found 5 to 6 more than
+  in direct, one more in the evening than the morning (252 against 251).
+  At 48 the stage is 24 us, one frame.
+- Part 2. Idle, each tick writes the return queue to its target and, at
+  the end, fills the outgoing pointer to the lead; the prime (drop 96,
+  the whole block) commits the host's third block at that pointer. In
+  host sample counts the outgoing share is then `found` (160 + 96 x the
+  tick's phase after the block boundary) and the return share is a
+  constant less 96 x the same phase, because the host's first IN pull
+  takes the queue as that tick wrote it: the phase cancels, which is why
+  both phases read one level (2026-11-01). It cancels only if the tick
+  that filled the pointer is the tick whose queue the host pulled.
+  `found` near the lead means the next boundary came within the tick's
+  own work (252 is the tick's work, about 40 us, and no more): if the
+  host's pull at that boundary came before `service_rx`'s write it took
+  the queue of the tick before, 96 frames older, while the pointer is
+  this tick's. Hence 252: once right (direct), twice a block late
+  (preset). The existing `wait_from = lead - 1` is the same edge, met at
+  48 on 2026-10-30. Depths cannot show it: `tx_mean` and `rx_mean` are
+  the same on the good and the late opens, the servo holds both, and the
+  offset is in which frames, not how many.
+- What this says about the builds. The edge is in c84e6a36 and before:
+  the prime and the loop's wait are unchanged in bc486911, and any open
+  after a long idle can meet it in direct, since the grid drifts against
+  the host's frames (the scattered 175 to 238). No record was found of
+  the old owner's primes with a preset at 96 after the drop of 96; the
+  one before it (2026-11-01 01:31 UTC, drop 48, `dante-rate-check@96000`)
+  read 1039, then 959 and 960, put down then to the settle after a rate
+  move. The Pi's journal starts 2026-11-05 and has no 96 kHz start
+  before 2026-11-18. So the monitor block is not shown to have added
+  this; a heavier stage at 96 exposes it, and `Immersive - one sub` at
+  302 sections is that.
+- Proposed, for the operator to choose; each is the audio path's timing,
+  so a new owner build and the battery at 48 and 96:
+  1. The grid stops inheriting the wake's work: the timeout in the
+     flowing branch counts from the wake's start (`kTickNs` less the
+     time already spent). A few lines. Presets then prime where direct
+     does (244 to 246 at 96), ten frames from the lead. Removes the
+     systematic hit, not the edge.
+  2. The edge itself: when the prime finds the depth within one wake's
+     work of the lead (a margin in time, so it scales with the rate,
+     replacing the fixed `lead - 1`), the owner cannot know which tick's
+     queue the host took, so it makes both sides this wake's: wait one
+     block on the outgoing side (as now) and set the return queue to its
+     target again in the same wake. One IN discontinuity about a
+     millisecond into those opens, and only those.
+  1 alone is the minimal change and is what the 96 kHz arm needs; 2 is
+  what makes "the same at every open" true after any idle.
+- To show part 2 before building on it: a candidate run of the present
+  owner with `--impulse-trace --open-phase` at 96 with the preset
+  (through `usb16x16-dante-candidate`, the service stopped, the
+  operator's word), opens repeated until one finds 252: the IMPULSE
+  line's `w - k` (the owner's share) should be 96 more on the late open
+  and the PRIMETRACE should show the boundary inside the tick.
