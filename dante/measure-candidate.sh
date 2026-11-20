@@ -62,7 +62,10 @@ result_path="$out_dir/${stem}.json"
 api_dir="$out_dir/${stem}-api"
 mkdir -p "$api_dir"
 
-pi() { ssh -o BatchMode=yes -o ConnectTimeout=8 bdimaio@192.168.1.201 "$@"; }
+# The Pi over eth0, where SSH has been since 2026-10-30 (the key is recorded as audio-dev.local);
+# wlan0 (192.168.1.201) went dead twice on 2026-11-19/20 and took this script with it.
+# USB16X16_PI=user@host overrides it.
+pi() { ssh -o HostKeyAlias=audio-dev.local -o BatchMode=yes -o ConnectTimeout=8 "${USB16X16_PI:-bdimaio@169.254.92.97}" "$@"; }
 
 # One line of gates, then the endpoint's own account of itself.
 pi_state() {

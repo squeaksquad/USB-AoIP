@@ -17594,3 +17594,103 @@ web service and the keepalive active.
 - The candidate `usb16x16-dante-owner-idlephase` is still in
   `~/usb-16x16-work/owner-idlephase/out/`. The Mac's forward of the page
   was closed before the reboot and is not needed now.
+
+**MEASURED 2026-11-20 12:26-13:12 UTC (session, on the operator's word
+"Done, test it"): the `--idle-phase` candidate bb3cd6ca hand-run at 96
+kHz with the monitor preset. The late open is reproduced on demand and
+is set by the idle grid's phase against the host's frames: at phase 0
+and 110 almost every open on the affected side reads one block late
+(772), at 20 a few, at 40, 60 and 90 none. The option does what it was
+written to do. Part 2 of the FOUND entry is confirmed in substance and
+corrected in detail: `tx_prime_found` does not tell a late open from a
+good one. Nothing installed; the service was stopped for 46 minutes and
+is restored.** Service stopped 12:26:14, candidate started through
+`usb16x16-dante-candidate` with the service's 96 kHz arguments (the
+installed plugin c6b012ae and config; `--prime-drop 96 --capture-drain`,
+`dante-immersive-one-sub@96000.dsp`, meters and the monitor's status
+written to `/dev/shm` because the service's runtime directory goes with
+it; no `--dsp-live-file`, no `--rate-request-file`), a fresh start per
+arm, opens begun 60 s after each. An open is the wrapper's readiness
+probe: 8 impulses at 32 frames, 1 s apart, here with 0.1 on the other
+channels except the first control. Evidence
+`outputs/latency/idlephase-20261120/` (`opens.sh`, `cand.sh`, one
+`opens-<arm>.txt` and `owner-<arm>.txt` per arm, each open's report).
+
+| Arm | Opens | At 675-678 | A block late (772-774) | Primes found |
+|---|---|---|---|---|
+| control, no option, unloaded | 60 | 60 | 0 | 166-167, 248-249 |
+| control, no option, loaded | 60 | 60 | 0 | 166, 248-251 |
+| `--idle-phase 0` | 50 | 4 | 45, and one at 737 | 253-254 on the late ones |
+| `--idle-phase 20` | 50 | 46 | 4 | 159-160, 243-244; 253-254 on the late ones |
+| `--idle-phase 40` | 60 | 60 | 0 | 160-164, 244-248 |
+| `--idle-phase 60` | 80 | 79 | 0 (one at 640, below) | 162-164, 246-248 |
+| `--idle-phase 90` | 60 | 60 | 0 | 167-168, 251-253 |
+| `--idle-phase 110` | 50 | 27 | 23 | 168-169 good; 252-253 late (23 of 24) |
+
+- What it shows. The host's sessions fall on two phases a microframe
+  apart, alternating open by open. A tick at the phase the last block
+  arrived on (0) is too early for the next session on the same phase,
+  and one 110 us after it is too late for the session a microframe on:
+  those opens read 772. Between them is a window from above 20 to below
+  about 100 us, and the installed behaviour sits near both ends of it:
+  direct near 20 to 30 (found 160 to 165), a preset near 70 to 90 (found
+  249 to 252). So the point of record's "same at every open" holds only
+  inside that window, in direct as with a preset, and last night's two
+  late opens were the preset's end of it.
+- The correction. At 90 the prime found 252 or 253 on 22 opens and all
+  read 676; at 110 it found 252 or 253 on 24 and 23 read 772. `found`
+  stops at about 253 once the boundary is inside the tick's work, so it
+  cannot say which side of the edge an open fell. A fix that waits or
+  re-primes "when the prime is near the lead" (proposal 2 as written)
+  would act on good opens too; it needs a better sign than `found`, or
+  to act always. The control did not reproduce the failure in 120
+  opens: its stage time was 45.6 us against last night's 53.
+- Which value. 40 and 60 are both clean (140 opens). 60 is the middle of
+  the measured window and the session's choice for the battery; 40 is
+  20 us from an arm that failed 4 in 50.
+- Other things seen. The first open of the phase-60 arm, 65 s after that
+  start, read 640 with two levels (632, 640): one open, not explained,
+  and no other arm's first open did it. One prime was unanchored (found
+  143, 678) three opens after a playback fault (`last_fault=-32`); a
+  playback fault was counted once in four of the eight starts, each at
+  an open, as on the installed owner on 2026-11-19 20:13 UTC. Opens a
+  second apart are harder on the gadget than use is, and neither is the
+  option's doing (the control has one), but both are owed a look.
+- Restored: candidate stopped, `systemctl start usb16x16-dante` at
+  13:11:57, owner bc486911, the preset at 96, start check `state=ok
+  rate=12020 restarts=0`, monitor 0.0 dB full. On it: noise probe
+  (`after-idlephase`, `20261120T131357Z`) clean from sample 912, and 100
+  loaded impulses 676 x100, `daw_timeline` 912.
+
+Next, each on the operator's word: the option into the service (a
+transport key `IDLE_PHASE` and the start wrapper's pass-through, the
+owner as a new pinned build with its installer and rollback), then the
+battery at 48 and 96 with it; whether 48 kHz and 44.1 want the same
+value (a microframe is 125 us at every rate, so probably, not measured).
+
+**FOUND 2026-11-20 13:13 UTC (session; the Pi only read): wlan0 is dead
+again 48 minutes after the operator set it to 2.4 GHz, and the cause is
+now visible: the access point keeps asking the Pi to move and the Pi's
+driver cannot answer.** The operator's `nmcli connection modify ...
+802-11-wireless.band bg` and `connection up` at 12:25:36 UTC took:
+band `bg`, the netplan file rewritten, associated with [the 2.4 GHz radio]
+on 2412 MHz, traffic passing at 12:26. From 13:04:20 wpa_supplicant logs
+`WNM: Preferred List Available` every 20 to 120 s (twelve by 13:11:35),
+each with the kernel's `brcmf_p2p_send_action_frame: Unknown Frame:
+category 0xa, action 0x8`, which is the driver failing to send the BSS
+transition response. By 13:13 the Pi, still associated at -49 dBm,
+cannot reach the router and the Mac cannot reach it. Yesterday's
+sequence was the same request followed by a move to 5 GHz and silence
+later. So the mesh steers this client, gets no answer, and stops
+passing its traffic; the band setting stops the move, not the steering.
+What would end it, none of it the session's to do: band steering off
+for this client or this network at the access point (or separate names
+for the two bands); or the Pi not offering BSS transition at all
+(wpa_supplicant's `disable_btm=1`, which NetworkManager does not expose
+and would need a supplicant config). A reboot or a root
+`nmcli connection up` brings it back for a while. Because of it
+`dante/measure-candidate.sh` now reaches the Pi over eth0, where
+CLAUDE.md has had SSH since 2026-10-30 (`USB16X16_PI` overrides); the
+page still binds wlan0 and is reached from the Mac by an SSH forward
+(`ssh -N -L 127.0.0.1:8088:192.168.1.201:8088` over eth0) while wlan0
+is down.
