@@ -17470,3 +17470,55 @@ probes).
   operator's word), opens repeated until one finds 252: the IMPULSE
   line's `w - k` (the owner's share) should be 96 more on the late open
   and the PRIMETRACE should show the boundary inside the tick.
+
+**IMPLEMENTED 2026-11-20 (session, on the operator's word "Build fix
+1"): the owner's `--idle-phase` option as a patch,
+`dante/owner/idle-phase.patch`; compiled under GCC, not built or run on
+the Pi, nothing installed. CORRECTION to the FOUND entry above: fix 1
+does not put a preset's primes "ten frames from the lead".** The tree's
+`dante/owner/main.cpp` is unchanged (8c9bf80e, the source of installed
+owner bc486911, pinned in `install/dev-unit/owner-monitor.sha256`); the
+patch applied to it gives 4d885b76.
+
+- What it does. `--idle-phase US` (0 to 999, off by default): the wake a
+  host block arrives on is remembered, and the grid the loop falls back
+  to ticks US microseconds after that phase (`idle_grid_next`, with
+  compile-time checks of its arithmetic). Without the option every
+  decision is as in bc486911: the one changed line computes the same
+  `next` from one clock reading instead of two. The START line gains
+  `idle_phase_us=`. The prime, the wait, the servos, the stage and the
+  return direction are not touched.
+- Checked on the Mac: the patch applies to the tree's file and
+  reproduces the candidate source; in debian:trixie arm64, g++ 14.2,
+  the build line of `build-owner-monitor.sh` with `-Wall -Wextra
+  -Wpedantic -Werror` compiles it; `--help` lists the option;
+  `--idle-phase 1000` and a non-number are refused (exit 2);
+  `--no-usb ... --idle-phase 40` prints `idle_phase_us=40`.
+  `install/dev-unit/test-owner-monitor.sh` passes (the tree is the
+  installed set's). Not checked, and cannot be off the Pi: any timing.
+- The correction. The host starts a session on any 125 us microframe
+  (the day's primes at 96 sit 12 frames apart: 160 to 165, 175, 182 to
+  188, 195, 201, 208 to 210, 222, 233 to 238, 243 to 248), and the
+  dangerous stretch is a frame boundary within the tick's own work,
+  about 40 us after the tick starts. So whatever the phase, the room is
+  125 us less the tick's work, shared between the two sides: about 40 us
+  each at the best choice. Direct today has about 25 us on the near side
+  (found 160 to 165) and 60 on the far side (243 to 248); a preset at 96
+  has 75 and under 10, which is the failure. `--idle-phase 40` aims at
+  40 and 45 (found about 164 and 248) for direct and presets alike. That
+  removes the preset's systematic late opens and leaves a margin thinner
+  than "ten frames" on both sides, held only while the Pi's clock and
+  the Mac's frames stay within it between sessions. Fix 2 (both sides
+  taken from one wake when the prime is near the lead) is what closes
+  it, and is the more needed for this.
+- To test on the Pi, on the operator's word: build the candidate there
+  as `usb16x16-dante-owner-idlephase` (patch header), and hand-run it
+  through `usb16x16-dante-candidate` with the service stopped, at 96
+  with `dante-immersive-one-sub@96000.dsp`: (a) the control, the same
+  binary without the option, opens repeated until one finds 252 and
+  reads a block late, so the failure is reproduced on this binary; (b)
+  `--idle-phase 40`, 40 or more opens: `tx_prime_found` at about 164 and
+  248, no open a block late; (c) then 20 and 60, to see both edges where
+  the arithmetic puts them. Each open is one 100-impulse run. If (b)
+  holds, the transport key and the start wrapper's pass-through are the
+  next change, then the battery at 48 and 96.
