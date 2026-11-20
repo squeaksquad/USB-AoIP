@@ -17522,3 +17522,52 @@ patch applied to it gives 4d885b76.
   the arithmetic puts them. Each open is one 100-impulse run. If (b)
   holds, the transport key and the start wrapper's pass-through are the
   next change, then the battery at 48 and 96.
+
+**DONE 2026-11-20 11:29 UTC (session, on the operator's word "copy and
+build"): the `--idle-phase` candidate built on the Pi, unprivileged:
+`usb16x16-dante-owner-idlephase`
+bb3cd6ca413ad4b498d42f479a15db7b42ff6768c2eb2c587b4e4cc5572c0ff4 in
+`~/usb-16x16-work/owner-idlephase/out/`. Not run, nothing installed.**
+Sources copied over eth0 (the owner's headers and `main.cpp` 8c9bf80e,
+the patch, `dsp-core/include`, `bridge_core.cpp`), the patch applied on
+the Pi (4d885b76, as on the Mac), g++ 14.2.0-19, the build line of the
+patch's header at nice 19 with the service running idle; `--help` lists
+the option. The installed owner is still bc486911, the endpoint on its
+start of 01:56:24 UTC, `NRestarts=0`.
+
+**FOUND 2026-11-20 11:30 UTC (session, the Pi only read): why wlan0
+stopped passing traffic. It roamed onto the access point's 5 GHz radio
+on 2026-11-19 at 23:06 UTC after the access point asked it to, and that
+association went dead some time between 00:46 and 01:21 UTC without
+either end's log noticing. Not fixed.**
+- wpa_supplicant: 23:01:15 UTC associated with [the 2.4 GHz radio] (2412
+  MHz); 23:02:08 `WNM: Preferred List Available` (a BSS transition
+  request, the mesh steering it; the kernel logs `Unknown Frame:
+  category 0xa, action 0x8` for the same frame); 23:06:20 associated
+  with [the 5 GHz radio] on 5500 MHz (channel 100, a DFS channel), key
+  negotiation completed, DHCP gave 192.168.1.201 again at 23:06:21.
+  Nothing after that from wpa_supplicant, NetworkManager or brcmfmac
+  until the session's refused `nmcli` at 01:52.
+- It worked on that radio for a while: the measurement wrapper reached
+  the Pi at 192.168.1.201 for the runs of 00:38 and 00:42 UTC and could
+  not at 01:21.
+- Now: `iw` says connected to that BSSID, -62 dBm, tx 325 Mbit/s, rx 6
+  Mbit/s (only beacons and group frames arrive), power save off; the
+  neighbour entries for the router and the Mac are FAILED; four pings to
+  the router move 12 packets out and nothing addressed to the Pi back;
+  multicast still arrives. The Mac (192.168.1.58 wired, the router
+  reachable) holds the Pi's MAC and gets no answer. So the Pi believes
+  it is associated and the access point is not passing its unicast
+  frames either way: a station the mesh has dropped or re-keyed without
+  the BCM4345's firmware (7.45.265) seeing it.
+  `usb16x16-wlan-keepalive` was active throughout and did not prevent
+  it; the Mac's address in it is one of those that fail.
+- The session cannot re-associate it: NetworkManager refuses the user,
+  and nothing in the sudoers rules covers it. What clears it: a new
+  association (root: `nmcli connection up`, or `wpa_cli reassociate`),
+  or a reboot (the session may run `reboot` without a password; not
+  done). What would stop it recurring is the operator's, with sudo: keep
+  wlan0 off the steered 5 GHz radio (the connection's band set to 2.4
+  GHz, or its BSSID pinned to [the 2.4 GHz radio], in the netplan file the
+  connection is generated from), and, if sessions are to recover it
+  themselves, a rule that lets them bring that one connection up.
