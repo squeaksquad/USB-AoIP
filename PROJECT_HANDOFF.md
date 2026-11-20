@@ -17312,3 +17312,76 @@ eth0 (a process on the Mac, nothing on the Pi) makes it
 Origin check compares Origin with Host, which agree there. The forward
 lasts while that process runs and shares eth0 with the audio, so the
 page is not left open across a measurement.
+
+**MEASURED 2026-11-20 01:57-02:23 UTC (session, on the operator's word "I
+just loaded that preset"): the at-unity arm at 96 kHz on the monitor
+preset, taken again with the far loop nearly clean, does NOT hold one
+level: two of the four loaded runs read `daw_timeline` 912 and two read
+1007 / 1008, one block of 96 frames later, and the soak's open was on
+the later one. The soak itself passes and the cost is in budget. FOUND:
+the level follows the phase the outgoing prime finds, which it did not
+on this preset in the morning or in direct. Not ACCEPTED, and at 96 this
+is a failure of the battery until explained.** Preset applied by the
+operator through the forwarded page: owner.conf written 01:56 UTC,
+`dante-immersive-one-sub@96000.dsp` 5792bc52, endpoint start 01:56:24
+(owner bc486911, `prime_drop=96 capture_drain=1 rx_queue=192`), start
+check `state=ok rate=12027 restarts=0`, monitor state 56 applied, level
+0.0, fold full. The page's forward was closed for the runs. The wrapper
+was the eth0 scratch copy (wlan0 still down).
+
+| Run | Levels | `daw_timeline` | Prime of that open (`tx_prime_found`) |
+|---|---|---|---|
+| `mon96b-unity-1` `20261120T015747Z` | 676 x798, 668 x2 | 912 | 170 |
+| `mon96b-unity-2` `20261120T020124Z` | 771 x798, 763 x2 | 1007 | 252 |
+| `mon96b-unity-3` `20261120T020459Z` | 676 x799, 668 x1 | 912 | 171 |
+| `mon96b-unity-4` `20261120T020835Z` | 772 x800 | 1008 | 252 |
+
+- Discontinuities 0 / 0 and endpoint xrun/lag/error lines +0 on all
+  four. Every prime `tx_prime_dropped=96 tx_unanchored=0`.
+- Soak 600 s (`mon96b-unity-loop8`, `20261120T021210Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peaks 0.0119 to
+  0.1000, discontinuities 0 / 0, endpoint lines +0. Its open found 252.
+  Channels 9 to 16 loaded, not judged.
+- The two levels are 95 to 96 apart, the prime's block. The 20 primes of
+  this start found 160 to 180 or 241 to 252, the two phases the 96 kHz
+  point of record has ("found 161 or 245, both phases at the same
+  level", 2026-11-01). Here the opens that found 170 / 171 read 676 and
+  the three that found 252 read 771 / 772 (the soak's level is not
+  measured). The morning's arm on the same preset and owner (13:03 UTC)
+  found 166 to 169 or 249 to 251 on its 20 primes and read 676 on all
+  four runs, including two opens at 251; the direct runs of the day
+  found 160 to 164 or 235 to 246 and read 675 / 676 throughout. So with
+  the preset loaded the prime finds 5 to 7 frames more than in direct,
+  and at 252 the session lands a block later where 251 did not.
+  `main.cpp`'s prime already knows this race one frame from the lead
+  (`wait_from = lead - 1` under `--capture-drain`: "a prime at 127 put
+  the session one block later", 2026-10-30, at 48 where the lead is
+  128); at 96 the lead is 256 and 252 is four frames from it. Session's
+  reading, not shown: the same race, reached at 96 because a loaded
+  preset moves the idle loop's phase toward the lead. Not known: why a
+  preset moves it (no audio runs through the stage while idle), whether
+  owner c84e6a36 with a preset at 96 did the same (no record of its
+  primes with a preset at 96 was looked for), and whether 48 has the
+  same margin (both 48 kHz arms read 528 at every open).
+- The far loop's event: 5 impulses of 3200 eight samples early (386 and
+  795; 456 and 527; 647; none), the Ferrofish's, at the rate of the
+  runs after its power cycle.
+- Cost, 25 one-minute lines: `dsp_us_max` 85.1 to 145.9, `dsp_us_mean`
+  51.7 to 55.3 (the morning's arm: 51.5 to 89.8 and 45.7 to 46.1, same
+  artifact; the difference is not explained); `meter_us_max` 35.6 to
+  88.2. Against about 300 us of each 1 ms block.
+- Owner at t=1560: no faults, re-primes, detaches, holes or resyncs,
+  `gap_us_max=1119`, `tx_i=-14.82 rx_i=15.07`.
+
+So at 96 the monitor preset's round trip is not the same at every open,
+which is the property the prime drop was accepted for. This is on the
+audio path's timing and blocks acceptance at 96; the 48 kHz arms stand.
+The off-unity arm at 96 was not run: it would measure the same two
+levels. Next, none of it on the Pi's installed set: read the prime's
+wait window against the grid at 96 with a preset (the owner's
+`--open-phase` / PRIMETRACE lines on a candidate run, or
+`owner/monitor_sim` does not cover it), decide whether the fix is the
+wait window per rate or the idle loop's phase with a stage loaded, and
+check the old owner with a preset at 96 so the new owner is charged only
+with what it changed. State left: the monitor preset at 96, Full, 0 dB;
+the page forwarded to the Mac's localhost:8088 again; wlan0 down.
