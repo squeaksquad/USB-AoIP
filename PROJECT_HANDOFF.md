@@ -17755,3 +17755,26 @@ repeated at 96. Not covered by this fix and still open: an open after a
 long idle, where the grid has drifted against the host's frames
 (proposal 2, which needs a better sign than `tx_prime_found`); the
 playback fault seen at some opens; the 640 on one first open; wlan0.
+
+**DONE 2026-11-20 13:45 UTC (session, on the operator's word "Stage,
+copy, build"): the owner-idlephase bundle staged from 69eb5b8, copied to
+the Pi and built there; the build reproduces the pin. Nothing
+installed.** `stage-owner-idlephase.sh` (16 files, list e3ef729e), the
+bundle copied over eth0 to `~/usb-16x16-work/usb-aoip-owner-idlephase/`,
+`./build-owner-idlephase.sh` unprivileged at nice 19 with the endpoint
+running idle:
+
+    usb16x16-dante-owner  bb3cd6ca413ad4b498d42f479a15db7b42ff6768c2eb2c587b4e4cc5572c0ff4
+    patched main.cpp      4d885b76578ec6e07b6de9464ea167ac6cb2784a870f956163ea3b8b8b5fbe12
+    source list           e3ef729e8e417414bb24b27e6137f3619713e7cdf142b42ea0222b545f45fbb5
+    compiler              g++ (Debian 14.2.0-19) 14.2.0
+    built                 2026-11-20T13:45:37Z
+
+That is `OWNER_NEW`, the binary measured this morning: the hash does not
+depend on the output's name or the directory. `./install-owner-idlephase.sh
+status` (read-only): the owner, the start wrapper and transport.conf all
+`old` (bc486911, df6a1b0b, add1bc21), nothing kept, the bundle's three
+bb3cd6ca, 203c6fa5, 6818176f; the endpoint active, the candidate
+launcher, the rate unit and the applier inactive. Next is the
+operator's: `sudo ./install-owner-idlephase.sh install` there, then the
+battery.
