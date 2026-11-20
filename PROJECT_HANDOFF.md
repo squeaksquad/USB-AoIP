@@ -17246,3 +17246,49 @@ direct to make four, then the at-unity and off-unity arms on the monitor
 preset (the at-unity arm of 13:03 UTC carried the far loop's event and
 is to be taken again). Separately: the 12-sample step seen during the
 capture of 19:09 UTC.
+
+**MEASURED 2026-11-20 01:24-01:31 UTC (session, on the operator's word
+"everything is back to 96k"): the other two loaded runs in direct at 96
+after the Ferrofish's power cycle: 676 on every impulse of the first,
+and one impulse of 800 at 668 in the second. So four runs since the
+power cycle carry one 8-early impulse in 3200, against 4 to 13 in every
+800 before it: nearly gone, not shown gone. FOUND beside it: the Pi's
+wlan0 no longer reaches the network. Nothing is ACCEPTED.** Between the
+two pairs the rate went to 48 and back twice (Reaper, then RX, on the
+Mac; arbiter runs at 00:46:55, 01:19:59, 01:21:14 and about 01:22 UTC);
+this start is 01:22:02 UTC, direct at 96, owner bc486911, start check
+`state=ok rate=12019 restarts=0` at 01:23:07, `NRestarts=0`.
+
+| Run | Levels | `daw_timeline` | Spread | Discontinuities |
+|---|---|---|---|---|
+| `direct96-ffpower-1` `20261120T003904Z` (earlier start) | 675 x800 | 911 | 0 | 0 / 0 |
+| `direct96-ffpower-2` `20261120T004248Z` (earlier start) | 675 x800 | 911 | 0 | 0 / 0 |
+| `direct96-ffpower-3` `20261120T012416Z` | 676 x800 | 912 | 0 | 0 / 0 |
+| `direct96-ffpower-4` `20261120T012751Z` | 676 x799, 668 x1 (impulse 480) | 912 | 8 | 0 / 0 |
+
+- Endpoint xrun/lag/error lines +0 on both. Owner at t=540: no faults,
+  re-primes, detaches, holes or resyncs, `tx_i=-15.66 rx_i=15.09`,
+  `gap_us_max=1060`.
+- 911 on the start of 2026-11-19 19:34 UTC and 912 on this one: the one
+  sample goes with the endpoint start, as the 2026-11-01 entries have it
+  (912 to 913 on some starts at 96), not with the far loop's event.
+- The single 668 was not captured on the wire; it has the event's size
+  and nothing else is known of it.
+- wlan0: from 01:21 UTC `192.168.1.201` does not answer the Mac (ssh
+  times out, ping lost) while the Mac reaches the router; on the Pi
+  NetworkManager shows wlan0 connected to its network with the address,
+  signal 60, and the Pi cannot ping 192.168.1.1. The keepalive unit is
+  active. Not touched. Its effects: `dante/measure-candidate.sh` reaches
+  the Pi at that address and refused two attempts (01:21:16 and
+  01:23:17, nothing measured; the first was wrongly put down to the rate
+  move at the time), so these two runs used a scratch copy of it with
+  the address and host key alias of eth0 and no other change
+  (`diff`: lines 35 and 65); and the page, which binds wlan0, cannot be
+  reached, so no preset can be applied until it is back.
+
+Owed at 96, in order: wlan0 back (or the page reached another way), then
+the at-unity and off-unity arms on the monitor preset, read with the far
+loop's event in mind: an odd impulse exactly 8 early with the wire and
+the owner clean is the Ferrofish's until shown otherwise. Separately:
+the 12-sample step of the capture; the wrapper's Wi-Fi address (CLAUDE.md
+already says SSH is on eth0 since 2026-10-30).
