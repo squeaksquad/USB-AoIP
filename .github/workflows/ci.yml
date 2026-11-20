@@ -80,6 +80,19 @@ jobs:
           # The point of record builds from the headers and bridge core kept beside it, as install.sh does.
           g++ $CXXFLAGS_STRICT -I dante/owner/point-of-record -o "$RUNNER_TEMP/owner-build/usb16x16-dante-owner-por" \
             dante/owner/point-of-record/main.cpp dante/owner/point-of-record/bridge_core.cpp -lasound -lpthread
+      # The --idle-phase candidate is the tree's owner with dante/owner/idle-phase.patch applied at
+      # build time (main.cpp stays the installed owner's source): applied to a copy and compiled, so
+      # the patch cannot rot.
+      - name: Owner with idle-phase.patch applies and compiles
+        run: |
+          mkdir -p "$RUNNER_TEMP/idlephase/dante" "$RUNNER_TEMP/idlephase/dsp-core/src" "$RUNNER_TEMP/owner-build"
+          cp -R dante/owner "$RUNNER_TEMP/idlephase/dante/"
+          cp -R dsp-core/include "$RUNNER_TEMP/idlephase/dsp-core/"
+          cp dsp-core/src/bridge_core.cpp "$RUNNER_TEMP/idlephase/dsp-core/src/"
+          ( cd "$RUNNER_TEMP/idlephase" && patch -p1 < "$GITHUB_WORKSPACE/dante/owner/idle-phase.patch" &&
+            g++ $CXXFLAGS_STRICT -I dante/owner -I dsp-core/include -o "$RUNNER_TEMP/owner-build/usb16x16-dante-owner-idlephase" \
+              dante/owner/main.cpp dsp-core/src/bridge_core.cpp -lasound -lpthread )
+          "$RUNNER_TEMP/owner-build/usb16x16-dante-owner-idlephase" --help 2>&1 | grep -q -- --idle-phase
 
   shell:
     name: Start wrapper and start check (bash)
@@ -102,6 +115,8 @@ jobs:
         run: git fetch --tags --quiet && bash install/dev-unit/test-access.sh
       - name: The development unit's owner-monitor update, against a stand-in root
         run: bash install/dev-unit/test-owner-monitor.sh
+      - name: The development unit's owner-idlephase update, against a stand-in root
+        run: bash install/dev-unit/test-owner-idlephase.sh
 
   # The installer's own build step on arm64, as on the Pi: Statime and the
   # patched Inferno plugin at the pinned revisions, the owner, the DSP runner.

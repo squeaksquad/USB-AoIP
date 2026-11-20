@@ -55,5 +55,27 @@ Order: this first (the old page never emits a monitor section), then
 order. It is an owner change: the full battery. `test-owner-monitor.sh`
 checks all of it against a stand-in root (CI, `install-render`).
 
+## The owner's idle phase (not installed)
+
+`owner/idle-phase.patch` (2026-11-20) adds `--idle-phase US` to the owner.
+It is not applied in the tree: `owner/main.cpp` stays the installed owner's
+source, and the candidate is built with the patch applied to a copy. Its
+service form, written 2026-11-20 and not installed:
+
+- `service/usb16x16-dante-start-transport` has the transport key
+  `IDLE_PHASE` (0 to 999, per rate like the others); without it the command
+  line is the one before. The from-scratch installer installs this wrapper
+  with `transport-rate882.conf`, so it passes nothing new.
+- `service/transport-idlephase.conf` is `transport-rate882.conf` with
+  `IDLE_PHASE=60`.
+- `install/dev-unit/stage-owner-idlephase.sh`, `build-owner-idlephase.sh`
+  and `install-owner-idlephase.sh install|rollback|status` put the patched
+  owner bb3cd6ca, that wrapper and that `transport.conf` on the author's Pi
+  in place of bc486911, df6a1b0b and add1bc21, keeping
+  `*.idlephase-previous`. It goes on after `install-owner-monitor.sh`; its
+  rollback comes before that one's. It is an owner change: the full battery
+  at 48 and 96 kHz. `test-owner-idlephase.sh` checks it against a stand-in
+  root (CI, `install-render`).
+
 Design documents are in `docs/design/dante/`; superseded installers and
 configs in `history/installers/dante/`.

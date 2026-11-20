@@ -77,7 +77,9 @@ sed -n "/^cat > \"\$sudoers_temporary\" <<'EOF'/,/^EOF/p" "$repo/history/install
 cmp -s "$dev/etc/sudoers.d/usb16x16-dante" "$tmp/sudoers.chain" || bad "development unit: the sudoers rule differs from the chain's"
 # The pinned hashes of the audio-path files, as the handoff records them.
 pinned() { [ "$(sha "$dev$1" | cut -c1-8)" = "$2" ] || bad "development unit: $1 is $(sha "$dev$1" | cut -c1-8), the point of record has $2"; }
-pinned /usr/local/libexec/usb16x16-dante/usb16x16-dante-start df6a1b0b
+# The wrapper with the IDLE_PHASE key (2026-11-20); the Pi runs df6a1b0b until install-owner-idlephase.sh
+# is installed. Without the key it makes df6a1b0b's command line (test-dante-start.sh transport).
+pinned /usr/local/libexec/usb16x16-dante/usb16x16-dante-start 203c6fa5
 pinned /etc/usb16x16/dante/transport.conf                     add1bc21
 pinned /etc/usb16x16/dante/asound-inferno-owner.conf          85a5256f
 pinned /etc/usb16x16/dante/statime.toml                       11b055df

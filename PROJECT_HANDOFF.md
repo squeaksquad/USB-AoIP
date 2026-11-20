@@ -17694,3 +17694,64 @@ CLAUDE.md has had SSH since 2026-10-30 (`USB16X16_PI` overrides); the
 page still binds wlan0 and is reached from the Mac by an SSH forward
 (`ssh -N -L 127.0.0.1:8088:192.168.1.201:8088` over eth0) while wlan0
 is down.
+
+**IMPLEMENTED 2026-11-20 (session, on the operator's word "Yes, build
+it"; written by an Opus 5.5 subagent, the diff read and every test run
+again by the session): the service form of the idle-phase fix, phase 60.
+On the Mac only; nothing staged to the Pi, nothing installed.**
+- The owner is the tree's sources with `dante/owner/idle-phase.patch`
+  applied at build time (`main.cpp` 8c9bf80e -> 4d885b76, the full hash
+  pinned in the build script); the tree's `main.cpp` is unchanged, so
+  the installed owner-monitor set's pins stay true. `OWNER_NEW` is
+  bb3cd6ca, the binary built on the Pi and measured today; the bundle's
+  build must reproduce it or the installer refuses (the hand build's
+  output name differed; whether the hash depends on it is not shown).
+- Start wrapper `dante/service/usb16x16-dante-start-transport`, df6a1b0b
+  -> 203c6fa5: transport key `IDLE_PHASE` (0 to 999 us, `IDLE_PHASE_<rate>`
+  like the others, an empty per-rate value turns it off), passed as
+  `--idle-phase N` after `--capture-drain`. Without the key the old and
+  new wrappers print the same command line in 40 cases (every transport
+  file at no rate, 44.1, 48, 88.2, 96), so the from-scratch installer,
+  which installs this wrapper with `transport-rate882.conf` and the
+  point-of-record owner, is unchanged in effect; `install/test-render.sh`'s
+  pin for the wrapper is moved to 203c6fa5 on purpose, with a note that
+  the Pi runs df6a1b0b until this is installed.
+- `dante/service/transport-idlephase.conf` (6818176f):
+  `transport-rate882.conf` (add1bc21) plus `IDLE_PHASE=60`, one value for
+  every rate.
+- `install/dev-unit/stage-owner-idlephase.sh`, `build-owner-idlephase.sh`,
+  `install-owner-idlephase.sh install|rollback|status`,
+  `owner-idlephase.sha256` (16 files, list e3ef729e),
+  `test-owner-idlephase.sh`. The installer swaps the three files together
+  or not at all (all old: install; all new: already installed; a mix:
+  refused), keeps `*.idlephase-previous`, stops and starts
+  `usb16x16-dante.service` and prints the START line's `idle_phase_us=`.
+  It goes on after `install-owner-monitor.sh`; its rollback comes before
+  that one's, whose install, status and rollback expect df6a1b0b. Kept
+  from that installer: sudo, the candidate launcher running, a rate
+  change or apply in progress, an empty pin, the bundle list, the built
+  binary's hash. Dropped: the runner (not swapped: `bridge_core.cpp` is
+  unchanged, 46f36659 stays) and the rollback refusal for a preset with a
+  monitor section (bc486911 loads one).
+- `install/dev-unit/test-owner-monitor.sh` now takes the wrapper df6a1b0b
+  from the tag `layout-2026-11-01` (as `test-access.sh` does) and skips
+  without the tag; `install-owner-monitor.sh` and its list are untouched.
+- CI: a step applies the patch to a copy and compiles it with the strict
+  flags (not run on the Mac: no ALSA; the same source compiled in a
+  container and on the Pi today), and `test-owner-idlephase.sh` runs in
+  `install-render`.
+- Run by the session on the final tree, all passing:
+  `test-dante-start.sh` (both modes), `test-dante-startcheck.sh`,
+  `test-owner-idlephase.sh`, `test-owner-monitor.sh`, `test-access.sh`,
+  `install/test-render.sh`, `node --test web-ui/*.test.mjs` (221),
+  `node --test dsp-compiler/*.test.mjs` (84), the web-control Python
+  suite (335).
+
+Owed, each on the operator's word: stage the bundle, copy it, build on
+the Pi (the hash against bb3cd6ca), `status`, the operator's
+`sudo ./install-owner-idlephase.sh install`; then the battery at 48 and
+at 96 on the monitor preset (at unity and off unity), with opens
+repeated at 96. Not covered by this fix and still open: an open after a
+long idle, where the grid has drifted against the host's frames
+(proposal 2, which needs a better sign than `tx_prime_found`); the
+playback fault seen at some opens; the 640 on one first open; wlan0.

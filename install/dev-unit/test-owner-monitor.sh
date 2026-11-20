@@ -3,7 +3,8 @@
 # directory standing in for /, holding stand-ins for the owner and the runner
 # the development unit runs (a test cannot make a file that hashes to c84e6a36,
 # so the old and new hashes are injected, which the installer takes only with a
-# stand-in root), the real start wrapper df6a1b0b from dante/service/, and
+# stand-in root), the real start wrapper df6a1b0b (from the tag layout-2026-11-01:
+# since 2026-11-20 dante/service/ holds its IDLE_PHASE successor), and
 # systemctl and journalctl replaced by recorders.
 #   - the bundle stages, is the one owner-monitor.sha256 pins, and a changed
 #     source fails staging;
@@ -16,7 +17,7 @@
 #   - rollback restores every byte; it is refused while the running preset (or its
 #     artifact at another rate) has a monitor section, and with nothing kept;
 #   - status changes nothing.
-# Run: bash install/dev-unit/test-owner-monitor.sh
+# Run: bash install/dev-unit/test-owner-monitor.sh   (needs the tag: a full clone)
 set -uo pipefail
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/usb-aoip-owner-monitor.XXXXXX")
@@ -25,6 +26,9 @@ fail=0
 ok()  { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -c1-64; else shasum -a 256 "$1" | cut -c1-64; fi; }
+tag=layout-2026-11-01
+git -C "$repo" rev-parse -q --verify "$tag^{commit}" >/dev/null || { echo "SKIP: the tag $tag is not in this clone (fetch tags)"; exit 0; }
+git -C "$repo" show "$tag:work/dante-mode/service/usb16x16-dante-start-transport" > "$tmp/start-wrapper"
 
 # --- staging
 before=$fail
@@ -80,7 +84,7 @@ fresh_root() {   # the development unit as it is: owner c84e6a36 (stand-in), run
   mkdir -p "$root/usr/local/libexec/usb16x16-dante" "$root/etc/usb16x16/dante" "$root/etc/usb16x16/dsp"
   cp "$tmp/old-owner" "$root/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner"
   cp "$tmp/old-runner" "$root/usr/local/libexec/usb16x16-dsp-offline"
-  cp "$repo/dante/service/usb16x16-dante-start-transport" "$root/usr/local/libexec/usb16x16-dante/usb16x16-dante-start"
+  cp "$tmp/start-wrapper" "$root/usr/local/libexec/usb16x16-dante/usb16x16-dante-start"
   printf 'METERS=1\n' > "$root/etc/usb16x16/dante/owner.conf"
   ( cd "$root" && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha "$f")" "$f"; done ) > "$tmp/before.$1"
   : > "$tmp/systemctl.log"
@@ -122,7 +126,7 @@ grep -q "^start usb16x16-dante.service" "$tmp/systemctl.log" || bad "install: th
 grep -Eq '^(stop|start|restart) (usb16x16-web|usb16x16-apply|usb16x16-statime|usb-16x16)' "$tmp/systemctl.log" && bad "install: it acted on another unit"
 grep -q 'MONITOR following' "$tmp/install.out" && grep -q 'MONITOR first state=idle' "$tmp/install.out" || bad "install: the MONITOR lines were not printed"
 grep -q 'usb16x16-dante.service is active' "$tmp/install.out" || bad "install: the unit's state was not printed"
-cmp -s "$root/usr/local/libexec/usb16x16-dante/usb16x16-dante-start" "$repo/dante/service/usb16x16-dante-start-transport" || bad "install: the start wrapper changed"
+cmp -s "$root/usr/local/libexec/usb16x16-dante/usb16x16-dante-start" "$tmp/start-wrapper" || bad "install: the start wrapper changed"
 run install > "$tmp/again.out" 2>&1; grep -q 'already installed' "$tmp/again.out" || bad "a second install did not say it was already installed"
 [ $fail = $before ] && ok "install: owner and runner replaced and kept as *.pre-monitor, the unit stopped and started, the MONITOR lines shown; a second install does nothing"
 

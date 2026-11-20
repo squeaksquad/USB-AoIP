@@ -142,5 +142,33 @@ if [ "${1:-}" = transport ]; then
   run $'RATE=88200\nMETERS=1\n'
   [ "$out" = "${base}--rate 88200 --rx-queue 192 --rx-slack 192 --buffer 2048 --tx-lead 256 --guard 512 --usb-period 96 --usb-buffer 960 --rate-request-file /run/x/rate-request --prime-drop 72 --capture-drain --meter-file /run/x/meters.txt " ] ||
     { echo "FAIL: transport-rate882.conf at 88.2: $out"; failures=$((failures + 1)); }
+  at882_rate882=$out
+  # IDLE_PHASE (2026-11-20): --idle-phase US after the capture drain; none without the key.
+  tr_run $'IDLE_PHASE=60\n' "";                             expect "an idle phase" 0 "--log-every 60 --idle-phase 60 "
+  tr_run $'IDLE_PHASE=0\n' "";                              expect "an idle phase of zero" 0 "--log-every 60 --idle-phase 0 "
+  tr_run $'IDLE_PHASE=999\n' "";                            expect "the largest idle phase" 0 "--log-every 60 --idle-phase 999 "
+  tr_run $'PRIME_DROP=28\nCAPTURE_DRAIN=1\nIDLE_PHASE=60\n' $'METERS=1\n'
+  expect "idle phase after the drain" 0 "--prime-drop 28 --capture-drain --idle-phase 60 --meter-file /run/x/meters.txt "
+  tr_run $'IDLE_PHASE=60\nIDLE_PHASE_96000=40\n' $'RATE=96000\n'; expect "a 96 idle phase at 96" 0 "--rate 96000 --idle-phase 40 "
+  tr_run $'IDLE_PHASE=60\nIDLE_PHASE_96000=40\n' "";        expect "a 96 idle phase at 48" 0 "--log-every 60 --idle-phase 60 "
+  tr_run $'IDLE_PHASE=60\nIDLE_PHASE_96000=\n' $'RATE=96000\n'
+  [ "$out" = "${base}--rate 96000 " ] || { echo "FAIL: an empty IDLE_PHASE_96000 turns the option off: $out"; failures=$((failures + 1)); }
+  tr_run $'IDLE_PHASE=1000\n' "";                           expect "idle phase too large" 2 "IDLE_PHASE must be a number of microseconds from 0 to 999"
+  tr_run $'IDLE_PHASE=-1\n' "";                             expect "negative idle phase" 2 "IDLE_PHASE must be"
+  tr_run $'IDLE_PHASE=60us\n' "";                           expect "idle phase not a number" 2 "IDLE_PHASE must be"
+  tr_run $'IDLE_PHASE=60; reboot\n' "";                     expect "idle phase: nothing is executed" 2 "IDLE_PHASE must be"
+  tr_run $'IDLE_PHASE=\n' "";                               expect "a plain idle phase may not be empty" 2 "IDLE_PHASE must be"
+  tr_run $'IDLE_PHASE_96000=1000\n' "";                     expect "a per-rate idle phase is checked at any rate" 2 "IDLE_PHASE must be"
+  # transport-idlephase.conf: transport-rate882.conf's line at every rate, with --idle-phase 60 after the drain.
+  cp "$here/transport-idlephase.conf" "$work/transport.conf"; run $'METERS=1\n'
+  [ "$out" = "${at48_new/--capture-drain /--capture-drain --idle-phase 60 }" ] || { echo "FAIL: transport-idlephase.conf at 48: $out"; failures=$((failures + 1)); }
+  run $'RATE=96000\nMETERS=1\n'
+  [ "$out" = "${at96_drop96/--capture-drain /--capture-drain --idle-phase 60 }" ] || { echo "FAIL: transport-idlephase.conf at 96: $out"; failures=$((failures + 1)); }
+  run $'RATE=44100\nMETERS=1\n'
+  [ "$out" = "${at441_drop96/--capture-drain /--capture-drain --idle-phase 60 }" ] || { echo "FAIL: transport-idlephase.conf at 44.1: $out"; failures=$((failures + 1)); }
+  run $'RATE=88200\nMETERS=1\n'
+  [ "$out" = "${at882_rate882/--capture-drain /--capture-drain --idle-phase 60 }" ] || { echo "FAIL: transport-idlephase.conf at 88.2: $out"; failures=$((failures + 1)); }
+  [ "$(grep -v '^#' "$here/transport-idlephase.conf" | grep -v '^IDLE_PHASE=60$')" = "$(grep -v '^#' "$here/transport-rate882.conf")" ] ||
+    { echo "FAIL: transport-idlephase.conf is not transport-rate882.conf plus IDLE_PHASE=60"; failures=$((failures + 1)); }
 fi
 if [ "$failures" -eq 0 ]; then echo "test-dante-start: all passed"; else echo "test-dante-start: $failures FAILED"; exit 1; fi
