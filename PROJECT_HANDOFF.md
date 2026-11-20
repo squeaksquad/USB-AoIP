@@ -17292,3 +17292,23 @@ loop's event in mind: an odd impulse exactly 8 early with the wire and
 the owner clean is the Ferrofish's until shown otherwise. Separately:
 the 12-sample step of the capture; the wrapper's Wi-Fi address (CLAUDE.md
 already says SSH is on eth0 since 2026-10-30).
+
+**DONE 2026-11-20 01:52-01:56 UTC (session, on the operator's word "Yes,
+reconnect it"): the reconnect was refused, so wlan0 is as it was; the
+page is reachable from the Mac through an SSH forward over eth0
+instead.** `nmcli connection up` as the session's user: `Not authorized
+to control networking`; nothing changed. The Pi's state, read before and
+after: wlan0 connected with 192.168.1.201 and its default route, and the
+neighbour entries for the router (192.168.1.1) and the Mac
+(192.168.1.67) FAILED, so it is associated and frames do not pass. Not
+tried, and the operator's: a reboot of the Pi (the session may run
+`reboot` without a password, and has not), or a look at the access
+point.
+
+The page itself is up: on the Pi `http://192.168.1.201:8088/` answers
+401. From the Mac, `ssh -N -L 127.0.0.1:8088:192.168.1.201:8088` over
+eth0 (a process on the Mac, nothing on the Pi) makes it
+`http://localhost:8088`, where it answers 401 the same; the service's
+Origin check compares Origin with Host, which agree there. The forward
+lasts while that process runs and shares eth0 with the audio, so the
+page is not left open across a measurement.
