@@ -17955,3 +17955,59 @@ reference criterion. With the at-unity arm that is the battery at 96 on
 the monitor preset. Owed before ACCEPTED: both arms at 48 and one direct
 run there; the 44.1 and 88.2 checks; a host-gain report at 96 from a
 direct run, to put today's date under the reference.
+
+**MEASURED 2026-11-21 03:54-04:24 UTC (session, on the operator's word
+"It's at 48" and "it's at -12"): the off-unity arm at 48 kHz on owner
+bb3cd6ca with `IDLE_PHASE=60` passes: four loaded 800-impulse runs at
+`daw_timeline` 528 with spread 0, the ten-minute soak PASS. FOUND beside
+it: three playback faults on the gadget, each at a host open, one of
+which gave that open an unanchored prime and a level 6 samples off. Not
+ACCEPTED.** The operator moved the rate; endpoint start 03:32:31 UTC,
+`RATE` absent from owner.conf (48), `dante-immersive-one-sub.dsp`
+6a2c8012 (302 biquads), START `prime_drop=28 capture_drain=1
+idle_phase_us=60 rx_queue=96`, start check `state=ok rate=6017
+restarts=0`; monitor state 77, -12.0 dB, fold full. `NRestarts=0` after.
+(A first launch at 03:53 had the soak without `USB16X16_LOOP_CHANNELS=8`;
+it was stopped within seconds, its partial probe directory removed,
+nothing measured.)
+
+- Noise probe (`ip48-minus12`, `20261121T035403Z`): clean from sample
+  528.
+- Four loaded runs: `ip48-minus12-1..4` (`035920Z`, `040255Z`,
+  `040630Z`, `041006Z`): 376 x800 on each, `daw_timeline` 528, spread 0,
+  discontinuities 0 / 0, endpoint lines +0. The point of record's
+  figure.
+- Soak 600 s (`ip48-minus12-loop8`, `20261121T041341Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 2, peaks 0.0045 to
+  0.0251 (-12.0 dB), discontinuities 0 / 0, endpoint lines +0. No run of
+  4, so the reference check was not called and the new fetches did not
+  run. Channels 9 to 16 loaded, not judged.
+- 60 loaded opens (`idlephase-20261120/svc48-minus12/`): 59 at 375 to
+  377, one at 382. The primes found 81 to 83 (71 of 84), 87 to 104 (12)
+  and one 70, against a lead of 128: at 48 the option leaves the prime
+  where it was (80 to 85 and 100 to 103 on bc486911).
+- The playback faults (`last_fault=-32`, the gadget's playback PCM
+  underrun): `playback_faults` 0 to 1 at 03:54:09 (an open of the noise
+  probe's gating), 1 to 2 at 03:55:26 (open 10 of the 60: that prime
+  found 70 and was unanchored, and the open read 382), 2 to 3 between
+  04:02 and 04:03 (an open of run 2's gating probes; the run itself is
+  clean). None inside an 800-impulse run or the soak; no capture fault,
+  re-prime or detach. Three in about 90 opens. On bc486911 the 48 kHz
+  arms of 2026-11-18/19 counted none over about 40 opens, and at 96 the
+  candidate's control arm (no option) counted one, as did the installed
+  bc486911 on 2026-11-19 20:13 UTC. So it is not shown to be the
+  option's, and not shown not to be at 48: the control is the same 60
+  opens at 48 without `--idle-phase` (the candidate launcher, the
+  service stopped). The wrapper's gating hides such an open from a run's
+  figure, which is why it is recorded here: a host that opens the device
+  once does not get a second try.
+- Cost, 30 one-minute lines: `dsp_us_max` 31.1 to 81.0, `dsp_us_mean`
+  24.2 to 26.9; `meter_us_max` 9.0 to 81.0.
+- Owner at t=3060: `capture_faults=0 tx_reprimes=0 detaches=0
+  servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1047`, `back_holes=0/0`, `out_holes=60/870` (one a loaded
+  open, the harness's own start).
+
+Owed before ACCEPTED: the at-unity arm at 48 (the operator sets 0 dB);
+one direct run at 48; the 48 kHz control for the playback faults; the
+44.1 and 88.2 checks.
