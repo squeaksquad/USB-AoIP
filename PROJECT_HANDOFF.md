@@ -18069,3 +18069,16 @@ kHz control not run; the mid-session pause and re-prime (three in about
 250 rapid opens); the far loop's occasional impulse 8 samples early at
 96 (the Ferrofish); the 640 on one first open; wlan0 and the access
 point's band steering; channels 9 to 16 never judged.
+
+**CORRECTION 2026-11-21 (session, on the operator's word "Redact, then
+push"): the access point's two radio addresses were taken out of the
+entries of 2026-11-20 before the branch was first published; they now
+read `[the 2.4 GHz radio]` and `[the 5 GHz radio]`.** The repository is
+public and a radio's address can be looked up for a location; nothing
+else in those entries changed. The eleven commits that carried them had
+not been pushed and were rewritten, so their hashes moved: an entry
+above that says the bundle was "staged from 69eb5b8" means the commit
+now 49db832 (the bundle on the Pi still prints `repository 69eb5b8`;
+its sixteen pinned files are the same), and the tests' "all pass" point
+8887ae0 is now 31ad32d. The evidence repository was pushed as it was:
+it never held the addresses.

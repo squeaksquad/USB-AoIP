@@ -149,7 +149,7 @@ with the accepted owner's sources and update `install/pins.sha256`, the installe
 `docs/install/author-pi-mapping.md` and `TO-VERIFY.md`, and make `transport-idlephase.conf`
 what `install.sh` renders. Then the pull request, when he says.
 
-**Tests that must pass before any commit that changes code** (all pass at 8887ae0):
+**Tests that must pass before any commit that changes code** (all pass at 31ad32d):
 `node --test web-ui/*.test.mjs` (221), `node --test dsp-compiler/*.test.mjs` (84),
 `python3 -m unittest discover -s web-control -p 'test_*.py'` (335),
 `python3 -m unittest discover -s dante -t dante -p 'test_soak_reference.py'` (22),
