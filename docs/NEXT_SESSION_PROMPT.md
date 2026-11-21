@@ -13,7 +13,153 @@
 > `outputs/` is a nested clone of the evidence repository: never check out a
 > commit that tracks `outputs/` in place (CLAUDE.md, working rules).
 
-## Current pickup — 2026-11-01: 44.1, 48, 88.2 and 96 kHz on the point of record. Start here.
+## Current pickup — 2026-11-21: page redesign phase 3 and the idle-phase owner are installed and measured, not accepted. Start here.
+
+You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16, bridged to Dante
+through Inferno) on the branch `web/redesign-phase3`. Read `CLAUDE.md` (the repo map and the
+working rules), then `PROJECT_HANDOFF.md` from the entry "IMPLEMENTED 2026-11-18" (phase 3) to
+the end: find the entries with
+
+    grep -n '^\*\*\(MEASURED\|INSTALLED\|FOUND\|IMPLEMENTED\|DONE\) 2026-11-\(1[89]\|2[01]\)' PROJECT_HANDOFF.md
+
+and read by entry, never the whole file. The handoff is authoritative where anything disagrees.
+The last entry (MEASURED 2026-11-21 04:28-04:58 UTC) has the battery's summary table and the
+owed and open lists; this section restates them and adds how to work.
+
+**How this operator works. These are binding.**
+- Start by reading, then say in a few lines what you understand the state to be and what you
+  propose to do first. Wait for his word before anything that changes the Pi.
+- Do not push, and do not open the pull request, until he says. The branch is 44 commits ahead
+  of `origin/main`; the evidence repository (`outputs/`, a nested clone) is 23 ahead. Neither
+  is pushed.
+- Do not touch the Pi beyond reading unless he asks. Reading over SSH is fine. The Pi's sudo
+  asks for a password, so he runs installs himself: give him one command in a `bash` block.
+  What a session may run without a password is listed by `sudo -n -l` on the Pi (start, stop
+  and restart of `usb16x16-dante`, the candidate launcher, `usb16x16-dante-catch`, `reboot`).
+  Each of those still needs his word first.
+- You cannot sign in to the web page (never enter credentials). He moves the Control Room
+  level, selects folds, applies presets and changes the sample rate (from the Mac or Dante
+  Controller, never the page). Ask him, then read the result back from the Pi before measuring.
+- The handoff is append-only: add an entry at the tail for every measurement, install or
+  finding, in the style of the entries there (what was asked, what was read back, the numbers,
+  what was not measured, what is owed). A correction is a later entry. Commit each entry.
+  Evidence goes in `outputs/latency/` and is committed there (`git -C outputs ...`).
+- Never write ACCEPTED yourself. That is the operator's word.
+- Change one variable at a time. The protected USB baseline is never edited.
+- Report plainly: lead with what was found, say what was not measured, and when a result does
+  not match the record say so before explaining it. If the same approach fails twice, stop and
+  say so.
+
+**What is on the Pi (read it back before trusting this).**
+- Owner bb3cd6ca (`--idle-phase 60`), start wrapper 203c6fa5, `transport.conf` 6818176f
+  (`IDLE_PHASE=60`), installed 2026-11-20 by `install/dev-unit/install-owner-idlephase.sh`; what
+  they replaced (owner bc486911, wrapper df6a1b0b, transport add1bc21) is kept as
+  `*.idlephase-previous`. DSP runner 46f36659. Web 1.9.0, applier 1.11.0, the Control Room page.
+- Left at: 48 kHz, preset `Immersive - one sub` (`dante-immersive-one-sub.dsp` 6a2c8012, one
+  speaker set, folds 5.1 / stereo / mono), monitor 0.0 dB, fold Full, no limits file.
+- Read it back with:
+
+      ssh -o HostKeyAlias=audio-dev.local -o BatchMode=yes bdimaio@169.254.92.97 'cd ~/usb-16x16-work/usb-aoip-owner-idlephase && ./install-owner-idlephase.sh status; grep -v "^#" /etc/usb16x16/dante/owner.conf; cat /run/usb16x16-dante-startcheck/status; grep -E "^(MONITOR|set id)" /run/usb16x16-dante/monitor.status; systemctl show usb16x16-dante -p NRestarts -p ActiveEnterTimestamp'
+
+- Rollback order if it is ever needed: `install-owner-idlephase.sh rollback` first, then the
+  access bundle's, then `install-owner-monitor.sh rollback`. Each is his sudo.
+- wlan0 (192.168.1.201) dies some time after every association: the access point's band
+  steering asks the Pi to move, the Pi's driver cannot answer, and the access point stops
+  passing its traffic (handoff, FOUND 2026-11-20 13:13 UTC). Use eth0 for everything; the
+  measurement wrapper already does. The page binds wlan0: when it does not answer, forward it
+  from the Mac with `ssh -o HostKeyAlias=audio-dev.local -N -L 127.0.0.1:8088:192.168.1.201:8088 bdimaio@169.254.92.97`
+  and he opens `http://localhost:8088`; close the forward before a measurement.
+
+**What is measured (owner bb3cd6ca, `IDLE_PHASE=60`, the monitor preset, eight looped channels).**
+
+| Rate, level | Four loaded 800-impulse runs (`daw_timeline`) | Ten-minute soak |
+|---|---|---|
+| 96, 0 dB | 912, 912, 913, 912 | PASS |
+| 96, -12 dB | 912, 912, 913, 912 | matched-events by the reference check |
+| 48, -12 dB | 528 x4, spread 0 | PASS |
+| 48, 0 dB | 528 x4, spread 0 | PASS |
+
+Before the fix the same preset at 96 read 912 on some opens and 1007 / 1008 on others (one
+block of 96 frames late). The cause and the fix are the handoff's FOUND and MEASURED entries of
+2026-11-20. Channels 9 to 16 are loaded and never judged: the far loop is eight channels wide,
+so every soak is run with `USB16X16_LOOP_CHANNELS=8` and the entry says so.
+
+**How to measure (from the Mac; nothing else may hold the device: no Reaper, RX, Pro Tools or
+RTL Utility, and the rate must not change during a run).**
+- Noise probe: `dante/measure-candidate.sh noise 32 LABEL`
+- One loaded run: `USB16X16_OTHER_LOAD=0.1 dante/measure-candidate.sh 32 800 LABEL`
+- Soak: `USB16X16_LOOP_CHANNELS=8 USB16X16_HOST_GAIN=<a bitexact or hostgain report at this rate> dante/measure-candidate.sh soak 600 32 LABEL-loop8`
+  (latest reports: `outputs/latency/rate7-48-bitexact-360s-32f-20261028T040758Z.json` at 48,
+  `svc96-bitexact-360s-32f-20261031T224125Z.json` at 96).
+- A battery arm is four loaded runs and the soak, about 26 minutes: launch it in the
+  background and wait for it; do not poll. After any endpoint start wait for
+  `/run/usb16x16-dante-startcheck/status` to read `state=ok` first.
+- Repeated opens (the test that finds a late open): the scripts are in
+  `outputs/latency/idlephase-20261120/` (`opens.sh LABEL COUNT`, with
+  `OPENS_EXTRA="--other-channel-load-amplitude 0.1"`). Pair each open with the owner's
+  `tx_prime_found` from `journalctl -u usb16x16-dante`.
+- Expected: 528 at 48 (376 + 152), 911 to 913 at 96 (675 to 677 + 236), 505 at 44.1, 889 at
+  88.2. After a run read the owner's last `USB t=` and `OWNER t=` lines and the `DSP t=` lines
+  (`dsp_us_max`, `dsp_us_mean`) and put them in the entry.
+- A soak or probe that fails is located before it is blamed: the owner's counters, then the
+  kept windows in the soak's report, then an eth0 capture. The far loop fails by itself: on
+  2026-11-19 the Ferrofish put an impulse 8 samples early every 25.75 s at 96 until its power
+  was cycled (a few in 3200 remain). An odd impulse exactly 8 early with the owner clean is
+  the Ferrofish's until shown otherwise.
+- `usb16x16-dante-catch` (the eth0 capture ring) disturbs the endpoint while it runs: after
+  using it, restart the endpoint (on his word) and measure again before trusting a level.
+
+**Owed before the operator can accept (in this order, each on his word).**
+1. One direct run at 48 on this owner (he applies `direct` on the page): noise probe and one
+   loaded 800-impulse run, 528 expected.
+2. The fold-down probe again on this owner (he selects Stereo; a noise probe; then back to Full).
+3. The 44.1 and 88.2 checks an owner change asks for (he moves the rate; at 88.2 wait 10 s
+   after the switch before any audio): a noise probe and three opens of 100 impulses at each.
+4. A host-gain report at 96 from a direct run (`bitexact --loop-channels 8`: full-scale noise
+   on every output, so he mutes the monitors first and says so), then the -12 dB soak of
+   2026-11-20 14:34 UTC judged again with it (the report keeps its windows; command in the
+   handoff's IMPLEMENTED entry on the reference check).
+5. The 48 kHz control for the playback faults: the same 60 opens on this binary without
+   `--idle-phase`, through the candidate launcher with the service stopped (the procedure and
+   the arguments are in `outputs/latency/idlephase-20261120/cand.sh`; at 48 use the 48 kHz
+   arguments from the running owner's command line). Restore the service after and check it.
+
+**Open, found during this work and not fixed. Do not start on any of these unasked; say they
+exist.**
+- An open after a long idle: the idle grid drifts against the host's frames and can reach the
+  edge again. The handoff's "proposal 2" needs a better sign than `tx_prime_found` (MEASURED
+  2026-11-20 12:26 UTC, "The correction").
+- Playback faults (`last_fault=-32`) at some host opens; one gave an unanchored prime and a
+  level 6 samples off.
+- A mid-session pause and re-prime: three in about 250 one-second opens, none in a run or soak.
+- One first open at 640 on a candidate start, once.
+- The Ferrofish's residual 8-sample-early impulses at 96.
+- wlan0 and the access point's band steering (his router, or `disable_btm=1` in a supplicant
+  config with his sudo).
+- From phase 3 itself (handoff, IMPLEMENTED 2026-11-18): `DspStage::publish`'s count/index
+  race, the applier's `ARTIFACT_MAX_INTERNAL` 64 against the engine's 48, the shared sub's
+  worst-case warning, `restart-audio` without the engine guard, `off` using a fold slot. Not
+  measured on the Pi: a ramp in progress, dim, mute and solo under load, a second speaker set,
+  the 5.1 and Mono folds, Level safety.
+
+**After his ACCEPTED (not before).** Fold the patch into the tree: apply
+`dante/owner/idle-phase.patch` to `dante/owner/main.cpp`, re-pin what pins it
+(`install/dev-unit/owner-monitor.sha256` and its test), replace `dante/owner/point-of-record/`
+with the accepted owner's sources and update `install/pins.sha256`, the installer's build line,
+`docs/install/author-pi-mapping.md` and `TO-VERIFY.md`, and make `transport-idlephase.conf`
+what `install.sh` renders. Then the pull request, when he says.
+
+**Tests that must pass before any commit that changes code** (all pass at 8887ae0):
+`node --test web-ui/*.test.mjs` (221), `node --test dsp-compiler/*.test.mjs` (84),
+`python3 -m unittest discover -s web-control -p 'test_*.py'` (335),
+`python3 -m unittest discover -s dante -t dante -p 'test_soak_reference.py'` (22),
+`bash dante/service/test-dante-start.sh` and `... transport`, `bash dante/service/test-dante-startcheck.sh`,
+`bash install/test-render.sh`, and in `install/dev-unit/`: `test-access.sh`,
+`test-owner-monitor.sh`, `test-owner-idlephase.sh`. The owner needs ALSA and does not compile
+on the Mac; CI compiles it. A change to the page, the web service, the applier, their units,
+the start wrapper or anything in a bundle list fails its test until re-pinned on purpose.
+
+## Pickup — 2026-11-01: 44.1, 48, 88.2 and 96 kHz on the point of record (history; the point of record's detail is still here).
 
 You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16, bridged to Dante
 through Inferno). Read `CLAUDE.md` (repo map), then `PROJECT_HANDOFF.md`'s tail from "INSTALLED
