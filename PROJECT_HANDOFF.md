@@ -18082,3 +18082,33 @@ now 49db832 (the bundle on the Pi still prints `repository 69eb5b8`;
 its sixteen pinned files are the same), and the tests' "all pass" point
 8887ae0 is now 31ad32d. The evidence repository was pushed as it was:
 it never held the addresses.
+
+**MEASURED 2026-11-21 20:31-20:35 UTC (session, on the operator's word
+"Applied direct"): one direct run at 48 kHz on owner bb3cd6ca with
+`IDLE_PHASE=60` reads the point of record: the noise probe clean from
+sample 528, one loaded 800-impulse run at 376 x800, `daw_timeline` 528,
+spread 0. Item 1 of the owed list done. Not ACCEPTED.** Read first:
+owner.conf has `METERS=1` and no `DSP_PRESET` (direct), `RATE` absent
+(48); endpoint start 20:30:17 UTC (the applier's restart for the
+profile), START `prime_drop=28 capture_drain=1 idle_phase_us=60
+rx_queue=96`; monitor status `state=idle reason="no DSP preset"`; start
+check `state=ok rate=6018 restarts=0` at 20:31:22; `NRestarts=0` before
+and after.
+
+- Noise probe (`ip48-direct`, `20261121T203130Z`): nonzero from 528, no
+  zero run of 4 or more, endpoint lines +0.
+- Loaded run (`ip48-direct-1`, `20261121T203211Z`,
+  `USB16X16_OTHER_LOAD=0.1`): 376 x800, spread 0, `daw_timeline` 528
+  (376 + 152), discontinuities 0 / 0, xrun, lag and error lines +0.
+- The nine primes of this start found 81 to 93 (16 of 22 link lines),
+  105 and 125; `tx_unanchored=0`. No `DSP t=` lines (no preset).
+- Owner at t=300: `capture_faults=0 playback_faults=0 tx_reprimes=0
+  detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1024`, `out_holes=0/0 back_holes=0/0`.
+
+Not measured: a soak direct (not asked by the owed list), repeated
+opens direct. Still owed before ACCEPTED: the fold-down probe on this
+owner (a preset again, Stereo, then Full); the 44.1 and 88.2 checks; a
+host-gain report at 96 from a direct run and the -12 dB soak judged
+again with it; the 48 kHz control for the playback faults. The endpoint
+is left direct at 48.
