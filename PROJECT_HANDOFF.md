@@ -18011,3 +18011,61 @@ nothing measured.)
 Owed before ACCEPTED: the at-unity arm at 48 (the operator sets 0 dB);
 one direct run at 48; the 48 kHz control for the playback faults; the
 44.1 and 88.2 checks.
+
+**MEASURED 2026-11-21 04:28-04:58 UTC (session, on the operator's word
+"It's at 0"): the at-unity arm at 48 kHz on owner bb3cd6ca with
+`IDLE_PHASE=60` passes: four loaded 800-impulse runs at `daw_timeline`
+528 with spread 0, the ten-minute soak PASS, no new playback fault in
+about 90 opens. With the three arms before it, that is the battery at
+48 and at 96 on the monitor preset, at unity and at -12 dB. Not
+ACCEPTED: that is the operator's word, and the list below is owed or
+open.** Same endpoint start as the off-unity arm (03:32:31 UTC); monitor
+state 80 applied, 0.0 dB, fold full; `NRestarts=0` after.
+
+- Noise probe (`ip48-unity`, `20261121T042824Z`): clean from sample 528.
+- Four loaded runs: `ip48-unity-1..4` (`043340Z`, `043715Z`, `044051Z`,
+  `044426Z`): 376 x800 on each, 528, spread 0, discontinuities 0 / 0,
+  endpoint lines +0.
+- Soak 600 s (`ip48-unity-loop8`, `20261121T044801Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peaks 0.0180 to
+  0.1000, discontinuities 0 / 0, endpoint lines +0. Channels 9 to 16
+  loaded, not judged.
+- 60 loaded opens (`idlephase-20261120/svc48-unity/`): 59 at 376 or 377;
+  open 54 read 373 on its first impulses and 376 after. On the Pi the
+  return's one hole of this arm (127 frames) and an extra outgoing prime
+  are in that minute: the host's stream paused inside the session and
+  the owner primed again, the event seen twice at 96 on 2026-11-20 (729
+  then 737). Three now in about 250 one-second opens, none in a run or
+  a soak.
+- `playback_faults` 3 before and 3 after: none in this arm's 93 primes,
+  against three in the arm before on the same start. So the faults are
+  not steady at 48 with the option either; the control is still owed to
+  say anything about their rate.
+- The primes found 81 to 83 (70 of 84) or 87 to 126; one unanchored
+  count carried from the arm before.
+- Cost, 30 one-minute lines: `dsp_us_max` 28.4 to 73.1, `dsp_us_mean`
+  23.5 to 26.2 (23.5 on bc486911 at unity); `meter_us_max` 7.6 to 66.8.
+- Owner at t=5100: `capture_faults=0 tx_reprimes=0 detaches=0
+  servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1045`.
+
+The battery on owner bb3cd6ca, wrapper 203c6fa5, transport 6818176f
+(`IDLE_PHASE=60`), preset `Immersive - one sub`, eight looped channels:
+
+| Rate, level | Four loaded runs (`daw_timeline`) | Soak | Opens a block late |
+|---|---|---|---|
+| 96, 0 dB | 912, 912, 913, 912 | PASS | 0 of 64 |
+| 96, -12 dB | 912, 912, 913, 912 | matched-events (the sub's own zero runs) | 0 of 20 |
+| 48, -12 dB | 528 x4, spread 0 | PASS | 0 of about 90 |
+| 48, 0 dB | 528 x4, spread 0 | PASS | 0 of about 90 |
+
+Owed or open before the operator's ACCEPTED, none measured: one direct
+run at 48 (and the fold-down probe again on this owner); the 44.1 and
+88.2 checks an owner change asks for; a host-gain report at 96 from a
+direct run for the reference's date. Open, found during this work and
+not fixed by it: an open after a long idle (the grid drifts against the
+host's frames; proposal 2); playback faults at some opens, with the 48
+kHz control not run; the mid-session pause and re-prime (three in about
+250 rapid opens); the far loop's occasional impulse 8 samples early at
+96 (the Ferrofish); the 640 on one first open; wlan0 and the access
+point's band steering; channels 9 to 16 never judged.
