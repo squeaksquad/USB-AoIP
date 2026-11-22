@@ -18172,3 +18172,45 @@ Mono folds, a fold under a soak or load. Owed before ACCEPTED: the fold
 back to Full (the operator), then the 44.1 and 88.2 checks; a host-gain
 report at 96 from a direct run and the -12 dB soak judged again with it;
 the 48 kHz control for the playback faults.
+
+**MEASURED 2026-11-22 04:31-04:34 UTC (session, on the operator's rate
+change to 44.1 and fold back to Full): the 44.1 kHz check on owner
+bb3cd6ca with `IDLE_PHASE=60`: noise probe clean from 505; three loaded
+opens of 100 impulses at `daw_timeline` 504, 504, 505, each with spread
+0. Two opens read one sample under the record's 505 (360 + 145): the
+lag was 359 on those. Item 3 half done (88.2 owed). Not ACCEPTED.**
+Read first: owner.conf `RATE=44100`, `DSP_PRESET`
+`dante-immersive-one-sub@44100.dsp` a9d1301b, `DSP_LIVE=1`; endpoint
+start 04:29:47 UTC (the arbiter's restart), start check `state=ok
+rate=5532 restarts=0` at 04:30:52; the owner's status `fold=full
+level_db=0.0 gain_db=0.0` (state 82); `NRestarts=0` after. The page
+went unreachable as the rate settled: wlan0 kept its address and
+association, the log shows `WNM: Preferred List Available` and the Pi
+could not ping the router over wlan0 while the page answered on the Pi
+itself (401): the band-steering fault of FOUND 2026-11-20 13:13 UTC, not
+the rate change. The eth0 forward served the page and was closed before
+the runs.
+
+- Noise probe (`ip44-full`, `20261122T043104Z`): nonzero from 505, no
+  zero run of 4 or more, endpoint lines +0.
+- Three opens, `USB16X16_OTHER_LOAD=0.1`, 100 impulses each:
+  `ip44-open-1` (`043144Z`) 359 x100, 504; `ip44-open-2` (`043225Z`)
+  359 x100, 504; `ip44-open-3` (`043305Z`) 360 x100, 505. IOProc offset
+  145 on all three, discontinuities 0 / 0, endpoint lines +0.
+- What 504 is not known. The record at 44.1 with the anchor is 505 (360,
+  2026-11-01, 400 impulses on one open); 359 was read at 44.1 before the
+  anchor (2026-10-28). One sample per open is the size 96 kHz has shown
+  on some opens since 2026-11-01 (912 / 913). The 16 primes of this start
+  found 92 to 110, all anchored, `last_fault=0` on every link line, so
+  the owner does not mark these opens. Whether 44.1 now draws 359 or 360
+  per open would take more opens than the three the check asks for.
+- Cost, the owner's line at t=240.0: `dsp_us_max=36.0 dsp_us_mean=23.6`;
+  `meter_us_max=15.9 meter_us_mean=3.7`.
+- Owner at t=240: `capture_faults=0 playback_faults=0 tx_reprimes=0
+  detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1086`, `out_holes=0/0 back_holes=0/0`.
+
+Owed before ACCEPTED: the 88.2 check (the operator moves the rate; 10 s
+before any audio); the 44.1 draw if the operator wants it decided; a
+host-gain report at 96 from a direct run and the -12 dB soak judged
+again with it; the 48 kHz control for the playback faults.
