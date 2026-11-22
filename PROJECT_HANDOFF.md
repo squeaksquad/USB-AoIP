@@ -18494,3 +18494,33 @@ is ACCEPTED.**
 Left from the pickup: item 4, the host-gain report at 96, is blocked on
 the far loop's 96 kHz slips. Next there: back to 96, a Metric Halo
 reboot, then a 30 s bitexact (CORRECTION above).
+
+**MEASURED 2026-11-22 13:35-13:38 UTC (session, on the operator's word "96 +
+MH reboot"): after the move to 96 and the Metric Halo's reboot, the 30 s
+bitexact at 96 kHz direct still FAILS, with 84 to 112 slips per looped
+channel. That is more than before the reboot (63 to 75 in 30 s at
+12:16), and of the same kind. Owner clean. Neither the Ferrofish's power
+cycle (05:07) nor the Metric Halo's reboot clears it today. Item 4 not
+done.**
+- The session took the operator's message as saying the move and the
+  reboot were both done; whether the reboot came after the move is not
+  on the record.
+- `dante-sync status` at about 13:35: MHLink and USB-AoIP 96k,
+  FF-PULSE-16-DX word clock LOCKED.
+- The endpoint was restarted by the move at 13:35:08 UTC
+  (`RATE=96000`, direct), start check `ok` at 13:36:13, `NRestarts=0`.
+- Noise probe `ip96-mhreboot` (`20261122T133630Z`): clean from 912.
+- `ip96-mhreboot-bitexact-30s-32f-20261122T133711Z`: `pass: false`.
+  First lock at 912 to 913. Each channel has dropped 8 and repeated 8
+  in equal numbers (39 to 53 of each) plus three each of 16. No
+  discontinuity, longest zero run 0 or 1.
+- Owner after: `capture_faults=0 playback_faults=0`, `back_holes=0/0`,
+  `tx_resyncs=0 tx_lost=0 rx_resyncs=0`.
+
+So today the slips are at 96 only (48 passed at 12:29), on the wire in
+what the FF-PULSE-16-DX returns (12:16), and outlast a power cycle of
+the Pulse and a reboot of the Metric Halo. Not tried: the Pulse's MADI
+out 25-32 cabled straight back to its MADI in 25-32, taking the Metric
+Halo out (proposed 2026-10-29). Not known: what differs from
+2026-10-31, when bitexact passed at 96, in the Pulse's or the Metric
+Halo's settings, for instance which device clocks MADI at 96.
