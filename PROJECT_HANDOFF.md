@@ -18251,3 +18251,49 @@ Owed before ACCEPTED: a host-gain report at 96 from a direct run and the
 -12 dB soak of 2026-11-20 judged again with it; the 48 kHz control for
 the playback faults; the 44.1 draw (359 or 360 per open) if the operator
 wants it decided. The endpoint is left at 88.2 on the monitor preset.
+
+**MEASURED 2026-11-22 04:58-05:04 UTC (session, on the operator's word
+"96, direct, muted"): the host-gain report at 96 kHz from a direct run
+FAILS: `bitexact --loop-channels 8`, 360 s, `pass: false`, with 895 to
+988 lost locks on each of channels 1 to 8, every one a slip of 8, 16,
+24 or 32 frames (dropped or repeated) at the same frames on all eight.
+The owner is clean through it. Located no further; by the rule of
+2026-11-19 it is the far loop's (the Ferrofish's) until shown otherwise.
+Item 4 not done.** Read first: owner.conf `RATE=96000`, no `DSP_PRESET`
+(direct); endpoint start 04:44:55 UTC, start check `state=ok rate=12017
+restarts=0` at 04:46:00; monitor `state=idle reason="no DSP preset"`;
+the operator muted the monitors. `NRestarts=0` after, start check
+unchanged.
+
+- Run (`ip96-direct-bitexact-360s-32f-20261122T045830Z`, the harness's
+  `bitexact --seconds 360 --loop-channels 8 --device USB-AoIP
+  --buffer-frames 32`): 34,560,000 frames each way, input and output
+  discontinuities 0, invalid buffers 0, largest code 8388607, nothing
+  off the 24-bit grid, longest zero run after lock 1. First lock at
+  frame 911 (the round trip, 912 less one). Channel 1: 977 slips; by
+  size, dropped 8 x435, repeated 8 x351, repeated 16 x109, dropped 16
+  x71, repeated 24 x7, dropped 24 x3, dropped 32 x1. First at frame
+  114900 (1.2 s), last at 357.4 s, 57 to 123 in every 30 s, mostly in
+  pairs a few hundred frames apart (a drop and the repeat that puts it
+  back, or the reverse). Channels 2 to 8 the same frames (channels 7
+  and 8 from frame 253676); 9 to 16 not looped, not judged.
+- Owner (`.owner-before.txt` at t=780, `.owner-after.txt` at t=1140):
+  `capture_faults=0 playback_faults=0 tx_reprimes=0 detaches=0
+  servo_rejected=0`, `back_holes=0/0` before and after, `out_holes` 0/0
+  to 2/1000 (the harness's start), `tx_links` 0 to 2, `tx_i=-15.79
+  rx_i=16.06`. Nothing on the Pi marks the slips.
+- Why the far loop: the same signature as FOUND 2026-11-19 19:08 UTC (a
+  return 8 samples early in the far device's own stamps, the Pi's
+  outgoing stamps continuous), only far more often (about 2.7 a second
+  against one per 25.75 s) and in both directions of slip. The 88.2
+  check an hour before had two impulses 8 early in 300. Not shown here:
+  no eth0 capture was taken (the catch ring disturbs the endpoint and
+  needs the operator's word), so "in what the far device returns" is
+  the earlier day's location, not this run's.
+- Not usable as the reference's host gain: a failed run is no figure
+  for `USB16X16_HOST_GAIN`, so the -12 dB soak of 2026-11-20 was not
+  judged again.
+
+What cleared it on 2026-11-19 was a power cycle of the Ferrofish. Owed:
+the far loop clean at 96 (the operator at the units), then this report
+again; the 48 kHz control for the playback faults.
