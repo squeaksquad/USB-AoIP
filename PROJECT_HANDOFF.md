@@ -18431,3 +18431,24 @@ rate.**
   only through analog, which cannot be judged bit-exact). Not known:
   whether 96 also slipped on 2026-10-31, when its bitexact passed, or
   what changed since.
+
+**CORRECTION (session, 2026-11-22 ~12:35 UTC), to the two entries of 12:16
+and 12:28 above.**
+- The capture of 12:16 broke the pickup's rule "no packet capture during
+  a measurement". The rule exists because the tcpdump ring caused USB
+  playback faults at 96 on 2026-10-31. The operator approved the capture
+  but was not told about the rule. Checked afterwards: the owner's
+  USBLINK lines across it read `capture_faults=0 playback_faults=0
+  last_fault=0`. The slip rate with the capture, about 70 per channel in
+  30 s, matches the runs without one: 63 to 75 in the deleted 30 s
+  attempt, about 100 per 30 s in the 360 s runs. So the capture did not
+  make the slips. Its finding stands.
+- The pickup's operating note "after moving the loop to 96, reboot the
+  Metric Halo before a bit-exact measurement" was not followed today:
+  the move to 96 this morning had no Metric Halo reboot. On 2026-10-29
+  the same kind of slip at 96 (a block misplaced in what the Pulse
+  returns) went away after a Metric Halo reboot and did not come back
+  in three runs. On 2026-11-19 a Metric Halo reboot did not clear the
+  8-early impulses, and the Ferrofish's power cycle did. Today the
+  Ferrofish's power cycle did not clear the slips. The Metric Halo
+  reboot at 96, followed by a bitexact, is the step not yet tried.
