@@ -18341,3 +18341,62 @@ both`), read for steps of 8 in the stamps of the return against the
 Pi's outgoing ones, which says Pi or far loop; then the endpoint
 restarted (the catch disturbs it). Owed as before: item 4, the 48 kHz
 control.
+
+**FOUND 2026-11-22 12:16-12:23 UTC (session, on the operator's word "Yes,
+capture it"): the 8-frame slips at 96 kHz are on the wire, in what the far
+device returns. The Pi's four outgoing flows are continuous and carry
+the bitexact noise in place; the far device's return carries the same
+noise at a stamp offset of 143 that drops to 135 (and briefly 151) and
+comes back, 66 to 68 times per looped channel in 26.5 s. They line up
+one for one with the slips the Mac's report found. So the owner,
+Inferno's two directions, the gadget and the Mac carry what they are
+given; the fault is in the far loop (Pulse, MADI, Ferrofish, Metric
+Halo). Unit left as found, in direct at 96, reading 911.**
+
+- Capture: `sudo -n usb16x16-dante-catch start 169.254.248.189 both 10`
+  at 12:16:56, stopped at 12:17:30 (814470 packets, 0 dropped by the
+  kernel). The ring was copied to the Mac over wlan0 after the run (not
+  eth0), then cleared on the Pi.
+- Across it, `ip96-direct-catch-bitexact-30s-32f-20261122T121655Z`
+  (bitexact, 30 s, `--loop-channels 8`, 32 frames): `pass: false`,
+  63 to 73 slips per looped channel, 8 or 16 frames, no
+  discontinuities. A first attempt at 12:16:10 ran without a capture
+  (a shell quoting error stopped the catch from starting); it was
+  deleted and not counted.
+- Reader `outputs/latency/ip96-catch-pcap_offsets.py`. It matches each
+  return channel to the outgoing channel it carries by exact 24-bit
+  samples, then follows the stamp offset sample by sample. Its output
+  is `...T121655Z.pcap-offsets.txt`.
+  - On the wire, four flows from the Pi (4 ch, 32 frames) and two to it
+    (8 ch, 16 frames). No stamp step off the packet size on any of
+    them.
+  - Eight return channels carry the eight looped outgoing ones: return
+    :33293 ch1, ch2, ch8 and :38562 ch1 to ch5.
+  - Every sample matches at offset 143, 135 or 151; unmatched 0 to 4
+    per channel.
+  - The offset changes come in drop-and-return pairs, and every channel
+    changes at the same stamps.
+- Lining up the wire with the Mac: the Mac's slips at
+  1795349829.9513 and 832.3479 (channel 1) are the wire's offset
+  changes at 829.9871 and 832.3837, 36 ms apart on both. The run's
+  first slips (819.55) came before the ring's window.
+- Owner over the run: `capture_faults=0 playback_faults=0
+  tx_reprimes=0`, `back_holes=0/0`, `tx_resyncs=0 rx_resyncs=0
+  net_errors=0`; endpoint the start of 04:44:55, start check `ok`,
+  `NRestarts=0`.
+- After the capture, `ip96-direct-aftercatch` (`20261122T122240Z`, 200
+  loaded impulses): 675 x198, 667 x2, `daw_timeline` 911. This time
+  the capture did not move the round trip (the 12-sample step of
+  2026-11-19 did not recur), so no endpoint restart was needed.
+
+What this settles. The owner changes since 2026-10-31 (bc486911,
+bb3cd6ca) are not the cause of the 96 kHz slips. This matches FOUND
+2026-11-19 19:08 and is far more frequent. Not located: which far device
+slips, and why it does at 96. The Ferrofish's power cycle did not clear
+it (05:07 UTC).
+
+Owed, all at the operator's units, not on the Pi: the clock and lock
+state of the Pulse, the Ferrofish and the Metric Halo at 96, or a
+bitexact with one of them taken out of the loop. Then the host-gain
+report at 96 again (item 4), and the 48 kHz control for the playback
+faults (item 5), which does not depend on this.
