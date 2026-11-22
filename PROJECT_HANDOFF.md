@@ -18452,3 +18452,45 @@ and 12:28 above.**
   8-early impulses, and the Ferrofish's power cycle did. Today the
   Ferrofish's power cycle did not clear the slips. The Metric Halo
   reboot at 96, followed by a bitexact, is the step not yet tried.
+
+**MEASURED 2026-11-22 12:32-12:41 UTC (session, on the operator's word "48
+control now"): item 5, the 48 kHz control for the playback faults. Owner
+bb3cd6ca at 48 kHz without `--idle-phase`, through the candidate
+launcher with the service stopped: 60 loaded opens, one playback fault
+(`last_fault=-32`). So the faults also happen without the option and are
+not shown to be its doing. Service restored and checked at 528. Nothing
+is ACCEPTED.**
+- `outputs/latency/idlephase-20261120/cand48.sh control48` is cand.sh's
+  48 kHz form. It stops the service and starts the candidate
+  `usb16x16-dante-owner-idlephase` (bb3cd6ca, the installed binary)
+  with the service's 48 kHz arguments, less `--idle-phase`, the
+  rate-request file and the ppm file. It adds the preset the 48 kHz arms
+  used (`dante-immersive-one-sub.dsp`) and a `/dev/shm` meter and
+  monitor-status file. START line: `rate=48000 ... seed_ppm=-16.59
+  seed_from_file=1 prime_drop=28 capture_drain=1 idle_phase_us=-1`;
+  log `/dev/shm/dante-owner-20261122T123211Z.log`, copied as
+  `owner-control48.txt`.
+- 60 loaded opens (`control48/`, `opens-control48.txt`): 376 x53,
+  377 x7, none failed. With the option (`svc48-unity`): 376 x55, 377 x4,
+  one 373 (a host pause).
+- Primes found: 82 x38, 81 x17, 83 x1, 88 x3, 111 x1; unanchored 0.
+  The with-option arms of 2026-11-21 found 81 to 83 in about 85 %.
+- One playback fault, `playback_faults` 0 to 1, at t=340.2
+  (12:37:50.9 UTC), in the USBLINK line of the 60th open. That open
+  read 376. No capture fault, re-prime, detach, resync or loss;
+  `gap_us_max` 1045, `back_holes=0/0`. `dsp_us_max` 30.6 at t=300.
+- Against the option at 48 on this binary: three faults in about 90
+  opens (the -12 dB arm), then none in 93 (the unity arm). Without it:
+  one in 60. The counts are too small to compare rates. What they do
+  show is that the fault occurs without the option, at 48, on this
+  binary. Its cause stays open (pickup's open list).
+- Restored: candidate stopped, `systemctl start usb16x16-dante` at
+  12:38:13 UTC. The owner's command line again carries `--idle-phase
+  60`, start check `ok` at 12:39:18 (new invocation), `NRestarts=0`.
+  Noise probe `ip48-svc-restored` (`20261122T123923Z`) clean from 529;
+  `ip48-svc-restored` (`20261122T124003Z`, 200 loaded impulses) 376
+  x200, `daw_timeline` 528, spread 0, discontinuities 0 / 0.
+
+Left from the pickup: item 4, the host-gain report at 96, is blocked on
+the far loop's 96 kHz slips. Next there: back to 96, a Metric Halo
+reboot, then a 30 s bitexact (CORRECTION above).
