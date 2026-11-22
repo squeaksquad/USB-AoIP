@@ -18400,3 +18400,34 @@ state of the Pulse, the Ferrofish and the Metric Halo at 96, or a
 bitexact with one of them taken out of the loop. Then the host-gain
 report at 96 again (item 4), and the 48 kHz control for the playback
 faults (item 5), which does not depend on this.
+
+**MEASURED 2026-11-22 12:28-12:30 UTC (session, on the operator's words "It's
+at 48" and "Muted, run it"): at 48 kHz the same far loop is bit-exact. A
+30 s bitexact in direct PASSES on all eight looped channels, with no
+slip. So the 8-frame slips of the morning are specific to 96 kHz (the
+Pulse's 2x mode and MADI at 2x), not a fault of the far loop at every
+rate.**
+- The domain was moved by the operator from the Mac / Dante Controller.
+  `dante-sync status` (read-only) before the run: MHLink, USB-AoIP,
+  D2USB, FF-PULSE-16-DX and the DVS all at 48k, and the leader
+  FF-PULSE-16-DX's word clock LOCKED. At 96, read at about 12:25 UTC,
+  everything was 96k and also LOCKED. So no rate or lock state shows
+  the 96 kHz fault. 169.254.248.189, the far end of every capture, is
+  the FF-PULSE-16-DX.
+- Endpoint restarted by the applier at 12:28:15 UTC, `owner.conf` with
+  `METERS=1` only (direct), start check `ok` at 12:29:20.
+- `ip48-direct-bitexact-30s-32f-20261122T122941Z` (`--loop-channels 8`,
+  32 frames): `pass: true`; first lock 528 / 529; lost locks 0,
+  slips 0, mismatches 0, off-grid 0, longest zero run 0 on channels
+  1-8; discontinuities 0 / 0.
+- Owner over the run: no faults, re-primes or resyncs.
+  `back_holes` went from 0/0 to 1/12: one all-sixteen-channel zero run
+  of 12 frames on the return. It is not inside the judged span of
+  channels 1-8, which had no zero run, so it falls outside the lock:
+  the harness's start or end, by reasoning, not located.
+- Item 4 (the host-gain report at 96) stays blocked on the 96 kHz
+  slips. Not tried: the Pulse's MADI looped on itself by cable, to take
+  the Metric Halo out (the Pulse's routing cannot loop Dante to Dante;
+  only through analog, which cannot be judged bit-exact). Not known:
+  whether 96 also slipped on 2026-10-31, when its bitexact passed, or
+  what changed since.
