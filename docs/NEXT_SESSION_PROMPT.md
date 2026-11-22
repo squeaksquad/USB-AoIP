@@ -13,7 +13,89 @@
 > `outputs/` is a nested clone of the evidence repository: never check out a
 > commit that tracks `outputs/` in place (CLAUDE.md, working rules).
 
-## Current pickup — 2026-11-21: page redesign phase 3 and the idle-phase owner are installed and measured, not accepted. Start here.
+## Current pickup — 2026-11-22: the owed checks are done but one, which is blocked by the far loop at 96 kHz. Start here.
+
+You are picking up the USB-AoIP project on the branch `web/redesign-phase3`. Read `CLAUDE.md`,
+then the section below this one (2026-11-21). Its binding rules, how to measure, the "after
+ACCEPTED" steps and the tests all still hold. Then read the handoff's entries of 2026-11-21 20:31
+UTC onward:
+
+    grep -n '^\*\*\(MEASURED\|FOUND\|CORRECTION\|DECIDED\) .*2026-11-2[12]' PROJECT_HANDOFF.md
+
+Read them by entry, never the whole file. The handoff wins where anything disagrees.
+
+**Pushed or not.** Nothing from 2026-11-22 is pushed. The branch is 14 commits ahead of
+`origin/web/redesign-phase3` and 59 ahead of `origin/main`. The evidence repository is 10 ahead
+of its `origin/main`. No pull request. Do not push or open it until he says. (The 2026-11-21
+section below says nothing was ever pushed. That is wrong: the branch and the evidence were
+pushed on 2026-11-21, see the handoff's CORRECTION of that day.)
+
+**What is on the Pi at the close (read it back).**
+- The same install as the 2026-11-21 section: owner bb3cd6ca with `IDLE_PHASE=60`, wrapper
+  203c6fa5, web 1.9.0, applier 1.11.0.
+- Left at **96 kHz, direct** (`owner.conf`: `METERS=1`, `RATE=96000`). Endpoint start
+  13:35:08 UTC, start check `ok`, `NRestarts=0`. The monitors were muted by the operator for the
+  bit-exact runs. Ask whether they still are before anything loud.
+- The domain is at 96, as `dante-sync status` shows (`~/Development/Dante Switcher/.build/debug/dante-sync status`,
+  read-only, a few seconds). Every device reads 96k, and the leader FF-PULSE-16-DX is locked to
+  the Metric Halo's word clock.
+- The Pi's far end on eth0 (169.254.248.189) is the FF-PULSE-16-DX (the "Pulse", a Ferrofish).
+
+**The owed list of 2026-11-21, where it stands.**
+1. Direct at 48: done (2026-11-21 20:31). Noise clean from 528; 376 x800, 528.
+2. The fold-down probe (Stereo): done (2026-11-22 03:42), clean from 528.
+3. 44.1 and 88.2: done (04:31, 04:37).
+   - 44.1: noise clean from 505; opens 504, 504, 505. Two of the three are one sample under
+     the record; that is unexplained.
+   - 88.2: noise clean from 888; 888 x3, with two impulses 8 early.
+4. **Host-gain report at 96: BLOCKED.**
+   - `bitexact --loop-channels 8` at 96 direct fails on 8-frame slips. The slips come in pairs:
+     a drop of 8 frames and its repeat a few tens of frames later.
+   - It failed four times today: two 360 s runs and two 30 s runs.
+   - FOUND 12:16 (an eth0 capture): the slips are on the wire, in what the Pulse returns. The
+     Pi's outgoing stream is continuous, so the owner, Inferno and the gadget are not the cause.
+   - At 48 the same loop passes bitexact (12:29).
+   - These did not clear it: the Pulse's power cycle (05:07), and a move to 96 followed by a
+     Metric Halo reboot (13:35).
+   - DECIDED: the operator will not cable the Pulse's MADI out to its own MADI in, which was
+     the test that would split the Pulse from the Metric Halo.
+   - Left, if he wants it: compare the Pulse's and the Metric Halo's settings at 96 with
+     2026-10-31, when bitexact passed at 96, especially which unit clocks MADI. Then a 30 s
+     bitexact (command in the handoff, 12:28 entry), and if it passes, the 360 s report and the
+     -12 dB soak of 2026-11-20 judged again with it.
+5. The 48 kHz control: done (12:32). It gave one playback fault in 60 opens without
+   `--idle-phase`, so the faults are not shown to be the option's. The service was restored,
+   and 528.
+
+So the battery and every check are done, except the host-gain report at 96, which waits on the
+far loop. Whether that blocks ACCEPTED is his call.
+
+**Learned today (rules for the next session).**
+- In zsh, `P="ssh ..."; $P cmd` does not split words. Use a function:
+  `P() { ssh -o HostKeyAlias=audio-dev.local -o BatchMode=yes bdimaio@169.254.92.97 "$@"; }`.
+- The capture rule ("no packet capture during a measurement", in the 2026-11-01 section's rules)
+  was broken once today. The operator approved the capture but was not told the rule first;
+  tell him. That capture caused no fault and no level step.
+- To read a capture, copy the ring to the Mac over wlan0 after the run (`scp` from
+  `192.168.1.201`), not over eth0, then `usb16x16-dante-catch clear` on the Pi.
+  `outputs/latency/ip96-catch-pcap_offsets.py` matches each return channel to the outgoing
+  channel it carries and follows the stamp offset sample by sample.
+- `outputs/latency/idlephase-20261120/cand48.sh` is the 48 kHz candidate run. It stops the
+  service and does not restart it. Restore with the candidate launcher's `stop`, then
+  `sudo -n systemctl start usb16x16-dante`, then wait for a new start-check invocation to read
+  `ok`.
+- wlan0 dropped its association at about 03:30 UTC. The fix was the operator's: reload the
+  driver (`sudo modprobe -r brcmfmac_cyw brcmfmac && sudo modprobe brcmfmac`), then
+  `sudo nmcli connection up "netplan-wlan0-The Snack Goblins"`. When the page goes silent after
+  a rate move, use the eth0 forward from the 2026-11-21 section.
+
+**Open (do not start unasked).** The 2026-11-21 list, plus:
+- the 96 kHz slips in the far loop (above);
+- the 44.1 opens one sample under the record;
+- the 12-frame all-channel return hole during the 48 kHz bitexact (12:29), probably the
+  harness's start or end, not located.
+
+## Pickup — 2026-11-21: page redesign phase 3 and the idle-phase owner are installed and measured, not accepted (history; the rules, how to measure and the tests in it still hold).
 
 You are picking up the USB-AoIP project (Raspberry Pi 5 UAC2 gadget, 16x16, bridged to Dante
 through Inferno) on the branch `web/redesign-phase3`. Read `CLAUDE.md` (the repo map and the
