@@ -18297,3 +18297,47 @@ unchanged.
 What cleared it on 2026-11-19 was a power cycle of the Ferrofish. Owed:
 the far loop clean at 96 (the operator at the units), then this report
 again; the 48 kHz control for the playback faults.
+
+**MEASURED 2026-11-22 05:09-05:16 UTC (session, on the operator's word
+"Ferrofish cycled"): the Ferrofish's power cycle did not clear it. The
+host-gain report at 96 kHz direct FAILS again, with more slips (1148 to
+1264 per looped channel), nearly all of exactly 8 frames. A 200-impulse
+run beside it reads 912 with one impulse 8 early. Owner clean. Two
+attempts, the same failure: the session stops here and proposes
+locating it. Item 4 not done.** The Pi saw the Ferrofish go: Inferno's
+`flow index=0 timeout (not receiving media packets)` and `TimedOut`
+05:07:48 to 05:07:54 UTC, nothing after; no resync, loss, fault or
+restart on the owner; endpoint still the start of 04:44:55, start check
+`ok`, `NRestarts=0`.
+
+- `ip96-direct-afterff` (`20261122T050925Z`), 200 loaded impulses:
+  676 x199, 668 x1, `daw_timeline` 912, discontinuities 0 / 0.
+- `ip96-direct-afterff-bitexact-360s-32f-20261122T051030Z`, same
+  arguments as the run before: `pass: false`; first lock at 912 to 913;
+  channel 1: 1264 slips (dropped 8 x633, repeated 8 x617, repeated 16
+  x11, dropped 16 x3), from 7.1 s to 359.6 s, 76 to 141 in every 30 s;
+  the median gap between consecutive slips 80 frames, so mostly a
+  drop of 8 and its repeat within a millisecond. Channels 2 to 8 the
+  same; no discontinuity, nothing off the grid, longest zero run 1.
+- Owner t=1500 to 1860: `capture_faults=0 playback_faults=0
+  tx_reprimes=0`, `back_holes=0/0`, `out_holes` 2/1000 to 4/1020 (the
+  harness's starts).
+
+What this changes. The impulse runs at 96 since 2026-11-19 carried "the
+Ferrofish's 8-early" impulse a few times in thousands; read against
+this, an impulse lands 8 early when it falls inside one of these
+80-frame windows, so the event may never have cleared on 2026-11-19, only
+become rarer, and impulse runs cannot see most of it. No bitexact had run
+at 96 since 2026-10-31 (PASS), so when the slips began is not known:
+the far loop's fault of 2026-11-19 is one candidate, the owner changes
+since (bc486911, bb3cd6ca) and anything else at 96 are not ruled out by
+this record. The one capture that located such an event (FOUND
+2026-11-19 19:08 UTC) found it in the far device's stamps; nothing here
+locates these.
+
+Proposed, on the operator's word: an eth0 capture of the Dante flows
+during a short bitexact at 96 direct (`usb16x16-dante-catch start ...
+both`), read for steps of 8 in the stamps of the return against the
+Pi's outgoing ones, which says Pi or far loop; then the endpoint
+restarted (the catch disturbs it). Owed as before: item 4, the 48 kHz
+control.
