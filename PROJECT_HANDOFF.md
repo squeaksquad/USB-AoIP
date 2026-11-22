@@ -18524,3 +18524,9 @@ out 25-32 cabled straight back to its MADI in 25-32, taking the Metric
 Halo out (proposed 2026-10-29). Not known: what differs from
 2026-10-31, when bitexact passed at 96, in the Pulse's or the Metric
 Halo's settings, for instance which device clocks MADI at 96.
+
+**DECIDED 2026-11-22 ~13:45 UTC (operator): no MADI cable loop on the Pulse.**
+The test that would have split the Pulse from the Metric Halo is not
+done. The 96 kHz slips stay located only as far as "in what the
+FF-PULSE-16-DX returns". Item 4 (the host-gain report at 96) stays
+blocked on them.
