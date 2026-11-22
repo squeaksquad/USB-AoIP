@@ -18214,3 +18214,40 @@ Owed before ACCEPTED: the 88.2 check (the operator moves the rate; 10 s
 before any audio); the 44.1 draw if the operator wants it decided; a
 host-gain report at 96 from a direct run and the -12 dB soak judged
 again with it; the 48 kHz control for the playback faults.
+
+**MEASURED 2026-11-22 04:37-04:40 UTC (session, on the operator's word
+"It's at 88.2"): the 88.2 kHz check on owner bb3cd6ca with
+`IDLE_PHASE=60`: noise probe clean from 888; three loaded opens of 100
+impulses at `daw_timeline` 888, 888, 888 (666 + 222), inside the
+record's 888 to 889. With the 44.1 entry above, item 3 done. Not
+ACCEPTED.** Read first: owner.conf `RATE=88200`, `DSP_PRESET`
+`dante-immersive-one-sub@88200.dsp` 987c8eb1, `DSP_LIVE=1`; START
+`rate=88200 ... rx_queue=192 prime_drop=72 capture_drain=1
+idle_phase_us=60`; endpoint start 04:36:23 UTC, start check `state=ok
+rate=11044 restarts=0` at 04:37:29 (first audio 04:37:30, more than 10
+s after the switch); the owner's status `fold=full level_db=0.0`;
+`NRestarts=0` after.
+
+- Noise probe (`ip88-full`, `20261122T043730Z`): nonzero from 888, no
+  zero run of 4 or more, endpoint lines +0.
+- Three opens, `USB16X16_OTHER_LOAD=0.1`, 100 impulses each:
+  `ip88-open-1` (`043811Z`) 666 x99, 658 x1; `ip88-open-2` (`043851Z`)
+  666 x99, 658 x1; `ip88-open-3` (`043931Z`) 666 x100. `daw_timeline`
+  888 on all three (the median), IOProc offset 222, discontinuities
+  0 / 0, endpoint lines +0.
+- The two impulses 8 samples early: one in each of the first two opens,
+  the owner clean. By the rule of 2026-11-19 they are the Ferrofish's
+  until shown otherwise; that event has been recorded at 96 only, so this
+  is its first sighting at 88.2 and was not located further.
+- The 16 primes of this start found 188 to 211, one 234, all anchored,
+  `last_fault=0` on every link line.
+- Cost, the owner's line at t=180.0: `dsp_us_max=70.5 dsp_us_mean=45.7`;
+  `meter_us_max=40.3 meter_us_mean=8.2`.
+- Owner at t=180: `capture_faults=0 playback_faults=0 tx_reprimes=0
+  detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1129`, `out_holes=0/0 back_holes=0/0`.
+
+Owed before ACCEPTED: a host-gain report at 96 from a direct run and the
+-12 dB soak of 2026-11-20 judged again with it; the 48 kHz control for
+the playback faults; the 44.1 draw (359 or 360 per open) if the operator
+wants it decided. The endpoint is left at 88.2 on the monitor preset.
