@@ -18136,3 +18136,39 @@ was not touched: endpoint start 20:30:17 UTC, `NRestarts=0`, start check
 `state=ok` throughout. Not known: what wedged the firmware (the
 band-steering fault of FOUND 2026-11-20 13:13 UTC stops traffic, not
 association), or whether it will recur.
+
+**MEASURED 2026-11-22 03:42 UTC (session, on the operator's word "Preset
+on, Stereo"): the fold-down probe on owner bb3cd6ca with `IDLE_PHASE=60`
+passes: the noise probe at 32 with the Stereo fold engaged at 0 dB on
+`Immersive - one sub` returns from sample 528 with no zero run. Item 2
+of the owed list done, at unity (2026-11-19's was at -12 dB on
+bc486911). Not ACCEPTED.** Read first: owner.conf `DSP_PRESET`
+`dante-immersive-one-sub.dsp` 6a2c8012, `DSP_LIVE=1`, `RATE` absent
+(48); endpoint start 03:40:56 UTC (the applier's restart from direct),
+start check `state=ok rate=6018 restarts=0` at 03:42:02; the owner's
+status `fold=stereo level_db=0.0 gain_db=0.0`, state 81 applied, no dim,
+no mute, no limits file. Read again after: unchanged, `NRestarts=0`. The
+eth0 forward to the page was closed before the run.
+
+- Noise probe (`ip48-stereo-unity`, `20261122T034204Z`): signal ready
+  after 3 probes, nonzero span 528..1245631, zeros inside the span 0.0%,
+  zero runs of 4 or more 0, IOProc offset 152, endpoint xrun/lag/error
+  lines +0.
+- The fold is in the returned signal: captured peak on input 2 0.3870,
+  against 0.0972 at -12 dB on 2026-11-19 (x3.98, -12.0 dB to the
+  hundredth) and 0.1000 on the direct probes; above the 0.25 the gain of
+  one input could return, so a sum of inputs. Not compared sample for
+  sample on the Pi (the Mac's `verify-fold.py` is that proof).
+- Cost, the owner's line at t=120.1 (the probe's minute): `dsp_us_max=39.1
+  dsp_us_mean=26.1`, `meter_us_max=8.9 meter_us_mean=4.6`.
+- Owner on the same line: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0
+  net_errors=0`, `out_holes=0/0 back_holes=0/0`, `gap_us_max=1051`. The
+  primes of this start found 82 to 88, one 116 and one 125;
+  `tx_unanchored=0`.
+
+Not measured: the switch itself (selected before the run), the 5.1 and
+Mono folds, a fold under a soak or load. Owed before ACCEPTED: the fold
+back to Full (the operator), then the 44.1 and 88.2 checks; a host-gain
+report at 96 from a direct run and the -12 dB soak judged again with it;
+the 48 kHz control for the playback faults.
