@@ -18112,3 +18112,27 @@ owner (a preset again, Stereo, then Full); the 44.1 and 88.2 checks; a
 host-gain report at 96 from a direct run and the -12 dB soak judged
 again with it; the 48 kHz control for the playback faults. The endpoint
 is left direct at 48.
+
+**FOUND 2026-11-22 ~03:30-03:50 UTC (session read the Pi; the operator
+ran the commands): wlan0 lost its association altogether, not only its
+traffic, and the page went with it; reloading the Wi-Fi driver and
+bringing the connection up once restored it.** The web service was
+active but listens on wlan0's address only (`--management-interface
+wlan0`), and wlan0 had none: NetworkManager `disconnected`, so the eth0
+forward of the pickup prompt failed too ("connect failed" on the Pi).
+`nmcli device connect wlan0` failed with "Secrets were required, but not
+provided"; the log shows why that message misleads: every attempt was
+`CTRL-EVENT-ASSOC-REJECT bssid=00:00:00:00:00:00 status_code=16` (the
+association failed in the driver/firmware, before the access point's
+answer), and NetworkManager files the give-up as `no-secrets`. The
+network was in the scan at signal 84 on 2.4 GHz. What fixed it, with
+the operator's sudo: `modprobe -r brcmfmac_cyw brcmfmac` (plain
+`modprobe -r brcmfmac` refuses: `brcmfmac_cyw` holds it), `modprobe
+brcmfmac`, then `nmcli connection up` on the netplan Wi-Fi profile
+(after the reload NetworkManager did not retry by itself, its
+autoconnect retries spent). wlan0 then had 192.168.1.201 and the page
+answered (401, the login) directly and through the forward. The audio
+was not touched: endpoint start 20:30:17 UTC, `NRestarts=0`, start check
+`state=ok` throughout. Not known: what wedged the firmware (the
+band-steering fault of FOUND 2026-11-20 13:13 UTC stops traffic, not
+association), or whether it will recur.
