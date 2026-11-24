@@ -13,7 +13,67 @@
 > `outputs/` is a nested clone of the evidence repository: never check out a
 > commit that tracks `outputs/` in place (CLAUDE.md, working rules).
 
-## Current pickup — 2026-11-22: the owed checks are done but one, which is blocked by the far loop at 96 kHz. Start here.
+## Current pickup — 2026-11-24: phase 3 and the idle-phase owner are ACCEPTED and folded into the tree. Start here.
+
+You are picking up the USB-AoIP project on the branch `web/redesign-phase3`. Read `CLAUDE.md`,
+then this section, then the handoff's entries of 2026-11-24:
+
+    grep -n '^\*\*\(FOUND\|DECIDED\|MEASURED\|ACCEPTED\|DONE\|Operator\).*2026-11-24' PROJECT_HANDOFF.md
+
+Read by entry, never the whole file. The handoff wins where anything disagrees. The binding
+rules, how to measure and the test list are in the 2026-11-21 section below. The 2026-11-22
+section's "learned today" rules also hold.
+
+**Pushed or not.** The branch is pushed to a45b084 (squeaksquad/USB-AoIP#15 is open, watched
+by another session with Auto-fix). The commit that adds this section is not pushed. The
+evidence repository is pushed to ca89fde. The PR's CI run on a45b084 is the first time two
+things run: the owner built from the folded source (it needs ALSA, so it never compiles on the
+Mac), and the step that checks `dante/owner/idle-phase.patch` reverses under GNU patch. Check
+that CI is green before relying on either. Do not merge; do not push without his word.
+
+**What is on the Pi (read it back; nothing was changed on 2026-11-23/24).**
+- The accepted set (ACCEPTED 2026-11-24): owner bb3cd6ca (`--idle-phase 60`), start wrapper
+  203c6fa5, `transport.conf` 6818176f, DSP runner 46f36659, web 1.9.0, applier 1.11.0 with
+  the Control Room page, Inferno config 85a5256f. The replaced files are kept as
+  `*.idlephase-previous`.
+- At **48 kHz, direct**: the arbiter moved it at 13:42:47 UTC on 2026-11-22, after the last
+  measurement. The 2026-11-22 section's "left at 96" is wrong. Start check `ok` (rate=6017),
+  `NRestarts=0`. Whether the monitors are still muted is not known: ask before anything loud.
+- Read it back with the command in the 2026-11-21 section.
+
+**What 2026-11-24 settled.**
+- The tests and pass criteria do not explain the 96 kHz slips (FOUND). The harness has
+  passed at 96 before. Three instruments agree, and the shift is in what the far loop returns.
+  88.2 slipped the same way once on 2026-11-01. The slips are per channel, on an 8-sample grid.
+  So this is a far-loop fault at 2x, not "96 only".
+- Impulse runs and zero-run soaks cannot see a slip. Only `bitexact` counts as clean at 2x.
+- The operator: nothing in the far loop's routing or settings has changed since 2026-11-01.
+  Devices are confirmed at rate and locked before any 2x measurement. The Metric Halo strips
+  t1-t8 are unprocessed pass-through (MA25-32 -> Direct Out MADIO), and MIOConsole has no route
+  around the mixer. MHLink is Metric Halo's own network, not Dante. So the Pulse and the
+  Metric Halo cannot be split without the MADI cable loop, which he declined (2026-11-22).
+- Item 4 (DECIDED): the host gain at 96 comes from a failing 96 bitexact report (unity both
+  ways). The -12 dB soak at 96 of 2026-11-20, judged again with it, is `matched-events`.
+  Every owed check had a result, and he accepted.
+- DONE: the idle-phase patch is applied in `dante/owner/main.cpp` (4d885b76), and
+  `dante/owner/point-of-record/` holds bb3cd6ca's sources. The installer renders
+  `transport-idlephase.conf`. The dev-unit stagers take the patch back out (`patch -s -f -R`)
+  to rebuild the earlier owners.
+
+**Open (do not start unasked; say they exist).**
+- The far loop's 2x slips. The only test left that splits it is the MADI cable loop (declined).
+  The clock question not yet answered: whether the Metric Halo's word clock out is 1x or 2x at 96.
+- `docs/install/TO-VERIFY.md` item 23: whether the installer's one-`-I` build of the point of
+  record hashes to bb3cd6ca on the development unit.
+- From before, unchanged:
+  - the playback faults at some host opens;
+  - the open after a long idle;
+  - the 44.1 opens one sample under the record;
+  - the 12-frame return hole in the 48 kHz bitexact of 2026-11-22;
+  - wlan0 and band steering;
+  - the phase-3 items listed in the 2026-11-21 section.
+
+## Pickup — 2026-11-22: the owed checks are done but one, which is blocked by the far loop at 96 kHz (history; its rules still hold).
 
 You are picking up the USB-AoIP project on the branch `web/redesign-phase3`. Read `CLAUDE.md`,
 then the section below this one (2026-11-21). Its binding rules, how to measure, the "after
