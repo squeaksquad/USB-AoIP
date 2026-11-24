@@ -369,7 +369,7 @@ void test_hostile_files(const std::string& root, const std::string& good) {
     check(m::read_file(dir + "/nothing", m::kFileCap, text, reason) == m::Read::absent, "a missing file is absent");
     put(dir + "/good", good);
     check(m::read_file(dir + "/good", m::kFileCap, text, reason) == m::Read::ok && text == good, "a regular file is read whole");
-    ::symlink((dir + "/good").c_str(), (dir + "/link").c_str());
+    check(::symlink((dir + "/good").c_str(), (dir + "/link").c_str()) == 0, "the link is made");
     check(m::read_file(dir + "/link", m::kFileCap, text, reason) == m::Read::invalid, "a symbolic link is invalid (" + reason + ")");
     ::mkfifo((dir + "/fifo").c_str(), 0644);
     check(m::read_file(dir + "/fifo", m::kFileCap, text, reason) == m::Read::invalid, "a FIFO is invalid, and never blocks");
@@ -388,7 +388,7 @@ void test_hostile_files(const std::string& root, const std::string& good) {
     std::FILE* list = ::popen(("ls -A '" + dir + "' | grep -c '^\\.' || true").c_str(), "r");
     char count[16]{};
     if (list != nullptr) {
-        std::fgets(count, sizeof count, list);
+        if (std::fgets(count, sizeof count, list) == nullptr) count[0] = '\0';
         ::pclose(list);
     }
     check(std::string(count) == "0\n", "the writer leaves no temporary file");
@@ -827,7 +827,7 @@ void test_start_rules(const std::string& root) {
     {
         Rig rig(root, "start-linkcopy");
         put(rig.directory + "/real", saved);
-        ::symlink((rig.directory + "/real").c_str(), rig.paths.saved.c_str());
+        check(::symlink((rig.directory + "/real").c_str(), rig.paths.saved.c_str()) == 0, "the link is made");
         rig.control->poll(1 * kMs);
         check(rig.status().active == "mains", "a copy that is a link is no copy");
     }
@@ -1013,7 +1013,7 @@ int main(int argc, char** argv) {
     test_folds_reach_the_stage(root);
     test_off_fold(root);
     test_idle(root);
-    std::system(("rm -rf '" + std::string(root) + "'").c_str());
+    check(std::system(("rm -rf '" + std::string(root) + "'").c_str()) == 0, "the scratch directory is removed");
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;

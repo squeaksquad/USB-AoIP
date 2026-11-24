@@ -1062,7 +1062,7 @@ class SystemRunner(FakeRunner):
         if argv[0] == "journalctl" and "-n" in argv:
             self.calls.append(argv)
             return 0, "\n".join(f"2026-11-17T00:00:{i:02d}+0000 pi {argv[2]}[1]: line {i}" for i in range(self.journal_lines))
-        if argv[0] == "modinfo":
+        if os.path.basename(argv[0]) == "modinfo":
             self.calls.append(argv)
             return 1, "modinfo: ERROR: Module usb_f_uac2 not found."
         if argv[:2] == ["systemctl", "reboot"]:
