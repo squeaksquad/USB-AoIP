@@ -18530,3 +18530,78 @@ The test that would have split the Pulse from the Metric Halo is not
 done. The 96 kHz slips stay located only as far as "in what the
 FF-PULSE-16-DX returns". Item 4 (the host-gain report at 96) stays
 blocked on them.
+
+**FOUND 2026-11-24 (session, read-only: the Mac's evidence and code, the Pi read
+over SSH; no measurement, nothing changed): the tests and pass criteria do not
+explain the 96 kHz slips. The harness is not rate-dependent where it matters, it
+has passed at 96 before, and three instruments agree. The fault also belongs to
+88.2 (one bitexact failure of the same kind, 2026-11-01), so it is a 2x-mode
+fault of the far loop, not "96 only". Two criterion points stand: impulse runs
+and zero-run soaks are blind to it, and item 4's host gain is already in the
+failing reports. A Fable 5.2 medium advisor read the same files on its own and
+agreed; its new points were checked here before use.** Asked by the pickup
+session: could our tests or criteria make 96 look broken, or 48 look clean?
+
+- Pi read back: it is at **48 kHz**, not 96 as the pickup says. Arbiter request
+  ab358eb8 at 13:42:47 UTC on 2026-11-22, endpoint start 13:42:48, start check
+  `state=ok rate=6017` at 13:43:53, `NRestarts=0`, `owner.conf` `METERS=1`
+  (direct). Inferno config 85a5256f (`SAMPLE_RATE "48000"`, RX/TX latency 1 ms
+  in ns at every rate), transport.conf 6818176f: its 96 keys are the D=96
+  battery's of 2026-11-01 plus `IDLE_PHASE=60`.
+- The harness is unchanged since 2026-11-10 (renames only). `bitexact
+  --loop-channels 8` passed at 96 on the same loop on 2026-10-29 (three runs
+  after the Metric Halo reboot), 10-31 22:41, 11-01 00:16 and 11-01 04:27.
+  Lock is self-predicting from the sequence, with no rate-dependent window.
+- Three instruments put the shift upstream of the Pi's receive and the Pi's
+  send intact: the Mac's `bitexact`, the owner's `--seq-check` (2026-10-29
+  14:48: `point=back` shifted, `point=out` clean) and the wire reader (10-29
+  catch3; 11-22 12:16). Re-checked `ip96-catch-pcap_offsets.py`: offset 135
+  means the return carried the outgoing audio 8 samples newer (a shorter
+  delay, still causal). That is not stale data from a late packet.
+- New in the 11-22 offsets file: 320 of the 334 listed offset changes are at
+  stamp = 4 mod 8, and the shifted windows are multiples of 8 long. The slips
+  are per channel, not all-channel: `ip96-mhreboot-bitexact-30s` lost locks per
+  channel 1-8 are 108, 112, 106, 96, 96, 90, 86, 84. A Dante packet (16 frames)
+  or a MADI link slip would move every channel together. The pattern fits an
+  8-sample block engine with per-channel reads at 2x hovering on a buffer
+  threshold: the Metric Halo strips or the Pulse's router. Drop and repeat in
+  pairs with no net loss means locked clocks with phase wander, not free ones.
+- 88.2: `d72b882-bitexact-360s-32f-20261101T151314Z` FAILED with dropped 8 then
+  repeated 8, eight frames later, on all eight channels; two later runs that day
+  passed. So "44.1 and 48 pass, 96 fails" is better read as 1x passes, 2x slips
+  in some far-loop states. The 44.1 bitexact failures of 2026-10-27 (`r44-*`)
+  were the owner's start slip, fixed that day (`r44fix-*` pass), not this.
+- Impulses exactly 8 early, runs since 2026-10-29: 96: 514 in 45,050 (about 1 %
+  on 11-19, 0.2 % on 11-20, 0.5 to 1 % on 11-22); 88.2: 2 in 6,500, both on
+  11-22 (0.67 %); 48: 2 in 46,000. On 11-22 the wire had 0.74 % of the time
+  shifted, the same fraction. So an impulse run sees the slip only as the
+  share of impulses that land in a shifted window.
+- Criterion 1, blind instruments: the impulse battery and the zero-run soak
+  cannot see a slip, which leaves no zeros. So the 96 batteries of 11-19 and
+  11-20 "passed" while the loop was in this state. Only `bitexact` counts as
+  "clean". 48's clean bitexact record on this loop is 10-29 (360 s) and 11-22
+  (30 s).
+- Criterion 2, item 4 is held by a session rule, not by the code:
+  `soak_reference.py` `host_gain()` checks the report's kind, rate and
+  |gain-1| < 1e-4, not `pass`. Every failing 96 report of 11-22 carries
+  `hostGain` 1 / 1 with the same widths as the passing 96 (10-31) and 48
+  reports. The gain comes from held DC steps (`HostGain.swift`), which a slip
+  cannot disturb. `check_windows` would fail an event whose window overlaps a
+  shifted span, but at 0.7 % of the time shifted most events would not.
+- Not shown: what changed in the far loop between 2026-11-01 (bitexact passes)
+  and 2026-11-19 (the first 8-early impulses): the MIOConsole session or strips,
+  firmware, the clock source. Nobody has compared them. The 11-22 pcap was not
+  kept, so packet arrival times against stamps cannot be read for it.
+
+Proposed, for the operator to pick (each on his word; monitors muted first for
+any `bitexact`):
+1. At the units, no measurement: each unit's clock source at 96, the Metric
+   Halo's word-clock output rate at 2x (1x or 2x), and the MIOConsole session
+   and strips on MADI 25-32 against 2026-11-01.
+2. One variable, no cable: in MIOConsole route MADI in 25-32 straight to MADI
+   out 25-32, bypassing strips t1-t8, then a 30 s `bitexact --loop-channels 8`
+   at 96 direct. If it passes, it is the strips; if it still slips, it is the
+   Pulse side or the clocking.
+3. Rule decision, Mac only: whether item 4 may take its host gain from a
+   failing 96 report (unity both ways), and the 2026-11-20 -12 dB soak be
+   judged again with it.
