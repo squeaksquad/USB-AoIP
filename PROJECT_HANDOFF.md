@@ -18605,3 +18605,17 @@ any `bitexact`):
 3. Rule decision, Mac only: whether item 4 may take its host gain from a
    failing 96 report (unity both ways), and the 2026-11-20 -12 dB soak be
    judged again with it.
+
+**Operator, 2026-11-24, on the FOUND entry above: no routing or settings in the
+far loop have changed since 2026-11-01. When the domain goes to a 2x rate,
+every device is confirmed at that rate and locked before any measurement.** So
+proposal 1's "what changed since 11-01" is answered: nothing. Read with the
+record, the same far-loop setup has given both results at 2x:
+- 10-29: fails at 96, then passes after a Metric Halo reboot;
+- 11-01: one failing 88.2 run, then two passing;
+- 11-19 to 11-22: fails at 96 through a Pulse power cycle and a Metric Halo
+  reboot.
+So the 10-31 and 11-01 passes show a good state of the far loop, not a good
+configuration. What the units are confirmed for (rate and lock) does not
+include the Metric Halo's word-clock output rate at 2x (1x or 2x), which is
+still not on the record.
