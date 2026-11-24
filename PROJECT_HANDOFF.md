@@ -18787,3 +18787,37 @@ only shown by time (read `journalctl -u usb16x16-wlan-guard` and the
 supplicant's `CTRL-EVENT-DISCONNECTED` lines after a day or more), and
 the reload path has run only in the test. Remove with
 `sudo ~/usb-16x16-work/gadget/install-wlan-guard.sh rollback`.
+
+**FOUND 2026-11-24 14:43 UTC (session, the Pi only read): `disable_btm`
+does not stop the access point cutting the Pi's traffic; the guard has
+acted twice in its first 23 minutes and brought the link back both
+times.** The guard's log: `no working link (3 passes): reconnecting
+(attempt 1)` at 14:35:22 UTC and `wlan0 is back` at 14:36:05; the same at
+14:42:43, associated at 14:43:07, address at 14:43:09, the router
+answering three pings of three and the page 401 at 14:43:13. Before each
+there is no supplicant or kernel line at all: no `WNM`, no `Unknown
+Frame`, no disconnect but the guard's own (reason 3, locally generated),
+so the association stood (-49 dBm) and passed nothing, the fault of
+FOUND 2026-11-20 13:13 UTC, now about 14 and about 6 minutes after an
+association instead of 40 minutes or more. Each re-association was
+rejected once (status_code=16) before it took. The driver reload has not
+run. The audio was not touched (`usb16x16-dante` active,
+`NRestarts=0`). So on the 2.4 GHz radio the link now costs about a
+minute's outage every several minutes, which the guard repairs and does
+not prevent; what the access point is doing to this station is not
+answered from the Pi. Not tried: the connection's band set to 5 GHz, the
+radio the access point steers it to (one sample on the record: it passed
+traffic there for about two hours on 2026-11-19 before going dead, on a
+DFS channel; today that radio is on channel 157).
+
+**DONE 2026-11-24 14:46 UTC (the operator's sudo, on the word "Yes, try 5
+GHz"; the session read it back): wlan0 pinned to the 5 GHz radio, an
+experiment, the guard left running.** `nmcli connection modify
+"netplan-wlan0-The Snack Goblins" 802-11-wireless.band a` and
+`connection up`: band `a`, associated at 14:46:01 UTC with [the 5 GHz
+radio] on 5785 MHz (channel 157) at the first attempt, no reject,
+192.168.1.201, three pings of three to the router, the page 401;
+`disable_btm` still 1. Back with the same command and `bg`. What it is
+for: on 2.4 GHz the access point cut the traffic 14 and 6 minutes after
+an association (FOUND 14:43 UTC). Judge it by the guard's log after
+14:46 UTC: lines other than `watching` mean the link failed there too.
