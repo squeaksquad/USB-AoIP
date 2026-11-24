@@ -20,8 +20,9 @@ What is installed, from `service/` and `config/` (the point of record of
 - `usb16x16-dante-start-transport` is installed as the start wrapper;
   `usb16x16-dante-start` is its predecessor, kept because the tests compare
   the two.
-- `transport-rate882.conf` is the installed `transport.conf`. The other
-  `transport-*.conf` files are its earlier forms; `test-dante-start.sh
+- `transport-idlephase.conf` is the installed `transport.conf` (since
+  2026-11-20, ACCEPTED 2026-11-24). The other `transport-*.conf` files are
+  its earlier forms; `test-dante-start.sh
   transport` checks that each step left the owner's command line unchanged
   where it should.
 - `config/asound-inferno-owner-usb-aoip-rate882.conf` is the installed
@@ -55,17 +56,18 @@ Order: this first (the old page never emits a monitor section), then
 order. It is an owner change: the full battery. `test-owner-monitor.sh`
 checks all of it against a stand-in root (CI, `install-render`).
 
-## The owner's idle phase (not installed)
+## The owner's idle phase (installed, ACCEPTED 2026-11-24)
 
 `owner/idle-phase.patch` (2026-11-20) adds `--idle-phase US` to the owner.
-It is not applied in the tree: `owner/main.cpp` stays the installed owner's
-source, and the candidate is built with the patch applied to a copy. Its
-service form, written 2026-11-20 and not installed:
+Since 2026-11-24 it is applied in the tree: `owner/main.cpp` (4d885b76) and
+`owner/point-of-record/main.cpp` are the installed owner bb3cd6ca's source.
+The patch file is kept because the development unit's bundles take it back
+out to rebuild the owners installed before it. Its service form:
 
 - `service/usb16x16-dante-start-transport` has the transport key
   `IDLE_PHASE` (0 to 999, per rate like the others); without it the command
   line is the one before. The from-scratch installer installs this wrapper
-  with `transport-rate882.conf`, so it passes nothing new.
+  with `transport-idlephase.conf`.
 - `service/transport-idlephase.conf` is `transport-rate882.conf` with
   `IDLE_PHASE=60`.
 - `install/dev-unit/stage-owner-idlephase.sh`, `build-owner-idlephase.sh`

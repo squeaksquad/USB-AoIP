@@ -45,7 +45,7 @@ Pi's values as the shipped defaults:
 
 | File | What it holds | Assumes |
 |---|---|---|
-| `/etc/usb16x16/dante/transport.conf` (= `dante/service/transport-rate882.conf`, add1bc21) | Every queue and buffer depth per rate, prime drop, capture drain, rate requests | One switch hop to the far device, a far device sending 1 ms packets, macOS's class driver on the host (the prime drop cancels a draw specific to it) |
+| `/etc/usb16x16/dante/transport.conf` (= `dante/service/transport-idlephase.conf`, 6818176f; add1bc21 before 2026-11-20) | Every queue and buffer depth per rate, prime drop, capture drain, rate requests, the idle phase (`IDLE_PHASE=60`) | One switch hop to the far device, a far device sending 1 ms packets, macOS's class driver on the host (the prime drop cancels a draw specific to it) |
 | `/etc/usb16x16/dante/startcheck.conf` (new, optional) | `TOLERANCE=60`, `FLOOR=1000`, `SETTLE=45`, `WINDOW=10`, `FLOWS_TIMEOUT=180`, `MAX_RESTARTS=4`, `EPISODE=900` | That Dante audio is the only steady traffic of 128 bytes and over on the audio port; that the NIC has per-size receive counters (`ethtool -S`); that a lossy start is about 800 or 115 packets a second short, as on the development network; tolerance and floor measured at 48 kHz only |
 
 Three of those start-check values (`tolerance`, `floor`, `episode`) are
@@ -61,12 +61,12 @@ Pi `status` will find the hash it expects.
 
 | Installed path | On the Pi (sha256) | New installer |
 |---|---|---|
-| `/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner` | c84e6a36, built from `main.cpp` ec8d60bc (commit c4b273d) | Built on the machine; hash recorded. See question 2 below |
+| `/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner` | bb3cd6ca (ACCEPTED 2026-11-24), built from `main.cpp` 4d885b76 (`dante/owner/point-of-record/`); bc486911 from 2026-11-18, c84e6a36 before | Built on the machine; hash recorded. See question 2 below |
 | `/usr/local/libexec/usb16x16-dante/statime` | e1952224 | Built from `SOURCES.lock`; hash recorded |
 | `/usr/local/lib/usb16x16-dante/alsa-plugins/libasound_module_pcm_inferno.so` | c6b012ae (patches 0001-0005) | Built from `SOURCES.lock` with the five patches; hash recorded |
-| `/usr/local/libexec/usb16x16-dante/usb16x16-dante-start` | df6a1b0b | Same bytes |
+| `/usr/local/libexec/usb16x16-dante/usb16x16-dante-start` | 203c6fa5 (df6a1b0b before 2026-11-20) | Same bytes |
 | `/usr/local/libexec/usb16x16-dante/usb16x16-dante-startcheck` | fccfdd62 | Three lines changed (config keys), defaults identical |
-| `/etc/usb16x16/dante/transport.conf` | add1bc21 | Same bytes; kept if already present |
+| `/etc/usb16x16/dante/transport.conf` | 6818176f (add1bc21 before 2026-11-20) | Same bytes; kept if already present |
 | `/etc/usb16x16/dante/owner.conf` | applier-written | Shipped default only if absent |
 | `/etc/usb16x16/dante/asound-inferno-owner.conf` | 85a5256f at 48 kHz | Rendered: `NAME`, `DEVICE_ID`, `STATE_ID`, `BIND_IP`, rates from config. With the Pi's values it must render to 85a5256f; the render test checks that |
 | `/etc/usb16x16/dante/statime.toml` | 11b055df | Rendered: interface. Pi's values must give 11b055df |
@@ -109,13 +109,13 @@ Pi's archive. So either the installer installs and holds that exact kernel
 (the one every measurement was made on), or the rate-request patch is ported
 to 6.18.50+ and becomes a new, unmeasured module.
 
-**The repository's owner source is not the installed owner's.** The
-installed binary c84e6a36 was built from `main.cpp` ec8d60bc (commit
-c4b273d, 2026-10-30). `dante/owner/main.cpp` at HEAD is d4a39b8c (commit
-16f4784, 2026-10-31), which adds the `--chan-holes` diagnostic used for the
-96 kHz catch. With the option absent from the command line the audio path
-should be the same, but that build was run as a candidate, not accepted as
-the service's owner.
+**The repository's owner source is the installed owner's (since
+2026-11-24).** The installed binary bb3cd6ca (ACCEPTED 2026-11-24) was
+built from `main.cpp` 4d885b76: 8c9bf80e with `dante/owner/idle-phase.patch`,
+which is now applied in the tree. `dante/owner/point-of-record/` holds that
+file with the headers and bridge core it was built from, and the installer
+builds from there. (Until 2026-11-24 it held c84e6a36's source, ec8d60bc,
+commit c4b273d, while the development line had moved on.)
 
 ## 4. To read off the Pi before `adopt` or the install doc can be finished
 

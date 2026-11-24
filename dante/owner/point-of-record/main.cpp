@@ -29,7 +29,29 @@
 // same-shape artifact written to it into the running stage (dsp_live.hpp).
 // With --meter-file, three level meters (what the host sent, what goes to
 // Dante, what Dante returned) are published to that file by another such
-// thread (meter_tap.hpp); with or without a preset.
+// thread (meter_tap.hpp); with or without a preset. With a preset that has a
+// monitor section a fourth tap, monitor-in, reads the stage's output before
+// the monitor gains (pre-fader).
+//
+// The monitor block (phase 3; docs/web/MONITOR-FILES.md, monitor_ctl.hpp): a
+// thread made before the device is opened (rule 3), never real-time, polls
+// every 10 ms the state file the web service writes (--monitor-state, default
+// /run/usb-aoip-monitor/state) and the limits root's applier writes
+// (--monitor-limits, default /var/lib/usb16x16-apply/monitor-limits), and at
+// its first poll, when there is no valid state file, applies the start rule
+// with the remembered copy (--monitor-saved, default
+// /var/lib/usb-aoip-monitor/state). It publishes per-output gains to the
+// MonitorGains after the stage, asks the stage for each set's fold-down, and
+// writes what is in force to --monitor-status (default
+// /run/usb16x16-dante/monitor.status) whenever that changes. The defaults are
+// compiled in so the start wrapper need not change. It runs with or without a
+// preset: without a monitor section it writes one idle status and nothing
+// else. With --no-monitor there is no thread and no status file, and the
+// gains are never published (a monitor-section preset then plays at unity).
+// No block with a monitor-section preset goes out before its targets: the
+// first poll is made, and published, before the loop starts, and every prime
+// takes the published targets and starts the gains from silence
+// (OutDsp::prime_monitor), 10 ms up to them.
 //
 // --rate (default 48000) is the one rate the owner runs at, both PCMs and the
 // DSP preset alike (SAMPLE_RATE_DESIGN.md, step 3): a preset compiled for
@@ -56,6 +78,13 @@
 // telemetry thread prints a SEQ line, with the wall clock, for each lost lock:
 // frames dropped, repeated, or other (seq_check.hpp). It says on which side of
 // the owner a slip the Mac sees was made.
+//
+// With --chan-holes N (diagnostic, off by default) the loop watches channels
+// 1..N of what Inferno delivers for runs of 16 to 4800 zero frames that end in
+// signal, on any subset of channels (back_holes counts only all-sixteen runs),
+// and the telemetry thread prints a CHANHOLE line, with the wall clock, for each
+// (chan_holes.hpp). It is the trigger for the 96 kHz catch (RATE96_PLAN.md):
+// it works with a preset running, where the SEQ check cannot.
 //
 // With --open-phase (diagnostic, off by default) the loop counts, from the
 // start of each stream, the frames the host has sent (gadget capture) and the
@@ -109,7 +138,8 @@
 //       -o usb16x16-dante-owner main.cpp ../../phase4-bridge/src/bridge_core.cpp -lasound -lpthread
 // (one line)
 // (the headers beside it; servo_test.cpp, dsp_path_test.cpp, dsp_live_test.cpp,
-// meter_tap_test.cpp and rate_check_test.cpp are their tests and build anywhere)
+// meter_tap_test.cpp, monitor_ctl_test.cpp, rate_check_test.cpp and chan_holes_test.cpp are their
+// tests and build anywhere; monitor_sim.cpp runs the monitor control and the stage without ALSA)
 
 #include <alsa/asoundlib.h>
 
@@ -117,6 +147,8 @@
 #include "dsp_live.hpp"
 #include "dsp_path.hpp"
 #include "meter_tap.hpp"
+#include "monitor_ctl.hpp"
+#include "chan_holes.hpp"
 #include "rate_check.hpp"
 #include "seq_check.hpp"
 #include "servo.hpp"
@@ -145,6 +177,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 
 namespace {
 
@@ -154,6 +187,24 @@ constexpr snd_pcm_uframes_t kResyncMargin = 16;    // the clock moves 4 to 5 fra
 constexpr std::int64_t kPacketFrames = 32;         // the transmit thread reads this far ahead of the clock
 constexpr std::size_t kScratchFrames = 1024;
 constexpr unsigned kIdleWakes = 100;               // wakes without movement before a direction counts as stopped
+
+// --idle-phase: the first tick after `now` of the grid that passes through `anchor + phase` every
+// kTickNs. `anchor` is the wake the host's last block arrived on, so the grid keeps that block's
+// phase however long the wakes since then spent working. (Without the option the grid starts one
+// tick after the last timed-out wait, which began when that wake's work ended: with a preset the
+// stage's time, about 50 us at 96 kHz, is in it, and the next host session's prime is found that
+// much nearer the lead; handoff, FOUND 2026-11-20.)
+constexpr std::int64_t idle_grid_next(std::int64_t anchor, std::int64_t phase, std::int64_t now) noexcept {
+    const std::int64_t base = anchor + phase;
+    if (now < base) return base;
+    return base + ((now - base) / kTickNs + 1) * kTickNs;
+}
+static_assert(idle_grid_next(0, 40000, 0) == 40000);
+static_assert(idle_grid_next(0, 40000, 39999) == 40000);
+static_assert(idle_grid_next(0, 40000, 40000) == 1040000);
+static_assert(idle_grid_next(0, 40000, 2100000) == 3040000);
+static_assert(idle_grid_next(5000000, 0, 5999999) == 6000000);
+static_assert(idle_grid_next(5000000, 0, 6000000) == 7000000);
 constexpr unsigned kFaultHoldoffWakes = 50;        // after a gadget PCM error, leave that direction alone this long
 constexpr std::int64_t kHostRateChanged = -ERANGE; // the detach code when the host's rate moved under an open gadget
 constexpr int kNominalPitch = 1000000;
@@ -205,6 +256,13 @@ struct Options {
     std::string dsp_live_status;
     // Level meter snapshot file. Empty means no tap: nothing is converted or measured for it.
     std::string meter_file;
+    // The monitor block's files (docs/web/MONITOR-FILES.md). Compiled-in defaults, so the
+    // installed start wrapper does not change; --no-monitor turns the whole block off.
+    std::string monitor_state{"/run/usb-aoip-monitor/state"};
+    std::string monitor_saved{"/var/lib/usb-aoip-monitor/state"};
+    std::string monitor_limits{"/var/lib/usb16x16-apply/monitor-limits"};
+    std::string monitor_status{"/run/usb16x16-dante/monitor.status"};
+    bool no_monitor{false};
     // Where a host at another rate is turned into a request for the arbiter
     // (usb16x16-apply --rate-request). Empty: the refusal is only logged.
     std::string rate_request_file;
@@ -218,6 +276,8 @@ struct Options {
     bool event_trace{false};
     // Diagnostic: check channels 1..seq_check against `bitexact`'s sequence at both points. 0 is off.
     unsigned seq_check{0};
+    // Diagnostic: CHANHOLE lines for zero runs on channels 1..chan_holes of the return. 0 is off.
+    unsigned chan_holes{0};
     // Diagnostic: an OPENPHASE line per host session (frames taken minus frames sent).
     bool open_phase{false};
     // Diagnostic: IMPULSE lines (channel 1 onsets both ways, with positions and indices).
@@ -226,6 +286,8 @@ struct Options {
     long prime_drop{-1};
     // Experiment: restart the gadget capture PCM when the outgoing direction goes idle.
     bool capture_drain{false};
+    // Experiment (2026-11-20): the idle grid's phase after the host's last block, microseconds. -1 is off.
+    long idle_phase_us{-1};
     // Experiment (2026-10-13): touch this many kilobytes of the loop thread's stack before it
     // turns real-time, so the loop never grows its stack (a page fault that can sleep). 0 is off.
     unsigned stack_prefault_kb{0};
@@ -244,7 +306,9 @@ struct Options {
                "                     [--ppm-file PATH] [--dsp-preset FILE]\n"
                "                     [--dsp-live-file PATH] [--dsp-live-status PATH]\n"
                "                     [--meter-file PATH] [--rate-request-file PATH] [--stall-at SECONDS --stall-ms MS]\n"
-               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--open-phase] [--impulse-trace] [--prime-drop D]\n"
+               "                     [--monitor-state PATH] [--monitor-saved PATH] [--monitor-limits PATH]\n"
+               "                     [--monitor-status PATH] [--no-monitor]\n"
+               "                     [--gap-trace MICROSECONDS] [--event-trace] [--seq-check N] [--chan-holes N] [--open-phase] [--impulse-trace] [--prime-drop D]\n"
                "                     [--capture-drain]\n"
                "                     [--stack-prefault KILOBYTES]\n"
                "                     [--no-mlock] [--no-rt]\n"
@@ -266,16 +330,26 @@ struct Options {
                "                     one line to PATH (by rename); without it the refusal is only logged\n"
                "  --meter-file       publish per-channel levels (usb-capture, dante-playback, dante-capture)\n"
                "                     to PATH, about twenty times a second while audio moves\n"
+               "  --monitor-state    the monitor state the web service writes (default /run/usb-aoip-monitor/state)\n"
+               "  --monitor-saved    its remembered copy, read for the start rule at the first poll\n"
+               "                     (default /var/lib/usb-aoip-monitor/state)\n"
+               "  --monitor-limits   root's monitor limits (default /var/lib/usb16x16-apply/monitor-limits)\n"
+               "  --monitor-status   where what the monitor has in force is written\n"
+               "                     (default /run/usb16x16-dante/monitor.status)\n"
+               "  --no-monitor       no monitor thread, no status file, monitor gains never published\n"
                "  --guard     frames behind the clock that are not cleared yet\n"
                "  --seconds   stop after this long; 0 runs until a signal\n"
                "  --stall-at, --stall-ms   test only: stall the loop once, MS long, SECONDS after it starts\n"
                "  --gap-trace   diagnostic: print a LOOPGAP line for every wake this late or later\n"
                "  --event-trace diagnostic: an EVENT line at each step counter change, a SERVO line a second\n"
                "  --seq-check   diagnostic: check channels 1..N against bitexact's sequence, gadget and Inferno side\n"
+               "  --chan-holes  diagnostic: a CHANHOLE line for each 16+ frame zero run on channels 1..N of the return\n"
                "  --open-phase  diagnostic: an OPENPHASE line per host session, frames taken minus frames sent\n"
                "  --impulse-trace  diagnostic: IMPULSE lines, channel 1 onsets both ways with positions and indices\n"
                "  --prime-drop  experiment: the outgoing prime drops this many of the first block's frames, always\n"
                "  --capture-drain  experiment: restart the gadget capture PCM when the host stops sending\n"
+               "  --idle-phase  experiment: the idle grid ticks this many microseconds (0..999) after the phase the\n"
+               "                host's blocks last arrived on, whatever the wakes in between spent working\n"
                "  --stack-prefault   experiment: touch this much of the loop's stack before it turns real-time\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
@@ -303,6 +377,7 @@ Options parse_options(int argc, char** argv) {
         if (a == "--open-phase") { o.open_phase = true; continue; }
         if (a == "--impulse-trace") { o.impulse_trace = true; continue; }
         if (a == "--capture-drain") { o.capture_drain = true; continue; }
+        if (a == "--no-monitor") { o.no_monitor = true; continue; }
         if (a == "--help" || i + 1 >= argc) { usage(); }
         const char* v = argv[++i];
         if (a == "--pcm") o.pcm = v;
@@ -320,11 +395,20 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--dsp-live-file") o.dsp_live_file = v;
         else if (a == "--dsp-live-status") o.dsp_live_status = v;
         else if (a == "--meter-file") o.meter_file = v;
+        else if (a == "--monitor-state") o.monitor_state = v;
+        else if (a == "--monitor-saved") o.monitor_saved = v;
+        else if (a == "--monitor-limits") o.monitor_limits = v;
+        else if (a == "--monitor-status") o.monitor_status = v;
         else if (a == "--rate-request-file") o.rate_request_file = v;
         else if (a == "--stall-at") o.stall_at = static_cast<unsigned>(parse_number(v, "--stall-at"));
         else if (a == "--stall-ms") o.stall_ms = static_cast<unsigned>(parse_number(v, "--stall-ms"));
         else if (a == "--seq-check") o.seq_check = static_cast<unsigned>(parse_number(v, "--seq-check"));
+        else if (a == "--chan-holes") o.chan_holes = static_cast<unsigned>(parse_number(v, "--chan-holes"));
         else if (a == "--prime-drop") o.prime_drop = static_cast<long>(parse_number(v, "--prime-drop"));
+        else if (a == "--idle-phase") {
+            o.idle_phase_us = static_cast<long>(parse_number(v, "--idle-phase"));
+            if (o.idle_phase_us > 999) usage();
+        }
         else if (a == "--gap-trace") o.gap_trace_us = static_cast<unsigned>(parse_number(v, "--gap-trace"));
         else if (a == "--stack-prefault") o.stack_prefault_kb = static_cast<unsigned>(parse_number(v, "--stack-prefault"));
         else if (a == "--period") o.period = parse_number(v, "--period");
@@ -575,6 +659,7 @@ struct Telemetry {
     std::atomic<std::int64_t> impulse_w{0};
     GapTrace gaps;
     usb16x16::owner::SeqTrace seq;
+    usb16x16::owner::ChanHoleTrace chan_holes;
 };
 
 void store_max(std::atomic<std::int64_t>& target, std::int64_t value) noexcept {
@@ -624,6 +709,7 @@ void* telemetry_entry(void* argument) {
     std::uint64_t reported_errors = 0;
     std::uint64_t gaps_printed = 0;
     std::uint64_t seq_printed = 0;
+    std::uint64_t holes_printed = 0;
     std::uint64_t phases_printed = 0;
     std::uint64_t prime_trace_printed = 0;
     std::uint64_t impulses_printed = 0;
@@ -731,6 +817,14 @@ void* telemetry_entry(void* argument) {
             std::printf("SEQ n=%" PRIu64 " wall=%.6f point=%s ch=%d frame=%" PRIu64 " %s %d\n", seq_printed + 1,
                         static_cast<double>(e.wall_ns) / 1e9, e.point == 0 ? "out" : "back", e.channel, e.frame,
                         kinds[static_cast<int>(e.kind)], e.count);
+            std::fflush(stdout);
+        }
+        const std::uint64_t holes_written = t.chan_holes.written.load(std::memory_order_acquire);
+        if (holes_written - holes_printed > t.chan_holes.events.size()) holes_printed = holes_written - t.chan_holes.events.size();
+        for (; holes_printed < holes_written; ++holes_printed) {
+            const usb16x16::owner::ChanHoleEvent& e = t.chan_holes.events[holes_printed % t.chan_holes.events.size()];
+            std::printf("CHANHOLE n=%" PRIu64 " wall=%.6f point=back ch=%d frame=%" PRIu64 " frames=%u\n", holes_printed + 1,
+                        static_cast<double>(e.wall_ns) / 1e9, e.channel, e.frame, e.frames);
             std::fflush(stdout);
         }
         if (const std::uint64_t errors = t.net_errors.load(std::memory_order_relaxed); errors != reported_errors) {
@@ -908,6 +1002,44 @@ void* meter_entry(void* argument) {
     }
     std::printf("METERS stopped writes=%" PRIu64 " failures=%" PRIu64 "\n", context.publisher->writes(),
                 context.publisher->failures());
+    return nullptr;
+}
+
+// ---- the monitor block -----------------------------------------------------------------
+
+struct MonitorContext {
+    usb16x16::owner::monitor::MonitorControl* control;
+};
+
+// One MONITOR line, from a thread that is never the loop.
+void print_monitor(const char* what, const usb16x16::owner::monitor::MonitorControl& control) {
+    const auto seq = control.seq();
+    std::printf("MONITOR %s state=%s seq=%s gen=%" PRIu64 " applied=%" PRIu64 " refused=%" PRIu64 " publishes=%" PRIu64
+                " status_failures=%" PRIu64 " limits=%s reason=\"%s\"\n",
+                what, usb16x16::owner::monitor::mode_name(control.idle() ? usb16x16::owner::monitor::Mode::idle : control.mode()),
+                seq ? std::to_string(*seq).c_str() : "none", control.status_gen(), control.applied(), control.refused(),
+                control.publishes(), control.status_failures(), control.limits_valid() ? "file" : "defaults",
+                control.reason().c_str());
+    std::fflush(stdout);
+}
+
+// Never the loop thread and never real-time: it reads files, allocates and writes the status.
+// Its first poll was made by main before the loop started.
+void* monitor_entry(void* argument) {
+    const MonitorContext context = *static_cast<MonitorContext*>(argument);
+    usb16x16::owner::monitor::MonitorControl& control = *context.control;
+    auto last = std::make_tuple(control.mode(), control.seq(), control.applied(), control.refused(), control.status_gen());
+    while (!stop_requested.load(std::memory_order_relaxed)) {
+        timespec nap{0, 10000000};
+        nanosleep(&nap, nullptr);
+        control.poll(now_ns());
+        const auto now = std::make_tuple(control.mode(), control.seq(), control.applied(), control.refused(), control.status_gen());
+        if (now != last) {
+            last = now;
+            print_monitor("changed", control);
+        }
+    }
+    print_monitor("stopped", control);
     return nullptr;
 }
 
@@ -1532,10 +1664,16 @@ struct UsbHalf {
     // --seq-check: the outgoing direction as the gadget delivers it, the return as Inferno delivers it.
     usb16x16::owner::SeqCheck<kChannels> seq_out;
     usb16x16::owner::SeqCheck<kChannels> seq_back;
+    // --chan-holes: zero runs per channel in the return as Inferno delivers it.
+    usb16x16::owner::ChanHoles<kChannels> holes_back;
     // The DSP stage on the outgoing direction; null without --dsp-preset.
     usb16x16::owner::OutDsp* dsp{nullptr};
     // The level meters; null without --meter-file.
     usb16x16::owner::OwnerMeters* meters{nullptr};
+    // The monitor-in tap: meters and a preset with a monitor section.
+    bool monitor_tap{false};
+    // The fade from silence at each prime (10 ms at --rate); used only with a monitor section.
+    std::uint32_t monitor_prime_frames{480};
     // --open-phase: frames the host sent since the outgoing direction left idle,
     // frames queued to the gadget since the last prime, and the sampling window.
     bool open_phase{false};
@@ -1772,15 +1910,28 @@ void run_dsp(UsbHalf& usb, std::int32_t* block, std::int64_t frames, Telemetry& 
     if (usb.meters != nullptr) usb.meters->usb_capture.observe(usb.dsp->floats(), count);
     const std::int64_t t2 = now_ns();
     usb.dsp->filter(count);
+    // The monitor-in tap (pre-fader) between the stage and the monitor gains,
+    // timed on its own so it counts as meter cost, not DSP cost; two clock
+    // reads more a block, and only with a monitor section and meters.
+    std::int64_t tap = 0;
+    if (usb.monitor_tap) {
+        const std::int64_t before = now_ns();
+        usb.meters->monitor_in.observe(usb.dsp->floats(), count);
+        tap = now_ns() - before;
+    }
+    // The monitor block after the stage, inside the timed span, so its cost
+    // is part of dsp_us_max.
+    usb.dsp->monitor_gains(count);
     const std::int64_t t3 = now_ns();
     if (usb.meters != nullptr) usb.meters->dante_playback.observe(usb.dsp->floats(), count);
     const std::int64_t t4 = now_ns();
     usb.dsp->from_float(block, count);
-    const std::int64_t spent = (t1 - t0) + (t3 - t2) + (now_ns() - t4);
+    // dsp_us = to_float + filter + monitor_gains + from_float; the taps are meter cost.
+    const std::int64_t spent = (t1 - t0) + (t3 - t2 - tap) + (now_ns() - t4);
     store_max(t.dsp_ns_max, spent);
     t.dsp_ns_total.fetch_add(static_cast<std::uint64_t>(spent), std::memory_order_relaxed);
     t.dsp_calls.fetch_add(1, std::memory_order_relaxed);
-    if (usb.meters != nullptr) add_meter_cost(t, (t2 - t1) + (t4 - t3));
+    if (usb.meters != nullptr) add_meter_cost(t, (t2 - t1) + tap + (t4 - t3));
 }
 
 constexpr std::uint32_t kHoleMinFrames = 8;
@@ -1933,6 +2084,9 @@ bool service_tx(UsbHalf& usb, UsbHandles& handles, NetHalf& net, std::int64_t& d
         if (usb.dsp != nullptr) {
             // A prime follows a gap: the filters start from silence, not from the tail of what played before it.
             usb.dsp->reset();
+            // And, with a monitor section, the monitor gains: they take the published targets and
+            // rise to them from silence, so this block never goes out at MonitorGains' default unity.
+            usb.dsp->prime_monitor(usb.monitor_prime_frames);
             t.dsp_resets.fetch_add(1, std::memory_order_relaxed);
         }
         if (usb.impulse_trace) {
@@ -2148,6 +2302,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
     const bool loop_owns = t.usb_owner.load(std::memory_order_acquire) == static_cast<int>(UsbOwner::loop);
     if (loop_owns && !usb.attached) {
         usb.attached = true;
+        usb.holes_back.reset();
         usb.rx_primed = false;
         usb.tx_holdoff = 0;
         usb.tx_restart_due = false;
@@ -2172,6 +2327,7 @@ bool service(NetHalf& net, UsbHalf& usb, UsbHandles& handles, const Options& o, 
         observe_peaks(usb.rx_scratch.data(), received, t.back_peak_1, t.back_peak_2);
         observe_holes(usb.rx_scratch.data(), received, usb.back_zero_run, t.back_holes, t.back_hole_max);
         if (usb.seq_back.channels != 0) usb.seq_back.observe(usb.rx_scratch.data(), received, t.seq);
+        if (usb.holes_back.channels != 0) usb.holes_back.observe(usb.rx_scratch.data(), received, t.chan_holes);
         if (usb.meters != nullptr && received > 0) {
             const std::int64_t before = now_ns();
             usb.meters->observe(usb.rx_scratch.data(), static_cast<std::size_t>(received), usb.meters->dante_capture);
@@ -2229,14 +2385,15 @@ int main(int argc, char** argv) {
 
     std::printf("START usb16x16-dante-owner mode=%s pcm=%s rate=%u period=%lu buffer=%lu tx_lead=%lu guard=%lu priority=%d "
                 "mlock=%d rt=%d seconds=%u usb=%s usb_period=%lu usb_buffer=%lu rx_queue=%lu rx_slack=%lu kp=%g ki=%g "
-                "seed_ppm=%g seed_from_file=%d prime_drop=%ld capture_drain=%d\n",
+                "seed_ppm=%g seed_from_file=%d prime_drop=%ld capture_drain=%d idle_phase_us=%ld\n",
                 options.no_usb ? "no-usb" : "usb", options.pcm.c_str(), options.rate, static_cast<unsigned long>(options.period),
                 static_cast<unsigned long>(options.buffer), static_cast<unsigned long>(options.tx_lead),
                 static_cast<unsigned long>(options.guard), options.priority, options.mlock ? 1 : 0,
                 options.realtime ? 1 : 0, options.seconds, options.usb.c_str(),
                 static_cast<unsigned long>(options.usb_period), static_cast<unsigned long>(options.usb_buffer),
                 static_cast<unsigned long>(options.rx_queue), static_cast<unsigned long>(options.rx_slack), options.kp,
-                options.ki, options.seed_ppm, seed_from_file ? 1 : 0, options.prime_drop, options.capture_drain ? 1 : 0);
+                options.ki, options.seed_ppm, seed_from_file ? 1 : 0, options.prime_drop, options.capture_drain ? 1 : 0,
+                options.idle_phase_us);
 
     // 0. The preset, before anything is opened: an owner asked for DSP that ran
     // without it would be measured as if it had filtered.
@@ -2283,6 +2440,7 @@ int main(int argc, char** argv) {
     usb.seq_out.point = 0;
     usb.seq_back.point = 1;
     usb.seq_out.channels = usb.seq_back.channels = std::min(options.seq_check, kChannels);
+    usb.holes_back.channels = std::min(options.chan_holes, kChannels);
     usb.open_phase = options.open_phase;
     usb.impulse_trace = options.impulse_trace;
     usb.prime_drop = options.prime_drop;
@@ -2307,6 +2465,25 @@ int main(int argc, char** argv) {
         meter_thread = start_thread(meter_entry, &meter_context, "meters");
         std::printf("METERS publishing file=%s window_frames=%zu\n", options.meter_file.c_str(),
                     meters.usb_capture.window_frames());
+    }
+    usb.monitor_tap = meters_enabled && dsp.enabled() && dsp.stage().has_monitor();
+    usb.monitor_prime_frames = usb16x16::monitor_ramp_frames_fast(options.rate);
+    // The monitor: its first poll here, on this thread, after the preset is loaded and before
+    // the loop exists, so a monitor-section preset's targets are published before any block
+    // can go out; the thread then owns every later poll. As the meters, not with --no-usb.
+    static usb16x16::owner::monitor::MonitorControl monitor_control(
+        dsp.stage(), dsp.monitor(),
+        {options.monitor_state, options.monitor_saved, options.monitor_limits, options.monitor_status}, options.rate);
+    MonitorContext monitor_context{&monitor_control};
+    pthread_t monitor_thread{};
+    const bool monitor_enabled = !options.no_monitor && !options.no_usb;
+    if (monitor_enabled) {
+        monitor_control.poll(now_ns());
+        std::printf("MONITOR following state=%s saved=%s limits=%s status=%s sets=%zu\n", options.monitor_state.c_str(),
+                    options.monitor_saved.c_str(), options.monitor_limits.c_str(), options.monitor_status.c_str(),
+                    dsp.stage().has_monitor() ? dsp.stage().monitor().sets.size() : std::size_t{0});
+        print_monitor("first", monitor_control);
+        monitor_thread = start_thread(monitor_entry, &monitor_context, "monitor");
     }
     thread_inventory("before-open", true);
 
@@ -2359,6 +2536,9 @@ int main(int argc, char** argv) {
     const std::int64_t started = now_ns();
     std::int64_t next = started + kTickNs;
     std::int64_t last_wake = started;
+    // --idle-phase: the wake the host's last block arrived on.
+    std::int64_t block_wake = started;
+    const std::int64_t idle_phase_ns = options.idle_phase_us < 0 ? -1 : static_cast<std::int64_t>(options.idle_phase_us) * 1000;
     int exit_code = 0;
     bool stalled = false;
     const bool tracing = options.gap_trace_us != 0;
@@ -2377,7 +2557,9 @@ int main(int argc, char** argv) {
         if (usb.attached && usb.tx != TxState::idle && usb.tx_holdoff == 0) {
             timespec timeout{0, static_cast<long>(kTickNs)};
             woke = ppoll(handles.capture_poll, static_cast<nfds_t>(handles.capture_poll_count), &timeout, nullptr) > 0 ? 1 : 2;
-            next = now_ns() + kTickNs;
+            const std::int64_t returned = now_ns();
+            if (woke == 1) block_wake = returned;
+            next = idle_phase_ns < 0 ? returned + kTickNs : idle_grid_next(block_wake, idle_phase_ns, returned);
         } else {
             timespec target{};
             target.tv_sec = static_cast<time_t>(next / 1000000000LL);
@@ -2438,6 +2620,7 @@ int main(int argc, char** argv) {
     write_ppm_file(options.ppm_file, telemetry);
     if (live_enabled) pthread_join(dsp_live_thread, nullptr);
     if (meters_enabled) pthread_join(meter_thread, nullptr);
+    if (monitor_enabled) pthread_join(monitor_thread, nullptr);
     pthread_join(telemetry_thread, nullptr);
 
     const double elapsed = static_cast<double>(now_ns() - started) / 1e9;

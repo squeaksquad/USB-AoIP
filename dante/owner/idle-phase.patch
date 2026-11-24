@@ -1,6 +1,8 @@
-Candidate, 2026-11-20: the owner's --idle-phase option (experiment, off by default).
-Not applied in the tree: dante/owner/main.cpp stays the source of the installed owner
-bc486911 (8c9bf80e, pinned in install/dev-unit/owner-monitor.sha256). Apply to a copy:
+The owner's --idle-phase option, 2026-11-20 (off by default). APPLIED in the tree since
+2026-11-24, when the owner built with it (bb3cd6ca, IDLE_PHASE=60) was ACCEPTED:
+dante/owner/main.cpp is 4d885b76, this patch on 8c9bf80e (the owner bc486911's source).
+Kept because install/dev-unit's two bundles take it back out (patch -R) to rebuild the
+owners installed before it, and CI checks that it still does. How it was applied to a copy:
 
     patch -p1 < dante/owner/idle-phase.patch        (from the repository's root)
     g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror -I dante/owner -I dsp-core/include \

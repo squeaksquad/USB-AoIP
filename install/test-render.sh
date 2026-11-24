@@ -54,7 +54,7 @@ for f in dante statime dante-startcheck dante-rate; do
 done
 same /usr/local/libexec/usb16x16-dante/usb16x16-dante-start      dante/service/usb16x16-dante-start-transport
 same /usr/local/libexec/usb16x16-dante/usb16x16-dante-startcheck dante/service/usb16x16-dante-startcheck
-same /etc/usb16x16/dante/transport.conf                 dante/service/transport-rate882.conf
+same /etc/usb16x16/dante/transport.conf                 dante/service/transport-idlephase.conf
 same /etc/usb16x16/dante/startcheck.conf                dante/service/startcheck.conf
 same /etc/usb16x16/dante/owner.conf                     dante/service/owner.conf.default
 same /etc/usb16x16/dante/asound-inferno-owner.conf      dante/config/asound-inferno-owner-usb-aoip-rate882.conf
@@ -77,10 +77,10 @@ sed -n "/^cat > \"\$sudoers_temporary\" <<'EOF'/,/^EOF/p" "$repo/history/install
 cmp -s "$dev/etc/sudoers.d/usb16x16-dante" "$tmp/sudoers.chain" || bad "development unit: the sudoers rule differs from the chain's"
 # The pinned hashes of the audio-path files, as the handoff records them.
 pinned() { [ "$(sha "$dev$1" | cut -c1-8)" = "$2" ] || bad "development unit: $1 is $(sha "$dev$1" | cut -c1-8), the point of record has $2"; }
-# The wrapper with the IDLE_PHASE key (2026-11-20); the Pi runs df6a1b0b until install-owner-idlephase.sh
-# is installed. Without the key it makes df6a1b0b's command line (test-dante-start.sh transport).
+# The wrapper with the IDLE_PHASE key and the transport that sets it (2026-11-20), installed by
+# install-owner-idlephase.sh and ACCEPTED 2026-11-24 with the owner bb3cd6ca.
 pinned /usr/local/libexec/usb16x16-dante/usb16x16-dante-start 203c6fa5
-pinned /etc/usb16x16/dante/transport.conf                     add1bc21
+pinned /etc/usb16x16/dante/transport.conf                     6818176f
 pinned /etc/usb16x16/dante/asound-inferno-owner.conf          85a5256f
 pinned /etc/usb16x16/dante/statime.toml                       11b055df
 pinned $u/usb16x16-dante.service                              27b68877

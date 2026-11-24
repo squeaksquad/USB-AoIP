@@ -290,7 +290,7 @@ EnvironmentFile=-$dante_etc/startcheck.conf
 EOF
   put_file 755 $d/usb16x16-dante-start-transport        $libexec/usb16x16-dante-start
   put_file 755 $d/usb16x16-dante-startcheck             $libexec/usb16x16-dante-startcheck
-  put_keep 644 $d/transport-rate882.conf                $dante_etc/transport.conf
+  put_keep 644 $d/transport-idlephase.conf              $dante_etc/transport.conf
   put_keep 644 $d/startcheck.conf                       $dante_etc/startcheck.conf
   put_keep 644 $d/owner.conf.default                    $dante_etc/owner.conf
   # The applier moves SAMPLE_RATE with owner.conf's RATE=; a reinstall keeps the pair.
@@ -456,8 +456,9 @@ cmd_build() {
   as_builder git -C "$build_dir/inferno" reset --quiet --hard "$(pin inferno_rev)"
   as_builder git -C "$build_dir/statime" reset --quiet --hard "$(pin statime_rev)"
 
-  # Its headers and the bridge core are the copies kept beside it: the
-  # development line (dante/owner, dsp-core) has moved on since it was accepted.
+  # Its headers and the bridge core are the copies kept beside it, the files
+  # the accepted owner (bb3cd6ca, 2026-11-24) was built from: the development
+  # line (dante/owner, dsp-core) may move on without changing what is installed.
   say "building the owner (the point-of-record source)"
   as_builder g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
     -I "$repo/dante/owner/point-of-record" -o "$out/usb16x16-dante-owner" \

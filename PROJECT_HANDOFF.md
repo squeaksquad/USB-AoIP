@@ -18682,3 +18682,41 @@ Owed after this (the 2026-11-21 pickup, "After his ACCEPTED"), not done here:
 fold `dante/owner/idle-phase.patch` into `dante/owner/main.cpp`, re-pin, and
 replace `dante/owner/point-of-record/` and the installer's pins and docs with
 the accepted owner.
+
+**DONE 2026-11-24 (session, on the operator's word "Yes, fold it in"; Mac only,
+nothing on the Pi): the accepted owner's source is in the tree. This is the
+"After his ACCEPTED" step of the 2026-11-21 pickup.**
+- `dante/owner/main.cpp` now has `idle-phase.patch` applied: 8c9bf80e ->
+  4d885b76, the `PATCHED_MAIN` that `build-owner-idlephase.sh` checks and that
+  built bb3cd6ca.
+- `dante/owner/point-of-record/` holds bb3cd6ca's sources: main.cpp 4d885b76,
+  the nine headers it includes (`chan_holes.hpp` and `monitor_ctl.hpp` added),
+  bridge core 8a095aaa / a1b6a05c. Each is byte-identical to the files
+  `install/dev-unit/owner-idlephase.sha256` pins. `install/pins.sha256` is
+  re-pinned and the README rewritten. c84e6a36's copies are in git
+  (`197945b:dante/owner/point-of-record/`).
+- The installer's owner build line is unchanged: one `-I` on the
+  point-of-record directory. `install/install.sh` now installs
+  `transport-idlephase.conf` (6818176f) as `transport.conf`.
+  `install/test-render.sh` compares against it and pins the development
+  unit's transport at 6818176f.
+- Dev-unit bundles: the two stagers take the patch back out of the tree's
+  main.cpp (`patch -s -f -R`). Their bundles stay the sources of the
+  installed owners bc486911 and bb3cd6ca, with their lists unchanged, except
+  `owner-idlephase.sha256`'s line for the patch file, whose header text now
+  says it is applied.
+- CI: the point-of-record owner must show `--idle-phase` in `--help`. A new
+  step checks that the patch reverses to 8c9bf80e. It replaces the step that
+  applied it to a copy.
+- Docs: `dante/README.md`, `CLAUDE.md`, `docs/install/author-pi-mapping.md`,
+  and `TO-VERIFY.md` item 23 (whether the installer's one-`-I` build of the
+  point of record hashes to bb3cd6ca on the development unit).
+- Tests, all passing:
+  - `node --test web-ui/*.test.mjs` (221), `dsp-compiler/*.test.mjs` (84);
+  - web-control (335), `test_soak_reference.py` (22);
+  - `test-dante-start.sh` and `transport`, `test-dante-startcheck.sh`;
+  - `test-render.sh`, `test-access.sh`, `test-owner-monitor.sh`,
+    `test-owner-idlephase.sh`.
+- Not compiled here (ALSA): the owner, which CI compiles.
+- A Fable 5.2 medium advisor reviewed the diff: no correctness bugs. Its
+  stale-doc findings and the `-f` on `patch -R` are taken.

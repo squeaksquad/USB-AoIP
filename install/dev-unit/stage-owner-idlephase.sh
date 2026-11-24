@@ -42,6 +42,13 @@ for f in dante/owner/main.cpp "${headers[@]}" dsp-core/src/bridge_core.cpp dante
   mkdir -p "$out/src/$(dirname "$f")"
   cp "$repo/$f" "$out/src/$f"
 done
+# Since 2026-11-24 dante/owner/main.cpp carries idle-phase.patch (the source of the accepted owner
+# bb3cd6ca). This bundle is built from the source before it, 8c9bf80e: the patch is taken back
+# out here, and the pinned list checks the result.
+rm -f "$out/src/dante/owner/main.cpp"
+if ! patch -s -f -R -r - -o "$out/src/dante/owner/main.cpp" "$repo/dante/owner/main.cpp" < "$repo/dante/owner/idle-phase.patch" >/dev/null 2>&1; then
+  echo "stage-owner-idlephase: idle-phase.patch does not come back out of dante/owner/main.cpp" >&2; exit 1
+fi
 cp "$repo/dante/service/usb16x16-dante-start-transport" "$repo/dante/service/transport-idlephase.conf" "$out/service/"
 cp "$repo/install/dev-unit/build-owner-idlephase.sh" "$out/"
 chmod 755 "$out/build-owner-idlephase.sh"

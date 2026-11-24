@@ -187,6 +187,24 @@ constexpr snd_pcm_uframes_t kResyncMargin = 16;    // the clock moves 4 to 5 fra
 constexpr std::int64_t kPacketFrames = 32;         // the transmit thread reads this far ahead of the clock
 constexpr std::size_t kScratchFrames = 1024;
 constexpr unsigned kIdleWakes = 100;               // wakes without movement before a direction counts as stopped
+
+// --idle-phase: the first tick after `now` of the grid that passes through `anchor + phase` every
+// kTickNs. `anchor` is the wake the host's last block arrived on, so the grid keeps that block's
+// phase however long the wakes since then spent working. (Without the option the grid starts one
+// tick after the last timed-out wait, which began when that wake's work ended: with a preset the
+// stage's time, about 50 us at 96 kHz, is in it, and the next host session's prime is found that
+// much nearer the lead; handoff, FOUND 2026-11-20.)
+constexpr std::int64_t idle_grid_next(std::int64_t anchor, std::int64_t phase, std::int64_t now) noexcept {
+    const std::int64_t base = anchor + phase;
+    if (now < base) return base;
+    return base + ((now - base) / kTickNs + 1) * kTickNs;
+}
+static_assert(idle_grid_next(0, 40000, 0) == 40000);
+static_assert(idle_grid_next(0, 40000, 39999) == 40000);
+static_assert(idle_grid_next(0, 40000, 40000) == 1040000);
+static_assert(idle_grid_next(0, 40000, 2100000) == 3040000);
+static_assert(idle_grid_next(5000000, 0, 5999999) == 6000000);
+static_assert(idle_grid_next(5000000, 0, 6000000) == 7000000);
 constexpr unsigned kFaultHoldoffWakes = 50;        // after a gadget PCM error, leave that direction alone this long
 constexpr std::int64_t kHostRateChanged = -ERANGE; // the detach code when the host's rate moved under an open gadget
 constexpr int kNominalPitch = 1000000;
@@ -268,6 +286,8 @@ struct Options {
     long prime_drop{-1};
     // Experiment: restart the gadget capture PCM when the outgoing direction goes idle.
     bool capture_drain{false};
+    // Experiment (2026-11-20): the idle grid's phase after the host's last block, microseconds. -1 is off.
+    long idle_phase_us{-1};
     // Experiment (2026-10-13): touch this many kilobytes of the loop thread's stack before it
     // turns real-time, so the loop never grows its stack (a page fault that can sleep). 0 is off.
     unsigned stack_prefault_kb{0};
@@ -328,6 +348,8 @@ struct Options {
                "  --impulse-trace  diagnostic: IMPULSE lines, channel 1 onsets both ways with positions and indices\n"
                "  --prime-drop  experiment: the outgoing prime drops this many of the first block's frames, always\n"
                "  --capture-drain  experiment: restart the gadget capture PCM when the host stops sending\n"
+               "  --idle-phase  experiment: the idle grid ticks this many microseconds (0..999) after the phase the\n"
+               "                host's blocks last arrived on, whatever the wakes in between spent working\n"
                "  --stack-prefault   experiment: touch this much of the loop's stack before it turns real-time\n"
                "  --no-mlock, --no-rt   for an unprivileged trial only\n",
                stderr);
@@ -383,6 +405,10 @@ Options parse_options(int argc, char** argv) {
         else if (a == "--seq-check") o.seq_check = static_cast<unsigned>(parse_number(v, "--seq-check"));
         else if (a == "--chan-holes") o.chan_holes = static_cast<unsigned>(parse_number(v, "--chan-holes"));
         else if (a == "--prime-drop") o.prime_drop = static_cast<long>(parse_number(v, "--prime-drop"));
+        else if (a == "--idle-phase") {
+            o.idle_phase_us = static_cast<long>(parse_number(v, "--idle-phase"));
+            if (o.idle_phase_us > 999) usage();
+        }
         else if (a == "--gap-trace") o.gap_trace_us = static_cast<unsigned>(parse_number(v, "--gap-trace"));
         else if (a == "--stack-prefault") o.stack_prefault_kb = static_cast<unsigned>(parse_number(v, "--stack-prefault"));
         else if (a == "--period") o.period = parse_number(v, "--period");
@@ -2359,14 +2385,15 @@ int main(int argc, char** argv) {
 
     std::printf("START usb16x16-dante-owner mode=%s pcm=%s rate=%u period=%lu buffer=%lu tx_lead=%lu guard=%lu priority=%d "
                 "mlock=%d rt=%d seconds=%u usb=%s usb_period=%lu usb_buffer=%lu rx_queue=%lu rx_slack=%lu kp=%g ki=%g "
-                "seed_ppm=%g seed_from_file=%d prime_drop=%ld capture_drain=%d\n",
+                "seed_ppm=%g seed_from_file=%d prime_drop=%ld capture_drain=%d idle_phase_us=%ld\n",
                 options.no_usb ? "no-usb" : "usb", options.pcm.c_str(), options.rate, static_cast<unsigned long>(options.period),
                 static_cast<unsigned long>(options.buffer), static_cast<unsigned long>(options.tx_lead),
                 static_cast<unsigned long>(options.guard), options.priority, options.mlock ? 1 : 0,
                 options.realtime ? 1 : 0, options.seconds, options.usb.c_str(),
                 static_cast<unsigned long>(options.usb_period), static_cast<unsigned long>(options.usb_buffer),
                 static_cast<unsigned long>(options.rx_queue), static_cast<unsigned long>(options.rx_slack), options.kp,
-                options.ki, options.seed_ppm, seed_from_file ? 1 : 0, options.prime_drop, options.capture_drain ? 1 : 0);
+                options.ki, options.seed_ppm, seed_from_file ? 1 : 0, options.prime_drop, options.capture_drain ? 1 : 0,
+                options.idle_phase_us);
 
     // 0. The preset, before anything is opened: an owner asked for DSP that ran
     // without it would be measured as if it had filtered.
@@ -2509,6 +2536,9 @@ int main(int argc, char** argv) {
     const std::int64_t started = now_ns();
     std::int64_t next = started + kTickNs;
     std::int64_t last_wake = started;
+    // --idle-phase: the wake the host's last block arrived on.
+    std::int64_t block_wake = started;
+    const std::int64_t idle_phase_ns = options.idle_phase_us < 0 ? -1 : static_cast<std::int64_t>(options.idle_phase_us) * 1000;
     int exit_code = 0;
     bool stalled = false;
     const bool tracing = options.gap_trace_us != 0;
@@ -2527,7 +2557,9 @@ int main(int argc, char** argv) {
         if (usb.attached && usb.tx != TxState::idle && usb.tx_holdoff == 0) {
             timespec timeout{0, static_cast<long>(kTickNs)};
             woke = ppoll(handles.capture_poll, static_cast<nfds_t>(handles.capture_poll_count), &timeout, nullptr) > 0 ? 1 : 2;
-            next = now_ns() + kTickNs;
+            const std::int64_t returned = now_ns();
+            if (woke == 1) block_wake = returned;
+            next = idle_phase_ns < 0 ? returned + kTickNs : idle_grid_next(block_wake, idle_phase_ns, returned);
         } else {
             timespec target{};
             target.tv_sec = static_cast<time_t>(next / 1000000000LL);
