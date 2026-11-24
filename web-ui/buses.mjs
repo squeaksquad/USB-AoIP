@@ -1,4 +1,4 @@
-import { validateConfig, createConfig } from './model.mjs';
+import { validateConfig, createConfig, settleSubShares, SUB_SHARES } from './model.mjs';
 import { LAYOUTS, swapOutputs } from './workflows.mjs';
 
 export function getBus(config, id) {
@@ -28,10 +28,16 @@ export function speakerGroupSourceIds(config) {
   return config.inputs.map((_, i) => i).filter(i => sources.has(i));
 }
 
-export function applyBusLayout(config, busId, layoutId, outputIds = null) {
+/** A layout's output order: its subwoofer positions dropped when `subs` is false. */
+function layoutRouting(layout, subs) {
+  return subs ? layout.routing : layout.routing.filter(source => source !== null);
+}
+
+export function applyBusLayout(config, busId, layoutId, outputIds = null, {subs = true} = {}) {
   const sourceBus = getBus(config, busId);
-  const layout = LAYOUTS.find(value => value.id === layoutId);
-  if (!layout) throw new Error('Choose an output format');
+  const found = LAYOUTS.find(value => value.id === layoutId);
+  if (!found) throw new Error('Choose an output format');
+  const layout = subs ? found : {...found, routing: layoutRouting(found, false), subs: 0};
   const ids = outputIds ?? sourceBus.outputIds;
   if (sourceBus.kind === 'headphones' && layout.routing.length !== 2) throw new Error('Headphones bus supports stereo layouts only');
   if (!Array.isArray(ids) || ids.length < layout.routing.length || ids.some(i => !Number.isInteger(i) || i < 0 || i >= 16) || new Set(ids).size !== ids.length) throw new Error('Bus layout needs distinct physical outputs');
@@ -68,14 +74,7 @@ export function applyBusLayout(config, busId, layoutId, outputIds = null) {
     }
     for (const output of subOutputs) result.sends[result.lfe.input][output] = layout.subs === 1 ? 0 : -6;
   }
-  return validateConfig(result);
-}
-
-export function setBusGainMute(config, busId, gainDb, mute) {
-  const result = structuredClone(config), bus = getBus(result, busId);
-  if (typeof gainDb !== 'number' || !Number.isFinite(gainDb) || gainDb < -60 || gainDb > 12) throw new Error('Bus gain must be between -60 and 12 dB');
-  if (typeof mute !== 'boolean') throw new Error('Bus mute must be on or off');
-  bus.gainDb = gainDb; bus.mute = mute;
+  settleSubShares(result);
   return validateConfig(result);
 }
 
@@ -164,19 +163,59 @@ export function createHeadphoneBus(config, id = 'headphones', outputIds = [14, 1
   for (const i of [8, 10]) matrix[i] = [-6, null];
   for (const i of [9, 11]) matrix[i] = [null, -6];
   matrix[config.lfe.input] = [null, null];
-  result.buses.push({ id, kind: 'headphones', label: 'Headphones', outputIds: [...outputIds], layoutId: 'stereo', gainDb: 0, mute: false, inputMode: 'pair', inputPair: [0, 1], downmixMatrix: matrix, sourcePreCrossover: true, linkEq: false });
+  result.buses.push({ id, kind: 'headphones', label: 'Headphones', outputIds: [...outputIds], layoutId: 'stereo', inputMode: 'pair', inputPair: [0, 1], downmixMatrix: matrix, sourcePreCrossover: true, linkEq: false });
   outputIds.forEach((i, ear) => { result.outputs[i].busId = id; result.outputs[i].role = 'speaker'; result.outputs[i].source = ear; result.outputs[i].label = `Headphone ${ear ? 'R' : 'L'}`; });
   return validateConfig(result);
 }
 
-export function createSpeakerBus(config, id, outputIds, layoutId = 'stereo') {
+/** The outputs a new speaker set of this layout takes: its speakers, plus its
+ *  subwoofers when it has its own. */
+export function speakerSetSize(layoutId, subShare) {
+  const layout = LAYOUTS.find(value => value.id === layoutId);
+  if (!layout) throw new Error('Choose an output format');
+  return layoutRouting(layout, subShare === 'own').length;
+}
+
+/** Which subwoofer choices a new speaker set of this layout can have, in the order the page offers them. */
+export function subShareChoices(config, layoutId) {
+  const layout = LAYOUTS.find(value => value.id === layoutId);
+  const first = config.buses.find(bus => bus.kind === 'speakers');
+  const mainSub = Boolean(first?.outputIds.some(i => config.outputs[i].role === 'sub'));
+  return SUB_SHARES.filter(share => share === 'main' ? mainSub : share === 'own' ? Boolean(layout?.subs) : true);
+}
+
+/**
+ * Add a speaker set: a layout on chosen spare outputs, in output order, with
+ * the subwoofer choice. `own` keeps the layout's subwoofers and makes their
+ * sends; `main` and `none` drop them. Speakers are named after their channel
+ * and the set's number (L 2, R 2), as the Routing tab shows them.
+ */
+export function addSpeakerSet(config, {layoutId, outputIds, subShare, label = null}) {
+  if (!config.buses.some(bus => bus.kind === 'speakers')) throw new Error('Add the main speakers first');
+  if (!SUB_SHARES.includes(subShare)) throw new Error('Choose what the speaker set does for a subwoofer');
+  if (!subShareChoices(config, layoutId).includes(subShare)) {
+    throw new Error(subShare === 'main' ? 'The main speakers have no subwoofer to share' : 'This layout has no subwoofer of its own');
+  }
+  const size = speakerSetSize(layoutId, subShare);
+  const ids = [...(outputIds || [])].sort((a, b) => a - b);
+  if (ids.length !== size || new Set(ids).size !== size || ids.some(i => !Number.isInteger(i) || i < 0 || i >= 16)) throw new Error(`Choose ${size} spare outputs`);
+  if (ids.some(i => busForOutput(config, i))) throw new Error('Choose spare outputs only');
+  const number = config.buses.filter(bus => bus.kind === 'speakers').length + 1;
+  let n = number, id = `speakers-${n}`;
+  while (config.buses.some(bus => bus.id === id)) { n += 1; id = `speakers-${n}`; }
   const result = structuredClone(config);
-  if (!/^[a-z][a-z0-9-]{0,31}$/.test(id) || result.buses.some(bus => bus.id === id)) throw new Error('Choose a unique bus ID');
-  if (!Array.isArray(outputIds) || outputIds.some(i => !Number.isInteger(i) || i < 0 || i >= 16) || new Set(outputIds).size !== outputIds.length) throw new Error('Bus needs distinct physical outputs');
-  if (outputIds.some(i => busForOutput(result, i))) throw new Error('Outputs must be unallocated or reassigned first');
-  result.buses.push({ id, kind: 'speakers', label: 'Speakers', outputIds: [...outputIds], layoutId, gainDb: 0, mute: false });
-  outputIds.forEach(i => { result.outputs[i].busId = id; });
-  return applyBusLayout(result, id, layoutId, outputIds);
+  const name = (label ?? `Speakers ${number}`).trim().slice(0, 24) || `Speakers ${number}`;
+  result.buses.push({ id, kind: 'speakers', label: name, outputIds: [...ids], layoutId, subShare });
+  ids.forEach(i => { result.outputs[i].busId = id; });
+  const made = applyBusLayout(result, id, layoutId, ids, {subs: subShare === 'own'});
+  const bus = getBus(made, id), subs = bus.outputIds.filter(i => made.outputs[i].role === 'sub');
+  for (const i of bus.outputIds) {
+    const output = made.outputs[i];
+    output.label = output.role === 'sub'
+      ? (subs.length === 1 ? `Sub ${number}` : `Sub ${number} ${subs.indexOf(i) ? 'R' : 'L'}`)
+      : `${output.label} ${number}`;
+  }
+  return validateConfig(made);
 }
 
 export function removeBus(config, id) {
@@ -188,5 +227,6 @@ export function removeBus(config, id) {
   }
   bus.outputIds.forEach(i => { result.outputs[i].busId = null; result.outputs[i].role = 'unused'; result.sends.forEach(row => { row[i] = null; }); });
   result.buses = result.buses.filter(value => value.id !== id);
+  settleSubShares(result);
   return validateConfig(result);
 }

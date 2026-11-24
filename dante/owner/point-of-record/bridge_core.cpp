@@ -1,0 +1,1553 @@
+#include "usb16x16/bridge_core.hpp"
+
+#include <sstream>
+
+#include <cstring>
+#include <type_traits>
+
+namespace usb16x16 {
+
+namespace {
+
+// Load-time parsing only. Throws on anything it does not understand: a preset
+// the bridge cannot read in full is a preset it must refuse, because half a
+// pipeline is a routing error with the gain still applied.
+class ArtifactReader {
+public:
+    explicit ArtifactReader(const std::string_view text) : stream_(std::string(text)) {}
+
+    std::string word(const char* what) {
+        std::string value;
+        if (!(stream_ >> value)) {
+            throw std::runtime_error(std::string("dsp artifact: expected ") + what);
+        }
+        return value;
+    }
+
+    void expect(const char* keyword) {
+        const std::string value = word(keyword);
+        if (value != keyword) {
+            throw std::runtime_error(std::string("dsp artifact: expected '") + keyword +
+                                     "', found '" + value + "'");
+        }
+    }
+
+    std::string rest_of_line() {
+        std::string line;
+        std::getline(stream_, line);
+        const auto first = line.find_first_not_of(" \t");
+        return first == std::string::npos ? std::string{} : line.substr(first);
+    }
+
+    // The next line that is not blank, trimmed; false at the end of the text.
+    // The monitor section is read line by line: its rows vary in length.
+    bool line(std::string& text) {
+        std::string raw;
+        while (std::getline(stream_, raw)) {
+            const auto first = raw.find_first_not_of(" \t\r");
+            if (first == std::string::npos) continue;
+            const auto last = raw.find_last_not_of(" \t\r");
+            text = raw.substr(first, last - first + 1);
+            return true;
+        }
+        return false;
+    }
+
+    std::size_t count(const char* what, const std::size_t limit) {
+        const std::string value = word(what);
+        try {
+            const auto parsed = std::stoull(value);
+            if (parsed > limit) {
+                throw std::runtime_error(std::string("dsp artifact: ") + what + " " + value +
+                                         " exceeds the limit " + std::to_string(limit));
+            }
+            return static_cast<std::size_t>(parsed);
+        } catch (const std::invalid_argument&) {
+            throw std::runtime_error(std::string("dsp artifact: ") + what +
+                                     " is not a number: '" + value + "'");
+        } catch (const std::out_of_range&) {
+            throw std::runtime_error(std::string("dsp artifact: ") + what + " out of range");
+        }
+    }
+
+    double real(const char* what) {
+        const std::string value = word(what);
+        try {
+            const double parsed = std::stod(value);
+            if (!std::isfinite(parsed)) {
+                throw std::runtime_error(std::string("dsp artifact: ") + what +
+                                         " is not finite: '" + value + "'");
+            }
+            return parsed;
+        } catch (const std::invalid_argument&) {
+            throw std::runtime_error(std::string("dsp artifact: ") + what +
+                                     " is not a number: '" + value + "'");
+        } catch (const std::out_of_range&) {
+            throw std::runtime_error(std::string("dsp artifact: ") + what + " out of range");
+        }
+    }
+
+private:
+    std::istringstream stream_;
+};
+
+std::vector<std::string> split_words(const std::string& text) {
+    std::istringstream stream(text);
+    std::vector<std::string> words;
+    for (std::string word; stream >> word;) words.push_back(word);
+    return words;
+}
+
+std::string join_words(const std::vector<std::string>& words) {
+    std::string out;
+    for (const std::string& word : words) {
+        if (!out.empty()) out += ' ';
+        out += word;
+    }
+    return out;
+}
+
+// A whole decimal number no larger than `limit`, or false.
+bool whole(const std::string& text, const std::size_t limit, std::size_t& value) {
+    if (text.empty() || text.size() > 9 || text.find_first_not_of("0123456789") != std::string::npos) return false;
+    const std::size_t parsed = static_cast<std::size_t>(std::stoul(text));
+    if (parsed > limit) return false;
+    value = parsed;
+    return true;
+}
+
+bool set_id_ok(const std::string& id) {
+    if (id.empty() || id.size() > 32 || id[0] < 'a' || id[0] > 'z') return false;
+    return std::all_of(id.begin(), id.end(), [](const char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
+    });
+}
+
+bool fold_name_ok(const std::string& name) {
+    if (name.empty() || name.size() > 16 || name == "full") return false;
+    return std::all_of(name.begin(), name.end(), [](const char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.';
+    });
+}
+
+// The monitor section as read, before it is moved into the stage.
+struct MonitorSection {
+    MonitorTopology topology;
+    std::vector<std::string> shape;
+    std::vector<std::uint8_t> expand_view;
+    struct Fold {
+        std::size_t set{};
+        std::vector<std::uint16_t> dest;
+        std::vector<std::uint16_t> source;
+        std::vector<double> gain;
+    };
+    std::vector<Fold> folds;
+};
+
+// Reads from just after the word `monitor` through the section's `end`.
+// Strict, as the rest of the loader: every count, index and name is checked,
+// and the error names the offending line.
+MonitorSection read_monitor_section(ArtifactReader& reader, const std::size_t expand_rows) {
+    MonitorSection section;
+    MonitorTopology& topology = section.topology;
+    std::string text;
+    std::vector<std::string> words;
+    const auto refuse = [&text](const std::string& why) -> std::runtime_error {
+        return std::runtime_error("dsp artifact: monitor: " + why + " in '" + text + "'");
+    };
+    const auto next = [&](const char* what) {
+        if (!reader.line(text)) {
+            throw std::runtime_error(std::string("dsp artifact: monitor: unexpected end, expected ") + what);
+        }
+        words = split_words(text);
+    };
+    const auto shape = [&]() { section.shape.push_back(join_words(words)); };
+    const auto number = [&](const std::size_t at, const std::size_t limit, const char* what) {
+        std::size_t value = 0;
+        if (at >= words.size() || !whole(words[at], limit, value)) {
+            throw refuse(std::string(what) + " must be a whole number no larger than " + std::to_string(limit));
+        }
+        return value;
+    };
+    const auto header = [&](const char* keyword, const std::size_t limit) {
+        next(keyword);
+        if (words.size() != 2 || words[0] != keyword) throw refuse(std::string("expected '") + keyword + " N'");
+        const std::size_t value = number(1, limit, keyword);
+        shape();
+        return value;
+    };
+
+    text = "monitor " + reader.rest_of_line();
+    words = split_words(text);
+    if (words.size() != 2 || words[1] != "1") throw refuse("unsupported monitor version");
+    shape();
+
+    const std::size_t sets = header("sets", MonitorTopology::kMaxSets);
+    if (sets == 0) throw refuse("a monitor section needs at least one set");
+    for (std::size_t index = 0; index < sets; ++index) {
+        next("set");
+        if (words.size() != 3 || words[0] != "set") throw refuse("expected 'set ID KIND'");
+        if (!set_id_ok(words[1])) throw refuse("set ID must match [a-z][a-z0-9-]{0,31}");
+        if (topology.set_index(words[1]) != MonitorTopology::npos) throw refuse("duplicate set ID");
+        MonitorTopology::Set set;
+        set.id = words[1];
+        if (words[2] == "speakers") set.kind = MonitorTopology::Kind::speakers;
+        else if (words[2] == "headphones") set.kind = MonitorTopology::Kind::headphones;
+        else throw refuse("set kind must be speakers or headphones");
+        set.folds.emplace_back("full");
+        topology.sets.push_back(std::move(set));
+        shape();
+    }
+    const auto is_speakers = [&](const std::size_t set) {
+        return topology.sets[set].kind == MonitorTopology::Kind::speakers;
+    };
+
+    const std::size_t outs = header("outs", kChannels);
+    for (std::size_t row = 0; row < outs; ++row) {
+        next("out");
+        if (words.size() < 4 || words[0] != "out") throw refuse("expected 'out INDEX ROLE SET...'");
+        MonitorTopology::Out out;
+        out.index = number(1, kChannels - 1, "output index");
+        if (!topology.outs.empty() && out.index <= topology.outs.back().index) {
+            throw refuse("output indices must ascend");
+        }
+        if (words[2] == "speaker") out.role = MonitorTopology::Role::speaker;
+        else if (words[2] == "sub") out.role = MonitorTopology::Role::sub;
+        else throw refuse("output role must be speaker or sub");
+        for (std::size_t at = 3; at < words.size(); ++at) {
+            const std::size_t set = number(at, sets - 1, "set index");
+            if (!out.sets.empty() && set <= out.sets.back()) throw refuse("an output's sets must ascend");
+            out.sets.push_back(set);
+        }
+        if (out.role == MonitorTopology::Role::sub &&
+            !std::all_of(out.sets.begin(), out.sets.end(), is_speakers)) {
+            throw refuse("a sub belongs to speaker sets only");
+        }
+        if (out.sets.size() > 1 && out.role != MonitorTopology::Role::sub) {
+            throw refuse("only a sub may belong to more than one set");
+        }
+        topology.outs.push_back(std::move(out));
+        shape();
+    }
+
+    // Labels: zero or more, then expandsets. Not shape.
+    next("label or expandsets");
+    std::size_t last_label = 0;
+    bool any_label = false;
+    while (!words.empty() && words[0] == "label") {
+        if (words.size() < 3) throw refuse("expected 'label INDEX TEXT'");
+        const std::size_t index = number(1, kChannels - 1, "label index");
+        if (any_label && index <= last_label) throw refuse("label indices must ascend");
+        if (std::none_of(topology.outs.begin(), topology.outs.end(),
+                         [index](const MonitorTopology::Out& out) { return out.index == index; })) {
+            throw refuse("a label for an output in no set");
+        }
+        // The text is the rest of the line after the index, as written.
+        std::size_t at = text.find_first_not_of(" \t", 5);
+        at = text.find_first_of(" \t", at);
+        at = text.find_first_not_of(" \t", at);
+        const std::string label = text.substr(at);
+        if (label.empty() || label.size() > MonitorTopology::kMaxLabel ||
+            !std::all_of(label.begin(), label.end(), [](const char c) { return c >= ' ' && c <= '~'; })) {
+            throw refuse("a label is 1 to 32 printable ASCII characters");
+        }
+        topology.labels[index] = label;
+        last_label = index;
+        any_label = true;
+        next("label or expandsets");
+    }
+
+    if (words.size() != 2 || words[0] != "expandsets") throw refuse("expected 'expandsets N'");
+    const std::size_t tagged = number(1, kChannels * DspStage::kMaxInternalChannels + 1, "expandsets");
+    if (tagged != expand_rows) {
+        throw refuse("expandsets must give one set per expand row (" + std::to_string(expand_rows) + ")");
+    }
+    shape();
+    section.expand_view.reserve(tagged);
+    for (std::size_t row = 0; row < tagged; ++row) {
+        next("an expandsets row");
+        if (words.size() != 1) throw refuse("expected a set index or '-'");
+        section.expand_view.push_back(
+            words[0] == "-" ? std::uint8_t{0} : static_cast<std::uint8_t>(number(0, sets - 1, "set index") + 1));
+        shape();
+    }
+
+    const std::size_t folds = header("folds", MonitorTopology::kMaxFoldsPerSet * sets);
+    for (std::size_t index = 0; index < folds; ++index) {
+        next("fold");
+        if (words.size() != 4 || words[0] != "fold") throw refuse("expected 'fold SET NAME ROWS'");
+        MonitorSection::Fold fold;
+        fold.set = number(1, sets - 1, "set index");
+        if (!is_speakers(fold.set)) throw refuse("only a speakers set has fold-downs");
+        if (!fold_name_ok(words[2])) throw refuse("fold name must match [a-z0-9.]{1,16} and not be 'full'");
+        MonitorTopology::Set& set = topology.sets[fold.set];
+        if (std::find(set.folds.begin(), set.folds.end(), words[2]) != set.folds.end()) {
+            throw refuse("duplicate fold name in a set");
+        }
+        if (set.folds.size() > MonitorTopology::kMaxFoldsPerSet) throw refuse("more than 4 fold-downs in one set");
+        set.folds.push_back(words[2]);
+        const std::size_t rows = number(3, MonitorTopology::kMaxFoldRows, "fold rows");
+        if (rows == 0) throw refuse("a fold-down has at least one row");
+        shape();
+        std::array<std::array<bool, kChannels>, kChannels> seen{};
+        for (std::size_t row = 0; row < rows; ++row) {
+            next("a fold row");
+            if (words.size() != 3) throw refuse("expected 'DEST SRC GAIN'");
+            const std::size_t dest = number(0, kChannels - 1, "fold destination");
+            const std::size_t source = number(1, kChannels - 1, "fold source");
+            if (seen[dest][source]) throw refuse("a (DEST, SRC) pair twice in one fold");
+            seen[dest][source] = true;
+            // Decimal only (no hex, inf or nan), as the JS reader takes it.
+            double gain = 0.0;
+            std::size_t used = 0;
+            if (words[2].find_first_not_of("+-0123456789.eE") == std::string::npos) {
+                try {
+                    gain = std::stod(words[2], &used);
+                } catch (const std::exception&) {
+                    used = 0;
+                }
+            }
+            if (used != words[2].size() || !std::isfinite(gain)) throw refuse("fold gain must be a finite number");
+            fold.dest.push_back(static_cast<std::uint16_t>(dest));
+            fold.source.push_back(static_cast<std::uint16_t>(source));
+            fold.gain.push_back(gain);
+            shape();
+        }
+        section.folds.push_back(std::move(fold));
+    }
+    next("end");
+    if (words.size() != 1 || words[0] != "end") throw refuse("expected 'end'");
+    // Nothing after it: the section is new, so this costs no old artifact.
+    if (reader.line(text)) throw refuse("content after 'end'");
+    return section;
+}
+
+}  // namespace
+
+std::size_t MonitorTopology::set_index(const std::string_view id) const noexcept {
+    for (std::size_t index = 0; index < sets.size(); ++index) {
+        if (sets[index].id == id) return index;
+    }
+    return npos;
+}
+
+std::size_t MonitorTopology::fold_index(const std::size_t set, const std::string_view name) const noexcept {
+    if (set >= sets.size()) return npos;
+    const auto& folds = sets[set].folds;
+    for (std::size_t index = 0; index < folds.size(); ++index) {
+        if (folds[index] == name) return index;
+    }
+    return npos;
+}
+
+DspStage::DspStage(DspStage&& other) noexcept
+    : preset_(std::move(other.preset_)),
+      shape_(std::move(other.shape_)),
+      internal_channels_(other.internal_channels_),
+      delay_samples_(other.delay_samples_),
+      rate_(other.rate_),
+      max_delay_(other.max_delay_),
+      expand_(std::move(other.expand_)),
+      assign_(std::move(other.assign_)),
+      branches_(std::move(other.branches_)),
+      states_(std::move(other.states_)),
+      inputs_(std::move(other.inputs_)),
+      outputs_(other.outputs_),
+      sets_(std::move(other.sets_)),
+      active_(other.active_.load(std::memory_order_relaxed)),
+      published_(other.published_.load(std::memory_order_relaxed)),
+      seen_(other.seen_.load(std::memory_order_relaxed)),
+      taken_(other.taken_),
+      delay_lines_(std::move(other.delay_lines_)),
+      delay_write_(other.delay_write_),
+      has_monitor_(other.has_monitor_),
+      monitor_(std::move(other.monitor_)),
+      monitor_shape_(std::move(other.monitor_shape_)),
+      expand_view_(std::move(other.expand_view_)),
+      fold_rows_(std::move(other.fold_rows_)),
+      folds_(std::move(other.folds_)),
+      fold_first_(other.fold_first_),
+      fold_count_(other.fold_count_),
+      monitor_sets_(other.monitor_sets_),
+      fold_ramp_(other.fold_ramp_),
+      fold_step_(other.fold_step_),
+      fold_state_(other.fold_state_),
+      views_(std::move(other.views_)) {
+    for (std::size_t set = 0; set < fold_request_.size(); ++set) {
+        fold_request_[set].store(other.fold_request_[set].load(std::memory_order_relaxed), std::memory_order_relaxed);
+    }
+    other.internal_channels_ = 0;
+    other.has_monitor_ = false;
+    other.monitor_sets_ = 0;
+}
+
+DspStage& DspStage::operator=(DspStage&& other) noexcept {
+    if (this != &other) {
+        preset_ = std::move(other.preset_);
+        shape_ = std::move(other.shape_);
+        internal_channels_ = other.internal_channels_;
+        delay_samples_ = other.delay_samples_;
+        rate_ = other.rate_;
+        max_delay_ = other.max_delay_;
+        expand_ = std::move(other.expand_);
+        assign_ = std::move(other.assign_);
+        branches_ = std::move(other.branches_);
+        states_ = std::move(other.states_);
+        inputs_ = std::move(other.inputs_);
+        outputs_ = other.outputs_;
+        sets_ = std::move(other.sets_);
+        active_.store(other.active_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        published_.store(other.published_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        seen_.store(other.seen_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        taken_ = other.taken_;
+        delay_lines_ = std::move(other.delay_lines_);
+        delay_write_ = other.delay_write_;
+        has_monitor_ = other.has_monitor_;
+        monitor_ = std::move(other.monitor_);
+        monitor_shape_ = std::move(other.monitor_shape_);
+        expand_view_ = std::move(other.expand_view_);
+        fold_rows_ = std::move(other.fold_rows_);
+        folds_ = std::move(other.folds_);
+        fold_first_ = other.fold_first_;
+        fold_count_ = other.fold_count_;
+        monitor_sets_ = other.monitor_sets_;
+        fold_ramp_ = other.fold_ramp_;
+        fold_step_ = other.fold_step_;
+        fold_state_ = other.fold_state_;
+        views_ = std::move(other.views_);
+        for (std::size_t set = 0; set < fold_request_.size(); ++set) {
+            fold_request_[set].store(other.fold_request_[set].load(std::memory_order_relaxed),
+                                     std::memory_order_relaxed);
+        }
+        other.internal_channels_ = 0;
+        other.has_monitor_ = false;
+        other.monitor_sets_ = 0;
+    }
+    return *this;
+}
+
+DspStage DspStage::load(const std::string_view text, const unsigned running_rate) {
+    ArtifactReader reader(text);
+    reader.expect("usb16x16-dsp");
+    const std::size_t version = reader.count("version", 1);
+    if (version != 1) {
+        throw std::runtime_error("dsp artifact: unsupported version " + std::to_string(version));
+    }
+    DspStage stage;
+    Coefficients& numbers = stage.sets_[0];
+    reader.expect("preset");
+    stage.preset_ = reader.rest_of_line();
+    reader.expect("rate");
+    const std::size_t rate = reader.count("rate", 768000);
+    if (rate != running_rate) {
+        throw std::runtime_error("dsp artifact: compiled for rate " + std::to_string(rate) +
+                                 ", running at " + std::to_string(running_rate));
+    }
+    if (rate % 100 != 0 || rate == 0) {
+        throw std::runtime_error("dsp artifact: rate " + std::to_string(rate) + " is not a whole number of hundreds");
+    }
+    stage.rate_ = static_cast<unsigned>(rate);
+    stage.max_delay_ = max_delay_samples(stage.rate_);
+    reader.expect("channels");
+    const std::size_t channels = reader.count("channels", kChannels);
+    if (channels != kChannels) {
+        throw std::runtime_error("dsp artifact: " + std::to_string(channels) +
+                                 " channels, the bridge carries " + std::to_string(kChannels));
+    }
+    reader.expect("internal");
+    stage.internal_channels_ = reader.count("internal", kMaxInternalChannels);
+    if (stage.internal_channels_ == 0) {
+        throw std::runtime_error("dsp artifact: a pipeline with no internal channels routes nothing");
+    }
+    reader.expect("maxdelay");
+    const std::size_t declared_delay = reader.count("maxdelay", stage.max_delay_);
+
+    const auto read_mix = [&reader](std::vector<MixEntry>& into, std::vector<double>& gains,
+                                    const char* what, const std::size_t destinations,
+                                    const std::size_t sources) {
+        reader.expect(what);
+        const std::size_t rows = reader.count(what, destinations * sources + 1);
+        into.reserve(rows);
+        gains.reserve(rows);
+        for (std::size_t row = 0; row < rows; ++row) {
+            const std::size_t dest = reader.count("mix destination", destinations - 1);
+            const std::size_t source = reader.count("mix source", sources - 1);
+            const double gain = reader.real("mix gain");
+            into.push_back({static_cast<std::uint16_t>(dest), static_cast<std::uint16_t>(source)});
+            gains.push_back(gain);
+        }
+    };
+
+    const auto read_sections = [&reader](std::vector<Section>& into, const std::size_t count) {
+        for (std::size_t index = 0; index < count; ++index) {
+            Section section;
+            section.b0 = reader.real("b0");
+            section.b1 = reader.real("b1");
+            section.b2 = reader.real("b2");
+            section.a1 = reader.real("a1");
+            section.a2 = reader.real("a2");
+            into.push_back(section);
+        }
+    };
+
+    read_mix(stage.expand_, numbers.expand_gain, "expand", stage.internal_channels_, kChannels);
+
+    reader.expect("branch");
+    const std::size_t branch_rows = reader.count("branch", kMaxInternalChannels);
+    stage.branches_.reserve(branch_rows);
+    for (std::size_t row = 0; row < branch_rows; ++row) {
+        const std::size_t channel = reader.count("branch channel", stage.internal_channels_ - 1);
+        const std::size_t count = reader.count("branch sections", 64);
+        Chain chain{static_cast<std::uint16_t>(channel),
+                    static_cast<std::uint32_t>(numbers.sections.size()),
+                    static_cast<std::uint32_t>(count)};
+        read_sections(numbers.sections, count);
+        stage.branches_.push_back(chain);
+    }
+
+    read_mix(stage.assign_, numbers.assign_gain, "assign", kChannels, stage.internal_channels_);
+
+    numbers.output_gain.fill(1.0);
+    numbers.output_delay.fill(0);
+    reader.expect("output");
+    const std::size_t output_rows = reader.count("output", kChannels);
+    for (std::size_t row = 0; row < output_rows; ++row) {
+        const std::size_t output = reader.count("output index", kChannels - 1);
+        const std::size_t delay = reader.count("output delay", declared_delay);
+        const double gain = reader.real("output gain");
+        const std::size_t count = reader.count("output sections", 64);
+        OutputSpec spec;
+        spec.first = static_cast<std::uint32_t>(numbers.sections.size());
+        spec.count = static_cast<std::uint32_t>(count);
+        read_sections(numbers.sections, count);
+        stage.outputs_[output] = spec;
+        numbers.output_delay[output] = static_cast<std::uint32_t>(delay);
+        numbers.output_gain[output] = gain;
+        stage.delay_samples_ = std::max(stage.delay_samples_, delay);
+    }
+    const std::string closing = reader.word("'end'");
+    if (closing == "monitor") {
+        MonitorSection section = read_monitor_section(reader, stage.expand_.size());
+        stage.has_monitor_ = true;
+        stage.monitor_ = std::move(section.topology);
+        stage.monitor_shape_ = std::move(section.shape);
+        stage.expand_view_ = std::move(section.expand_view);
+        stage.monitor_sets_ = stage.monitor_.sets.size();
+        for (std::size_t set = 0; set < stage.monitor_sets_; ++set) {
+            stage.fold_first_[set] = static_cast<std::uint32_t>(stage.folds_.size());
+            for (const MonitorSection::Fold& fold : section.folds) {
+                if (fold.set != set) continue;
+                FoldSpan span{static_cast<std::uint32_t>(stage.fold_rows_.size()),
+                              static_cast<std::uint32_t>(fold.dest.size())};
+                for (std::size_t row = 0; row < fold.dest.size(); ++row) {
+                    stage.fold_rows_.push_back({fold.dest[row], fold.source[row], fold.gain[row]});
+                }
+                stage.folds_.push_back(span);
+            }
+            stage.fold_count_[set] = static_cast<std::uint32_t>(stage.folds_.size()) - stage.fold_first_[set] + 1;
+        }
+        stage.fold_ramp_ = std::max<std::uint32_t>(monitor_ramp_frames_fast(stage.rate_), 1);
+        stage.fold_step_ = 1.0 / static_cast<double>(stage.fold_ramp_);
+        stage.views_.assign(stage.monitor_sets_ * kChannels, 0.0);
+    } else if (closing != "end") {
+        throw std::runtime_error("dsp artifact: expected 'end', found '" + closing + "'");
+    }
+
+    stage.index_sections(numbers);
+    // The second set is sized now, so a publish never allocates.
+    stage.sets_[1] = numbers;
+    stage.states_.assign(numbers.sections.size(), State{});
+    stage.inputs_.assign(stage.branches_.size() + kChannels, State{});
+    stage.delay_lines_.assign(kChannels * stage.max_delay_, 0.0);
+    stage.delay_write_.fill(0);
+    stage.shape_ = shape_text(stage);
+    return stage;
+}
+
+// The canonical shape: the artifact with every gain, delay and coefficient
+// blanked. Must match `artifactShape` in bridge-artifact.mjs line for line.
+std::string DspStage::shape_text(const DspStage& stage) {
+    std::string out;
+    out += "usb16x16-dsp-shape 1\n";
+    out += "rate " + std::to_string(stage.rate_) + "\n";
+    out += "channels " + std::to_string(kChannels) + "\n";
+    out += "internal " + std::to_string(stage.internal_channels_) + "\n";
+    out += "maxdelay " + std::to_string(stage.max_delay_) + "\n";
+    out += "expand " + std::to_string(stage.expand_.size()) + "\n";
+    for (const MixEntry& entry : stage.expand_) {
+        out += std::to_string(entry.dest) + " " + std::to_string(entry.source) + "\n";
+    }
+    out += "branch " + std::to_string(stage.branches_.size()) + "\n";
+    for (const Chain& chain : stage.branches_) {
+        out += std::to_string(chain.channel) + " " + std::to_string(chain.count) + "\n";
+    }
+    out += "assign " + std::to_string(stage.assign_.size()) + "\n";
+    for (const MixEntry& entry : stage.assign_) {
+        out += std::to_string(entry.dest) + " " + std::to_string(entry.source) + "\n";
+    }
+    // The artifact lists outputs in its own order and may omit some; the
+    // loader keeps only the per-output spec, so the shape lists all 16 in
+    // index order. The emitter writes all 16 in index order too
+    // (bridge-artifact.mjs), so the two agree on every artifact it writes.
+    out += "output " + std::to_string(kChannels) + "\n";
+    for (std::size_t output = 0; output < kChannels; ++output) {
+        out += std::to_string(output) + " " + std::to_string(stage.outputs_[output].count) + "\n";
+    }
+    // The monitor section, all of it but the labels, as the artifact wrote it
+    // (fold gains included: they are shape). Absent, nothing: the shape of an
+    // artifact without the section is what it always was.
+    for (const std::string& line : stage.monitor_shape_) {
+        out += line + "\n";
+    }
+    out += "end\n";
+    return out;
+}
+
+std::string DspStage::shape_key() const {
+    return sha256_hex(shape_);
+}
+
+bool DspStage::publish(const DspStage& other, std::string& reason) noexcept {
+    if (!loaded()) {
+        reason = "stage not loaded";
+        return false;
+    }
+    if (!other.loaded()) {
+        reason = "update not loaded";
+        return false;
+    }
+    if (other.shape_ != shape_) {
+        reason = "shape differs";
+        return false;
+    }
+    const std::uint64_t published = published_.load(std::memory_order_relaxed);
+    if (seen_.load(std::memory_order_acquire) != published) {
+        reason = "previous update not yet taken";
+        return false;
+    }
+    const unsigned active = active_.load(std::memory_order_relaxed);
+    Coefficients& inactive = sets_[1 - active];
+    const Coefficients& from = other.sets_[other.active_.load(std::memory_order_acquire)];
+    // Same shape means same sizes: element copies into storage sized at load.
+    std::copy(from.sections.begin(), from.sections.end(), inactive.sections.begin());
+    std::copy(from.unity.begin(), from.unity.end(), inactive.unity.begin());
+    std::copy(from.running.begin(), from.running.end(), inactive.running.begin());
+    std::copy(from.run_first.begin(), from.run_first.end(), inactive.run_first.begin());
+    std::copy(from.run_count.begin(), from.run_count.end(), inactive.run_count.begin());
+    std::copy(from.expand_gain.begin(), from.expand_gain.end(), inactive.expand_gain.begin());
+    std::copy(from.assign_gain.begin(), from.assign_gain.end(), inactive.assign_gain.begin());
+    inactive.output_gain = from.output_gain;
+    inactive.output_delay = from.output_delay;
+    delay_samples_ = static_cast<std::size_t>(
+        *std::max_element(from.output_delay.begin(), from.output_delay.end()));
+    published_.store(published + 1, std::memory_order_relaxed);
+    active_.store(1 - active, std::memory_order_release);
+    reason.clear();
+    return true;
+}
+
+void DspStage::index_sections(Coefficients& c) const {
+    c.unity.assign(c.sections.size(), 0);
+    for (std::size_t index = 0; index < c.sections.size(); ++index) {
+        const Section& s = c.sections[index];
+        c.unity[index] = s.b0 == 1.0 && s.b1 == 0.0 && s.b2 == 0.0 && s.a1 == 0.0 && s.a2 == 0.0;
+    }
+    const std::size_t chains = branches_.size() + kChannels;
+    c.running.assign(c.sections.size(), 0);
+    c.run_first.assign(chains, 0);
+    c.run_count.assign(chains, 0);
+    std::uint32_t used = 0;
+    const auto chain = [&](const std::size_t index, const std::uint32_t first, const std::uint32_t count) {
+        c.run_first[index] = used;
+        for (std::uint32_t section = first; section < first + count; ++section) {
+            if (!c.unity[section]) c.running[used++] = section;
+        }
+        c.run_count[index] = used - c.run_first[index];
+    };
+    for (std::size_t row = 0; row < branches_.size(); ++row) chain(row, branches_[row].first, branches_[row].count);
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        chain(branches_.size() + channel, outputs_[channel].first, outputs_[channel].count);
+    }
+}
+
+void DspStage::adopt(const Coefficients& before, const Coefficients& now) noexcept {
+    const auto chain = [&](const std::uint32_t first, const std::uint32_t count, const std::size_t input) {
+        // The newest section `before` ran; null means the chain's input.
+        const State* upstream = nullptr;
+        for (std::uint32_t index = first; index < first + count; ++index) {
+            if (before.unity[index] && !now.unity[index]) {
+                // Under `before` this section's input was upstream's output (or the
+                // chain's input), and as y = x its output was the same signal.
+                const double h1 = upstream != nullptr ? upstream->y1 : inputs_[input].x1;
+                const double h2 = upstream != nullptr ? upstream->y2 : inputs_[input].x2;
+                states_[index] = State{h1, h2, h1, h2};
+            }
+            if (!before.unity[index]) upstream = &states_[index];
+        }
+    };
+    for (std::size_t row = 0; row < branches_.size(); ++row) {
+        chain(branches_[row].first, branches_[row].count, row);
+    }
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        chain(outputs_[channel].first, outputs_[channel].count, branches_.size() + channel);
+    }
+}
+
+void DspStage::reset() noexcept {
+    for (auto& state : states_) {
+        state = State{};
+    }
+    for (auto& history : inputs_) {
+        history = State{};
+    }
+    std::fill(delay_lines_.begin(), delay_lines_.end(), 0.0);
+    delay_write_.fill(0);
+}
+
+double DspStage::run_chain(const Coefficients& c, const std::uint32_t first,
+                           const std::uint32_t count, const std::size_t chain, double sample) noexcept {
+    State& history = inputs_[chain];
+    history.x2 = history.x1;
+    history.x1 = sample;
+    // Direct form I, the form the emitted coefficients are written for.
+    const auto step = [&](const std::uint32_t index) {
+        const Section& section = c.sections[index];
+        State& state = states_[index];
+        const double input = sample;
+        const double output = section.b0 * input + section.b1 * state.x1 +
+                              section.b2 * state.x2 - section.a1 * state.y1 -
+                              section.a2 * state.y2;
+        state.x2 = state.x1;
+        state.x1 = input;
+        state.y2 = state.y1;
+        state.y1 = output;
+        sample = output;
+    };
+    const std::uint32_t running = c.run_count[chain];
+    if (running == count) {
+        for (std::uint32_t index = first; index < first + count; ++index) step(index);
+        return sample;
+    }
+    // Unity sections are left out: y = x, and their history is upstream's (adopt).
+    const std::uint32_t* const list = c.running.data() + c.run_first[chain];
+    for (std::uint32_t index = 0; index < running; ++index) step(list[index]);
+    return sample;
+}
+
+void DspStage::flush_denormals() noexcept {
+    // Once per block, not per sample. A decaying IIR in double precision takes
+    // a very long time to reach the denormal range, but a silent input holds it
+    // there once it arrives, and on hardware that traps denormals the cost is
+    // paid on every sample from then on. Cheap insurance at this rate.
+    constexpr double floor = 1e-100;
+    for (auto& state : states_) {
+        if (std::abs(state.x1) < floor) state.x1 = 0.0;
+        if (std::abs(state.x2) < floor) state.x2 = 0.0;
+        if (std::abs(state.y1) < floor) state.y1 = 0.0;
+        if (std::abs(state.y2) < floor) state.y2 = 0.0;
+    }
+}
+
+bool DspStage::set_fold(const std::size_t set, const std::size_t fold) noexcept {
+    if (!has_monitor_ || set >= monitor_sets_ || fold >= fold_count_[set]) return false;
+    fold_request_[set].store(static_cast<std::uint32_t>(fold), std::memory_order_relaxed);
+    return true;
+}
+
+std::size_t DspStage::fold(const std::size_t set) const noexcept {
+    return set < monitor_sets_ ? fold_state_[set].current : 0;
+}
+
+bool DspStage::fold_crossfading(const std::size_t set) const noexcept {
+    return set < monitor_sets_ && fold_state_[set].remaining > 0;
+}
+
+void DspStage::snap_folds() noexcept {
+    for (std::size_t set = 0; set < monitor_sets_; ++set) {
+        FoldState& state = fold_state_[set];
+        const std::uint32_t wanted = fold_request_[set].load(std::memory_order_relaxed);
+        state.current = wanted;
+        state.to = wanted;
+        state.remaining = 0;
+        state.a = 0.0;
+    }
+}
+
+void DspStage::apply_fold(const std::size_t set, const std::uint32_t fold, const double* const in,
+                          double* const into) const noexcept {
+    if (fold == 0) {
+        std::copy(in, in + kChannels, into);
+        return;
+    }
+    std::fill(into, into + kChannels, 0.0);
+    const FoldSpan& span = folds_[fold_first_[set] + fold - 1];
+    for (std::uint32_t row = span.first; row < span.first + span.count; ++row) {
+        const FoldRow& r = fold_rows_[row];
+        into[r.dest] += r.gain * in[r.source];
+    }
+}
+
+const double* DspStage::fold_view(const std::size_t set, const double* const in) noexcept {
+    FoldState& state = fold_state_[set];
+    double* const view = views_.data() + set * kChannels;
+    if (state.remaining == 0) {
+        if (state.current == 0) return in;
+        apply_fold(set, state.current, in, view);
+        return view;
+    }
+    std::array<double, kChannels> from{};
+    std::array<double, kChannels> to{};
+    apply_fold(set, state.current, in, from.data());
+    apply_fold(set, state.to, in, to.data());
+    state.a += fold_step_;
+    if (--state.remaining == 0) {
+        state.a = 1.0;
+        state.current = state.to;
+    }
+    const double a = state.a;
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        view[channel] = (1.0 - a) * from[channel] + a * to[channel];
+    }
+    return view;
+}
+
+void DspStage::process(float* const interleaved, const std::size_t frames) noexcept {
+    if (internal_channels_ == 0) {
+        return;
+    }
+    // Fold requests, once per block: a set that is not crossfading and is
+    // asked for another fold starts one here. Any set off full or crossfading
+    // makes this block read views; otherwise the expand loop is today's.
+    bool folding = false;
+    for (std::size_t set = 0; set < monitor_sets_; ++set) {
+        FoldState& state = fold_state_[set];
+        if (state.remaining == 0) {
+            const std::uint32_t wanted = fold_request_[set].load(std::memory_order_relaxed);
+            if (wanted != state.current) {
+                state.to = wanted;
+                state.remaining = fold_ramp_;
+                state.a = 0.0;
+            }
+        }
+        folding = folding || state.remaining > 0 || state.current != 0;
+    }
+    // One acquire per block: this block runs on one set throughout. The
+    // publish count is read after the index so the value seen is at least
+    // the one that went with this set; recording it releases the other set
+    // back to the control thread.
+    const unsigned active = active_.load(std::memory_order_acquire);
+    const Coefficients& c = sets_[active];
+    // A new set: give its newly running sections their history, from the old
+    // set's flags. Before `seen_` is stored, so the control thread cannot yet be
+    // writing into the old set.
+    if (active != taken_) {
+        adopt(sets_[taken_], c);
+        taken_ = active;
+    }
+    seen_.store(published_.load(std::memory_order_relaxed), std::memory_order_release);
+    // A delay that shrank under a live update: keep the write index inside
+    // the new length. Up to `delay` stale samples come out of the line once.
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        const std::uint32_t delay = c.output_delay[channel];
+        if (delay > 0 && delay_write_[channel] >= delay) {
+            delay_write_[channel] %= delay;
+        }
+    }
+    std::array<double, kMaxInternalChannels> internal{};
+    std::array<double, kChannels> in{};
+    std::array<double, kChannels> out{};
+    // What each expand row reads: [0] the inputs, [s + 1] set s's view.
+    std::array<const double*, MonitorTopology::kMaxSets + 1> sources{};
+    sources.fill(in.data());
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        float* const block = interleaved + frame * kChannels;
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            in[channel] = static_cast<double>(block[channel]);
+        }
+        std::fill(internal.begin(), internal.begin() + internal_channels_, 0.0);
+        if (folding) {
+            for (std::size_t set = 0; set < monitor_sets_; ++set) {
+                sources[set + 1] = fold_view(set, in.data());
+            }
+            for (std::size_t row = 0; row < expand_.size(); ++row) {
+                const MixEntry& entry = expand_[row];
+                internal[entry.dest] += c.expand_gain[row] * sources[expand_view_[row]][entry.source];
+            }
+        } else {
+            for (std::size_t row = 0; row < expand_.size(); ++row) {
+                const MixEntry& entry = expand_[row];
+                internal[entry.dest] += c.expand_gain[row] * in[entry.source];
+            }
+        }
+        for (std::size_t row = 0; row < branches_.size(); ++row) {
+            const Chain& chain = branches_[row];
+            internal[chain.channel] = run_chain(c, chain.first, chain.count, row, internal[chain.channel]);
+        }
+        out.fill(0.0);
+        for (std::size_t row = 0; row < assign_.size(); ++row) {
+            const MixEntry& entry = assign_[row];
+            out[entry.dest] += c.assign_gain[row] * internal[entry.source];
+        }
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            const OutputSpec& spec = outputs_[channel];
+            double sample = run_chain(c, spec.first, spec.count, branches_.size() + channel, out[channel]);
+            const std::uint32_t delay = c.output_delay[channel];
+            if (delay > 0) {
+                double* const line = delay_lines_.data() + channel * max_delay_;
+                const std::uint32_t write = delay_write_[channel];
+                const double delayed = line[write];
+                line[write] = sample;
+                delay_write_[channel] = (write + 1) % delay;
+                sample = delayed;
+            }
+            block[channel] = static_cast<float>(sample * c.output_gain[channel]);
+        }
+    }
+    flush_denormals();
+}
+
+// ----------------------------------------------------------- monitor block
+
+MonitorGains::MonitorGains() noexcept {
+    for (Targets& set : sets_) {
+        set.gain.fill(1.0);
+        set.ramp_frames.fill(1);
+    }
+    gain_.fill(1.0);
+    target_.fill(1.0);
+}
+
+bool MonitorGains::publish(const Targets& targets, std::string& reason) noexcept {
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        const double g = targets.gain[channel];
+        // Written so that NaN fails too: every comparison with it is false.
+        if (!(std::isfinite(g) && g >= 0.0 && g <= 1.0)) {
+            reason = "gain on output " + std::to_string(channel + 1) + " is not a finite value in [0, 1]";
+            return false;
+        }
+    }
+    const std::uint64_t published = published_.load(std::memory_order_relaxed);
+    if (seen_.load(std::memory_order_acquire) != published) {
+        reason = "previous update not yet taken";
+        return false;
+    }
+    const unsigned active = active_.load(std::memory_order_relaxed);
+    sets_[1 - active] = targets;
+    // Index first, count second: an audio thread that sees the new count has
+    // also seen the new index, so it can never record as seen a publish whose
+    // set it has not yet switched to (which would let the next publish write
+    // into the set it is still reading).
+    active_.store(1 - active, std::memory_order_release);
+    published_.store(published + 1, std::memory_order_release);
+    reason.clear();
+    return true;
+}
+
+void MonitorGains::take() noexcept {
+    const std::uint64_t published = published_.load(std::memory_order_acquire);
+    const unsigned active = active_.load(std::memory_order_acquire);
+    if (active != taken_) {
+        const Targets& set = sets_[active];
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            const double t = set.gain[channel];
+            if (t == target_[channel]) continue;
+            target_[channel] = t;
+            if (gain_[channel] == t) {
+                remaining_[channel] = 0;
+                continue;
+            }
+            const std::uint32_t frames = std::max<std::uint32_t>(set.ramp_frames[channel], 1);
+            step_[channel] = (t - gain_[channel]) / static_cast<double>(frames);
+            remaining_[channel] = frames;
+        }
+        taken_ = active;
+        update_rest();
+    }
+    // Releases the other set back to the control thread.
+    seen_.store(published, std::memory_order_release);
+}
+
+void MonitorGains::update_rest() noexcept {
+    bool rest = true;
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        rest = rest && remaining_[channel] == 0 && gain_[channel] == 1.0;
+    }
+    rest_unity_ = rest;
+}
+
+void MonitorGains::start_from_silence(const std::uint32_t frames) noexcept {
+    const std::uint32_t length = std::max<std::uint32_t>(frames, 1);
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        gain_[channel] = 0.0;
+        if (target_[channel] == 0.0) {
+            remaining_[channel] = 0;
+            continue;
+        }
+        step_[channel] = target_[channel] / static_cast<double>(length);
+        remaining_[channel] = length;
+    }
+    update_rest();
+}
+
+void MonitorGains::process(float* const interleaved, const std::size_t frames) noexcept {
+    take();
+    if (rest_unity_ || frames == 0) return;
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        double g = gain_[channel];
+        std::uint32_t remaining = remaining_[channel];
+        if (remaining == 0 && g == 1.0) continue;
+        float* sample = interleaved + channel;
+        std::size_t frame = 0;
+        if (remaining > 0) {
+            const double step = step_[channel];
+            const double target = target_[channel];
+            for (; frame < frames && remaining > 0; ++frame, sample += kChannels) {
+                g += step;
+                if (--remaining == 0) g = target;
+                *sample = static_cast<float>(static_cast<double>(*sample) * g);
+            }
+            gain_[channel] = g;
+            remaining_[channel] = remaining;
+        }
+        // At rest on a gain other than unity (a ramp that just ended on 1.0
+        // leaves the rest of the block alone, as unity always does).
+        if (g != 1.0) {
+            for (; frame < frames; ++frame, sample += kChannels) {
+                *sample = static_cast<float>(static_cast<double>(*sample) * g);
+            }
+        }
+    }
+    update_rest();
+}
+
+// ---------------------------------------------------------------- SHA-256
+//
+// FIPS 180-4, straight from the standard. Used only for the DSP shape key and
+// only off the audio path; a few hundred bytes hashed once per publish.
+std::string sha256_hex(const std::string_view text) {
+    static constexpr std::array<std::uint32_t, 64> k{
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
+    std::array<std::uint32_t, 8> h{0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                                   0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
+    const auto rotr = [](const std::uint32_t x, const unsigned n) {
+        return (x >> n) | (x << (32 - n));
+    };
+    std::vector<unsigned char> message(text.begin(), text.end());
+    const std::uint64_t bit_length = static_cast<std::uint64_t>(message.size()) * 8;
+    message.push_back(0x80);
+    while (message.size() % 64 != 56) message.push_back(0);
+    for (int shift = 56; shift >= 0; shift -= 8) {
+        message.push_back(static_cast<unsigned char>(bit_length >> shift));
+    }
+    for (std::size_t offset = 0; offset < message.size(); offset += 64) {
+        std::array<std::uint32_t, 64> w{};
+        for (std::size_t i = 0; i < 16; ++i) {
+            w[i] = (static_cast<std::uint32_t>(message[offset + i * 4]) << 24) |
+                   (static_cast<std::uint32_t>(message[offset + i * 4 + 1]) << 16) |
+                   (static_cast<std::uint32_t>(message[offset + i * 4 + 2]) << 8) |
+                   static_cast<std::uint32_t>(message[offset + i * 4 + 3]);
+        }
+        for (std::size_t i = 16; i < 64; ++i) {
+            const std::uint32_t s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >> 3);
+            const std::uint32_t s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+        }
+        std::uint32_t a = h[0], b = h[1], cc = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+        for (std::size_t i = 0; i < 64; ++i) {
+            const std::uint32_t s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+            const std::uint32_t ch = (e & f) ^ (~e & g);
+            const std::uint32_t t1 = hh + s1 + ch + k[i] + w[i];
+            const std::uint32_t s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+            const std::uint32_t maj = (a & b) ^ (a & cc) ^ (b & cc);
+            const std::uint32_t t2 = s0 + maj;
+            hh = g; g = f; f = e; e = d + t1; d = cc; cc = b; b = a; a = t1 + t2;
+        }
+        h[0] += a; h[1] += b; h[2] += cc; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
+    }
+    static constexpr char digits[] = "0123456789abcdef";
+    std::string hex;
+    hex.reserve(64);
+    for (const std::uint32_t word : h) {
+        for (int shift = 28; shift >= 0; shift -= 4) {
+            hex.push_back(digits[(word >> shift) & 0xF]);
+        }
+    }
+    return hex;
+}
+
+AudioRing::AudioRing(const std::size_t capacity_frames)
+    : samples_(capacity_frames * kChannels, 0.0F), capacity_frames_(capacity_frames) {
+    if (capacity_frames < 8) {
+        throw std::invalid_argument("audio ring capacity must be at least 8 frames");
+    }
+}
+
+void AudioRing::clear() noexcept {
+    read_frame_ = 0;
+    size_frames_ = 0;
+}
+
+bool AudioRing::push(const float* interleaved, const std::size_t frames) noexcept {
+    if (frames > free()) {
+        return false;
+    }
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        const std::size_t destination_frame = (read_frame_ + size_frames_ + frame) % capacity_frames_;
+        std::memcpy(samples_.data() + destination_frame * kChannels,
+                    interleaved + frame * kChannels,
+                    kChannels * sizeof(float));
+    }
+    size_frames_ += frames;
+    return true;
+}
+
+void AudioRing::pop(const std::size_t frames) noexcept {
+    const std::size_t actual = std::min(frames, size_frames_);
+    read_frame_ = (read_frame_ + actual) % capacity_frames_;
+    size_frames_ -= actual;
+}
+
+float AudioRing::sample(const std::size_t frame, const std::size_t channel) const noexcept {
+    if (frame >= size_frames_ || channel >= kChannels) {
+        return 0.0F;
+    }
+    const std::size_t physical_frame = (read_frame_ + frame) % capacity_frames_;
+    return samples_[physical_frame * kChannels + channel];
+}
+
+std::size_t FarrowResampler::render(AudioRing& source,
+                                    float* output,
+                                    const std::size_t output_capacity_frames,
+                                    const double source_step) noexcept {
+    if (!(source_step >= 0.999 && source_step <= 1.001)) {
+        return 0;
+    }
+
+    std::size_t produced = 0;
+    while (produced < output_capacity_frames) {
+        const auto center = static_cast<std::size_t>(position_);
+        if (center < 1 || center + 2 >= source.size()) {
+            break;
+        }
+        const float fraction = static_cast<float>(position_ - static_cast<double>(center));
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            const float y0 = source.sample(center - 1, channel);
+            const float y1 = source.sample(center, channel);
+            const float y2 = source.sample(center + 1, channel);
+            const float y3 = source.sample(center + 2, channel);
+
+            // Cubic Farrow form (Catmull-Rom). It has two frames of lookahead
+            // and no coefficient-table lookup on the real-time path.
+            const float a0 = -0.5F * y0 + 1.5F * y1 - 1.5F * y2 + 0.5F * y3;
+            const float a1 = y0 - 2.5F * y1 + 2.0F * y2 - 0.5F * y3;
+            const float a2 = -0.5F * y0 + 0.5F * y2;
+            output[produced * kChannels + channel] = ((a0 * fraction + a1) * fraction + a2) * fraction + y1;
+        }
+        ++produced;
+        position_ += source_step;
+    }
+
+    if (position_ >= 2.0) {
+        const std::size_t consumed = static_cast<std::size_t>(position_) - 1;
+        source.pop(consumed);
+        position_ -= static_cast<double>(consumed);
+        consumed_frames_ += consumed;
+    }
+    return produced;
+}
+
+void LevelServo::set_setpoint(const double frames) noexcept {
+    setpoint_ = frames;
+    have_setpoint_ = true;
+    bias_ = 0.0;
+}
+
+double LevelServo::update(const double depth_frames) noexcept {
+    if (!have_setpoint_ || !std::isfinite(depth_frames)) {
+        bias_ = 0.0;
+        return bias_;
+    }
+    const double error = depth_frames - setpoint_;
+    const double clamp = std::abs(error) > config_.wide_error_frames
+        ? config_.wide_clamp_ppm
+        : config_.clamp_ppm;
+    bias_ = std::clamp(config_.gain_ppm_per_frame * error, -clamp, clamp);
+    return bias_;
+}
+
+std::int64_t median_wake_interval(const std::vector<std::int64_t>& wake_times) noexcept {
+    if (wake_times.size() < 2) {
+        return 0;
+    }
+    std::vector<std::int64_t> intervals;
+    intervals.reserve(wake_times.size() - 1);
+    for (std::size_t index = 1; index < wake_times.size(); ++index) {
+        intervals.push_back(wake_times[index] - wake_times[index - 1]);
+    }
+    std::sort(intervals.begin(), intervals.end());
+    const std::size_t middle = intervals.size() / 2;
+    if (intervals.size() % 2 == 1) {
+        return intervals[middle];
+    }
+    return (intervals[middle - 1] + intervals[middle]) / 2;
+}
+
+std::int64_t next_aligned_time(const std::int64_t reference,
+                               const std::int64_t period,
+                               const std::int64_t not_before) noexcept {
+    if (period <= 0 || not_before <= reference) {
+        return reference;
+    }
+    const std::int64_t elapsed = not_before - reference;
+    const std::int64_t periods = (elapsed + period - 1) / period;
+    return reference + periods * period;
+}
+
+SharedDriftEstimator::SharedDriftEstimator() : SharedDriftEstimator(Config{}) {}
+
+SharedDriftEstimator::SharedDriftEstimator(const Config config) : config_(config) {}
+
+void SharedDriftEstimator::reset(const double initial_ppm) noexcept {
+    ppm_ = std::clamp(initial_ppm, -config_.maximum_ppm, config_.maximum_ppm);
+    integral_ppm_ = ppm_;
+    phase_error_ = 0.0;
+    have_error_ = false;
+    observed_ppm_ = ppm_;
+    have_rate_observation_ = false;
+}
+
+void SharedDriftEstimator::update_rate_observation(const double observed_ppm) noexcept {
+    if (!std::isfinite(observed_ppm)) {
+        return;
+    }
+    const double bounded_observation =
+        std::clamp(observed_ppm, -config_.maximum_ppm, config_.maximum_ppm);
+    if (!have_rate_observation_) {
+        observed_ppm_ = bounded_observation;
+        have_rate_observation_ = true;
+    } else {
+        const double retain = std::clamp(config_.rate_smoothing, 0.0, 0.999999);
+        observed_ppm_ = retain * observed_ppm_ + (1.0 - retain) * bounded_observation;
+    }
+    ppm_ += std::clamp(observed_ppm_ - ppm_,
+                       -config_.maximum_slew_ppm,
+                       config_.maximum_slew_ppm);
+    ppm_ = std::clamp(ppm_, -config_.maximum_ppm, config_.maximum_ppm);
+    integral_ppm_ = ppm_;
+    phase_error_ = 0.0;
+    have_error_ = false;
+}
+
+void SharedDriftEstimator::update_phase_error(const double differential_phase_error_frames) noexcept {
+    if (!std::isfinite(differential_phase_error_frames)) {
+        return;
+    }
+    if (!have_error_) {
+        phase_error_ = differential_phase_error_frames;
+        have_error_ = true;
+    } else {
+        const double retain = std::clamp(config_.smoothing, 0.0, 0.999999);
+        phase_error_ = retain * phase_error_ +
+                       (1.0 - retain) * differential_phase_error_frames;
+    }
+
+    integral_ppm_ += config_.integral_ppm_per_frame_update * phase_error_;
+    integral_ppm_ = std::clamp(integral_ppm_, -config_.maximum_ppm, config_.maximum_ppm);
+    const double requested = std::clamp(
+        integral_ppm_ + config_.proportional_ppm_per_frame * phase_error_,
+        -config_.maximum_ppm,
+        config_.maximum_ppm);
+    ppm_ += std::clamp(requested - ppm_, -config_.maximum_slew_ppm, config_.maximum_slew_ppm);
+    ppm_ = std::clamp(ppm_, -config_.maximum_ppm, config_.maximum_ppm);
+}
+
+void WindowedLinearRegression::clear() noexcept {
+    count_ = 0;
+    next_ = 0;
+}
+
+void WindowedLinearRegression::add(const double independent, const double dependent) noexcept {
+    if (!std::isfinite(independent) || !std::isfinite(dependent)) {
+        return;
+    }
+    samples_[next_] = {independent, dependent};
+    next_ = (next_ + 1) % samples_.size();
+    count_ = std::min(count_ + 1, samples_.size());
+}
+
+bool WindowedLinearRegression::slope(double& result) const noexcept {
+    if (count_ < 2) {
+        return false;
+    }
+    double independent_mean = 0.0;
+    double dependent_mean = 0.0;
+    for (std::size_t index = 0; index < count_; ++index) {
+        independent_mean += samples_[index].independent;
+        dependent_mean += samples_[index].dependent;
+    }
+    independent_mean /= static_cast<double>(count_);
+    dependent_mean /= static_cast<double>(count_);
+
+    double numerator = 0.0;
+    double denominator = 0.0;
+    for (std::size_t index = 0; index < count_; ++index) {
+        const double centered = samples_[index].independent - independent_mean;
+        numerator += centered * (samples_[index].dependent - dependent_mean);
+        denominator += centered * centered;
+    }
+    if (denominator <= std::numeric_limits<double>::epsilon()) {
+        return false;
+    }
+    result = numerator / denominator;
+    return std::isfinite(result);
+}
+
+void ZeroRunDetector::reset() noexcept {
+    run_length_.fill(0);
+    run_start_.fill(0);
+    pending_count_ = 0;
+}
+
+void ZeroRunDetector::end_run(const std::size_t channel) noexcept {
+    const std::size_t length = run_length_[channel];
+    if (length > config_.maximum_frames) {
+        ++long_runs_;
+        return;
+    }
+    if (length < config_.minimum_frames) {
+        return;
+    }
+    const auto bit = static_cast<std::uint32_t>(1U << channel);
+    for (std::size_t index = 0; index < pending_count_; ++index) {
+        Event& pending = pending_[index];
+        if (pending.start_frame == run_start_[channel] && pending.length == length) {
+            pending.channel_mask |= bit;
+            return;
+        }
+    }
+    // pending_ has one slot per channel, so this never overflows.
+    pending_[pending_count_++] = Event{run_start_[channel], length, bit};
+}
+
+void ZeroRunDetector::enqueue(const Event& event) noexcept {
+    ++events_;
+    zero_frames_ += event.length;
+    longest_ = std::max(longest_, event.length);
+    if (queue_count_ == kEventCapacity) {
+        ++dropped_events_;
+        return;
+    }
+    events_queue_[(queue_head_ + queue_count_) % kEventCapacity] = event;
+    ++queue_count_;
+}
+
+void ZeroRunDetector::observe(const float* interleaved,
+                              const std::size_t frames,
+                              const std::uint64_t first_frame_position) noexcept {
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        const std::uint64_t position = first_frame_position + frame;
+        const float* samples = interleaved + frame * kChannels;
+        pending_count_ = 0;
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            if (samples[channel] == 0.0F) {
+                if (run_length_[channel] == 0) {
+                    run_start_[channel] = position;
+                }
+                ++run_length_[channel];
+            } else if (run_length_[channel] != 0) {
+                end_run(channel);
+                run_length_[channel] = 0;
+            }
+        }
+        // Runs that ended on this frame with the same start and length are
+        // one event; different lengths are separate events.
+        for (std::size_t index = 0; index < pending_count_; ++index) {
+            enqueue(pending_[index]);
+        }
+        pending_count_ = 0;
+    }
+}
+
+bool ZeroRunDetector::pop_event(Event& event) noexcept {
+    if (queue_count_ == 0) {
+        return false;
+    }
+    event = events_queue_[queue_head_];
+    queue_head_ = (queue_head_ + 1) % kEventCapacity;
+    --queue_count_;
+    return true;
+}
+
+void ImpulseTraceDetector::reset() noexcept {
+    armed_at_ = 0;
+}
+
+void ImpulseTraceDetector::observe(const float* interleaved,
+                                   const std::size_t frames,
+                                   const std::uint64_t first_frame_position) noexcept {
+    if (config_.channel >= kChannels) {
+        return;
+    }
+    const float* sample = interleaved + config_.channel;
+    for (std::size_t frame = 0; frame < frames; ++frame, sample += kChannels) {
+        const std::uint64_t position = first_frame_position + frame;
+        if (position < armed_at_) {
+            continue;
+        }
+        const float value = *sample;
+        if (value > config_.threshold || value < -config_.threshold) {
+            armed_at_ = position + config_.holdoff_frames;
+            ++events_;
+            if (queue_count_ == kEventCapacity) {
+                ++dropped_events_;
+                continue;
+            }
+            events_queue_[(queue_head_ + queue_count_) % kEventCapacity] = Event{position, value};
+            ++queue_count_;
+        }
+    }
+}
+
+bool ImpulseTraceDetector::pop_event(Event& event) noexcept {
+    if (queue_count_ == 0) {
+        return false;
+    }
+    event = events_queue_[queue_head_];
+    queue_head_ = (queue_head_ + 1) % kEventCapacity;
+    --queue_count_;
+    return true;
+}
+
+static_assert(std::is_trivially_copyable_v<LevelMeter::Snapshot>,
+              "the seqlock copies the snapshot with memcpy");
+
+LevelMeter::LevelMeter(const std::size_t window_frames) noexcept
+    : window_frames_(window_frames == 0 ? kDefaultWindowFrames : window_frames) {}
+
+void LevelMeter::observe(const float* interleaved, const std::size_t frames) noexcept {
+    // Sixteen lanes of locals so the block pass vectorises: peak, the square
+    // sum in float over this block only (at most 512 frames, well inside
+    // float's precision), and the full-scale count.
+    std::array<float, kChannels> peak{};
+    std::array<float, kChannels> squares{};
+    std::array<std::uint32_t, kChannels> clipped{};
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        const float* row = interleaved + frame * kChannels;
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            const float sample = row[channel];
+            const float magnitude = std::fabs(sample);
+            peak[channel] = std::max(peak[channel], magnitude);
+            squares[channel] += sample * sample;
+            // The same test exceeds_full_scale() makes, inlined: at or above
+            // +1.0 (not representable in either integer format) or below -1.0.
+            clipped[channel] += (!(sample < 1.0F) || sample < -1.0F) ? 1U : 0U;
+        }
+    }
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        open_.peak[channel] = std::max(open_.peak[channel], peak[channel]);
+        open_.sum_squares[channel] += static_cast<double>(squares[channel]);
+        open_.clipped[channel] += clipped[channel];
+    }
+    open_.frames += static_cast<std::uint32_t>(frames);
+    open_.position += frames;
+    if (open_.frames >= window_frames_) {
+        publish();
+    }
+}
+
+void LevelMeter::publish() noexcept {
+    ++open_.sequence;
+    const std::uint64_t sequence = published_sequence_.load(std::memory_order_relaxed);
+    published_sequence_.store(sequence + 1, std::memory_order_relaxed);
+    std::atomic_thread_fence(std::memory_order_release);
+    published_ = open_;
+    std::atomic_thread_fence(std::memory_order_release);
+    published_sequence_.store(sequence + 2, std::memory_order_release);
+    // The clip counts carry on; everything else starts the next window empty.
+    open_.peak.fill(0.0F);
+    open_.sum_squares.fill(0.0);
+    open_.frames = 0;
+}
+
+bool LevelMeter::read(Snapshot& out) const noexcept {
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        const std::uint64_t before = published_sequence_.load(std::memory_order_acquire);
+        if (before == 0) {
+            return false;
+        }
+        if ((before & 1U) != 0U) {
+            continue;
+        }
+        Snapshot copy;
+        std::memcpy(&copy, &published_, sizeof copy);
+        std::atomic_thread_fence(std::memory_order_acquire);
+        const std::uint64_t after = published_sequence_.load(std::memory_order_relaxed);
+        if (before == after) {
+            out = copy;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::int32_t unpack_s24le(const std::uint8_t* source) noexcept {
+    std::uint32_t value = static_cast<std::uint32_t>(source[0]) |
+                          (static_cast<std::uint32_t>(source[1]) << 8U) |
+                          (static_cast<std::uint32_t>(source[2]) << 16U);
+    if ((value & 0x00800000U) != 0U) {
+        value |= 0xFF000000U;
+    }
+    return static_cast<std::int32_t>(value);
+}
+
+void pack_s24le(const std::int32_t sample, std::uint8_t* destination) noexcept {
+    const std::int32_t clipped = std::clamp(sample, -8388608, 8388607);
+    const auto value = static_cast<std::uint32_t>(clipped);
+    destination[0] = static_cast<std::uint8_t>(value & 0xFFU);
+    destination[1] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
+    destination[2] = static_cast<std::uint8_t>((value >> 16U) & 0xFFU);
+}
+
+float s24_to_float(const std::uint8_t* source) noexcept {
+    return static_cast<float>(unpack_s24le(source)) / 8388608.0F;
+}
+
+// Both converters clamp in the integer domain, after rounding. The previous
+// form clamped the float to nextafter(1.0, 0) and rounded afterwards, and
+// that rounds back up to exactly +full scale: 8388607.5 -> 8388608 for S24
+// and 2147483647.9999998 -> 2147483648 for S32. pack_s24le clamps its integer
+// so the USB side survived, but the S32 cast wrapped to -2147483648, so every
+// positive intersample overshoot the Farrow interpolator produced on hot
+// material left the bridge as a negative full-scale sample on the AES67 wire.
+// Measured 2026-09-02: audible crackle on 0 dBFS masters, gone at -3 dB.
+void float_to_s24(const float sample, std::uint8_t* destination) noexcept {
+    const double scaled = std::clamp(static_cast<double>(sample), -2.0, 2.0) * 8388608.0;
+    const auto rounded = static_cast<std::int32_t>(std::lrint(scaled));
+    pack_s24le(std::clamp(rounded, -8388608, 8388607), destination);
+}
+
+float s32_to_float(const std::int32_t sample) noexcept {
+    return static_cast<float>(static_cast<double>(sample) / 2147483648.0);
+}
+
+std::int32_t float_to_s32(const float sample) noexcept {
+    const double scaled = std::clamp(static_cast<double>(sample), -2.0, 2.0) * 2147483648.0;
+    const auto rounded = std::llround(scaled);
+    return static_cast<std::int32_t>(std::clamp<long long>(rounded, -2147483648LL, 2147483647LL));
+}
+
+bool exceeds_full_scale(const float sample) noexcept {
+    // True when the integer converters will have to clamp: anything at or
+    // above +1.0, or below -1.0. +1.0 itself is not representable in either
+    // integer format, so it counts.
+    return !(sample < 1.0F) || sample < -1.0F;
+}
+
+} // namespace usb16x16

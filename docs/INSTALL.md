@@ -276,7 +276,8 @@ is enabled. `docs/install/author-pi-mapping.md` has the mapping.
 | `/etc/usb-aoip/install.conf` | The site config |
 | `/etc/usb-aoip/web-auth`, `web.env`, `tls/` | The page's logins; its TLS and bind arguments; its key and certificate |
 | `/var/spool/usb-aoip/inbox` | Requests from the page to the root helper: the page can drop files here and cannot list them |
-| `/var/lib/usb16x16-apply` | The root helper's status and receipts |
+| `/var/lib/usb16x16-apply` | The root helper's status and receipts; the monitor's limits (`monitor-limits`) |
+| `/run/usb-aoip-monitor`, `/var/lib/usb-aoip-monitor` | The monitor's state, which the page's service writes and the Dante owner reads, and its remembered copy (made by systemd for the page's unit) |
 | `/etc/usb16x16/dante/` | Inferno and Statime configs, `transport.conf`, `startcheck.conf`, `owner.conf` (written by the page) |
 | `/etc/usb16x16/dsp/` | DSP presets applied from the page |
 | `/usr/local/libexec/usb16x16-dante/` | The owner, Statime, the start wrapper, the start check |

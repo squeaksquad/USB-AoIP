@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createConfig, CHANNELS } from '../web-ui/model.mjs';
-import { createHeadphoneBus, setBusGainMute } from '../web-ui/buses.mjs';
+import { createConfig, CHANNELS, parsePreset } from '../web-ui/model.mjs';
+import { createHeadphoneBus } from '../web-ui/buses.mjs';
 import { compile, planChannels, fileDevices, alsaDevices, SAMPLE_RATE } from './compile.mjs';
 import { toYaml } from './yaml.mjs';
 
@@ -194,15 +194,18 @@ test('an unused output is explicitly silent, not merely absent', () => {
   assert.equal(namesFor(result, 15).length, 0);
 });
 
-test('bus gain reaches the assign mixer and bus mute mutes the destination', () => {
-  let preset = createConfig();
-  preset = setBusGainMute(preset, 'speakers', -6, false);
-  let result = build(preset);
-  assert.equal(destOf(result, 'assign', 0).sources[0].gain, -6);
-  assert.equal(destOf(result, 'assign', 3).sources[0].gain, -6, 'sub sends carry bus gain too');
-  preset = setBusGainMute(preset, 'speakers', -6, true);
-  result = build(preset);
-  assert.equal(destOf(result, 'assign', 0).mute, true);
+test('a v2 bus level and mute compile as the outputs\' own after migration (model v3)', () => {
+  const legacy = createConfig(); legacy.version = 2;
+  legacy.buses[0].gainDb = -6; legacy.buses[0].mute = false;
+  let result = build(parsePreset(JSON.stringify(legacy)));
+  assert.equal(destOf(result, 'assign', 0).sources[0].gain, 0, 'the assign mixer carries no set level');
+  assert.equal(destOf(result, 'assign', 3).sources[0].gain, 0, 'nor do the sub sends');
+  assert.equal(result.config.filters.gain_out1.parameters.gain, -6);
+  assert.equal(result.config.filters.gain_out4.parameters.gain, -6);
+  legacy.buses[0].mute = true;
+  result = build(parsePreset(JSON.stringify(legacy)));
+  assert.equal(destOf(result, 'assign', 0).mute, false);
+  assert.equal(result.config.filters.gain_out1.parameters.mute, true, 'a muted bus switches its outputs off');
 });
 
 test('bass redirection off bypasses main high-passes and keeps only LFE in the subs', () => {
@@ -304,7 +307,7 @@ test('a preset that routes nothing is rejected rather than emitted empty', () =>
   const preset = createConfig();
   preset.outputs.forEach((output, i) => { output.role = 'unused'; output.busId = null; });
   preset.buses = [{id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds: [],
-                   layoutId: 'custom', gainDb: 0, mute: false}];
+                   layoutId: 'custom'}];
   preset.sends = Array.from({length: 16}, () => Array(16).fill(null));
   assert.throws(() => build(preset), /routes nothing/);
 });

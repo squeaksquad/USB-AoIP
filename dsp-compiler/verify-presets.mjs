@@ -8,6 +8,8 @@
 // Offline: this writes JSON and exits. It compiles nothing and applies nothing.
 
 import { CHANNELS, FREQUENCIES, createConfig, validateConfig } from '../web-ui/model.mjs';
+import { applyLayout } from '../web-ui/workflows.mjs';
+import { addSpeakerSet, createHeadphoneBus } from '../web-ui/buses.mjs';
 
 const flatBands = () => FREQUENCIES.map(frequency =>
   ({enabled: true, type: 'bell', frequency, gainDb: 0, q: 1}));
@@ -27,7 +29,7 @@ function output(label, role, source, busId, extra = {}) {
 
 function base(name, {headroomDb = 0, bassEnabled = true} = {}) {
   return {
-    version: 2, name, mode: 'dsp', source: 'usb', sampleRate: 48000,
+    version: 3, name, mode: 'dsp', source: 'usb', sampleRate: 48000,
     headroomDb, bassEnabled, eqBypass: false,
     // Input 16 drives nothing anywhere in these presets, so parking the LFE
     // there keeps the LFE trim and the LFE low-pass out of every measurement.
@@ -80,7 +82,7 @@ export function crossoverPreset() {
   });
   preset.buses = [{
     id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds,
-    layoutId: 'custom', gainDb: 0, mute: false,
+    layoutId: 'custom',
   }];
   return validateConfig(preset);
 }
@@ -113,7 +115,7 @@ export function clipPreset() {
   for (const input of summed) preset.sends[input][3] = 0;
   preset.buses = [{
     id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds: [0, 1, 2, 3, 4],
-    layoutId: 'custom', gainDb: 0, mute: false,
+    layoutId: 'custom',
   }];
   return validateConfig(preset);
 }
@@ -150,18 +152,19 @@ export function phonesPreset() {
   matrix[6] = [-9, -12];
   preset.outputs[0] = output('Pair L', 'speaker', 0, 'hp-pair');
   preset.outputs[1] = output('Pair R', 'speaker', 1, 'hp-pair', {delayMs: 2.5});
-  preset.outputs[2] = output('Downmix L', 'speaker', 0, 'hp-downmix');
-  preset.outputs[3] = output('Downmix R', 'speaker', 1, 'hp-downmix', {invert: true});
+  // -3 dB on the downmix pair: a bus level until model v3, the outputs' own since.
+  preset.outputs[2] = output('Downmix L', 'speaker', 0, 'hp-downmix', {gainDb: -3});
+  preset.outputs[3] = output('Downmix R', 'speaker', 1, 'hp-downmix', {invert: true, gainDb: -3});
   preset.buses = [
     {
       id: 'hp-pair', kind: 'headphones', label: 'Phones pair', outputIds: [0, 1],
-      layoutId: 'custom', gainDb: 0, mute: false, inputMode: 'pair',
+      layoutId: 'custom', inputMode: 'pair',
       inputPair: [0, 1], downmixMatrix: Array.from({length: CHANNELS}, () => [null, null]),
       sourcePreCrossover: true,
     },
     {
       id: 'hp-downmix', kind: 'headphones', label: 'Phones downmix', outputIds: [2, 3],
-      layoutId: 'custom', gainDb: -3, mute: false, inputMode: 'downmix',
+      layoutId: 'custom', inputMode: 'downmix',
       inputPair: [0, 1], downmixMatrix: matrix, sourcePreCrossover: true,
     },
   ];
@@ -248,7 +251,7 @@ export function transparentPreset() {
   });
   preset.buses = [{
     id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds: speakers,
-    layoutId: 'custom', gainDb: 0, mute: false,
+    layoutId: 'custom',
   }];
   return validateConfig(preset);
 }
@@ -274,6 +277,85 @@ export function loopMeasurePreset() {
   return validateConfig(preset);
 }
 
+/**
+ * Fold-downs through bass management (phase 3, step 2; verify-fold.py).
+ *
+ * The shipped 7.2.4 layout -- crossovers at 80 Hz, bass redirected to the two
+ * subs, the LFE on its own low-pass -- with a different PEQ on every speaker
+ * and an alignment delay on the centre, so a fold that reached a speaker by
+ * the wrong path (unfiltered, or another speaker's EQ) would show. Outputs 14
+ * and 15 are a headphones pair on inputs 1-2: their rows read the inputs
+ * unfolded whatever the speakers' fold.
+ */
+export function foldPreset() {
+  const preset = createConfig();
+  preset.name = 'verify-fold';
+  const types = ['bell', 'lowShelf', 'highShelf'];
+  preset.outputs.forEach((output, index) => {
+    if (output.role !== 'speaker') return;
+    output.bands[(index * 5) % FREQUENCIES.length].gainDb = 4 + index % 3;
+    output.bands[(index * 5) % FREQUENCIES.length].type = types[index % 3];
+    output.bands[(index * 7 + 3) % FREQUENCIES.length].gainDb = -3 - index % 4;
+  });
+  preset.outputs[2].delayMs = 1.5;
+  for (const index of [13, 14]) {
+    preset.outputs[index].role = 'speaker';
+    preset.outputs[index].source = index - 13;
+    preset.outputs[index].label = index === 13 ? 'Phones L' : 'Phones R';
+    preset.outputs[index].busId = 'phones';
+  }
+  preset.buses.push({
+    id: 'phones', kind: 'headphones', label: 'Phones', outputIds: [13, 14], layoutId: 'custom',
+    inputMode: 'pair', inputPair: [0, 1],
+    downmixMatrix: Array.from({length: CHANNELS}, () => [null, null]), sourcePreCrossover: true,
+  });
+  return validateConfig(preset);
+}
+
+/**
+ * The same 7.2.4 speakers with nothing in the way: bass redirection off,
+ * crossovers off, every band flat, 0 dB headroom. Each speaker output is then
+ * its input view times one, so verify-fold.py can check a crossfade bit for
+ * bit against the documented arithmetic and bound every step on DC.
+ */
+export function foldFlatPreset() {
+  const preset = createConfig();
+  preset.name = 'verify-fold-flat';
+  preset.headroomDb = 0;
+  preset.bassEnabled = false;
+  preset.inputs.forEach(input => { input.crossover = false; });
+  return validateConfig(preset);
+}
+
+/**
+ * Two speaker sets (model v3; verify-sets.py). The mains are the shipped 5.1
+ * layout on outputs 1-6 with bass management on (crossovers at 80 Hz, LFE on
+ * output 4), a stereo nearfield pair on outputs 7 and 8 sharing the main
+ * subwoofer, and headphones on outputs 15 and 16 fed inputs 1 and 2. A band
+ * on each speaker and the sub, so a branch reaching an output by the wrong
+ * set's path would show. `share` picks the nearfield's subwoofer choice:
+ * 'main' (shares the mains' sub), 'none' (full range, no bass) or 'own' (a
+ * 2.1 nearfield with its own sub on output 9). `single` is the same preset
+ * without the nearfield: the mains-only reference.
+ */
+export function setsPreset(share = 'main') {
+  let preset = applyLayout(createConfig(), '5.1');
+  preset.name = share === 'single' ? 'verify-sets-single' : `verify-sets-${share}`;
+  preset.outputs.forEach((output, index) => {
+    if (output.role === 'unused') return;
+    output.bands[(index * 3 + 2) % FREQUENCIES.length].gainDb = 3 + (index % 3);
+  });
+  preset.outputs[3].bands[1].gainDb = -4;   // the sub: 40 Hz
+  if (share !== 'single') {
+    const own = share === 'own';
+    preset = addSpeakerSet(preset, {layoutId: own ? '2.1' : 'stereo', outputIds: own ? [6, 7, 8] : [6, 7], subShare: share, label: 'Nearfield'});
+    preset.outputs[6].bands[9].gainDb = -2;
+    preset.outputs[7].bands[11].gainDb = 2.5;
+  }
+  preset = createHeadphoneBus(preset, 'phones', [14, 15]);
+  return validateConfig(preset);
+}
+
 export const PRESETS = {
   crossover: crossoverPreset,
   clip: clipPreset,
@@ -282,6 +364,12 @@ export const PRESETS = {
   loaded: loadedPreset,
   transparent: transparentPreset,
   'loop-measure': loopMeasurePreset,
+  fold: foldPreset,
+  'fold-flat': foldFlatPreset,
+  sets: () => setsPreset('main'),
+  'sets-none': () => setsPreset('none'),
+  'sets-own': () => setsPreset('own'),
+  'sets-single': () => setsPreset('single'),
 };
 
 function main(argv) {

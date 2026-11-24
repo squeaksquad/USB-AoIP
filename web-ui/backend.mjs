@@ -664,7 +664,8 @@ const danteStepWords = {
   removing: 'Removing the preset', pushing: 'Handing the coefficients to the endpoint', committing: 'Committing the preview',
   'host-follow': 'Asking the Mac to follow the rate',
 };
-const ACTION_LABELS = {'restart-audio': 'restart audio', 'restart-clock': 'restart clock service', bundle: 'support bundle', password: 'page password', reboot: 'reboot'};
+const ACTION_LABELS = {'restart-audio': 'restart audio', 'restart-clock': 'restart clock service', bundle: 'support bundle', password: 'page password', reboot: 'reboot',
+  'monitor-limits': 'level safety', 'monitor-reference': 'reference level'};
 /** A step of an Apply receipt in words. `stack` is the receipt's own (current.stack), or the Pi's. */
 export const applyStepLabel = (name, stack) => (stack === 'dante' ? danteStepWords : stepWords)[name] || name;
 
@@ -682,6 +683,16 @@ export function applyLine(status) {
       case 'failed': return `Shutdown failed: ${current.error || 'no detail'}. Check the Pi.`;
       case 'refused': return `Refused: ${current.error || 'no detail'}`;
       default: return `${applyStepLabel(current.state, current.stack)} (shutdown)…`;
+    }
+  }
+  if (current.kind === 'monitor-limits' || current.kind === 'monitor-reference') {
+    // The monitor's limits and references: no restart, nothing to roll back.
+    const what = current.kind === 'monitor-limits' ? 'Level safety changed' : `Reference level of ${current.request?.set || 'a set'} stored`;
+    switch (current.state) {
+      case 'done': return `${what}${who} at ${current.finishedAt || '?'}.`;
+      case 'refused': return `Refused: ${current.error || 'no detail'}`;
+      case 'failed': case 'rolled-back': return `${ACTION_LABELS[current.kind].replace(/^./, c => c.toUpperCase())} failed: ${current.error || 'no detail'}`;
+      default: return `${applyStepLabel(current.state, current.stack)} (${ACTION_LABELS[current.kind]})…`;
     }
   }
   if (isActionReceipt(current)) {
@@ -736,19 +747,34 @@ function loadCompiler(importImpl = path => import(path)) {
  *  The fixed shape (LIVE_COEFFICIENTS_DESIGN.md) since 2026-09-13: a user
  *  preset is the base of live coefficient updates, so every band and row is
  *  present and a value edit changes only numbers. `shapeKey` is the key the
- *  Pi compares against the installed preset's. */
-export async function compileDraft(config, importImpl, {shape = 'fixed', rate = 48000} = {}) {
+ *  Pi compares against the installed preset's.
+ *  `monitor` writes the artifact's monitor section (phase 3); off by default,
+ *  and the page turns it on only for an engine that knows it
+ *  (monitorEngine(health)): an older owner refuses the whole file. Off, the
+ *  artifact is byte for byte what it was before the section existed.
+ *  `plainShapeKey` is the key of the same artifact without the section (the
+ *  same as `shapeKey` when it has none), so liveState can tell an edit that
+ *  changes the pipeline from a running preset installed before the section. */
+export async function compileDraft(config, importImpl, {shape = 'fixed', rate = 48000, monitor = false} = {}) {
   const compiler = await loadCompiler(importImpl);
-  const result = compiler.compile(config, compiler.fileDevices('in.raw', 'out.raw', 'S32_LE', 1024, rate), {shape});
+  const result = compiler.compile(config, compiler.fileDevices('in.raw', 'out.raw', 'S32_LE', 1024, rate), {shape, monitor});
   const artifact = compiler.bridgeArtifact(result, {presetName: config.name});
   const delay = compiler.delayLatency(config, rate);
   // Coefficient rows only: five numbers, of which the first is not an index.
   const sections = (artifact.match(/^-?\d*\.?\d+(e[-+]?\d+)? -?\S+ -?\S+ -?\S+ -?\S+$/gm) || [])
     .filter(line => !/^preset /.test(line)).length;
   const shapeKey = await compiler.artifactShapeKey(artifact);
+  const at = artifact.indexOf('\nmonitor ');
+  const plainShapeKey = at < 0 ? shapeKey : await compiler.artifactShapeKey(`${artifact.slice(0, at + 1)}end\n`);
   const sha256 = await compiler.sha256Hex(artifact);
-  return {artifact, report: result.report, delay, sections, shapeKey, sha256};
+  return {artifact, report: result.report, delay, sections, shapeKey, plainShapeKey, sha256};
 }
+
+/** Whether the device's engine knows the artifact's monitor section: the
+ *  service's control.monitor.engine (the owner's monitor status reads whole,
+ *  or the installed owner binary knows the section).
+ *  False when unknown, on an older service and standalone. */
+export const monitorEngine = health => health?.control?.monitor?.engine === true;
 
 /** One compiled draft per rate (SAMPLE_RATE_DESIGN.md, step 3): the Pi has
  *  no compiler, so a preset is compiled here at every rate the endpoint
@@ -757,12 +783,12 @@ export async function compileDraft(config, importImpl, {shape = 'fixed', rate = 
  *  OFFERED_RATES (44.1 and 48 kHz since 2026-10-28, 96 since 2026-10-31). A rate the preset cannot
  *  compile at fails the whole call: a preset is never stored with a rate
  *  missing. The page itself sends every Dante rate (compileOtherRates). */
-export async function compileDraftRates(config, importImpl, {shape = 'fixed', rates} = {}) {
+export async function compileDraftRates(config, importImpl, {shape = 'fixed', rates, monitor = false} = {}) {
   const compiler = await loadCompiler(importImpl);
   const wanted = rates ?? compiler.OFFERED_RATES;
   if (!Array.isArray(wanted) || !wanted.length) throw new Error('No rate to compile at');
   const byRate = {};
-  for (const rate of wanted) byRate[rate] = await compileDraft(config, importImpl, {shape, rate});
+  for (const rate of wanted) byRate[rate] = await compileDraft(config, importImpl, {shape, rate, monitor});
   return byRate;
 }
 
@@ -778,9 +804,9 @@ export function runningRate(health) {
  *  the Dante applier stores one artifact per rate and the endpoint runs the one
  *  for its rate (SAMPLE_RATE_DESIGN.md, step 4d). All six, not only the
  *  offered ones, so a rate offered later finds every saved preset ready. */
-export async function compileOtherRates(config, importImpl, {shape = 'fixed', except = 48000} = {}) {
+export async function compileOtherRates(config, importImpl, {shape = 'fixed', except = 48000, monitor = false} = {}) {
   const compiler = await loadCompiler(importImpl);
-  const byRate = await compileDraftRates(config, importImpl, {shape, rates: compiler.DANTE_RATES.filter(rate => rate !== except)});
+  const byRate = await compileDraftRates(config, importImpl, {shape, monitor, rates: compiler.DANTE_RATES.filter(rate => rate !== except)});
   return Object.fromEntries(Object.entries(byRate).map(([rate, compiled]) => [rate, compiled.artifact]));
 }
 
@@ -841,7 +867,7 @@ export function userPresets(health) {
  *   not-previewable no Pi, Apply not installed, an accepted profile live, or
  *                   a user preset installed before live updates existed
  */
-export function liveState(health, draftShapeKey) {
+export function liveState(health, draftShapeKey, draftPlainShapeKey = null) {
   if (!health) return {state: 'not-previewable', reason: 'Not connected to the Pi.', profile: null};
   const choices = profileChoices(health);
   if (!choices.available) return {state: 'not-previewable', reason: choices.reason || 'Apply is not installed.', profile: null};
@@ -854,7 +880,12 @@ export function liveState(health, draftShapeKey) {
   const base = {profile: live.name, liveSha256: dspLive.sha256 || null, installedSha256: live.dspSha256 || null,
                 previewing: Boolean(dspLive.sha256) && dspLive.sha256 !== live.dspSha256, liveShape: live.dspShape};
   if (!draftShapeKey) return {...base, state: 'live', reason: `Edits go to the running ${terms.engine} as you make them.`};
-  if (draftShapeKey !== live.dspShape) return {...base, state: 'needs-apply', reason: 'This edit changes the pipeline\'s shape (routing, a bus format, a 48 dB/oct slope, or an input\'s first send). Compile & apply to run it.'};
+  // The draft has the monitor section and the running preset was installed
+  // before it (or by an engine without it): the same needs-apply, said truly.
+  if (draftShapeKey !== live.dspShape && draftPlainShapeKey && draftPlainShapeKey !== draftShapeKey && draftPlainShapeKey === live.dspShape) {
+    return {...base, state: 'needs-apply', reason: `${live.name} was installed without the monitor block. Compile & apply it to add the monitor; edits then go live again.`};
+  }
+  if (draftShapeKey !== live.dspShape) return {...base, state: 'needs-apply', reason: 'This edit changes the pipeline\'s shape (routing, a speaker layout, a speaker set or headphones added or removed, a subwoofer choice, a 48 dB/oct slope, or an input\'s first send). Compile & apply to run it.'};
   return {...base, state: 'live', reason: `Edits go to the running ${terms.engine} as you make them; not kept across a restart until committed.`};
 }
 
@@ -907,6 +938,38 @@ export const requestRestartClock = (fetchImpl = globalThis.fetch) => requestActi
 export const requestBundle = (fetchImpl = globalThis.fetch) => requestAction('/api/apply/bundle', {}, 'Support bundle', fetchImpl);
 /** The password goes to the service, which hashes it; it is never kept by the page. */
 export const requestPassword = (password, fetchImpl = globalThis.fetch) => requestAction('/api/apply/password', {password: String(password)}, 'Password', fetchImpl);
+
+// The monitor (phase 3). A knob move is not an Apply: POST /api/monitor
+// writes the owner's state file at once and answers with the new seq. The
+// limits and the references are root's: applier kinds with a receipt. The
+// standalone page has no monitor: these are called only while connected.
+export const MONITOR_PATH = '/api/monitor';
+
+/** GET /api/monitor's answer, or null when nothing (or no usable answer) comes back. */
+export async function fetchMonitor(fetchImpl = globalThis.fetch, signal) {
+  try {
+    const response = await fetchImpl(MONITOR_PATH, {signal, cache: 'no-store', headers: {accept: 'application/json'}});
+    if (!response.ok) return null;
+    const body = await response.json();
+    return isObject(body) && body.ok === true ? body : null;
+  } catch { return null; }
+}
+
+/** One change to the monitor ({set|sets, levelDb, ...}, {active}, {solo}, ...). Resolves with {seq, state}. */
+export async function postMonitor(patch, fetchImpl = globalThis.fetch) {
+  const response = await sendRequest(MONITOR_PATH, {body: patch}, fetchImpl);
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !isObject(result) || result.ok !== true || !Number.isInteger(result.seq)) {
+    throw new Error(isObject(result) && result.error ? result.error : `The monitor did not take the change (${response.status})`);
+  }
+  return result;
+}
+
+/** The knobs' maximum, the start rule and level, the reference lock: any of them. */
+export const requestMonitorLimits = (fields, fetchImpl = globalThis.fetch) => requestAction('/api/apply/monitor-limits', {...fields}, 'Level safety', fetchImpl);
+/** One set's reference level and note. */
+export const requestMonitorReference = (set, levelDb, note = '', fetchImpl = globalThis.fetch) =>
+  requestAction('/api/apply/monitor-reference', {set: String(set), levelDb, note: String(note)}, 'Reference level', fetchImpl);
 
 /** The support bundle the applier made, as a Blob, from its path (actions.mjs bundlePath). */
 export async function fetchSupportBundle(path, fetchImpl = globalThis.fetch) {
@@ -1005,11 +1068,18 @@ export function statusCards(health) {
  * missing: what the computer sends, what goes to the network (after the
  * processing), what comes from the network (on its way to the computer).
  */
+const tapBank = tap => Array.isArray(tap?.peakDb) && tap.peakDb.length === 16
+  ? tap.peakDb.map((peak, i) => ({peak, rms: tap.rmsDb?.[i] ?? null, clipped: tap.clipped?.[i] ?? 0}))
+  : null;
+
+/** The Dante owner's monitor-in tap (after the DSP stage, before the
+ *  monitor's level, dim, mute and solo) as a bank, or null: it is written
+ *  only while a preset with a monitor section runs. Not a Status row. */
+export const preFaderBank = meters => tapBank(meters?.taps?.['monitor-in']);
+
 export function meterRows(meters) {
   const taps = meters?.taps || {};
-  const bank = tap => Array.isArray(tap?.peakDb) && tap.peakDb.length === 16
-    ? tap.peakDb.map((peak, i) => ({peak, rms: tap.rmsDb?.[i] ?? null, clipped: tap.clipped?.[i] ?? 0}))
-    : null;
+  const bank = tapBank;
   return [
     {id: 'computer', title: 'From the computer', note: 'USB, before the processing', bank: bank(taps['usb-capture'])},
     {id: 'to-network', title: 'To the network', note: 'After the processing: what the outputs carry', bank: bank(taps['dante-playback'] ?? taps['ravenna-playback'])},

@@ -9,29 +9,38 @@
 //
 //   16 capture channels
 //     -> expand mixer: headroom trim, one internal channel per needed branch
-//        main branch  = input i, later high-passed
-//        bass branch  = input i, later low-passed (LFE uses its own LP + trim)
+//        main branch  = input i for one speaker set, later high-passed
+//        bass branch  = input i for one speaker set, later low-passed (LFE
+//                       uses its own LP + trim)
 //        phones branch= input pair member, or a downmix sum, full range
+//        Branches are per (speaker set, input) since model v3: each set's
+//        speakers and bass are their own channels, so the monitor stage can
+//        switch a set off (its reserved fold `off`) without touching another
+//        set's, and a sub shared by two sets sums both sets' bass. The first
+//        set's channels and filter names are what they were with one set;
+//        another set's filters are named set<N>_...
 //     -> branch filters: the crossover. These are separate from the user's
 //        output PEQ, so a crossover never consumes one of the 16 bands.
 //     -> assign mixer: internal channels -> the 16 physical outputs, applying
-//        sub send gains and bus level/mute
+//        sub send gains (a bus has no level or mute of its own since v3)
 //     -> output filters: 16 PEQ bands, alignment delay, gain/polarity/mute
 //     -> 16 playback channels
 //
 // Headroom policy: config.headroomDb is applied exactly once, in the expand
 // mixer, to every branch of every input. Nothing downstream re-applies it. Sub
-// sends, bus gain and output gain are all applied after it, so a preset can
+// sends and output gain are applied after it, so a preset can
 // still be driven into clipping; worstCaseDbfs in the report says by how much,
-// for coherent full-scale inputs.
+// for coherent full-scale inputs. A sub fed by several speaker sets is counted
+// with all of them playing (All sets), its loudest case.
 //
 // Two emission shapes (LIVE_COEFFICIENTS_DESIGN.md). `minimal`, the default,
-// emits only what changes the audio: a flat band, a bypassed high-pass, a muted
-// bus and an empty downmix cell are absent. `fixed` emits the same audio in a
+// emits only what changes the audio: a flat band, a bypassed high-pass and an
+// empty downmix cell are absent. `fixed` emits the same audio in a
 // shape that depends on the routing alone, so that a value edit changes only
 // numbers in the artifact: every band of every output is present (a unity
 // section when it does nothing), a switched-off high-pass is a unity chain of
-// its slope's length, a muted bus or output keeps its rows at gain zero, and
+// its slope's length (as is the high-pass of a set with no sub, which plays
+// full range), a muted output keeps its rows at gain zero, and
 // every send a branch can make to a sub is a row, muted when the preset has
 // none. Bass redirection off is, in the fixed shape, the same pipeline with
 // every main high-pass at unity and every non-LFE sub send muted, so the
@@ -41,8 +50,9 @@
 // order at 48 dB/oct. Both shapes run the same audio; the harnesses verify the
 // minimal one and the artifact test proves the fixed one says the same thing.
 
-import { CHANNELS, validateConfig } from '../web-ui/model.mjs';
+import { CHANNELS, validateConfig, speakerSetBass } from '../web-ui/model.mjs';
 import { polarityWarningText } from '../web-ui/crossover-notes.mjs';
+import { monitorTopology } from './bridge-artifact.mjs';
 
 export const SAMPLE_RATE = 48000;
 // Every rate a Dante device can run at (SAMPLE_RATE_DESIGN.md). A preset
@@ -90,44 +100,59 @@ function busOf(config, outputIndex) {
  * preset using four inputs does not pay for sixteen main branches and sixteen
  * bass branches. The returned plan is stable and is emitted into the config as
  * comments, so the channel map is auditable against the YAML.
+ *
+ * Main and bass branches belong to a speakers set (model v3): each set reads
+ * its own view of the inputs (the monitor block's fold-downs), so input 1 on
+ * two sets is two main branches. Allocation order: main branches in output
+ * order, then each set's bass branches in set order, inputs ascending. With
+ * one speakers set this is exactly the plan before v3.
+ *
+ * `sets` holds, per speakers set in bus order, its feed (speakerSetBass) and
+ * its own mainOf / bassOf (input -> internal channel). `mainOf` and `bassOf`
+ * are the first speakers set's.
  */
 export function planChannels(config, fixed = false) {
   const channels = [];
-  const mainOf = new Map();     // input index -> internal channel
-  const bassOf = new Map();     // input index -> internal channel
   const phonesOf = new Map();   // `${busId}:${ear}` -> internal channel
+  const feeds = speakerSetBass(config);
+  const sets = feeds.map(feed => ({...feed, mainOf: new Map(), bassOf: new Map()}));
+  const setOf = new Map(sets.map(entry => [entry.set, entry]));
 
   const allocate = entry => { channels.push(entry); return channels.length - 1; };
 
   for (let output = 0; output < CHANNELS; output += 1) {
     const spec = config.outputs[output];
     if (spec.role === 'unused') continue;
-    const bus = busOf(config, output);
+    const busIndex = config.buses.findIndex(bus => bus.outputIds.includes(output));
+    const bus = config.buses[busIndex];
     if (bus?.kind === 'headphones') {
       const ear = bus.outputIds.indexOf(output);
       const key = `${bus.id}:${ear}`;
       if (!phonesOf.has(key)) phonesOf.set(key, allocate({kind: 'phones', busId: bus.id, ear}));
       continue;
     }
-    if (spec.role === 'speaker' && !mainOf.has(spec.source)) {
-      mainOf.set(spec.source, allocate({kind: 'main', input: spec.source}));
+    const own = setOf.get(busIndex);
+    if (spec.role === 'speaker' && own && !own.mainOf.has(spec.source)) {
+      own.mainOf.set(spec.source, allocate({kind: 'main', input: spec.source, set: busIndex}));
     }
   }
 
-  // A bass branch exists for an input only if some enabled send carries it.
-  for (let input = 0; input < CHANNELS; input += 1) {
-    const isLfe = input === config.lfe.input;
-    // Fixed shape: the branch stays when bass redirection is off (its sends
-    // are muted), so the toggle changes numbers only.
-    if (!config.bassEnabled && !isLfe && !fixed) continue;
-    const sends = config.sends[input];
-    const used = sends.some((gain, output) =>
-      gain !== null && config.outputs[output].role === 'sub');
-    if (used && !bassOf.has(input)) {
-      bassOf.set(input, allocate({kind: 'bass', input, lfe: isLfe}));
+  // A bass branch exists for an input only if some enabled send carries it to
+  // one of the subs the set's bass feeds.
+  for (const entry of sets) {
+    for (let input = 0; input < CHANNELS; input += 1) {
+      const isLfe = input === config.lfe.input;
+      // Fixed shape: the branch stays when bass redirection is off (its sends
+      // are muted), so the toggle changes numbers only.
+      if (!config.bassEnabled && !isLfe && !fixed) continue;
+      if (entry.inputs && !entry.inputs.includes(input)) continue;
+      const used = entry.subs.some(output => config.sends[input][output] !== null);
+      if (used && !entry.bassOf.has(input)) {
+        entry.bassOf.set(input, allocate({kind: 'bass', input, lfe: isLfe, set: entry.set}));
+      }
     }
   }
-  return {channels, mainOf, bassOf, phonesOf};
+  return {channels, sets, mainOf: sets[0]?.mainOf ?? new Map(), bassOf: sets[0]?.bassOf ?? new Map(), phonesOf};
 }
 
 /** The expand mixer: capture channels into branch channels, with headroom. */
@@ -166,13 +191,22 @@ function muted(channel) {
 /** Crossover filters, one set per branch channel that needs them. */
 function branchFilters(config, plan, filters, fixed) {
   const steps = [];
+  // The first speakers set's filters keep the names they had with one set;
+  // another set's carry its number among the speaker sets (set2, set3).
+  const prefix = channel => {
+    const n = plan.sets.findIndex(entry => entry.set === channel.set);
+    return n > 0 ? `set${n + 1}_` : '';
+  };
+  const shareOf = channel => plan.sets.find(entry => entry.set === channel.set)?.share;
   for (const [index, channel] of plan.channels.entries()) {
     const names = [];
     if (channel.kind === 'main') {
       const input = config.inputs[channel.input];
-      // Bass redirection off bypasses every main high-pass, retaining the draft.
-      if (config.bassEnabled && input.crossover) {
-        const name = `hp_in${channel.input + 1}`;
+      // Bass redirection off bypasses every main high-pass, retaining the
+      // draft; so does a speaker set with no subwoofer (subShare none), whose
+      // speakers run full range.
+      if (config.bassEnabled && input.crossover && shareOf(channel) !== 'none') {
+        const name = `hp_${prefix(channel)}in${channel.input + 1}`;
         filters[name] = {
           type: 'BiquadCombo',
           parameters: {type: 'LinkwitzRileyHighpass', freq: input.highpassHz, order: SLOPE_ORDER[input.slope]},
@@ -183,13 +217,13 @@ function branchFilters(config, plan, filters, fixed) {
         // unity sections, as many as the slope would take, so switching it
         // on is a coefficient change.
         for (let section = 0; section < SLOPE_SECTIONS[input.slope]; section += 1) {
-          const name = `hp_in${channel.input + 1}_off${section + 1}`;
+          const name = `hp_${prefix(channel)}in${channel.input + 1}_off${section + 1}`;
           filters[name] = unityBiquad();
           names.push(name);
         }
       }
     } else if (channel.kind === 'bass') {
-      const name = `lp_in${channel.input + 1}`;
+      const name = `lp_${prefix(channel)}in${channel.input + 1}`;
       const {lowpassHz, slope} = channel.lfe
         ? {lowpassHz: config.lfe.lowpassHz, slope: config.lfe.slope}
         : config.inputs[channel.input];
@@ -209,13 +243,11 @@ function assignMixer(config, plan, fixed) {
   const mapping = [];
   for (let output = 0; output < CHANNELS; output += 1) {
     const spec = config.outputs[output];
-    const bus = busOf(config, output);
-    const busGain = bus?.gainDb ?? 0;
-    // The fixed shape keeps a muted bus's rows and mutes each source instead,
-    // which CamillaDSP treats the same and the artifact can hold at zero.
-    const busMute = Boolean(bus?.mute);
-    const entry = {dest: output, mute: busMute && !fixed, sources: []};
-    const push = row => entry.sources.push(fixed && busMute ? {...row, mute: true} : row);
+    const busIndex = config.buses.findIndex(value => value.outputIds.includes(output));
+    const bus = config.buses[busIndex] ?? null;
+    // Level and mute are the outputs' own and the Control Room's (model v3):
+    // a bus carries neither, so every row is at unity here.
+    const entry = {dest: output, mute: false, sources: []};
     if (spec.role === 'unused' || !bus) {
       // No sources: CamillaDSP writes silence. Kept in the mapping so the
       // channel is explicitly accounted for rather than absent.
@@ -224,20 +256,26 @@ function assignMixer(config, plan, fixed) {
     }
     if (bus.kind === 'headphones') {
       const channel = plan.phonesOf.get(`${bus.id}:${bus.outputIds.indexOf(output)}`);
-      push(source(channel, busGain));
+      entry.sources.push(source(channel, 0));
     } else if (spec.role === 'speaker') {
-      push(source(plan.mainOf.get(spec.source), busGain));
+      const own = plan.sets.find(value => value.set === busIndex);
+      entry.sources.push(source(own.mainOf.get(spec.source), 0));
     } else if (spec.role === 'sub') {
-      config.sends.forEach((row, input) => {
-        const gain = row[output];
-        const channel = plan.bassOf.get(input);
-        // Bass redirection off leaves only the LFE branch feeding the subs.
-        if (channel === undefined) return;
-        const carried = gain !== null && (config.bassEnabled || input === config.lfe.input);
-        if (carried) push(source(channel, busGain + gain));
-        // A branch that exists can reach every sub: hold the row, muted.
-        else if (fixed) push(muted(channel));
-      });
+      // Every set whose bass this sub carries, in set order: its own set, and
+      // the sets sharing it.
+      for (const feed of plan.sets) {
+        if (!feed.subs.includes(output)) continue;
+        config.sends.forEach((row, input) => {
+          const gain = row[output];
+          const channel = feed.bassOf.get(input);
+          // Bass redirection off leaves only the LFE branch feeding the subs.
+          if (channel === undefined) return;
+          const carried = gain !== null && (config.bassEnabled || input === config.lfe.input);
+          if (carried) entry.sources.push(source(channel, gain));
+          // A branch that exists can reach every sub: hold the row, muted.
+          else if (fixed) entry.sources.push(muted(channel));
+        });
+      }
     }
     mapping.push(entry);
   }
@@ -305,7 +343,7 @@ function outputFilters(config, filters, fixed, rate) {
 function worstCase(config, plan) {
   return config.outputs.map((spec, output) => {
     const bus = busOf(config, output);
-    if (spec.role === 'unused' || !bus || spec.mute || bus.mute) return null;
+    if (spec.role === 'unused' || !bus || spec.mute) return null;
     let linear = 0;
     if (bus.kind === 'headphones') {
       const ear = bus.outputIds.indexOf(output);
@@ -318,14 +356,18 @@ function worstCase(config, plan) {
     } else if (spec.role === 'speaker') {
       linear = dbToLinear(config.headroomDb);
     } else {
-      config.sends.forEach((row, input) => {
-        if (row[output] === null || !plan.bassOf.has(input)) return;
-        const trim = input === config.lfe.input ? config.lfe.trimDb : 0;
-        linear += dbToLinear(config.headroomDb + trim + row[output]);
-      });
+      // A shared sub sums every set's bass: under All sets they all play.
+      for (const feed of plan.sets) {
+        if (!feed.subs.includes(output)) continue;
+        config.sends.forEach((row, input) => {
+          if (row[output] === null || !feed.bassOf.has(input)) return;
+          const trim = input === config.lfe.input ? config.lfe.trimDb : 0;
+          linear += dbToLinear(config.headroomDb + trim + row[output]);
+        });
+      }
     }
     if (linear === 0) return null;
-    return round(20 * Math.log10(linear) + (bus.gainDb ?? 0) + spec.gainDb, 2);
+    return round(20 * Math.log10(linear) + spec.gainDb, 2);
   });
 }
 
@@ -384,8 +426,15 @@ export function alsaDevices(captureDevice, playbackDevice, format = 'S24_3_LE', 
  * choosing capture and playback devices is an integration decision this
  * compiler has no basis to make. Its `samplerate` is the rate everything is
  * compiled for, and must be a Dante rate.
+ *
+ * `monitor` (default on) keeps the preset's monitor topology as
+ * `result.monitor` (monitorTopology in bridge-artifact.mjs): its sets, their
+ * outputs and labels, which set each internal channel reads, and the
+ * fold-downs. bridgeArtifact writes it as the artifact's `monitor` section.
+ * Off, `result.monitor` is null and the artifact is what it was before the
+ * section existed; the CamillaDSP configuration is the same either way.
  */
-export function compile(preset, devices, {shape = 'minimal'} = {}) {
+export function compile(preset, devices, {shape = 'minimal', monitor = true} = {}) {
   if (!SHAPES.includes(shape)) throw new Error(`Unknown shape ${shape}; use ${SHAPES.join(' or ')}`);
   const fixed = shape === 'fixed';
   const config = validateConfig(structuredClone(preset));
@@ -427,6 +476,7 @@ export function compile(preset, devices, {shape = 'minimal'} = {}) {
   return {
     config: camilla,
     plan,
+    monitor: monitor ? monitorTopology(config, plan) : null,
     report: {
       preset: config.name,
       shape,

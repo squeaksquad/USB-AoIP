@@ -39,6 +39,20 @@ public:
         return first == std::string::npos ? std::string{} : line.substr(first);
     }
 
+    // The next line that is not blank, trimmed; false at the end of the text.
+    // The monitor section is read line by line: its rows vary in length.
+    bool line(std::string& text) {
+        std::string raw;
+        while (std::getline(stream_, raw)) {
+            const auto first = raw.find_first_not_of(" \t\r");
+            if (first == std::string::npos) continue;
+            const auto last = raw.find_last_not_of(" \t\r");
+            text = raw.substr(first, last - first + 1);
+            return true;
+        }
+        return false;
+    }
+
     std::size_t count(const char* what, const std::size_t limit) {
         const std::string value = word(what);
         try {
@@ -77,7 +91,254 @@ private:
     std::istringstream stream_;
 };
 
+std::vector<std::string> split_words(const std::string& text) {
+    std::istringstream stream(text);
+    std::vector<std::string> words;
+    for (std::string word; stream >> word;) words.push_back(word);
+    return words;
+}
+
+std::string join_words(const std::vector<std::string>& words) {
+    std::string out;
+    for (const std::string& word : words) {
+        if (!out.empty()) out += ' ';
+        out += word;
+    }
+    return out;
+}
+
+// A whole decimal number no larger than `limit`, or false.
+bool whole(const std::string& text, const std::size_t limit, std::size_t& value) {
+    if (text.empty() || text.size() > 9 || text.find_first_not_of("0123456789") != std::string::npos) return false;
+    const std::size_t parsed = static_cast<std::size_t>(std::stoul(text));
+    if (parsed > limit) return false;
+    value = parsed;
+    return true;
+}
+
+bool set_id_ok(const std::string& id) {
+    if (id.empty() || id.size() > 32 || id[0] < 'a' || id[0] > 'z') return false;
+    return std::all_of(id.begin(), id.end(), [](const char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-';
+    });
+}
+
+bool fold_name_ok(const std::string& name) {
+    if (name.empty() || name.size() > 16 || name == "full") return false;
+    return std::all_of(name.begin(), name.end(), [](const char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.';
+    });
+}
+
+// The monitor section as read, before it is moved into the stage.
+struct MonitorSection {
+    MonitorTopology topology;
+    std::vector<std::string> shape;
+    std::vector<std::uint8_t> expand_view;
+    struct Fold {
+        std::size_t set{};
+        std::vector<std::uint16_t> dest;
+        std::vector<std::uint16_t> source;
+        std::vector<double> gain;
+    };
+    std::vector<Fold> folds;
+};
+
+// Reads from just after the word `monitor` through the section's `end`.
+// Strict, as the rest of the loader: every count, index and name is checked,
+// and the error names the offending line.
+MonitorSection read_monitor_section(ArtifactReader& reader, const std::size_t expand_rows) {
+    MonitorSection section;
+    MonitorTopology& topology = section.topology;
+    std::string text;
+    std::vector<std::string> words;
+    const auto refuse = [&text](const std::string& why) -> std::runtime_error {
+        return std::runtime_error("dsp artifact: monitor: " + why + " in '" + text + "'");
+    };
+    const auto next = [&](const char* what) {
+        if (!reader.line(text)) {
+            throw std::runtime_error(std::string("dsp artifact: monitor: unexpected end, expected ") + what);
+        }
+        words = split_words(text);
+    };
+    const auto shape = [&]() { section.shape.push_back(join_words(words)); };
+    const auto number = [&](const std::size_t at, const std::size_t limit, const char* what) {
+        std::size_t value = 0;
+        if (at >= words.size() || !whole(words[at], limit, value)) {
+            throw refuse(std::string(what) + " must be a whole number no larger than " + std::to_string(limit));
+        }
+        return value;
+    };
+    const auto header = [&](const char* keyword, const std::size_t limit) {
+        next(keyword);
+        if (words.size() != 2 || words[0] != keyword) throw refuse(std::string("expected '") + keyword + " N'");
+        const std::size_t value = number(1, limit, keyword);
+        shape();
+        return value;
+    };
+
+    text = "monitor " + reader.rest_of_line();
+    words = split_words(text);
+    if (words.size() != 2 || words[1] != "1") throw refuse("unsupported monitor version");
+    shape();
+
+    const std::size_t sets = header("sets", MonitorTopology::kMaxSets);
+    if (sets == 0) throw refuse("a monitor section needs at least one set");
+    for (std::size_t index = 0; index < sets; ++index) {
+        next("set");
+        if (words.size() != 3 || words[0] != "set") throw refuse("expected 'set ID KIND'");
+        if (!set_id_ok(words[1])) throw refuse("set ID must match [a-z][a-z0-9-]{0,31}");
+        if (topology.set_index(words[1]) != MonitorTopology::npos) throw refuse("duplicate set ID");
+        MonitorTopology::Set set;
+        set.id = words[1];
+        if (words[2] == "speakers") set.kind = MonitorTopology::Kind::speakers;
+        else if (words[2] == "headphones") set.kind = MonitorTopology::Kind::headphones;
+        else throw refuse("set kind must be speakers or headphones");
+        set.folds.emplace_back("full");
+        topology.sets.push_back(std::move(set));
+        shape();
+    }
+    const auto is_speakers = [&](const std::size_t set) {
+        return topology.sets[set].kind == MonitorTopology::Kind::speakers;
+    };
+
+    const std::size_t outs = header("outs", kChannels);
+    for (std::size_t row = 0; row < outs; ++row) {
+        next("out");
+        if (words.size() < 4 || words[0] != "out") throw refuse("expected 'out INDEX ROLE SET...'");
+        MonitorTopology::Out out;
+        out.index = number(1, kChannels - 1, "output index");
+        if (!topology.outs.empty() && out.index <= topology.outs.back().index) {
+            throw refuse("output indices must ascend");
+        }
+        if (words[2] == "speaker") out.role = MonitorTopology::Role::speaker;
+        else if (words[2] == "sub") out.role = MonitorTopology::Role::sub;
+        else throw refuse("output role must be speaker or sub");
+        for (std::size_t at = 3; at < words.size(); ++at) {
+            const std::size_t set = number(at, sets - 1, "set index");
+            if (!out.sets.empty() && set <= out.sets.back()) throw refuse("an output's sets must ascend");
+            out.sets.push_back(set);
+        }
+        if (out.role == MonitorTopology::Role::sub &&
+            !std::all_of(out.sets.begin(), out.sets.end(), is_speakers)) {
+            throw refuse("a sub belongs to speaker sets only");
+        }
+        if (out.sets.size() > 1 && out.role != MonitorTopology::Role::sub) {
+            throw refuse("only a sub may belong to more than one set");
+        }
+        topology.outs.push_back(std::move(out));
+        shape();
+    }
+
+    // Labels: zero or more, then expandsets. Not shape.
+    next("label or expandsets");
+    std::size_t last_label = 0;
+    bool any_label = false;
+    while (!words.empty() && words[0] == "label") {
+        if (words.size() < 3) throw refuse("expected 'label INDEX TEXT'");
+        const std::size_t index = number(1, kChannels - 1, "label index");
+        if (any_label && index <= last_label) throw refuse("label indices must ascend");
+        if (std::none_of(topology.outs.begin(), topology.outs.end(),
+                         [index](const MonitorTopology::Out& out) { return out.index == index; })) {
+            throw refuse("a label for an output in no set");
+        }
+        // The text is the rest of the line after the index, as written.
+        std::size_t at = text.find_first_not_of(" \t", 5);
+        at = text.find_first_of(" \t", at);
+        at = text.find_first_not_of(" \t", at);
+        const std::string label = text.substr(at);
+        if (label.empty() || label.size() > MonitorTopology::kMaxLabel ||
+            !std::all_of(label.begin(), label.end(), [](const char c) { return c >= ' ' && c <= '~'; })) {
+            throw refuse("a label is 1 to 32 printable ASCII characters");
+        }
+        topology.labels[index] = label;
+        last_label = index;
+        any_label = true;
+        next("label or expandsets");
+    }
+
+    if (words.size() != 2 || words[0] != "expandsets") throw refuse("expected 'expandsets N'");
+    const std::size_t tagged = number(1, kChannels * DspStage::kMaxInternalChannels + 1, "expandsets");
+    if (tagged != expand_rows) {
+        throw refuse("expandsets must give one set per expand row (" + std::to_string(expand_rows) + ")");
+    }
+    shape();
+    section.expand_view.reserve(tagged);
+    for (std::size_t row = 0; row < tagged; ++row) {
+        next("an expandsets row");
+        if (words.size() != 1) throw refuse("expected a set index or '-'");
+        section.expand_view.push_back(
+            words[0] == "-" ? std::uint8_t{0} : static_cast<std::uint8_t>(number(0, sets - 1, "set index") + 1));
+        shape();
+    }
+
+    const std::size_t folds = header("folds", MonitorTopology::kMaxFoldsPerSet * sets);
+    for (std::size_t index = 0; index < folds; ++index) {
+        next("fold");
+        if (words.size() != 4 || words[0] != "fold") throw refuse("expected 'fold SET NAME ROWS'");
+        MonitorSection::Fold fold;
+        fold.set = number(1, sets - 1, "set index");
+        if (!is_speakers(fold.set)) throw refuse("only a speakers set has fold-downs");
+        if (!fold_name_ok(words[2])) throw refuse("fold name must match [a-z0-9.]{1,16} and not be 'full'");
+        MonitorTopology::Set& set = topology.sets[fold.set];
+        if (std::find(set.folds.begin(), set.folds.end(), words[2]) != set.folds.end()) {
+            throw refuse("duplicate fold name in a set");
+        }
+        if (set.folds.size() > MonitorTopology::kMaxFoldsPerSet) throw refuse("more than 4 fold-downs in one set");
+        set.folds.push_back(words[2]);
+        const std::size_t rows = number(3, MonitorTopology::kMaxFoldRows, "fold rows");
+        if (rows == 0) throw refuse("a fold-down has at least one row");
+        shape();
+        std::array<std::array<bool, kChannels>, kChannels> seen{};
+        for (std::size_t row = 0; row < rows; ++row) {
+            next("a fold row");
+            if (words.size() != 3) throw refuse("expected 'DEST SRC GAIN'");
+            const std::size_t dest = number(0, kChannels - 1, "fold destination");
+            const std::size_t source = number(1, kChannels - 1, "fold source");
+            if (seen[dest][source]) throw refuse("a (DEST, SRC) pair twice in one fold");
+            seen[dest][source] = true;
+            // Decimal only (no hex, inf or nan), as the JS reader takes it.
+            double gain = 0.0;
+            std::size_t used = 0;
+            if (words[2].find_first_not_of("+-0123456789.eE") == std::string::npos) {
+                try {
+                    gain = std::stod(words[2], &used);
+                } catch (const std::exception&) {
+                    used = 0;
+                }
+            }
+            if (used != words[2].size() || !std::isfinite(gain)) throw refuse("fold gain must be a finite number");
+            fold.dest.push_back(static_cast<std::uint16_t>(dest));
+            fold.source.push_back(static_cast<std::uint16_t>(source));
+            fold.gain.push_back(gain);
+            shape();
+        }
+        section.folds.push_back(std::move(fold));
+    }
+    next("end");
+    if (words.size() != 1 || words[0] != "end") throw refuse("expected 'end'");
+    // Nothing after it: the section is new, so this costs no old artifact.
+    if (reader.line(text)) throw refuse("content after 'end'");
+    return section;
+}
+
 }  // namespace
+
+std::size_t MonitorTopology::set_index(const std::string_view id) const noexcept {
+    for (std::size_t index = 0; index < sets.size(); ++index) {
+        if (sets[index].id == id) return index;
+    }
+    return npos;
+}
+
+std::size_t MonitorTopology::fold_index(const std::size_t set, const std::string_view name) const noexcept {
+    if (set >= sets.size()) return npos;
+    const auto& folds = sets[set].folds;
+    for (std::size_t index = 0; index < folds.size(); ++index) {
+        if (folds[index] == name) return index;
+    }
+    return npos;
+}
 
 DspStage::DspStage(DspStage&& other) noexcept
     : preset_(std::move(other.preset_)),
@@ -98,8 +359,26 @@ DspStage::DspStage(DspStage&& other) noexcept
       seen_(other.seen_.load(std::memory_order_relaxed)),
       taken_(other.taken_),
       delay_lines_(std::move(other.delay_lines_)),
-      delay_write_(other.delay_write_) {
+      delay_write_(other.delay_write_),
+      has_monitor_(other.has_monitor_),
+      monitor_(std::move(other.monitor_)),
+      monitor_shape_(std::move(other.monitor_shape_)),
+      expand_view_(std::move(other.expand_view_)),
+      fold_rows_(std::move(other.fold_rows_)),
+      folds_(std::move(other.folds_)),
+      fold_first_(other.fold_first_),
+      fold_count_(other.fold_count_),
+      monitor_sets_(other.monitor_sets_),
+      fold_ramp_(other.fold_ramp_),
+      fold_step_(other.fold_step_),
+      fold_state_(other.fold_state_),
+      views_(std::move(other.views_)) {
+    for (std::size_t set = 0; set < fold_request_.size(); ++set) {
+        fold_request_[set].store(other.fold_request_[set].load(std::memory_order_relaxed), std::memory_order_relaxed);
+    }
     other.internal_channels_ = 0;
+    other.has_monitor_ = false;
+    other.monitor_sets_ = 0;
 }
 
 DspStage& DspStage::operator=(DspStage&& other) noexcept {
@@ -123,7 +402,26 @@ DspStage& DspStage::operator=(DspStage&& other) noexcept {
         taken_ = other.taken_;
         delay_lines_ = std::move(other.delay_lines_);
         delay_write_ = other.delay_write_;
+        has_monitor_ = other.has_monitor_;
+        monitor_ = std::move(other.monitor_);
+        monitor_shape_ = std::move(other.monitor_shape_);
+        expand_view_ = std::move(other.expand_view_);
+        fold_rows_ = std::move(other.fold_rows_);
+        folds_ = std::move(other.folds_);
+        fold_first_ = other.fold_first_;
+        fold_count_ = other.fold_count_;
+        monitor_sets_ = other.monitor_sets_;
+        fold_ramp_ = other.fold_ramp_;
+        fold_step_ = other.fold_step_;
+        fold_state_ = other.fold_state_;
+        views_ = std::move(other.views_);
+        for (std::size_t set = 0; set < fold_request_.size(); ++set) {
+            fold_request_[set].store(other.fold_request_[set].load(std::memory_order_relaxed),
+                                     std::memory_order_relaxed);
+        }
         other.internal_channels_ = 0;
+        other.has_monitor_ = false;
+        other.monitor_sets_ = 0;
     }
     return *this;
 }
@@ -227,7 +525,33 @@ DspStage DspStage::load(const std::string_view text, const unsigned running_rate
         numbers.output_gain[output] = gain;
         stage.delay_samples_ = std::max(stage.delay_samples_, delay);
     }
-    reader.expect("end");
+    const std::string closing = reader.word("'end'");
+    if (closing == "monitor") {
+        MonitorSection section = read_monitor_section(reader, stage.expand_.size());
+        stage.has_monitor_ = true;
+        stage.monitor_ = std::move(section.topology);
+        stage.monitor_shape_ = std::move(section.shape);
+        stage.expand_view_ = std::move(section.expand_view);
+        stage.monitor_sets_ = stage.monitor_.sets.size();
+        for (std::size_t set = 0; set < stage.monitor_sets_; ++set) {
+            stage.fold_first_[set] = static_cast<std::uint32_t>(stage.folds_.size());
+            for (const MonitorSection::Fold& fold : section.folds) {
+                if (fold.set != set) continue;
+                FoldSpan span{static_cast<std::uint32_t>(stage.fold_rows_.size()),
+                              static_cast<std::uint32_t>(fold.dest.size())};
+                for (std::size_t row = 0; row < fold.dest.size(); ++row) {
+                    stage.fold_rows_.push_back({fold.dest[row], fold.source[row], fold.gain[row]});
+                }
+                stage.folds_.push_back(span);
+            }
+            stage.fold_count_[set] = static_cast<std::uint32_t>(stage.folds_.size()) - stage.fold_first_[set] + 1;
+        }
+        stage.fold_ramp_ = std::max<std::uint32_t>(monitor_ramp_frames_fast(stage.rate_), 1);
+        stage.fold_step_ = 1.0 / static_cast<double>(stage.fold_ramp_);
+        stage.views_.assign(stage.monitor_sets_ * kChannels, 0.0);
+    } else if (closing != "end") {
+        throw std::runtime_error("dsp artifact: expected 'end', found '" + closing + "'");
+    }
 
     stage.index_sections(numbers);
     // The second set is sized now, so a publish never allocates.
@@ -268,6 +592,12 @@ std::string DspStage::shape_text(const DspStage& stage) {
     out += "output " + std::to_string(kChannels) + "\n";
     for (std::size_t output = 0; output < kChannels; ++output) {
         out += std::to_string(output) + " " + std::to_string(stage.outputs_[output].count) + "\n";
+    }
+    // The monitor section, all of it but the labels, as the artifact wrote it
+    // (fold gains included: they are shape). Absent, nothing: the shape of an
+    // artifact without the section is what it always was.
+    for (const std::string& line : stage.monitor_shape_) {
+        out += line + "\n";
     }
     out += "end\n";
     return out;
@@ -418,9 +748,88 @@ void DspStage::flush_denormals() noexcept {
     }
 }
 
+bool DspStage::set_fold(const std::size_t set, const std::size_t fold) noexcept {
+    if (!has_monitor_ || set >= monitor_sets_ || fold >= fold_count_[set]) return false;
+    fold_request_[set].store(static_cast<std::uint32_t>(fold), std::memory_order_relaxed);
+    return true;
+}
+
+std::size_t DspStage::fold(const std::size_t set) const noexcept {
+    return set < monitor_sets_ ? fold_state_[set].current : 0;
+}
+
+bool DspStage::fold_crossfading(const std::size_t set) const noexcept {
+    return set < monitor_sets_ && fold_state_[set].remaining > 0;
+}
+
+void DspStage::snap_folds() noexcept {
+    for (std::size_t set = 0; set < monitor_sets_; ++set) {
+        FoldState& state = fold_state_[set];
+        const std::uint32_t wanted = fold_request_[set].load(std::memory_order_relaxed);
+        state.current = wanted;
+        state.to = wanted;
+        state.remaining = 0;
+        state.a = 0.0;
+    }
+}
+
+void DspStage::apply_fold(const std::size_t set, const std::uint32_t fold, const double* const in,
+                          double* const into) const noexcept {
+    if (fold == 0) {
+        std::copy(in, in + kChannels, into);
+        return;
+    }
+    std::fill(into, into + kChannels, 0.0);
+    const FoldSpan& span = folds_[fold_first_[set] + fold - 1];
+    for (std::uint32_t row = span.first; row < span.first + span.count; ++row) {
+        const FoldRow& r = fold_rows_[row];
+        into[r.dest] += r.gain * in[r.source];
+    }
+}
+
+const double* DspStage::fold_view(const std::size_t set, const double* const in) noexcept {
+    FoldState& state = fold_state_[set];
+    double* const view = views_.data() + set * kChannels;
+    if (state.remaining == 0) {
+        if (state.current == 0) return in;
+        apply_fold(set, state.current, in, view);
+        return view;
+    }
+    std::array<double, kChannels> from{};
+    std::array<double, kChannels> to{};
+    apply_fold(set, state.current, in, from.data());
+    apply_fold(set, state.to, in, to.data());
+    state.a += fold_step_;
+    if (--state.remaining == 0) {
+        state.a = 1.0;
+        state.current = state.to;
+    }
+    const double a = state.a;
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        view[channel] = (1.0 - a) * from[channel] + a * to[channel];
+    }
+    return view;
+}
+
 void DspStage::process(float* const interleaved, const std::size_t frames) noexcept {
     if (internal_channels_ == 0) {
         return;
+    }
+    // Fold requests, once per block: a set that is not crossfading and is
+    // asked for another fold starts one here. Any set off full or crossfading
+    // makes this block read views; otherwise the expand loop is today's.
+    bool folding = false;
+    for (std::size_t set = 0; set < monitor_sets_; ++set) {
+        FoldState& state = fold_state_[set];
+        if (state.remaining == 0) {
+            const std::uint32_t wanted = fold_request_[set].load(std::memory_order_relaxed);
+            if (wanted != state.current) {
+                state.to = wanted;
+                state.remaining = fold_ramp_;
+                state.a = 0.0;
+            }
+        }
+        folding = folding || state.remaining > 0 || state.current != 0;
     }
     // One acquire per block: this block runs on one set throughout. The
     // publish count is read after the index so the value seen is at least
@@ -447,15 +856,28 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
     std::array<double, kMaxInternalChannels> internal{};
     std::array<double, kChannels> in{};
     std::array<double, kChannels> out{};
+    // What each expand row reads: [0] the inputs, [s + 1] set s's view.
+    std::array<const double*, MonitorTopology::kMaxSets + 1> sources{};
+    sources.fill(in.data());
     for (std::size_t frame = 0; frame < frames; ++frame) {
         float* const block = interleaved + frame * kChannels;
         for (std::size_t channel = 0; channel < kChannels; ++channel) {
             in[channel] = static_cast<double>(block[channel]);
         }
         std::fill(internal.begin(), internal.begin() + internal_channels_, 0.0);
-        for (std::size_t row = 0; row < expand_.size(); ++row) {
-            const MixEntry& entry = expand_[row];
-            internal[entry.dest] += c.expand_gain[row] * in[entry.source];
+        if (folding) {
+            for (std::size_t set = 0; set < monitor_sets_; ++set) {
+                sources[set + 1] = fold_view(set, in.data());
+            }
+            for (std::size_t row = 0; row < expand_.size(); ++row) {
+                const MixEntry& entry = expand_[row];
+                internal[entry.dest] += c.expand_gain[row] * sources[expand_view_[row]][entry.source];
+            }
+        } else {
+            for (std::size_t row = 0; row < expand_.size(); ++row) {
+                const MixEntry& entry = expand_[row];
+                internal[entry.dest] += c.expand_gain[row] * in[entry.source];
+            }
         }
         for (std::size_t row = 0; row < branches_.size(); ++row) {
             const Chain& chain = branches_[row];
@@ -482,6 +904,120 @@ void DspStage::process(float* const interleaved, const std::size_t frames) noexc
         }
     }
     flush_denormals();
+}
+
+// ----------------------------------------------------------- monitor block
+
+MonitorGains::MonitorGains() noexcept {
+    for (Targets& set : sets_) {
+        set.gain.fill(1.0);
+        set.ramp_frames.fill(1);
+    }
+    gain_.fill(1.0);
+    target_.fill(1.0);
+}
+
+bool MonitorGains::publish(const Targets& targets, std::string& reason) noexcept {
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        const double g = targets.gain[channel];
+        // Written so that NaN fails too: every comparison with it is false.
+        if (!(std::isfinite(g) && g >= 0.0 && g <= 1.0)) {
+            reason = "gain on output " + std::to_string(channel + 1) + " is not a finite value in [0, 1]";
+            return false;
+        }
+    }
+    const std::uint64_t published = published_.load(std::memory_order_relaxed);
+    if (seen_.load(std::memory_order_acquire) != published) {
+        reason = "previous update not yet taken";
+        return false;
+    }
+    const unsigned active = active_.load(std::memory_order_relaxed);
+    sets_[1 - active] = targets;
+    // Index first, count second: an audio thread that sees the new count has
+    // also seen the new index, so it can never record as seen a publish whose
+    // set it has not yet switched to (which would let the next publish write
+    // into the set it is still reading).
+    active_.store(1 - active, std::memory_order_release);
+    published_.store(published + 1, std::memory_order_release);
+    reason.clear();
+    return true;
+}
+
+void MonitorGains::take() noexcept {
+    const std::uint64_t published = published_.load(std::memory_order_acquire);
+    const unsigned active = active_.load(std::memory_order_acquire);
+    if (active != taken_) {
+        const Targets& set = sets_[active];
+        for (std::size_t channel = 0; channel < kChannels; ++channel) {
+            const double t = set.gain[channel];
+            if (t == target_[channel]) continue;
+            target_[channel] = t;
+            if (gain_[channel] == t) {
+                remaining_[channel] = 0;
+                continue;
+            }
+            const std::uint32_t frames = std::max<std::uint32_t>(set.ramp_frames[channel], 1);
+            step_[channel] = (t - gain_[channel]) / static_cast<double>(frames);
+            remaining_[channel] = frames;
+        }
+        taken_ = active;
+        update_rest();
+    }
+    // Releases the other set back to the control thread.
+    seen_.store(published, std::memory_order_release);
+}
+
+void MonitorGains::update_rest() noexcept {
+    bool rest = true;
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        rest = rest && remaining_[channel] == 0 && gain_[channel] == 1.0;
+    }
+    rest_unity_ = rest;
+}
+
+void MonitorGains::start_from_silence(const std::uint32_t frames) noexcept {
+    const std::uint32_t length = std::max<std::uint32_t>(frames, 1);
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        gain_[channel] = 0.0;
+        if (target_[channel] == 0.0) {
+            remaining_[channel] = 0;
+            continue;
+        }
+        step_[channel] = target_[channel] / static_cast<double>(length);
+        remaining_[channel] = length;
+    }
+    update_rest();
+}
+
+void MonitorGains::process(float* const interleaved, const std::size_t frames) noexcept {
+    take();
+    if (rest_unity_ || frames == 0) return;
+    for (std::size_t channel = 0; channel < kChannels; ++channel) {
+        double g = gain_[channel];
+        std::uint32_t remaining = remaining_[channel];
+        if (remaining == 0 && g == 1.0) continue;
+        float* sample = interleaved + channel;
+        std::size_t frame = 0;
+        if (remaining > 0) {
+            const double step = step_[channel];
+            const double target = target_[channel];
+            for (; frame < frames && remaining > 0; ++frame, sample += kChannels) {
+                g += step;
+                if (--remaining == 0) g = target;
+                *sample = static_cast<float>(static_cast<double>(*sample) * g);
+            }
+            gain_[channel] = g;
+            remaining_[channel] = remaining;
+        }
+        // At rest on a gain other than unity (a ramp that just ended on 1.0
+        // leaves the rest of the block alone, as unity always does).
+        if (g != 1.0) {
+            for (; frame < frames; ++frame, sample += kChannels) {
+                *sample = static_cast<float>(static_cast<double>(*sample) * g);
+            }
+        }
+    }
+    update_rest();
 }
 
 // ---------------------------------------------------------------- SHA-256

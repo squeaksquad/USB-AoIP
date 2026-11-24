@@ -1,0 +1,144 @@
+#!/bin/bash
+# usb16x16-wlan-guard: keep the Pi's wireless management link up against an
+# access point that steers clients between bands.
+#
+# The faults it answers (PROJECT_HANDOFF.md, FOUND 2026-11-20 13:13 UTC,
+# FOUND 2026-11-22 ~03:30 UTC, and the entry of 2026-11-24):
+#   1. The access point sends BSS transition requests ("WNM: Preferred List
+#      Available"); brcmfmac cannot send the answer ("Unknown Frame: category
+#      0xa, action 0x8"); the access point then stops passing the Pi's traffic
+#      while the association stands, or drops the station (reason 6 or 7).
+#   2. The association that follows is rejected a few times (status_code=16),
+#      NetworkManager files the give-up as `no-secrets`, and that reason blocks
+#      autoconnect for good: wlan0 stayed down for two days on 2026-11-22.
+#
+# What it does, every INTERVAL seconds:
+#   - keeps wpa_supplicant's `disable_btm` at 1 on the interface, so the Pi
+#     does not offer BSS transition and ignores a request sent anyway. The
+#     setting is the supplicant's runtime state (NetworkManager has no key for
+#     it) and is lost when the interface is made again, so it is checked every
+#     pass; when it had to be set on a standing association, the interface is
+#     re-associated once so the association is made without the capability.
+#   - checks the link: NetworkManager says connected and the default gateway
+#     on the interface answers a ping. After FAILS passes in a row without
+#     that, it brings the connection up again (`nmcli device connect`), which
+#     also clears the autoconnect block.
+#   - when RELOAD_AFTER such attempts in a row fail, it reloads the Wi-Fi
+#     driver (what cleared the wedged firmware on 2026-11-22) and tries again,
+#     at most once per RELOAD_GAP seconds.
+#
+# Management only: nothing here touches eth0, the Dante stack or the gadget.
+# It does nothing while Wi-Fi is switched off (`nmcli radio wifi off`). To
+# take wlan0 down on purpose, stop the service first:
+#   sudo systemctl stop usb16x16-wlan-guard.service
+#
+# Options (for the test): --ticks N ends after N passes. Environment:
+# USB16X16_WLAN_IF, USB16X16_WLAN_GUARD_INTERVAL (0 also skips every wait),
+# USB16X16_WLAN_GUARD_SYS (the sysfs root), USB16X16_WLAN_GUARD_STUBS (a
+# directory of stand-in commands put first on PATH).
+set -u
+PATH=${USB16X16_WLAN_GUARD_STUBS:+$USB16X16_WLAN_GUARD_STUBS:}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+IF=${USB16X16_WLAN_IF:-wlan0}
+INTERVAL=${USB16X16_WLAN_GUARD_INTERVAL:-20}
+SYS=${USB16X16_WLAN_GUARD_SYS:-/sys}
+FAILS=3            # unhealthy passes in a row before a reconnect
+RELOAD_AFTER=2     # failed reconnects in a row before a driver reload
+RELOAD_GAP=600     # seconds between driver reloads
+
+ticks=0
+[ "${1:-}" = --ticks ] && ticks=${2:?--ticks needs a number}
+
+log() { echo "wlan-guard: $*"; }
+nap() { [ "$INTERVAL" = 0 ] || sleep "$1"; }
+
+# The driver module and whatever holds it, read while the interface exists.
+MODULE=brcmfmac
+HOLDERS=brcmfmac_cyw
+learn_driver() {
+  local m
+  m=$(readlink -f "$SYS/class/net/$IF/device/driver/module" 2>/dev/null) || return 0
+  [ -d "$m" ] || return 0
+  MODULE=${m##*/}
+  HOLDERS=$(ls "$m/holders" 2>/dev/null | tr '\n' ' ')
+}
+
+# 0: already off. 1: could not be read or set. 2: was on, now off.
+btm_off() {
+  local v
+  v=$(wpa_cli -i "$IF" get disable_btm 2>/dev/null) || return 1
+  [ "$v" = 1 ] && return 0
+  [ "$(wpa_cli -i "$IF" set disable_btm 1 2>/dev/null)" = OK ] || return 1
+  return 2
+}
+
+associated() { wpa_cli -i "$IF" status 2>/dev/null | grep -q '^wpa_state=COMPLETED$'; }
+
+healthy() {
+  local gw i
+  nmcli -t -f GENERAL.STATE device show "$IF" 2>/dev/null | grep -q ':100 ' || return 1
+  gw=$(ip -4 route show default dev "$IF" 2>/dev/null | awk '$1 == "default" { print $3; exit }')
+  [ -n "$gw" ] || return 1
+  for i in 1 2 3; do
+    ping -c 1 -W 2 -I "$IF" "$gw" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+reconnect() { nmcli -w 45 device connect "$IF" >/dev/null 2>&1; }
+
+reload_driver() {
+  local h i
+  log "reloading the driver ($HOLDERS$MODULE)"
+  # shellcheck disable=SC2086
+  modprobe -r $HOLDERS "$MODULE" 2>/dev/null || modprobe -r "$MODULE" 2>/dev/null
+  modprobe "$MODULE" || { log "modprobe $MODULE failed"; return 1; }
+  for h in $HOLDERS; do modprobe "$h" 2>/dev/null; done
+  for i in 1 2 3 4 5 6; do
+    nap 5
+    btm_off; [ $? = 1 ] || return 0
+  done
+  log "the supplicant did not take $IF back after the reload"
+  return 1
+}
+
+fails=0
+tries=0
+last_reload=-$RELOAD_GAP
+n=0
+learn_driver
+log "watching $IF every ${INTERVAL}s (driver $MODULE)"
+while :; do
+  n=$((n + 1))
+  if [ "$(nmcli radio wifi 2>/dev/null)" != disabled ]; then
+    btm_off
+    case $? in
+      2) if associated; then
+           log "disable_btm set on a standing association: re-associating"
+           wpa_cli -i "$IF" reassociate >/dev/null 2>&1
+           nap 10
+         else
+           log "disable_btm set"
+         fi ;;
+    esac
+    if healthy; then
+      [ $fails -lt $FAILS ] || log "$IF is back"
+      fails=0; tries=0
+      learn_driver
+    else
+      fails=$((fails + 1))
+      if [ $fails -ge $FAILS ]; then
+        if [ $tries -ge $RELOAD_AFTER ] && [ $((SECONDS - last_reload)) -ge $RELOAD_GAP ]; then
+          last_reload=$SECONDS
+          tries=0
+          reload_driver
+        fi
+        tries=$((tries + 1))
+        log "$IF has no working link ($fails passes): reconnecting (attempt $tries)"
+        reconnect || log "reconnect failed"
+      fi
+    fi
+  fi
+  [ "$ticks" = 0 ] || [ $n -lt "$ticks" ] || break
+  nap "$INTERVAL"
+done

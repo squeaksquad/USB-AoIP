@@ -90,7 +90,7 @@ export function applyLayout(config,id) {
   result.bassEnabled=layout.subs>0;
   if (Array.isArray(result.buses)) {
     const active = Array.from({length: layout.routing.length}, (_, i) => i);
-    result.buses = [{ id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds: active, layoutId: id, gainDb: 0, mute: false }];
+    result.buses = [{ id: 'speakers', kind: 'speakers', label: 'Speakers', outputIds: active, layoutId: id }];
     result.outputs.forEach((output, i) => { output.busId = active.includes(i) ? 'speakers' : null; });
   }
   // Stereo has full-range mains. Input labels/order and crossover values stay intact.
@@ -178,6 +178,6 @@ export function blankConfig(name='New preset') {
   result.inputs.forEach((input,i)=>{input.label=`In ${i+1}`;input.crossover=false;});
   result.outputs.forEach((output,i)=>Object.assign(output,{label:`Out ${i+1}`,role:'speaker',source:i,busId:'speakers'}));
   result.sends=Array.from({length:16},()=>Array(16).fill(null));
-  result.buses=[{id:'speakers',kind:'speakers',label:'Speakers',outputIds:Array.from({length:16},(_,i)=>i),layoutId:'custom',gainDb:0,mute:false}];
+  result.buses=[{id:'speakers',kind:'speakers',label:'Speakers',outputIds:Array.from({length:16},(_,i)=>i),layoutId:'custom'}];
   return validateConfig(result);
 }

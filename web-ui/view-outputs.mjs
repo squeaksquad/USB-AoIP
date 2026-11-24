@@ -103,7 +103,7 @@ export function outputsView(S) {
     const ids = [...bus.outputIds].sort((a, b) => bus.kind === 'headphones' ? 0 : a - b);
     const subs = ids.filter(i => c.outputs[i].role === 'sub').length;
     return panel(S, bus.kind === 'headphones' ? 'Headphones' : 'Speaker set', bus.label,
-      bus.kind === 'headphones' ? 'Left and right' : `${ids.length - subs} speaker${ids.length - subs === 1 ? '' : 's'}${subs ? `, ${subs} subwoofer${subs === 1 ? '' : 's'}` : ''}`, ids);
+      bus.kind === 'headphones' ? 'Left and right' : `${ids.length - subs} speaker${ids.length - subs === 1 ? '' : 's'}${subs ? `, ${subs} subwoofer${subs === 1 ? '' : 's'}` : ''}${bus.subShare === 'main' ? ', shares the main sub' : bus.subShare === 'none' ? ', full range' : ''}`, ids);
   }).join('');
   const spare = c.outputs.map((o, i) => ({o, i})).filter(({o}) => o.busId === null);
   const sparePanel = spare.length ? `<section class="panel out-panel" aria-label="Outputs not in use">

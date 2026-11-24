@@ -1,0 +1,20 @@
+# Keep the wireless management link up against an access point that steers
+# clients between bands: the Pi stops offering BSS transition, and a link that
+# drops or stops passing traffic is brought up again (the script's header has
+# the faults and the record). Management only: nothing here touches eth0, the
+# Dante stack or the gadget. Installed by gadget/install-wlan-guard.sh; remove
+# with its `rollback`. To take wlan0 down on purpose, stop this first.
+[Unit]
+Description=USB-AoIP wireless management guard (no BSS transition; reconnects a dropped or dead link)
+After=NetworkManager.service wpa_supplicant.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/usb16x16-wlan-guard
+Restart=always
+RestartSec=10
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

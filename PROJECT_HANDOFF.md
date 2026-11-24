@@ -16358,3 +16358,2432 @@ Next is phase 3 of `docs/web/REDESIGN-2026-11.md`, in a new session, its
 own branch and pull request. Pull requests 12, 13 and 14 are open and
 stack in that order; merging them in order leaves phase 3 to branch from
 `main`.
+
+**IMPLEMENTED 2026-11-18 (Mac side, nothing on the Pi): phase 3 of the page
+redesign, the monitor block in the engine, with its control path, the
+Control Room tab, preset model v3 and the owner's installer.** Branch
+`web/redesign-phase3`, cut from `origin/main` (d05d402, pull requests 12,
+13 and 14 merged); not pushed, no pull request. Not installed and not
+built on the Pi: it still runs owner c84e6a36, runner 4492a19c, start
+wrapper df6a1b0b, web 1.8.0 (956c8569), applier 1.10.0 (d8a97b2c) and the
+phase 2 page (bundle list d006b0a2), direct at 48 kHz. This phase changes
+the audio path: nothing in it is ACCEPTED until the full battery has run.
+The operator approved the design and its six choices on 2026-11-18 before
+anything was written.
+
+What the block is, in the engine (`dsp-core/src/bridge_core.cpp` 8a095aaa,
+header a1b6a05c):
+
+- `MonitorGains`: one gain per output, applied after `DspStage::process`
+  and before the samples go back to 24 bits. Every move is a linear ramp
+  per sample from the gain it has to its target: 10 ms (rate/100) for
+  mute, dim, solo, subwoofers off, a fold and the set switch, 40 ms
+  (rate/25) for level and trim. At rest on unity the block does not touch
+  the buffer. A start or re-prime rises from zero over 10 ms.
+- The artifact has an optional `monitor` section (sets, their outputs,
+  labels, which expand rows read which set's view, fold-down matrices).
+  Fold-downs act at the stage's input, before bass management and each
+  speaker's EQ: a set's expand rows read that set's view of the sixteen
+  inputs, crossfaded over 10 ms on a change and put in place without a
+  crossfade at a prime. Folds are `5.1`, `stereo` and `mono` by the table
+  in `dsp-compiler/README.md` (folded-in channels at -3 dB, top middle at
+  -6 dB to front and surround, mono as half of left plus right to both
+  front speakers, the LFE passed, not normalised). An artifact without the
+  section loads, runs and has the shape key it had (7d17e417 for the
+  pinned vector); with one the key covers the section (pinned vector
+  e119252e, `dsp-compiler/fixtures/pinned-monitor-vector.dsp`, read by the
+  JS, Python and C++ tests).
+- Only with a preset. Direct has no engine and no monitor, and the page
+  draws no Control Room tab then (the operator's choice).
+
+The control path (`docs/web/MONITOR-FILES.md` is the contract,
+`docs/web/ACCESS.md`, "The monitor path", the reasoning):
+
+- The web service writes `/run/usb-aoip-monitor/state` itself on
+  `POST /api/monitor`, with a remembered copy in
+  `/var/lib/usb-aoip-monitor/state` two seconds after the last change. No
+  applier and no receipt on this route. It is a third writable place for
+  the web unit (`RuntimeDirectory=` and `StateDirectory=`
+  `usb-aoip-monitor`, unit 0997426f).
+- The limits are root's: `/var/lib/usb16x16-apply/monitor-limits`, written
+  only by the applier on the new kinds `monitor-limits` (knob maximum
+  -30 to 0 dB, start rule, reference lock) and `monitor-reference`.
+- The owner (`dante/owner/monitor_ctl.hpp`, on a 10 ms control thread that
+  is never the loop thread) reads both as untrusted input, clamps level and
+  level plus trim to the maximum and never above 0 dB, and writes
+  `/run/usb16x16-dante/monitor.status`, which the web service reads back.
+  A set switch is two publishes: what goes down goes down, then what comes
+  up comes up. On the first start since boot (no state file) the owner
+  applies the start rule itself: where it was, each set's reference, or a
+  fixed level; with nothing remembered, the fixed level, -30 dB by default.
+  The web service adopts those levels and writes the run file at once, so
+  a later owner restart keeps the levels it had. Solo is never remembered.
+- The paths are compiled into the owner (`--monitor-state`,
+  `--monitor-saved`, `--monitor-limits`, `--monitor-status`,
+  `--no-monitor` override them), so the start wrapper df6a1b0b is not
+  changed.
+- A fourth meter tap, `monitor-in`, is taken before the gains and is in
+  the meter file only while a monitor preset runs.
+
+The rest:
+
+- Web 1.9.0 (51877ce9) and applier 1.11.0 (e8468870): the routes above,
+  `control.monitor` in health (`available`: a monitor preset is running;
+  `engine`: this unit's owner knows the section, read from the status file
+  or from the owner binary), the artifact readers' monitor section. The
+  page compiles the section only when `engine` is true, the web service
+  refuses one early otherwise, and the applier refuses to install one for
+  an owner binary that would not load it. The support bundle's `modinfo`
+  call (FOUND in the phase 2 ACCEPTED entry) now tries `/usr/sbin/modinfo`,
+  `/sbin/modinfo`, then the PATH, and records why it failed in
+  `hashes.usb_f_uac2_error`; the applier unit also has
+  `ProtectKernelModules=yes`, which may be the real cause. Not looked at
+  on the Pi.
+- The page: a Control Room tab (`web-ui/monitor.mjs`, `view-control.mjs`)
+  drawn only when the device offers the monitor: a card per speaker set
+  and headphones (knob with ring, typed level, Dim, Mute, Ref, Set, the
+  reference note, Listen as, subwoofers on and off, meters), main volume,
+  trims and the set switch with several sets, the speaker overview with
+  solo and mute per speaker and group and Pre/Post meters, keyboard
+  shortcuts, and Level safety on System. A knob move is sent at most every
+  30 ms, one in flight, the latest wins. Left out, as the engine cannot do
+  them: the Sources grid, Sum, Follow, cue mix, talkback, the T key
+  (phase 4), Calibrate (phase 6). "Subwoofers off" mutes the subwoofers;
+  bass is not returned to the main speakers, and the page says so.
+- Preset model v3 (`web-ui/model.mjs`): a speaker set beyond the first has
+  `subShare` (the main set's subwoofer, none, its own); a bus has no saved
+  level or mute, and migration folds a v2 bus level into its outputs'
+  levels (clamped, with a note) and a bus mute into their on/off. The
+  compiler gives each set its own branches; a sub shared by two sets is
+  listed under both, and every speaker set of a several-set preset has a
+  reserved fold `off` that the owner engages on a set that is not playing,
+  so its bass leaves a shared sub. A preset with one speaker set compiles
+  to the bytes it did before (232 pinned cases,
+  `dsp-compiler/fixtures/single-set-pins.json`).
+- The owner is built from `dante/owner/main.cpp` (8c9bf80e: the development
+  line, so it also carries the `--chan-holes` diagnostic, off by default).
+  `install/dev-unit/stage-owner-monitor.sh`, `build-owner-monitor.sh` and
+  `install-owner-monitor.sh install|rollback|status` (source list
+  a884de21) build the owner and the offline runner on the Pi and swap them
+  for c84e6a36 and 4492a19c, kept as `*.pre-monitor`. The runner goes with
+  the owner because the applier's load check runs the installed one, which
+  would refuse a monitor artifact. `OWNER_NEW` and `RUNNER_NEW` in the
+  installer are empty and `install` refuses until a build on the Pi has
+  given the two hashes and they are pinned here. Its rollback refuses
+  while the running preset has a monitor section.
+- `install/install.sh` now builds the accepted owner from copies of its
+  own headers and bridge core kept in `dante/owner/point-of-record/`
+  (bridge core bbaec39e and c8558c99, the hashes `pins.sha256` held before
+  this phase), so a from-scratch install is still c84e6a36's source. The
+  runner it builds is the live one.
+- `install/dev-unit/access.sha256` is re-pinned (list 0da82c06) and
+  `install-access.sh` lists web 956c8569, applier d8a97b2c and web unit
+  c908894d as earlier bundles' files, with the `test-access.sh` case of a
+  unit on those.
+
+Tested off the Pi, all passing, run by the session on the finished tree:
+`node --test web-ui/*.test.mjs` (221), `node --test dsp-compiler/*.test.mjs`
+(84), the `web-control` Python tests (335), the soak reference and
+`tools/diag` tests, dsp-core's ctest, the eight owner header tests of the
+CI loop, `install/test-render.sh`, `install/dev-unit/test-access.sh`,
+`install/dev-unit/test-owner-monitor.sh`, the start wrapper and start check
+tests. File to file through `usb16x16-dsp-offline`:
+`dsp-compiler/verify-monitor.py` (the ramps equal an independent reference
+sample for sample at two block sizes; with full-scale DC no step exceeds
+1/N of the ramp plus a float; a unity script is byte-identical to none),
+`verify-fold.py` (the fold table; the folded output equals the weighted sum
+of the unfolded responses through bass management, EQ and delay within
+float rounding; the crossfade; the subs byte-identical under every fold),
+`verify-sets.py` (each set alone is bit for bit the one-set preset with the
+other silent; all sets is their sum; the switch on a shared sub), at 48 kHz,
+the last also at 96. Both owner sources compile under g++ 14.2 with the
+installer's flags in a Debian trixie arm64 container, and the staged bundle
+builds there as a non-root user (owner bc486911, runner 46f36659: that
+container's, not the Pi's, and not to be pinned). End to end on the Mac
+with `dante/owner/monitor_sim.cpp` (the owner's monitor code and meter taps
+without ALSA) behind the real web service and applier code, driven from a
+browser by the subagents that built it: a level move of 10 dB moved the
+post meter 10.0 dB and left the pre meter; mute, dim (-20.0 dB), Listen as,
+solo, Pre/Post, a knob maximum of -26 clamping page and engine, the set
+switch and All sets on a compiled two-set preset with a shared sub; no
+console or content-security-policy errors.
+
+Cost, on the Mac only and relative: the gains add about 0.13 us to a
+32-frame block; a stereo fold of the 308-section loaded shape about 9 per
+cent and mono about 15; a second speaker set about 1 to 1.4 us on a small
+preset, more while it is not playing (an engaged `off` forces the fold
+path). None of this is a Pi figure.
+
+FOUND while building, not fixed:
+- `DspStage::publish` stores its count before its index and `process`
+  reads the index before the count, so a publish that lands between the
+  two reads lets the next publish write the set the loop is reading for
+  one block. It needs two publishes within one block; the live file is
+  polled every 50 ms, so it cannot happen as installed. `MonitorGains`
+  uses the other order. The stage's own code is the installed owner's and
+  was left alone.
+- The applier's `ARTIFACT_MAX_INTERNAL` is 64 and the engine's
+  `kMaxInternalChannels` is 48. Older than this phase.
+- A set that shares the main sub raises that sub's worst-case sum, which
+  assumes every set plays at once: the `sets` verification preset reaches
+  +1.08 dBFS on it and the compile CLI warns.
+- `restart-audio` restarts whatever is installed without the applier's
+  engine guard; it matters only if an owner is rolled back under a running
+  monitor preset, which the owner installer's rollback refuses.
+- `off` takes one of a set's four fold slots.
+
+Not verified anywhere: the owner on the Pi at all (its build, the 10 ms
+control thread beside the loop, `dsp_us_max` with the gains, a fold and the
+fourth tap, the start rule after a real boot, the status and state
+directories' owners and modes under systemd, the web unit's new
+directories, `RuntimeDirectoryPreserve` across a web restart, the owner
+reading root's limits file), the audible result of any ramp, the Control
+Room by pointer or touch, the dev-unit install of either bundle, and 44.1
+or 88.2 kHz for anything (the harnesses ran at 48 and 96).
+
+Owed, in this order, each on the operator's word:
+1. `install/dev-unit/stage-owner-monitor.sh`, the bundle to the Pi,
+   `./build-owner-monitor.sh` there (unprivileged, stops nothing), the two
+   hashes pinned in `install-owner-monitor.sh`, the bundle staged again.
+2. `sudo ./install-owner-monitor.sh install` (operator). The old page
+   never emits a monitor section, so the unit should behave as before:
+   a noise probe at 32 and a control run on a preset without the section
+   (the new owner also differs from c84e6a36 by the dormant `--chan-holes`
+   code), against `daw_timeline` 528.
+3. `install/dev-unit/stage-access.sh` and `install-access.sh install`
+   (operator), then a preset applied from the new page (it gets the
+   section), and the behavioural checks: each Control Room control, Level
+   safety, a reboot for the start rule, the two rollbacks' refusals.
+4. The full battery on a monitor preset, at unity and again off unity:
+   four loaded 800-impulse runs and a ten-minute soak with
+   `USB16X16_LOOP_CHANNELS=8` (channels 9 to 16 loaded, not judged, while
+   the far loop is eight wide), `dsp_us_max` and `meter_us_max` recorded,
+   at 48 kHz and at 96, where the loaded preset was already over budget in
+   22 of 365 windows before this block.
+5. Only then ACCEPTED, `dante/owner/point-of-record/` replaced by the new
+   owner's sources and `install/pins.sha256` and the installer's build
+   line with it.
+
+**DONE 2026-11-18 17:24 UTC (session, on the operator's word "Copy and
+build"): the phase 3 owner and offline runner built on the Pi; their hashes
+are pinned. Nothing installed, nothing stopped.** Read first over SSH: the
+Pi runs owner c84e6a36, runner 4492a19c and start wrapper df6a1b0b, the
+three the installer expects, with `usb16x16-dante`, `usb16x16-statime` and
+`usb-16x16` active. The bundle staged from 4e92e78 (list a884de21, archive
+7f4af729) was copied to `~/usb-aoip-owner-monitor` over eth0 and
+`build-owner-monitor.sh` run there, unprivileged, at nice 15:
+
+- `usb16x16-dante-owner` bc48691122f2357606e2cd2a849cde4aee8c0ad6cb7998cad41aaa0c2f320b3e
+- `usb16x16-dsp-offline` 46f36659410b612d3ad9da2ae849ec8cfcf40eda672c700c8338af0318cb316a
+- g++ Debian 14.2.0-19, cmake 3.31.6, Linux 6.18.34+rpt-rpi-2712; the
+  owner's `--help` lists the monitor options, both binaries carry the
+  loader's mark, and the runner loaded the pinned monitor vector.
+
+They are the hashes the Debian trixie arm64 container gave on the Mac
+(IMPLEMENTED entry above, which said not to pin the container's: the
+Pi's own build is what is pinned, and it happens to be the same bytes, so
+the build reproduces off the Pi with that compiler). `OWNER_NEW` and
+`RUNNER_NEW` in `install/dev-unit/install-owner-monitor.sh` carry them;
+its test keeps the empty-pin refusal by a stand-in value. After the build
+the endpoint was still active and the start check still read `state=ok
+restarts=0` for the start of 2026-11-17 23:22 UTC. No measurement was
+running or taken; whether the copy or the build disturbed the audio was
+not measured. `out/BUILD.txt` is saved as
+`outputs/owner-monitor-build-20261118/BUILD.txt`. Owed next, on the
+operator's word: the restaged bundle (installer with the pins) to the Pi,
+`./install-owner-monitor.sh status`, then the operator's
+`sudo ./install-owner-monitor.sh install`, and the list in the
+IMPLEMENTED entry from its step 2.
+
+**DONE 2026-11-18 (session, on the operator's word "Copy and status"): the
+restaged owner bundle is on the Pi and its `status` is clean; the install
+is the operator's.** The bundle staged from 7886d44 (archive 92711ca3,
+list a884de21, both binary pins in) was unpacked over
+`~/usb-aoip-owner-monitor`; `out/` from the build was kept.
+`./install-owner-monitor.sh status`, which changes nothing, read: pins
+owner bc486911 and runner 46f36659, the bundle's `out/` the same two; the
+installed owner and runner `old` (c84e6a36, 4492a19c) with nothing kept
+yet; start wrapper df6a1b0b as expected; running preset none (direct);
+`usb16x16-dante.service` active; the candidate launcher, the rate service
+and the applier inactive. So nothing the installer checks stands in the
+way of `sudo ./install-owner-monitor.sh install` from that directory.
+Not installed. Next after it, from the IMPLEMENTED entry: a noise probe at
+32 and a control run on a preset without a monitor section, then the
+access bundle.
+
+**INSTALLED 2026-11-18 17:59:15 UTC (operator, read back by the session)
+and MEASURED 18:00-18:04 UTC: the phase 3 owner bc486911 and offline
+runner 46f36659 are on the Pi; direct at 48 kHz it measures as c84e6a36
+did. Not ACCEPTED: the monitor block itself has not run yet.** The
+operator ran `sudo ./install-owner-monitor.sh install` and said
+"installed"; the session did not see its output. Read back over SSH:
+`status` shows owner and runner `new` with c84e6a36 and 4492a19c kept as
+`*.pre-monitor`, start wrapper df6a1b0b, running preset none (direct);
+`usb16x16-dante.service` active since 17:59:15 UTC with `NRestarts=0`;
+start check `state=ok restarts=0` (18:00:20 UTC); the owner's START line
+is the old one's (`prime_drop=28`, `rx_queue=96`, 48 kHz). The owner
+printed `MONITOR following ... sets=0` and `MONITOR first state=idle`, and
+`/run/usb16x16-dante/monitor.status` (644, the audio user's) reads
+`state=idle reason="no DSP preset"`. `/run/usb-aoip-monitor` does not
+exist yet (the web service is still 1.8.0), which the owner took without
+complaint. Web 1.8.0, applier 1.10.0 and the phase 2 page are unchanged.
+
+From the Mac, `dante/measure-candidate.sh`, 48 kHz, 32 frames, direct:
+- noise probe (`owner-monitor`, `20261118T180040Z`): return from sample
+  529, no zero run of 4 or more, zeros inside the span 0.0%, endpoint
+  xrun/lag/error lines +0.
+- loaded impulse run, 800 impulses, `USB16X16_OTHER_LOAD=0.1`
+  (`owner-monitor-control`, `20261118T180127Z`): 376 on all 800, spread 0,
+  discontinuities in 0 out 0, `daw_timeline` 528 = 376 + 152 (steady),
+  endpoint lines +0.
+
+So with no preset the new owner, which differs from c84e6a36 by the
+dormant `--chan-holes` code, the idle monitor thread (a 10 ms wake beside
+the loop) and the unused gain step, gives the point of record's figure on
+one start. This is one run and one probe, not a battery, and it says
+nothing about the block in use: direct never converts the samples.
+`gap_us_max` in the first minute was 1026 (1011 to 1021 on the old owner's
+last minutes). No soak was run. Owed next, each on the operator's word:
+the access bundle (`stage-access.sh`, `install-access.sh install`), a
+preset applied from the new page, the Control Room's behavioural checks,
+and the full battery of the IMPLEMENTED entry's step 4.
+
+**DONE 2026-11-18 (session, on the operator's word "Copy and status"): the
+phase 3 access bundle is on the Pi and its `status` is clean; the install
+is the operator's.** Staged from 94fc74a (archive 791e61fe, 36 files, list
+0da82c06: web 1.9.0 51877ce9, applier 1.11.0 e8468870, web unit 0997426f,
+the Control Room page). On the Pi the phase 2 bundle was first renamed
+`~/usb-aoip-access-phase2` (phase 1's is `~/usb-aoip-access-phase1`), then
+this one unpacked as `~/usb-aoip-access`. `./install-access.sh status`,
+which changes nothing, read: web, applier and web unit each an "earlier
+bundle" (956c8569, d8a97b2c, c908894d), which is what the installer
+upgrades from; `usb16x16-apply.path` and `usb16x16-apply.service` already
+the bundle's; the old chain's files still kept (6b98e7cf, 347a7062,
+f7c7d48c, 6d53b053, 23cb5b2e); inbox, state and logins present;
+`usb16x16-web.service`, `usb16x16-apply.path`, `usb16x16-dante-rate.path`
+and `usb16x16-dante.service` active. Not installed. The install restarts
+the web service and the apply watcher, not the endpoint. After it: a
+preset applied from the new page (it will carry the monitor section, the
+owner being bc486911), then the Control Room checks and the battery.
+
+**INSTALLED 2026-11-18 18:14:55 UTC (operator, read back by the session):
+the phase 3 access bundle (list 0da82c06, repository 94fc74a) is on the
+Pi: web 1.9.0 (51877ce9), applier 1.11.0 (e8468870), web unit 0997426f and
+the Control Room page. Not measured since, and not ACCEPTED.** The
+operator ran `sudo ./install-access.sh install` and said "installed"; the
+session did not see its output. Read back over SSH: `status` shows all
+five files `new` with the old chain's still kept; `usb16x16-web.service`
+active since 18:14:55 UTC with `NRestarts=0`; `usb16x16-apply.path`,
+`usb16x16-dante-rate.path` active; the endpoint not restarted by it
+(active since 17:59:15 UTC, start check still `state=ok restarts=0` of
+18:00:20 UTC); the page and `/api/monitor` answer 401 without a login; a
+browser at 192.168.1.58 was polling `/api/meters` at 18:15 UTC. Held on
+the unit, of what the IMPLEMENTED entry listed as not verified: systemd
+made `/run/usb-aoip-monitor` and `/var/lib/usb-aoip-monitor`, both 755
+and owned by the web service's account (`bdimaio` on this unit), under
+the unit's sandbox. Both are empty and there is no
+`/var/lib/usb16x16-apply/monitor-limits`, as expected before any knob
+move or limits request: the unit is still direct and the owner's status
+still reads `state=idle reason="no DSP preset"`. The session did not sign
+in to the page and ran nothing through it.
+
+The Pi now runs every part of phase 3 (owner bc486911, runner 46f36659,
+web 1.9.0, applier 1.11.0, the page), with no monitor preset applied.
+Owed, each on the operator's word: under the light rule for the page and
+its backend, a noise probe at 32 and `USB16X16_LOOP_CHANNELS=8
+dante/measure-candidate.sh soak 120 32` in direct; then a preset applied
+from the page (the first artifact with a monitor section on this unit),
+the Control Room and Level safety checks, a reboot for the start rule,
+and the full battery of the IMPLEMENTED entry's step 4.
+
+**MEASURED 2026-11-18 18:30-18:33 UTC (session, on the operator's word):
+with all of phase 3 installed and the unit in direct, the noise probe at
+32 and the two-minute soak pass on the eight looped channels.** From the
+Mac, `dante/measure-candidate.sh`, 48 kHz, 32 frames, owner bc486911, web
+1.9.0, applier 1.11.0, no preset:
+- noise probe (`page3`, `20261118T183008Z`): return from sample 528, no
+  zero run of 4 or more, zeros inside the span 0.0%, endpoint
+  xrun/lag/error lines +0.
+- soak 120 s judged on the loop (`page3-loop8`, `20261118T183053Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peak 0.1000 on
+  all eight, discontinuities in 0 out 0, endpoint lines +0.
+
+As on the phase 1 and 2 runs this is not the sixteen-channel soak the
+light rule names: channels 9 to 16 are loaded but not judged while the
+far loop is eight wide. It is the light rule's measurement for the page
+and its backend, taken in direct, where the samples are never converted:
+it says the new web service and applier beside the new owner leave the
+direct path as it was, and nothing about the monitor block, which has
+still not run on this unit. Still owed, each on the operator's word: a
+preset applied from the page, the Control Room and Level safety checks, a
+reboot for the start rule, and the full battery on a monitor preset (four
+loaded 800-impulse runs and the ten-minute soak, at unity and off unity,
+48 and 96 kHz, `dsp_us_max` and `meter_us_max` recorded).
+
+**DONE 2026-11-18 19:02-19:05 UTC (operator, read back by the session at
+19:04-19:05 UTC): the first monitor preset runs on the Pi, the monitor
+block has taken 49 state changes from the page without a refusal, and the
+start rule held across a real reboot. No audio has been measured through
+it yet.** The operator's words: "a monitor preset is running and the
+monitor level is set to 0". The session watched none of it and read this
+back over SSH from root's receipts, the journal and the three files.
+
+- 19:02:53 UTC, receipt `preset` done, profile `dante-immersive-one-sub`:
+  `/etc/usb16x16/dsp/dante-immersive-one-sub.dsp` (6a2c8012), compiled by
+  the new page, the first artifact with a monitor section on this unit
+  (one set `speakers`, twelve outputs, the LFE as its sub, folds `5.1`,
+  `stereo`, `mono`). Applier 1.11.0 and runner 46f36659 passed it and
+  owner bc486911 loaded it: `DSP loaded ... internal=23 biquads=302
+  delay_frames=0`, `MONITOR following ... sets=1`, `MONITOR first
+  state=start`. `owner.conf` has `DSP_PRESET`, `DSP_SHA256`, `DSP_LIVE=1`.
+- Between then and the reboot the owner logged `MONITOR changed
+  state=applied` for seq 1 to 49, `applied=49 refused=0 publishes=49
+  status_failures=0 limits=defaults`: every state the web service wrote
+  was read whole, resolved and published, none late enough to be skipped.
+  What the operator moved (knob, dim, mute, a fold) was not reported and
+  the status keeps only the last state.
+- 19:03:45 UTC, receipt `reboot` done; the Pi booted at 19:04:00 and the
+  endpoint started at 19:04:27 UTC, `NRestarts=0`. With no run file after
+  the boot the owner applied the start rule itself (`MONITOR first
+  state=start`, limits the defaults, so `start=last` from the remembered
+  copy), the web service adopted that and wrote the run file at once
+  (`MONITOR changed state=applied seq=50`, the count carried on from the
+  remembered copy's 49). In force: `active=speakers`, `level_db=0.0`,
+  `trim_db=0.0`, no dim, no mute, `fold=full`, `gain_db=0.0`, which is
+  where the operator says the level was left. So "where it was" survives a
+  power cycle, on one reboot.
+- Start check `state=ok restarts=0` at 19:05:32 UTC. `usb16x16-statime`,
+  `usb16x16-web`, `usb-16x16` and `usb16x16-apply.path` active.
+  `/run/usb-aoip-monitor/state` and `/var/lib/usb-aoip-monitor/state` are
+  644, the web account's, 204 bytes each. There is still no
+  `monitor-limits` file: Level safety has not been changed, so the knob
+  maximum is 0 dB and the start rule the default.
+
+Not seen: any `DSP t=` cost line, because no host was sending when the
+session read (both outgoing taps idle), so `dsp_us_max` with the gains and
+the fourth tap is still unmeasured on the Pi; the `monitor-in` tap in the
+meter file, for the same reason; anything audible; which Control Room
+controls were tried; Level safety; the set switch (the preset has one
+set). At a level of 0.0 with nothing ramping the gain step is skipped, so
+a measurement taken now is the at-unity arm of the battery. Owed, on the
+operator's word: the full battery of the IMPLEMENTED entry's step 4, at
+unity and again off unity, with the Mac's gain for the preset's zero-run
+check (`USB16X16_HOST_GAIN`) taken first.
+
+**MEASURED 2026-11-18 19:19-19:45 UTC (session, on the operator's word):
+the battery's at-unity arm at 48 kHz passes on a monitor preset: four
+loaded 800-impulse runs at `daw_timeline` 528, 528, 528, 529 and the
+ten-minute soak on the eight looped channels, with `dsp_us_max` at most
+63 us. Not the whole battery: the off-unity arm and 96 kHz are owed, and
+nothing is ACCEPTED.** The operator said the outputs were safe to drive
+and left the choice of preset to the session. It ran on the preset the
+operator had applied, since applying another needs the page's login:
+`Immersive - one sub` (`dante-immersive-one-sub.dsp` 6a2c8012, 302
+sections, one speaker set of twelve outputs with the LFE as its sub),
+monitor level 0.0 dB, no dim, no mute, fold full, owner bc486911 on the
+start of 19:04:27 UTC, `prime_drop=28`, `rx_queue=96`. At 0.0 dB with
+nothing ramping the gain step is skipped by design, so this arm exercises
+the stage with the section, the control thread beside the loop and the
+fourth meter tap, not the multiply.
+
+From the Mac, `dante/measure-candidate.sh`, 32 frames,
+`USB16X16_OTHER_LOAD=0.1` on the impulse runs:
+
+| Run | Level, all 800 | `daw_timeline` | Spread | Discontinuities | Endpoint lines |
+|---|---|---|---|---|---|
+| `mon-unity-1` `20261118T191955Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-unity-2` `20261118T192331Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-unity-3` `20261118T192706Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-unity-4` `20261118T193041Z` | 377 | 529 | 0 | 0 / 0 | +0 |
+
+- Soak 600 s (`mon-unity-loop8`, `20261118T193428Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, so the preset's
+  zero-run reference was not needed; peak 0.0180 to 0.1000 across the
+  eight (the preset's own levels); discontinuities in 0 out 0; endpoint
+  xrun/lag/error lines +0. Channels 9 to 16 loaded, not judged.
+- The impulse on output 1 goes through the left speaker's high-pass and EQ
+  and still reads the point of record's 376 / 528; run 4 read one sample
+  more on its own open, as the phase 2 probe did (529 against 528).
+- Cost, from the owner's one-minute lines over the runs and the soak
+  (t=1080 to 2400 s): `dsp_us_max` 28.6 to 62.8, `dsp_us_mean` 23.5 to
+  23.6; `meter_us_max` 9.7 to 30.3, `meter_us_mean` 5.4 to 5.6 with four
+  taps (`monitor-in` is in the meter file). The budget is about 300 us of
+  each 1 ms wake. The mean is far under the 308-section `loaded` preset's
+  figures because most of this preset's sections are the fixed shape's
+  unity slots, which are skipped; it is this preset's cost, not a
+  worst case.
+- Owner counters at t=2400: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 out_holes=0/0 back_holes=0/0`,
+  `gap_us_max=1045`, `tx_depth=79..82`; `NRestarts=0`; start check
+  unchanged.
+
+Owed before ACCEPTED, each on the operator's word: the same four runs and
+soak with the monitor off unity (the knob moved from the page, which makes
+the gain step run on every block), a fold engaged for at least a probe,
+and the battery at 96 kHz with the eight-channel loop. The operator's own
+checks of the Control Room and Level safety have not been reported one by
+one.
+
+**MEASURED 2026-11-19 11:21-11:47 UTC (session, on the operator's word "I
+just set it to -12dB"): the battery's off-unity arm at 48 kHz passes on the
+same monitor preset: four loaded 800-impulse runs all at `daw_timeline`
+528 and the ten-minute soak on the eight looped channels, the gain step
+running on every block, `dsp_us_max` at most 77 us. With the at-unity arm
+of 2026-11-18 that is the battery at 48 kHz with the fold on full. A fold
+and 96 kHz are owed; nothing is ACCEPTED.** Read first over SSH: the
+owner's status `level_db=-12.0 gain_db=-12.0`, state 51 applied, 2
+applied and 0 refused since the start; the endpoint still on the start of
+2026-11-18 19:04:27 UTC (`NRestarts=0`, start check unchanged), preset
+`dante-immersive-one-sub.dsp` 6a2c8012, owner bc486911, fold full, no dim,
+no mute, no limits file.
+
+From the Mac, `dante/measure-candidate.sh`, 32 frames,
+`USB16X16_OTHER_LOAD=0.1` on the impulse runs:
+
+| Run | Level, all 800 | `daw_timeline` | Spread | Discontinuities | Endpoint lines |
+|---|---|---|---|---|---|
+| `mon-minus12-1` `20261119T112144Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-minus12-2` `20261119T112520Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-minus12-3` `20261119T112855Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+| `mon-minus12-4` `20261119T113230Z` | 376 | 528 | 0 | 0 / 0 | +0 |
+
+- Soak 600 s (`mon-minus12-loop8`, `20261119T113613Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 2, discontinuities in
+  0 out 0, endpoint xrun/lag/error lines +0. Channels 9 to 16 loaded, not
+  judged.
+- The level is what was asked for: the eight channels' peaks are 0.0045 to
+  0.0251 against 0.0180 to 0.1000 at unity, a factor of 0.251 on both
+  ends, which is -12.0 dB; the owner's own peaks say the same
+  (`out_peak` 838861 into the stage, `back_peak` 210712 returned, 0.2512).
+- Cost, from the owner's one-minute lines from 11:21 UTC (25 lines):
+  `dsp_us_max` 29.5 to 77.0, `dsp_us_mean` 24.1 to 24.3, against 23.5 to
+  23.6 at unity: the gains on twelve outputs cost about 0.7 us of each
+  1 ms block on the Pi. `meter_us_max` 4.9 to 50.7, `meter_us_mean` 3.8 to
+  5.6, four taps (`monitor-in` advancing with the others).
+- Owner counters at t=60120: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 out_holes=0/0 back_holes=0/0`,
+  `gap_us_max=1053`.
+
+Not measured: a ramp in progress (the level was set before the runs and
+not moved during them), a fold engaged, dim, mute or solo under load, a
+second speaker set, and anything at 96 kHz. Owed before ACCEPTED, each on
+the operator's word: a noise probe with a fold engaged, and the battery at
+96 kHz on the eight-channel loop.
+
+**MEASURED 2026-11-19 13:00 UTC (session, on the operator's word "I just
+set it to Stereo, it's still at -12"): the noise probe at 32 passes with
+the Stereo fold engaged at -12 dB on the same monitor preset: return from
+sample 528, no zero run, `dsp_us_max` 63.9 us. The battery at 96 kHz is
+owed; nothing is ACCEPTED.** Read first over SSH: the owner's status
+`fold=stereo level_db=-12.0 gain_db=-12.0`, state 52 applied (3 applied,
+0 refused, 2 publishes since the start); the endpoint still on the start
+of 2026-11-18 19:04:27 UTC (`NRestarts=0`), preset
+`dante-immersive-one-sub.dsp` 6a2c8012, owner bc486911, no dim, no mute,
+no limits file. Read again after the run: unchanged.
+
+- Noise probe (`mon-stereo-minus12`, `20261119T130020Z`,
+  `dante/measure-candidate.sh noise 32`): signal ready after 3 probes,
+  nonzero span 528..1245599, zeros inside the span 0.0%, zero runs of 4 or
+  more 0, discontinuities in 0 out 0, IOProc offset 152 (so 376 + 152),
+  endpoint xrun/lag/error lines +0.
+- The fold is in the returned signal: the captured peak on input 2 is
+  0.0972. The largest peak into the stage is 0.25 of full scale (the
+  owner's `out_peak` 2097152), so the gain alone returns at most 0.0628
+  on any output; 0.0972 is a sum of inputs. (The direct probes of
+  2026-11-18 read 0.1000.) What each folded output should carry was not
+  compared sample for sample on the Pi; that proof is the Mac's
+  `verify-fold.py`.
+- Cost, the owner's line at t=64560.1 inside the run: `dsp_us_max=63.9
+  dsp_us_mean=27.4`, against a mean of 24.1 to 24.3 at -12 dB on full: the
+  Stereo view costs about 3 us of each 1 ms block. `meter_us_max=21.6
+  meter_us_mean=4.0`. One line only: the probe is about 40 s.
+- Owner counters on the same line: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 out_holes=0/0 back_holes=0/0`.
+
+Not measured: the switch itself (the fold was selected before the run),
+the 5.1 and Mono folds on the Pi, a fold under the ten-minute soak, a
+ramp in progress, dim, mute or solo under load, a second speaker set, and
+anything at 96 kHz. Owed before ACCEPTED, on the operator's word: the
+battery at 96 kHz on the eight-channel loop.
+
+**MEASURED 2026-11-19 13:03-13:28 UTC (session, on the operator's word
+"it's at 96 now, Full at 0 dB"): the at-unity battery at 96 kHz on the
+eight-channel loop, same monitor preset: four loaded 800-impulse runs all
+at a median of `daw_timeline` 912 and the ten-minute soak PASS,
+`dsp_us_max` at most 89.8 us. FOUND in the same runs and not explained: 5
+to 7 impulses of each 800 read 668, one every 103 impulses. The point of
+record at 96 is 911 with spread 0, so this is not a clean match; a direct
+control at 96 is owed before it is judged. Nothing is ACCEPTED.** The rate
+was moved by the operator; the applier wrote owner.conf at 13:02:24 UTC
+(`RATE=96000`, `dante-immersive-one-sub@96000.dsp` 5792bc52, 302 biquads,
+shape 743b05e4) and the endpoint started at 13:02:25 (`prime_drop=96
+capture_drain=1 rx_queue=192`, owner bc486911), start check `state=ok
+rate=12018 restarts=0` at 13:03:30. Monitor: state 56 applied, level 0.0,
+fold full, no dim, no mute, no limits file; unchanged after the runs,
+`NRestarts=0`. The first run began 90 s after the start.
+
+From the Mac, `dante/measure-candidate.sh`, 32 frames,
+`USB16X16_OTHER_LOAD=0.1` on the impulse runs:
+
+| Run | Levels | Median `daw_timeline` | Spread | Discontinuities | Endpoint lines |
+|---|---|---|---|---|---|
+| `mon96-unity-1` `20261119T130355Z` | 676 x793, 668 x7 | 912 | 8 | 0 / 0 | +0 |
+| `mon96-unity-2` `20261119T130731Z` | 676 x795, 668 x5 | 912 | 8 | 0 / 0 | +0 |
+| `mon96-unity-3` `20261119T131106Z` | 676 x794, 668 x6 | 912 | 8 | 0 / 0 | +0 |
+| `mon96-unity-4` `20261119T131442Z` | 676 x793, 668 x7 | 912 | 8 | 0 / 0 | +0 |
+
+- Soak 600 s (`mon96-unity-loop8`, `20261119T131817Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peaks 0.0119 to
+  0.1000, discontinuities in 0 out 0, endpoint xrun/lag/error lines +0.
+  Channels 9 to 16 loaded, not judged.
+- The level: 676 + io_offset 236 = 912 on every run, one sample over the
+  911 (675 + 236) of the D=96 battery of 2026-11-01. The service read 912
+  to 913 in the first minutes after a move to 96 on that day; these runs
+  span 1.5 to 15 minutes after the move and all read 912.
+- The 668s: impulses 7, 110, 213, 316, 419, 677, 780 in run 1 and the
+  same spacing of 103 (or a multiple) in the others, which is 25.75 s
+  (impulses are 250 ms apart). 668 is 676 less the harness's peak search
+  radius of 8, so it says the peak was not found at 676 on that impulse,
+  not that the return moved by 8 samples; the soak and the runs show no
+  discontinuity and no zero run. Not seen at 48 on this preset (376 on
+  every impulse, both arms), and the D=96 battery of 2026-11-01 (direct,
+  owner c84e6a36 as a candidate) had spread 0. Not located: whether it
+  belongs to the preset's filters on output 1 at 96, to the monitor
+  owner, or to the day. The control that separates them is the same four
+  runs at 96 in direct.
+- Cost, the owner's 25 one-minute lines of this start: `dsp_us_max` 51.5
+  to 89.8, `dsp_us_mean` 45.7 to 46.1 (23.5 at 48: twice the frames in
+  each 1 ms block); `meter_us_max` at most 45.4, `meter_us_mean` 10.9 on
+  the last line.
+- Owner counters at t=1560: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 servo_rejected=0 out_holes=0/0
+  back_holes=0/0`, `gap_us_max=1084`, `tx_resyncs=0 rx_resyncs=0
+  net_errors=0`.
+
+Not measured at 96: the off-unity arm, a fold, a ramp in progress, dim,
+mute or solo under load. Owed before ACCEPTED, on the operator's word: the
+direct control at 96 (four loaded runs), then the off-unity arm at 96.
+
+**MEASURED 2026-11-19 18:24-18:40 UTC (session, on the operator's word
+"It's in direct"): the control at 96 kHz in direct reads the same as the
+monitor preset did: a median of `daw_timeline` 912 on all four loaded
+runs and 4 to 6 impulses of each 800 at 668, 103 impulses apart. So
+neither is the engine's or the monitor block's. FOUND with a capture
+dump: on those impulses the return really is 8 samples early, and back
+on the next. Not located. Nothing is ACCEPTED.** Direct was applied by
+the operator: owner.conf `RATE=96000` and no preset, endpoint start
+18:22:59 UTC (owner bc486911, `prime_drop=96 capture_drain=1
+rx_queue=192`), monitor `state=idle reason="no DSP preset"`, start check
+`state=ok rate=12019 restarts=0` at 18:24:04. `NRestarts=0` after.
+
+| Run | Levels | Median `daw_timeline` | Odd impulses (index) | Discontinuities |
+|---|---|---|---|---|
+| `direct96-control-1` `20261119T182407Z` | 676 x796, 668 x4 | 912 | 54, 312, 518, 621 | 0 / 0 |
+| `direct96-control-2` `20261119T182743Z` | 676 x795, 668 x5 | 912 | 67, 428, 531, 634, 737 | 0 / 0 |
+| `direct96-control-3` `20261119T183119Z` | 676 x794, 668 x6 | 912 | 29, 132, 390, 493, 596, 699 | 0 / 0 |
+| `direct96-control-4` `20261119T183455Z` | 676 x795, 668 x5 | 912 | 94, 197, 455, 558, 661 | 1 / 1 |
+
+- Endpoint xrun/lag/error lines +0 on every run. Run 4 has one input and
+  one output discontinuity on the Mac; the owner's `out_holes=2/72
+  back_holes=2/72` at t=900 are of this start (all sixteen channels zero
+  for 8+ frames arriving from the host, returned as sent). Other counters:
+  `capture_faults=0 playback_faults=0 tx_reprimes=0 detaches=0
+  servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1038`; every prime anchored (`tx_prime_dropped=96
+  tx_unanchored=0`, found 160-164, 182 or 235-246).
+- What a 668 is (`direct96-dump`, `20261119T183907Z`, 250 loaded
+  impulses with `USB16X16_DUMP`; 676 x248, 668 x2;
+  `direct96-dump-roundtrip-32f-20261119T183907Z.slip.txt`): the harness's
+  markers are 24000 apart without exception; the returned impulses are
+  24000 apart except 23992 then 24008 around impulses 13 and 219 (206
+  apart). The impulse is whole (0.250, zeros around it), 8 samples early,
+  and the next is back in place. On a silent channel that is what 8
+  frames gone before the impulse and 8 added after it look like, or a
+  block of 8 frames arriving ahead of the one before it; the harness
+  cannot tell which, and a soak's zero-run test sees neither.
+- Against the record: every earlier loaded 800-impulse run at 96 in the
+  evidence has no odd impulse (`d96r2loaded1..4` 2026-11-01 at 675,
+  `loop8-96-loaded1..4` 2026-10-29, `svc96loaded2` 2026-10-31), with the
+  same harness binary (built 2026-10-29). Those ran owner c84e6a36 or
+  earlier; today's ran bc486911 in direct. So it is the new owner, the
+  far loop, or the day, and this control does not separate them. At 48
+  on the same day: 376 on every impulse of eight runs.
+- The one sample (912 against 911) is in direct too.
+
+Owed before anything at 96 is judged: locate the 8-frame event, by an
+eth0 capture of both Dante flows over one occurrence
+(`usb16x16-dante-catch`, then the impulse read per flow), which says
+whether the Pi sends the impulse in place and whether the far loop
+returns it early; if the capture puts it on the Pi, the old owner
+c84e6a36 at 96 in direct is the next control. Then the off-unity arm at
+96.
+
+**FOUND 2026-11-19 19:08-19:12 UTC (session, on the operator's word "Yes,
+capture it"): the 8-sample event at 96 kHz is in what the far device
+returns, not in what the Pi sends. A second thing appeared during the
+capture and is not located: the round trip stepped 12 samples shorter
+(676 to 664) and was still there on the next open. Nothing is ACCEPTED;
+the unit is left in direct at 96 reading 900, not 912.** Capture:
+`sudo -n usb16x16-dante-catch start 169.254.248.189 both 10` at 19:08:36
+(the Audinate address on eth0), stopped at 19:09:44 (1625554 packets, 0
+dropped by the kernel), ring read on the Pi at nice 19 and then cleared.
+Across it `direct96-catch` (`20261119T190838Z`, 200 loaded impulses with
+`USB16X16_DUMP`). Reader `outputs/latency/direct96-catch-pcap_impulses.py`
+(every sample of 0.19 to 0.31 of full scale per flow and channel, as a
+Dante stamp), its output
+`direct96-catch-roundtrip-32f-20261119T190838Z.pcap-impulses.txt`.
+
+- The ring's last 23.4 s: four flows from the Pi (4 channels, 32 frames a
+  packet), two to it (8 channels, 16 frames), no stamp step off the
+  packet size on any. The Pi's flow to :14338, channel 1: 88 impulses,
+  every one 24000 after the last (stamp mod 24000 = 20420 on all 88).
+  The return flow to :53078, channel 1: 88 impulses, 20564 on 87 and
+  20556 on one, at 19:09:29.275 UTC, 23992 after the one before and the
+  next 24008 after it. That is impulse 144 of the run, which the Mac's
+  dump has at 668. So the far loop (Pulse, MADI, Ferrofish, Metric Halo)
+  hands that impulse back 8 samples early in its own stamps, and the
+  owner, Inferno's two directions and the gadget carry what they are
+  given. The loop is 144 samples in stamps on every other impulse.
+- The dump of the same run: impulses 41 and 144 at 668 (103 apart, the
+  periodic event), and from impulse 175 (about 19:09:37) to the end at
+  664, a step of 12. On the wire nothing moves at 175 in either
+  direction (20420 out and 20564 back before and after), and the Pi's
+  outgoing stamps are continuous, so the step is after the wire on the
+  return: Inferno's receive, the owner's return queue, the gadget's IN
+  or the Mac. The owner logged no fault, re-prime, resync or detach
+  (`tx_resyncs=0 rx_resyncs=0 net_errors=0`, `gap_us_max` 1035 to 1069).
+  It began with the capture running (tcpdump at nice 19, 1.6 million
+  packets into tmpfs); whether the capture caused it is not shown.
+- After the ring was cleared, `direct96-after-catch`
+  (`20261119T190952Z` to 19:11:29, 200 loaded impulses, a new open):
+  median 664, `daw_timeline` 900; the first 13 impulses at the search
+  floor of 656 (their true place not known), then 664 with impulses 83
+  and 186 at 656 (103 apart again). So the return path is 12 samples
+  shorter than at 18:24 and moved again inside this run.
+- The owner's servo integrators have moved through the afternoon in
+  direct at 96: `tx_i` / `rx_i` -14.85 / 14.88 at 13:28 UTC's start,
+  -18.73 / 18.36 at 18:38, -24.82 / 23.33 at 19:08, -28.00 / 25.65 at
+  19:10 (seed -14.85 ppm). Not read against earlier days; noted because
+  a clock that is moving on the far side would show here.
+
+Not located: the cause inside the far loop (which device, and why 25.75
+s), and the 12-sample step. Not tried: an endpoint restart, after which
+912 would be expected again; a restart of the far loop's devices, which
+is what cleared the far loop's zeros on 2026-10-29; the clock and lock
+state of the Pulse, the Ferrofish and the Metric Halo at 96. Everything
+measured at 96 today (the monitor preset's arm and the direct control)
+carries the far loop's event and is not a judgement of the owner either
+way; the 48 kHz arms are unaffected. Owed before ACCEPTED: the far loop
+clean at 96 (four loaded runs with no odd impulse, in direct), then the
+at-unity and off-unity arms at 96 on the monitor preset.
+
+**MEASURED 2026-11-19 19:15-19:20 UTC (session, on the operator's word
+"Yes, restart it"): an endpoint restart brings the round trip at 96 back
+from 900 to 912; the far loop's 8-sample event is still there. Nothing
+is ACCEPTED.** `sudo -n systemctl restart usb16x16-dante` at 19:15:09
+(the owner's last line before it: idle, `tx_i=-27.86 rx_i=25.60`); new
+start direct at 96, owner bc486911, `prime_drop=96 capture_drain=1
+rx_queue=192 seed_ppm=-14.85`, start check `state=ok rate=12019
+restarts=0` at 19:16:14, `NRestarts=0` (a commanded restart is not
+counted).
+
+- `direct96-restart-1` (`20261119T191616Z`, 32 frames, 800 loaded
+  impulses): 676 x795, 668 x5, median `daw_timeline` 912, discontinuities
+  0 / 0, endpoint lines +0. The five odd impulses are 166, 269, 372, 475,
+  578: 103 apart, the far loop's event of the entry above.
+- So the 12-sample step of 19:09 was state held by the running endpoint
+  (not reset by a USB open, reset by a restart), which points at
+  Inferno's receive side or the owner's network half and away from the
+  gadget and the Mac. What set it is still not shown; it is the one time
+  the capture ring has been run in `both` mode beside a harness run at
+  96 with this owner.
+- Owner at t=240 of the new start: `tx_i=-18.38 rx_i=18.05`,
+  `rx_depth=88..106`, no faults, re-primes or holes. The integrators
+  start again from the seed at each endpoint start, so their climb
+  through the earlier start (to -28 / 26 after 52 minutes) is a thing to
+  read on the next long run at 96, not yet a finding.
+
+State left: direct at 96, 912, the capture ring cleared. Still owed, in
+order: the far loop clean at 96 (the operator's devices: clock and lock
+on the Pulse, the Ferrofish and the Metric Halo, or a restart of them),
+shown by four loaded runs in direct with no odd impulse; then the
+at-unity and off-unity arms at 96 on the monitor preset. Separately: the
+12-sample step, by repeating the capture beside a run to see whether it
+comes with the capture.
+
+**MEASURED 2026-11-19 19:35-19:49 UTC (session, on the operator's word
+"it's back at 96 now"): a rate change to 48 and back to 96 did not clear
+the far loop's 8-sample event; it is more frequent after it, 9 to 13
+impulses of each 800 against 4 to 7 before. Nothing is ACCEPTED.** The
+operator moved the rate from the Mac; the arbiter ran at 19:29:43 (to
+48) and 19:34:01 (to 96), endpoint start 19:34:01 UTC in direct, owner
+bc486911, start check `state=ok rate=12020 restarts=0` at 19:35:06,
+`NRestarts=0`.
+
+| Run | Levels | Median `daw_timeline` | Discontinuities |
+|---|---|---|---|
+| `direct96-relock-1` `20261119T193507Z` | 675 x788, 667 x12 | 911 | 2 / 2 |
+| `direct96-relock-2` `20261119T193843Z` | 676 x787, 668 x13 | 912 | 0 / 0 |
+| `direct96-relock-3` `20261119T194218Z` | 676 x791, 668 x9 | 912 | 0 / 0 |
+| `direct96-relock-4` `20261119T194554Z` | 676 x787, 668 x13 | 912 | 0 / 0 |
+
+- Endpoint xrun/lag/error lines +0 on every run. The odd impulses still
+  include the chain 103 apart (run 4: 14, 117, 220, ..., 478, 581; run
+  1: 128, 231, 334) and now others between (run 2: 90, 128, 193, 259,
+  298, 348, 397, 451, 515, 554, 642, 657, 760), so there is more than
+  one period or the one is no longer regular.
+- Run 1 read 675 / 911, the point of record's figure, with two
+  discontinuities each way on the Mac; the owner counts `out_holes=2/106
+  back_holes=2/106` on this start (zeros arriving from the host,
+  returned as sent). Runs 2 to 4 read 676 / 912 on their own opens.
+- Owner at t=900: no faults, re-primes, detaches or resyncs,
+  `gap_us_max=1034`, `tx_i=-19.37 rx_i=19.01`.
+
+Not captured on the wire this time: that these are the far loop's is
+carried over from the capture of 19:09, where the same 8-sample shape
+was in the far device's return and not in the Pi's send. Still owed: the
+far loop clean at 96 (a restart of its devices, or their clock and lock
+state, the operator's), then the two arms at 96 on the monitor preset.
+
+**MEASURED 2026-11-19 19:55-20:00 UTC (session, on the operator's word:
+the Ferrofish's Dante chip rebooted from Dante Controller, remotely): the
+far loop's 8-sample event at 96 kHz is still there after it, 10 impulses
+of 800. Nothing is ACCEPTED.** The Pi saw the reboot: at 19:54:39 UTC
+Inferno logged both return flows timed out and the sixteen subscriptions
+to `FF-PULSE-16-DX` orphaned; the endpoint was not restarted
+(`NRestarts=0`, the start of 19:34:01, direct at 96) and the flows came
+back by themselves.
+
+- Noise probe (`direct96-pulsereboot`, `20261119T195542Z`): signal ready
+  after 3 probes, return from sample 912, no zero run, endpoint lines
+  +0. So the remade flows are whole.
+- `direct96-pulsereboot-1` (`20261119T195623Z`, 32 frames, 800 loaded
+  impulses): 676 x790, 668 x10, median `daw_timeline` 912,
+  discontinuities 0 / 0, endpoint lines +0. Odd impulses 73, 175, 176,
+  279, 382, 485, 489, 640, 743, 784: the chain 103 apart (176 to 485,
+  640 to 743) and others.
+- Owner at t=1500: no faults, re-primes or detaches; `tx_i=-22.56
+  rx_i=21.67`, up from -18.66 / 18.45 at t=1140, the same climb as the
+  earlier start's.
+
+So a restart of the Pulse's Dante side alone does not clear it. Not yet
+tried: the Metric Halo (the operator can restart it from MIOConsole3d,
+remotely), the Ferrofish itself and its MADI clocking (need the operator
+at the unit).
+
+**MEASURED 2026-11-19 20:13-20:17 UTC (session, on the operator's word:
+the Metric Halo rebooted from MIOConsole3d, remotely): the far loop's
+8-sample event at 96 kHz is still there after it, 6 impulses of 800.
+Nothing is ACCEPTED.** Endpoint unchanged: the start of 19:34:01 UTC,
+direct at 96, owner bc486911, `NRestarts=0`; Inferno logged nothing
+after 20:00 (the Metric Halo is behind the Pulse's MADI, not on Dante's
+return to the Pi).
+
+- Noise probe (`direct96-mhreboot`, `20261119T201300Z`): signal ready
+  after 3 probes, return from sample 912, no zero run, endpoint lines
+  +0.
+- `direct96-mhreboot-1` (`20261119T201341Z`, 32 frames, 800 loaded
+  impulses): 676 x794, 668 x6, median `daw_timeline` 912,
+  discontinuities 0 / 0, endpoint lines +0. Odd impulses 119, 222, 325,
+  428, 531, 789: the chain 103 apart and nothing else, as before the
+  rate change.
+- One owner counter moved: `playback_faults` 0 to 1 (`last_fault=-32`)
+  between the USBLINK lines of 20:13:46.4 (idle) and 20:13:48.4 (flow),
+  which is one of the harness's 8-impulse signal probes opening the
+  device before the main run, not inside the 800 impulses. No re-prime,
+  detach or capture fault with it. The first playback fault of the day
+  on this owner; one event, not explained, to be watched for at opens.
+
+Tried on the far loop without clearing it at 96: a rate change to 48 and
+back, the Pulse's Dante reboot, the Metric Halo's reboot. Left, and they
+need the operator at the units: the Ferrofish itself (power cycle), and
+the clock source and lock of the Ferrofish and the Metric Halo at 96
+over MADI. Not excluded by anything today: that the event is new in the
+far loop's settings since 2026-11-01 rather than a fault state.
+
+**MEASURED 2026-11-20 00:38-00:46 UTC (session, on the operator's word:
+the Ferrofish power cycled, receiving MADI clock at 96, the Dante
+network at 96): the far loop's 8-sample event at 96 kHz is gone after
+the Ferrofish's power cycle: two loaded 800-impulse runs in direct at
+675 on every impulse, `daw_timeline` 911, spread 0. Two runs, not the
+four owed: the third was cut off when the operator's Reaper session
+moved the rate to 48. Nothing is ACCEPTED.** The Pi saw the Ferrofish go
+at 00:37:11 UTC (both return flows timed out) and come back without an
+endpoint restart (the start of 2026-11-19 19:34:01 UTC, direct at 96,
+owner bc486911, `NRestarts=0`).
+
+- Noise probe (`direct96-ffpower`, `20261120T003823Z`): signal ready
+  after 3 probes, return from sample 910, no zero run, endpoint lines
+  +0.
+- `direct96-ffpower-1` (`20261120T003904Z`): 675 x800, 911, spread 0,
+  score 1.000, discontinuities 0 / 0, endpoint lines +0.
+- `direct96-ffpower-2` (`20261120T004248Z`): 675 x800, 911, spread 0,
+  score 1.000, discontinuities 0 / 0.
+- `direct96-ffpower-3` began 00:46:24; the arbiter moved the unit to 48
+  at 00:46:55 (Reaper opened a 48 kHz session on the Mac, as the rate
+  rules intend). The session killed the harness and the remaining runs
+  at once so no test signal played under the operator's work; run 3 has
+  an `-api` directory and no result, run 4 was not started.
+- Owner at t=18480 (after run 1): no capture fault, re-prime or detach,
+  `playback_faults=1` (the one of 20:13:47 UTC), `tx_i=-22.03
+  rx_i=21.06` six hours into the start, so the integrators settle near
+  there and the afternoon's climb was not a runaway.
+
+So, of the far loop's devices, the Ferrofish held the state: the rate
+change, its Dante chip's reboot and the Metric Halo's reboot left the
+event, its own power cycle removed it, and with it gone the level is the
+point of record's 911, not 912. Which is the 2026-10-29 pattern (zeros
+until the Ferrofish was restarted) in another form. What put the
+Ferrofish in that state is not known; today's first move to 96 came
+after a day at 48. A check worth making on any day's first run at 96:
+one loaded 800-impulse run in direct, and a Ferrofish power cycle if any
+impulse is 8 early.
+
+State left: direct at 48 (endpoint start 00:46:55 UTC), the operator
+working in Reaper; nothing is being measured. Still owed at 96, when the
+operator is done and moves the rate: two more clean loaded runs in
+direct to make four, then the at-unity and off-unity arms on the monitor
+preset (the at-unity arm of 13:03 UTC carried the far loop's event and
+is to be taken again). Separately: the 12-sample step seen during the
+capture of 19:09 UTC.
+
+**MEASURED 2026-11-20 01:24-01:31 UTC (session, on the operator's word
+"everything is back to 96k"): the other two loaded runs in direct at 96
+after the Ferrofish's power cycle: 676 on every impulse of the first,
+and one impulse of 800 at 668 in the second. So four runs since the
+power cycle carry one 8-early impulse in 3200, against 4 to 13 in every
+800 before it: nearly gone, not shown gone. FOUND beside it: the Pi's
+wlan0 no longer reaches the network. Nothing is ACCEPTED.** Between the
+two pairs the rate went to 48 and back twice (Reaper, then RX, on the
+Mac; arbiter runs at 00:46:55, 01:19:59, 01:21:14 and about 01:22 UTC);
+this start is 01:22:02 UTC, direct at 96, owner bc486911, start check
+`state=ok rate=12019 restarts=0` at 01:23:07, `NRestarts=0`.
+
+| Run | Levels | `daw_timeline` | Spread | Discontinuities |
+|---|---|---|---|---|
+| `direct96-ffpower-1` `20261120T003904Z` (earlier start) | 675 x800 | 911 | 0 | 0 / 0 |
+| `direct96-ffpower-2` `20261120T004248Z` (earlier start) | 675 x800 | 911 | 0 | 0 / 0 |
+| `direct96-ffpower-3` `20261120T012416Z` | 676 x800 | 912 | 0 | 0 / 0 |
+| `direct96-ffpower-4` `20261120T012751Z` | 676 x799, 668 x1 (impulse 480) | 912 | 8 | 0 / 0 |
+
+- Endpoint xrun/lag/error lines +0 on both. Owner at t=540: no faults,
+  re-primes, detaches, holes or resyncs, `tx_i=-15.66 rx_i=15.09`,
+  `gap_us_max=1060`.
+- 911 on the start of 2026-11-19 19:34 UTC and 912 on this one: the one
+  sample goes with the endpoint start, as the 2026-11-01 entries have it
+  (912 to 913 on some starts at 96), not with the far loop's event.
+- The single 668 was not captured on the wire; it has the event's size
+  and nothing else is known of it.
+- wlan0: from 01:21 UTC `192.168.1.201` does not answer the Mac (ssh
+  times out, ping lost) while the Mac reaches the router; on the Pi
+  NetworkManager shows wlan0 connected to its network with the address,
+  signal 60, and the Pi cannot ping 192.168.1.1. The keepalive unit is
+  active. Not touched. Its effects: `dante/measure-candidate.sh` reaches
+  the Pi at that address and refused two attempts (01:21:16 and
+  01:23:17, nothing measured; the first was wrongly put down to the rate
+  move at the time), so these two runs used a scratch copy of it with
+  the address and host key alias of eth0 and no other change
+  (`diff`: lines 35 and 65); and the page, which binds wlan0, cannot be
+  reached, so no preset can be applied until it is back.
+
+Owed at 96, in order: wlan0 back (or the page reached another way), then
+the at-unity and off-unity arms on the monitor preset, read with the far
+loop's event in mind: an odd impulse exactly 8 early with the wire and
+the owner clean is the Ferrofish's until shown otherwise. Separately:
+the 12-sample step of the capture; the wrapper's Wi-Fi address (CLAUDE.md
+already says SSH is on eth0 since 2026-10-30).
+
+**DONE 2026-11-20 01:52-01:56 UTC (session, on the operator's word "Yes,
+reconnect it"): the reconnect was refused, so wlan0 is as it was; the
+page is reachable from the Mac through an SSH forward over eth0
+instead.** `nmcli connection up` as the session's user: `Not authorized
+to control networking`; nothing changed. The Pi's state, read before and
+after: wlan0 connected with 192.168.1.201 and its default route, and the
+neighbour entries for the router (192.168.1.1) and the Mac
+(192.168.1.67) FAILED, so it is associated and frames do not pass. Not
+tried, and the operator's: a reboot of the Pi (the session may run
+`reboot` without a password, and has not), or a look at the access
+point.
+
+The page itself is up: on the Pi `http://192.168.1.201:8088/` answers
+401. From the Mac, `ssh -N -L 127.0.0.1:8088:192.168.1.201:8088` over
+eth0 (a process on the Mac, nothing on the Pi) makes it
+`http://localhost:8088`, where it answers 401 the same; the service's
+Origin check compares Origin with Host, which agree there. The forward
+lasts while that process runs and shares eth0 with the audio, so the
+page is not left open across a measurement.
+
+**MEASURED 2026-11-20 01:57-02:23 UTC (session, on the operator's word "I
+just loaded that preset"): the at-unity arm at 96 kHz on the monitor
+preset, taken again with the far loop nearly clean, does NOT hold one
+level: two of the four loaded runs read `daw_timeline` 912 and two read
+1007 / 1008, one block of 96 frames later, and the soak's open was on
+the later one. The soak itself passes and the cost is in budget. FOUND:
+the level follows the phase the outgoing prime finds, which it did not
+on this preset in the morning or in direct. Not ACCEPTED, and at 96 this
+is a failure of the battery until explained.** Preset applied by the
+operator through the forwarded page: owner.conf written 01:56 UTC,
+`dante-immersive-one-sub@96000.dsp` 5792bc52, endpoint start 01:56:24
+(owner bc486911, `prime_drop=96 capture_drain=1 rx_queue=192`), start
+check `state=ok rate=12027 restarts=0`, monitor state 56 applied, level
+0.0, fold full. The page's forward was closed for the runs. The wrapper
+was the eth0 scratch copy (wlan0 still down).
+
+| Run | Levels | `daw_timeline` | Prime of that open (`tx_prime_found`) |
+|---|---|---|---|
+| `mon96b-unity-1` `20261120T015747Z` | 676 x798, 668 x2 | 912 | 170 |
+| `mon96b-unity-2` `20261120T020124Z` | 771 x798, 763 x2 | 1007 | 252 |
+| `mon96b-unity-3` `20261120T020459Z` | 676 x799, 668 x1 | 912 | 171 |
+| `mon96b-unity-4` `20261120T020835Z` | 772 x800 | 1008 | 252 |
+
+- Discontinuities 0 / 0 and endpoint xrun/lag/error lines +0 on all
+  four. Every prime `tx_prime_dropped=96 tx_unanchored=0`.
+- Soak 600 s (`mon96b-unity-loop8`, `20261120T021210Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peaks 0.0119 to
+  0.1000, discontinuities 0 / 0, endpoint lines +0. Its open found 252.
+  Channels 9 to 16 loaded, not judged.
+- The two levels are 95 to 96 apart, the prime's block. The 20 primes of
+  this start found 160 to 180 or 241 to 252, the two phases the 96 kHz
+  point of record has ("found 161 or 245, both phases at the same
+  level", 2026-11-01). Here the opens that found 170 / 171 read 676 and
+  the three that found 252 read 771 / 772 (the soak's level is not
+  measured). The morning's arm on the same preset and owner (13:03 UTC)
+  found 166 to 169 or 249 to 251 on its 20 primes and read 676 on all
+  four runs, including two opens at 251; the direct runs of the day
+  found 160 to 164 or 235 to 246 and read 675 / 676 throughout. So with
+  the preset loaded the prime finds 5 to 7 frames more than in direct,
+  and at 252 the session lands a block later where 251 did not.
+  `main.cpp`'s prime already knows this race one frame from the lead
+  (`wait_from = lead - 1` under `--capture-drain`: "a prime at 127 put
+  the session one block later", 2026-10-30, at 48 where the lead is
+  128); at 96 the lead is 256 and 252 is four frames from it. Session's
+  reading, not shown: the same race, reached at 96 because a loaded
+  preset moves the idle loop's phase toward the lead. Not known: why a
+  preset moves it (no audio runs through the stage while idle), whether
+  owner c84e6a36 with a preset at 96 did the same (no record of its
+  primes with a preset at 96 was looked for), and whether 48 has the
+  same margin (both 48 kHz arms read 528 at every open).
+- The far loop's event: 5 impulses of 3200 eight samples early (386 and
+  795; 456 and 527; 647; none), the Ferrofish's, at the rate of the
+  runs after its power cycle.
+- Cost, 25 one-minute lines: `dsp_us_max` 85.1 to 145.9, `dsp_us_mean`
+  51.7 to 55.3 (the morning's arm: 51.5 to 89.8 and 45.7 to 46.1, same
+  artifact; the difference is not explained); `meter_us_max` 35.6 to
+  88.2. Against about 300 us of each 1 ms block.
+- Owner at t=1560: no faults, re-primes, detaches, holes or resyncs,
+  `gap_us_max=1119`, `tx_i=-14.82 rx_i=15.07`.
+
+So at 96 the monitor preset's round trip is not the same at every open,
+which is the property the prime drop was accepted for. This is on the
+audio path's timing and blocks acceptance at 96; the 48 kHz arms stand.
+The off-unity arm at 96 was not run: it would measure the same two
+levels. Next, none of it on the Pi's installed set: read the prime's
+wait window against the grid at 96 with a preset (the owner's
+`--open-phase` / PRIMETRACE lines on a candidate run, or
+`owner/monitor_sim` does not cover it), decide whether the fix is the
+wait window per rate or the idle loop's phase with a stage loaded, and
+check the old owner with a preset at 96 so the new owner is charged only
+with what it changed. State left: the monitor preset at 96, Full, 0 dB;
+the page forwarded to the Mac's localhost:8088 again; wlan0 down.
+
+**FOUND 2026-11-20 (session, analysis on the Mac from the day's logs and
+`dante/owner/main.cpp`; the Pi only read): why a preset at 96 kHz puts
+some opens one block later. Two parts. Part 1 is shown by the numbers:
+the idle grid's phase inherits the last flowing wake's service time, so
+the stage's ~50 us moves every prime 5 to 6 frames toward the lead.
+Part 2 is the session's reading of the code and fits every open of the
+day, but is not yet shown by a trace: the round trip is the same at
+every open only while one tick sets both the outgoing pointer and the
+return queue the host first pulls from; when a USB frame boundary falls
+inside that tick's own work the two come from ticks 1 ms apart and the
+round trip is 96 frames longer. Nothing built, nothing changed.**
+Table: `outputs/latency/prime-phase-20261120-join.txt` (made by
+`prime-phase-20261120-join.py`): each open of 2026-11-18 to 11-20 (125
+at 96 kHz), the owner's `tx_prime_found` joined by time with the lag the
+Mac measured on that open (the main runs and their 8-impulse readiness
+probes).
+
+- The data. At 96 in direct: found 160 to 165 or 243 to 248 (a few
+  between), lag 675 to 677 on every one, and one open at 252, lag 676.
+  At 96 with the preset: 166 to 171 or 249 to 251, lag 676 / 677 on
+  every one (23 opens, six of them at 251), and two opens at 252, lag
+  771 and 772 (a third 252 was the soak's, not measured). At 48 with the
+  preset: 80 to 103 against a lead of 128, lag 376 / 377.
+- Part 1. While a host sends, the loop wakes on the gadget's capture
+  (ppoll); when the host stops, the next wakes are ppoll timeouts of
+  `kTickNs` counted from the call, which is made after the wake's work,
+  and the idle grid (`next += kTickNs`) carries on from there. So the
+  grid sits later against the host's frame boundaries by the last
+  flowing wake's work, and with a preset that includes one pass of the
+  stage: 46 us in the morning, 53 in the evening (`dsp_us_mean`), which
+  is 4.4 and 5.1 frames at 96 kHz, and the primes found 5 to 6 more than
+  in direct, one more in the evening than the morning (252 against 251).
+  At 48 the stage is 24 us, one frame.
+- Part 2. Idle, each tick writes the return queue to its target and, at
+  the end, fills the outgoing pointer to the lead; the prime (drop 96,
+  the whole block) commits the host's third block at that pointer. In
+  host sample counts the outgoing share is then `found` (160 + 96 x the
+  tick's phase after the block boundary) and the return share is a
+  constant less 96 x the same phase, because the host's first IN pull
+  takes the queue as that tick wrote it: the phase cancels, which is why
+  both phases read one level (2026-11-01). It cancels only if the tick
+  that filled the pointer is the tick whose queue the host pulled.
+  `found` near the lead means the next boundary came within the tick's
+  own work (252 is the tick's work, about 40 us, and no more): if the
+  host's pull at that boundary came before `service_rx`'s write it took
+  the queue of the tick before, 96 frames older, while the pointer is
+  this tick's. Hence 252: once right (direct), twice a block late
+  (preset). The existing `wait_from = lead - 1` is the same edge, met at
+  48 on 2026-10-30. Depths cannot show it: `tx_mean` and `rx_mean` are
+  the same on the good and the late opens, the servo holds both, and the
+  offset is in which frames, not how many.
+- What this says about the builds. The edge is in c84e6a36 and before:
+  the prime and the loop's wait are unchanged in bc486911, and any open
+  after a long idle can meet it in direct, since the grid drifts against
+  the host's frames (the scattered 175 to 238). No record was found of
+  the old owner's primes with a preset at 96 after the drop of 96; the
+  one before it (2026-11-01 01:31 UTC, drop 48, `dante-rate-check@96000`)
+  read 1039, then 959 and 960, put down then to the settle after a rate
+  move. The Pi's journal starts 2026-11-05 and has no 96 kHz start
+  before 2026-11-18. So the monitor block is not shown to have added
+  this; a heavier stage at 96 exposes it, and `Immersive - one sub` at
+  302 sections is that.
+- Proposed, for the operator to choose; each is the audio path's timing,
+  so a new owner build and the battery at 48 and 96:
+  1. The grid stops inheriting the wake's work: the timeout in the
+     flowing branch counts from the wake's start (`kTickNs` less the
+     time already spent). A few lines. Presets then prime where direct
+     does (244 to 246 at 96), ten frames from the lead. Removes the
+     systematic hit, not the edge.
+  2. The edge itself: when the prime finds the depth within one wake's
+     work of the lead (a margin in time, so it scales with the rate,
+     replacing the fixed `lead - 1`), the owner cannot know which tick's
+     queue the host took, so it makes both sides this wake's: wait one
+     block on the outgoing side (as now) and set the return queue to its
+     target again in the same wake. One IN discontinuity about a
+     millisecond into those opens, and only those.
+  1 alone is the minimal change and is what the 96 kHz arm needs; 2 is
+  what makes "the same at every open" true after any idle.
+- To show part 2 before building on it: a candidate run of the present
+  owner with `--impulse-trace --open-phase` at 96 with the preset
+  (through `usb16x16-dante-candidate`, the service stopped, the
+  operator's word), opens repeated until one finds 252: the IMPULSE
+  line's `w - k` (the owner's share) should be 96 more on the late open
+  and the PRIMETRACE should show the boundary inside the tick.
+
+**IMPLEMENTED 2026-11-20 (session, on the operator's word "Build fix
+1"): the owner's `--idle-phase` option as a patch,
+`dante/owner/idle-phase.patch`; compiled under GCC, not built or run on
+the Pi, nothing installed. CORRECTION to the FOUND entry above: fix 1
+does not put a preset's primes "ten frames from the lead".** The tree's
+`dante/owner/main.cpp` is unchanged (8c9bf80e, the source of installed
+owner bc486911, pinned in `install/dev-unit/owner-monitor.sha256`); the
+patch applied to it gives 4d885b76.
+
+- What it does. `--idle-phase US` (0 to 999, off by default): the wake a
+  host block arrives on is remembered, and the grid the loop falls back
+  to ticks US microseconds after that phase (`idle_grid_next`, with
+  compile-time checks of its arithmetic). Without the option every
+  decision is as in bc486911: the one changed line computes the same
+  `next` from one clock reading instead of two. The START line gains
+  `idle_phase_us=`. The prime, the wait, the servos, the stage and the
+  return direction are not touched.
+- Checked on the Mac: the patch applies to the tree's file and
+  reproduces the candidate source; in debian:trixie arm64, g++ 14.2,
+  the build line of `build-owner-monitor.sh` with `-Wall -Wextra
+  -Wpedantic -Werror` compiles it; `--help` lists the option;
+  `--idle-phase 1000` and a non-number are refused (exit 2);
+  `--no-usb ... --idle-phase 40` prints `idle_phase_us=40`.
+  `install/dev-unit/test-owner-monitor.sh` passes (the tree is the
+  installed set's). Not checked, and cannot be off the Pi: any timing.
+- The correction. The host starts a session on any 125 us microframe
+  (the day's primes at 96 sit 12 frames apart: 160 to 165, 175, 182 to
+  188, 195, 201, 208 to 210, 222, 233 to 238, 243 to 248), and the
+  dangerous stretch is a frame boundary within the tick's own work,
+  about 40 us after the tick starts. So whatever the phase, the room is
+  125 us less the tick's work, shared between the two sides: about 40 us
+  each at the best choice. Direct today has about 25 us on the near side
+  (found 160 to 165) and 60 on the far side (243 to 248); a preset at 96
+  has 75 and under 10, which is the failure. `--idle-phase 40` aims at
+  40 and 45 (found about 164 and 248) for direct and presets alike. That
+  removes the preset's systematic late opens and leaves a margin thinner
+  than "ten frames" on both sides, held only while the Pi's clock and
+  the Mac's frames stay within it between sessions. Fix 2 (both sides
+  taken from one wake when the prime is near the lead) is what closes
+  it, and is the more needed for this.
+- To test on the Pi, on the operator's word: build the candidate there
+  as `usb16x16-dante-owner-idlephase` (patch header), and hand-run it
+  through `usb16x16-dante-candidate` with the service stopped, at 96
+  with `dante-immersive-one-sub@96000.dsp`: (a) the control, the same
+  binary without the option, opens repeated until one finds 252 and
+  reads a block late, so the failure is reproduced on this binary; (b)
+  `--idle-phase 40`, 40 or more opens: `tx_prime_found` at about 164 and
+  248, no open a block late; (c) then 20 and 60, to see both edges where
+  the arithmetic puts them. Each open is one 100-impulse run. If (b)
+  holds, the transport key and the start wrapper's pass-through are the
+  next change, then the battery at 48 and 96.
+
+**DONE 2026-11-20 11:29 UTC (session, on the operator's word "copy and
+build"): the `--idle-phase` candidate built on the Pi, unprivileged:
+`usb16x16-dante-owner-idlephase`
+bb3cd6ca413ad4b498d42f479a15db7b42ff6768c2eb2c587b4e4cc5572c0ff4 in
+`~/usb-16x16-work/owner-idlephase/out/`. Not run, nothing installed.**
+Sources copied over eth0 (the owner's headers and `main.cpp` 8c9bf80e,
+the patch, `dsp-core/include`, `bridge_core.cpp`), the patch applied on
+the Pi (4d885b76, as on the Mac), g++ 14.2.0-19, the build line of the
+patch's header at nice 19 with the service running idle; `--help` lists
+the option. The installed owner is still bc486911, the endpoint on its
+start of 01:56:24 UTC, `NRestarts=0`.
+
+**FOUND 2026-11-20 11:30 UTC (session, the Pi only read): why wlan0
+stopped passing traffic. It roamed onto the access point's 5 GHz radio
+on 2026-11-19 at 23:06 UTC after the access point asked it to, and that
+association went dead some time between 00:46 and 01:21 UTC without
+either end's log noticing. Not fixed.**
+- wpa_supplicant: 23:01:15 UTC associated with [the 2.4 GHz radio] (2412
+  MHz); 23:02:08 `WNM: Preferred List Available` (a BSS transition
+  request, the mesh steering it; the kernel logs `Unknown Frame:
+  category 0xa, action 0x8` for the same frame); 23:06:20 associated
+  with [the 5 GHz radio] on 5500 MHz (channel 100, a DFS channel), key
+  negotiation completed, DHCP gave 192.168.1.201 again at 23:06:21.
+  Nothing after that from wpa_supplicant, NetworkManager or brcmfmac
+  until the session's refused `nmcli` at 01:52.
+- It worked on that radio for a while: the measurement wrapper reached
+  the Pi at 192.168.1.201 for the runs of 00:38 and 00:42 UTC and could
+  not at 01:21.
+- Now: `iw` says connected to that BSSID, -62 dBm, tx 325 Mbit/s, rx 6
+  Mbit/s (only beacons and group frames arrive), power save off; the
+  neighbour entries for the router and the Mac are FAILED; four pings to
+  the router move 12 packets out and nothing addressed to the Pi back;
+  multicast still arrives. The Mac (192.168.1.58 wired, the router
+  reachable) holds the Pi's MAC and gets no answer. So the Pi believes
+  it is associated and the access point is not passing its unicast
+  frames either way: a station the mesh has dropped or re-keyed without
+  the BCM4345's firmware (7.45.265) seeing it.
+  `usb16x16-wlan-keepalive` was active throughout and did not prevent
+  it; the Mac's address in it is one of those that fail.
+- The session cannot re-associate it: NetworkManager refuses the user,
+  and nothing in the sudoers rules covers it. What clears it: a new
+  association (root: `nmcli connection up`, or `wpa_cli reassociate`),
+  or a reboot (the session may run `reboot` without a password; not
+  done). What would stop it recurring is the operator's, with sudo: keep
+  wlan0 off the steered 5 GHz radio (the connection's band set to 2.4
+  GHz, or its BSSID pinned to [the 2.4 GHz radio], in the netplan file the
+  connection is generated from), and, if sessions are to recover it
+  themselves, a rule that lets them bring that one connection up.
+
+**DONE 2026-11-20 11:31-11:34 UTC (session, on the operator's word "Yes,
+reboot it"): the Pi rebooted; wlan0 passes traffic again and everything
+came back as it was.** `sudo -n reboot` at 11:31:50, up at 11:32:04,
+system `running`, no failed unit; the gadget, Statime, the endpoint, the
+web service and the keepalive active.
+- Wi-Fi: associated at 11:32:19, again with [the 5 GHz radio] on 5500
+  MHz; the Pi pings the router, the Mac pings 192.168.1.201, the page
+  answers there (401) and SSH over wlan0 works. It is on the same 5 GHz
+  radio that went dead yesterday, so the cause is not removed: the
+  operator's change to keep wlan0 off it is still open.
+- Audio: owner.conf unchanged (`RATE=96000`,
+  `dante-immersive-one-sub@96000.dsp` 5792bc52), owner bc486911,
+  `DSP loaded ... biquads=302`, start check `state=ok rate=12020
+  restarts=0` at 11:33:34; the Mac at 96000.
+- The monitor's start rule across this boot: `MONITOR first
+  state=start`, then state 57 applied by the web service, level 0.0 dB,
+  fold full, no dim or mute (rule `last`, no limits file; the level
+  before the reboot was 0.0, so `last` and the default are not told
+  apart by this one).
+- The candidate `usb16x16-dante-owner-idlephase` is still in
+  `~/usb-16x16-work/owner-idlephase/out/`. The Mac's forward of the page
+  was closed before the reboot and is not needed now.
+
+**MEASURED 2026-11-20 12:26-13:12 UTC (session, on the operator's word
+"Done, test it"): the `--idle-phase` candidate bb3cd6ca hand-run at 96
+kHz with the monitor preset. The late open is reproduced on demand and
+is set by the idle grid's phase against the host's frames: at phase 0
+and 110 almost every open on the affected side reads one block late
+(772), at 20 a few, at 40, 60 and 90 none. The option does what it was
+written to do. Part 2 of the FOUND entry is confirmed in substance and
+corrected in detail: `tx_prime_found` does not tell a late open from a
+good one. Nothing installed; the service was stopped for 46 minutes and
+is restored.** Service stopped 12:26:14, candidate started through
+`usb16x16-dante-candidate` with the service's 96 kHz arguments (the
+installed plugin c6b012ae and config; `--prime-drop 96 --capture-drain`,
+`dante-immersive-one-sub@96000.dsp`, meters and the monitor's status
+written to `/dev/shm` because the service's runtime directory goes with
+it; no `--dsp-live-file`, no `--rate-request-file`), a fresh start per
+arm, opens begun 60 s after each. An open is the wrapper's readiness
+probe: 8 impulses at 32 frames, 1 s apart, here with 0.1 on the other
+channels except the first control. Evidence
+`outputs/latency/idlephase-20261120/` (`opens.sh`, `cand.sh`, one
+`opens-<arm>.txt` and `owner-<arm>.txt` per arm, each open's report).
+
+| Arm | Opens | At 675-678 | A block late (772-774) | Primes found |
+|---|---|---|---|---|
+| control, no option, unloaded | 60 | 60 | 0 | 166-167, 248-249 |
+| control, no option, loaded | 60 | 60 | 0 | 166, 248-251 |
+| `--idle-phase 0` | 50 | 4 | 45, and one at 737 | 253-254 on the late ones |
+| `--idle-phase 20` | 50 | 46 | 4 | 159-160, 243-244; 253-254 on the late ones |
+| `--idle-phase 40` | 60 | 60 | 0 | 160-164, 244-248 |
+| `--idle-phase 60` | 80 | 79 | 0 (one at 640, below) | 162-164, 246-248 |
+| `--idle-phase 90` | 60 | 60 | 0 | 167-168, 251-253 |
+| `--idle-phase 110` | 50 | 27 | 23 | 168-169 good; 252-253 late (23 of 24) |
+
+- What it shows. The host's sessions fall on two phases a microframe
+  apart, alternating open by open. A tick at the phase the last block
+  arrived on (0) is too early for the next session on the same phase,
+  and one 110 us after it is too late for the session a microframe on:
+  those opens read 772. Between them is a window from above 20 to below
+  about 100 us, and the installed behaviour sits near both ends of it:
+  direct near 20 to 30 (found 160 to 165), a preset near 70 to 90 (found
+  249 to 252). So the point of record's "same at every open" holds only
+  inside that window, in direct as with a preset, and last night's two
+  late opens were the preset's end of it.
+- The correction. At 90 the prime found 252 or 253 on 22 opens and all
+  read 676; at 110 it found 252 or 253 on 24 and 23 read 772. `found`
+  stops at about 253 once the boundary is inside the tick's work, so it
+  cannot say which side of the edge an open fell. A fix that waits or
+  re-primes "when the prime is near the lead" (proposal 2 as written)
+  would act on good opens too; it needs a better sign than `found`, or
+  to act always. The control did not reproduce the failure in 120
+  opens: its stage time was 45.6 us against last night's 53.
+- Which value. 40 and 60 are both clean (140 opens). 60 is the middle of
+  the measured window and the session's choice for the battery; 40 is
+  20 us from an arm that failed 4 in 50.
+- Other things seen. The first open of the phase-60 arm, 65 s after that
+  start, read 640 with two levels (632, 640): one open, not explained,
+  and no other arm's first open did it. One prime was unanchored (found
+  143, 678) three opens after a playback fault (`last_fault=-32`); a
+  playback fault was counted once in four of the eight starts, each at
+  an open, as on the installed owner on 2026-11-19 20:13 UTC. Opens a
+  second apart are harder on the gadget than use is, and neither is the
+  option's doing (the control has one), but both are owed a look.
+- Restored: candidate stopped, `systemctl start usb16x16-dante` at
+  13:11:57, owner bc486911, the preset at 96, start check `state=ok
+  rate=12020 restarts=0`, monitor 0.0 dB full. On it: noise probe
+  (`after-idlephase`, `20261120T131357Z`) clean from sample 912, and 100
+  loaded impulses 676 x100, `daw_timeline` 912.
+
+Next, each on the operator's word: the option into the service (a
+transport key `IDLE_PHASE` and the start wrapper's pass-through, the
+owner as a new pinned build with its installer and rollback), then the
+battery at 48 and 96 with it; whether 48 kHz and 44.1 want the same
+value (a microframe is 125 us at every rate, so probably, not measured).
+
+**FOUND 2026-11-20 13:13 UTC (session; the Pi only read): wlan0 is dead
+again 48 minutes after the operator set it to 2.4 GHz, and the cause is
+now visible: the access point keeps asking the Pi to move and the Pi's
+driver cannot answer.** The operator's `nmcli connection modify ...
+802-11-wireless.band bg` and `connection up` at 12:25:36 UTC took:
+band `bg`, the netplan file rewritten, associated with [the 2.4 GHz radio]
+on 2412 MHz, traffic passing at 12:26. From 13:04:20 wpa_supplicant logs
+`WNM: Preferred List Available` every 20 to 120 s (twelve by 13:11:35),
+each with the kernel's `brcmf_p2p_send_action_frame: Unknown Frame:
+category 0xa, action 0x8`, which is the driver failing to send the BSS
+transition response. By 13:13 the Pi, still associated at -49 dBm,
+cannot reach the router and the Mac cannot reach it. Yesterday's
+sequence was the same request followed by a move to 5 GHz and silence
+later. So the mesh steers this client, gets no answer, and stops
+passing its traffic; the band setting stops the move, not the steering.
+What would end it, none of it the session's to do: band steering off
+for this client or this network at the access point (or separate names
+for the two bands); or the Pi not offering BSS transition at all
+(wpa_supplicant's `disable_btm=1`, which NetworkManager does not expose
+and would need a supplicant config). A reboot or a root
+`nmcli connection up` brings it back for a while. Because of it
+`dante/measure-candidate.sh` now reaches the Pi over eth0, where
+CLAUDE.md has had SSH since 2026-10-30 (`USB16X16_PI` overrides); the
+page still binds wlan0 and is reached from the Mac by an SSH forward
+(`ssh -N -L 127.0.0.1:8088:192.168.1.201:8088` over eth0) while wlan0
+is down.
+
+**IMPLEMENTED 2026-11-20 (session, on the operator's word "Yes, build
+it"; written by an Opus 5.5 subagent, the diff read and every test run
+again by the session): the service form of the idle-phase fix, phase 60.
+On the Mac only; nothing staged to the Pi, nothing installed.**
+- The owner is the tree's sources with `dante/owner/idle-phase.patch`
+  applied at build time (`main.cpp` 8c9bf80e -> 4d885b76, the full hash
+  pinned in the build script); the tree's `main.cpp` is unchanged, so
+  the installed owner-monitor set's pins stay true. `OWNER_NEW` is
+  bb3cd6ca, the binary built on the Pi and measured today; the bundle's
+  build must reproduce it or the installer refuses (the hand build's
+  output name differed; whether the hash depends on it is not shown).
+- Start wrapper `dante/service/usb16x16-dante-start-transport`, df6a1b0b
+  -> 203c6fa5: transport key `IDLE_PHASE` (0 to 999 us, `IDLE_PHASE_<rate>`
+  like the others, an empty per-rate value turns it off), passed as
+  `--idle-phase N` after `--capture-drain`. Without the key the old and
+  new wrappers print the same command line in 40 cases (every transport
+  file at no rate, 44.1, 48, 88.2, 96), so the from-scratch installer,
+  which installs this wrapper with `transport-rate882.conf` and the
+  point-of-record owner, is unchanged in effect; `install/test-render.sh`'s
+  pin for the wrapper is moved to 203c6fa5 on purpose, with a note that
+  the Pi runs df6a1b0b until this is installed.
+- `dante/service/transport-idlephase.conf` (6818176f):
+  `transport-rate882.conf` (add1bc21) plus `IDLE_PHASE=60`, one value for
+  every rate.
+- `install/dev-unit/stage-owner-idlephase.sh`, `build-owner-idlephase.sh`,
+  `install-owner-idlephase.sh install|rollback|status`,
+  `owner-idlephase.sha256` (16 files, list e3ef729e),
+  `test-owner-idlephase.sh`. The installer swaps the three files together
+  or not at all (all old: install; all new: already installed; a mix:
+  refused), keeps `*.idlephase-previous`, stops and starts
+  `usb16x16-dante.service` and prints the START line's `idle_phase_us=`.
+  It goes on after `install-owner-monitor.sh`; its rollback comes before
+  that one's, whose install, status and rollback expect df6a1b0b. Kept
+  from that installer: sudo, the candidate launcher running, a rate
+  change or apply in progress, an empty pin, the bundle list, the built
+  binary's hash. Dropped: the runner (not swapped: `bridge_core.cpp` is
+  unchanged, 46f36659 stays) and the rollback refusal for a preset with a
+  monitor section (bc486911 loads one).
+- `install/dev-unit/test-owner-monitor.sh` now takes the wrapper df6a1b0b
+  from the tag `layout-2026-11-01` (as `test-access.sh` does) and skips
+  without the tag; `install-owner-monitor.sh` and its list are untouched.
+- CI: a step applies the patch to a copy and compiles it with the strict
+  flags (not run on the Mac: no ALSA; the same source compiled in a
+  container and on the Pi today), and `test-owner-idlephase.sh` runs in
+  `install-render`.
+- Run by the session on the final tree, all passing:
+  `test-dante-start.sh` (both modes), `test-dante-startcheck.sh`,
+  `test-owner-idlephase.sh`, `test-owner-monitor.sh`, `test-access.sh`,
+  `install/test-render.sh`, `node --test web-ui/*.test.mjs` (221),
+  `node --test dsp-compiler/*.test.mjs` (84), the web-control Python
+  suite (335).
+
+Owed, each on the operator's word: stage the bundle, copy it, build on
+the Pi (the hash against bb3cd6ca), `status`, the operator's
+`sudo ./install-owner-idlephase.sh install`; then the battery at 48 and
+at 96 on the monitor preset (at unity and off unity), with opens
+repeated at 96. Not covered by this fix and still open: an open after a
+long idle, where the grid has drifted against the host's frames
+(proposal 2, which needs a better sign than `tx_prime_found`); the
+playback fault seen at some opens; the 640 on one first open; wlan0.
+
+**DONE 2026-11-20 13:45 UTC (session, on the operator's word "Stage,
+copy, build"): the owner-idlephase bundle staged from 69eb5b8, copied to
+the Pi and built there; the build reproduces the pin. Nothing
+installed.** `stage-owner-idlephase.sh` (16 files, list e3ef729e), the
+bundle copied over eth0 to `~/usb-16x16-work/usb-aoip-owner-idlephase/`,
+`./build-owner-idlephase.sh` unprivileged at nice 19 with the endpoint
+running idle:
+
+    usb16x16-dante-owner  bb3cd6ca413ad4b498d42f479a15db7b42ff6768c2eb2c587b4e4cc5572c0ff4
+    patched main.cpp      4d885b76578ec6e07b6de9464ea167ac6cb2784a870f956163ea3b8b8b5fbe12
+    source list           e3ef729e8e417414bb24b27e6137f3619713e7cdf142b42ea0222b545f45fbb5
+    compiler              g++ (Debian 14.2.0-19) 14.2.0
+    built                 2026-11-20T13:45:37Z
+
+That is `OWNER_NEW`, the binary measured this morning: the hash does not
+depend on the output's name or the directory. `./install-owner-idlephase.sh
+status` (read-only): the owner, the start wrapper and transport.conf all
+`old` (bc486911, df6a1b0b, add1bc21), nothing kept, the bundle's three
+bb3cd6ca, 203c6fa5, 6818176f; the endpoint active, the candidate
+launcher, the rate unit and the applier inactive. Next is the
+operator's: `sudo ./install-owner-idlephase.sh install` there, then the
+battery.
+
+**INSTALLED 2026-11-20 13:46 UTC (the operator: `sudo
+./install-owner-idlephase.sh install`; read back by the session) and
+MEASURED 13:47-14:17 UTC: owner bb3cd6ca with `--idle-phase 60`, start
+wrapper 203c6fa5, transport.conf 6818176f. The at-unity arm at 96 kHz on
+the monitor preset passes with it: four loaded 800-impulse runs at
+`daw_timeline` 912, 912, 913, 912, no open a block late in 64 opens, the
+ten-minute soak PASS. Not ACCEPTED: the off-unity arm at 96 and both
+arms at 48 are owed.** Read back: `status` shows the three `new`, kept
+bc486911, df6a1b0b, add1bc21 as `*.idlephase-previous`; the owner's
+command line ends `--prime-drop 96 --capture-drain --idle-phase 60 ...`,
+START `idle_phase_us=60`, `dante-immersive-one-sub@96000.dsp` loaded,
+endpoint start 13:46:08, start check `state=ok rate=12019 restarts=0`,
+monitor state 57 applied, 0.0 dB, fold full; `NRestarts=0` after.
+
+- Noise probe (`ip96-unity`, `20261120T134728Z`): clean from sample 912.
+- 60 loaded opens (`idlephase-20261120/svc96-unity/`,
+  `opens-svc96-unity.txt`): 59 at 675 to 677; one at 737 (below). No
+  open at 772. The 88 primes of this start found 163 to 165 or 247 to
+  249 (a few 175 to 235), every one anchored, where the same preset on
+  bc486911 found up to 252.
+- Four loaded 800-impulse runs, `USB16X16_OTHER_LOAD=0.1`:
+
+| Run | Levels | `daw_timeline` | Discontinuities | Endpoint lines |
+|---|---|---|---|---|
+| `ip96-unity-1` `20261120T135245Z` | 676 x798, 668 x2 | 912 | 0 / 0 | +0 |
+| `ip96-unity-2` `20261120T135620Z` | 676 x800 | 912 | 0 / 0 | +0 |
+| `ip96-unity-3` `20261120T135956Z` | 677 x799, 669 x1 | 913 | 0 / 0 | +0 |
+| `ip96-unity-4` `20261120T140331Z` | 676 x800 | 912 | 0 / 0 | +0 |
+
+  The three impulses 8 early are the far loop's (the Ferrofish's event,
+  3 in 3200 here). Run 3 is one sample over on its own open, as 96 has
+  read on some opens since 2026-11-01.
+- Soak 600 s (`ip96-unity-loop8`, `20261120T140707Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peaks 0.0119 to
+  0.1000, discontinuities 0 / 0, endpoint lines +0. Channels 9 to 16
+  loaded, not judged.
+- Cost, 30 one-minute lines: `dsp_us_max` 51.7 to 129.3, `dsp_us_mean`
+  45.6 to 52.9; `meter_us_max` 9.2 to 55.9.
+- Owner at t=1860: `capture_faults=0 playback_faults=0 tx_reprimes=0
+  detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1093`, `tx_i=-15.29 rx_i=15.56`. `out_holes=60/1804
+  back_holes=1/385`: all counted during the 60 opens (t=120 to 420) and
+  none during the four runs and the soak. The outgoing ones are one a
+  loaded open, the harness's own silent start (the morning's candidate
+  arms count the same, 51 to 78 in 60 to 80 opens, the control
+  included).
+- The open at 737 (open 49, 13:51:53 UTC): two impulses at 729, six at
+  737, no discontinuity on the Mac; on the Pi `tx_links` goes up by two
+  across that open and the one after, and the return's one hole of 385
+  frames is in that minute. So the host's stream paused inside the
+  session and the owner primed again, at another level. The same
+  signature once this morning (`--idle-phase 0`, open 42: 729 then 737).
+  Two in about 500 one-second opens, none in any 800-impulse run or
+  soak; what pauses the stream is not known, and a mid-session prime
+  landing 61 frames off is a separate matter from the open's prime, not
+  touched by this fix.
+
+Owed before ACCEPTED: at 96 the off-unity arm (-12 dB, set by the
+operator); at 48, on the operator's rate change, both arms on the
+monitor preset (the point of record there is 528) and direct once. Then
+the 44.1 and 88.2 checks the rate rules ask for after an owner change.
+
+**MEASURED 2026-11-20 14:20-14:45 UTC (session, on the operator's word
+"It's at -12"): the off-unity arm at 96 kHz on owner bb3cd6ca with
+`IDLE_PHASE=60`. The four loaded runs pass (912, 912, 913, 912). The
+soak's verdict is the tool's FAIL-as-inconclusive, not a pass: the sub's
+output has runs of 4 to 6 zeros and `soak_reference.py` cannot check
+them, because it does not model the monitor's gain. The kept windows
+show what the runs are. Not ACCEPTED.** Read first: `level_db=-12.0
+gain_db=-12.0`, fold full, state 77 applied; the endpoint still on the
+start of 13:46:08 UTC, `NRestarts=0` before and after.
+
+| Run | Levels | `daw_timeline` | Discontinuities | Endpoint lines |
+|---|---|---|---|---|
+| `ip96-minus12-1` `20261120T142018Z` | 676 x799, 668 x1 | 912 | 0 / 0 | +0 |
+| `ip96-minus12-2` `20261120T142353Z` | 676 x800 | 912 | 0 / 0 | +0 |
+| `ip96-minus12-3` `20261120T142728Z` | 677 x799, 669 x1 | 913 | 0 / 0 | +0 |
+| `ip96-minus12-4` `20261120T143104Z` | 676 x799, 668 x1 | 912 | 0 / 0 | +0 |
+
+- The 20 primes of the arm found 160 to 165 or 244 to 251, one 174 and
+  one 254; no open read a block late. The 254 is noted: this arm's
+  opens were minutes apart, where the grid has had time to move against
+  the host's frames, which `IDLE_PHASE` does not hold (the long-idle
+  case, still open).
+- Soak 600 s (`ip96-minus12-loop8`, `20261120T143439Z`,
+  `USB16X16_LOOP_CHANNELS=8`): discontinuities 0 / 0, endpoint lines +0,
+  peaks 0.0030 to 0.0251 (0.2512 of the unity arm's on every channel:
+  -12.0 dB), longest zero run 1 on channels 1 to 3 and 5 to 8, and 6 on
+  channel 4, the sub. The wrapper then needs the reference check, which
+  wants `USB16X16_HOST_GAIN` and, given it, would compare against the
+  artifact at unity: there is no monitor gain in `reference_export.cpp`
+  or `soak_reference.py`. Verdict as printed: `FAIL, the zero runs could
+  not be checked against the preset (inconclusive is not a pass)`.
+- What the seven runs are
+  (`ip96-minus12-loop8-soak-600s-32f-20261120T143439Z.zero-runs.txt`,
+  from the report's kept windows): each is the sub's low-passed output
+  coming down to zero and leaving it again in steps of one code (`... 5
+  4 3 2 1 0 0 0 0 0 0 1 2 3 4 6 ...`), frames consecutive, and in every
+  window the other seven looped channels have no zero sample and their
+  usual level. A transport hole is zeros on every channel at once with a
+  step either side; these are neither. At unity the same output is four
+  times larger and its longest run is 1 (the at-unity arm), at 48 kHz
+  and -12 dB it was 2 (2026-11-19). So the soak shows no hole; it is not
+  a PASS by the criterion as written.
+- Cost, 24 one-minute lines: `dsp_us_max` 53.3 to 88.4, `dsp_us_mean`
+  46.8 to 46.9; `meter_us_max` 15.4 to 48.9.
+- Owner at t=3480: no fault, re-prime, detach, resync or new hole
+  (`out_holes` and `back_holes` unchanged from the opens of 13:48),
+  `gap_us_max=1083`, `back_peak` 210712 against `out_peak` 838861
+  (0.2512).
+
+To make this arm decidable by the tool: the reference to take the
+monitor's gain (the exporter applying the owner's `MonitorGains` at a
+given level, `soak_reference.py --monitor-gain-db`, and the wrapper
+reading the level from the owner's status), with its test; then this
+capture can be judged again without a new run, since the report keeps
+the windows. Owed besides: both arms at 48 and one direct run there,
+then the 44.1 and 88.2 checks.
+
+**IMPLEMENTED 2026-11-20 (session, on the operator's word "Yes, build
+that"; written by an Opus 5.5 subagent, the diff read and the tests and
+the judgement run again by the session): the soak's reference check
+models the monitor block, and with it the off-unity soak at 96 kHz of
+14:34 UTC is `matched-events`. Tools on the Mac only; nothing on the Pi
+changed.**
+- `dante/owner/reference_export.cpp` takes the monitor's state file and,
+  optionally, root's limits file (`ARTIFACT RANGES [RATE [OUTPUT_GAIN
+  [MONITOR_STATE [MONITOR_LIMITS]]]]`). With a state and an artifact
+  that has a monitor section it uses the owner's own code:
+  `monitor_ctl.hpp`'s `read_file`, `parse_state`, `parse_limits` and
+  `resolve`, then `set_fold` for each set, `MonitorGains::publish` and
+  `prime_monitor`, at rest from the first frame. A file the owner would
+  refuse is refused (the owner would play its start rule or the
+  defaults, and the reference does not guess). Without the arguments
+  its output is byte for byte what it was (old and new exporters over
+  three artifacts, two gains and the defaults).
+- `dante/soak_reference.py --monitor-state FILE [--monitor-limits
+  FILE]`; the result records the files, their hashes and what was
+  resolved, and the policy gains `monitorModel`. The criterion's
+  assumption is written in: the monitor did not change during the
+  capture. `dante/measure-candidate.sh`'s soak fetches
+  `/run/usb-aoip-monitor/state`, the limits file if there is one and the
+  owner's status into the `-api` directory and passes the first two; a
+  file that exists and cannot be fetched makes the check inconclusive,
+  never the defaults. The fetches themselves have not run against the
+  Pi yet.
+- Tests, `dante/test_soak_reference.py`, 22 passing (17 before): no
+  state gives the reference as before; a capture at -12 dB matches with
+  the state and is a mismatch without it; a limit of -14 dB caps it; a
+  fold that swaps two inputs matches only with its state; a malformed,
+  out-of-range or absent state, invalid limits, and limits alone are
+  `inconclusive` (exit 2). None of the pinned owner files changed
+  (`test-owner-monitor.sh`, `test-owner-idlephase.sh`, `test-access.sh`
+  pass). Not compiled under g++ here (clang on the Mac; CI's job uses
+  the system compiler).
+- The capture judged again, no new run
+  (`ip96-minus12-loop8-soak-600s-32f-20261120T143439Z`, its `-api/`
+  holding `preset.dsp` 5792bc52, `monitor-state.txt` and
+  `monitor-status.txt` as read from the Pi at 15:15 UTC, state 77,
+  -12.0 dB, fold full, no limits file; `reference/result.json`):
+  `matched-events`: the seven runs on channel 4, one alignment of 912
+  frames for all seven, worst error 1.00 code, the zeros exactly where
+  the reference has them. Without the state the same capture is a
+  mismatch at the first run. Two things it rests on: the Mac's gain at
+  96 is the latest measured, `svc96-bitexact-360s` of 2026-10-31 (unity
+  both ways), not today's; and the state file was read half an hour
+  after the capture, the owner's status agreeing (state 77 applied
+  before the arm began).
+
+So the off-unity arm at 96 kHz on owner bb3cd6ca with `IDLE_PHASE=60`
+stands as: four loaded runs 912, 912, 913, 912; soak with no
+discontinuity and every zero run the preset's own at -12 dB by the
+reference criterion. With the at-unity arm that is the battery at 96 on
+the monitor preset. Owed before ACCEPTED: both arms at 48 and one direct
+run there; the 44.1 and 88.2 checks; a host-gain report at 96 from a
+direct run, to put today's date under the reference.
+
+**MEASURED 2026-11-21 03:54-04:24 UTC (session, on the operator's word
+"It's at 48" and "it's at -12"): the off-unity arm at 48 kHz on owner
+bb3cd6ca with `IDLE_PHASE=60` passes: four loaded 800-impulse runs at
+`daw_timeline` 528 with spread 0, the ten-minute soak PASS. FOUND beside
+it: three playback faults on the gadget, each at a host open, one of
+which gave that open an unanchored prime and a level 6 samples off. Not
+ACCEPTED.** The operator moved the rate; endpoint start 03:32:31 UTC,
+`RATE` absent from owner.conf (48), `dante-immersive-one-sub.dsp`
+6a2c8012 (302 biquads), START `prime_drop=28 capture_drain=1
+idle_phase_us=60 rx_queue=96`, start check `state=ok rate=6017
+restarts=0`; monitor state 77, -12.0 dB, fold full. `NRestarts=0` after.
+(A first launch at 03:53 had the soak without `USB16X16_LOOP_CHANNELS=8`;
+it was stopped within seconds, its partial probe directory removed,
+nothing measured.)
+
+- Noise probe (`ip48-minus12`, `20261121T035403Z`): clean from sample
+  528.
+- Four loaded runs: `ip48-minus12-1..4` (`035920Z`, `040255Z`,
+  `040630Z`, `041006Z`): 376 x800 on each, `daw_timeline` 528, spread 0,
+  discontinuities 0 / 0, endpoint lines +0. The point of record's
+  figure.
+- Soak 600 s (`ip48-minus12-loop8`, `20261121T041341Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 2, peaks 0.0045 to
+  0.0251 (-12.0 dB), discontinuities 0 / 0, endpoint lines +0. No run of
+  4, so the reference check was not called and the new fetches did not
+  run. Channels 9 to 16 loaded, not judged.
+- 60 loaded opens (`idlephase-20261120/svc48-minus12/`): 59 at 375 to
+  377, one at 382. The primes found 81 to 83 (71 of 84), 87 to 104 (12)
+  and one 70, against a lead of 128: at 48 the option leaves the prime
+  where it was (80 to 85 and 100 to 103 on bc486911).
+- The playback faults (`last_fault=-32`, the gadget's playback PCM
+  underrun): `playback_faults` 0 to 1 at 03:54:09 (an open of the noise
+  probe's gating), 1 to 2 at 03:55:26 (open 10 of the 60: that prime
+  found 70 and was unanchored, and the open read 382), 2 to 3 between
+  04:02 and 04:03 (an open of run 2's gating probes; the run itself is
+  clean). None inside an 800-impulse run or the soak; no capture fault,
+  re-prime or detach. Three in about 90 opens. On bc486911 the 48 kHz
+  arms of 2026-11-18/19 counted none over about 40 opens, and at 96 the
+  candidate's control arm (no option) counted one, as did the installed
+  bc486911 on 2026-11-19 20:13 UTC. So it is not shown to be the
+  option's, and not shown not to be at 48: the control is the same 60
+  opens at 48 without `--idle-phase` (the candidate launcher, the
+  service stopped). The wrapper's gating hides such an open from a run's
+  figure, which is why it is recorded here: a host that opens the device
+  once does not get a second try.
+- Cost, 30 one-minute lines: `dsp_us_max` 31.1 to 81.0, `dsp_us_mean`
+  24.2 to 26.9; `meter_us_max` 9.0 to 81.0.
+- Owner at t=3060: `capture_faults=0 tx_reprimes=0 detaches=0
+  servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1047`, `back_holes=0/0`, `out_holes=60/870` (one a loaded
+  open, the harness's own start).
+
+Owed before ACCEPTED: the at-unity arm at 48 (the operator sets 0 dB);
+one direct run at 48; the 48 kHz control for the playback faults; the
+44.1 and 88.2 checks.
+
+**MEASURED 2026-11-21 04:28-04:58 UTC (session, on the operator's word
+"It's at 0"): the at-unity arm at 48 kHz on owner bb3cd6ca with
+`IDLE_PHASE=60` passes: four loaded 800-impulse runs at `daw_timeline`
+528 with spread 0, the ten-minute soak PASS, no new playback fault in
+about 90 opens. With the three arms before it, that is the battery at
+48 and at 96 on the monitor preset, at unity and at -12 dB. Not
+ACCEPTED: that is the operator's word, and the list below is owed or
+open.** Same endpoint start as the off-unity arm (03:32:31 UTC); monitor
+state 80 applied, 0.0 dB, fold full; `NRestarts=0` after.
+
+- Noise probe (`ip48-unity`, `20261121T042824Z`): clean from sample 528.
+- Four loaded runs: `ip48-unity-1..4` (`043340Z`, `043715Z`, `044051Z`,
+  `044426Z`): 376 x800 on each, 528, spread 0, discontinuities 0 / 0,
+  endpoint lines +0.
+- Soak 600 s (`ip48-unity-loop8`, `20261121T044801Z`,
+  `USB16X16_LOOP_CHANNELS=8`): PASS, longest zero run 1, peaks 0.0180 to
+  0.1000, discontinuities 0 / 0, endpoint lines +0. Channels 9 to 16
+  loaded, not judged.
+- 60 loaded opens (`idlephase-20261120/svc48-unity/`): 59 at 376 or 377;
+  open 54 read 373 on its first impulses and 376 after. On the Pi the
+  return's one hole of this arm (127 frames) and an extra outgoing prime
+  are in that minute: the host's stream paused inside the session and
+  the owner primed again, the event seen twice at 96 on 2026-11-20 (729
+  then 737). Three now in about 250 one-second opens, none in a run or
+  a soak.
+- `playback_faults` 3 before and 3 after: none in this arm's 93 primes,
+  against three in the arm before on the same start. So the faults are
+  not steady at 48 with the option either; the control is still owed to
+  say anything about their rate.
+- The primes found 81 to 83 (70 of 84) or 87 to 126; one unanchored
+  count carried from the arm before.
+- Cost, 30 one-minute lines: `dsp_us_max` 28.4 to 73.1, `dsp_us_mean`
+  23.5 to 26.2 (23.5 on bc486911 at unity); `meter_us_max` 7.6 to 66.8.
+- Owner at t=5100: `capture_faults=0 tx_reprimes=0 detaches=0
+  servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1045`.
+
+The battery on owner bb3cd6ca, wrapper 203c6fa5, transport 6818176f
+(`IDLE_PHASE=60`), preset `Immersive - one sub`, eight looped channels:
+
+| Rate, level | Four loaded runs (`daw_timeline`) | Soak | Opens a block late |
+|---|---|---|---|
+| 96, 0 dB | 912, 912, 913, 912 | PASS | 0 of 64 |
+| 96, -12 dB | 912, 912, 913, 912 | matched-events (the sub's own zero runs) | 0 of 20 |
+| 48, -12 dB | 528 x4, spread 0 | PASS | 0 of about 90 |
+| 48, 0 dB | 528 x4, spread 0 | PASS | 0 of about 90 |
+
+Owed or open before the operator's ACCEPTED, none measured: one direct
+run at 48 (and the fold-down probe again on this owner); the 44.1 and
+88.2 checks an owner change asks for; a host-gain report at 96 from a
+direct run for the reference's date. Open, found during this work and
+not fixed by it: an open after a long idle (the grid drifts against the
+host's frames; proposal 2); playback faults at some opens, with the 48
+kHz control not run; the mid-session pause and re-prime (three in about
+250 rapid opens); the far loop's occasional impulse 8 samples early at
+96 (the Ferrofish); the 640 on one first open; wlan0 and the access
+point's band steering; channels 9 to 16 never judged.
+
+**CORRECTION 2026-11-21 (session, on the operator's word "Redact, then
+push"): the access point's two radio addresses were taken out of the
+entries of 2026-11-20 before the branch was first published; they now
+read `[the 2.4 GHz radio]` and `[the 5 GHz radio]`.** The repository is
+public and a radio's address can be looked up for a location; nothing
+else in those entries changed. The eleven commits that carried them had
+not been pushed and were rewritten, so their hashes moved: an entry
+above that says the bundle was "staged from 69eb5b8" means the commit
+now 49db832 (the bundle on the Pi still prints `repository 69eb5b8`;
+its sixteen pinned files are the same), and the tests' "all pass" point
+8887ae0 is now 31ad32d. The evidence repository was pushed as it was:
+it never held the addresses.
+
+**MEASURED 2026-11-21 20:31-20:35 UTC (session, on the operator's word
+"Applied direct"): one direct run at 48 kHz on owner bb3cd6ca with
+`IDLE_PHASE=60` reads the point of record: the noise probe clean from
+sample 528, one loaded 800-impulse run at 376 x800, `daw_timeline` 528,
+spread 0. Item 1 of the owed list done. Not ACCEPTED.** Read first:
+owner.conf has `METERS=1` and no `DSP_PRESET` (direct), `RATE` absent
+(48); endpoint start 20:30:17 UTC (the applier's restart for the
+profile), START `prime_drop=28 capture_drain=1 idle_phase_us=60
+rx_queue=96`; monitor status `state=idle reason="no DSP preset"`; start
+check `state=ok rate=6018 restarts=0` at 20:31:22; `NRestarts=0` before
+and after.
+
+- Noise probe (`ip48-direct`, `20261121T203130Z`): nonzero from 528, no
+  zero run of 4 or more, endpoint lines +0.
+- Loaded run (`ip48-direct-1`, `20261121T203211Z`,
+  `USB16X16_OTHER_LOAD=0.1`): 376 x800, spread 0, `daw_timeline` 528
+  (376 + 152), discontinuities 0 / 0, xrun, lag and error lines +0.
+- The nine primes of this start found 81 to 93 (16 of 22 link lines),
+  105 and 125; `tx_unanchored=0`. No `DSP t=` lines (no preset).
+- Owner at t=300: `capture_faults=0 playback_faults=0 tx_reprimes=0
+  detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1024`, `out_holes=0/0 back_holes=0/0`.
+
+Not measured: a soak direct (not asked by the owed list), repeated
+opens direct. Still owed before ACCEPTED: the fold-down probe on this
+owner (a preset again, Stereo, then Full); the 44.1 and 88.2 checks; a
+host-gain report at 96 from a direct run and the -12 dB soak judged
+again with it; the 48 kHz control for the playback faults. The endpoint
+is left direct at 48.
+
+**FOUND 2026-11-22 ~03:30-03:50 UTC (session read the Pi; the operator
+ran the commands): wlan0 lost its association altogether, not only its
+traffic, and the page went with it; reloading the Wi-Fi driver and
+bringing the connection up once restored it.** The web service was
+active but listens on wlan0's address only (`--management-interface
+wlan0`), and wlan0 had none: NetworkManager `disconnected`, so the eth0
+forward of the pickup prompt failed too ("connect failed" on the Pi).
+`nmcli device connect wlan0` failed with "Secrets were required, but not
+provided"; the log shows why that message misleads: every attempt was
+`CTRL-EVENT-ASSOC-REJECT bssid=00:00:00:00:00:00 status_code=16` (the
+association failed in the driver/firmware, before the access point's
+answer), and NetworkManager files the give-up as `no-secrets`. The
+network was in the scan at signal 84 on 2.4 GHz. What fixed it, with
+the operator's sudo: `modprobe -r brcmfmac_cyw brcmfmac` (plain
+`modprobe -r brcmfmac` refuses: `brcmfmac_cyw` holds it), `modprobe
+brcmfmac`, then `nmcli connection up` on the netplan Wi-Fi profile
+(after the reload NetworkManager did not retry by itself, its
+autoconnect retries spent). wlan0 then had 192.168.1.201 and the page
+answered (401, the login) directly and through the forward. The audio
+was not touched: endpoint start 20:30:17 UTC, `NRestarts=0`, start check
+`state=ok` throughout. Not known: what wedged the firmware (the
+band-steering fault of FOUND 2026-11-20 13:13 UTC stops traffic, not
+association), or whether it will recur.
+
+**MEASURED 2026-11-22 03:42 UTC (session, on the operator's word "Preset
+on, Stereo"): the fold-down probe on owner bb3cd6ca with `IDLE_PHASE=60`
+passes: the noise probe at 32 with the Stereo fold engaged at 0 dB on
+`Immersive - one sub` returns from sample 528 with no zero run. Item 2
+of the owed list done, at unity (2026-11-19's was at -12 dB on
+bc486911). Not ACCEPTED.** Read first: owner.conf `DSP_PRESET`
+`dante-immersive-one-sub.dsp` 6a2c8012, `DSP_LIVE=1`, `RATE` absent
+(48); endpoint start 03:40:56 UTC (the applier's restart from direct),
+start check `state=ok rate=6018 restarts=0` at 03:42:02; the owner's
+status `fold=stereo level_db=0.0 gain_db=0.0`, state 81 applied, no dim,
+no mute, no limits file. Read again after: unchanged, `NRestarts=0`. The
+eth0 forward to the page was closed before the run.
+
+- Noise probe (`ip48-stereo-unity`, `20261122T034204Z`): signal ready
+  after 3 probes, nonzero span 528..1245631, zeros inside the span 0.0%,
+  zero runs of 4 or more 0, IOProc offset 152, endpoint xrun/lag/error
+  lines +0.
+- The fold is in the returned signal: captured peak on input 2 0.3870,
+  against 0.0972 at -12 dB on 2026-11-19 (x3.98, -12.0 dB to the
+  hundredth) and 0.1000 on the direct probes; above the 0.25 the gain of
+  one input could return, so a sum of inputs. Not compared sample for
+  sample on the Pi (the Mac's `verify-fold.py` is that proof).
+- Cost, the owner's line at t=120.1 (the probe's minute): `dsp_us_max=39.1
+  dsp_us_mean=26.1`, `meter_us_max=8.9 meter_us_mean=4.6`.
+- Owner on the same line: `capture_faults=0 playback_faults=0
+  tx_reprimes=0 detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0
+  net_errors=0`, `out_holes=0/0 back_holes=0/0`, `gap_us_max=1051`. The
+  primes of this start found 82 to 88, one 116 and one 125;
+  `tx_unanchored=0`.
+
+Not measured: the switch itself (selected before the run), the 5.1 and
+Mono folds, a fold under a soak or load. Owed before ACCEPTED: the fold
+back to Full (the operator), then the 44.1 and 88.2 checks; a host-gain
+report at 96 from a direct run and the -12 dB soak judged again with it;
+the 48 kHz control for the playback faults.
+
+**MEASURED 2026-11-22 04:31-04:34 UTC (session, on the operator's rate
+change to 44.1 and fold back to Full): the 44.1 kHz check on owner
+bb3cd6ca with `IDLE_PHASE=60`: noise probe clean from 505; three loaded
+opens of 100 impulses at `daw_timeline` 504, 504, 505, each with spread
+0. Two opens read one sample under the record's 505 (360 + 145): the
+lag was 359 on those. Item 3 half done (88.2 owed). Not ACCEPTED.**
+Read first: owner.conf `RATE=44100`, `DSP_PRESET`
+`dante-immersive-one-sub@44100.dsp` a9d1301b, `DSP_LIVE=1`; endpoint
+start 04:29:47 UTC (the arbiter's restart), start check `state=ok
+rate=5532 restarts=0` at 04:30:52; the owner's status `fold=full
+level_db=0.0 gain_db=0.0` (state 82); `NRestarts=0` after. The page
+went unreachable as the rate settled: wlan0 kept its address and
+association, the log shows `WNM: Preferred List Available` and the Pi
+could not ping the router over wlan0 while the page answered on the Pi
+itself (401): the band-steering fault of FOUND 2026-11-20 13:13 UTC, not
+the rate change. The eth0 forward served the page and was closed before
+the runs.
+
+- Noise probe (`ip44-full`, `20261122T043104Z`): nonzero from 505, no
+  zero run of 4 or more, endpoint lines +0.
+- Three opens, `USB16X16_OTHER_LOAD=0.1`, 100 impulses each:
+  `ip44-open-1` (`043144Z`) 359 x100, 504; `ip44-open-2` (`043225Z`)
+  359 x100, 504; `ip44-open-3` (`043305Z`) 360 x100, 505. IOProc offset
+  145 on all three, discontinuities 0 / 0, endpoint lines +0.
+- What 504 is not known. The record at 44.1 with the anchor is 505 (360,
+  2026-11-01, 400 impulses on one open); 359 was read at 44.1 before the
+  anchor (2026-10-28). One sample per open is the size 96 kHz has shown
+  on some opens since 2026-11-01 (912 / 913). The 16 primes of this start
+  found 92 to 110, all anchored, `last_fault=0` on every link line, so
+  the owner does not mark these opens. Whether 44.1 now draws 359 or 360
+  per open would take more opens than the three the check asks for.
+- Cost, the owner's line at t=240.0: `dsp_us_max=36.0 dsp_us_mean=23.6`;
+  `meter_us_max=15.9 meter_us_mean=3.7`.
+- Owner at t=240: `capture_faults=0 playback_faults=0 tx_reprimes=0
+  detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1086`, `out_holes=0/0 back_holes=0/0`.
+
+Owed before ACCEPTED: the 88.2 check (the operator moves the rate; 10 s
+before any audio); the 44.1 draw if the operator wants it decided; a
+host-gain report at 96 from a direct run and the -12 dB soak judged
+again with it; the 48 kHz control for the playback faults.
+
+**MEASURED 2026-11-22 04:37-04:40 UTC (session, on the operator's word
+"It's at 88.2"): the 88.2 kHz check on owner bb3cd6ca with
+`IDLE_PHASE=60`: noise probe clean from 888; three loaded opens of 100
+impulses at `daw_timeline` 888, 888, 888 (666 + 222), inside the
+record's 888 to 889. With the 44.1 entry above, item 3 done. Not
+ACCEPTED.** Read first: owner.conf `RATE=88200`, `DSP_PRESET`
+`dante-immersive-one-sub@88200.dsp` 987c8eb1, `DSP_LIVE=1`; START
+`rate=88200 ... rx_queue=192 prime_drop=72 capture_drain=1
+idle_phase_us=60`; endpoint start 04:36:23 UTC, start check `state=ok
+rate=11044 restarts=0` at 04:37:29 (first audio 04:37:30, more than 10
+s after the switch); the owner's status `fold=full level_db=0.0`;
+`NRestarts=0` after.
+
+- Noise probe (`ip88-full`, `20261122T043730Z`): nonzero from 888, no
+  zero run of 4 or more, endpoint lines +0.
+- Three opens, `USB16X16_OTHER_LOAD=0.1`, 100 impulses each:
+  `ip88-open-1` (`043811Z`) 666 x99, 658 x1; `ip88-open-2` (`043851Z`)
+  666 x99, 658 x1; `ip88-open-3` (`043931Z`) 666 x100. `daw_timeline`
+  888 on all three (the median), IOProc offset 222, discontinuities
+  0 / 0, endpoint lines +0.
+- The two impulses 8 samples early: one in each of the first two opens,
+  the owner clean. By the rule of 2026-11-19 they are the Ferrofish's
+  until shown otherwise; that event has been recorded at 96 only, so this
+  is its first sighting at 88.2 and was not located further.
+- The 16 primes of this start found 188 to 211, one 234, all anchored,
+  `last_fault=0` on every link line.
+- Cost, the owner's line at t=180.0: `dsp_us_max=70.5 dsp_us_mean=45.7`;
+  `meter_us_max=40.3 meter_us_mean=8.2`.
+- Owner at t=180: `capture_faults=0 playback_faults=0 tx_reprimes=0
+  detaches=0 servo_rejected=0 tx_resyncs=0 rx_resyncs=0 net_errors=0`,
+  `gap_us_max=1129`, `out_holes=0/0 back_holes=0/0`.
+
+Owed before ACCEPTED: a host-gain report at 96 from a direct run and the
+-12 dB soak of 2026-11-20 judged again with it; the 48 kHz control for
+the playback faults; the 44.1 draw (359 or 360 per open) if the operator
+wants it decided. The endpoint is left at 88.2 on the monitor preset.
+
+**MEASURED 2026-11-22 04:58-05:04 UTC (session, on the operator's word
+"96, direct, muted"): the host-gain report at 96 kHz from a direct run
+FAILS: `bitexact --loop-channels 8`, 360 s, `pass: false`, with 895 to
+988 lost locks on each of channels 1 to 8, every one a slip of 8, 16,
+24 or 32 frames (dropped or repeated) at the same frames on all eight.
+The owner is clean through it. Located no further; by the rule of
+2026-11-19 it is the far loop's (the Ferrofish's) until shown otherwise.
+Item 4 not done.** Read first: owner.conf `RATE=96000`, no `DSP_PRESET`
+(direct); endpoint start 04:44:55 UTC, start check `state=ok rate=12017
+restarts=0` at 04:46:00; monitor `state=idle reason="no DSP preset"`;
+the operator muted the monitors. `NRestarts=0` after, start check
+unchanged.
+
+- Run (`ip96-direct-bitexact-360s-32f-20261122T045830Z`, the harness's
+  `bitexact --seconds 360 --loop-channels 8 --device USB-AoIP
+  --buffer-frames 32`): 34,560,000 frames each way, input and output
+  discontinuities 0, invalid buffers 0, largest code 8388607, nothing
+  off the 24-bit grid, longest zero run after lock 1. First lock at
+  frame 911 (the round trip, 912 less one). Channel 1: 977 slips; by
+  size, dropped 8 x435, repeated 8 x351, repeated 16 x109, dropped 16
+  x71, repeated 24 x7, dropped 24 x3, dropped 32 x1. First at frame
+  114900 (1.2 s), last at 357.4 s, 57 to 123 in every 30 s, mostly in
+  pairs a few hundred frames apart (a drop and the repeat that puts it
+  back, or the reverse). Channels 2 to 8 the same frames (channels 7
+  and 8 from frame 253676); 9 to 16 not looped, not judged.
+- Owner (`.owner-before.txt` at t=780, `.owner-after.txt` at t=1140):
+  `capture_faults=0 playback_faults=0 tx_reprimes=0 detaches=0
+  servo_rejected=0`, `back_holes=0/0` before and after, `out_holes` 0/0
+  to 2/1000 (the harness's start), `tx_links` 0 to 2, `tx_i=-15.79
+  rx_i=16.06`. Nothing on the Pi marks the slips.
+- Why the far loop: the same signature as FOUND 2026-11-19 19:08 UTC (a
+  return 8 samples early in the far device's own stamps, the Pi's
+  outgoing stamps continuous), only far more often (about 2.7 a second
+  against one per 25.75 s) and in both directions of slip. The 88.2
+  check an hour before had two impulses 8 early in 300. Not shown here:
+  no eth0 capture was taken (the catch ring disturbs the endpoint and
+  needs the operator's word), so "in what the far device returns" is
+  the earlier day's location, not this run's.
+- Not usable as the reference's host gain: a failed run is no figure
+  for `USB16X16_HOST_GAIN`, so the -12 dB soak of 2026-11-20 was not
+  judged again.
+
+What cleared it on 2026-11-19 was a power cycle of the Ferrofish. Owed:
+the far loop clean at 96 (the operator at the units), then this report
+again; the 48 kHz control for the playback faults.
+
+**MEASURED 2026-11-22 05:09-05:16 UTC (session, on the operator's word
+"Ferrofish cycled"): the Ferrofish's power cycle did not clear it. The
+host-gain report at 96 kHz direct FAILS again, with more slips (1148 to
+1264 per looped channel), nearly all of exactly 8 frames. A 200-impulse
+run beside it reads 912 with one impulse 8 early. Owner clean. Two
+attempts, the same failure: the session stops here and proposes
+locating it. Item 4 not done.** The Pi saw the Ferrofish go: Inferno's
+`flow index=0 timeout (not receiving media packets)` and `TimedOut`
+05:07:48 to 05:07:54 UTC, nothing after; no resync, loss, fault or
+restart on the owner; endpoint still the start of 04:44:55, start check
+`ok`, `NRestarts=0`.
+
+- `ip96-direct-afterff` (`20261122T050925Z`), 200 loaded impulses:
+  676 x199, 668 x1, `daw_timeline` 912, discontinuities 0 / 0.
+- `ip96-direct-afterff-bitexact-360s-32f-20261122T051030Z`, same
+  arguments as the run before: `pass: false`; first lock at 912 to 913;
+  channel 1: 1264 slips (dropped 8 x633, repeated 8 x617, repeated 16
+  x11, dropped 16 x3), from 7.1 s to 359.6 s, 76 to 141 in every 30 s;
+  the median gap between consecutive slips 80 frames, so mostly a
+  drop of 8 and its repeat within a millisecond. Channels 2 to 8 the
+  same; no discontinuity, nothing off the grid, longest zero run 1.
+- Owner t=1500 to 1860: `capture_faults=0 playback_faults=0
+  tx_reprimes=0`, `back_holes=0/0`, `out_holes` 2/1000 to 4/1020 (the
+  harness's starts).
+
+What this changes. The impulse runs at 96 since 2026-11-19 carried "the
+Ferrofish's 8-early" impulse a few times in thousands; read against
+this, an impulse lands 8 early when it falls inside one of these
+80-frame windows, so the event may never have cleared on 2026-11-19, only
+become rarer, and impulse runs cannot see most of it. No bitexact had run
+at 96 since 2026-10-31 (PASS), so when the slips began is not known:
+the far loop's fault of 2026-11-19 is one candidate, the owner changes
+since (bc486911, bb3cd6ca) and anything else at 96 are not ruled out by
+this record. The one capture that located such an event (FOUND
+2026-11-19 19:08 UTC) found it in the far device's stamps; nothing here
+locates these.
+
+Proposed, on the operator's word: an eth0 capture of the Dante flows
+during a short bitexact at 96 direct (`usb16x16-dante-catch start ...
+both`), read for steps of 8 in the stamps of the return against the
+Pi's outgoing ones, which says Pi or far loop; then the endpoint
+restarted (the catch disturbs it). Owed as before: item 4, the 48 kHz
+control.
+
+**FOUND 2026-11-22 12:16-12:23 UTC (session, on the operator's word "Yes,
+capture it"): the 8-frame slips at 96 kHz are on the wire, in what the far
+device returns. The Pi's four outgoing flows are continuous and carry
+the bitexact noise in place; the far device's return carries the same
+noise at a stamp offset of 143 that drops to 135 (and briefly 151) and
+comes back, 66 to 68 times per looped channel in 26.5 s. They line up
+one for one with the slips the Mac's report found. So the owner,
+Inferno's two directions, the gadget and the Mac carry what they are
+given; the fault is in the far loop (Pulse, MADI, Ferrofish, Metric
+Halo). Unit left as found, in direct at 96, reading 911.**
+
+- Capture: `sudo -n usb16x16-dante-catch start 169.254.248.189 both 10`
+  at 12:16:56, stopped at 12:17:30 (814470 packets, 0 dropped by the
+  kernel). The ring was copied to the Mac over wlan0 after the run (not
+  eth0), then cleared on the Pi.
+- Across it, `ip96-direct-catch-bitexact-30s-32f-20261122T121655Z`
+  (bitexact, 30 s, `--loop-channels 8`, 32 frames): `pass: false`,
+  63 to 73 slips per looped channel, 8 or 16 frames, no
+  discontinuities. A first attempt at 12:16:10 ran without a capture
+  (a shell quoting error stopped the catch from starting); it was
+  deleted and not counted.
+- Reader `outputs/latency/ip96-catch-pcap_offsets.py`. It matches each
+  return channel to the outgoing channel it carries by exact 24-bit
+  samples, then follows the stamp offset sample by sample. Its output
+  is `...T121655Z.pcap-offsets.txt`.
+  - On the wire, four flows from the Pi (4 ch, 32 frames) and two to it
+    (8 ch, 16 frames). No stamp step off the packet size on any of
+    them.
+  - Eight return channels carry the eight looped outgoing ones: return
+    :33293 ch1, ch2, ch8 and :38562 ch1 to ch5.
+  - Every sample matches at offset 143, 135 or 151; unmatched 0 to 4
+    per channel.
+  - The offset changes come in drop-and-return pairs, and every channel
+    changes at the same stamps.
+- Lining up the wire with the Mac: the Mac's slips at
+  1795349829.9513 and 832.3479 (channel 1) are the wire's offset
+  changes at 829.9871 and 832.3837, 36 ms apart on both. The run's
+  first slips (819.55) came before the ring's window.
+- Owner over the run: `capture_faults=0 playback_faults=0
+  tx_reprimes=0`, `back_holes=0/0`, `tx_resyncs=0 rx_resyncs=0
+  net_errors=0`; endpoint the start of 04:44:55, start check `ok`,
+  `NRestarts=0`.
+- After the capture, `ip96-direct-aftercatch` (`20261122T122240Z`, 200
+  loaded impulses): 675 x198, 667 x2, `daw_timeline` 911. This time
+  the capture did not move the round trip (the 12-sample step of
+  2026-11-19 did not recur), so no endpoint restart was needed.
+
+What this settles. The owner changes since 2026-10-31 (bc486911,
+bb3cd6ca) are not the cause of the 96 kHz slips. This matches FOUND
+2026-11-19 19:08 and is far more frequent. Not located: which far device
+slips, and why it does at 96. The Ferrofish's power cycle did not clear
+it (05:07 UTC).
+
+Owed, all at the operator's units, not on the Pi: the clock and lock
+state of the Pulse, the Ferrofish and the Metric Halo at 96, or a
+bitexact with one of them taken out of the loop. Then the host-gain
+report at 96 again (item 4), and the 48 kHz control for the playback
+faults (item 5), which does not depend on this.
+
+**MEASURED 2026-11-22 12:28-12:30 UTC (session, on the operator's words "It's
+at 48" and "Muted, run it"): at 48 kHz the same far loop is bit-exact. A
+30 s bitexact in direct PASSES on all eight looped channels, with no
+slip. So the 8-frame slips of the morning are specific to 96 kHz (the
+Pulse's 2x mode and MADI at 2x), not a fault of the far loop at every
+rate.**
+- The domain was moved by the operator from the Mac / Dante Controller.
+  `dante-sync status` (read-only) before the run: MHLink, USB-AoIP,
+  D2USB, FF-PULSE-16-DX and the DVS all at 48k, and the leader
+  FF-PULSE-16-DX's word clock LOCKED. At 96, read at about 12:25 UTC,
+  everything was 96k and also LOCKED. So no rate or lock state shows
+  the 96 kHz fault. 169.254.248.189, the far end of every capture, is
+  the FF-PULSE-16-DX.
+- Endpoint restarted by the applier at 12:28:15 UTC, `owner.conf` with
+  `METERS=1` only (direct), start check `ok` at 12:29:20.
+- `ip48-direct-bitexact-30s-32f-20261122T122941Z` (`--loop-channels 8`,
+  32 frames): `pass: true`; first lock 528 / 529; lost locks 0,
+  slips 0, mismatches 0, off-grid 0, longest zero run 0 on channels
+  1-8; discontinuities 0 / 0.
+- Owner over the run: no faults, re-primes or resyncs.
+  `back_holes` went from 0/0 to 1/12: one all-sixteen-channel zero run
+  of 12 frames on the return. It is not inside the judged span of
+  channels 1-8, which had no zero run, so it falls outside the lock:
+  the harness's start or end, by reasoning, not located.
+- Item 4 (the host-gain report at 96) stays blocked on the 96 kHz
+  slips. Not tried: the Pulse's MADI looped on itself by cable, to take
+  the Metric Halo out (the Pulse's routing cannot loop Dante to Dante;
+  only through analog, which cannot be judged bit-exact). Not known:
+  whether 96 also slipped on 2026-10-31, when its bitexact passed, or
+  what changed since.
+
+**CORRECTION (session, 2026-11-22 ~12:35 UTC), to the two entries of 12:16
+and 12:28 above.**
+- The capture of 12:16 broke the pickup's rule "no packet capture during
+  a measurement". The rule exists because the tcpdump ring caused USB
+  playback faults at 96 on 2026-10-31. The operator approved the capture
+  but was not told about the rule. Checked afterwards: the owner's
+  USBLINK lines across it read `capture_faults=0 playback_faults=0
+  last_fault=0`. The slip rate with the capture, about 70 per channel in
+  30 s, matches the runs without one: 63 to 75 in the deleted 30 s
+  attempt, about 100 per 30 s in the 360 s runs. So the capture did not
+  make the slips. Its finding stands.
+- The pickup's operating note "after moving the loop to 96, reboot the
+  Metric Halo before a bit-exact measurement" was not followed today:
+  the move to 96 this morning had no Metric Halo reboot. On 2026-10-29
+  the same kind of slip at 96 (a block misplaced in what the Pulse
+  returns) went away after a Metric Halo reboot and did not come back
+  in three runs. On 2026-11-19 a Metric Halo reboot did not clear the
+  8-early impulses, and the Ferrofish's power cycle did. Today the
+  Ferrofish's power cycle did not clear the slips. The Metric Halo
+  reboot at 96, followed by a bitexact, is the step not yet tried.
+
+**MEASURED 2026-11-22 12:32-12:41 UTC (session, on the operator's word "48
+control now"): item 5, the 48 kHz control for the playback faults. Owner
+bb3cd6ca at 48 kHz without `--idle-phase`, through the candidate
+launcher with the service stopped: 60 loaded opens, one playback fault
+(`last_fault=-32`). So the faults also happen without the option and are
+not shown to be its doing. Service restored and checked at 528. Nothing
+is ACCEPTED.**
+- `outputs/latency/idlephase-20261120/cand48.sh control48` is cand.sh's
+  48 kHz form. It stops the service and starts the candidate
+  `usb16x16-dante-owner-idlephase` (bb3cd6ca, the installed binary)
+  with the service's 48 kHz arguments, less `--idle-phase`, the
+  rate-request file and the ppm file. It adds the preset the 48 kHz arms
+  used (`dante-immersive-one-sub.dsp`) and a `/dev/shm` meter and
+  monitor-status file. START line: `rate=48000 ... seed_ppm=-16.59
+  seed_from_file=1 prime_drop=28 capture_drain=1 idle_phase_us=-1`;
+  log `/dev/shm/dante-owner-20261122T123211Z.log`, copied as
+  `owner-control48.txt`.
+- 60 loaded opens (`control48/`, `opens-control48.txt`): 376 x53,
+  377 x7, none failed. With the option (`svc48-unity`): 376 x55, 377 x4,
+  one 373 (a host pause).
+- Primes found: 82 x38, 81 x17, 83 x1, 88 x3, 111 x1; unanchored 0.
+  The with-option arms of 2026-11-21 found 81 to 83 in about 85 %.
+- One playback fault, `playback_faults` 0 to 1, at t=340.2
+  (12:37:50.9 UTC), in the USBLINK line of the 60th open. That open
+  read 376. No capture fault, re-prime, detach, resync or loss;
+  `gap_us_max` 1045, `back_holes=0/0`. `dsp_us_max` 30.6 at t=300.
+- Against the option at 48 on this binary: three faults in about 90
+  opens (the -12 dB arm), then none in 93 (the unity arm). Without it:
+  one in 60. The counts are too small to compare rates. What they do
+  show is that the fault occurs without the option, at 48, on this
+  binary. Its cause stays open (pickup's open list).
+- Restored: candidate stopped, `systemctl start usb16x16-dante` at
+  12:38:13 UTC. The owner's command line again carries `--idle-phase
+  60`, start check `ok` at 12:39:18 (new invocation), `NRestarts=0`.
+  Noise probe `ip48-svc-restored` (`20261122T123923Z`) clean from 529;
+  `ip48-svc-restored` (`20261122T124003Z`, 200 loaded impulses) 376
+  x200, `daw_timeline` 528, spread 0, discontinuities 0 / 0.
+
+Left from the pickup: item 4, the host-gain report at 96, is blocked on
+the far loop's 96 kHz slips. Next there: back to 96, a Metric Halo
+reboot, then a 30 s bitexact (CORRECTION above).
+
+**MEASURED 2026-11-22 13:35-13:38 UTC (session, on the operator's word "96 +
+MH reboot"): after the move to 96 and the Metric Halo's reboot, the 30 s
+bitexact at 96 kHz direct still FAILS, with 84 to 112 slips per looped
+channel. That is more than before the reboot (63 to 75 in 30 s at
+12:16), and of the same kind. Owner clean. Neither the Ferrofish's power
+cycle (05:07) nor the Metric Halo's reboot clears it today. Item 4 not
+done.**
+- The session took the operator's message as saying the move and the
+  reboot were both done; whether the reboot came after the move is not
+  on the record.
+- `dante-sync status` at about 13:35: MHLink and USB-AoIP 96k,
+  FF-PULSE-16-DX word clock LOCKED.
+- The endpoint was restarted by the move at 13:35:08 UTC
+  (`RATE=96000`, direct), start check `ok` at 13:36:13, `NRestarts=0`.
+- Noise probe `ip96-mhreboot` (`20261122T133630Z`): clean from 912.
+- `ip96-mhreboot-bitexact-30s-32f-20261122T133711Z`: `pass: false`.
+  First lock at 912 to 913. Each channel has dropped 8 and repeated 8
+  in equal numbers (39 to 53 of each) plus three each of 16. No
+  discontinuity, longest zero run 0 or 1.
+- Owner after: `capture_faults=0 playback_faults=0`, `back_holes=0/0`,
+  `tx_resyncs=0 tx_lost=0 rx_resyncs=0`.
+
+So today the slips are at 96 only (48 passed at 12:29), on the wire in
+what the FF-PULSE-16-DX returns (12:16), and outlast a power cycle of
+the Pulse and a reboot of the Metric Halo. Not tried: the Pulse's MADI
+out 25-32 cabled straight back to its MADI in 25-32, taking the Metric
+Halo out (proposed 2026-10-29). Not known: what differs from
+2026-10-31, when bitexact passed at 96, in the Pulse's or the Metric
+Halo's settings, for instance which device clocks MADI at 96.
+
+**DECIDED 2026-11-22 ~13:45 UTC (operator): no MADI cable loop on the Pulse.**
+The test that would have split the Pulse from the Metric Halo is not
+done. The 96 kHz slips stay located only as far as "in what the
+FF-PULSE-16-DX returns". Item 4 (the host-gain report at 96) stays
+blocked on them.
+
+**FOUND 2026-11-24 (session, read-only: the Mac's evidence and code, the Pi read
+over SSH; no measurement, nothing changed): the tests and pass criteria do not
+explain the 96 kHz slips. The harness is not rate-dependent where it matters, it
+has passed at 96 before, and three instruments agree. The fault also belongs to
+88.2 (one bitexact failure of the same kind, 2026-11-01), so it is a 2x-mode
+fault of the far loop, not "96 only". Two criterion points stand: impulse runs
+and zero-run soaks are blind to it, and item 4's host gain is already in the
+failing reports. A Fable 5.2 medium advisor read the same files on its own and
+agreed; its new points were checked here before use.** Asked by the pickup
+session: could our tests or criteria make 96 look broken, or 48 look clean?
+
+- Pi read back: it is at **48 kHz**, not 96 as the pickup says. Arbiter request
+  ab358eb8 at 13:42:47 UTC on 2026-11-22, endpoint start 13:42:48, start check
+  `state=ok rate=6017` at 13:43:53, `NRestarts=0`, `owner.conf` `METERS=1`
+  (direct). Inferno config 85a5256f (`SAMPLE_RATE "48000"`, RX/TX latency 1 ms
+  in ns at every rate), transport.conf 6818176f: its 96 keys are the D=96
+  battery's of 2026-11-01 plus `IDLE_PHASE=60`.
+- The harness is unchanged since 2026-11-10 (renames only). `bitexact
+  --loop-channels 8` passed at 96 on the same loop on 2026-10-29 (three runs
+  after the Metric Halo reboot), 10-31 22:41, 11-01 00:16 and 11-01 04:27.
+  Lock is self-predicting from the sequence, with no rate-dependent window.
+- Three instruments put the shift upstream of the Pi's receive and the Pi's
+  send intact: the Mac's `bitexact`, the owner's `--seq-check` (2026-10-29
+  14:48: `point=back` shifted, `point=out` clean) and the wire reader (10-29
+  catch3; 11-22 12:16). Re-checked `ip96-catch-pcap_offsets.py`: offset 135
+  means the return carried the outgoing audio 8 samples newer (a shorter
+  delay, still causal). That is not stale data from a late packet.
+- New in the 11-22 offsets file: 320 of the 334 listed offset changes are at
+  stamp = 4 mod 8, and the shifted windows are multiples of 8 long. The slips
+  are per channel, not all-channel: `ip96-mhreboot-bitexact-30s` lost locks per
+  channel 1-8 are 108, 112, 106, 96, 96, 90, 86, 84. A Dante packet (16 frames)
+  or a MADI link slip would move every channel together. The pattern fits an
+  8-sample block engine with per-channel reads at 2x hovering on a buffer
+  threshold: the Metric Halo strips or the Pulse's router. Drop and repeat in
+  pairs with no net loss means locked clocks with phase wander, not free ones.
+- 88.2: `d72b882-bitexact-360s-32f-20261101T151314Z` FAILED with dropped 8 then
+  repeated 8, eight frames later, on all eight channels; two later runs that day
+  passed. So "44.1 and 48 pass, 96 fails" is better read as 1x passes, 2x slips
+  in some far-loop states. The 44.1 bitexact failures of 2026-10-27 (`r44-*`)
+  were the owner's start slip, fixed that day (`r44fix-*` pass), not this.
+- Impulses exactly 8 early, runs since 2026-10-29: 96: 514 in 45,050 (about 1 %
+  on 11-19, 0.2 % on 11-20, 0.5 to 1 % on 11-22); 88.2: 2 in 6,500, both on
+  11-22 (0.67 %); 48: 2 in 46,000. On 11-22 the wire had 0.74 % of the time
+  shifted, the same fraction. So an impulse run sees the slip only as the
+  share of impulses that land in a shifted window.
+- Criterion 1, blind instruments: the impulse battery and the zero-run soak
+  cannot see a slip, which leaves no zeros. So the 96 batteries of 11-19 and
+  11-20 "passed" while the loop was in this state. Only `bitexact` counts as
+  "clean". 48's clean bitexact record on this loop is 10-29 (360 s) and 11-22
+  (30 s).
+- Criterion 2, item 4 is held by a session rule, not by the code:
+  `soak_reference.py` `host_gain()` checks the report's kind, rate and
+  |gain-1| < 1e-4, not `pass`. Every failing 96 report of 11-22 carries
+  `hostGain` 1 / 1 with the same widths as the passing 96 (10-31) and 48
+  reports. The gain comes from held DC steps (`HostGain.swift`), which a slip
+  cannot disturb. `check_windows` would fail an event whose window overlaps a
+  shifted span, but at 0.7 % of the time shifted most events would not.
+- Not shown: what changed in the far loop between 2026-11-01 (bitexact passes)
+  and 2026-11-19 (the first 8-early impulses): the MIOConsole session or strips,
+  firmware, the clock source. Nobody has compared them. The 11-22 pcap was not
+  kept, so packet arrival times against stamps cannot be read for it.
+
+Proposed, for the operator to pick (each on his word; monitors muted first for
+any `bitexact`):
+1. At the units, no measurement: each unit's clock source at 96, the Metric
+   Halo's word-clock output rate at 2x (1x or 2x), and the MIOConsole session
+   and strips on MADI 25-32 against 2026-11-01.
+2. One variable, no cable: in MIOConsole route MADI in 25-32 straight to MADI
+   out 25-32, bypassing strips t1-t8, then a 30 s `bitexact --loop-channels 8`
+   at 96 direct. If it passes, it is the strips; if it still slips, it is the
+   Pulse side or the clocking.
+3. Rule decision, Mac only: whether item 4 may take its host gain from a
+   failing 96 report (unity both ways), and the 2026-11-20 -12 dB soak be
+   judged again with it.
+
+**Operator, 2026-11-24, on the FOUND entry above: no routing or settings in the
+far loop have changed since 2026-11-01. When the domain goes to a 2x rate,
+every device is confirmed at that rate and locked before any measurement.** So
+proposal 1's "what changed since 11-01" is answered: nothing. Read with the
+record, the same far-loop setup has given both results at 2x:
+- 10-29: fails at 96, then passes after a Metric Halo reboot;
+- 11-01: one failing 88.2 run, then two passing;
+- 11-19 to 11-22: fails at 96 through a Pulse power cycle and a Metric Halo
+  reboot.
+So the 10-31 and 11-01 passes show a good state of the far loop, not a good
+configuration. What the units are confirmed for (rate and lock) does not
+include the Metric Halo's word-clock output rate at 2x (1x or 2x), which is
+still not on the record.
+
+**DECIDED 2026-11-24 (operator, "yes, accept item 4 and re-judge the soak"):
+item 4, the host gain at 96 kHz, is taken from a failing 96 kHz bitexact
+report of 2026-11-22. Its gain calibration (held DC steps, before the noise)
+measured unity both ways with the same widths as every passing report; its
+failure is the far loop's slips (FOUND 2026-11-24). The session rule "a failed
+run is no figure for `USB16X16_HOST_GAIN`" is dropped for this case. This does
+not say 96 is bit-exact through the far loop: the 2x slips stay open.**
+
+**MEASURED 2026-11-24 (session, Mac only, no run): the -12 dB soak at 96 kHz
+of 2026-11-20 14:34 UTC, judged again with that gain, is `matched-events`,
+the same as on 2026-11-20 with the 10-31 gain.**
+- `dante/soak_reference.py ip96-minus12-loop8-soak-600s-32f-20261120T143439Z.json
+  <api>/preset.dsp --host-gain ip96-mhreboot-bitexact-30s-32f-20261122T133711Z.json
+  --loop-channels 8 --monitor-state <api>/monitor-state.txt`, output in
+  `<api>/reference-gain20261122/` (the 2026-11-20 `reference/` left as it was).
+  Gain report f8ce68f5 (`pass: false`, `hostGain` 1 / 1), preset 5792bc52,
+  monitor state 77 (-12.0 dB, fold full, no limits file).
+- Result: policy `dante-event-reference-v2`, `matched-events`, exit 0; channel
+  4, 7 runs, longest 6, worst error 1.00 code, one alignment of 912 frames for
+  all 7. Compared key by key with the 2026-11-20 `result.json`, the only
+  difference is `hostGainSHA256`.
+- Evidence committed in the evidence repository.
+
+So item 4 is done. On the 2026-11-21 owed list, every check now has a result.
+ACCEPTED is the operator's.
+
+**ACCEPTED 2026-11-24 (operator, "push the branch and the evidence, accept
+it"): the install of 2026-11-20/21 is the Dante point of record. That is page
+redesign phase 3 (the Control Room and the monitor block) with the idle-phase
+owner.** The accepted set, as read back from the Pi:
+- owner bb3cd6ca (`--idle-phase 60`);
+- start wrapper 203c6fa5;
+- `transport.conf` 6818176f (`IDLE_PHASE=60`, the 96 and 88.2 keys as before);
+- DSP runner 46f36659;
+- web 1.9.0 and applier 1.11.0, the Control Room page;
+- Inferno config 85a5256f;
+- the gadget and modules of 2026-11-01, unchanged.
+
+The replaced files are kept as `*.idlephase-previous`. Rollback order:
+`install-owner-idlephase.sh rollback`, then the access bundle's, then
+`install-owner-monitor.sh rollback`. Accepted on the battery of 2026-11-20/21
+and the owed list of 2026-11-21, every item with a result:
+- 48 direct: 528.
+- The fold probe: clean.
+- 44.1: 504-505.
+- 88.2: 888.
+- Item 4: the gain from a failing 96 report (DECIDED 2026-11-24), the -12 dB
+  soak at 96 `matched-events`.
+- The 48 control: the playback faults occur without `--idle-phase` too.
+
+Accepted with these still open:
+- the far loop's 2x slips (FOUND 2026-11-24: not the test, not the Pi side);
+- the playback faults at some host opens;
+- the open after a long idle;
+- the 44.1 opens one sample under the record;
+- the 12-frame return hole in the 48 kHz bitexact of 2026-11-22;
+- the phase-3 items listed in the 2026-11-21 pickup.
+
+Owed after this (the 2026-11-21 pickup, "After his ACCEPTED"), not done here:
+fold `dante/owner/idle-phase.patch` into `dante/owner/main.cpp`, re-pin, and
+replace `dante/owner/point-of-record/` and the installer's pins and docs with
+the accepted owner.
+
+**DONE 2026-11-24 (session, on the operator's word "Yes, fold it in"; Mac only,
+nothing on the Pi): the accepted owner's source is in the tree. This is the
+"After his ACCEPTED" step of the 2026-11-21 pickup.**
+- `dante/owner/main.cpp` now has `idle-phase.patch` applied: 8c9bf80e ->
+  4d885b76, the `PATCHED_MAIN` that `build-owner-idlephase.sh` checks and that
+  built bb3cd6ca.
+- `dante/owner/point-of-record/` holds bb3cd6ca's sources: main.cpp 4d885b76,
+  the nine headers it includes (`chan_holes.hpp` and `monitor_ctl.hpp` added),
+  bridge core 8a095aaa / a1b6a05c. Each is byte-identical to the files
+  `install/dev-unit/owner-idlephase.sha256` pins. `install/pins.sha256` is
+  re-pinned and the README rewritten. c84e6a36's copies are in git
+  (`197945b:dante/owner/point-of-record/`).
+- The installer's owner build line is unchanged: one `-I` on the
+  point-of-record directory. `install/install.sh` now installs
+  `transport-idlephase.conf` (6818176f) as `transport.conf`.
+  `install/test-render.sh` compares against it and pins the development
+  unit's transport at 6818176f.
+- Dev-unit bundles: the two stagers take the patch back out of the tree's
+  main.cpp (`patch -s -f -R`). Their bundles stay the sources of the
+  installed owners bc486911 and bb3cd6ca, with their lists unchanged, except
+  `owner-idlephase.sha256`'s line for the patch file, whose header text now
+  says it is applied.
+- CI: the point-of-record owner must show `--idle-phase` in `--help`. A new
+  step checks that the patch reverses to 8c9bf80e. It replaces the step that
+  applied it to a copy.
+- Docs: `dante/README.md`, `CLAUDE.md`, `docs/install/author-pi-mapping.md`,
+  and `TO-VERIFY.md` item 23 (whether the installer's one-`-I` build of the
+  point of record hashes to bb3cd6ca on the development unit).
+- Tests, all passing:
+  - `node --test web-ui/*.test.mjs` (221), `dsp-compiler/*.test.mjs` (84);
+  - web-control (335), `test_soak_reference.py` (22);
+  - `test-dante-start.sh` and `transport`, `test-dante-startcheck.sh`;
+  - `test-render.sh`, `test-access.sh`, `test-owner-monitor.sh`,
+    `test-owner-idlephase.sh`.
+- Not compiled here (ALSA): the owner, which CI compiles.
+- A Fable 5.2 medium advisor reviewed the diff: no correctness bugs. Its
+  stale-doc findings and the `-f` on `patch -R` are taken.
+
+**FOUND 2026-11-24 ~14:05-14:20 UTC (session; the Pi read, then one
+runtime change on the operator's word "fix the wlan0 band steering so it
+stays connected"): why wlan0 was down for two days, and that the Pi can
+stop offering BSS transition without root.**
+- The page was unreachable because wlan0 had no association from
+  2026-11-22 21:20 UTC (the Pi's log, 16:20 local): six disconnects that
+  day with reason 6 (the access point no longer knew the station), each
+  re-associated in seconds, then one with reason 7 followed by nine
+  `CTRL-EVENT-ASSOC-REJECT ... status_code=16`, and NetworkManager's
+  `config -> failed (reason 'no-secrets')`. Nothing tried again until the
+  operator's `sudo nmcli con up` at 14:12 UTC today (rejected three times,
+  associated on the fourth, [the 2.4 GHz radio], 192.168.1.201; the page
+  answers 401). 946 `WNM: Preferred List Available` in this boot's log;
+  five more in the four minutes after that reconnect.
+- `disable_btm` (FOUND 2026-11-20 13:13 UTC named it as needing a
+  supplicant config) is reachable at runtime: the supplicant's control
+  socket `/run/wpa_supplicant/wlan0` is group `netdev`, which `bdimaio` is
+  in, and the D-Bus interface has `DisableBtm` writable. The session ran
+  `wpa_cli -i wlan0 set disable_btm 1` and `reassociate` at 14:16:31 UTC
+  (the Pi's 09:16:31): one reject, associated at 09:16:50, traffic
+  passing. It is runtime state: a reboot, a supplicant restart or a
+  driver reload puts it back to 0.
+- Not shown: that the access point has stopped steering. With
+  `disable_btm=1` the supplicant drops a request before it logs it and
+  sends no answer, so the two log lines that marked the fault go quiet
+  whether or not the access point still sends. The only evidence is the
+  link staying up; earlier it went dead between 40 minutes and some hours
+  after an association.
+
+**IMPLEMENTED 2026-11-24 (session, same word; Mac-tested, staged on the Pi
+at `~/usb-16x16-work/gadget/`; installed in the next entry: the install needs the
+operator's sudo): `usb16x16-wlan-guard`, the Pi-side answer to the band
+steering.** A root service (`gadget/usb16x16-wlan-guard` 89ec5484, unit
+d1cd33d6, `gadget/install-wlan-guard.sh install|rollback|status`,
+`gadget/test-wlan-guard.sh` in CI's shell job). Every 20 s it
+- keeps `disable_btm` at 1 on wlan0, re-associating once when it had to
+  set it on a standing association;
+- judges the link by NetworkManager's state and one answered ping in
+  three to the default gateway on wlan0, so it sees both faults on the
+  record: no association, and an association that passes no traffic;
+- after three bad passes runs `nmcli device connect wlan0` (which also
+  clears the `no-secrets` autoconnect block), and after two failed
+  attempts reloads the Wi-Fi driver (what cleared the firmware on
+  2026-11-22), at most once in ten minutes.
+It does nothing while Wi-Fi is switched off, and touches neither eth0 nor
+any audio service. To take wlan0 down on purpose, stop it first. It is
+for the author's Pi: `install/install.sh` does not install it. Checked:
+the test's twelve cases on the Mac and on the Pi; two passes run
+unprivileged on the Pi against the live link (healthy, nothing done).
+The cure at the source is still the access point's: band steering off
+for this client or network, or separate names for the two bands.
+
+**INSTALLED 2026-11-24 14:20 UTC (the operator ran `sudo
+~/usb-16x16-work/gadget/install-wlan-guard.sh`; the session read it
+back): the wireless guard.** Guard 89ec5484 at
+`/usr/local/sbin/usb16x16-wlan-guard`, unit d1cd33d6, enabled, started
+14:20:06 UTC, `NRestarts=0`, its one log line `watching wlan0 every 20s
+(driver brcmfmac)`; `disable_btm` 1; wlan0 connected on [the 2.4 GHz
+radio] since 14:16:50 UTC with no disconnect after, three of three pings
+to the router answered, the page 401 on 192.168.1.201. The audio was not
+touched: `usb16x16-dante` active, `NRestarts=0`, start check `state=ok
+rate=6017` of 2026-11-22 13:43:53Z. Not ACCEPTED: whether it holds is
+only shown by time (read `journalctl -u usb16x16-wlan-guard` and the
+supplicant's `CTRL-EVENT-DISCONNECTED` lines after a day or more), and
+the reload path has run only in the test. Remove with
+`sudo ~/usb-16x16-work/gadget/install-wlan-guard.sh rollback`.

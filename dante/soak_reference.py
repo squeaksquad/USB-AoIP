@@ -32,7 +32,20 @@ harness's `hostgain` report, or a `bitexact` one) instead of the fixed
 (2026-10-10) and unity (2026-10-27). Like v1 it is an activity criterion,
 not whole-stream verification: samples outside the windows are not compared.
 
+The monitor block (phase 3, 2026-11-20). An owner with a monitor-section
+preset applies per-output gains after the stage and fold-downs at its input.
+With --monitor-state (and --monitor-limits when root has written one), the
+exporter resolves what played by the owner's own code (monitor_ctl.hpp) and
+applies it at rest from the first frame. The criterion's assumption: the
+monitor did not change during the capture (any change ramps over 10 or 40 ms
+and moves every level after it, which this cannot tell from a hole). A state
+or limits file the owner would refuse is evidence that cannot decide. With a
+monitor-section artifact and no state, the reference is the monitor at unity
+on every fold `full`, as before this option; the result says so, since a
+capture taken off unity then cannot match.
+
   soak_reference.py REPORT.json ARTIFACT.dsp --host-gain GAIN.json [--output DIR]
+                    [--loop-channels N] [--monitor-state FILE [--monitor-limits FILE]]
 
 Exit 0 only for `matched-events` or `no-events` with the capture's own
 integrity checks passing; 1 for a mismatch; 2 for evidence that cannot
@@ -58,7 +71,10 @@ POLICY = {'id': 'dante-event-reference-v2', 'maximumErrorLSB': 2.0, 'maximumSear
           'alignment': 'one integer offset for all channels and events',
           'zeroRunRule': 'exact predicted zero codes with nonzero boundaries',
           'coverage': 'retained event windows only', 'wholeRunValidated': False,
-          'maximumSeconds': 3600}
+          'maximumSeconds': 3600,
+          'monitorModel': "none, or with --monitor-state the steady state resolved by the owner's monitor_ctl "
+                          'from the state and limits files, at rest from the first frame (assumes the monitor '
+                          'did not change during the capture)'}
 DANTE_RATES = (44100, 48000, 88200, 96000, 176400, 192000)
 
 
@@ -288,7 +304,13 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def export_reference(artifact, spans, work, rate, output_gain):
+def artifact_has_monitor(artifact):
+    """Whether the artifact carries a monitor section (a line `monitor 1`), for the record only:
+    the exporter's loader decides what the owner does with it."""
+    return 'monitor 1' in Path(artifact).read_text(errors='replace').splitlines()
+
+
+def export_reference(artifact, spans, work, rate, output_gain, monitor_state=None, monitor_limits=None):
     """Build the exporter and run it over `spans`. Returns (bytes, provenance)."""
     binary = work / 'reference_export'
     command = ['c++', '-std=c++20', '-O2', '-Wall', '-Wextra', '-Wpedantic', '-Werror', '-I', str(EXPORTER.parent),
@@ -296,23 +318,52 @@ def export_reference(artifact, spans, work, rate, output_gain):
     subprocess.run(command, check=True, capture_output=True, text=True, timeout=180)
     ranges = work / 'ranges.txt'
     ranges.write_text(''.join(f'{lo} {hi}\n' for lo, hi in spans))
-    done = subprocess.run([str(binary), str(artifact), str(ranges), str(rate), repr(output_gain)], check=True, capture_output=True, timeout=1800)
-    provenance = {'exporterSHA256': sha(EXPORTER), 'coreSHA256': sha(CORE), 'artifactSHA256': sha(artifact),
+    require(monitor_limits is None or monitor_state is not None, 'monitor limits without a monitor state')
+    monitor = [str(p) for p in (monitor_state, monitor_limits) if p is not None]
+    done = subprocess.run([str(binary), str(artifact), str(ranges), str(rate), repr(output_gain)] + monitor,
+                          check=True, capture_output=True, timeout=1800)
+    provenance = {'exporterSHA256': sha(EXPORTER), 'coreSHA256': sha(CORE),
+                  'monitorControlSHA256': sha(EXPORTER.parent / 'monitor_ctl.hpp'), 'artifactSHA256': sha(artifact),
                   'referenceSHA256': hashlib.sha256(done.stdout).hexdigest(),
                   'compiler': subprocess.check_output(['c++', '--version'], text=True).splitlines()[0]}
+    resolved = [line for line in done.stderr.decode(errors='replace').splitlines() if line.startswith('MONITOR ')]
+    if resolved:
+        provenance['monitorResolved'] = resolved[-1]
     return done.stdout, provenance
 
 
-def analyze(report_path, artifact, work, gain_path, loop=16):
+def monitor_record(artifact, monitor_state, monitor_limits):
+    """What the result says about the monitor block, before any export."""
+    record = {'artifactHasMonitorSection': artifact_has_monitor(artifact),
+              'state': None, 'limits': None}
+    for key, path in (('state', monitor_state), ('limits', monitor_limits)):
+        if path is not None:
+            record[key] = {'path': str(path), 'sha256': sha(path)}
+    if monitor_state is not None:
+        record['model'] = 'steady state from the state file' + (' and the limits file' if monitor_limits else
+                                                                ' with default limits')
+    elif record['artifactHasMonitorSection']:
+        record['model'] = ('none: the artifact has a monitor section but no state was given, so the reference '
+                           'is the monitor at unity with every set on full; a capture taken off unity cannot match')
+    else:
+        record['model'] = 'none: the artifact has no monitor section'
+    return record
+
+
+def analyze(report_path, artifact, work, gain_path, loop=16, monitor_state=None, monitor_limits=None):
     result = {'policy': POLICY, 'status': 'inconclusive', 'wholeRunValidated': False}
+    monitor = None
     try:
+        require(monitor_limits is None or monitor_state is not None, 'monitor limits without a monitor state')
+        monitor = monitor_record(artifact, monitor_state, monitor_limits)
         report = json.loads(Path(report_path).read_text())
         events = validate_evidence(report, loop)
         output_gain, input_gain = host_gain(gain_path, report_rate(report))
         result['evidenceComplete'] = True
         if events:
             spans = reference_ranges(events, report['outputFrames'])
-            data, provenance = export_reference(artifact, spans, work, report_rate(report), output_gain)
+            data, provenance = export_reference(artifact, spans, work, report_rate(report), output_gain,
+                                                monitor_state, monitor_limits)
             result = check_windows(report, events, Reference(spans, data), input_gain, loop)
             result.update(evidenceComplete=True, provenance=provenance, ranges=spans)
         else:
@@ -328,6 +379,10 @@ def analyze(report_path, artifact, work, gain_path, loop=16):
         result.update(status='inconclusive', reason=f'reference export failed: {detail.strip()[:300]}')
     except (EvidenceError, KeyError, TypeError, OSError, ValueError, subprocess.SubprocessError) as error:
         result.update(status='inconclusive', reason=str(error))
+    if monitor is not None:
+        if result.get('provenance', {}).get('monitorResolved'):
+            monitor['resolved'] = result['provenance']['monitorResolved']
+        result['monitor'] = monitor
     return result
 
 
@@ -340,9 +395,16 @@ def main(argv=None):
     parser.add_argument('--output', type=Path, help='write result.json here (the directory is created)')
     parser.add_argument('--loop-channels', type=int, default=16,
                         help='only channels 1..N are looped back and judged (default 16)')
+    parser.add_argument('--monitor-state', type=Path,
+                        help="the monitor's state file as the owner read it (/run/usb-aoip-monitor/state); "
+                             'the reference then applies the monitor block at rest')
+    parser.add_argument('--monitor-limits', type=Path,
+                        help="root's monitor limits (/var/lib/usb16x16-apply/monitor-limits), when it exists; "
+                             'only with --monitor-state')
     args = parser.parse_args(argv)
     with tempfile.TemporaryDirectory() as scratch:
-        result = analyze(args.report, args.artifact, Path(scratch), args.host_gain, args.loop_channels)
+        result = analyze(args.report, args.artifact, Path(scratch), args.host_gain, args.loop_channels,
+                         args.monitor_state, args.monitor_limits)
     if args.output:
         args.output.mkdir(parents=True, exist_ok=True)
         (args.output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
@@ -355,6 +417,8 @@ def main(argv=None):
         print('  ' + '; '.join(f"ch{c}: {len(runs)} run(s), longest {max(runs)}" for c, runs in sorted(by_channel.items())) +
               f"; worst error {max(e['maximumErrorLSB'] for e in events):.2f} codes; one alignment "
               f"({result.get('inputIndexMinusSourceIndex')} frames) for all {len(events)}")
+    if result.get('monitor'):
+        print('  monitor: ' + result['monitor'].get('resolved', result['monitor']['model']))
     return 0 if result['status'] in ('matched-events', 'no-events') else 1 if result['status'] == 'mismatch' else 2
 
 

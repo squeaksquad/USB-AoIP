@@ -15,7 +15,7 @@ browser storage. Nothing can be run.
 `docs/web/REDESIGN-2026-11.md` is the design and the build order. Phase 1 is
 this: the new page on today's audio engine, as a change to `web-ui/` only.
 The web service, the applier, the compiler and the preset model (version 2)
-are as they were. A feature the engine lacks is left out, not shown disabled.
+were as they were (the model is version 3 since phase 3 step 6, below). A feature the engine lacks is left out, not shown disabled.
 
 Three tabs.
 
@@ -54,6 +54,51 @@ Three tabs.
     is made on the device, then downloaded as `usb-aoip-support.json`.
     After a reboot request the page says so and reconnects by itself.
 
+- **Control Room** (phase 3, 2026-11-18; needs web 1.9.0 with the
+  monitor block, `docs/web/MONITOR-FILES.md`). Drawn only when the device
+  says `control.monitor.available` in `/api/health`; when that stops, a page
+  on it goes back to Status. The standalone page has no Control Room.
+  Everything on it is instant, not part of a preset and not in undo, and
+  never marks the draft changed; the device keeps it across restarts.
+  - A card per set (speakers, headphones); with two or more speaker sets,
+    one *Main volume* card that writes level, Dim and Mute to every speaker
+    set at once (`"sets": [...]`), a trim per set (−12 to +12 dB, with what
+    it plays at), and "Which speakers are playing" with "All sets".
+  - The knob: drag (0.25 dB a pixel), arrow keys (0.5 dB), − and + (1 dB),
+    or type; −60 dB to the limit in 0.5 dB steps. The ring of 31 lights
+    shows the level, the blocked part above the limit and the reference.
+    Dim (by the device's dim amount), Mute, Ref (go to the reference), Set
+    (store the level as the reference; left out when the reference is
+    locked). The state line (Muted, Dimmed to, At reference, from ref, Not
+    playing) opens the reference row: the reference level and what it
+    measures, stored through the applier (`monitor-reference`).
+  - Per output meters after the level knob (the to-network tap), a peak
+    line, "Listen as" when the set has two or more fold-downs, Subwoofers
+    on or off on a set with a sub (bass is not redirected to the mains).
+  - The speaker overview: groups (fronts, surrounds, ..., subs, and groups
+    of your own kept in this browser) and a room map, each with S and M.
+    Solo is exclusive in a set; Cmd or Ctrl adds. Clear solo, Clear clips.
+    Pre / Post (2026-11-18): where the overview tiles meter, before the
+    level knob, Dim, mute and solo (the owner's `monitor-in` tap) or after
+    them; Pre by default, the choice kept in this browser (`prefs.mjs`).
+    Drawn only while the meters carry `monitor-in` (a monitor-section
+    preset); without it the overview is after the knob. The cards' banks
+    are always after the knob, and the Status tab's rows are unchanged.
+  - Keys: ↑ ↓ (1 dB), M, D, R, 1 to 9 and 0 (sets, with several), Esc
+    (clear solo), ? (the list).
+  - Sending (`monitor.mjs`, `MonitorSender`): one POST in flight, at most
+    one every 30 ms while dragging, the latest value per set and field
+    wins, the final value on release. The page shows what it sent at once
+    and settles on what the endpoint reports (`effective`, polled every
+    500 ms while the tab is open, matched by `seq`).
+  - Left out, the engine has none of them: sources, sum, follow, cue,
+    talkback, calibration.
+- **System, Level safety** (phase 3): the loudest the knobs can go, the
+  level after power-up (where it was, the reference, or a fixed level; a
+  restart of audio keeps the level it had), and the reference lock. Root's,
+  so each change is a `monitor-limits` request followed to its receipt.
+  Drawn only when the device lists that kind in `control.monitor.kinds`.
+
 The **change bar** at the bottom says what is pending and offers what can be
 done about it. Whether an edit is heard at once or needs a restart is not
 decided in the page: it is `liveState`'s answer, from the compiled draft's
@@ -83,9 +128,26 @@ Things that work differently from the page before:
 - **Gone:** the A/B slots, the Direct/DSP and USB/AoIP switches, the
   copyable service commands, the pasted log snapshot, demonstration meters,
   copy and paste of a whole channel (EQ copy and paste remains).
-- **A set's own level** (`bus.gainDb`, `bus.mute`) has no control: level
-  lives on each output. A preset that carries one says so on Speakers &
-  headphones and offers to clear it.
+- **Preset model v3** (phase 3 step 6, 2026-11-18): a bus has no level or
+  mute (`validateConfig` refuses them); level lives on each output and in
+  the Control Room. `readPreset` reads a version 1 or 2 preset and says what
+  it moved: a bus level is added to its outputs' levels (clamped to −60 and
+  +12 dB, the clamped ones named), a muted bus mutes its outputs. The page
+  shows those sentences as a toast when the preset is opened.
+- **More than one speaker set** (Speakers & headphones, *Add speaker set*):
+  a name, a layout that fits the spare outputs, the spares it takes, and its
+  subwoofer: *Shares the main subs* (its bass goes to the main set's subs,
+  with the sends its channels already have), *None, full range*, or *Own sub*
+  when the layout has one and there is a spare for it. Its outputs are
+  labelled by number (`L 2`, `Sub 2`) and start on the matching computer
+  channels. Giving one of its outputs the job Subwoofer makes it *Own sub*;
+  removing its last one, or the main set losing its subs, moves it back
+  (`settleSubShares`). Adding, removing or changing the sub choice is a
+  restart; everything else on it is live. Drawn only when the device's
+  engine knows the monitor section (`control.monitor.engine`) or there is
+  no device; otherwise a preset with two sets says it cannot switch them.
+  The Control Room switches between them (Which speakers are playing, All
+  sets); `docs/web/MONITOR-FILES.md` has what the owner does.
 - The sample rate is never set from the page.
 - A preset has one spelling of its name, the preset store's: a name is
   rewritten to it when a preset is loaded (`·` becomes `-`).
@@ -123,6 +185,16 @@ downloaded from. `backend.mjs` has the five requests beside `requestShutdown`
 and `fetchSupportBundle`. `renderLive` now compares a panel with the
 browser's own serialisation of the new HTML, so an unchanged panel is no
 longer replaced on every poll.
+
+`monitor.mjs` (phase 3) holds the Control Room's logic: reading
+`/api/monitor`, the optimistic overlay, the sender, solo and mute, the
+labels, the ring, the state line, the room map and groups, the safety
+panel's words; `view-control.mjs` draws the tab and `safetyPanel` in
+`view-system.mjs` the System panel. `backend.mjs` has `fetchMonitor`,
+`postMonitor`, `requestMonitorLimits` and `requestMonitorReference`. The
+Control Room is redrawn by a small DOM morph in `app.mjs`, so a dragged knob
+or a field being typed in survives the poll; the knob's angle and a tile's
+place are custom properties set from script (`--rot`, `--x`, `--y`).
 
 All modules stay flat in `web-ui/`: the installer and
 `install/dev-unit/stage-access.sh` copy `web-ui/*.mjs` and nothing below it.
@@ -177,6 +249,31 @@ Checked on 2026-11-17 for phase 2, with no device:
 
 Not checked: anything on the device itself; the browser's own sign-in prompt
 after a password change; a real file save of the bundle.
+
+Checked on 2026-11-18 for phase 3, with no device: the real web service
+(`--no-auth`) on the Mac, a script standing in for the owner (it follows the
+run file into `monitor.status`, clamped to root's limits, and writes a meter
+snapshot) and the real applier code with the tests' runner draining the
+inbox. Two layouts: 7.1.4 with headphones, and two speaker sets sharing a
+sub. Knob drag, keys, Dim, Mute, Listen as, solo by tile and by group (Cmd
+adding), Esc, the trims, the set switch with All sets, Main volume writing
+both sets; on System the limit (the level clamped to it), the power-up
+rule, and a reference with its note stored from the Control Room; a 375 px
+screen with no sideways scroll; no console errors. Not checked: the owner
+itself, a real lock round trip from the page, touch.
+
+Checked on 2026-11-18 for phase 3 step 6, with no device: the same stand-in
+with `monitor_sim` (the owner's `MonitorControl` without ALSA) on a really
+compiled two-set artifact (`verify-presets.mjs sets`: 5.1, a stereo nearfield
+sharing the sub, headphones). In the Control Room Main volume moved both
+speaker sets, the nearfield's trim moved its gain, the switch went to
+Speakers 2, All sets and back; `/api/meters` read the shared sub following
+the set playing (−111.4 dB mains, −117.2 nearfield, −108.2 both, −123.2 with
+the nearfield trimmed −6 dB, `monitor_sim`'s −20 dBFS broadband signal) and
+the set not playing at −144 dB. On Processor a 2.1 set with its own sub was
+added on the three spares, named, and the change bar asked for a restart; a
+layout that needs more spares than there are is disabled. No console errors. The pane was
+hidden, so this was driven through the DOM, not by pointer.
 
 ## The record below
 

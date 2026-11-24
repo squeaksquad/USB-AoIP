@@ -79,7 +79,7 @@ still describes it; on the Dante stack the differences are these.
 | Verified by | `/run/usb16x16/stage`, the BRIDGE line, RECOVERs, the bridge log | the unit staying up on one start and that start's journal: `DSP loaded`, `DSPLIVE following`, `NETSTART`, nothing fatal, 15 s settle |
 | User presets | `user-<slug>`, a profile block each | `dante-<slug>`, the file alone; any installed preset can be switched to |
 | Live file and status | `/run/usb16x16/dsp-live.dsp`, `.status` | `/run/usb16x16-dante/dsp-live.dsp`, `dsp-live.status` |
-| Meters | `/run/usb16x16/meters`, four taps | `/run/usb16x16-dante/meters.txt`, three taps (`usb-capture`, `dante-playback`, `dante-capture`) |
+| Meters | `/run/usb16x16/meters`, four taps | `/run/usb16x16-dante/meters.txt`, three taps (`usb-capture`, `dante-playback`, `dante-capture`), and `monitor-in` with a monitor-section preset |
 | Telemetry in `/api/health` | `bridge`, `stage`, `recovers`, `ptp`, `streams` | `owner` (the endpoint's once-a-minute `OWNER` / `USB` / `DSP` / `METER` lines, read from the journal every 10 s); no clock or stream table: routing is Dante Controller's |
 | Logs | `usb16x16-aes67`, `usb-16x16` | `usb16x16-dante`, `usb16x16-statime`, `usb-16x16` (`service=stack` names the network service on either) |
 
@@ -186,6 +186,101 @@ those and no others. The web service drops its cache of verified logins when
 the login file changes (one `stat` per request), so the old password stops
 working on the next request.
 
+### The monitor (2026-11-18, web 1.9.0, applier 1.11.0)
+
+Phase 3 of `docs/web/REDESIGN-2026-11.md`, the service half: the monitor
+block's volume, dim, mute, solo, speaker set and fold-downs. A knob is not
+an Apply: the web service writes the owner's state file itself, and only the
+limits go through the applier. `docs/web/MONITOR-FILES.md` is the contract
+for the three files (state, limits, status); `docs/web/ACCESS.md`, "The
+monitor path", says why the third writable place is safe. Built and tested
+on the Mac; the owner's half is a separate step, and nothing is installed.
+
+```
+GET  /api/monitor        {ok, available, state, effective, topology, limits, seq}
+                         available:false (with reason and limits) unless the Dante service is active and
+                         /run/usb16x16-dante/monitor.status reads whole
+POST /api/monitor        a patch, any subset of:
+                           {"set": id, "levelDb": -60..0, "trimDb": -12..12, "dim": b, "mute": b, "fold": name}
+                           {"sets": [id, ...], <the same fields>}  the same change to several sets, one write
+                                                                   (the page's Main volume); not with "set"
+                           {"active": id | "all"}  {"dimDb": -40..0}  {"subs": b}
+                           {"solo": [16 b]}  {"outMute": [16 b]}  {"clearSolo": true}
+                         -> 200 {ok, seq, state}; 400 bad form or unknown key (4 KiB body at most);
+                            409 a set, fold or active set the running preset lacks; 503 no monitor
+                            (the reserved fold `off` is never one it has: the status's folds leave it out)
+POST /api/apply/monitor-limits     {"maxDb": -30..0, "start": "last"|"reference"|"fixed", "startDb": -60..0,
+                                    "lock": b}, at least one     -> 202 {id, kind, note}
+POST /api/apply/monitor-reference  {"set": id, "levelDb": -60..0, "note": "<= 64 ASCII, no \" or \\"}
+                                   409 while the limits say lock=1
+```
+
+- **The state** lives in memory and in `/run/usb-aoip-monitor/state`
+  (`--monitor-run-dir`), rewritten on every POST (seq one more each time),
+  and in a remembered copy in `/var/lib/usb-aoip-monitor/state`
+  (`--monitor-state-dir`), written 2 s after the last change, with solo
+  cleared, and on SIGTERM if a change is unwritten. A level above the
+  limits' `max_db` is lowered to it before it is written (the owner enforces
+  the limit; this is so the page shows what plays). The POST has the sign-in
+  and cross-site checks of every change but not `apply_gate`: a knob works
+  while an Apply runs.
+- **At start** the service reads the run file back (a bad one is discarded
+  with a log line), else the remembered copy, which it does not write to the
+  run file. While no run file exists and the owner's status says
+  `state=start`, the owner's active set and per-set level, trim, dim, mute
+  and fold are taken as the state, so after a boot the owner's start rule
+  decides the first levels, and the run file is written from them at once
+  (the monitor thread looks every 0.5 s, and every GET and POST does), so an
+  owner restart before any knob move does not apply its start rule again.
+  Otherwise the run file is written on a POST.
+- **The status** is read fresh on each GET and POST, parsed once per file
+  version (stat, then a read on a change), as `/api/meters` is. Its age
+  means nothing: the owner writes it only on a change.
+- **The limits** are read from `monitor-limits` in the applier's state
+  directory (absent or invalid: the defaults, `limits.file` says which).
+  The two kinds take their fields only (envelope checks as the System
+  actions), restart nothing (a drain goes on after them), and are refused
+  by the web service on the AES67 stack. The applier implements them in its
+  base class, so either stack takes them; the receipt carries the limits as
+  written and `limitsReplaced` when a file that did not parse was replaced
+  by the defaults.
+- `/api/health` has `control.monitor = {available, reason, endpoint, kinds, engine}`;
+  `kinds` lists the two limits kinds when Apply is available on the Dante
+  stack, and is empty otherwise. `control.apply.actions` is unchanged.
+  `engine` says whether this unit's engine knows the bridge artifact's
+  `monitor` section: the owner of phase 3 writes its monitor status at every
+  start, even with no preset (`state=idle`, no sets), and an older owner never
+  does, so `engine` is true when `/run/usb16x16-dante/monitor.status` exists
+  and reads whole, whatever the unit's state, or, since the file is in the
+  unit's RuntimeDirectory and goes when it stops, when the installed owner
+  binary (`/usr/local/libexec/usb16x16-dante/usb16x16-dante-owner`,
+  `USB16X16_DANTE_OWNER`) carries the section loader's literal
+  `dsp artifact: monitor: `, the applier's own test, read once per binary
+  (cached by inode, size and mtime; unreadable is false). So a preset applied
+  while the endpoint is stopped keeps its section. False on the AES67 stack.
+  `available` is unchanged. The page compiles the section only when `engine`
+  is true.
+- **The monitor section and an older engine.** `POST /api/apply/preset`,
+  `/api/apply/live` and `/api/apply/commit` answer 400 when an artifact they
+  carry (the 48 kHz one or any `rateArtifacts`) has a `monitor` section and
+  `engine` is false, so a page compiled for another unit fails at once
+  instead of an endpoint that does not start. The applier holds the same line
+  on its own (`check_monitor_engine`): on a preset, a profile switch, a rate
+  change and a live edit it refuses an artifact with the section unless the
+  binary that will load it (the owner, or the AES67 bridge) carries the
+  section's loader (the literal `dsp artifact: monitor: `). That covers the
+  one case the offline runner's load check cannot: a new runner beside an
+  owner rolled back alone. The applier's `parse_artifact` and both programs'
+  `artifact_shape` read the section as `DspStage::load` does, check for check;
+  fold gains take part in the applier's +40 dB gain bound; the shape key is
+  pinned with and without the section (`dsp-compiler/fixtures/pinned-monitor-vector.dsp`,
+  `test_monitor_section.py`).
+
+In passing (applier 1.11.0): the support bundle's `usb_f_uac2` hash calls
+`modinfo` as `/usr/sbin/modinfo`, then `/sbin/modinfo`, then from `PATH`;
+when none answers, `hashes.usb_f_uac2_error` says what each attempt said
+rather than leaving a bare null.
+
 ### Live coefficient updates (2026-09-13, step 4 of LIVE_COEFFICIENTS_DESIGN.md)
 
 `live` is a same-shape update of the running user preset with **no restart**.
@@ -272,7 +367,12 @@ converters clamp, cumulative since the bridge started so a client polling
 slower than a window still sees every overload. The stages: `usb-capture`
 is what the host sends over USB, before the DSP stage; `ravenna-playback`
 what leaves on AES67, after it (the UI's output bank); `ravenna-capture` and
-`usb-playback` the return leg. The page reads this at up to 10 Hz while its
+`usb-playback` the return leg. The Dante owner writes three taps,
+`usb-capture`, `dante-playback` (after the stage and the monitor gains: what
+the wire carries) and `dante-capture`, and a fourth, `monitor-in` (after the
+stage, before the monitor's level, dim, mute and solo: pre-fader), only while
+a preset with a monitor section runs; the page's Control Room offers its
+Pre / Post meter switch only when that tap is there. The page reads this at up to 10 Hz while its
 Outputs tab is visible and stops otherwise. A file older than 1 s (the bridge
 stopped, or the profile runs `METERS=0`) reads `available: false` with the
 reason; the health snapshot's `meters` block carries the same flag, the
@@ -377,6 +477,9 @@ POST   /api/apply/profile       queue a switch between accepted profiles (see ab
 POST   /api/apply/shutdown      queue a power-off of the Pi (see "Shut down the Pi")
 POST   /api/apply/reboot, restart-audio, restart-clock, bundle, password   (see "The System actions")
 GET    /api/support/<id>        a support bundle the applier wrote
+GET    /api/monitor             the monitor's state, what is in force, the sets, the limits (see "The monitor")
+POST   /api/monitor             a knob move: written to the state file at once, no applier
+POST   /api/apply/monitor-limits, monitor-reference   root's limits, through the applier (see "The monitor")
 GET    /api/presets             names and mtimes
 GET    /api/presets/<name>      one preset document
 PUT    /api/presets/<name>      atomic write (tmp + fsync + rename), 1 MB / 200 presets

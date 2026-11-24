@@ -646,7 +646,7 @@ class SystemRunner(ShutdownRunner):
         if argv[:2] == ["systemctl", "is-active"]:
             self.calls.append(argv)
             return 3, "inactive"
-        if argv[0] in ("journalctl", "modinfo"):
+        if argv[0] == "journalctl" or os.path.basename(argv[0]) == "modinfo":
             self.calls.append(argv)
             return (0, f"{argv[2]}: a line\n{argv[2]}: another") if argv[0] == "journalctl" else (1, "not found")
         return super().run(argv, timeout)

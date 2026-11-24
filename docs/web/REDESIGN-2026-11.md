@@ -156,6 +156,11 @@ the operator's go-ahead.
 3. **Monitor block in the engine.** Ramped volume, dim, mute, solo, set
    switch, fold-downs, level safety, on a direct control path. Unlocks the
    Control Room for the computer source.
+   Built 2026-11-18 on the Mac (branch `web/redesign-phase3`: owner from
+   `dante/owner/main.cpp`, web 1.9.0, applier 1.11.0, preset model v3,
+   `docs/web/MONITOR-FILES.md`); the handoff says whether it is installed
+   and measured. Left for phase 4: the Sources grid, Sum, Follow, cue mix,
+   talkback. Left for phase 6: Calibrate.
 4. **Dante inputs into the mix.** Sources, talkback, cue mixes, the "To the
    computer" patch.
 5. **More than 16 Dante channels.** Run the no-USB Inferno probe at 32 and

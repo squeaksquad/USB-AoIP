@@ -290,7 +290,7 @@ EnvironmentFile=-$dante_etc/startcheck.conf
 EOF
   put_file 755 $d/usb16x16-dante-start-transport        $libexec/usb16x16-dante-start
   put_file 755 $d/usb16x16-dante-startcheck             $libexec/usb16x16-dante-startcheck
-  put_keep 644 $d/transport-rate882.conf                $dante_etc/transport.conf
+  put_keep 644 $d/transport-idlephase.conf              $dante_etc/transport.conf
   put_keep 644 $d/startcheck.conf                       $dante_etc/startcheck.conf
   put_keep 644 $d/owner.conf.default                    $dante_etc/owner.conf
   # The applier moves SAMPLE_RATE with owner.conf's RATE=; a reinstall keeps the pair.
@@ -456,10 +456,13 @@ cmd_build() {
   as_builder git -C "$build_dir/inferno" reset --quiet --hard "$(pin inferno_rev)"
   as_builder git -C "$build_dir/statime" reset --quiet --hard "$(pin statime_rev)"
 
+  # Its headers and the bridge core are the copies kept beside it, the files
+  # the accepted owner (bb3cd6ca, 2026-11-24) was built from: the development
+  # line (dante/owner, dsp-core) may move on without changing what is installed.
   say "building the owner (the point-of-record source)"
   as_builder g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
-    -I "$repo/dante/owner" -I "$repo/dsp-core/include" -o "$out/usb16x16-dante-owner" \
-    "$repo/dante/owner/point-of-record/main.cpp" "$repo/dsp-core/src/bridge_core.cpp" -lasound -lpthread
+    -I "$repo/dante/owner/point-of-record" -o "$out/usb16x16-dante-owner" \
+    "$repo/dante/owner/point-of-record/main.cpp" "$repo/dante/owner/point-of-record/bridge_core.cpp" -lasound -lpthread
 
   say "building the DSP runner"
   as_builder cmake -S "$repo/dsp-core" -B "$build_dir/dsp-core" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF >/dev/null
@@ -795,13 +798,15 @@ cmd_uninstall() {
   systemctl daemon-reload
   systemctl reload NetworkManager 2>/dev/null || true
   if [ "$purge" = 1 ]; then
-    rm -rf /etc/usb16x16 /var/lib/usb16x16-dante "$WORK_DIR" "$state" /etc/usb-aoip /var/cache/usb-aoip-uac2 /var/spool/usb-aoip "$apply_state"
+    rm -rf /etc/usb16x16 /var/lib/usb16x16-dante "$WORK_DIR" "$state" /etc/usb-aoip /var/cache/usb-aoip-uac2 /var/spool/usb-aoip "$apply_state" \
+      /var/lib/usb-aoip-monitor /run/usb-aoip-monitor
     userdel "$WEB_USER" 2>/dev/null || true; userdel "$OWNER_USER" 2>/dev/null || true
     say "removed, with its settings, presets, Dante identity and config"
   else
     rm -f "$manifest"
     say "removed. Kept: /etc/usb-aoip, /etc/usb16x16 (settings), /var/lib/usb16x16-dante (Dante identity"
-    say "and subscriptions), $WORK_DIR (presets), the logins and certificate in /etc/usb-aoip. --purge removes those too."
+    say "and subscriptions), $WORK_DIR (presets), /var/lib/usb-aoip-monitor (the monitor's remembered levels),"
+    say "the logins and certificate in /etc/usb-aoip. --purge removes those too."
   fi
   say "left alone: the packages, the held kernel (now unheld), /boot/firmware/config.txt, and any aoip-$AUDIO_IF connection"
 }

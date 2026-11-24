@@ -167,8 +167,336 @@ export function bridgeArtifact(result, {presetName} = {}) {
       lines.push([s.b0, s.b1, s.b2, s.a1, s.a2].map(number).join(' '));
     }
   }
+  if (result.monitor) {
+    const tags = config.mixers.expand.mapping.flatMap(entry =>
+      entry.sources.map(() => result.monitor.channelSet[entry.dest]));
+    lines.push(...monitorSection(result.monitor, tags));
+  }
   lines.push('end');
   return `${lines.join('\n')}\n`;
+}
+
+// ------------------------------------------------------------- monitor section
+//
+// Phase 3, the monitor block: the preset's speaker sets and headphones, which
+// outputs belong to which, their labels, and each speaker set's fold-downs, as
+// an optional section just before `end`. The bridge applies a fold at its
+// input (DspStage, bridge_core.hpp): each expand row is tagged with the set
+// whose view of the 16 inputs it reads, so folded content is bass-managed and
+// gets the EQ of the speaker that plays it; headphone rows read the inputs.
+//
+//     monitor 1
+//     sets S                 1..8
+//     set ID KIND            S lines; KIND speakers|headphones; index = order
+//     outs N                 0..16
+//     out INDEX ROLE SET...  INDEX ascending; ROLE speaker|sub; sets ascending
+//     label INDEX TEXT       zero or more, INDEX ascending, outputs in outs only
+//     expandsets N           N = the expand row count
+//     SET|-                  N lines: the set an expand row reads, '-' the inputs
+//     folds F                up to 4 per set
+//     fold SET NAME ROWS     SET a speakers set; NAME not 'full'; ROWS 1..256
+//     DEST SRC GAIN          view[DEST] += GAIN * in[SRC]; a DEST with no row is silent
+//
+// Everything but the label lines is shape (artifactShape), fold gains
+// included, so a live edit never changes the section.
+
+export const MONITOR_VERSION = 1;
+export const MONITOR_LIMITS = Object.freeze({sets: 8, foldsPerSet: 4, foldRows: 256, label: 32});
+const SET_ID = /^[a-z][a-z0-9-]{0,31}$/;
+const FOLD_NAME = /^[a-z0-9.]{1,16}$/;
+
+/** Programme channels by input index, the fixed order the fold table uses. */
+export const PROGRAMME = Object.freeze(['L', 'R', 'C', 'LFE', 'Ls', 'Rs', 'Lrs', 'Rrs',
+  'Ltf', 'Rtf', 'Ltr', 'Rtr', 'Lw', 'Rw', 'Ltm', 'Rtm']);
+const P = Object.fromEntries(PROGRAMME.map((name, index) => [name, index]));
+
+/** A sparse matrix as [dest, [[src, gain]...]] rows, composed outer after inner:
+ *  result[d][s] = sum over k of outer[d][k] * inner[k][s], summed in the
+ *  outer row's order, so the arithmetic (and so every emitted gain) is fixed. */
+function compose(outer, inner) {
+  const innerRows = new Map(inner);
+  return outer.map(([dest, terms]) => {
+    const acc = new Map();
+    for (const [k, g] of terms) {
+      for (const [source, h] of innerRows.get(k) ?? []) acc.set(source, (acc.get(source) ?? 0) + g * h);
+    }
+    return [dest, [...acc]];
+  }).filter(([, terms]) => terms.length);
+}
+
+/**
+ * The fold-downs a speaker set offers, from the inputs its speakers play.
+ *
+ * Programme channel = input index (PROGRAMME). With a = Math.SQRT1_2, h = 0.5,
+ * and only the terms whose source the set uses (the LFE always passes):
+ *
+ *   5.1     L' = L + a Lw + a Ltf + h Ltm     R' likewise (Rw, Rtf, Rtm)
+ *           C' = C    Ls' = Ls + a Lrs + a Ltr + h Ltm    Rs' likewise    LFE' = LFE
+ *           offered when the set uses L, R, C, Ls, Rs and any input above Rs
+ *   stereo  L'' = L' + a C' + a Ls'    R'' = R' + a C' + a Rs'    LFE passes
+ *           offered when the set uses L, R and any other non-LFE input
+ *   mono    L''' = R''' = 0.5 (L'' + R'')    LFE passes
+ *           offered when the set uses L and R
+ *
+ * Not normalised: a hot mix can exceed full scale and saturates at the
+ * converter, the engine's measured behaviour. Duplicate (DEST, SRC) terms are
+ * summed by matrix composition (compose). `lfe` is the input that passes as
+ * the LFE (the preset's LFE input; 3 in the programme order).
+ *
+ * Returns [{name, rows: [[dest, src, gain]...]}], rows sorted by dest then src.
+ */
+export function monitorFolds(usedInputs, {lfe = P.LFE} = {}) {
+  const used = new Set(usedInputs);
+  const a = Math.SQRT1_2, h = 0.5;
+  const terms = list => list.filter(([source]) => used.has(source));
+  const lfeRow = [lfe, [[lfe, 1]]];
+  const five = [
+    [P.L, terms([[P.L, 1], [P.Lw, a], [P.Ltf, a], [P.Ltm, h]])],
+    [P.R, terms([[P.R, 1], [P.Rw, a], [P.Rtf, a], [P.Rtm, h]])],
+    [P.C, terms([[P.C, 1]])],
+    [P.Ls, terms([[P.Ls, 1], [P.Lrs, a], [P.Ltr, a], [P.Ltm, h]])],
+    [P.Rs, terms([[P.Rs, 1], [P.Rrs, a], [P.Rtr, a], [P.Rtm, h]])],
+    lfeRow,
+  ].filter(([, list]) => list.length);
+  const stereo = compose([
+    [P.L, [[P.L, 1], [P.C, a], [P.Ls, a]]],
+    [P.R, [[P.R, 1], [P.C, a], [P.Rs, a]]],
+    lfeRow,
+  ], five);
+  const mono = compose([
+    [P.L, [[P.L, 0.5], [P.R, 0.5]]],
+    [P.R, [[P.L, 0.5], [P.R, 0.5]]],
+    lfeRow,
+  ], stereo);
+  const has = (...names) => names.every(name => used.has(P[name]));
+  const others = [...used].some(input => input !== P.L && input !== P.R && input !== P.LFE && input !== lfe);
+  const folds = [];
+  const rows = matrix => matrix.flatMap(([dest, list]) => list.map(([source, gain]) => [dest, source, gain]))
+    .sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  if (has('L', 'R', 'C', 'Ls', 'Rs') && [...used].some(input => input > P.Rs)) folds.push({name: '5.1', rows: rows(five)});
+  if (has('L', 'R') && others) folds.push({name: 'stereo', rows: rows(stereo)});
+  if (has('L', 'R')) folds.push({name: 'mono', rows: rows(mono)});
+  return folds;
+}
+
+/** An output label as the section carries it: printable ASCII, '?' for
+ *  anything else, runs of spaces collapsed, trimmed, at most 32 characters.
+ *  Empty means no label line. */
+export function monitorLabel(text) {
+  const ascii = [...String(text)].map(ch => (ch >= ' ' && ch <= '~' ? ch : '?')).join('');
+  return ascii.replace(/ +/g, ' ').trim().slice(0, MONITOR_LIMITS.label).trim();
+}
+
+/** The fold that silences a speakers set's whole view: the one row 0 0 0.
+ *  Emitted, last, for every speakers set when a preset has more than one; the
+ *  owner engages it on a set that is not playing so the set stops feeding a
+ *  subwoofer it shares, and never offers it as a fold to listen in. */
+export const OFF_FOLD = Object.freeze({name: 'off', rows: Object.freeze([Object.freeze([0, 0, 0])])});
+
+/**
+ * The monitor topology of a validated preset and its channel plan: what
+ * `compile()` keeps as `result.monitor` and bridgeArtifact writes.
+ *
+ * One set per bus, in bus order. Every output in a bus and not unused is
+ * listed, with its role; a sub of the first speakers set is also listed for
+ * every set that shares it (subShare main). Each plan channel is tagged with
+ * the set whose view it reads: `phones` channels read the inputs (null), a
+ * `main` or `bass` channel its own set (planChannels gives every main and
+ * bass branch one). Folds per speakers set from what its speakers play, and
+ * with more than one speakers set, each set's `off` last.
+ */
+export function monitorTopology(model, plan) {
+  const sets = model.buses.map(bus => ({id: bus.id, kind: bus.kind}));
+  const busOfOutput = output => model.buses.findIndex(bus => bus.outputIds.includes(output));
+  const feeds = plan.sets ?? [];
+  const outs = [];
+  const labels = Array(16).fill(null);
+  model.outputs.forEach((spec, index) => {
+    const set = busOfOutput(index);
+    if (set < 0 || spec.role === 'unused') return;
+    const shared = spec.role === 'sub'
+      ? feeds.filter(feed => feed.set !== set && feed.share === 'main' && feed.subs.includes(index)).map(feed => feed.set)
+      : [];
+    outs.push({index, role: spec.role, sets: [set, ...shared].sort((a, b) => a - b)});
+    const label = monitorLabel(spec.label);
+    labels[index] = label || null;
+  });
+  const channelSet = plan.channels.map(channel => (channel.kind === 'phones' ? null : channel.set));
+  const folds = [];
+  const speakerSets = model.buses.filter(bus => bus.kind === 'speakers').length;
+  model.buses.forEach((bus, set) => {
+    if (bus.kind !== 'speakers') return;
+    const used = outs.filter(out => out.role === 'speaker' && out.sets.includes(set))
+      .map(out => model.outputs[out.index].source);
+    for (const fold of monitorFolds(used, {lfe: model.lfe.input})) folds.push({set, ...fold});
+    if (speakerSets > 1) folds.push({set, name: OFF_FOLD.name, rows: OFF_FOLD.rows.map(row => [...row])});
+  });
+  // A set ID is the bus ID, which model.mjs validates against the same rule.
+  return {sets, outs, labels, channelSet, folds};
+}
+
+/** The section's lines for a topology and one set tag per expand row. */
+export function monitorSection(topology, expandTags) {
+  const lines = [`monitor ${MONITOR_VERSION}`, `sets ${topology.sets.length}`];
+  for (const set of topology.sets) lines.push(`set ${set.id} ${set.kind}`);
+  lines.push(`outs ${topology.outs.length}`);
+  for (const out of topology.outs) lines.push(`out ${out.index} ${out.role} ${out.sets.join(' ')}`);
+  topology.labels.forEach((label, index) => { if (label) lines.push(`label ${index} ${label}`); });
+  lines.push(`expandsets ${expandTags.length}`, ...expandTags.map(tag => (tag === null ? '-' : String(tag))));
+  lines.push(`folds ${topology.folds.length}`);
+  for (const fold of topology.folds) {
+    lines.push(`fold ${fold.set} ${fold.name} ${fold.rows.length}`);
+    for (const [dest, source, gain] of fold.rows) lines.push(`${dest} ${source} ${number(gain)}`);
+  }
+  return lines;
+}
+
+/**
+ * Read a monitor section from `lines` (trimmed, non-empty) starting at `at`,
+ * the line `monitor 1`, through the `end` that closes the artifact. As strict
+ * as the bridge's loader, refusing what it refuses. `expandRows`, when given,
+ * is the artifact's expand row count, which expandsets must equal.
+ *
+ * Returns {section, shape, at}: the parsed section, its shape lines (every
+ * line but the labels, words joined by single spaces), and the index of the
+ * `end` line.
+ */
+function readMonitor(lines, at, expandRows) {
+  let text = '';
+  let words = [];
+  const refuse = why => new Error(`monitor: ${why} in '${text}'`);
+  const next = what => {
+    if (at >= lines.length) throw new Error(`monitor: unexpected end, expected ${what}`);
+    text = lines[at++];
+    words = text.split(/\s+/);
+  };
+  const shape = [];
+  const keep = () => shape.push(words.join(' '));
+  const whole = (index, limit, what) => {
+    const value = words[index];
+    if (value === undefined || !/^\d{1,9}$/.test(value) || Number(value) > limit) {
+      throw refuse(`${what} must be a whole number no larger than ${limit}`);
+    }
+    return Number(value);
+  };
+  const header = (keyword, limit) => {
+    next(keyword);
+    if (words.length !== 2 || words[0] !== keyword) throw refuse(`expected '${keyword} N'`);
+    const value = whole(1, limit, keyword);
+    keep();
+    return value;
+  };
+  next('monitor');
+  if (words.length !== 2 || words[0] !== 'monitor' || words[1] !== String(MONITOR_VERSION)) {
+    throw refuse('unsupported monitor version');
+  }
+  keep();
+  const section = {sets: [], outs: [], labels: Array(16).fill(null), expandSets: [], folds: []};
+  const setCount = header('sets', MONITOR_LIMITS.sets);
+  if (setCount === 0) throw refuse('a monitor section needs at least one set');
+  for (let index = 0; index < setCount; index += 1) {
+    next('set');
+    if (words.length !== 3 || words[0] !== 'set') throw refuse("expected 'set ID KIND'");
+    if (!SET_ID.test(words[1])) throw refuse('set ID must match [a-z][a-z0-9-]{0,31}');
+    if (section.sets.some(set => set.id === words[1])) throw refuse('duplicate set ID');
+    if (words[2] !== 'speakers' && words[2] !== 'headphones') throw refuse('set kind must be speakers or headphones');
+    section.sets.push({id: words[1], kind: words[2], folds: ['full']});
+    keep();
+  }
+  const speakers = set => section.sets[set].kind === 'speakers';
+  const outCount = header('outs', 16);
+  for (let row = 0; row < outCount; row += 1) {
+    next('out');
+    if (words.length < 4 || words[0] !== 'out') throw refuse("expected 'out INDEX ROLE SET...'");
+    const index = whole(1, 15, 'output index');
+    if (section.outs.length && index <= section.outs.at(-1).index) throw refuse('output indices must ascend');
+    const role = words[2];
+    if (role !== 'speaker' && role !== 'sub') throw refuse('output role must be speaker or sub');
+    const sets = [];
+    for (let i = 3; i < words.length; i += 1) {
+      const set = whole(i, setCount - 1, 'set index');
+      if (sets.length && set <= sets.at(-1)) throw refuse("an output's sets must ascend");
+      sets.push(set);
+    }
+    if (role === 'sub' && !sets.every(speakers)) throw refuse('a sub belongs to speaker sets only');
+    if (sets.length > 1 && role !== 'sub') throw refuse('only a sub may belong to more than one set');
+    section.outs.push({index, role, sets});
+    keep();
+  }
+  next('label or expandsets');
+  let lastLabel = -1;
+  while (words[0] === 'label') {
+    if (words.length < 3) throw refuse("expected 'label INDEX TEXT'");
+    const index = whole(1, 15, 'label index');
+    if (index <= lastLabel) throw refuse('label indices must ascend');
+    if (!section.outs.some(out => out.index === index)) throw refuse('a label for an output in no set');
+    const label = text.replace(/^label\s+\S+\s+/, '');
+    if (!label.length || label.length > MONITOR_LIMITS.label || !/^[\x20-\x7e]+$/.test(label)) {
+      throw refuse('a label is 1 to 32 printable ASCII characters');
+    }
+    section.labels[index] = label;
+    lastLabel = index;
+    next('label or expandsets');
+  }
+  if (words.length !== 2 || words[0] !== 'expandsets') throw refuse("expected 'expandsets N'");
+  const tagged = whole(1, 16 * 48 + 1, 'expandsets');
+  if (expandRows !== undefined && tagged !== expandRows) {
+    throw refuse(`expandsets must give one set per expand row (${expandRows})`);
+  }
+  keep();
+  for (let row = 0; row < tagged; row += 1) {
+    next('an expandsets row');
+    if (words.length !== 1) throw refuse("expected a set index or '-'");
+    section.expandSets.push(words[0] === '-' ? null : whole(0, setCount - 1, 'set index'));
+    keep();
+  }
+  const foldCount = header('folds', MONITOR_LIMITS.foldsPerSet * setCount);
+  for (let index = 0; index < foldCount; index += 1) {
+    next('fold');
+    if (words.length !== 4 || words[0] !== 'fold') throw refuse("expected 'fold SET NAME ROWS'");
+    const set = whole(1, setCount - 1, 'set index');
+    if (!speakers(set)) throw refuse('only a speakers set has fold-downs');
+    const name = words[2];
+    if (!FOLD_NAME.test(name) || name === 'full') throw refuse("fold name must match [a-z0-9.]{1,16} and not be 'full'");
+    if (section.sets[set].folds.includes(name)) throw refuse('duplicate fold name in a set');
+    if (section.sets[set].folds.length > MONITOR_LIMITS.foldsPerSet) throw refuse('more than 4 fold-downs in one set');
+    section.sets[set].folds.push(name);
+    const count = whole(3, MONITOR_LIMITS.foldRows, 'fold rows');
+    if (count === 0) throw refuse('a fold-down has at least one row');
+    keep();
+    const rows = [];
+    const seen = new Set();
+    for (let row = 0; row < count; row += 1) {
+      next('a fold row');
+      if (words.length !== 3) throw refuse("expected 'DEST SRC GAIN'");
+      const dest = whole(0, 15, 'fold destination');
+      const source = whole(1, 15, 'fold source');
+      if (seen.has(dest * 16 + source)) throw refuse('a (DEST, SRC) pair twice in one fold');
+      seen.add(dest * 16 + source);
+      const gain = Number(words[2]);
+      if (!/^[-+0-9.eE]+$/.test(words[2]) || !Number.isFinite(gain)) throw refuse('fold gain must be a finite number');
+      rows.push([dest, source, gain]);
+      keep();
+    }
+    section.folds.push({set, name, rows});
+  }
+  next('end');
+  if (words.length !== 1 || words[0] !== 'end') throw refuse("expected 'end'");
+  return {section, shape, at: at - 1};
+}
+
+/**
+ * The monitor section of an artifact, or null when it has none. Throws on a
+ * malformed section, as the bridge would refuse it. The page reads the sets,
+ * outputs, labels and fold names from this.
+ */
+export function parseMonitorSection(text) {
+  const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+  const start = lines.findIndex(line => /^monitor(\s|$)/.test(line));
+  if (start < 0) return null;
+  const expand = lines.find(line => /^expand\s+\d+$/.test(line));
+  const expandRows = expand === undefined ? undefined : Number(expand.split(/\s+/)[1]);
+  return readMonitor(lines, start, expandRows).section;
 }
 
 /**
@@ -221,9 +549,10 @@ export function artifactShape(text) {
       if (gain === undefined || extra.length) throw new Error(`artifact shape: ${keyword} row ${row + 1}`);
       out.push(`${dest} ${source}`);
     }
+    return rows;
   };
   const skipSections = count => { for (let i = 0; i < count; i += 1) next(); };
-  mix('expand');
+  const expandRows = mix('expand');
   const branches = counted('branch');
   out.push(`branch ${branches}`);
   for (let row = 0; row < branches; row += 1) {
@@ -246,6 +575,15 @@ export function artifactShape(text) {
   }
   out.push('output 16');
   perOutput.forEach((sections, index) => out.push(`${index} ${sections}`));
+  // The monitor section, when there is one: every line of it but the labels,
+  // as written (fold gains are shape). Without it the shape is unchanged.
+  if (at < lines.length && /^monitor(\s|$)/.test(lines[at])) {
+    let monitor;
+    try { monitor = readMonitor(lines, at, expandRows); }
+    catch (error) { throw new Error(`artifact shape: ${error.message}`); }
+    out.push(...monitor.shape);
+    at = monitor.at;
+  }
   if (next() !== 'end' || at !== lines.length) throw new Error("artifact shape: expected 'end'");
   out.push('end');
   return `${out.join('\n')}\n`;

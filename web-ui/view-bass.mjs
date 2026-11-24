@@ -32,6 +32,13 @@ export function bassView(S) {
       ${subs.map(({o, i: j}) => `<input type="text" inputmode="decimal" class="send" data-f="send" data-i="${i},${j}" data-k="send:${i},${j}" value="${dbText(c.sends[i][j])}" ${!lfe && !on ? 'disabled' : ''} aria-label="${esc(v.label)} to ${esc(o.label)}, in dB, or off">`).join('')}</div>`;
   }).join('');
   const note = S.polarity;
+  // Added speaker sets: where their bass goes (model v3's subwoofer choice).
+  const extra = c.buses.filter(b => b.kind === 'speakers').slice(1).map(b => {
+    const own = b.outputIds.filter(i => c.outputs[i].role === 'sub').map(i => c.outputs[i].label);
+    return b.subShare === 'main' ? `${b.label} shares the main subwoofer: its channels' bass goes there with the sends below, and only while it plays.`
+      : b.subShare === 'none' ? `${b.label} has no subwoofer: its speakers play full range, whatever the high-passes here say.`
+      : `${b.label} has its own: ${own.join(', ')}, with the sends in ${own.length === 1 ? 'its column' : 'their columns'}.`;
+  });
   return `<section class="panel" aria-label="Bass management">
     <div class="row-head"><div><strong class="title">Bass management</strong> <span class="muted">${on ? 'Each speaker\'s low frequencies go to the subwoofers.' : 'Off: speakers play full range and send no bass. LFE is still routed.'}</span></div>
       <button type="button" class="toggle" data-act="bass-toggle" ${pressed(on)}>${on ? 'On' : 'Off'}</button></div>
@@ -45,6 +52,7 @@ export function bassView(S) {
       <span>LFE slope</span>${segmented({act: 'lfe-slope', label: 'LFE slope', items: slopes, value: c.lfe.slope})}
       <label class="inline">LFE is computer channel <select data-f="lfe.input" aria-label="Which computer channel is LFE">${options(c.inputs.map((v, i) => [i, `${pad(i)} · ${v.label}`]), c.lfe.input)}</select></label></div>
     ${xover === null && mains.length ? '<p class="muted">The speakers have different crossovers. Typing one here sets them all.</p>' : ''}
+    ${extra.length ? `<p class="muted">${extra.map(esc).join(' ')} The crossovers are each channel's, the same in every speaker set.</p>` : ''}
     ${note ? `<p class="banner note" role="note"><strong>${esc(note.headline)}.</strong> ${esc(note.detail)} <span class="muted">Advice only: no polarity has been changed.</span></p>` : ''}
     <div class="row-head"><div><strong>Speakers and sub feeds</strong> <span class="muted">One row per computer channel that feeds a speaker. With the high-pass off a speaker plays full range and still sends its bass. Type a level into a send, or off.</span></div></div>
     <div class="table-scroll"><div class="bass-table cols-${subs.length}" role="table" aria-label="Speakers and sub feeds">

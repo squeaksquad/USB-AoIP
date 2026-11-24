@@ -54,7 +54,7 @@ for f in dante statime dante-startcheck dante-rate; do
 done
 same /usr/local/libexec/usb16x16-dante/usb16x16-dante-start      dante/service/usb16x16-dante-start-transport
 same /usr/local/libexec/usb16x16-dante/usb16x16-dante-startcheck dante/service/usb16x16-dante-startcheck
-same /etc/usb16x16/dante/transport.conf                 dante/service/transport-rate882.conf
+same /etc/usb16x16/dante/transport.conf                 dante/service/transport-idlephase.conf
 same /etc/usb16x16/dante/startcheck.conf                dante/service/startcheck.conf
 same /etc/usb16x16/dante/owner.conf                     dante/service/owner.conf.default
 same /etc/usb16x16/dante/asound-inferno-owner.conf      dante/config/asound-inferno-owner-usb-aoip-rate882.conf
@@ -77,8 +77,10 @@ sed -n "/^cat > \"\$sudoers_temporary\" <<'EOF'/,/^EOF/p" "$repo/history/install
 cmp -s "$dev/etc/sudoers.d/usb16x16-dante" "$tmp/sudoers.chain" || bad "development unit: the sudoers rule differs from the chain's"
 # The pinned hashes of the audio-path files, as the handoff records them.
 pinned() { [ "$(sha "$dev$1" | cut -c1-8)" = "$2" ] || bad "development unit: $1 is $(sha "$dev$1" | cut -c1-8), the point of record has $2"; }
-pinned /usr/local/libexec/usb16x16-dante/usb16x16-dante-start df6a1b0b
-pinned /etc/usb16x16/dante/transport.conf                     add1bc21
+# The wrapper with the IDLE_PHASE key and the transport that sets it (2026-11-20), installed by
+# install-owner-idlephase.sh and ACCEPTED 2026-11-24 with the owner bb3cd6ca.
+pinned /usr/local/libexec/usb16x16-dante/usb16x16-dante-start 203c6fa5
+pinned /etc/usb16x16/dante/transport.conf                     6818176f
 pinned /etc/usb16x16/dante/asound-inferno-owner.conf          85a5256f
 pinned /etc/usb16x16/dante/statime.toml                       11b055df
 pinned $u/usb16x16-dante.service                              27b68877
@@ -111,6 +113,8 @@ has $u/usb16x16-web.service                       '--port 9090'
 has $u/usb16x16-apply.path                        'PathChanged=/var/spool/usb-aoip/inbox'
 has $u/usb16x16-web.service                       '--auth-file /etc/usb-aoip/web-auth'
 has $u/usb16x16-web.service                       'ReadWritePaths=/var/lib/usb-aoip/web-presets /var/spool/usb-aoip/inbox'
+has $u/usb16x16-web.service                       'RuntimeDirectory=usb-aoip-monitor'
+has $u/usb16x16-web.service                       'StateDirectory=usb-aoip-monitor'
 has /etc/sudoers.d/usb16x16-dante                 'pi ALL=(root) NOPASSWD:'
 [ ! -e "$new$u/usb16x16-wlan-keepalive.service" ] || bad "fresh unit: a keepalive unit was rendered with no targets"
 # The audio path is the same on every unit: only names and addresses differ.

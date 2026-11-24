@@ -29,6 +29,9 @@ if(BUILD_TESTING)
     add_executable(usb16x16_bridge_tests tests/bridge_tests.cpp)
     target_link_libraries(usb16x16_bridge_tests PRIVATE usb16x16_bridge_core)
     target_compile_options(usb16x16_bridge_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    # The monitor vector the JS and Python tests share; skipped when absent.
+    target_compile_definitions(usb16x16_bridge_tests PRIVATE
+        USB16X16_MONITOR_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/../dsp-compiler/fixtures/pinned-monitor-vector.dsp")
     add_test(NAME bridge_core COMMAND usb16x16_bridge_tests)
 endif()
 

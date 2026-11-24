@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 25
       - run: node --test web-ui/*.test.mjs
       - run: node --test dsp-compiler/*.test.mjs
 
@@ -59,11 +59,35 @@ jobs:
             c++ $CXXFLAGS_STRICT -o "$RUNNER_TEMP/owner/${t}_test" "${t}_test.cpp"
             "$RUNNER_TEMP/owner/${t}_test"
           done
-          for t in dsp_path dsp_live meter_tap; do
+          for t in dsp_path dsp_live meter_tap monitor_ctl; do
             c++ $CXXFLAGS_STRICT -I ../../dsp-core/include \
               -o "$RUNNER_TEMP/owner/${t}_test" "${t}_test.cpp" ../../dsp-core/src/bridge_core.cpp
             "$RUNNER_TEMP/owner/${t}_test"
           done
+          # The monitor simulator (not installed): compile only.
+          c++ $CXXFLAGS_STRICT -I . -I ../../dsp-core/include -o "$RUNNER_TEMP/owner/monitor_sim" \
+            monitor_sim.cpp ../../dsp-core/src/bridge_core.cpp -lpthread
+      # The owners themselves need ALSA, so they are compiled here (not run) with
+      # the installer's flags: the development owner, and the point of record
+      # against the headers beside it as they are now.
+      - name: Owner sources compile (development and point of record)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q libasound2-dev
+          mkdir -p "$RUNNER_TEMP/owner-build"
+          g++ $CXXFLAGS_STRICT -I dante/owner -I dsp-core/include -o "$RUNNER_TEMP/owner-build/usb16x16-dante-owner" \
+            dante/owner/main.cpp dsp-core/src/bridge_core.cpp -lasound -lpthread
+          "$RUNNER_TEMP/owner-build/usb16x16-dante-owner" --help 2>&1 | head -3 || true
+          # The point of record builds from the headers and bridge core kept beside it, as install.sh does.
+          g++ $CXXFLAGS_STRICT -I dante/owner/point-of-record -o "$RUNNER_TEMP/owner-build/usb16x16-dante-owner-por" \
+            dante/owner/point-of-record/main.cpp dante/owner/point-of-record/bridge_core.cpp -lasound -lpthread
+          "$RUNNER_TEMP/owner-build/usb16x16-dante-owner-por" --help 2>&1 | grep -q -- --idle-phase
+      # Since 2026-11-24 dante/owner/main.cpp carries idle-phase.patch (the accepted owner's source).
+      # The development unit's two bundles rebuild the installed owners from the source before it by
+      # taking the patch back out, so check that it still comes out to that source (8c9bf80e).
+      - name: idle-phase.patch comes back out of the tree's owner
+        run: |
+          patch -s -f -R -r - -o "$RUNNER_TEMP/main-before-idlephase.cpp" dante/owner/main.cpp < dante/owner/idle-phase.patch
+          echo "8c9bf80e9a23ef69056c812e8fdc3ed895618d5720002deb48444bde0c79a792  $RUNNER_TEMP/main-before-idlephase.cpp" | sha256sum -c -
 
   shell:
     name: Start wrapper and start check (bash)
@@ -73,6 +97,7 @@ jobs:
       - run: bash dante/service/test-dante-start.sh
       - run: bash dante/service/test-dante-start.sh transport
       - run: bash dante/service/test-dante-startcheck.sh
+      - run: bash gadget/test-wlan-guard.sh
 
   install-render:
     name: Installer render test (development unit reproduces the point of record)
@@ -84,6 +109,10 @@ jobs:
       - run: bash install/test-render.sh
       - name: The development unit's access update, against a stand-in root
         run: git fetch --tags --quiet && bash install/dev-unit/test-access.sh
+      - name: The development unit's owner-monitor update, against a stand-in root
+        run: bash install/dev-unit/test-owner-monitor.sh
+      - name: The development unit's owner-idlephase update, against a stand-in root
+        run: bash install/dev-unit/test-owner-idlephase.sh
 
   # The installer's own build step on arm64, as on the Pi: Statime and the
   # patched Inferno plugin at the pinned revisions, the owner, the DSP runner.

@@ -89,7 +89,7 @@ same run (TLS, item 16, and the no-address retry, item 17, were not).
 10. The built artifacts run: Statime locks to the leader, the device appears
     in Dante Controller under `DEVICE_NAME` with its own device ID, the host
     sees the gadget with the derived serial. The binaries will not hash to
-    the development unit's (c84e6a36, c6b012ae, e1952224): compare behaviour,
+    the development unit's (owner bb3cd6ca since 2026-11-20, c84e6a36 before; c6b012ae, e1952224): compare behaviour,
     and record the new hashes from the manifest.
 11. Two units on one host at once: distinct serials, both usable.
 12. The web page as the dedicated `usb-aoip-web` user: it reads the journal
@@ -139,6 +139,23 @@ stack, never run on a Pi.
     checks above, a noise probe at 32 and one two-minute sixteen-channel
     soak. The rate arbiter's decisions were not changed, but it runs through
     the same file: a rate move from the Mac and one from Dante Controller.
+
+22. The monitor path (web 1.9.0, applier 1.11.0, 2026-11-18): systemd makes
+    `/run/usb-aoip-monitor` and `/var/lib/usb-aoip-monitor` for the web unit
+    (0755, the web account's) under its sandbox, the service writes `state`
+    there 0644 despite `UMask=0027`, and the owner's account can read both and
+    `/var/lib/usb16x16-apply/monitor-limits`. The run directory survives a
+    restart of the web service (`RuntimeDirectoryPreserve=yes`) and is empty
+    after a reboot. `uninstall --purge` removes both. Also: whether the
+    applier's unit (`ProtectKernelModules=yes`) can run `modinfo` at all: a
+    support bundle's `hashes.usb_f_uac2_error` says what it got.
+23. The owner the installer builds (2026-11-24): `install.sh build` compiles
+    `dante/owner/point-of-record/` (now the accepted bb3cd6ca's sources,
+    main.cpp 4d885b76) with one `-I`, where `build-owner-idlephase.sh` used
+    two (`-I dante/owner -I dsp-core/include`) and gave bb3cd6ca. On the
+    development unit, with the same compiler, check whether the two builds
+    give the same hash; if not, the installer's owner is a new binary of the
+    same source and is measured as one.
 
 ## Acceptance
 
