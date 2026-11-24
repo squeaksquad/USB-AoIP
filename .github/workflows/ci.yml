@@ -97,6 +97,7 @@ jobs:
       - run: bash dante/service/test-dante-start.sh
       - run: bash dante/service/test-dante-start.sh transport
       - run: bash dante/service/test-dante-startcheck.sh
+      - run: bash gadget/test-wlan-guard.sh
 
   install-render:
     name: Installer render test (development unit reproduces the point of record)

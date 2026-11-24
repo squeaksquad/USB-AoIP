@@ -18720,3 +18720,70 @@ nothing on the Pi): the accepted owner's source is in the tree. This is the
 - Not compiled here (ALSA): the owner, which CI compiles.
 - A Fable 5.2 medium advisor reviewed the diff: no correctness bugs. Its
   stale-doc findings and the `-f` on `patch -R` are taken.
+
+**FOUND 2026-11-24 ~14:05-14:20 UTC (session; the Pi read, then one
+runtime change on the operator's word "fix the wlan0 band steering so it
+stays connected"): why wlan0 was down for two days, and that the Pi can
+stop offering BSS transition without root.**
+- The page was unreachable because wlan0 had no association from
+  2026-11-22 21:20 UTC (the Pi's log, 16:20 local): six disconnects that
+  day with reason 6 (the access point no longer knew the station), each
+  re-associated in seconds, then one with reason 7 followed by nine
+  `CTRL-EVENT-ASSOC-REJECT ... status_code=16`, and NetworkManager's
+  `config -> failed (reason 'no-secrets')`. Nothing tried again until the
+  operator's `sudo nmcli con up` at 14:12 UTC today (rejected three times,
+  associated on the fourth, [the 2.4 GHz radio], 192.168.1.201; the page
+  answers 401). 946 `WNM: Preferred List Available` in this boot's log;
+  five more in the four minutes after that reconnect.
+- `disable_btm` (FOUND 2026-11-20 13:13 UTC named it as needing a
+  supplicant config) is reachable at runtime: the supplicant's control
+  socket `/run/wpa_supplicant/wlan0` is group `netdev`, which `bdimaio` is
+  in, and the D-Bus interface has `DisableBtm` writable. The session ran
+  `wpa_cli -i wlan0 set disable_btm 1` and `reassociate` at 14:16:31 UTC
+  (the Pi's 09:16:31): one reject, associated at 09:16:50, traffic
+  passing. It is runtime state: a reboot, a supplicant restart or a
+  driver reload puts it back to 0.
+- Not shown: that the access point has stopped steering. With
+  `disable_btm=1` the supplicant drops a request before it logs it and
+  sends no answer, so the two log lines that marked the fault go quiet
+  whether or not the access point still sends. The only evidence is the
+  link staying up; earlier it went dead between 40 minutes and some hours
+  after an association.
+
+**IMPLEMENTED 2026-11-24 (session, same word; Mac-tested, staged on the Pi
+at `~/usb-16x16-work/gadget/`; installed in the next entry: the install needs the
+operator's sudo): `usb16x16-wlan-guard`, the Pi-side answer to the band
+steering.** A root service (`gadget/usb16x16-wlan-guard` 89ec5484, unit
+d1cd33d6, `gadget/install-wlan-guard.sh install|rollback|status`,
+`gadget/test-wlan-guard.sh` in CI's shell job). Every 20 s it
+- keeps `disable_btm` at 1 on wlan0, re-associating once when it had to
+  set it on a standing association;
+- judges the link by NetworkManager's state and one answered ping in
+  three to the default gateway on wlan0, so it sees both faults on the
+  record: no association, and an association that passes no traffic;
+- after three bad passes runs `nmcli device connect wlan0` (which also
+  clears the `no-secrets` autoconnect block), and after two failed
+  attempts reloads the Wi-Fi driver (what cleared the firmware on
+  2026-11-22), at most once in ten minutes.
+It does nothing while Wi-Fi is switched off, and touches neither eth0 nor
+any audio service. To take wlan0 down on purpose, stop it first. It is
+for the author's Pi: `install/install.sh` does not install it. Checked:
+the test's twelve cases on the Mac and on the Pi; two passes run
+unprivileged on the Pi against the live link (healthy, nothing done).
+The cure at the source is still the access point's: band steering off
+for this client or network, or separate names for the two bands.
+
+**INSTALLED 2026-11-24 14:20 UTC (the operator ran `sudo
+~/usb-16x16-work/gadget/install-wlan-guard.sh`; the session read it
+back): the wireless guard.** Guard 89ec5484 at
+`/usr/local/sbin/usb16x16-wlan-guard`, unit d1cd33d6, enabled, started
+14:20:06 UTC, `NRestarts=0`, its one log line `watching wlan0 every 20s
+(driver brcmfmac)`; `disable_btm` 1; wlan0 connected on [the 2.4 GHz
+radio] since 14:16:50 UTC with no disconnect after, three of three pings
+to the router answered, the page 401 on 192.168.1.201. The audio was not
+touched: `usb16x16-dante` active, `NRestarts=0`, start check `state=ok
+rate=6017` of 2026-11-22 13:43:53Z. Not ACCEPTED: whether it holds is
+only shown by time (read `journalctl -u usb16x16-wlan-guard` and the
+supplicant's `CTRL-EVENT-DISCONNECTED` lines after a day or more), and
+the reload path has run only in the test. Remove with
+`sudo ~/usb-16x16-work/gadget/install-wlan-guard.sh rollback`.
