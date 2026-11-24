@@ -18619,3 +18619,29 @@ So the 10-31 and 11-01 passes show a good state of the far loop, not a good
 configuration. What the units are confirmed for (rate and lock) does not
 include the Metric Halo's word-clock output rate at 2x (1x or 2x), which is
 still not on the record.
+
+**DECIDED 2026-11-24 (operator, "yes, accept item 4 and re-judge the soak"):
+item 4, the host gain at 96 kHz, is taken from a failing 96 kHz bitexact
+report of 2026-11-22. Its gain calibration (held DC steps, before the noise)
+measured unity both ways with the same widths as every passing report; its
+failure is the far loop's slips (FOUND 2026-11-24). The session rule "a failed
+run is no figure for `USB16X16_HOST_GAIN`" is dropped for this case. This does
+not say 96 is bit-exact through the far loop: the 2x slips stay open.**
+
+**MEASURED 2026-11-24 (session, Mac only, no run): the -12 dB soak at 96 kHz
+of 2026-11-20 14:34 UTC, judged again with that gain, is `matched-events`,
+the same as on 2026-11-20 with the 10-31 gain.**
+- `dante/soak_reference.py ip96-minus12-loop8-soak-600s-32f-20261120T143439Z.json
+  <api>/preset.dsp --host-gain ip96-mhreboot-bitexact-30s-32f-20261122T133711Z.json
+  --loop-channels 8 --monitor-state <api>/monitor-state.txt`, output in
+  `<api>/reference-gain20261122/` (the 2026-11-20 `reference/` left as it was).
+  Gain report f8ce68f5 (`pass: false`, `hostGain` 1 / 1), preset 5792bc52,
+  monitor state 77 (-12.0 dB, fold full, no limits file).
+- Result: policy `dante-event-reference-v2`, `matched-events`, exit 0; channel
+  4, 7 runs, longest 6, worst error 1.00 code, one alignment of 912 frames for
+  all 7. Compared key by key with the 2026-11-20 `result.json`, the only
+  difference is `hostGainSHA256`.
+- Evidence committed in the evidence repository.
+
+So item 4 is done. On the 2026-11-21 owed list, every check now has a result.
+ACCEPTED is the operator's.
