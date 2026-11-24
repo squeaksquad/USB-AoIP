@@ -13,25 +13,25 @@
 > `outputs/` is a nested clone of the evidence repository: never check out a
 > commit that tracks `outputs/` in place (CLAUDE.md, working rules).
 
-## Current pickup — 2026-11-24: phase 3 and the idle-phase owner are ACCEPTED and folded into the tree. Start here.
+## Current pickup — 2026-11-24: phase 3 and the idle-phase owner are ACCEPTED, folded into the tree and merged to `main`. Start here.
 
-You are picking up the USB-AoIP project on the branch `web/redesign-phase3`. Read `CLAUDE.md`,
+You are picking up the USB-AoIP project on `main`. Read `CLAUDE.md`,
 then this section, then the handoff's entries of 2026-11-24:
 
-    grep -n '^\*\*\(FOUND\|DECIDED\|MEASURED\|ACCEPTED\|DONE\|Operator\).*2026-11-24' PROJECT_HANDOFF.md
+    grep -n '^\*\*\(FOUND\|DECIDED\|MEASURED\|ACCEPTED\|DONE\|IMPLEMENTED\|INSTALLED\|Operator\).*2026-11-24' PROJECT_HANDOFF.md
 
 Read by entry, never the whole file. The handoff wins where anything disagrees. The binding
 rules, how to measure and the test list are in the 2026-11-21 section below. The 2026-11-22
 section's "learned today" rules also hold.
 
-**Pushed or not.** The branch is pushed to a45b084 (squeaksquad/USB-AoIP#15 is open, watched
-by another session with Auto-fix). The commit that adds this section is not pushed. The
-evidence repository is pushed to ca89fde. The PR's CI run on a45b084 is the first time two
-things run: the owner built from the folded source (it needs ALSA, so it never compiles on the
-Mac), and the step that checks `dante/owner/idle-phase.patch` reverses under GNU patch. Check
-that CI is green before relying on either. Do not merge; do not push without his word.
+**Pushed or not.** squeaksquad/USB-AoIP#15 (`web/redesign-phase3`) was merged into `main` as
+cf2fac5 on 2026-11-24, on the operator's word, with CI green on its head 9c48f06: the owner built from the
+folded source and `dante/owner/idle-phase.patch` reversing under GNU patch both passed there.
+The remote branch `web/redesign-phase3` was not deleted. The commit that updates this section
+is not pushed unless the log says so. The evidence repository is pushed to ca89fde. New work
+goes on a branch from `main`; do not push or merge without the operator's word.
 
-**What is on the Pi (read it back; nothing was changed on 2026-11-23/24).**
+**What is on the Pi (read it back; the audio path was not changed on 2026-11-23/24).**
 - The accepted set (ACCEPTED 2026-11-24): owner bb3cd6ca (`--idle-phase 60`), start wrapper
   203c6fa5, `transport.conf` 6818176f, DSP runner 46f36659, web 1.9.0, applier 1.11.0 with
   the Control Room page, Inferno config 85a5256f. The replaced files are kept as
@@ -39,6 +39,12 @@ that CI is green before relying on either. Do not merge; do not push without his
 - At **48 kHz, direct**: the arbiter moved it at 13:42:47 UTC on 2026-11-22, after the last
   measurement. The 2026-11-22 section's "left at 96" is wrong. Start check `ok` (rate=6017),
   `NRestarts=0`. Whether the monitors are still muted is not known: ask before anything loud.
+- The wireless guard (INSTALLED 2026-11-24 14:20 UTC, not ACCEPTED): `usb16x16-wlan-guard`
+  89ec5484 with its unit d1cd33d6, from `gadget/` by `install-wlan-guard.sh` (its `rollback`
+  removes it). It keeps wpa_supplicant's `disable_btm` at 1 on wlan0 and reconnects a link
+  that dropped or passes no traffic. wlan0 had been down from 2026-11-22 21:20 UTC until that
+  day; the page binds wlan0 only (`http://192.168.1.201:8088`). To take wlan0 down on purpose,
+  stop the guard first.
 - Read it back with the command in the 2026-11-21 section.
 
 **What 2026-11-24 settled.**
@@ -70,7 +76,11 @@ that CI is green before relying on either. Do not merge; do not push without his
   - the open after a long idle;
   - the 44.1 opens one sample under the record;
   - the 12-frame return hole in the 48 kHz bitexact of 2026-11-22;
-  - wlan0 and band steering;
+  - wlan0 and band steering: the guard is installed but only time shows whether it holds.
+    Read `journalctl -u usb16x16-wlan-guard` and the supplicant's `CTRL-EVENT-DISCONNECTED`
+    lines since 2026-11-24 14:20 UTC; only the "watching wlan0" line means it never had to
+    act. Its driver-reload path has run only in the test. The cure at the source is the
+    access point's (steering off for the Pi, or separate names for the two bands);
   - the phase-3 items listed in the 2026-11-21 section.
 
 ## Pickup — 2026-11-22: the owed checks are done but one, which is blocked by the far loop at 96 kHz (history; its rules still hold).
