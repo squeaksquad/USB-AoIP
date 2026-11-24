@@ -27,7 +27,7 @@ section's "learned today" rules also hold.
 **Pushed or not.** squeaksquad/USB-AoIP#15 (`web/redesign-phase3`) was merged into `main` as
 cf2fac5 on 2026-11-24, on the operator's word, with CI green on its head 9c48f06: the owner built from the
 folded source and `dante/owner/idle-phase.patch` reversing under GNU patch both passed there.
-The remote branch `web/redesign-phase3` was not deleted. The commit that updates this section
+The branch `web/redesign-phase3` was deleted after the merge (its tip was 9c48f06). The commit that updates this section
 is not pushed unless the log says so. The evidence repository is pushed to ca89fde. New work
 goes on a branch from `main`; do not push or merge without the operator's word.
 
