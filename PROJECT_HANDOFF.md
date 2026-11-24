@@ -18645,3 +18645,40 @@ the same as on 2026-11-20 with the 10-31 gain.**
 
 So item 4 is done. On the 2026-11-21 owed list, every check now has a result.
 ACCEPTED is the operator's.
+
+**ACCEPTED 2026-11-24 (operator, "push the branch and the evidence, accept
+it"): the install of 2026-11-20/21 is the Dante point of record. That is page
+redesign phase 3 (the Control Room and the monitor block) with the idle-phase
+owner.** The accepted set, as read back from the Pi:
+- owner bb3cd6ca (`--idle-phase 60`);
+- start wrapper 203c6fa5;
+- `transport.conf` 6818176f (`IDLE_PHASE=60`, the 96 and 88.2 keys as before);
+- DSP runner 46f36659;
+- web 1.9.0 and applier 1.11.0, the Control Room page;
+- Inferno config 85a5256f;
+- the gadget and modules of 2026-11-01, unchanged.
+
+The replaced files are kept as `*.idlephase-previous`. Rollback order:
+`install-owner-idlephase.sh rollback`, then the access bundle's, then
+`install-owner-monitor.sh rollback`. Accepted on the battery of 2026-11-20/21
+and the owed list of 2026-11-21, every item with a result:
+- 48 direct: 528.
+- The fold probe: clean.
+- 44.1: 504-505.
+- 88.2: 888.
+- Item 4: the gain from a failing 96 report (DECIDED 2026-11-24), the -12 dB
+  soak at 96 `matched-events`.
+- The 48 control: the playback faults occur without `--idle-phase` too.
+
+Accepted with these still open:
+- the far loop's 2x slips (FOUND 2026-11-24: not the test, not the Pi side);
+- the playback faults at some host opens;
+- the open after a long idle;
+- the 44.1 opens one sample under the record;
+- the 12-frame return hole in the 48 kHz bitexact of 2026-11-22;
+- the phase-3 items listed in the 2026-11-21 pickup.
+
+Owed after this (the 2026-11-21 pickup, "After his ACCEPTED"), not done here:
+fold `dante/owner/idle-phase.patch` into `dante/owner/main.cpp`, re-pin, and
+replace `dante/owner/point-of-record/` and the installer's pins and docs with
+the accepted owner.
