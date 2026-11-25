@@ -18821,3 +18821,28 @@ radio] on 5785 MHz (channel 157) at the first attempt, no reject,
 for: on 2.4 GHz the access point cut the traffic 14 and 6 minutes after
 an association (FOUND 14:43 UTC). Judge it by the guard's log after
 14:46 UTC: lines other than `watching` mean the link failed there too.
+
+**MEASURED 2026-11-25 12:59 UTC (session, the Pi only read): 22 hours on
+the 5 GHz radio with one outage of about a minute, at a channel change
+by the access point; no silent loss of traffic.** Since the band was
+pinned at 14:46:01 UTC on 2026-11-24:
+- 14:46 to 21:17 UTC (6 h 31 min) on 5785 MHz (channel 157): no
+  supplicant, kernel or guard line. That passes the one earlier 5 GHz
+  sample (dead within 2 h 15 min on 2026-11-19).
+- 21:17:14 UTC `CTRL-EVENT-DISCONNECTED ... reason=0 locally_generated=1`;
+  21:18:05 the guard's `no working link (3 passes): reconnecting (attempt
+  1)` and `reconnect failed`; 21:18:13 associated with the same BSSID on
+  5500 MHz (channel 100, a DFS channel) at the first attempt; 21:18:25
+  `wlan0 is back`. So the radio moved channel and the Pi was off for
+  about 60 s. Not known which of the two brought it back: the guard's
+  `nmcli device connect` returned an error 8 s before the association,
+  and NetworkManager may have been retrying by itself.
+- 21:18:13 to 12:59 UTC: one association, 56,339 s (15 h 39 min), -55
+  dBm, no line from the guard; three pings of three to the router (42 to
+  126 ms), the page 401. `disable_btm` 1, band `a`. No `WNM` or `Unknown
+  Frame` line since 14:46 UTC, which `disable_btm` would hide either way.
+- The guard: active, `NRestarts=0`, no driver reload. The audio:
+  `usb16x16-dante` active, `NRestarts=0`.
+Against it, on 2.4 GHz the same day: traffic cut 14 and 6 minutes after
+an association. Channel 100 is the channel of the 2026-11-19 failure, so
+the association now standing is the comparable case and has outlasted it.
